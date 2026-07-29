@@ -61,8 +61,11 @@ pub use planner::plan;
 #[cfg(feature = "std")]
 pub use world::World;
 
-/// Float math methods (`cos`, `sqrt`, `exp`, …) come from `std` on the
-/// laptop and from `libm` via this trait on bare metal. Modules that do
-/// float math import this; the call sites look the same either way.
-#[allow(unused_imports)]
-pub(crate) use num_traits::Float as _;
+/// Float math methods (`cos`, `sqrt`, `hypot`, `atan2`, …) come from `std`
+/// on the laptop and from `libm` via this trait on bare metal.
+///
+/// Re-exported so downstream `no_std` users — our firmware — get the same
+/// methods with `use sim_core::Float as _;` instead of each having to
+/// depend on `num-traits` and pick matching features. A library that needs
+/// a trait to be usable should hand that trait to its callers.
+pub use num_traits::Float;

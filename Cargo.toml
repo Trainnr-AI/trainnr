@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/mpu6050-driver",
+    "crates/hil-host",
     "crates/quad-encoder",
     "crates/sim-core",
     "crates/sim-run",
