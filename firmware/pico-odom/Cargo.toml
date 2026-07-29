@@ -1,0 +1,27 @@
+[package]
+name = "pico-odom"
+version = "0.1.0"
+edition = "2021"
+
+# H2b: read a real sensor over I2C, using OUR driver crate — the same
+# crate that is unit-tested on the Mac with a mocked bus.
+
+[dependencies]
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+embassy-rp = { version = "0.10", features = ["rp2040", "time-driver", "critical-section-impl", "boot2-w25q080"] }
+embassy-time = "0.5"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+heapless = "0.9"
+# The driver Prakhar wrote. Same source, two worlds: mocked bus in
+# `cargo test` on the Mac, real I2C peripheral here.
+quad-encoder = { path = "../../crates/quad-encoder" }
+sim-core = { path = "../../crates/sim-core", default-features = false }
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "z"
+
+[workspace]

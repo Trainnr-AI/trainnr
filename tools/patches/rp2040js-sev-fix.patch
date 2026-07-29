@@ -1,0 +1,15 @@
+diff --git a/src/cortex-m0-core.ts b/src/cortex-m0-core.ts
+index d7cab56..ef6404e 100644
+--- a/src/cortex-m0-core.ts
++++ b/src/cortex-m0-core.ts
+@@ -1137,6 +1137,10 @@ export class CortexM0Core {
+     // SEV
+     else if (opcode === 0b1011111101000000) {
+       this.logger.info(LOG_NAME, 'SEV');
++      // ARMv6-M: SEV sets the event register (of every core; we model
++      // core0 only). Without this, WFE/SEV synchronization — e.g. the
++      // embassy executor's wake protocol — deadlocks in WFE.
++      this.eventRegistered = true;
+     }
+     // STMIA
+     else if (opcode >> 11 === 0b11000) {

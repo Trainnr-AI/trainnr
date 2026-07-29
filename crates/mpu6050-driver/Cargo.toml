@@ -1,0 +1,15 @@
+[package]
+name = "mpu6050-driver"
+version = "0.1.0"
+edition.workspace = true
+
+# A no_std driver crate: runs on the Pico, TESTS on the Mac. This is the
+# professional embedded-Rust pattern — logic in a portable library against
+# embedded-hal traits, hardware specifics kept out.
+
+[dependencies]
+embedded-hal = "1.0"
+
+[dev-dependencies]
+# Mock I2C bus for host-side tests (eh1 = embedded-hal 1.x API).
+embedded-hal-mock = { version = "0.11", default-features = false, features = ["eh1"] }

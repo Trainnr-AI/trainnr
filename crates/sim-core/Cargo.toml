@@ -1,0 +1,19 @@
+[package]
+name = "sim-core"
+version = "0.1.0"
+edition.workspace = true
+
+# Two build shapes from ONE source:
+#   default (std)          -> full simulator: world, camera, grid, A*
+#   --no-default-features  -> no_std subset that runs on the Pico:
+#                             Pose, DiffDrive, Odometry, Pid, Motor, Rng
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+# Float math (cos/sin/sqrt/exp...) lives in `std`, not `core`. num-traits'
+# Float trait provides the same METHOD syntax backed by libm when there is
+# no OS underneath. On std builds the inherent f64 methods still win, so
+# the source reads identically either way.
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }

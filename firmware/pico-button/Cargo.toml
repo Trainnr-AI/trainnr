@@ -1,0 +1,24 @@
+[package]
+name = "pico-button"
+version = "0.1.0"
+edition = "2021"
+
+# H0: blink, on the Wokwi-simulated RP2040 Pico.
+# Port to the physical Pico 2: feature "rp2040" -> "rp235xa", target
+# thumbv6m-none-eabi -> thumbv8m.main-none-eabihf (see docs/08).
+
+[dependencies]
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+embassy-rp = { version = "0.10", features = ["rp2040", "time-driver", "critical-section-impl", "boot2-w25q080"] }
+embassy-time = "0.5"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+
+[profile.release]
+debug = true      # keep symbols: Wokwi/GDB can show source lines
+lto = true
+opt-level = "z"
+
+# Standalone workspace: keeps this crate out of the laptop workspace.
+[workspace]

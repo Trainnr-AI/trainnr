@@ -1,0 +1,7 @@
+[build]
+# ARM Cortex-M0+ (RP2040). The Pico 2's M33 uses thumbv8m.main-none-eabihf.
+target = "thumbv6m-none-eabi"
+
+[target.thumbv6m-none-eabi]
+# When the physical board + Debug Probe arrive:
+# runner = "probe-rs run --chip RP2040"

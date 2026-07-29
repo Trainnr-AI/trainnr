@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mpu6050-driver",
+    "crates/quad-encoder",
+    "crates/sim-core",
+    "crates/sim-run",
+]
+# Firmware builds for a different CPU (ARM Cortex-M) with no_std — it lives
+# outside this workspace so `cargo test` here never tries to build it for
+# the Mac.
+exclude = ["firmware"]
+
+[workspace.package]
+edition = "2021"
