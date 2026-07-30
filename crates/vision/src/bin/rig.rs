@@ -6,8 +6,8 @@
 //! arm, and nothing above this layer changes.
 //!
 //! ```sh
-//! cargo run --release -p vision --bin rig            # cameras 0 and 1
-//! cargo run --release -p vision --bin rig -- 1 0     # swap which is which
+//! cargo run --release -p vision --bin rig                    # Brio + FaceTime
+//! cargo run --release -p vision --bin rig -- FaceTime Brio  # swap roles
 //! ```
 //!
 //! Watch `rig/skew_ms` in Rerun. That number is how far apart in *time*
@@ -23,13 +23,11 @@ const FPS: u32 = 30;
 fn main() -> Result<()> {
     vision::logging::init();
 
-    // Which physical device plays which role. Run `probe` to list them.
-    let args: Vec<u32> = std::env::args()
-        .skip(1)
-        .filter_map(|a| a.parse().ok())
-        .collect();
-    let external_idx = args.first().copied().unwrap_or(0);
-    let wrist_idx = args.get(1).copied().unwrap_or(1);
+    // Which physical device plays which role, BY NAME. Indices lie on
+    // macOS (see NokhwaCamera::open_named). Run `probe` to list names.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let external_dev = args.first().cloned().unwrap_or_else(|| "Brio".into());
+    let wrist_dev = args.get(1).cloned().unwrap_or_else(|| "FaceTime".into());
 
     let rec = rerun::RecordingStreamBuilder::new("robotiq_rig").spawn()?;
 
@@ -46,15 +44,15 @@ fn main() -> Result<()> {
     // Names are roles, not devices. Downstream code — and eventually a
     // policy's observation dict — refers to "external"/"wrist", never to
     // an index. Swapping hardware is then a launch argument.
-    rig.add("external", external_idx, RESOLUTION, FPS)?;
-    println!("opened 'external' on camera {external_idx}");
+    rig.add_named("external", &external_dev, RESOLUTION, FPS)?;
+    println!("role 'external' <- device matching \"{external_dev}\"");
 
-    match rig.add("wrist", wrist_idx, RESOLUTION, FPS) {
-        Ok(()) => println!("opened 'wrist' on camera {wrist_idx}"),
+    match rig.add_named("wrist", &wrist_dev, RESOLUTION, FPS) {
+        Ok(()) => println!("role 'wrist'    <- device matching \"{wrist_dev}\""),
         Err(e) => {
             // Degraded, not dead. A rig with one camera is still useful,
             // and saying so beats crashing.
-            println!("could not open 'wrist' on camera {wrist_idx}: {e:#}");
+            println!("could not open 'wrist' ({wrist_dev}): {e:#}");
             println!("continuing with one camera");
         }
     }

@@ -42,6 +42,7 @@ pub struct NokhwaCamera {
     camera: Camera,
     width: u32,
     height: u32,
+    name: String,
 }
 
 impl NokhwaCamera {
@@ -97,15 +98,21 @@ impl NokhwaCamera {
                 Ok(mut camera) => match camera.open_stream() {
                     Ok(()) => {
                         let res = camera.resolution();
+                        // Report the device we ACTUALLY got, not the index we
+                        // asked for — on macOS these can differ, and two roles
+                        // silently landing on one device looks like success.
                         eprintln!(
-                            "camera: opened via {label} at {}x{}",
+                            "camera: index {index} -> \"{}\" via {label} at {}x{}",
+                            camera.info().human_name(),
                             res.width(),
                             res.height()
                         );
+                        let name = camera.info().human_name();
                         return Ok(NokhwaCamera {
                             camera,
                             width: res.width(),
                             height: res.height(),
+                            name,
                         });
                     }
                     Err(e) => last_error = Some(anyhow::anyhow!("{label}: stream failed: {e}")),
@@ -117,6 +124,67 @@ impl NokhwaCamera {
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("no request strategy attempted"))).context(
             "could not open the camera with any format. \
                  Run `cargo run -p vision --bin probe` to see what this device accepts",
+        )
+    }
+}
+
+impl NokhwaCamera {
+    /// The device this camera actually opened. **Not necessarily the one
+    /// you asked for** — see [`NokhwaCamera::open_named`].
+    pub fn device_name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Open the camera whose name contains `fragment`, verifying what we
+    /// actually got.
+    ///
+    /// # Why this exists — nokhwa's macOS indices are not trustworthy
+    ///
+    /// Measured on this machine:
+    ///
+    /// ```text
+    /// query() reports:            open by index actually gives:
+    ///   index 0 = FaceTime HD       index 0 -> "Brio 100"
+    ///   index 1 = Brio 100          index 1 -> "FaceTime HD Camera"
+    /// ```
+    ///
+    /// Inverted. And worse, *unstable*: opening two cameras in one process
+    /// produced "Brio 100" for **both** roles, silently — two views of the
+    /// same device, which looks like a working multi-camera rig until you
+    /// notice both pictures are identical.
+    ///
+    /// (This is the same class of bug the research flagged in OpenCV,
+    /// which sorts devices by opaque `uniqueID` so index 0 is not "the
+    /// built-in camera".)
+    ///
+    /// So: never trust an index. Ask for a name, try candidate indices,
+    /// and **verify with `info().human_name()`** before accepting.
+    pub fn open_named(fragment: &str, desired: (u32, u32), fps: u32) -> Result<Self> {
+        let devices = nokhwa::query(nokhwa::utils::ApiBackend::Auto)
+            .map_err(|e| anyhow::anyhow!("could not enumerate cameras: {e}"))?;
+        anyhow::ensure!(!devices.is_empty(), "no cameras found");
+
+        let wanted = fragment.to_lowercase();
+        let mut tried = Vec::new();
+
+        // Indices are unreliable, so try them all and check what came back.
+        for i in 0..devices.len() as u32 {
+            match Self::open(i, desired, fps) {
+                Ok(cam) => {
+                    let got = cam.device_name();
+                    if got.to_lowercase().contains(&wanted) {
+                        return Ok(cam);
+                    }
+                    tried.push(format!("index {i} -> \"{got}\""));
+                    drop(cam); // release before trying the next
+                }
+                Err(e) => tried.push(format!("index {i} -> failed: {e}")),
+            }
+        }
+
+        let available: Vec<String> = devices.iter().map(|d| d.human_name()).collect();
+        anyhow::bail!(
+            "no camera matching \"{fragment}\".\n  enumerated: {available:?}\n  tried: {tried:?}"
         )
     }
 }

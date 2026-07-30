@@ -61,6 +61,12 @@ use std::time::{Duration, Instant};
 
 use crate::camera::{CameraSource, Frame, NokhwaCamera};
 
+/// How to find a camera: by (unreliable) index, or by device name.
+enum Source {
+    Index(u32),
+    Name(String),
+}
+
 /// A frame plus the moment it arrived.
 struct Stamped {
     frame: Arc<Frame>,
@@ -145,7 +151,39 @@ impl CameraRig {
     /// Blocks until the device opens (so failures surface here, not later),
     /// then hands it to a dedicated thread — `Camera` is `!Send`, and a
     /// control loop must never block waiting on one.
+    /// Open the camera whose *device name* contains `device_fragment` and
+    /// stream it under the role `name`.
+    ///
+    /// Prefer this over [`CameraRig::add`]. nokhwa's macOS indices do not
+    /// match its own enumeration and are not stable across opens — two
+    /// roles can silently land on the same physical camera, which looks
+    /// exactly like a working rig until both pictures turn out identical.
+    pub fn add_named(
+        &mut self,
+        name: &str,
+        device_fragment: &str,
+        resolution: (u32, u32),
+        fps: u32,
+    ) -> Result<()> {
+        self.spawn(
+            name,
+            Source::Name(device_fragment.to_string()),
+            resolution,
+            fps,
+        )
+    }
+
     pub fn add(&mut self, name: &str, index: u32, resolution: (u32, u32), fps: u32) -> Result<()> {
+        self.spawn(name, Source::Index(index), resolution, fps)
+    }
+
+    fn spawn(
+        &mut self,
+        name: &str,
+        source: Source,
+        resolution: (u32, u32),
+        fps: u32,
+    ) -> Result<()> {
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let tx = self.tx.clone();
         let failures = Arc::clone(&self.failures);
@@ -154,7 +192,11 @@ impl CameraRig {
         std::thread::Builder::new()
             .name(format!("camera-{name}"))
             .spawn(move || {
-                let mut cam = match NokhwaCamera::open(index, resolution, fps) {
+                let opened = match &source {
+                    Source::Index(i) => NokhwaCamera::open(*i, resolution, fps),
+                    Source::Name(frag) => NokhwaCamera::open_named(frag, resolution, fps),
+                };
+                let mut cam = match opened {
                     Ok(c) => {
                         let _ = ready_tx.send(Ok(()));
                         c
@@ -188,7 +230,7 @@ impl CameraRig {
 
         match ready_rx.recv() {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => anyhow::bail!("camera '{name}' (index {index}): {e}"),
+            Ok(Err(e)) => anyhow::bail!("camera '{name}': {e}"),
             Err(_) => anyhow::bail!("camera '{name}' thread died during startup"),
         }
     }
