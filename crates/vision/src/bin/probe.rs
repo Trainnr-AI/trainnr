@@ -14,9 +14,9 @@ use nokhwa::utils::{
 use nokhwa::{query, Camera};
 use std::sync::mpsc;
 
-fn try_open(label: &str, req: RequestedFormatType) {
+fn try_open(index: u32, label: &str, req: RequestedFormatType) {
     let format = RequestedFormat::new::<RgbFormat>(req);
-    match Camera::new(CameraIndex::Index(0), format) {
+    match Camera::new(CameraIndex::Index(index), format) {
         Ok(mut cam) => match cam.open_stream() {
             Ok(()) => {
                 let res = cam.resolution();
@@ -61,27 +61,53 @@ fn main() {
         Err(e) => println!("  query failed: {e}"),
     }
 
+    // Which device to probe: `cargo run -p vision --bin probe -- 1`
+    let index: u32 = std::env::args()
+        .nth(1)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(0);
+
     // NOTE: AbsoluteHighestResolution / AbsoluteHighestFrameRate are
     // deliberately NOT tried — they hang on M-series Macs.
-    println!("\nrequest strategies (index 0):");
-    try_open("None (let the driver decide)", RequestedFormatType::None);
+    println!("\nrequest strategies (index {index}):");
     try_open(
+        index,
+        "None (let the driver decide)",
+        RequestedFormatType::None,
+    );
+    try_open(
+        index,
         "HighestResolution(640x480)",
         RequestedFormatType::HighestResolution(Resolution::new(640, 480)),
     );
-    try_open(
-        "HighestFrameRate(30)",
-        RequestedFormatType::HighestFrameRate(30),
-    );
     for fmt in [
-        FrameFormat::NV12,
         FrameFormat::YUYV,
         FrameFormat::MJPEG,
+        FrameFormat::NV12,
         FrameFormat::RAWRGB,
     ] {
         try_open(
+            index,
             &format!("Closest(640x480 {fmt:?} 30)"),
             RequestedFormatType::Closest(CameraFormat::new(Resolution::new(640, 480), fmt, 30)),
+        );
+    }
+
+    // DANGEROUS — opt in with a second argument:
+    //   cargo run -p vision --bin probe -- 1 danger
+    //
+    // HighestFrameRate ABORTS THE PROCESS on some external webcams
+    // (reproduced on a Logitech Brio 100: SIGABRT, exit 134, "panic in a
+    // function that cannot unwind"). The panic happens inside an
+    // AVFoundation C callback, which Rust cannot unwind through — so it
+    // is not catchable, and any strategy listed after it never runs.
+    // This is nokhwa#247. Never use it in real code.
+    if std::env::args().nth(2).as_deref() == Some("danger") {
+        println!("\n  (trying HighestFrameRate — this may abort the process)");
+        try_open(
+            index,
+            "HighestFrameRate(30)",
+            RequestedFormatType::HighestFrameRate(30),
         );
     }
 }

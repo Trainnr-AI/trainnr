@@ -39,6 +39,15 @@ use vision::{
     deadband, CameraSource, DFineDetector, Detection, Detector, Frame, LowPass, NokhwaCamera,
 };
 
+/// Which camera. `cargo run -p vision --bin BIN -- 1` for the second one;
+/// run the `probe` binary to list what is attached.
+fn camera_index() -> u32 {
+    std::env::args()
+        .nth(1)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(0)
+}
+
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 const MIN_CONFIDENCE: f32 = 0.40;
@@ -91,8 +100,9 @@ fn main() -> Result<()> {
 
     let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(1);
     let (res_tx, res_rx) = mpsc::channel::<(u32, u32)>();
+    let index = camera_index();
     std::thread::spawn(move || {
-        let mut cam = match NokhwaCamera::open(0, DESIRED, FPS) {
+        let mut cam = match NokhwaCamera::open(index, DESIRED, FPS) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("camera: {e:#}");

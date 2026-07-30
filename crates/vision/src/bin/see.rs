@@ -24,6 +24,15 @@ use std::time::Instant;
 use vision::{CameraSource, Frame, NokhwaCamera};
 
 /// Hint only — the camera negotiates. We read back what we actually get.
+/// Which camera. `cargo run -p vision --bin BIN -- 1` for the second one;
+/// run the `probe` binary to list what is attached.
+fn camera_index() -> u32 {
+    std::env::args()
+        .nth(1)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(0)
+}
+
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 
@@ -54,8 +63,9 @@ fn main() -> Result<()> {
     let (frame_tx, frame_rx) = mpsc::channel::<Frame>();
     let (res_tx, res_rx) = mpsc::channel::<(u32, u32)>();
 
+    let index = camera_index();
     std::thread::spawn(move || {
-        let mut cam = match NokhwaCamera::open(0, DESIRED, FPS) {
+        let mut cam = match NokhwaCamera::open(index, DESIRED, FPS) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("could not open camera: {e:#}");
