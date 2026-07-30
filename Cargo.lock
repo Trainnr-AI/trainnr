@@ -11982,6 +11982,7 @@ dependencies = [
  "anyhow",
  "nokhwa",
  "rerun",
+ "sim-core",
  "usls",
 ]
 
