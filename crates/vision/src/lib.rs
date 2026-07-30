@@ -15,9 +15,11 @@ pub mod camera;
 pub mod detect;
 pub mod filter;
 pub mod logging;
+pub mod openvocab;
 pub mod rig;
 
 pub use camera::{CameraSource, Frame, NokhwaCamera};
 pub use detect::{Backend, DFineDetector, Detection, Detector};
 pub use filter::{deadband, LowPass};
+pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};
 pub use rig::{CameraRig, FrameSet};
