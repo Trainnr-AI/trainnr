@@ -35,7 +35,9 @@ use anyhow::Result;
 use sim_core::{wrap_angle, DiffDrive, Pid, Pose, Robot};
 use std::sync::mpsc;
 use std::time::Instant;
-use vision::{CameraSource, DFineDetector, Detection, Detector, Frame, NokhwaCamera};
+use vision::{
+    deadband, CameraSource, DFineDetector, Detection, Detector, Frame, LowPass, NokhwaCamera,
+};
 
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
@@ -57,6 +59,13 @@ const TRACK_WIDTH: f64 = 0.15;
 /// approaching. Bigger box = closer object.
 const STOP_AT_HEIGHT_FRACTION: f32 = 0.55;
 const V_MAX: f64 = 0.35;
+
+// ---- Noise handling. Tune these and watch the two turn_rate plots. ----
+/// Low-pass on the measured bearing. 1.0 = off, 0.05 = very smooth/laggy.
+const BEARING_ALPHA: f64 = 0.25;
+/// Heading errors below this (radians) are treated as zero. ~0.02 rad is
+/// about 1° — finer than the detector can honestly resolve.
+const HEADING_DEADBAND: f64 = 0.02;
 
 fn main() -> Result<()> {
     let rec = rerun::RecordingStreamBuilder::new("robotiq_chase").spawn()?;
@@ -121,6 +130,10 @@ fn main() -> Result<()> {
         pose: Pose::ORIGIN,
     };
     let mut heading_pid = Pid::new(HEADING_KP, HEADING_KI, HEADING_KD, 1.0);
+    // A second, identical PID fed the UNFILTERED signal. It steers
+    // nothing — it exists so the viewer can plot what we avoided.
+    let mut raw_pid = Pid::new(HEADING_KP, HEADING_KI, HEADING_KD, 1.0);
+    let mut bearing_filter = LowPass::new(BEARING_ALPHA);
 
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
@@ -138,15 +151,29 @@ fn main() -> Result<()> {
             .iter()
             .max_by(|a, b| a.confidence.total_cmp(&b.confidence));
 
-        let (v_cmd, w_cmd, heading_error) = match target {
+        let (v_cmd, w_cmd, heading_error, w_raw) = match target {
             Some(d) => {
                 // ---- the closed loop ----
                 // The object's bearing IS the heading we want, expressed in
                 // camera coordinates. shortest_turn gives the error from
                 // where the robot currently points — the same function that
                 // steered it toward waypoints in Stage 0.
-                let target_heading = d.bearing(frame.width, HORIZONTAL_FOV) as f64;
-                let error = wrap_angle(shortest(robot.pose.theta, target_heading));
+                let measured = d.bearing(frame.width, HORIZONTAL_FOV) as f64;
+
+                // What the controller WOULD do on the raw signal — computed
+                // only so the viewer can show both curves at once.
+                let raw_error = wrap_angle(shortest(robot.pose.theta, measured));
+                let w_raw = raw_pid.update(raw_error, dt);
+
+                // ---- noise handling ----
+                // 1. Smooth the measurement before it reaches the PID, because
+                //    the D term differentiates whatever jitter survives.
+                // 2. Deadband the error, so sub-degree wobble commands nothing.
+                let target_heading = bearing_filter.update(measured);
+                let error = deadband(
+                    wrap_angle(shortest(robot.pose.theta, target_heading)),
+                    HEADING_DEADBAND,
+                );
                 let w = heading_pid.update(error, dt);
 
                 // ---- the open-loop part (see module docs) ----
@@ -156,13 +183,15 @@ fn main() -> Result<()> {
                 // Turn first, drive second — same alignment throttle as M3.
                 let alignment = (1.0 - error.abs() / std::f64::consts::FRAC_PI_2).max(0.0);
                 let v = V_MAX * approach as f64 * alignment;
-                (v, w, error)
+                (v, w, error, w_raw)
             }
             None => {
                 // Nothing seen: stop, and forget accumulated PID state so a
                 // reappearing object doesn't inherit a stale integral.
                 heading_pid.reset();
-                (0.0, 0.0, 0.0)
+                raw_pid.reset();
+                bearing_filter.reset();
+                (0.0, 0.0, 0.0, 0.0)
             }
         };
 
@@ -205,6 +234,7 @@ fn main() -> Result<()> {
             &rerun::Scalars::single(heading_error),
         )?;
         rec.log("control/turn_rate", &rerun::Scalars::single(w_cmd))?;
+        rec.log("control/turn_rate_raw", &rerun::Scalars::single(w_raw))?;
         rec.log("control/forward_speed", &rerun::Scalars::single(v_cmd))?;
 
         if last_print.elapsed().as_secs_f64() >= 1.0 {
