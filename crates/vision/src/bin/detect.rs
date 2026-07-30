@@ -30,6 +30,7 @@ const MIN_CONFIDENCE: f32 = 0.40;
 const HORIZONTAL_FOV: f32 = 1.05;
 
 fn main() -> Result<()> {
+    vision::logging::init();
     let rec = rerun::RecordingStreamBuilder::new("robotiq_vision").spawn()?;
 
     // Colour + label per class, logged ONCE. After this, boxes carry only

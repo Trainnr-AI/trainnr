@@ -37,6 +37,7 @@ const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 
 fn main() -> Result<()> {
+    vision::logging::init();
     let rec = rerun::RecordingStreamBuilder::new("robotiq_vision").spawn()?;
 
     // macOS: this triggers the TCC permission prompt. It is asynchronous —

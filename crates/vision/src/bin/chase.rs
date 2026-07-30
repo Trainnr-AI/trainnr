@@ -77,6 +77,7 @@ const BEARING_ALPHA: f64 = 0.25;
 const HEADING_DEADBAND: f64 = 0.02;
 
 fn main() -> Result<()> {
+    vision::logging::init();
     let rec = rerun::RecordingStreamBuilder::new("robotiq_chase").spawn()?;
     rec.log_static(
         "/",

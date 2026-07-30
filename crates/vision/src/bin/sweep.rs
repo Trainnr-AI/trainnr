@@ -60,6 +60,7 @@ fn time_model(cfg: Config, coreml: bool, frames: &[Frame]) -> Result<f64> {
 }
 
 fn main() -> Result<()> {
+    vision::logging::init();
     let index: u32 = std::env::args()
         .nth(1)
         .and_then(|a| a.parse().ok())

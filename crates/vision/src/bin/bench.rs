@@ -83,11 +83,7 @@ fn main() -> Result<()> {
     // provider failures are completely silent — the research flagged this as
     // costing someone days. Run with RUST_LOG=ort=debug to see which ops
     // CoreML actually took and which fell back to CPU.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
-        )
-        .init();
+    vision::logging::init();
 
     let index: u32 = std::env::args()
         .nth(1)

@@ -44,6 +44,7 @@ fn try_open(index: u32, label: &str, req: RequestedFormatType) {
 }
 
 fn main() {
+    vision::logging::init();
     let (tx, rx) = mpsc::channel();
     nokhwa::nokhwa_initialize(move |granted| {
         let _ = tx.send(granted);
