@@ -27,31 +27,33 @@
 //! current — policies are *trained* on the same skew they meet at
 //! inference, so consistency matters more than perfect synchronisation.
 //!
-//! # Measured: skew BEATS, it does not settle
+//! # Measured: skew, honestly
 //!
-//! Running two cameras here (Brio + built-in, both nominally 30 fps) the
-//! skew is not a constant with noise on it — it is a beat envelope:
+//! Brio (external) + built-in (wrist), both nominally 30 fps, 640x480:
 //!
 //! ```text
-//!  35ms ┤██▌  ▐██▌  ▐██▌      cycles with a ~3.5 s period
-//!       │███▌ ▐███▌ ▐███
-//!   0ms ┤  ▀▄▀   ▀▄▀   ▀      pinches to ~0 when phases align
-//!       └──────────────────
+//! mean 16.8 ms      max 61.8 ms      ~59 frame-sets/s
 //! ```
 //!
-//! Two free-running oscillators at *almost* the same rate drift past each
-//! other; skew collapses when they align and peaks at half a frame period
-//! when they oppose. A ~3.5 s beat means the cameras differ by ~0.3 fps.
-//! Same mathematics as the encoder aliasing in Stage 2's H3.
+//! **The max is the number that matters, and it is ~3.7x the mean.** A
+//! consumer that tolerates 20 ms passes on the mean and fails regularly in
+//! reality. This is why [`FrameSet::skew`] is per-set rather than a
+//! property of the rig: a single sample cannot characterise it.
 //!
-//! **Consequences for anyone using this:**
+//! ## A correction worth keeping
 //!
-//! - A single skew measurement is worthless — sample at the wrong instant
-//!   and you conclude either "perfectly synced" or "unusable", both wrong.
-//!   Hence [`FrameSet::skew`] is per-set, not a property of the rig.
-//! - The statistic that matters is the **maximum**, not the mean. Measured
-//!   here: mean 16.6 ms, max 36.7 ms. A consumer tolerating 20 ms passes
-//!   on the mean and fails every 3.5 seconds in reality.
+//! An earlier version of this file described a clean "beat envelope"
+//! (swelling to 35 ms, pinching to ~0 every ~3.5 s) and explained it as two
+//! oscillators drifting past each other. **That measurement was taken while
+//! a bug had both roles opening the SAME physical camera** — it was one
+//! stream sampled twice, which is naturally small and regular. With two
+//! genuinely independent devices the mean is unchanged (16.6 -> 16.8 ms)
+//! but the max nearly doubles (36.7 -> 61.8 ms), and the structure is far
+//! less tidy.
+//!
+//! The lesson is not about cameras: a plausible physical story fitted to
+//! data from a broken configuration is still wrong. See
+//! [`crate::camera::NokhwaCamera::open_named`] for the bug itself.
 
 use anyhow::Result;
 use std::collections::HashMap;
