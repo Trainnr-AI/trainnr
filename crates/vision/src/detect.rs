@@ -78,9 +78,27 @@ pub struct DFineDetector {
 pub enum Backend {
     /// ONNX Runtime CPU provider. Always available, predictable.
     Cpu,
-    /// Apple CoreML. usls defaults to MLProgram format + static input
-    /// shapes, which is exactly what the research says to use.
+    /// Apple CoreML with usls's defaults (static input shapes required).
+    ///
+    /// **Measured: no faster than CPU on D-FINE**, because this model's
+    /// ONNX export has a dynamic batch dimension (`{-1,3,640,640}`) and
+    /// CoreML then refuses every node. The ORT logs say it plainly:
+    /// *"All nodes placed on [CPUExecutionProvider]. Number of nodes:
+    /// 731"*. This setting is safe — it degrades to CPU rather than
+    /// failing — it just cannot help.
     CoreMl,
+    /// ⚠️ **ABORTS THE PROCESS. Benchmark only — never ship this.**
+    ///
+    /// Relaxing the static-shape requirement lets CoreML *attempt* the
+    /// graph, and it dies inside Apple's MIL compiler:
+    /// *"has unbounded dimension which is not supported"*, then
+    /// *"shapes of x and y are not broadcastable"*, then SIGABRT (exit
+    /// 134). C++ exceptions across the FFI boundary are not catchable
+    /// from Rust — the same failure mode as nokhwa#247.
+    ///
+    /// The real fix is to re-export the ONNX with a fixed batch dimension
+    /// of 1, which is a Python step this project deliberately avoids.
+    CoreMlDynamic,
 }
 
 impl DFineDetector {
@@ -99,6 +117,15 @@ impl DFineDetector {
         let config = match backend {
             Backend::Cpu => config,
             Backend::CoreMl => config.with_model_device(usls::Device::CoreMl),
+            // usls defaults `RequireStaticInputShapes` to true, which the
+            // research recommends — but this model's batch dimension is
+            // dynamic (`{-1,3,640,640}`), so that setting makes CoreML
+            // reject EVERY node and the whole graph falls back to CPU.
+            // Verified in the ORT logs: "All nodes placed on
+            // [CPUExecutionProvider]. Number of nodes: 731".
+            Backend::CoreMlDynamic => config
+                .with_model_device(usls::Device::CoreMl)
+                .with_coreml_static_input_shapes_all(false),
         };
         let config = config
             .commit()

@@ -140,8 +140,18 @@ fn main() -> Result<()> {
     );
 
     let cpu = measure("CPU execution provider", Backend::Cpu, &frames)?;
-    let coreml = measure("CoreML execution provider", Backend::CoreMl, &frames)?;
+    let coreml = measure("CoreML (static shapes required)", Backend::CoreMl, &frames)?;
+    let coreml_dyn = measure(
+        "CoreML (dynamic shapes allowed)",
+        Backend::CoreMlDynamic,
+        &frames,
+    )?;
 
+    if !cpu.is_empty() && !coreml_dyn.is_empty() {
+        let mean_cpu = cpu.iter().sum::<f64>() / cpu.len() as f64;
+        let mean_dyn = coreml_dyn.iter().sum::<f64>() / coreml_dyn.len() as f64;
+        println!("\n  CoreML-dynamic vs CPU: {:.2}x", mean_cpu / mean_dyn);
+    }
     if !cpu.is_empty() && !coreml.is_empty() {
         let mean_cpu = cpu.iter().sum::<f64>() / cpu.len() as f64;
         let mean_ml = coreml.iter().sum::<f64>() / coreml.len() as f64;
