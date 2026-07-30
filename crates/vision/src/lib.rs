@@ -15,5 +15,5 @@ pub mod detect;
 pub mod filter;
 
 pub use camera::{CameraSource, Frame, NokhwaCamera};
-pub use detect::{DFineDetector, Detection, Detector};
+pub use detect::{Backend, DFineDetector, Detection, Detector};
 pub use filter::{deadband, LowPass};

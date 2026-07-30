@@ -66,14 +66,41 @@ pub struct DFineDetector {
     min_confidence: f32,
 }
 
+/// Where inference runs.
+///
+/// On Apple Silicon this is not an obvious win either way — the research
+/// found a documented case where `CPUOnly` beat `CPUAndGPU` on a
+/// conv-heavy model, because CoreML's benefit comes from graph
+/// *partitioning*, and a model whose ops don't all map cleanly gets split
+/// and shuttled between processors. **Measure, don't assume**:
+/// `cargo run --release -p vision --bin bench`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Backend {
+    /// ONNX Runtime CPU provider. Always available, predictable.
+    Cpu,
+    /// Apple CoreML. usls defaults to MLProgram format + static input
+    /// shapes, which is exactly what the research says to use.
+    CoreMl,
+}
+
 impl DFineDetector {
-    /// Load D-FINE-N (COCO-80). Weights are **downloaded automatically** on
-    /// first run and cached — no Python export step, ever.
+    /// Load D-FINE-N (COCO-80) on the CPU provider. Weights are
+    /// **downloaded automatically** on first run and cached — no Python
+    /// export step, ever.
     ///
     /// `min_confidence` filters detections; 0.35–0.5 is a sane range for a
     /// control loop, where a false positive costs more than a missed frame.
     pub fn new(min_confidence: f32) -> Result<Self> {
-        let config = Config::d_fine_n_coco()
+        Self::with_backend(min_confidence, Backend::Cpu)
+    }
+
+    pub fn with_backend(min_confidence: f32, backend: Backend) -> Result<Self> {
+        let config = Config::d_fine_n_coco();
+        let config = match backend {
+            Backend::Cpu => config,
+            Backend::CoreMl => config.with_model_device(usls::Device::CoreMl),
+        };
+        let config = config
             .commit()
             .context("building the D-FINE config (first run downloads weights)")?;
         let model = RTDETR::new(config).context("loading the D-FINE model")?;
