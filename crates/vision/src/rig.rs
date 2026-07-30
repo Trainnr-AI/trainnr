@@ -26,6 +26,32 @@
 //! Reassuringly, LeRobot records at ~30 fps and pairs whatever frames are
 //! current — policies are *trained* on the same skew they meet at
 //! inference, so consistency matters more than perfect synchronisation.
+//!
+//! # Measured: skew BEATS, it does not settle
+//!
+//! Running two cameras here (Brio + built-in, both nominally 30 fps) the
+//! skew is not a constant with noise on it — it is a beat envelope:
+//!
+//! ```text
+//!  35ms ┤██▌  ▐██▌  ▐██▌      cycles with a ~3.5 s period
+//!       │███▌ ▐███▌ ▐███
+//!   0ms ┤  ▀▄▀   ▀▄▀   ▀      pinches to ~0 when phases align
+//!       └──────────────────
+//! ```
+//!
+//! Two free-running oscillators at *almost* the same rate drift past each
+//! other; skew collapses when they align and peaks at half a frame period
+//! when they oppose. A ~3.5 s beat means the cameras differ by ~0.3 fps.
+//! Same mathematics as the encoder aliasing in Stage 2's H3.
+//!
+//! **Consequences for anyone using this:**
+//!
+//! - A single skew measurement is worthless — sample at the wrong instant
+//!   and you conclude either "perfectly synced" or "unusable", both wrong.
+//!   Hence [`FrameSet::skew`] is per-set, not a property of the rig.
+//! - The statistic that matters is the **maximum**, not the mean. Measured
+//!   here: mean 16.6 ms, max 36.7 ms. A consumer tolerating 20 ms passes
+//!   on the mean and fails every 3.5 seconds in reality.
 
 use anyhow::Result;
 use std::collections::HashMap;
