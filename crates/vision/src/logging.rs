@@ -54,14 +54,24 @@ pub fn init() {
     });
 }
 
+/// Is the caller asking for ORT logs through `RUST_LOG` while leaving the
+/// C++ gate (`ORT_LOG`) shut?
+///
+/// The exact mistake that wasted an hour, expressed as a pure function so
+/// it can be tested without touching process environment — env vars are
+/// global mutable state, and tests that set them race each other.
+pub fn is_half_configured(rust_log: &str, ort_log: Option<&str>) -> bool {
+    let wants_ort = rust_log.contains("ort") || rust_log.contains("trace");
+    wants_ort && ort_log.is_none()
+}
+
 /// Catch the specific mistake that wasted an hour: asking for ort logs
 /// through `RUST_LOG` while leaving the C++ gate shut.
 fn warn_on_half_configured_logging() {
     let rust_log = std::env::var("RUST_LOG").unwrap_or_default();
-    let wants_ort = rust_log.contains("ort") || rust_log.contains("trace");
-    let ort_log_set = std::env::var("ORT_LOG").is_ok();
+    let ort_log = std::env::var("ORT_LOG").ok();
 
-    if wants_ort && !ort_log_set {
+    if is_half_configured(&rust_log, ort_log.as_deref()) {
         eprintln!(
             "\n\
              ── logging note ──────────────────────────────────────────────\n\
@@ -73,5 +83,49 @@ fn warn_on_half_configured_logging() {
              Or just run:       tools/debug-inference.sh <command>\n\
              ──────────────────────────────────────────────────────────────\n"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asking_for_ort_without_the_cpp_gate_is_flagged() {
+        // The hour-wasting configuration.
+        assert!(is_half_configured("ort=info", None));
+        assert!(is_half_configured("ort=trace", None));
+        assert!(is_half_configured("warn,ort=debug", None));
+    }
+
+    #[test]
+    fn setting_both_gates_is_not_flagged() {
+        assert!(!is_half_configured("ort=trace", Some("verbose")));
+        // Even ORT_LOG=error counts as "set" — the user chose it.
+        assert!(!is_half_configured("ort=trace", Some("error")));
+    }
+
+    #[test]
+    fn a_bare_trace_request_is_flagged_too() {
+        // `RUST_LOG=trace` implies ort logs without naming ort.
+        assert!(is_half_configured("trace", None));
+    }
+
+    #[test]
+    fn ordinary_filters_are_left_alone() {
+        // No mention of ort or trace: nothing to warn about, and warning
+        // anyway would train people to ignore the message.
+        assert!(!is_half_configured("", None));
+        assert!(!is_half_configured("warn", None));
+        assert!(!is_half_configured("info", None));
+        assert!(!is_half_configured("vision=debug", None));
+    }
+
+    #[test]
+    fn init_is_idempotent() {
+        // Called by every binary; a second call must not panic on the
+        // already-installed global subscriber.
+        init();
+        init();
     }
 }

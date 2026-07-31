@@ -296,6 +296,39 @@ mod tests {
     }
 
     #[test]
+    fn get_returns_the_named_frame_and_nothing_else() {
+        let s = set_with(&[("front", Instant::now()), ("rear", Instant::now())]);
+        assert!(s.get("front").is_some());
+        assert!(s.get("rear").is_some());
+        assert!(s.get("left").is_none(), "invented a camera that isn't there");
+    }
+
+    #[test]
+    fn names_lists_every_camera_in_the_set() {
+        let s = set_with(&[("front", Instant::now()), ("rear", Instant::now())]);
+        let mut names: Vec<&str> = s.names().collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["front", "rear"]);
+    }
+
+    #[test]
+    fn len_and_is_empty_agree() {
+        let empty = set_with(&[]);
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+
+        let two = set_with(&[("a", Instant::now()), ("b", Instant::now())]);
+        assert_eq!(two.len(), 2);
+        assert!(!two.is_empty());
+    }
+
+    #[test]
+    fn age_of_an_unknown_camera_is_none() {
+        let s = set_with(&[("front", Instant::now())]);
+        assert!(s.age_of("nonexistent").is_none());
+    }
+
+    #[test]
     fn skew_of_one_camera_is_zero() {
         let s = set_with(&[("only", Instant::now())]);
         assert_eq!(s.skew(), Duration::ZERO);

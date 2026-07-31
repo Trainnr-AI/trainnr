@@ -15,9 +15,8 @@
 //! First run downloads the model weights (a few MB, cached afterwards).
 
 use anyhow::Result;
-use std::sync::mpsc;
 use std::time::Instant;
-use vision::{CameraSource, DFineDetector, Detection, Detector, Frame, NokhwaCamera};
+use vision::{Detection, Detector, ObjectDetector, Source, Stream};
 
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
@@ -47,66 +46,25 @@ fn main() -> Result<()> {
         ]),
     )?;
 
-    let (tx, rx) = mpsc::channel();
-    eprintln!("requesting camera access (click Allow if macOS asks)...");
-    nokhwa::nokhwa_initialize(move |granted| {
-        let _ = tx.send(granted);
-    });
-    if !rx.recv().unwrap_or(false) {
-        anyhow::bail!(
-            "camera permission denied.\n\
-             If no prompt appeared you are likely in an editor terminal or over SSH \
-             — use Terminal.app or iTerm2."
-        );
-    }
-
-    // Capture on its own thread; the detector runs on main. A bounded
-    // channel of 1 means the camera thread drops stale frames rather than
-    // queueing them — we always detect on the *newest* frame, which is what
-    // a control loop wants. A growing queue would mean acting on the past.
-    let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(1);
-    let (res_tx, res_rx) = mpsc::channel::<(u32, u32)>();
-
-    std::thread::spawn(move || {
-        let mut cam = match NokhwaCamera::open(0, DESIRED, FPS) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("could not open camera: {e:#}");
-                return;
-            }
-        };
-        let _ = res_tx.send(cam.resolution());
-        loop {
-            match cam.next_frame() {
-                // try_send, not send: if the detector is busy, throw the
-                // frame away instead of blocking capture.
-                Ok(frame) => match frame_tx.try_send(frame) {
-                    Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
-                    Err(mpsc::TrySendError::Disconnected(_)) => return,
-                },
-                Err(e) => {
-                    eprintln!("capture error: {e:#}");
-                    return;
-                }
-            }
-        }
-    });
-
-    let (w, h) = res_rx
-        .recv()
-        .map_err(|_| anyhow::anyhow!("camera thread died before opening the device"))?;
+    // Permission, device open, and a latest-wins capture thread — all in
+    // one call. A bounded channel of 1 means the camera drops stale frames
+    // rather than queueing them: we always detect on the *newest* frame,
+    // which is what a control loop wants. A growing queue means acting on
+    // the past. See `vision::camera::Stream`.
+    let stream = Stream::start(Source::Index(0), DESIRED, FPS)?;
+    let (w, h) = stream.resolution;
     println!("camera open at {w}x{h}");
 
     println!("loading D-FINE-N (first run downloads weights)...");
     let load_start = Instant::now();
-    let mut detector = DFineDetector::new(MIN_CONFIDENCE)?;
+    let mut detector = ObjectDetector::new(MIN_CONFIDENCE)?;
     println!("model ready in {:.1}s", load_start.elapsed().as_secs_f64());
 
     let start = Instant::now();
     let mut frames = 0u64;
     let mut last_report = Instant::now();
 
-    for frame in frame_rx {
+    for frame in stream.frames {
         let t_infer = Instant::now();
         let detections = detector.detect(&frame)?;
         let infer_ms = t_infer.elapsed().as_secs_f64() * 1000.0;

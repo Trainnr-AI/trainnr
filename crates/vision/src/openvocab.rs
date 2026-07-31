@@ -266,6 +266,92 @@ mod tests {
     }
 
     #[test]
+    fn every_hue_bucket_is_reachable_and_ordered() {
+        // Walks the wheel and checks each named band, including the
+        // wrap-around at red which is the one that is easy to get wrong.
+        for (hue, expected) in [
+            (0.0, "red"),
+            (10.0, "red"),
+            (350.0, "red"),
+            (359.9, "red"),
+            (30.0, "orange"),
+            (60.0, "yellow"),
+            (120.0, "green"),
+            (180.0, "cyan"),
+            (225.0, "blue"),
+            (270.0, "purple"),
+            (320.0, "magenta"),
+        ] {
+            assert_eq!(hue_name(hue), expected, "hue {hue}");
+        }
+    }
+
+    #[test]
+    fn hue_bucket_boundaries_are_exact() {
+        // Each boundary belongs to the band ABOVE it. Pinned because an
+        // off-by-one here renames colours near the edges, which reads as
+        // a model problem rather than an arithmetic one.
+        assert_eq!(hue_name(15.0), "orange");
+        assert_eq!(hue_name(14.9), "red");
+        assert_eq!(hue_name(45.0), "yellow");
+        assert_eq!(hue_name(70.0), "green");
+        assert_eq!(hue_name(165.0), "cyan");
+        assert_eq!(hue_name(200.0), "blue");
+        assert_eq!(hue_name(255.0), "purple");
+        assert_eq!(hue_name(290.0), "magenta");
+        assert_eq!(hue_name(345.0), "red");
+    }
+
+    #[test]
+    fn a_partially_overlapping_box_is_clipped_not_rejected() {
+        // Detector boxes routinely hang off the frame edge. Clipping keeps
+        // the colour reading; rejecting would lose it entirely.
+        let f = solid(8, 8, [255, 0, 0]);
+        let d = Detection {
+            x: 6.0,
+            y: 6.0,
+            width: 10.0,
+            height: 10.0,
+            confidence: 1.0,
+            label: "x".into(),
+            class_id: 0,
+        };
+        let (hue, _) = dominant_hue(&f, &d).expect("clipped box still has pixels");
+        assert_eq!(hue_name(hue), "red");
+    }
+
+    #[test]
+    fn a_negative_origin_box_is_clamped_to_the_frame() {
+        let f = solid(8, 8, [0, 0, 255]);
+        let d = Detection {
+            x: -5.0,
+            y: -5.0,
+            width: 8.0,
+            height: 8.0,
+            confidence: 1.0,
+            label: "x".into(),
+            class_id: 0,
+        };
+        let (hue, _) = dominant_hue(&f, &d).expect("clamped box has pixels");
+        assert_eq!(hue_name(hue), "blue");
+    }
+
+    #[test]
+    fn a_zero_area_box_has_no_hue() {
+        let f = solid(8, 8, [255, 0, 0]);
+        let d = Detection {
+            x: 4.0,
+            y: 4.0,
+            width: 0.0,
+            height: 0.0,
+            confidence: 1.0,
+            label: "x".into(),
+            class_id: 0,
+        };
+        assert_eq!(dominant_hue(&f, &d), None);
+    }
+
+    #[test]
     fn box_outside_the_frame_is_rejected() {
         let f = solid(4, 4, [255, 0, 0]);
         let d = Detection {

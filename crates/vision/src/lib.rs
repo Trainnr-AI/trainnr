@@ -12,14 +12,20 @@
 //! Research and rationale: docs/11-perception-stack.md
 
 pub mod camera;
+pub mod cli;
 pub mod detect;
 pub mod filter;
 pub mod logging;
 pub mod openvocab;
 pub mod rig;
+pub mod stats;
+pub mod target;
 
-pub use camera::{CameraSource, Frame, NokhwaCamera};
-pub use detect::{Backend, DFineDetector, Detection, Detector};
+pub use camera::{name_matches, request_access, CameraSource, Frame, NokhwaCamera, Source, Stream};
+pub use detect::{Backend, Detection, Detector, DetectorModel, ObjectDetector};
 pub use filter::{deadband, LowPass};
 pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};
+pub use cli::Args;
 pub use rig::{CameraRig, FrameSet};
+pub use stats::{percentile, Stats};
+pub use target::{approach_factor, pick_target};

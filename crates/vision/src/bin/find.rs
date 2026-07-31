@@ -14,11 +14,10 @@
 //! deterministic maths beat a confident guess.
 
 use anyhow::Result;
-use std::sync::mpsc;
 use std::time::Instant;
 use vision::{
-    dominant_hue, hue_name, CameraSource, Detection, Detector, Frame, NokhwaCamera,
-    OpenVocabDetector, Promptable,
+    dominant_hue, hue_name, Detection, Detector, Frame, OpenVocabDetector, Promptable, Source,
+    Stream,
 };
 
 const RESOLUTION: (u32, u32) = (640, 480);
@@ -37,39 +36,13 @@ fn main() -> Result<()> {
 
     let rec = rerun::RecordingStreamBuilder::new("robotiq_find").spawn()?;
 
-    let (tx, rx) = mpsc::channel();
-    eprintln!("requesting camera access...");
-    nokhwa::nokhwa_initialize(move |g| {
-        let _ = tx.send(g);
-    });
-    if !rx.recv().unwrap_or(false) {
-        anyhow::bail!("camera permission denied — run from Terminal.app");
-    }
-
-    let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(1);
-    std::thread::spawn(move || {
-        let mut cam = match NokhwaCamera::open_named("Brio", RESOLUTION, FPS)
-            .or_else(|_| NokhwaCamera::open(0, RESOLUTION, FPS))
-        {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("camera: {e:#}");
-                return;
-            }
-        };
-        loop {
-            match cam.next_frame() {
-                Ok(f) => match frame_tx.try_send(f) {
-                    Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
-                    Err(_) => return,
-                },
-                Err(e) => {
-                    eprintln!("capture: {e:#}");
-                    return;
-                }
-            }
-        }
-    });
+    // Prefer the external Brio by NAME, not index: nokhwa's macOS indices
+    // are inverted and unstable, which once had two roles streaming the
+    // same physical camera (docs/13-architecture-review.md).
+    let stream = match Stream::start(Source::Name("Brio"), RESOLUTION, FPS) {
+        Ok(s) => s,
+        Err(_) => Stream::open(Source::Index(0), RESOLUTION, FPS)?,
+    };
 
     println!("looking for: {phrases:?}");
     println!("loading Grounding DINO (first run downloads a large model)...");
@@ -82,7 +55,7 @@ fn main() -> Result<()> {
     let mut n = 0u64;
     let mut total_ms = 0.0;
 
-    for frame in frame_rx {
+    for frame in stream.frames {
         let t = Instant::now();
         let dets = detector.detect(&frame)?;
         let ms = t.elapsed().as_secs_f64() * 1000.0;

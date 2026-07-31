@@ -164,7 +164,6 @@ impl NokhwaCamera {
             .map_err(|e| anyhow::anyhow!("could not enumerate cameras: {e}"))?;
         anyhow::ensure!(!devices.is_empty(), "no cameras found");
 
-        let wanted = fragment.to_lowercase();
         let mut tried = Vec::new();
 
         // Indices are unreliable, so try them all and check what came back.
@@ -172,7 +171,7 @@ impl NokhwaCamera {
             match Self::open(i, desired, fps) {
                 Ok(cam) => {
                     let got = cam.device_name();
-                    if got.to_lowercase().contains(&wanted) {
+                    if name_matches(&got, fragment) {
                         return Ok(cam);
                     }
                     tried.push(format!("index {i} -> \"{got}\""));
@@ -204,5 +203,194 @@ impl CameraSource for NokhwaCamera {
 
     fn resolution(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+}
+
+// ---------------------------------------------------------------------
+// Running a camera in the background — the boilerplate, written once.
+// ---------------------------------------------------------------------
+//
+// Every binary in this crate needs the same three things: ask macOS for
+// permission, open a device, and pump frames from a dedicated thread
+// (`Camera` is `!Send`, and a control loop must never block on one).
+//
+// That was copy-pasted into six binaries, which is how five of them ended
+// up still calling `open(index, ..)` after we proved macOS indices are
+// inverted AND unstable — the bug that had `rig` streaming one physical
+// camera into two windows. A fix that lives in one place gets applied
+// once; a fix that lives in six places gets applied to whichever file you
+// happened to be editing.
+
+use std::sync::mpsc::{self, Receiver};
+
+/// Ask macOS for camera access and block until the user answers.
+///
+/// Must be called before opening any device. Returns an error rather than
+/// panicking so callers can print something more useful than a backtrace.
+pub fn request_access() -> Result<()> {
+    let (tx, rx) = mpsc::channel();
+    eprintln!("requesting camera access...");
+    nokhwa::nokhwa_initialize(move |granted| {
+        let _ = tx.send(granted);
+    });
+    if rx.recv().unwrap_or(false) {
+        Ok(())
+    } else {
+        anyhow::bail!("camera permission denied — run from Terminal.app, not an editor terminal")
+    }
+}
+
+/// Which physical camera to open.
+pub enum Source<'a> {
+    /// By substring of the device's human-readable name. **Prefer this.**
+    Name(&'a str),
+    /// By nokhwa index — unreliable on macOS, see [`NokhwaCamera::open_named`].
+    Index(u32),
+}
+
+/// A running camera: latest-wins frames, plus the resolution actually
+/// negotiated (which is often not the one you asked for).
+pub struct Stream {
+    pub frames: Receiver<Frame>,
+    pub resolution: (u32, u32),
+}
+
+impl Stream {
+    /// Open `source` and start pumping frames on a background thread.
+    ///
+    /// Blocks until the device opens, so a bad camera fails here with a
+    /// useful message instead of hanging the caller's loop forever.
+    ///
+    /// The channel has capacity 1 and drops on backpressure: a control
+    /// loop wants the *newest* frame, never a queue of stale ones.
+    pub fn open(source: Source<'_>, resolution: (u32, u32), fps: u32) -> Result<Stream> {
+        let (frame_tx, frames) = mpsc::sync_channel::<Frame>(1);
+        let (ready_tx, ready_rx) = mpsc::channel::<Result<(u32, u32), String>>();
+
+        // The device is opened ON the thread that will own it: `Camera` is
+        // !Send, so it can never cross this boundary.
+        let owned = match source {
+            Source::Name(n) => OwnedSource::Name(n.to_string()),
+            Source::Index(i) => OwnedSource::Index(i),
+        };
+
+        std::thread::Builder::new()
+            .name("camera".into())
+            .spawn(move || {
+                let opened = match &owned {
+                    OwnedSource::Name(frag) => NokhwaCamera::open_named(frag, resolution, fps),
+                    OwnedSource::Index(i) => NokhwaCamera::open(*i, resolution, fps),
+                };
+                let mut cam = match opened {
+                    Ok(c) => {
+                        let _ = ready_tx.send(Ok(c.resolution()));
+                        c
+                    }
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(format!("{e:#}")));
+                        return;
+                    }
+                };
+                loop {
+                    match cam.next_frame() {
+                        Ok(f) => match frame_tx.try_send(f) {
+                            // Full means the consumer is still working on
+                            // the previous frame. Dropping is correct.
+                            Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
+                            Err(mpsc::TrySendError::Disconnected(_)) => return,
+                        },
+                        Err(e) => {
+                            eprintln!("capture stopped: {e:#}");
+                            return;
+                        }
+                    }
+                }
+            })
+            .context("spawning the camera thread")?;
+
+        match ready_rx.recv() {
+            Ok(Ok(resolution)) => Ok(Stream { frames, resolution }),
+            Ok(Err(e)) => anyhow::bail!("opening camera: {e}"),
+            Err(_) => anyhow::bail!("camera thread died before reporting readiness"),
+        }
+    }
+
+    /// Convenience: permission + open, the two calls every binary makes.
+    pub fn start(source: Source<'_>, resolution: (u32, u32), fps: u32) -> Result<Stream> {
+        request_access()?;
+        Stream::open(source, resolution, fps)
+    }
+}
+
+enum OwnedSource {
+    Name(String),
+    Index(u32),
+}
+
+/// Does `device_name` satisfy a request for `fragment`?
+///
+/// Case-insensitive substring match. Extracted from
+/// [`NokhwaCamera::open_named`] so the rule that fixed the
+/// two-roles-one-camera bug is pinned by tests rather than living inside
+/// a function that cannot run without a webcam attached.
+///
+/// Deliberately permissive: users type "brio", the device calls itself
+/// "Brio 100", and macOS has been known to append vendor noise. Requiring
+/// an exact match would break on a firmware update.
+pub fn name_matches(device_name: &str, fragment: &str) -> bool {
+    device_name.to_lowercase().contains(&fragment.to_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matching_is_case_insensitive_both_ways() {
+        assert!(name_matches("Brio 100", "brio"));
+        assert!(name_matches("brio 100", "BRIO"));
+        assert!(name_matches("FaceTime HD Camera", "facetime"));
+    }
+
+    #[test]
+    fn partial_fragments_match() {
+        // Users type a short name; devices have long ones.
+        assert!(name_matches("Logitech BRIO 100 (046d:0942)", "brio"));
+        assert!(name_matches("FaceTime HD Camera (Built-in)", "HD"));
+    }
+
+    #[test]
+    fn the_two_cameras_on_this_machine_do_not_collide() {
+        // The actual bug: both roles opened one device. These two names
+        // must never satisfy each other's fragment.
+        let brio = "Brio 100";
+        let facetime = "FaceTime HD Camera";
+        assert!(name_matches(brio, "Brio"));
+        assert!(!name_matches(facetime, "Brio"));
+        assert!(name_matches(facetime, "FaceTime"));
+        assert!(!name_matches(brio, "FaceTime"));
+    }
+
+    #[test]
+    fn unrelated_names_do_not_match() {
+        assert!(!name_matches("FaceTime HD Camera", "kinect"));
+    }
+
+    #[test]
+    fn an_empty_fragment_matches_anything() {
+        // Documents the edge rather than pretending it cannot happen:
+        // `contains("")` is true, so callers must not pass an empty
+        // fragment expecting "no camera".
+        assert!(name_matches("Brio 100", ""));
+    }
+
+    #[test]
+    fn frame_reports_its_own_dimensions() {
+        let f = Frame {
+            width: 4,
+            height: 2,
+            rgb: vec![0u8; 4 * 2 * 3],
+        };
+        assert_eq!(f.rgb.len(), (f.width * f.height * 3) as usize);
     }
 }
