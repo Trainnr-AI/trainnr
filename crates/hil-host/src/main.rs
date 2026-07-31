@@ -10,7 +10,8 @@
 //!
 //! Run with: tools/sim-hil.sh
 
-use sim_core::{DiffDrive, Encoders, Motor, Pose, Rng, Robot, World};
+use hil_protocol::Message;
+use sim_core::{DiffDrive, Encoders, Motor, Pose, Rng, Robot, RobotSpec, World};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
@@ -20,10 +21,12 @@ const DT: f64 = 0.02;
 const MAX_STEPS: usize = 3000; // 60 s
 const SEED: u64 = 7;
 
+/// The robot as the FIRMWARE believes it to be — the shared definition the
+/// chip also compiles against, so host and target cannot silently disagree.
+const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 /// The robot as it truly is: 1% worn tyres the firmware doesn't know about.
-const TRUE_WHEEL_RADIUS: f64 = 0.0297;
-const TRACK_WIDTH: f64 = 0.15;
-const TICKS_PER_REV: f64 = 1024.0;
+/// This gap is deliberate — it is what makes the odometry drift real.
+const TRUE_WHEEL_RADIUS: f64 = SPEC.wheel_radius * 0.99;
 /// Motor: first-order lag + saturation (sim-core's model).
 const MOTOR_TAU: f64 = 0.15;
 const MOTOR_MAX: f64 = 30.0;
@@ -57,13 +60,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut robot = Robot {
         model: DiffDrive {
             wheel_radius: TRUE_WHEEL_RADIUS,
-            track_width: TRACK_WIDTH,
+            track_width: SPEC.track_width,
         },
         pose: start,
     };
     let mut motor_l = Motor::new(MOTOR_TAU, MOTOR_MAX);
     let mut motor_r = Motor::new(MOTOR_TAU, MOTOR_MAX);
-    let mut encoders = Encoders::new(TICKS_PER_REV);
+    let mut encoders = Encoders::new(SPEC.ticks_per_rev);
     let mut rng = Rng::new(SEED);
 
     // ---- spawn the emulator ----
@@ -88,23 +91,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---- the loop: read the chip's decisions, answer with consequences ----
     for line in from_chip.lines() {
         let line = line?;
-        let mut parts = line.split_whitespace();
-        match parts.next() {
+        // Parsed by the SAME code the firmware uses. A line the host
+        // cannot read is skipped loudly rather than guessed at — the chip
+        // also prints human-facing text on this stream.
+        match Message::parse(&line) {
             // The chip's believed pose — for display only.
-            Some("P") => {
-                let x: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-                let y: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-                let th: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-                belief = Pose::new(x, y, th);
+            Ok(Message::Pose { x, y, theta }) => {
+                belief = Pose::new(x, y, theta);
             }
             // Motor command: advance physics one step, reply with ticks.
-            Some("M") => {
-                let duty_l: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-                let duty_r: f64 = parts.next().unwrap_or("0").parse().unwrap_or(0.0);
-
+            Ok(Message::Motor { duty_l, duty_r }) => {
                 // duty -> commanded wheel speed -> what the motor ACTUALLY does
-                let act_l = motor_l.step(duty_l * DUTY_SCALE, DT);
-                let act_r = motor_r.step(duty_r * DUTY_SCALE, DT);
+                let act_l = motor_l.step(duty_l as f64 * DUTY_SCALE, DT);
+                let act_r = motor_r.step(duty_r as f64 * DUTY_SCALE, DT);
 
                 // the ground steals a random 0-1% per wheel per step
                 let slip_l = 1.0 - 0.01 * rng.uniform();
@@ -179,11 +178,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         belief.x,
                         belief.y,
                         robot.pose.distance_to(&belief),
-                        duty_l as i32,
-                        duty_r as i32
+                        duty_l,
+                        duty_r
                     );
                 }
-                if duty_l == 0.0 && duty_r == 0.0 && steps > 10 {
+                if duty_l == 0 && duty_r == 0 && steps > 10 {
                     idle += 1;
                     if idle == 25 {
                         eprintln!("[{t:5.1}s] chip has stopped commanding — tour complete");
@@ -197,7 +196,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            _ => eprintln!("[host] unknown line: {line}"),
+            // The chip also prints human-facing text on this stream, so a
+            // parse failure is normal, not fatal. Sensor lines travel the
+            // other way and should never arrive here.
+            Ok(Message::Sensors { .. }) => eprintln!("[host] unexpected S line: {line}"),
+            Err(_) => eprintln!("[host] {line}"),
         }
     }
 

@@ -9,6 +9,20 @@
 //! - **D** reacts to how fast the error is changing (damps overshoot).
 //!
 //! Math and intuition: docs/learning/math-04-pid-and-lag.md.
+//!
+//! [`GotoController`] sits on top of [`Pid`] and is the robot's actual
+//! steering law — the one that was, until the 2026-07-31 architecture
+//! review, copy-pasted into the simulator, the firmware, and the camera
+//! chase (docs/13-architecture-review.md).
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float as _;
+
+use core::f64::consts::FRAC_PI_2;
+
+use crate::exercises::shortest_turn;
+use crate::pose::Pose;
+use crate::spec::ControlGains;
 
 pub struct Pid {
     pub kp: f64,
@@ -69,6 +83,94 @@ impl Pid {
     }
 }
 
+/// Turn a heading error into a body twist — **turn first, then drive**.
+///
+/// This is the whole steering policy of the robot, and it is three lines:
+///
+/// ```text
+/// w         = pid(heading_error)                       // how hard to turn
+/// alignment = 1 - |heading_error| / (pi/2), floored at 0   // are we facing it?
+/// v         = speed_budget * alignment                  // how fast to go
+/// ```
+///
+/// # Why the alignment throttle matters
+///
+/// A differential-drive robot cannot move sideways. If it drives at full
+/// speed while badly misaligned, it carves a wide arc *away* from the
+/// target and the heading error stays large — the classic slow spiral.
+/// Scaling forward speed by alignment makes the robot pivot nearly in
+/// place when it is facing the wrong way, and commit to speed only once
+/// it is pointed correctly.
+///
+/// The `.max(0.0)` floor is what stops it driving **backwards** when the
+/// target is behind it (error > 90°, so the raw factor goes negative).
+/// Without that floor the robot reverses away from its own goal.
+///
+/// # What this deliberately does not know
+///
+/// Where the heading error came from. Stage 0 computes it from a map
+/// coordinate; `chase` computes it from a camera bearing; a future VLA may
+/// emit it directly. All three are the same control problem downstream of
+/// the error, which is exactly why this type takes the error as an
+/// argument instead of a goal.
+pub struct GotoController {
+    pub heading_pid: Pid,
+    pub gains: ControlGains,
+}
+
+impl GotoController {
+    pub fn new(gains: ControlGains) -> Self {
+        GotoController {
+            heading_pid: Pid::new(
+                gains.heading_kp,
+                gains.heading_ki,
+                gains.heading_kd,
+                gains.heading_i_limit,
+            ),
+            gains,
+        }
+    }
+
+    /// The primitive: heading error + a forward-speed budget → `(v, w)`.
+    ///
+    /// `speed_budget` is what the caller *would* drive at if perfectly
+    /// aligned — distance-proportional for a waypoint, size-proportional
+    /// for a camera target. It is capped at `v_max` here so no caller can
+    /// forget to.
+    pub fn steer(&mut self, heading_error: f64, speed_budget: f64, dt: f64) -> (f64, f64) {
+        let w = self.heading_pid.update(heading_error, dt);
+        let alignment = (1.0 - heading_error.abs() / FRAC_PI_2).max(0.0);
+        let v = speed_budget.min(self.gains.v_max) * alignment;
+        (v, w)
+    }
+
+    /// Drive toward a known point: bearing → error → [`Self::steer`], with
+    /// the speed budget proportional to remaining distance.
+    pub fn goto_point(&mut self, pose: &Pose, target: (f64, f64), dt: f64) -> (f64, f64) {
+        let (tx, ty) = target;
+        let bearing = (ty - pose.y).atan2(tx - pose.x);
+        let error = shortest_turn(pose.theta, bearing);
+        let budget = self.gains.kp_dist * Self::distance(pose, target);
+        self.steer(error, budget, dt)
+    }
+
+    /// Straight-line distance from `pose` to `target`, metres.
+    pub fn distance(pose: &Pose, target: (f64, f64)) -> f64 {
+        (target.0 - pose.x).hypot(target.1 - pose.y)
+    }
+
+    /// Has the robot reached `target`?
+    pub fn arrived(&self, pose: &Pose, target: (f64, f64)) -> bool {
+        Self::distance(pose, target) < self.gains.arrive_radius
+    }
+
+    /// Drop accumulated PID state — on a new waypoint, or when the target
+    /// is lost, so a reappearing object does not inherit a stale integral.
+    pub fn reset(&mut self) {
+        self.heading_pid.reset();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +215,73 @@ mod tests {
         let mut pid = Pid::new(0.0, 0.0, 1.0, 1.0);
         // Big first error must NOT produce a derivative spike.
         assert!(pid.update(100.0, 0.02).abs() < 1e-12);
+    }
+
+    fn ctrl() -> GotoController {
+        GotoController::new(ControlGains::WAYPOINT)
+    }
+
+    #[test]
+    fn facing_the_target_gives_full_speed() {
+        let mut c = ctrl();
+        let (v, w) = c.steer(0.0, 10.0, 0.02);
+        assert!((v - ControlGains::WAYPOINT.v_max).abs() < 1e-12, "v = {v}");
+        assert!(w.abs() < 1e-12, "no turn needed, got {w}");
+    }
+
+    #[test]
+    fn misalignment_throttles_forward_speed() {
+        let mut c = ctrl();
+        // 45 degrees off: alignment = 1 - (pi/4)/(pi/2) = 0.5
+        let (v, _) = c.steer(core::f64::consts::FRAC_PI_4, 10.0, 0.02);
+        assert!(
+            (v - ControlGains::WAYPOINT.v_max * 0.5).abs() < 1e-12,
+            "v = {v}"
+        );
+    }
+
+    #[test]
+    fn target_behind_never_drives_backwards() {
+        let mut c = ctrl();
+        // Anything past 90 degrees would give a negative alignment factor.
+        for err in [FRAC_PI_2 + 0.1, 2.0, core::f64::consts::PI] {
+            let (v, _) = c.steer(err, 10.0, 0.02);
+            assert!(v >= 0.0, "error {err} drove backwards at {v}");
+            assert!(v.abs() < 1e-12, "should pivot in place, got v = {v}");
+        }
+    }
+
+    #[test]
+    fn speed_budget_is_capped_at_v_max() {
+        let mut c = ctrl();
+        let (v, _) = c.steer(0.0, 1000.0, 0.02);
+        assert!(v <= ControlGains::WAYPOINT.v_max + 1e-12, "v = {v}");
+    }
+
+    #[test]
+    fn goto_point_turns_toward_the_target() {
+        let mut c = ctrl();
+        // Robot at origin facing +x; target is directly to its left (+y).
+        let pose = Pose {
+            x: 0.0,
+            y: 0.0,
+            theta: 0.0,
+        };
+        let (_, w) = c.goto_point(&pose, (0.0, 1.0), 0.02);
+        assert!(w > 0.0, "should turn left (positive w), got {w}");
+    }
+
+    #[test]
+    fn arrival_uses_the_configured_radius() {
+        let c = ctrl();
+        let pose = Pose {
+            x: 0.0,
+            y: 0.0,
+            theta: 0.0,
+        };
+        let r = ControlGains::WAYPOINT.arrive_radius;
+        assert!(c.arrived(&pose, (r * 0.5, 0.0)));
+        assert!(!c.arrived(&pose, (r * 2.0, 0.0)));
     }
 
     #[test]

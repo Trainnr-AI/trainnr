@@ -28,20 +28,24 @@
 pub mod control;
 pub mod exercises;
 pub mod motor;
+pub mod nav;
 pub mod odometry;
 pub mod pose;
 pub mod rng;
 pub mod robot;
+pub mod spec;
 pub mod sensors;
 pub mod world;
 
-pub use control::Pid;
+pub use control::{GotoController, Pid};
 pub use motor::Motor;
+pub use nav::{lookahead_point, summarize_scan, AvoidHysteresis, Mode, ScanSummary};
 pub use odometry::Odometry;
 pub use pose::{wrap_angle, Pose};
 pub use rng::Rng;
 pub use robot::{DiffDrive, Robot};
 pub use sensors::Encoders;
+pub use spec::{ControlGains, RobotSpec};
 pub use world::Segment;
 
 // ---- std only: these allocate. ----

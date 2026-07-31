@@ -4338,9 +4338,14 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 name = "hil-host"
 version = "0.1.0"
 dependencies = [
+ "hil-protocol",
  "rerun",
  "sim-core",
 ]
+
+[[package]]
+name = "hil-protocol"
+version = "0.1.0"
 
 [[package]]
 name = "hmac"

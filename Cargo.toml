@@ -5,6 +5,7 @@ members = [
     "crates/hil-host",
     "crates/quad-encoder",
     "crates/vision",
+    "crates/hil-protocol",
     "crates/sim-core",
     "crates/sim-run",
 ]

@@ -5,9 +5,13 @@
 //! world, now fed by a real camera:
 //!
 //! ```text
-//!   camera → D-FINE → bearing → shortest_turn → Pid → DiffDrive → Robot
-//!            (P1)     (P1)      (exercise 2)  (ex. 4)  (M0)      (M0)
+//!   camera → Detector → bearing → GotoController → DiffDrive → Robot
+//!            (P1)       (P1)      (ex. 2 + 4, M3)   (M0)       (M0)
 //! ```
+//!
+//! `Detector` is a trait, and which model sits behind it is a CLI flag —
+//! so the same control loop runs on any of the seven detectors in
+//! `DetectorModel`, or on the open-vocabulary detector from `find`.
 //!
 //! # What is and isn't a closed loop here — read this
 //!
@@ -26,48 +30,52 @@
 //!
 //! ```sh
 //! cargo run --release -p vision --bin chase
+//! cargo run --release -p vision --bin chase -- --model deimv2-s
+//! cargo run --release -p vision --bin chase -- --find "red mug"   # open-vocab
 //! ```
+//!
+//! `--find` is the **fast/slow split**: Grounding DINO interprets the
+//! phrase once at 0.3 fps, hands over a `TargetLock`, and D-FINE tracks
+//! that class-plus-colour at 20 fps. The control loop never waits on the
+//! slow model. See `vision::lock`.
 //!
 //! Then hold something the model knows — a cup, a bottle, a phone, a book,
 //! or just yourself — and move it left and right.
 
 use anyhow::Result;
-use sim_core::{wrap_angle, DiffDrive, Pid, Pose, Robot};
-use std::sync::mpsc;
+use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
 use std::time::Instant;
 use vision::{
-    deadband, CameraSource, DFineDetector, Detection, Detector, Frame, LowPass, NokhwaCamera,
+    approach_factor, deadband, pick_target, Args, Detection, Detector, Frame, LowPass,
+    ObjectDetector, OpenVocabDetector, Source, Stream, TargetLock,
 };
-
-/// Which camera. `cargo run -p vision --bin BIN -- 1` for the second one;
-/// run the `probe` binary to list what is attached.
-fn camera_index() -> u32 {
-    std::env::args()
-        .nth(1)
-        .and_then(|a| a.parse().ok())
-        .unwrap_or(0)
-}
 
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 const MIN_CONFIDENCE: f32 = 0.40;
+/// Acquisition threshold for the open-vocabulary pass — **lower than
+/// [`MIN_CONFIDENCE`] on purpose.**
+///
+/// Grounding DINO scores on a different scale from a closed-set DETR: its
+/// confidences are text-image similarities, not class posteriors, and a
+/// correct hit routinely lands around 0.3. Reusing D-FINE's 0.40 here
+/// found nothing at all on the first real run. `find` has always used
+/// 0.30; this matches it and goes slightly lower, because a false hit at
+/// acquisition is cheap (you see the wrong lock printed and rerun) while
+/// a missed hit costs a 3-second model pass.
+const ACQUIRE_CONFIDENCE: f32 = 0.25;
 /// Rough webcam horizontal field of view (~60°).
 const HORIZONTAL_FOV: f32 = 1.05;
 
-/// Heading PID — the same gains tuned by eye in the Rerun viewer during
-/// Stage 0's M3, now steering on camera input instead of a goal position.
-const HEADING_KP: f64 = 3.0;
-const HEADING_KI: f64 = 0.0;
-const HEADING_KD: f64 = 0.3;
-
-/// Robot geometry, unchanged from the simulator.
-const WHEEL_RADIUS: f64 = 0.03;
-const TRACK_WIDTH: f64 = 0.15;
+/// The robot and its steering profile — the same definitions the simulator
+/// and the firmware compile against. VISUAL_SERVO is deliberately gentler
+/// than WAYPOINT; the reason is documented on the constant itself.
+const SPEC: RobotSpec = RobotSpec::SIM_BOT;
+const GAINS: ControlGains = ControlGains::VISUAL_SERVO;
 
 /// Fraction of frame height a box occupies when the robot should stop
 /// approaching. Bigger box = closer object.
 const STOP_AT_HEIGHT_FRACTION: f32 = 0.55;
-const V_MAX: f64 = 0.35;
 
 // ---- Noise handling. Tune these and watch the two turn_rate plots. ----
 /// Low-pass on the measured bearing. 1.0 = off, 0.05 = very smooth/laggy.
@@ -78,6 +86,7 @@ const HEADING_DEADBAND: f64 = 0.02;
 
 fn main() -> Result<()> {
     vision::logging::init();
+    let args = Args::parse_from(std::env::args().skip(1))?;
     let rec = rerun::RecordingStreamBuilder::new("robotiq_chase").spawn()?;
     rec.log_static(
         "/",
@@ -90,61 +99,150 @@ fn main() -> Result<()> {
         ]),
     )?;
 
-    let (tx, rx) = mpsc::channel();
-    eprintln!("requesting camera access...");
-    nokhwa::nokhwa_initialize(move |g| {
-        let _ = tx.send(g);
-    });
-    if !rx.recv().unwrap_or(false) {
-        anyhow::bail!("camera permission denied — run from Terminal.app, not an editor terminal");
-    }
+    // Permission + capture thread + latest-wins channel, in one call.
+    let source = match args.camera {
+        Some(i) => Source::Index(i),
+        None => Source::Name("Brio"),
+    };
+    let stream = match Stream::start(source, DESIRED, FPS) {
+        Ok(s) => s,
+        // Named lookup can miss if no Brio is attached; fall back to any.
+        Err(_) if args.camera.is_none() => Stream::open(Source::Index(0), DESIRED, FPS)?,
+        Err(e) => return Err(e),
+    };
+    let (w, h) = stream.resolution;
 
-    let (frame_tx, frame_rx) = mpsc::sync_channel::<Frame>(1);
-    let (res_tx, res_rx) = mpsc::channel::<(u32, u32)>();
-    let index = camera_index();
-    std::thread::spawn(move || {
-        let mut cam = match NokhwaCamera::open(index, DESIRED, FPS) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("camera: {e:#}");
-                return;
+    // The detector is chosen here and never mentioned again — everything
+    // downstream talks to `dyn Detector`. This is what makes `--find`
+    // cost one line instead of a second binary.
+    println!(
+        "camera {w}x{h}; loading {} ({})...",
+        args.model.name(),
+        args.model.describe()
+    );
+    // Concrete type, not `Box<dyn Detector>`: acquisition needs to retune
+    // the confidence floor, which is not part of the trait. It is coerced
+    // to `&mut dyn Detector` at the one place polymorphism is needed.
+    let mut detector = ObjectDetector::load(args.model, MIN_CONFIDENCE, vision::Backend::Cpu)?;
+
+    // ---- the fast/slow handoff (docs/14, vision::lock) ----
+    //
+    // `--find` does NOT swap the control loop onto the open-vocabulary
+    // detector. That would run the loop at 0.3 fps. Instead the slow model
+    // runs ONCE to interpret the phrase, hands over a TargetLock, and the
+    // fast model does the tracking at 20 fps.
+    let lock = match &args.find {
+        None => None,
+        Some(phrase) => {
+            println!("loading open-vocabulary detector to find {phrase:?} (slow, once)...");
+            let mut slow = OpenVocabDetector::new(&args.phrases(), ACQUIRE_CONFIDENCE)?;
+
+            let frame = stream
+                .frames
+                .recv()
+                .map_err(|_| anyhow::anyhow!("camera stopped before acquisition"))?;
+
+            let t = Instant::now();
+            let named = slow.detect(&frame)?;
+            println!(
+                "  open-vocab pass: {:.0} ms, {} hit(s)",
+                t.elapsed().as_secs_f64() * 1000.0,
+                named.len()
+            );
+            // Print every hit with its score. A failed acquisition is
+            // otherwise undiagnosable: "0 hits" cannot distinguish "not in
+            // frame" from "scored 0.24 against a 0.25 bar".
+            for d in &named {
+                println!("    {:>6.0}%  {}", d.confidence * 100.0, d.label);
             }
-        };
-        let _ = res_tx.send(cam.resolution());
-        loop {
-            match cam.next_frame() {
-                Ok(f) => match frame_tx.try_send(f) {
-                    Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
-                    Err(_) => return,
-                },
-                Err(e) => {
-                    eprintln!("capture: {e:#}");
-                    return;
+            let hit = pick_target(&named).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "could not find {phrase:?} in view (nothing scored above \
+                     {:.0}%). Try a plainer noun, or move the object closer.",
+                    ACQUIRE_CONFIDENCE * 100.0
+                )
+            })?;
+
+            // Both detectors on the SAME frame: the bridge is spatial.
+            //
+            // Drop the fast detector's floor for this one pass. Acquisition
+            // wants RECALL — every plausible box is a candidate for spatial
+            // matching — while the control loop wants precision. At the
+            // tracking threshold a small mug never becomes a candidate and
+            // the handoff fails against a frame full of furniture.
+            detector.set_min_confidence(ACQUIRE_CONFIDENCE);
+            let candidates = detector.detect(&frame)?;
+            detector.set_min_confidence(MIN_CONFIDENCE);
+
+            // Show the overlap, not just the labels: a failed handoff needs
+            // to distinguish "the object was never detected" from "it was,
+            // and the overlap was 0.28 against a 0.30 bar".
+            for c in &candidates {
+                println!(
+                    "    {:>6.0}%  {:<16} overlap {:.2}",
+                    c.confidence * 100.0,
+                    c.label,
+                    vision::iou(hit, c)
+                );
+            }
+
+            // Put the acquisition frame on the timeline BEFORE deciding.
+            // A failed handoff used to leave an empty viewer, which is the
+            // worst possible moment to have nothing on screen: you cannot
+            // tell whether the object was out of frame, boxed differently
+            // by the two models, or simply missed by the fast one.
+            log_acquisition(&rec, &frame, hit, &candidates)?;
+            match TargetLock::acquire(phrase, hit, &candidates, &frame) {
+                Some(lock) => {
+                    println!("  {}\n", lock.describe());
+                    Some(lock)
+                }
+                None => {
+                    // Not fatal any more: fall back to chasing the most
+                    // confident thing, and leave the acquisition frame on
+                    // the timeline so the disagreement is visible.
+                    eprintln!(
+                        "  no COCO-80 class overlaps {phrase:?} (best overlap \
+                         {:.2}, need {:.2}).\n  \
+                         Falling back to untargeted chase — the viewer shows \
+                         what each model saw.\n",
+                        candidates
+                            .iter()
+                            .map(|c| vision::iou(hit, c))
+                            .fold(0.0f32, f32::max),
+                        vision::lock::MIN_OVERLAP
+                    );
+                    None
                 }
             }
         }
-    });
-
-    let (w, h) = res_rx
-        .recv()
-        .map_err(|_| anyhow::anyhow!("camera failed"))?;
-    println!("camera {w}x{h}; loading detector...");
-    let mut detector = DFineDetector::new(MIN_CONFIDENCE)?;
+    };
 
     // The Stage 0 robot, unchanged.
-    let model = DiffDrive {
-        wheel_radius: WHEEL_RADIUS,
-        track_width: TRACK_WIDTH,
-    };
     let mut robot = Robot {
-        model,
+        model: SPEC.drive(),
         pose: Pose::ORIGIN,
     };
-    let mut heading_pid = Pid::new(HEADING_KP, HEADING_KI, HEADING_KD, 1.0);
+    let mut controller = GotoController::new(GAINS);
     // A second, identical PID fed the UNFILTERED signal. It steers
     // nothing — it exists so the viewer can plot what we avoided.
-    let mut raw_pid = Pid::new(HEADING_KP, HEADING_KI, HEADING_KD, 1.0);
+    let mut raw_pid = Pid::new(
+        GAINS.heading_kp,
+        GAINS.heading_ki,
+        GAINS.heading_kd,
+        GAINS.heading_i_limit,
+    );
     let mut bearing_filter = LowPass::new(BEARING_ALPHA);
+
+    // Clear the acquisition overlay before the loop starts.
+    //
+    // Rerun keeps a logged entity visible until it is overwritten, and
+    // these were logged ONCE at t=0. Without this they hang over every
+    // live frame for the rest of the session — a stale box from a frame
+    // three minutes ago, indistinguishable from a live detection. Caught
+    // on screen, which is the only place it was visible.
+    rec.log("camera/image/named", &rerun::Clear::flat())?;
+    rec.log("camera/image/candidates", &rerun::Clear::flat())?;
 
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
@@ -153,14 +251,16 @@ fn main() -> Result<()> {
     let mut last_tick = Instant::now();
     let mut last_print = Instant::now();
 
-    for frame in frame_rx {
+    for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);
         last_tick = Instant::now();
 
         let detections = detector.detect(&frame)?;
-        let target = detections
-            .iter()
-            .max_by(|a, b| a.confidence.total_cmp(&b.confidence));
+        // Locked: track that class (and colour). Otherwise: most confident.
+        let target = match &lock {
+            Some(l) => l.pick(&detections, &frame),
+            None => pick_target(&detections),
+        };
 
         let (v_cmd, w_cmd, heading_error, w_raw) = match target {
             Some(d) => {
@@ -185,28 +285,27 @@ fn main() -> Result<()> {
                     wrap_angle(shortest(robot.pose.theta, target_heading)),
                     HEADING_DEADBAND,
                 );
-                let w = heading_pid.update(error, dt);
-
                 // ---- the open-loop part (see module docs) ----
                 // Box height as a distance proxy: taller box = closer.
-                let height_fraction = d.height / frame.height as f32;
-                let approach = (1.0 - height_fraction / STOP_AT_HEIGHT_FRACTION).clamp(0.0, 1.0);
-                // Turn first, drive second — same alignment throttle as M3.
-                let alignment = (1.0 - error.abs() / std::f64::consts::FRAC_PI_2).max(0.0);
-                let v = V_MAX * approach as f64 * alignment;
+                let approach = approach_factor(d.height, frame.height, STOP_AT_HEIGHT_FRACTION);
+
+                // The shared steering law. Identical to the simulator's and
+                // the firmware's — only the speed budget differs, because
+                // here "how far away" comes from box size, not a map.
+                let (v, w) = controller.steer(error, GAINS.v_max * approach as f64, dt);
                 (v, w, error, w_raw)
             }
             None => {
                 // Nothing seen: stop, and forget accumulated PID state so a
                 // reappearing object doesn't inherit a stale integral.
-                heading_pid.reset();
+                controller.reset();
                 raw_pid.reset();
                 bearing_filter.reset();
                 (0.0, 0.0, 0.0, 0.0)
             }
         };
 
-        let (omega_l, omega_r) = model.inverse(v_cmd, w_cmd);
+        let (omega_l, omega_r) = SPEC.drive().inverse(v_cmd, w_cmd);
         robot.step(omega_l, omega_r, dt);
 
         // ---- telemetry ----
@@ -271,6 +370,41 @@ fn main() -> Result<()> {
 /// re-derived here because `sim_core::exercises` is where it lives.
 fn shortest(from: f64, to: f64) -> f64 {
     sim_core::exercises::shortest_turn(from, to)
+}
+
+/// Draw what each model saw during the handoff: the named object in
+/// yellow, the fast detector's candidates in blue. Their disagreement is
+/// the whole story when acquisition fails.
+fn log_acquisition(
+    rec: &rerun::RecordingStream,
+    frame: &Frame,
+    hit: &Detection,
+    candidates: &[Detection],
+) -> Result<()> {
+    rec.set_duration_secs("time", 0.0);
+    rec.log(
+        "camera/image",
+        &rerun::Image::from_rgb24(frame.rgb.clone(), [frame.width, frame.height]),
+    )?;
+    rec.log(
+        "camera/image/named",
+        &rerun::Boxes2D::from_mins_and_sizes([(hit.x, hit.y)], [(hit.width, hit.height)])
+            .with_labels([format!("{} {:.0}%", hit.label, hit.confidence * 100.0)])
+            .with_colors([rerun::Color::from_rgb(255, 230, 60)]),
+    )?;
+    let mins: Vec<(f32, f32)> = candidates.iter().map(|d| (d.x, d.y)).collect();
+    let sizes: Vec<(f32, f32)> = candidates.iter().map(|d| (d.width, d.height)).collect();
+    let labels: Vec<String> = candidates
+        .iter()
+        .map(|d| format!("{} {:.0}% iou {:.2}", d.label, d.confidence * 100.0, vision::iou(hit, d)))
+        .collect();
+    rec.log(
+        "camera/image/candidates",
+        &rerun::Boxes2D::from_mins_and_sizes(mins, sizes)
+            .with_labels(labels)
+            .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+    )?;
+    Ok(())
 }
 
 fn log_boxes(rec: &rerun::RecordingStream, dets: &[Detection]) -> Result<()> {

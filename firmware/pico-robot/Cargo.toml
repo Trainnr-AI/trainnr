@@ -18,6 +18,7 @@ heapless = "0.9"
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { path = "../../crates/quad-encoder" }
 sim-core = { path = "../../crates/sim-core", default-features = false }
+hil-protocol = { path = "../../crates/hil-protocol" }
 
 [profile.release]
 debug = true
