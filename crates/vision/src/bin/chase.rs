@@ -46,13 +46,24 @@ use anyhow::Result;
 use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
 use std::time::Instant;
 use vision::{
-    approach_factor, deadband, pick_target, Args, Detection, Detector, LowPass, ObjectDetector,
-    OpenVocabDetector, Source, Stream, TargetLock,
+    approach_factor, deadband, pick_target, Args, Detection, Detector, Frame, LowPass,
+    ObjectDetector, OpenVocabDetector, Source, Stream, TargetLock,
 };
 
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 const MIN_CONFIDENCE: f32 = 0.40;
+/// Acquisition threshold for the open-vocabulary pass — **lower than
+/// [`MIN_CONFIDENCE`] on purpose.**
+///
+/// Grounding DINO scores on a different scale from a closed-set DETR: its
+/// confidences are text-image similarities, not class posteriors, and a
+/// correct hit routinely lands around 0.3. Reusing D-FINE's 0.40 here
+/// found nothing at all on the first real run. `find` has always used
+/// 0.30; this matches it and goes slightly lower, because a false hit at
+/// acquisition is cheap (you see the wrong lock printed and rerun) while
+/// a missed hit costs a 3-second model pass.
+const ACQUIRE_CONFIDENCE: f32 = 0.25;
 /// Rough webcam horizontal field of view (~60°).
 const HORIZONTAL_FOV: f32 = 1.05;
 
@@ -109,11 +120,10 @@ fn main() -> Result<()> {
         args.model.name(),
         args.model.describe()
     );
-    let mut detector: Box<dyn Detector> = Box::new(ObjectDetector::load(
-        args.model,
-        MIN_CONFIDENCE,
-        vision::Backend::Cpu,
-    )?);
+    // Concrete type, not `Box<dyn Detector>`: acquisition needs to retune
+    // the confidence floor, which is not part of the trait. It is coerced
+    // to `&mut dyn Detector` at the one place polymorphism is needed.
+    let mut detector = ObjectDetector::load(args.model, MIN_CONFIDENCE, vision::Backend::Cpu)?;
 
     // ---- the fast/slow handoff (docs/14, vision::lock) ----
     //
@@ -125,7 +135,7 @@ fn main() -> Result<()> {
         None => None,
         Some(phrase) => {
             println!("loading open-vocabulary detector to find {phrase:?} (slow, once)...");
-            let mut slow = OpenVocabDetector::new(&args.phrases(), MIN_CONFIDENCE)?;
+            let mut slow = OpenVocabDetector::new(&args.phrases(), ACQUIRE_CONFIDENCE)?;
 
             let frame = stream
                 .frames
@@ -139,21 +149,72 @@ fn main() -> Result<()> {
                 t.elapsed().as_secs_f64() * 1000.0,
                 named.len()
             );
-            let hit = pick_target(&named)
-                .ok_or_else(|| anyhow::anyhow!("could not find {phrase:?} in view"))?;
-
-            // Both detectors on the SAME frame: the bridge is spatial.
-            let candidates = detector.detect(&frame)?;
-            let lock = TargetLock::acquire(phrase, hit, &candidates, &frame).ok_or_else(|| {
+            // Print every hit with its score. A failed acquisition is
+            // otherwise undiagnosable: "0 hits" cannot distinguish "not in
+            // frame" from "scored 0.24 against a 0.25 bar".
+            for d in &named {
+                println!("    {:>6.0}%  {}", d.confidence * 100.0, d.label);
+            }
+            let hit = pick_target(&named).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "found {phrase:?}, but no COCO-80 class overlaps it — \
-                     the fast detector has no equivalent to track.\n\
-                     Candidates in frame: {:?}",
-                    candidates.iter().map(|c| &c.label).collect::<Vec<_>>()
+                    "could not find {phrase:?} in view (nothing scored above \
+                     {:.0}%). Try a plainer noun, or move the object closer.",
+                    ACQUIRE_CONFIDENCE * 100.0
                 )
             })?;
-            println!("  {}\n", lock.describe());
-            Some(lock)
+
+            // Both detectors on the SAME frame: the bridge is spatial.
+            //
+            // Drop the fast detector's floor for this one pass. Acquisition
+            // wants RECALL — every plausible box is a candidate for spatial
+            // matching — while the control loop wants precision. At the
+            // tracking threshold a small mug never becomes a candidate and
+            // the handoff fails against a frame full of furniture.
+            detector.set_min_confidence(ACQUIRE_CONFIDENCE);
+            let candidates = detector.detect(&frame)?;
+            detector.set_min_confidence(MIN_CONFIDENCE);
+
+            // Show the overlap, not just the labels: a failed handoff needs
+            // to distinguish "the object was never detected" from "it was,
+            // and the overlap was 0.28 against a 0.30 bar".
+            for c in &candidates {
+                println!(
+                    "    {:>6.0}%  {:<16} overlap {:.2}",
+                    c.confidence * 100.0,
+                    c.label,
+                    vision::iou(hit, c)
+                );
+            }
+
+            // Put the acquisition frame on the timeline BEFORE deciding.
+            // A failed handoff used to leave an empty viewer, which is the
+            // worst possible moment to have nothing on screen: you cannot
+            // tell whether the object was out of frame, boxed differently
+            // by the two models, or simply missed by the fast one.
+            log_acquisition(&rec, &frame, hit, &candidates)?;
+            match TargetLock::acquire(phrase, hit, &candidates, &frame) {
+                Some(lock) => {
+                    println!("  {}\n", lock.describe());
+                    Some(lock)
+                }
+                None => {
+                    // Not fatal any more: fall back to chasing the most
+                    // confident thing, and leave the acquisition frame on
+                    // the timeline so the disagreement is visible.
+                    eprintln!(
+                        "  no COCO-80 class overlaps {phrase:?} (best overlap \
+                         {:.2}, need {:.2}).\n  \
+                         Falling back to untargeted chase — the viewer shows \
+                         what each model saw.\n",
+                        candidates
+                            .iter()
+                            .map(|c| vision::iou(hit, c))
+                            .fold(0.0f32, f32::max),
+                        vision::lock::MIN_OVERLAP
+                    );
+                    None
+                }
+            }
         }
     };
 
@@ -172,6 +233,16 @@ fn main() -> Result<()> {
         GAINS.heading_i_limit,
     );
     let mut bearing_filter = LowPass::new(BEARING_ALPHA);
+
+    // Clear the acquisition overlay before the loop starts.
+    //
+    // Rerun keeps a logged entity visible until it is overwritten, and
+    // these were logged ONCE at t=0. Without this they hang over every
+    // live frame for the rest of the session — a stale box from a frame
+    // three minutes ago, indistinguishable from a live detection. Caught
+    // on screen, which is the only place it was visible.
+    rec.log("camera/image/named", &rerun::Clear::flat())?;
+    rec.log("camera/image/candidates", &rerun::Clear::flat())?;
 
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
@@ -299,6 +370,41 @@ fn main() -> Result<()> {
 /// re-derived here because `sim_core::exercises` is where it lives.
 fn shortest(from: f64, to: f64) -> f64 {
     sim_core::exercises::shortest_turn(from, to)
+}
+
+/// Draw what each model saw during the handoff: the named object in
+/// yellow, the fast detector's candidates in blue. Their disagreement is
+/// the whole story when acquisition fails.
+fn log_acquisition(
+    rec: &rerun::RecordingStream,
+    frame: &Frame,
+    hit: &Detection,
+    candidates: &[Detection],
+) -> Result<()> {
+    rec.set_duration_secs("time", 0.0);
+    rec.log(
+        "camera/image",
+        &rerun::Image::from_rgb24(frame.rgb.clone(), [frame.width, frame.height]),
+    )?;
+    rec.log(
+        "camera/image/named",
+        &rerun::Boxes2D::from_mins_and_sizes([(hit.x, hit.y)], [(hit.width, hit.height)])
+            .with_labels([format!("{} {:.0}%", hit.label, hit.confidence * 100.0)])
+            .with_colors([rerun::Color::from_rgb(255, 230, 60)]),
+    )?;
+    let mins: Vec<(f32, f32)> = candidates.iter().map(|d| (d.x, d.y)).collect();
+    let sizes: Vec<(f32, f32)> = candidates.iter().map(|d| (d.width, d.height)).collect();
+    let labels: Vec<String> = candidates
+        .iter()
+        .map(|d| format!("{} {:.0}% iou {:.2}", d.label, d.confidence * 100.0, vision::iou(hit, d)))
+        .collect();
+    rec.log(
+        "camera/image/candidates",
+        &rerun::Boxes2D::from_mins_and_sizes(mins, sizes)
+            .with_labels(labels)
+            .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+    )?;
+    Ok(())
 }
 
 fn log_boxes(rec: &rerun::RecordingStream, dets: &[Detection]) -> Result<()> {

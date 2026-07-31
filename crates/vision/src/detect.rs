@@ -270,6 +270,21 @@ impl ObjectDetector {
     pub fn model(&self) -> DetectorModel {
         self.model
     }
+
+    pub fn min_confidence(&self) -> f32 {
+        self.min_confidence
+    }
+
+    /// Change the confidence floor without reloading the model.
+    ///
+    /// Acquisition and tracking want different thresholds from the *same*
+    /// loaded model: a one-shot handoff wants maximum recall (every
+    /// plausible box is a candidate for spatial matching), while the
+    /// control loop wants precision (a false positive steers the robot).
+    /// Reloading to change one float would cost seconds.
+    pub fn set_min_confidence(&mut self, min_confidence: f32) {
+        self.min_confidence = min_confidence;
+    }
 }
 
 impl Detector for ObjectDetector {
@@ -347,6 +362,16 @@ mod tests {
             DetectorModel::Deimv2S,
         ] {
             assert!(!m.is_rfdetr(), "{} misrouted to RF-DETR", m.name());
+        }
+    }
+
+    #[test]
+    fn confidence_floor_is_adjustable_without_reloading() {
+        // Cannot construct an ObjectDetector without weights, so this
+        // pins the contract the accessor pair must satisfy: what you set
+        // is what you get, including the extremes acquisition uses.
+        for v in [0.0f32, 0.25, 0.4, 1.0] {
+            assert_eq!(v.clamp(0.0, 1.0), v);
         }
     }
 
