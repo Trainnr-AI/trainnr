@@ -1,0 +1,12 @@
+[package]
+name = "hil-protocol"
+version = "0.1.0"
+edition.workspace = true
+
+# Zero dependencies, no_std, no alloc. This crate is compiled twice — once
+# for the Mac (hil-host) and once for ARM (pico-robot) — so it must not
+# assume an allocator or an operating system.
+[features]
+default = []
+
+[dependencies]
