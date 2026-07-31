@@ -9,4 +9,5 @@ edition.workspace = true
 
 [dependencies]
 sim-core = { path = "../sim-core" }
+hil-protocol = { path = "../hil-protocol" }
 rerun = "0.35"
