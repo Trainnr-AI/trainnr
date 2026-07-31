@@ -34,6 +34,11 @@
 //! cargo run --release -p vision --bin chase -- --find "red mug"   # open-vocab
 //! ```
 //!
+//! `--find` is the **fast/slow split**: Grounding DINO interprets the
+//! phrase once at 0.3 fps, hands over a `TargetLock`, and D-FINE tracks
+//! that class-plus-colour at 20 fps. The control loop never waits on the
+//! slow model. See `vision::lock`.
+//!
 //! Then hold something the model knows — a cup, a bottle, a phone, a book,
 //! or just yourself — and move it left and right.
 
@@ -42,7 +47,7 @@ use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, Robot
 use std::time::Instant;
 use vision::{
     approach_factor, deadband, pick_target, Args, Detection, Detector, LowPass, ObjectDetector,
-    OpenVocabDetector, Source, Stream,
+    OpenVocabDetector, Source, Stream, TargetLock,
 };
 
 const DESIRED: (u32, u32) = (640, 480);
@@ -99,22 +104,56 @@ fn main() -> Result<()> {
     // The detector is chosen here and never mentioned again — everything
     // downstream talks to `dyn Detector`. This is what makes `--find`
     // cost one line instead of a second binary.
-    let mut detector: Box<dyn Detector> = match &args.find {
+    println!(
+        "camera {w}x{h}; loading {} ({})...",
+        args.model.name(),
+        args.model.describe()
+    );
+    let mut detector: Box<dyn Detector> = Box::new(ObjectDetector::load(
+        args.model,
+        MIN_CONFIDENCE,
+        vision::Backend::Cpu,
+    )?);
+
+    // ---- the fast/slow handoff (docs/14, vision::lock) ----
+    //
+    // `--find` does NOT swap the control loop onto the open-vocabulary
+    // detector. That would run the loop at 0.3 fps. Instead the slow model
+    // runs ONCE to interpret the phrase, hands over a TargetLock, and the
+    // fast model does the tracking at 20 fps.
+    let lock = match &args.find {
+        None => None,
         Some(phrase) => {
-            println!("camera {w}x{h}; loading open-vocabulary detector for {phrase:?}...");
-            Box::new(OpenVocabDetector::new(&args.phrases(), MIN_CONFIDENCE)?)
-        }
-        None => {
+            println!("loading open-vocabulary detector to find {phrase:?} (slow, once)...");
+            let mut slow = OpenVocabDetector::new(&args.phrases(), MIN_CONFIDENCE)?;
+
+            let frame = stream
+                .frames
+                .recv()
+                .map_err(|_| anyhow::anyhow!("camera stopped before acquisition"))?;
+
+            let t = Instant::now();
+            let named = slow.detect(&frame)?;
             println!(
-                "camera {w}x{h}; loading {} ({})...",
-                args.model.name(),
-                args.model.describe()
+                "  open-vocab pass: {:.0} ms, {} hit(s)",
+                t.elapsed().as_secs_f64() * 1000.0,
+                named.len()
             );
-            Box::new(ObjectDetector::load(
-                args.model,
-                MIN_CONFIDENCE,
-                vision::Backend::Cpu,
-            )?)
+            let hit = pick_target(&named)
+                .ok_or_else(|| anyhow::anyhow!("could not find {phrase:?} in view"))?;
+
+            // Both detectors on the SAME frame: the bridge is spatial.
+            let candidates = detector.detect(&frame)?;
+            let lock = TargetLock::acquire(phrase, hit, &candidates, &frame).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "found {phrase:?}, but no COCO-80 class overlaps it — \
+                     the fast detector has no equivalent to track.\n\
+                     Candidates in frame: {:?}",
+                    candidates.iter().map(|c| &c.label).collect::<Vec<_>>()
+                )
+            })?;
+            println!("  {}\n", lock.describe());
+            Some(lock)
         }
     };
 
@@ -146,7 +185,11 @@ fn main() -> Result<()> {
         last_tick = Instant::now();
 
         let detections = detector.detect(&frame)?;
-        let target = pick_target(&detections);
+        // Locked: track that class (and colour). Otherwise: most confident.
+        let target = match &lock {
+            Some(l) => l.pick(&detections, &frame),
+            None => pick_target(&detections),
+        };
 
         let (v_cmd, w_cmd, heading_error, w_raw) = match target {
             Some(d) => {
