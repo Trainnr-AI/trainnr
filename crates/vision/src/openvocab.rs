@@ -185,6 +185,82 @@ pub fn dominant_hue(frame: &Frame, det: &Detection) -> Option<(f32, f32)> {
     Some((hue, sat_sum / counted as f32))
 }
 
+/// EXERCISE 7 — centre-weighted hue. **Prakhar implements this.**
+///
+/// Fixes a limitation found on camera on 2026-07-31: [`dominant_hue`]
+/// averages over the *whole* box, so a translucent grey bottle on a wooden
+/// desk reported as **"orange"** — it measured the desk showing through and
+/// around the bottle, not the bottle. Detector boxes always contain some
+/// background; near the edges they contain mostly background.
+///
+/// The fix: weight each pixel by how close it is to the box centre, so
+/// centre pixels (almost certainly the object) count for much more than
+/// corner pixels (often background).
+///
+/// # The recipe, line by line
+///
+/// 1. **Clip the box to the frame**, exactly as [`dominant_hue`] does —
+///    copy those first six lines, including the `if x1 <= x0 || y1 <= y0`
+///    early return. Detector boxes routinely hang off the frame edge.
+///
+/// 2. **Find the box centre and half-size**, in `f32`:
+///    ```text
+///    cx = (x0 + x1) as f32 / 2.0        hw = (x1 - x0) as f32 / 2.0
+///    cy = (y0 + y1) as f32 / 2.0        hh = (y1 - y0) as f32 / 2.0
+///    ```
+///    `hw`/`hh` are half the box width/height. Dividing by them below is
+///    what makes the weight independent of box size — a normalised
+///    distance, so a tall thin box behaves like a square one.
+///
+/// 3. **Per pixel, compute the normalised distance from the centre.** Use
+///    the pixel's *centre* (`x as f32 + 0.5`), not its corner:
+///    ```text
+///    dx = (x as f32 + 0.5 - cx) / hw
+///    dy = (y as f32 + 0.5 - cy) / hh
+///    r  = dx.hypot(dy)
+///    ```
+///    `r` is 0 at the box centre and 1 at the middle of each edge.
+///    `hypot(a, b)` is `sqrt(a² + b²)` — see docs/learning/math-01.
+///
+/// 4. **Turn distance into a weight** that falls to zero at the edge:
+///    ```text
+///    w = (1.0 - r).max(0.0)
+///    w = w * w                    // square it: sharper falloff
+///    ```
+///    `.max(0.0)` matters — past `r = 1` (the box corners) `1 - r` goes
+///    *negative*, and a negative weight would actively pull the average
+///    toward the corner colour. The same `.max(0.0)` floor you wrote in
+///    the alignment throttle, for the same reason.
+///
+/// 5. **Skip unsaturated pixels** (`sat < 0.25`), as [`dominant_hue`] does.
+///    Grey has no meaningful hue.
+///
+/// 6. **Accumulate, multiplied by `w`:**
+///    ```text
+///    sin_sum += w * rad.sin();     cos_sum += w * rad.cos();
+///    sat_sum += w * sat;           weight_sum += w;
+///    ```
+///    Still a *circular* mean — you cannot average hue directly, because
+///    359° and 1° are 2° apart but their arithmetic mean is 180°, the
+///    opposite colour. Same trick as [`dominant_hue`].
+///
+/// 7. **Finish:** if `weight_sum <= 0.0`, return `None` (every pixel was
+///    grey, or weighted to nothing). Otherwise:
+///    ```text
+///    hue = sin_sum.atan2(cos_sum).to_degrees().rem_euclid(360.0)
+///    Some((hue, sat_sum / weight_sum))
+///    ```
+///    Note the saturation is divided by `weight_sum`, **not** by a pixel
+///    count — it is a weighted average too.
+///
+/// Run the tests with:
+/// ```sh
+/// cargo test -p vision weighted -- --ignored
+/// ```
+pub fn dominant_hue_weighted(frame: &Frame, det: &Detection) -> Option<(f32, f32)> {
+    todo!("exercise 7 — see the recipe above")
+}
+
 /// Coarse colour name from a hue, for printing.
 pub fn hue_name(hue: f32) -> &'static str {
     match hue {
@@ -364,5 +440,116 @@ mod tests {
             class_id: 0,
         };
         assert_eq!(dominant_hue(&f, &d), None);
+    }
+
+    // ---- EXERCISE 7: centre-weighted hue ----
+
+    /// A frame whose box centre is one colour and whose edges are another.
+    /// This is the shape of the real failure: object in the middle, desk
+    /// and wall around it.
+    fn centre_on_background(n: u32, centre_px: u32, centre: [u8; 3], background: [u8; 3]) -> Frame {
+        let mut rgb = vec![0u8; (n * n * 3) as usize];
+        let lo = (n - centre_px) / 2;
+        let hi = (n + centre_px) / 2;
+        for y in 0..n {
+            for x in 0..n {
+                let c = if x >= lo && x < hi && y >= lo && y < hi {
+                    centre
+                } else {
+                    background
+                };
+                let i = ((y * n + x) * 3) as usize;
+                rgb[i..i + 3].copy_from_slice(&c);
+            }
+        }
+        Frame {
+            width: n,
+            height: n,
+            rgb,
+        }
+    }
+
+    #[test]
+    #[ignore = "exercise 7"]
+    fn weighted_hue_matches_plain_hue_on_a_solid_colour() {
+        // Sanity: with nothing to disagree about, weighting changes nothing.
+        for rgb in [[255u8, 0, 0], [0, 255, 0], [0, 0, 255]] {
+            let f = solid(16, 16, rgb);
+            let plain = dominant_hue(&f, &whole(&f)).unwrap();
+            let weighted = dominant_hue_weighted(&f, &whole(&f)).unwrap();
+            assert!(
+                (plain.0 - weighted.0).abs() < 1.0,
+                "solid colour: plain {:.0} vs weighted {:.0}",
+                plain.0,
+                weighted.0
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "exercise 7"]
+    fn weighted_hue_recovers_the_centre_colour_from_a_busy_box() {
+        // THE bug this fixes. Red object filling the middle of the box,
+        // blue background around it. The plain average is dragged off the
+        // object entirely; the weighted one should read the object.
+        let f = centre_on_background(32, 18, [255, 0, 0], [0, 0, 255]);
+        let b = whole(&f);
+
+        let (plain, _) = dominant_hue(&f, &b).expect("saturated");
+        let (weighted, _) = dominant_hue_weighted(&f, &b).expect("saturated");
+
+        assert_ne!(
+            hue_name(plain),
+            "red",
+            "plain average should NOT read red here (it read {:.0}deg) — \
+             if it does, the test frame is not exercising the bug",
+            plain
+        );
+        assert_eq!(
+            hue_name(weighted),
+            "red",
+            "weighted average read {:.0}deg ({}), expected red",
+            weighted,
+            hue_name(weighted)
+        );
+    }
+
+    #[test]
+    #[ignore = "exercise 7"]
+    fn weighted_hue_ignores_grey_like_the_plain_version() {
+        let f = solid(16, 16, [128, 128, 128]);
+        assert_eq!(dominant_hue_weighted(&f, &whole(&f)), None);
+    }
+
+    #[test]
+    #[ignore = "exercise 7"]
+    fn weighted_hue_rejects_a_box_outside_the_frame() {
+        let f = solid(8, 8, [255, 0, 0]);
+        let d = Detection {
+            x: 100.0,
+            y: 100.0,
+            width: 10.0,
+            height: 10.0,
+            confidence: 1.0,
+            label: "x".into(),
+            class_id: 0,
+        };
+        assert_eq!(dominant_hue_weighted(&f, &d), None);
+    }
+
+    #[test]
+    #[ignore = "exercise 7"]
+    fn weighted_hue_still_wraps_correctly() {
+        // The circular mean must survive the weighting: half the pixels at
+        // hue ~5deg, half at ~355deg, mean must be red (0), not cyan (180).
+        let mut f = solid(4, 2, [255, 0, 0]);
+        for x in 0..4u32 {
+            let i = ((f.width + x) * 3) as usize;
+            f.rgb[i] = 255;
+            f.rgb[i + 1] = 0;
+            f.rgb[i + 2] = 20;
+        }
+        let (hue, _) = dominant_hue_weighted(&f, &whole(&f)).unwrap();
+        assert_eq!(hue_name(hue), "red", "circular mean broke, hue = {hue}");
     }
 }
