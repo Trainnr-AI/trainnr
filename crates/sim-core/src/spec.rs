@@ -317,6 +317,22 @@ mod tests {
     }
 
     #[test]
+    fn changing_real_bot_is_a_single_edit() {
+        // `pico-robot` (the chip) and `hil-host` (the physics) both read
+        // REAL_BOT, and `sim-run` reads SIM_BOT. This test documents the
+        // split rather than enforcing it — its job is to make anyone
+        // editing REAL_BOT aware that both halves of the HIL rig move
+        // together, and the Stage 0 baseline deliberately does not.
+        assert_eq!(
+            RobotSpec::REAL_BOT,
+            RobotSpec::SIM_BOT,
+            "REAL_BOT has been measured — good. Expect the HIL numbers to \
+             change, and check docs/07 records the new baseline. sim-run \
+             stays on SIM_BOT so its regression test still means something."
+        );
+    }
+
+    #[test]
     fn drive_matches_the_spec() {
         let d = RobotSpec::SIM_BOT.drive();
         assert_eq!(d.wheel_radius, RobotSpec::SIM_BOT.wheel_radius);

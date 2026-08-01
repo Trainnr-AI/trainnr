@@ -42,8 +42,10 @@ use sim_core::{ControlGains, GotoController, Odometry, Pose, RobotSpec};
 
 /// Control period — must match the host's physics step.
 const DT: f64 = 0.02; // 50 Hz
-/// Robot geometry — one definition, shared with the host by construction.
-const SPEC: RobotSpec = RobotSpec::SIM_BOT;
+/// The robot this firmware is driving. `REAL_BOT` — not `SIM_BOT` —
+/// because this code runs on the physical machine: when the measured
+/// values land in `spec.rs`, they take effect here with no edit.
+const SPEC: RobotSpec = RobotSpec::REAL_BOT;
 
 /// Steering profile. The waypoint gains, with a slightly wider arrival
 /// radius: this loop runs against the host's motor lag over a serial link,

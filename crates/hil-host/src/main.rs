@@ -21,9 +21,10 @@ const DT: f64 = 0.02;
 const MAX_STEPS: usize = 3000; // 60 s
 const SEED: u64 = 7;
 
-/// The robot as the FIRMWARE believes it to be — the shared definition the
-/// chip also compiles against, so host and target cannot silently disagree.
-const SPEC: RobotSpec = RobotSpec::SIM_BOT;
+/// The robot the host simulates. Must be the SAME spec the firmware
+/// believes in, or the rig tests the chip against a machine that does not
+/// exist — hence `REAL_BOT`, matching `pico-robot`.
+const SPEC: RobotSpec = RobotSpec::REAL_BOT;
 /// The robot as it truly is: 1% worn tyres the firmware doesn't know about.
 /// This gap is deliberate — it is what makes the odometry drift real.
 const TRUE_WHEEL_RADIUS: f64 = SPEC.wheel_radius * 0.99;
