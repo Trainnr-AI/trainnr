@@ -116,8 +116,29 @@ impl RobotSpec {
     /// 4. **Max RPM** — measure it on *your* battery at the voltage the
     ///    robot actually runs at, not the datasheet's nominal 6 V.
     ///
-    /// Until then this is `SIM_BOT`, and `docs/09` records that these are
-    /// pending measurement.
+    /// # ⚠️ NOT YET MEASURED
+    ///
+    /// This is currently `SIM_BOT` — placeholders, not measurements. The
+    /// parts were ordered 2026-08-02 and have not arrived.
+    ///
+    /// **Do not fill this in with plausible-looking guesses.** It was
+    /// briefly set to invented values while testing the mechanism, and the
+    /// danger was instructive: every derived quantity came out physically
+    /// sensible, [`Self::check`] passed, and nothing anywhere indicated the
+    /// numbers were fiction. `pico-robot` and `hil-host` both read this
+    /// constant, so a guess here is a rig quietly validating a robot that
+    /// does not exist.
+    ///
+    /// Replace it in one line once bench measurements exist:
+    ///
+    /// ```ignore
+    /// pub const REAL_BOT: RobotSpec =
+    ///     RobotSpec::from_measurements(diameter_mm, track_mm, ticks, rpm);
+    /// ```
+    ///
+    /// `changing_real_bot_is_a_single_edit` will then fail on purpose —
+    /// that is the signal to record the new HIL baseline in docs/07 and
+    /// delete the test.
     pub const REAL_BOT: RobotSpec = RobotSpec::SIM_BOT;
 
     /// The kinematic model implied by this geometry.
@@ -251,9 +272,15 @@ mod tests {
     fn measurements_convert_to_si() {
         // 60 mm wheels, 150 mm apart, 200 RPM — what you read off the parts.
         let s = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
-        assert!((s.wheel_radius - 0.030).abs() < 1e-12, "mm diameter -> m radius");
+        assert!(
+            (s.wheel_radius - 0.030).abs() < 1e-12,
+            "mm diameter -> m radius"
+        );
         assert!((s.track_width - 0.150).abs() < 1e-12);
-        assert!((s.max_wheel_rad_s - 20.943_951).abs() < 1e-5, "200 RPM -> rad/s");
+        assert!(
+            (s.max_wheel_rad_s - 20.943_951).abs() < 1e-5,
+            "200 RPM -> rad/s"
+        );
     }
 
     #[test]
@@ -268,19 +295,23 @@ mod tests {
         // One revolution of a 30 mm-radius wheel covers 2*pi*r.
         assert!((s.wheel_circumference_m() - 0.188_495).abs() < 1e-5);
         // ...spread over ticks_per_rev counts.
-        assert!(
-            (s.metres_per_tick() * s.ticks_per_rev - s.wheel_circumference_m()).abs() < 1e-12
-        );
+        assert!((s.metres_per_tick() * s.ticks_per_rev - s.wheel_circumference_m()).abs() < 1e-12);
         // Sub-millimetre resolution at 1024 ticks: odometry cannot see
         // motion finer than this.
-        assert!(s.metres_per_tick() < 0.001, "{} m/tick", s.metres_per_tick());
+        assert!(
+            s.metres_per_tick() < 0.001,
+            "{} m/tick",
+            s.metres_per_tick()
+        );
     }
 
     #[test]
     fn the_simulator_profile_is_physically_achievable() {
         // The check that would have caught a v_max nobody can reach.
         assert!(RobotSpec::SIM_BOT.check(&ControlGains::WAYPOINT).is_ok());
-        assert!(RobotSpec::SIM_BOT.check(&ControlGains::VISUAL_SERVO).is_ok());
+        assert!(RobotSpec::SIM_BOT
+            .check(&ControlGains::VISUAL_SERVO)
+            .is_ok());
     }
 
     #[test]
@@ -291,7 +322,10 @@ mod tests {
             v_max: 2.0,
             ..ControlGains::WAYPOINT
         };
-        assert!(slow.check(&greedy).is_err(), "should reject an impossible v_max");
+        assert!(
+            slow.check(&greedy).is_err(),
+            "should reject an impossible v_max"
+        );
         // ...but the real profile fits comfortably on the ordered motor.
         assert!(slow.check(&ControlGains::WAYPOINT).is_ok());
     }
