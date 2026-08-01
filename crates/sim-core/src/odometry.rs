@@ -33,8 +33,8 @@ impl Odometry {
     /// 2. angle → distance rolled:       d  = wheel_radius · Δφ
     ///    (do 1–2 for each wheel: d_l, d_r)
     /// 3. the two distances → body motion:
-    ///       d_center = (d_r + d_l) / 2          (how far forward)
-    ///       d_theta  = (d_r - d_l) / track_width (how much turned)
+    ///    d_center = (d_r + d_l) / 2          (how far forward)
+    ///    d_theta  = (d_r - d_l) / track_width (how much turned)
     /// 4. advance the pose along that arc. Trick: `Pose::integrate(v, w, dt)`
     ///    with dt = 1.0 treats v and w as *distances* — so
     ///    `self.pose.integrate(d_center, d_theta, 1.0)` is exactly step 4.

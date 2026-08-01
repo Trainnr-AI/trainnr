@@ -78,8 +78,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut to_chip = child.stdin.take().expect("stdin");
-    let from_chip = BufReader::new(child.stdout.take().expect("stdout"));
+    // `?`, not `.expect()`: main returns Result, so propagating costs
+    // nothing and a failed spawn reports itself instead of panicking.
+    let mut to_chip = child
+        .stdin
+        .take()
+        .ok_or("emulator stdin was not piped")?;
+    let from_chip = BufReader::new(child.stdout.take().ok_or("emulator stdout was not piped")?);
 
     let mut trail_true: Vec<[f32; 2]> = Vec::new();
     let mut trail_belief: Vec<[f32; 2]> = Vec::new();
@@ -168,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // Progress narration: every simulated second, plus a note
                 // when the chip stops commanding (tour finished).
-                if steps % 50 == 0 {
+                if steps.is_multiple_of(50) {
                     eprintln!(
                         "[{:5.1}s] true ({:.2}, {:.2}) th={:+.2}   chip ({:.2}, {:.2})   drift {:.3} m   duty {:>5}/{:<5}",
                         t,

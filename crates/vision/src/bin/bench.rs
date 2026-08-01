@@ -139,6 +139,19 @@ struct Row {
     detections: usize,
 }
 
+/// A configuration that actually produced samples.
+///
+/// Separating this from [`Row`] is what removes the eight `.unwrap()`
+/// calls the reporting code used to carry: `filter(|r| r.stats.is_some())`
+/// followed by `r.stats.unwrap()` asks the reader to verify a coupling the
+/// compiler could enforce instead. `filter_map` makes the invariant a
+/// type, so there is nothing left to unwrap.
+struct Measured<'a> {
+    label: &'a str,
+    stats: Stats,
+    detections: usize,
+}
+
 fn measure(label: &str, model: DetectorModel, backend: Backend, frames: &[Frame]) -> Row {
     use std::io::Write as _;
     print!("  {label:<16} loading...");
@@ -269,7 +282,16 @@ fn backend_sweep(args: &Args, frames: &[Frame]) -> Vec<Row> {
 }
 
 fn report(rows: &[Row], real_frames: bool, backends: bool) {
-    let measured: Vec<&Row> = rows.iter().filter(|r| r.stats.is_some()).collect();
+    let measured: Vec<Measured<'_>> = rows
+        .iter()
+        .filter_map(|r| {
+            r.stats.map(|stats| Measured {
+                label: &r.label,
+                stats,
+                detections: r.detections,
+            })
+        })
+        .collect();
     if measured.is_empty() {
         println!("\nnothing was measured.");
         return;
@@ -281,7 +303,7 @@ fn report(rows: &[Row], real_frames: bool, backends: bool) {
         "config", "mean ms", "fps", "p50 ms", "p90 ms", "dets"
     );
     for r in &measured {
-        let s = r.stats.unwrap();
+        let s = r.stats;
         println!(
             "  {:<16} {:>9.1} {:>8.1} {:>9.1} {:>9.1} {:>7}",
             r.label,
@@ -302,7 +324,7 @@ fn report(rows: &[Row], real_frames: bool, backends: bool) {
         let cpu = measured.iter().find(|r| r.label == "cpu");
         let ml = measured.iter().find(|r| r.label == "coreml");
         if let (Some(c), Some(m)) = (cpu, ml) {
-            let ratio = c.stats.unwrap().mean / m.stats.unwrap().mean;
+            let ratio = c.stats.mean / m.stats.mean;
             if ratio > 1.05 {
                 println!("  CoreML is {ratio:.2}x faster — use it.");
             } else if ratio < 0.95 {
@@ -321,16 +343,22 @@ fn report(rows: &[Row], real_frames: bool, backends: bool) {
             }
         }
     } else {
-        let fastest = measured
+        // `measured` is non-empty (checked above), but expressing that to
+        // the compiler costs more than handling None, so handle None.
+        let Some(fastest) = measured
             .iter()
-            .min_by(|a, b| a.stats.unwrap().mean.total_cmp(&b.stats.unwrap().mean))
-            .unwrap();
-        let slowest = measured
+            .min_by(|a, b| a.stats.mean.total_cmp(&b.stats.mean))
+        else {
+            return;
+        };
+        let Some(slowest) = measured
             .iter()
-            .max_by(|a, b| a.stats.unwrap().mean.total_cmp(&b.stats.unwrap().mean))
-            .unwrap();
-        let f = fastest.stats.unwrap();
-        let s = slowest.stats.unwrap();
+            .max_by(|a, b| a.stats.mean.total_cmp(&b.stats.mean))
+        else {
+            return;
+        };
+        let f = fastest.stats;
+        let s = slowest.stats;
         println!(
             "  fastest: {} at {:.1} ms ({:.1} fps)",
             fastest.label,

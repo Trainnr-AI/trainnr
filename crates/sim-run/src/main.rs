@@ -117,7 +117,7 @@ fn draw(
 
     // The MAP as the robot remembers it, every 10th tick to keep the
     // stream light.
-    if tick.index % 10 == 0 {
+    if tick.index.is_multiple_of(10) {
         let map = &mission.map;
         let mut occupied: Vec<[f32; 2]> = Vec::new();
         for cy in 0..map.height {

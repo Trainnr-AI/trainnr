@@ -145,11 +145,12 @@ mod tests {
         assert_eq!(d.track_width, RobotSpec::SIM_BOT.track_width);
     }
 
-    #[test]
-    fn visual_servo_is_gentler_than_waypoint() {
-        // Not a style assertion — this encodes the reason the two profiles
-        // exist. If someone "unifies" them, this test explains the cost.
-        assert!(ControlGains::VISUAL_SERVO.heading_kp < ControlGains::WAYPOINT.heading_kp);
-        assert!(ControlGains::VISUAL_SERVO.heading_kd < ControlGains::WAYPOINT.heading_kd);
-    }
+    // Not a style assertion — this encodes the reason the two profiles
+    // exist. If someone "unifies" them, this explains the cost.
+    //
+    // A `const` assertion rather than a `#[test]`: both sides are compile
+    // -time constants, so this fails the BUILD rather than a test run.
+    // You cannot merge a change that breaks it.
+    const _: () = assert!(ControlGains::VISUAL_SERVO.heading_kp < ControlGains::WAYPOINT.heading_kp);
+    const _: () = assert!(ControlGains::VISUAL_SERVO.heading_kd < ControlGains::WAYPOINT.heading_kd);
 }

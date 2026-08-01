@@ -10,3 +10,17 @@ edition.workspace = true
 default = []
 
 [dependencies]
+
+# Panic discipline. Scoped deliberately: this crate is compiled into
+# firmware and/or parses input we do not control, so a panic here is a
+# stopped robot. Binaries and build scripts are NOT linted this way —
+# panicking at startup is the correct way to fail loudly.
+#
+# NOTE: `unwrap_or_default()` is deliberately NOT the escape hatch. In a
+# control loop, substituting a default for a failed measurement is worse
+# than crashing: the robot acts confidently on a fiction. Propagate with
+# `?`, or return Option/Result to a caller that can stop.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "warn"
+panic_in_result_fn = "deny"

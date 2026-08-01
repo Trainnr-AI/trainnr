@@ -44,6 +44,7 @@
 
 use anyhow::Result;
 use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
+use std::collections::VecDeque;
 use std::time::Instant;
 use vision::{
     approach_factor, deadband, pick_target, Args, Detection, Detector, Frame, LowPass,
@@ -76,6 +77,10 @@ const GAINS: ControlGains = ControlGains::VISUAL_SERVO;
 /// Fraction of frame height a box occupies when the robot should stop
 /// approaching. Bigger box = closer object.
 const STOP_AT_HEIGHT_FRACTION: f32 = 0.55;
+/// How much of the robot's path to keep on screen. 600 points is ~30 s at
+/// 20 fps — enough to see where it came from, bounded so a long session
+/// does not slow down.
+const TRAIL_POINTS: usize = 600;
 
 // ---- Noise handling. Tune these and watch the two turn_rate plots. ----
 /// Low-pass on the measured bearing. 1.0 = off, 0.05 = very smooth/laggy.
@@ -247,7 +252,11 @@ fn main() -> Result<()> {
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
     let start = Instant::now();
-    let mut trail: Vec<[f32; 2]> = Vec::new();
+    // Bounded, because this loop never ends. An unbounded trail grows at
+    // 20 points/s AND is cloned into Rerun every frame, so the per-frame
+    // cost climbs with runtime — after an hour it is cloning 72k points
+    // 20x a second. A fixed window keeps that constant.
+    let mut trail: VecDeque<[f32; 2]> = VecDeque::with_capacity(TRAIL_POINTS);
     let mut last_tick = Instant::now();
     let mut last_print = Instant::now();
 
@@ -318,10 +327,13 @@ fn main() -> Result<()> {
         log_boxes(&rec, &detections)?;
 
         let (rx_, ry_) = (robot.pose.x as f32, robot.pose.y as f32);
-        trail.push([rx_, ry_]);
+        if trail.len() == TRAIL_POINTS {
+            trail.pop_front();
+        }
+        trail.push_back([rx_, ry_]);
         rec.log(
             "robot/trail",
-            &rerun::LineStrips2D::new([trail.clone()])
+            &rerun::LineStrips2D::new([trail.iter().copied().collect::<Vec<_>>()])
                 .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
         )?;
         rec.log(

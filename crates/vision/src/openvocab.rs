@@ -332,7 +332,7 @@ mod tests {
         // the exact opposite colour.
         let mut f = solid(4, 2, [255, 0, 0]);
         for x in 0..4u32 {
-            let i = ((1 * f.width + x) * 3) as usize;
+            let i = ((f.width + x) * 3) as usize; // row 1
             f.rgb[i] = 255;
             f.rgb[i + 1] = 0;
             f.rgb[i + 2] = 20; // slightly magenta -> hue near 355

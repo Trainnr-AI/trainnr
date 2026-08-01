@@ -286,7 +286,7 @@ impl Mission {
             }
 
             // ---- PLAN: re-run A* over the growing map.
-            if index % self.config.replan_ticks == 0 || self.path.is_none() {
+            if index.is_multiple_of(self.config.replan_ticks) || self.path.is_none() {
                 self.path = plan(
                     &self.map,
                     (pose.x, pose.y),
@@ -488,8 +488,10 @@ mod tests {
     fn odometry_drifts_because_the_wheels_are_worn() {
         // With perfect wheels there is still quantisation and slip, but
         // the systematic component vanishes and drift shrinks a lot.
-        let mut perfect = MissionConfig::default();
-        perfect.wheel_wear = 1.0;
+        let perfect = MissionConfig {
+            wheel_wear: 1.0,
+            ..MissionConfig::default()
+        };
 
         let worn = Mission::new(MissionConfig::default()).run();
         let exact = Mission::new(perfect).run();
@@ -503,8 +505,10 @@ mod tests {
 
     #[test]
     fn an_impossible_deadline_reports_failure_rather_than_hanging() {
-        let mut config = MissionConfig::default();
-        config.duration = 1.0; // nowhere near enough
+        let config = MissionConfig {
+            duration: 1.0, // nowhere near enough
+            ..MissionConfig::default()
+        };
 
         let outcome = Mission::new(config).run();
         assert!(!outcome.succeeded());

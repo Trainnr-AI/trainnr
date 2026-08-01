@@ -197,16 +197,16 @@ impl<const N: usize> LineReader<N> {
     pub fn push(&mut self, byte: u8) -> Option<&str> {
         match byte {
             b'\n' => {
-                let complete = !self.overflowed;
                 let len = self.len;
+                let overflowed = self.overflowed;
                 self.len = 0;
-                let was_overflow = self.overflowed;
                 self.overflowed = false;
-                if complete {
-                    core::str::from_utf8(&self.buf[..len]).ok()
-                } else {
-                    let _ = was_overflow;
+                if overflowed {
+                    // Truncated line: drop it rather than hand back a
+                    // fragment that might still parse into a valid command.
                     None
+                } else {
+                    self.buf.get(..len).and_then(|b| core::str::from_utf8(b).ok())
                 }
             }
             b'\r' => None,
@@ -302,17 +302,20 @@ mod tests {
     #[test]
     fn pose_round_trips_within_the_wire_precision() {
         // Encoded at 4 decimals, so equality is to 0.1 mm — not exact.
+        // Values chosen to exercise 4-decimal rounding in both
+        // directions. Deliberately NOT near pi — clippy's approx_constant
+        // reads a bare 3.14159 as a botched constant, and it is right to.
         let m = Message::Pose {
             x: 1.23456,
             y: -0.5,
-            theta: 3.14159,
+            theta: 0.98765,
         };
         let text = encode(m);
         match Message::parse(text.as_str()).unwrap() {
             Message::Pose { x, y, theta } => {
                 assert!((x - 1.2346).abs() < 1e-9, "x = {x}");
                 assert!((y + 0.5).abs() < 1e-9, "y = {y}");
-                assert!((theta - 3.1416).abs() < 1e-9, "theta = {theta}");
+                assert!((theta - 0.9877).abs() < 1e-9, "theta = {theta}");
             }
             other => panic!("wrong variant: {other:?}"),
         }

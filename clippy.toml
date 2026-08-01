@@ -1,0 +1,6 @@
+# The document's own stated exception: unwrap/expect are fine in tests.
+# Without these, `unwrap_used = "deny"` fires on every assertion helper and
+# the lint gets switched off wholesale — which is how strict lints die.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
