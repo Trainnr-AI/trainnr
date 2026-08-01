@@ -32,10 +32,10 @@ pub mod nav;
 pub mod odometry;
 pub mod pose;
 pub mod rng;
-pub mod safety;
 pub mod robot;
-pub mod spec;
+pub mod safety;
 pub mod sensors;
+pub mod spec;
 pub mod world;
 
 pub use control::{GotoController, Pid};
@@ -44,8 +44,8 @@ pub use nav::{lookahead_point, summarize_scan, AvoidHysteresis, Mode, ScanSummar
 pub use odometry::Odometry;
 pub use pose::{wrap_angle, Pose};
 pub use rng::Rng;
-pub use safety::{CommandWatchdog, Millis};
 pub use robot::{DiffDrive, Robot};
+pub use safety::{CommandWatchdog, Millis};
 pub use sensors::Encoders;
 pub use spec::{ControlGains, RobotSpec};
 pub use world::Segment;

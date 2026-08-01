@@ -80,10 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn()?;
     // `?`, not `.expect()`: main returns Result, so propagating costs
     // nothing and a failed spawn reports itself instead of panicking.
-    let mut to_chip = child
-        .stdin
-        .take()
-        .ok_or("emulator stdin was not piped")?;
+    let mut to_chip = child.stdin.take().ok_or("emulator stdin was not piped")?;
     let from_chip = BufReader::new(child.stdout.take().ok_or("emulator stdout was not piped")?);
 
     let mut trail_true: Vec<[f32; 2]> = Vec::new();

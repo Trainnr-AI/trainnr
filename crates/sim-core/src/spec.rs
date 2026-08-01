@@ -151,6 +151,8 @@ mod tests {
     // A `const` assertion rather than a `#[test]`: both sides are compile
     // -time constants, so this fails the BUILD rather than a test run.
     // You cannot merge a change that breaks it.
-    const _: () = assert!(ControlGains::VISUAL_SERVO.heading_kp < ControlGains::WAYPOINT.heading_kp);
-    const _: () = assert!(ControlGains::VISUAL_SERVO.heading_kd < ControlGains::WAYPOINT.heading_kd);
+    const _: () =
+        assert!(ControlGains::VISUAL_SERVO.heading_kp < ControlGains::WAYPOINT.heading_kp);
+    const _: () =
+        assert!(ControlGains::VISUAL_SERVO.heading_kd < ControlGains::WAYPOINT.heading_kd);
 }

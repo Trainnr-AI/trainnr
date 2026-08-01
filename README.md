@@ -90,6 +90,16 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/05-simulation-ros2-wasm.md`](docs/05-simulation-ros2-wasm.md) — simulators, ROS 2 state, Wasm in robotics
 - [`docs/06-stage0-design.md`](docs/06-stage0-design.md) — Stage 0 red-team critique + revised design
 - [`docs/07-progress-log.md`](docs/07-progress-log.md) — dated log of everything done and decided
+- [`docs/08-hardware-sim.md`](docs/08-hardware-sim.md) — emulating a Pico before owning one
+- [`docs/09-shopping-list.md`](docs/09-shopping-list.md) — what to buy, tiered
+- [`docs/10-hil-protocol.md`](docs/10-hil-protocol.md) — hardware-in-the-loop wire format
+- [`docs/11-perception-stack.md`](docs/11-perception-stack.md) — camera, detectors, measured limits
+- [`docs/12-model-choice.md`](docs/12-model-choice.md) — fixed-class vs open-vocab vs VLM, and licences
+- [`docs/13-architecture-review.md`](docs/13-architecture-review.md) — DRY/composability review + fixes
+- [`docs/14-model-landscape.md`](docs/14-model-landscape.md) — detector options, **measured on this laptop**
+- [`docs/15-testing-and-coverage.md`](docs/15-testing-and-coverage.md) — test suite, coverage, LOC
+- **[`docs/16-the-map.md`](docs/16-the-map.md) — START HERE: every symbol, unit and formula, and how
+  the maths, the physics and the code connect**
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
 
 ## Repository layout

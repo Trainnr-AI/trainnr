@@ -408,7 +408,14 @@ fn log_acquisition(
     let sizes: Vec<(f32, f32)> = candidates.iter().map(|d| (d.width, d.height)).collect();
     let labels: Vec<String> = candidates
         .iter()
-        .map(|d| format!("{} {:.0}% iou {:.2}", d.label, d.confidence * 100.0, vision::iou(hit, d)))
+        .map(|d| {
+            format!(
+                "{} {:.0}% iou {:.2}",
+                d.label,
+                d.confidence * 100.0,
+                vision::iou(hit, d)
+            )
+        })
         .collect();
     rec.log(
         "camera/image/candidates",

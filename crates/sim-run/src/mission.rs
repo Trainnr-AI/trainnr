@@ -321,7 +321,10 @@ impl Mission {
                         dt,
                     )
                 }
-                Mode::Avoid => (self.config.avoid_v, summary.turn_direction() * self.config.avoid_w),
+                Mode::Avoid => (
+                    self.config.avoid_v,
+                    summary.turn_direction() * self.config.avoid_w,
+                ),
             };
 
             // ---- ACT through the imperfect world.
@@ -338,9 +341,11 @@ impl Mission {
             // can still pivot). The wheels DID spin, so odometry keeps
             // integrating: grinding against a wall drifts fast, exactly
             // like a real robot pushing on one.
-            let bumped = self
-                .world
-                .collides(self.robot.pose.x, self.robot.pose.y, self.config.robot_radius);
+            let bumped = self.world.collides(
+                self.robot.pose.x,
+                self.robot.pose.y,
+                self.config.robot_radius,
+            );
             if bumped {
                 self.robot.pose.x = before.x;
                 self.robot.pose.y = before.y;
@@ -416,7 +421,9 @@ mod tests {
             outcome.ticks
         );
 
-        let t = outcome.completed_at.expect("completed missions have a time");
+        let t = outcome
+            .completed_at
+            .expect("completed missions have a time");
         assert!(
             (20.0..25.0).contains(&t),
             "took {t:.1} s; the recorded baseline is 22.5 s"
@@ -479,7 +486,10 @@ mod tests {
         let b = Mission::new(other).run();
         assert_ne!(a.drift, b.drift, "the seed does not affect wheel slip");
         // Both should still solve it — the trap is not luck.
-        assert!(a.succeeded() && b.succeeded(), "outcome depends on the seed");
+        assert!(
+            a.succeeded() && b.succeeded(),
+            "outcome depends on the seed"
+        );
     }
 
     // ---- the mechanism, tested separately from the outcome ----

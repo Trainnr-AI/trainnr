@@ -198,7 +198,10 @@ mod tests {
             }
             mode = next;
         }
-        assert!(flips <= 1, "mode flipped {flips} times on a constant reading");
+        assert!(
+            flips <= 1,
+            "mode flipped {flips} times on a constant reading"
+        );
     }
 
     #[test]
@@ -299,7 +302,10 @@ mod tests {
         // Near the end of a path every node is close; steering at the
         // goal is right, and returning the last node would stall.
         let path = [(0.1, 0.0), (0.2, 0.0), (0.3, 0.0)];
-        assert_eq!(lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)), (9.0, 9.0));
+        assert_eq!(
+            lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)),
+            (9.0, 9.0)
+        );
     }
 
     #[test]
@@ -318,6 +324,9 @@ mod tests {
         // (0.4, 0.4) is 0.566 away — beyond a 0.5 lookahead, even though
         // neither coordinate alone exceeds it.
         let path = [(0.4, 0.4)];
-        assert_eq!(lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)), (0.4, 0.4));
+        assert_eq!(
+            lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)),
+            (0.4, 0.4)
+        );
     }
 }

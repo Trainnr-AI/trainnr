@@ -206,7 +206,9 @@ impl<const N: usize> LineReader<N> {
                     // fragment that might still parse into a valid command.
                     None
                 } else {
-                    self.buf.get(..len).and_then(|b| core::str::from_utf8(b).ok())
+                    self.buf
+                        .get(..len)
+                        .and_then(|b| core::str::from_utf8(b).ok())
                 }
             }
             b'\r' => None,
@@ -295,7 +297,12 @@ mod tests {
         ] {
             let text = encode(m);
             let back = Message::parse(text.as_str()).unwrap();
-            assert_eq!(back, m, "round trip failed for {text:?}", text = text.as_str());
+            assert_eq!(
+                back,
+                m,
+                "round trip failed for {text:?}",
+                text = text.as_str()
+            );
         }
     }
 

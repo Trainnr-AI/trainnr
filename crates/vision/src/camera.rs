@@ -338,7 +338,9 @@ enum OwnedSource {
 /// "Brio 100", and macOS has been known to append vendor noise. Requiring
 /// an exact match would break on a firmware update.
 pub fn name_matches(device_name: &str, fragment: &str) -> bool {
-    device_name.to_lowercase().contains(&fragment.to_lowercase())
+    device_name
+        .to_lowercase()
+        .contains(&fragment.to_lowercase())
 }
 
 #[cfg(test)]

@@ -300,7 +300,10 @@ mod tests {
         let s = set_with(&[("front", Instant::now()), ("rear", Instant::now())]);
         assert!(s.get("front").is_some());
         assert!(s.get("rear").is_some());
-        assert!(s.get("left").is_none(), "invented a camera that isn't there");
+        assert!(
+            s.get("left").is_none(),
+            "invented a camera that isn't there"
+        );
     }
 
     #[test]

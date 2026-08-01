@@ -258,6 +258,17 @@ pub fn dominant_hue(frame: &Frame, det: &Detection) -> Option<(f32, f32)> {
 /// cargo test -p vision weighted -- --ignored
 /// ```
 pub fn dominant_hue_weighted(frame: &Frame, det: &Detection) -> Option<(f32, f32)> {
+    let x0 = det.x.max(0.0) as u32;
+    let y0 = det.y.max(0.0) as u32;
+    let x1 = ((det.x + det.width) as u32).min(frame.width);
+    let y1 = ((det.y + det.height) as u32).min(frame.height);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let cx = (x0 + x1) as f32 / 2.0;
+    let cy = (y0 + y1) as f32 / 2.0;
+    let hw = (x1 - x0) as f32 / 2.0;
+    let hh = (y1 - y0) as f32 / 2.0;
     todo!("exercise 7 — see the recipe above")
 }
 

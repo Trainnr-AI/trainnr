@@ -60,7 +60,6 @@ pub trait Detector {
     fn detect(&mut self, frame: &Frame) -> Result<Vec<Detection>>;
 }
 
-
 /// Which closed-set detector to load.
 ///
 /// Every entry here is **Apache-2.0** and reaches us through `usls` with
@@ -160,10 +159,7 @@ impl DetectorModel {
     }
 
     fn is_rfdetr(self) -> bool {
-        matches!(
-            self,
-            DetectorModel::RfDetrNano | DetectorModel::RfDetrSmall
-        )
+        matches!(self, DetectorModel::RfDetrNano | DetectorModel::RfDetrSmall)
     }
 }
 

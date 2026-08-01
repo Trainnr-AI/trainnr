@@ -23,11 +23,11 @@ pub mod stats;
 pub mod target;
 
 pub use camera::{name_matches, request_access, CameraSource, Frame, NokhwaCamera, Source, Stream};
+pub use cli::Args;
 pub use detect::{Backend, Detection, Detector, DetectorModel, ObjectDetector};
 pub use filter::{deadband, LowPass};
-pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};
-pub use cli::Args;
 pub use lock::{hue_distance, iou, TargetLock};
+pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};
 pub use rig::{CameraRig, FrameSet};
 pub use stats::{percentile, Stats};
 pub use target::{approach_factor, pick_target};
