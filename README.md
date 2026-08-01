@@ -101,6 +101,8 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - **[`docs/16-the-map.md`](docs/16-the-map.md) — START HERE: every symbol, unit and formula, and how
   the maths, the physics and the code connect**
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
+  - [`math-00-symbol-decoder.md`](docs/learning/math-00-symbol-decoder.md) — what every
+    maths symbol means, in plain words. Start here if formulas look alien.
 
 ## Repository layout
 
