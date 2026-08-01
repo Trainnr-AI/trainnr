@@ -30,6 +30,8 @@ pub struct MissionConfig {
     /// docs/learning/math-03.
     pub wheel_wear: f64,
     pub motor_tau: f64,
+    /// Motor saturation, rad/s. Defaults to `spec.max_wheel_rad_s` — the
+    /// same physical quantity, and a third copy of `30.0` until 2026-08-02.
     pub motor_max: f64,
     /// Steer on odometry belief instead of ground truth. `false` is the
     /// honest simulator default; `true` shows how drift compounds.
@@ -71,7 +73,7 @@ impl Default for MissionConfig {
             gains: ControlGains::WAYPOINT,
             wheel_wear: 0.99,
             motor_tau: 0.15,
-            motor_max: 30.0,
+            motor_max: RobotSpec::SIM_BOT.max_wheel_rad_s,
             control_on_belief: false,
             cam_rays: 21,
             cam_fov: 1.22,

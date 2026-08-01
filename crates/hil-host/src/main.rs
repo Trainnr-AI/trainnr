@@ -29,7 +29,11 @@ const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 const TRUE_WHEEL_RADIUS: f64 = SPEC.wheel_radius * 0.99;
 /// Motor: first-order lag + saturation (sim-core's model).
 const MOTOR_TAU: f64 = 0.15;
-const MOTOR_MAX: f64 = 30.0;
+/// Motor saturation. **Derived, not chosen** — it is the same physical
+/// quantity as `SPEC.max_wheel_rad_s`, and was a second copy of `30.0`
+/// until 2026-08-02. If the two disagree, the host simulates a motor the
+/// firmware does not believe in, and the drift looks like a control bug.
+const MOTOR_MAX: f64 = SPEC.max_wheel_rad_s;
 /// Duty ±1000 maps to ±MOTOR_MAX rad/s of commanded wheel speed.
 const DUTY_SCALE: f64 = MOTOR_MAX / 1000.0;
 const ROBOT_RADIUS: f64 = 0.09;

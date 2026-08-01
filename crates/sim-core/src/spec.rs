@@ -42,9 +42,53 @@ pub struct RobotSpec {
 }
 
 impl RobotSpec {
-    /// The robot this project has been simulating since Stage 0, and which
-    /// the Pico drives in the HIL rig. The hardware order (docs/09) is
-    /// specced to match these numbers so the transition costs nothing.
+    /// Build a spec from the units you actually measure in.
+    ///
+    /// Calipers give **millimetres**; motor datasheets give **RPM**. Doing
+    /// the conversion here means the one place a human types numbers is
+    /// the one place those numbers look like what they read off the part.
+    ///
+    /// ```
+    /// # use sim_core::RobotSpec;
+    /// // 60 mm wheels, 150 mm apart, 1024 counts/rev, 200 RPM motor
+    /// let spec = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+    /// assert!((spec.wheel_radius - 0.030).abs() < 1e-12);
+    /// ```
+    pub const fn from_measurements(
+        wheel_diameter_mm: f64,
+        track_width_mm: f64,
+        ticks_per_rev: f64,
+        max_rpm: f64,
+    ) -> RobotSpec {
+        RobotSpec {
+            wheel_radius: wheel_diameter_mm / 2000.0, // mm diameter -> m radius
+            track_width: track_width_mm / 1000.0,
+            ticks_per_rev,
+            // rev/min -> rev/s -> rad/s
+            max_wheel_rad_s: max_rpm / 60.0 * core::f64::consts::TAU,
+        }
+    }
+
+    /// The robot the simulator has modelled since Stage 0.
+    ///
+    /// # Provenance — read before trusting these
+    ///
+    /// **These are plausible placeholders, not measurements.** They were
+    /// chosen on 2026-07-27 when there was no hardware in view, and they
+    /// are self-consistent, which is all the simulator needs.
+    ///
+    /// | field | where it came from |
+    /// |---|---|
+    /// | `wheel_radius` | 60 mm diameter — typical small 2WD chassis wheel |
+    /// | `track_width` | plausible for an N20-class chassis |
+    /// | `ticks_per_rev` | a round number |
+    /// | `max_wheel_rad_s` | 30 rad/s ≈ 286 RPM |
+    ///
+    /// The ordered motor is **~200 RPM** (docs/09), i.e. ~20.9 rad/s — so
+    /// `max_wheel_rad_s` here is ~43% optimistic. That is left alone
+    /// deliberately: retuning the simulator to a motor that has not arrived
+    /// would move the recorded Stage 0 baseline (22.5 s, 0.052 m) for no
+    /// gain. Measure the real part, then use [`Self::from_measurements`].
     pub const SIM_BOT: RobotSpec = RobotSpec {
         wheel_radius: 0.03,
         track_width: 0.15,
@@ -52,12 +96,77 @@ impl RobotSpec {
         max_wheel_rad_s: 30.0,
     };
 
+    /// The physical robot. **Fill this in from the bench, not the datasheet.**
+    ///
+    /// When the parts arrive, measure and replace — this is the single
+    /// place to edit, and everything (simulator, HIL host, firmware)
+    /// follows from it.
+    ///
+    /// 1. **Wheel diameter** — calipers, and measure it *under load* with
+    ///    the robot's weight on it. A squashy tyre has a smaller effective
+    ///    radius than a free one, and this is the **largest single source
+    ///    of odometry drift**. It is why the simulator models a deliberate
+    ///    1% error.
+    /// 2. **Track width** — centre-to-centre of the two *contact patches*,
+    ///    not the axle length and not the outer edges.
+    /// 3. **Ticks per rev** — do **not** compute it from
+    ///    `PPR × 4 × gear_ratio`. Gear ratios advertised as "50:1" are
+    ///    routinely 51.45:1. Spin the wheel exactly ten turns by hand,
+    ///    read the counter, divide by ten.
+    /// 4. **Max RPM** — measure it on *your* battery at the voltage the
+    ///    robot actually runs at, not the datasheet's nominal 6 V.
+    ///
+    /// Until then this is `SIM_BOT`, and `docs/09` records that these are
+    /// pending measurement.
+    pub const REAL_BOT: RobotSpec = RobotSpec::SIM_BOT;
+
     /// The kinematic model implied by this geometry.
     pub fn drive(&self) -> DiffDrive {
         DiffDrive {
             wheel_radius: self.wheel_radius,
             track_width: self.track_width,
         }
+    }
+
+    /// Distance the robot travels per full wheel revolution, metres.
+    pub fn wheel_circumference_m(&self) -> f64 {
+        core::f64::consts::TAU * self.wheel_radius
+    }
+
+    /// Ground distance per encoder tick, metres. The resolution of
+    /// odometry: no position change smaller than this is observable.
+    pub fn metres_per_tick(&self) -> f64 {
+        self.wheel_circumference_m() / self.ticks_per_rev
+    }
+
+    /// Top forward speed the motors can actually deliver, m/s.
+    pub fn max_body_speed(&self) -> f64 {
+        self.wheel_radius * self.max_wheel_rad_s
+    }
+
+    /// Motor speed in RPM — the unit the datasheet uses.
+    pub fn max_rpm(&self) -> f64 {
+        self.max_wheel_rad_s / core::f64::consts::TAU * 60.0
+    }
+
+    /// Is this control profile physically achievable on this robot?
+    ///
+    /// Catches the mismatch class that is otherwise diagnosed as "the
+    /// controller is badly tuned": commanding a speed the motors cannot
+    /// reach means they saturate, the robot moves slower than the model
+    /// believes, and odometry blames the encoders.
+    pub fn check(&self, gains: &ControlGains) -> Result<(), &'static str> {
+        if self.wheel_radius <= 0.0 || self.track_width <= 0.0 {
+            return Err("geometry must be positive");
+        }
+        if self.ticks_per_rev <= 0.0 {
+            return Err("ticks_per_rev must be positive");
+        }
+        if gains.v_max > self.max_body_speed() {
+            return Err("v_max exceeds what the motors can deliver — the \
+                        controller will command speeds the robot cannot reach");
+        }
+        Ok(())
     }
 
     /// Wheel speed (rad/s) → motor command in ±1000 duty units, saturated.
@@ -136,6 +245,75 @@ mod tests {
         assert_eq!(s.duty(-s.max_wheel_rad_s), -1000);
         assert_eq!(s.duty(s.max_wheel_rad_s * 10.0), 1000, "must clamp");
         assert_eq!(s.duty(0.0), 0);
+    }
+
+    #[test]
+    fn measurements_convert_to_si() {
+        // 60 mm wheels, 150 mm apart, 200 RPM — what you read off the parts.
+        let s = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+        assert!((s.wheel_radius - 0.030).abs() < 1e-12, "mm diameter -> m radius");
+        assert!((s.track_width - 0.150).abs() < 1e-12);
+        assert!((s.max_wheel_rad_s - 20.943_951).abs() < 1e-5, "200 RPM -> rad/s");
+    }
+
+    #[test]
+    fn rpm_round_trips() {
+        let s = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+        assert!((s.max_rpm() - 200.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn derived_quantities_are_consistent() {
+        let s = RobotSpec::SIM_BOT;
+        // One revolution of a 30 mm-radius wheel covers 2*pi*r.
+        assert!((s.wheel_circumference_m() - 0.188_495).abs() < 1e-5);
+        // ...spread over ticks_per_rev counts.
+        assert!(
+            (s.metres_per_tick() * s.ticks_per_rev - s.wheel_circumference_m()).abs() < 1e-12
+        );
+        // Sub-millimetre resolution at 1024 ticks: odometry cannot see
+        // motion finer than this.
+        assert!(s.metres_per_tick() < 0.001, "{} m/tick", s.metres_per_tick());
+    }
+
+    #[test]
+    fn the_simulator_profile_is_physically_achievable() {
+        // The check that would have caught a v_max nobody can reach.
+        assert!(RobotSpec::SIM_BOT.check(&ControlGains::WAYPOINT).is_ok());
+        assert!(RobotSpec::SIM_BOT.check(&ControlGains::VISUAL_SERVO).is_ok());
+    }
+
+    #[test]
+    fn an_unreachable_v_max_is_rejected() {
+        // A 200 RPM motor on 60 mm wheels tops out at ~0.63 m/s.
+        let slow = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+        let greedy = ControlGains {
+            v_max: 2.0,
+            ..ControlGains::WAYPOINT
+        };
+        assert!(slow.check(&greedy).is_err(), "should reject an impossible v_max");
+        // ...but the real profile fits comfortably on the ordered motor.
+        assert!(slow.check(&ControlGains::WAYPOINT).is_ok());
+    }
+
+    #[test]
+    fn nonsense_geometry_is_rejected() {
+        let bad = RobotSpec::from_measurements(0.0, 150.0, 1024.0, 200.0);
+        assert!(bad.check(&ControlGains::WAYPOINT).is_err());
+        let no_encoder = RobotSpec::from_measurements(60.0, 150.0, 0.0, 200.0);
+        assert!(no_encoder.check(&ControlGains::WAYPOINT).is_err());
+    }
+
+    #[test]
+    fn the_ordered_motor_is_slower_than_the_simulated_one() {
+        // Documents the known mismatch rather than letting it be
+        // rediscovered on hardware. SIM_BOT assumes ~286 RPM; docs/09
+        // orders ~200 RPM.
+        let ordered = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+        assert!(
+            ordered.max_wheel_rad_s < RobotSpec::SIM_BOT.max_wheel_rad_s,
+            "if these ever match, delete this test and the note on SIM_BOT"
+        );
     }
 
     #[test]
