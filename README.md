@@ -82,6 +82,8 @@ industry lingua franca and every sensor assumes it.
 Detailed, dated research on the current (mid-2026) state of each layer lives in
 [`docs/`](docs/):
 
+- **[`docs/17-one-page.md`](docs/17-one-page.md) — START HERE: the whole system in one
+  view, with pointers into everything else**
 - [`docs/00-roadmap.md`](docs/00-roadmap.md) — the staged plan in full detail
 - [`docs/01-rust-robotics-stack.md`](docs/01-rust-robotics-stack.md) — dora-rs, Zenoh, Copper, ros2-rust, Rerun
 - [`docs/02-embedded-rust.md`](docs/02-embedded-rust.md) — Embassy, Pico 2/RP2350, ESP32, tooling, MCU↔host link
@@ -98,8 +100,8 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/13-architecture-review.md`](docs/13-architecture-review.md) — DRY/composability review + fixes
 - [`docs/14-model-landscape.md`](docs/14-model-landscape.md) — detector options, **measured on this laptop**
 - [`docs/15-testing-and-coverage.md`](docs/15-testing-and-coverage.md) — test suite, coverage, LOC
-- **[`docs/16-the-map.md`](docs/16-the-map.md) — START HERE: every symbol, unit and formula, and how
-  the maths, the physics and the code connect**
+- [`docs/16-the-map.md`](docs/16-the-map.md) — every symbol, unit and formula, and how
+  the maths, the physics and the code connect
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
   - [`math-00-symbol-decoder.md`](docs/learning/math-00-symbol-decoder.md) — what every
     maths symbol means, in plain words. Start here if formulas look alien.
