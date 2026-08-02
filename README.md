@@ -103,6 +103,8 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
   - [`math-00-symbol-decoder.md`](docs/learning/math-00-symbol-decoder.md) — what every
     maths symbol means, in plain words. Start here if formulas look alien.
+  - [`hw-00-microcontroller-decoder.md`](docs/learning/hw-00-microcontroller-decoder.md) —
+    the chip: pins, boot, GPIO/UART/I2C, embassy, and where the maths meets the metal.
 
 ## Repository layout
 
