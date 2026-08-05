@@ -7,9 +7,14 @@ edition = "2021"
 # Port to the physical Pico 2: feature "rp2040" -> "rp235xa", target
 # thumbv6m-none-eabi -> thumbv8m.main-none-eabihf (see docs/08).
 
+[features]
+default = ["rp2040"]
+rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
+pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
+
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-rp = { version = "0.10", features = ["rp2040", "time-driver", "critical-section-impl", "boot2-w25q080"] }
+embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
 embassy-time = "0.5"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"

@@ -3,13 +3,25 @@ name = "pico-blink"
 version = "0.1.0"
 edition = "2021"
 
-# H0: blink, on the Wokwi-simulated RP2040 Pico.
-# Port to the physical Pico 2: feature "rp2040" -> "rp235xa", target
-# thumbv6m-none-eabi -> thumbv8m.main-none-eabihf (see docs/08).
+# H0: blink. Builds for TWO chips:
+#
+#   cargo build --release
+#       RP2040 (Pico 1) for thumbv6m-none-eabi — what the emulator runs.
+#
+#   cargo build --release --no-default-features --features pico2 \
+#               --target thumbv8m.main-none-eabihf
+#       RP2350 (Pico 2 W) — the physical board.
+#
+# The emulator cannot run RP2350 (docs/08), so both paths stay alive.
+
+[features]
+default = ["rp2040"]
+rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
+pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
 
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-rp = { version = "0.10", features = ["rp2040", "time-driver", "critical-section-impl", "boot2-w25q080"] }
+embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
 embassy-time = "0.5"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
