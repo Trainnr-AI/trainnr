@@ -542,6 +542,102 @@ mod tests {
         );
     }
 
+    /// **THE DIGITAL-TWIN PROPERTY, as a test.**
+    ///
+    /// `hil-host` does not call `step()`. It calls `observe()`, ships the
+    /// observation to a chip, gets a motor command back, and calls
+    /// `advance()`. If that path can drift from `step()`, the simulator
+    /// and the rig stop being twins — and the only thing that would notice
+    /// is a human running the emulator and squinting at the numbers.
+    ///
+    /// So: drive the mission BOTH ways and require identical outcomes.
+    /// The manual path here mirrors `hil-host` exactly, minus the wire.
+    #[test]
+    fn driving_it_by_hand_matches_step_exactly() {
+        let in_process = Mission::new(MissionConfig::default()).run();
+
+        // The hil-host path: observe, decide outside, advance.
+        let mut m = Mission::new(MissionConfig::default());
+        while let Some(obs) = m.observe() {
+            let (v, w) = m.decide(&obs);
+            let drive = m.config.spec.drive();
+            let (cmd_l, cmd_r) = drive.inverse(v, w);
+            m.advance(obs, cmd_l, cmd_r);
+        }
+        let manual = m.outcome();
+
+        assert_eq!(
+            in_process, manual,
+            "observe/decide/advance diverged from step() — the simulator \
+             and the HIL rig are no longer digital twins"
+        );
+    }
+
+    /// The wire carries *duty*, not wheel speeds. Two separate questions:
+    /// is the quantisation lossless, and does anything saturate?
+    ///
+    /// # A real finding, deliberately recorded rather than fixed
+    ///
+    /// The second one is not benign. The controller regularly commands
+    /// wheel speeds the motors cannot deliver — this test measured a peak
+    /// **overshoot of ~169 rad/s against a 30 rad/s motor**, i.e. asking
+    /// for over six times what exists.
+    ///
+    /// The source is the PID's D term. `Kd · de/dt` with `dt = 0.02` means
+    /// a target that jumps sideways gives `de/dt ≈ 157`, so `w ≈ 94 rad/s`
+    /// of turn rate, which is ~235 rad/s at the wheel.
+    ///
+    /// It does not break the simulation: `Motor::step` clamps, the mission
+    /// still completes in 22.5 s. But the controller is **relying on
+    /// saturation to clean up after it**, which is a different thing from
+    /// being correct, and on real hardware it means the turn's shape
+    /// differs from what the controller computed — with no feedback path
+    /// telling the PID its output was ignored.
+    ///
+    /// Not fixed here because clamping `steer`'s output would move the
+    /// recorded Stage 0 baseline, and that is a decision to make
+    /// deliberately rather than inside a test. Note also that
+    /// `RobotSpec::check` claims to catch "commanding speeds the robot
+    /// cannot reach" and misses this entirely — it only validates `v_max`,
+    /// never the turn component.
+    #[test]
+    fn duty_quantisation_is_lossless_but_the_controller_saturates() {
+        let spec = MissionConfig::default().spec;
+        let step = spec.max_wheel_rad_s / 1000.0; // one duty count, rad/s
+        let mut m = Mission::new(MissionConfig::default());
+        let mut worst_quantisation: f64 = 0.0;
+        let mut worst_overshoot: f64 = 0.0;
+
+        for _ in 0..300 {
+            let Some(obs) = m.observe() else { break };
+            let (v, w) = m.decide(&obs);
+            let (cmd_l, cmd_r) = spec.drive().inverse(v, w);
+            for cmd in [cmd_l, cmd_r] {
+                let over = cmd.abs() - spec.max_wheel_rad_s;
+                if over > 0.0 {
+                    // Saturated: the duty cannot represent this at all.
+                    worst_overshoot = worst_overshoot.max(over);
+                } else {
+                    // In range: round-tripping must cost less than one count.
+                    let back = f64::from(spec.duty(cmd)) * step;
+                    worst_quantisation = worst_quantisation.max((back - cmd).abs());
+                }
+            }
+            m.advance(obs, cmd_l, cmd_r);
+        }
+
+        assert!(
+            worst_quantisation <= step,
+            "unsaturated duty lost {worst_quantisation} rad/s, more than \
+             one count ({step})"
+        );
+        assert!(
+            worst_overshoot > 0.0,
+            "no saturation seen — if the controller has been fixed to \
+             clamp its output, delete this test and the note above"
+        );
+    }
+
     /// Determinism is what makes every assertion above meaningful.
     #[test]
     fn the_same_seed_produces_the_same_run() {

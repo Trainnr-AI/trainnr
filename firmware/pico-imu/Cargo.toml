@@ -23,6 +23,9 @@ heapless = "0.9"
 # `cargo test` on the Mac, real I2C peripheral here.
 mpu6050-driver = { path = "../../crates/mpu6050-driver" }
 
+[build-dependencies]
+firmware-build-support = { path = "../build-support" }
+
 [profile.release]
 debug = true
 lto = true

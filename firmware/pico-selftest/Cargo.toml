@@ -30,6 +30,9 @@ cortex-m-rt = "0.7"
 panic-halt = "1.0"
 sim-core = { path = "../../crates/sim-core", default-features = false }
 
+[build-dependencies]
+firmware-build-support = { path = "../build-support" }
+
 [profile.release]
 debug = true
 lto = true

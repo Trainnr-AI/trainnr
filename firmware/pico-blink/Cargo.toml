@@ -27,6 +27,9 @@ cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "1.0"
 
+[build-dependencies]
+firmware-build-support = { path = "../build-support" }
+
 [profile.release]
 debug = true      # keep symbols: Wokwi/GDB can show source lines
 lto = true

@@ -137,6 +137,11 @@ fn speed_budget_is_capped_at_v_max_inside_steer() {
 // ---- The radian section ----
 
 #[test]
+// The doc prints rounded values (`2π ≈ 6.283`) and this test exists to
+// check *those printed values* are right. Clippy sees a literal near TAU
+// and assumes a botched constant — correct in general, wrong here. Allowed
+// narrowly rather than by weakening the lint globally.
+#[allow(clippy::approx_constant)]
 fn the_radian_conversion_numbers_are_right() {
     // "radians × 57.3 ≈ degrees"; the table's entries.
     assert!((1.0f64.to_degrees() - 57.2957).abs() < 1e-3);

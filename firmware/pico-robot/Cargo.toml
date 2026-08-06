@@ -32,6 +32,9 @@ quad-encoder = { path = "../../crates/quad-encoder" }
 sim-core = { path = "../../crates/sim-core", default-features = false }
 hil-protocol = { path = "../../crates/hil-protocol" }
 
+[build-dependencies]
+firmware-build-support = { path = "../build-support" }
+
 [profile.release]
 debug = true
 lto = true
