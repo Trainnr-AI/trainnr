@@ -19,5 +19,6 @@
 //! than flaky.
 
 pub mod mission;
+pub mod viz;
 
-pub use mission::{Mission, MissionConfig, Outcome, Tick};
+pub use mission::{Mission, MissionConfig, Observation, Outcome, Tick};

@@ -3,10 +3,29 @@
 //! The chip decides; the host owns physics. Every 20 ms:
 //!
 //! ```text
+//!   host -> chip   G <x> <y> <budget>    steer here, at most this fast
+//!   host -> chip   T <v> <w>              or: just do exactly this
 //!   chip -> host   P <x> <y> <theta>     believed pose (display only)
 //!   chip -> host   M <duty_l> <duty_r>   motor command, ±1000
 //!   host -> chip   S <dl> <dr>           encoder tick deltas
 //! ```
+//!
+//! # Why the host sends the goal
+//!
+//! The chip cannot plan. `OccupancyGrid` is a `Vec` and `plan()` uses a
+//! `BinaryHeap`; bare metal has no allocator. So mapping and A* stay on
+//! the host — which is not a workaround, it is the two-tier architecture
+//! docs/00 describes and every real robot uses:
+//!
+//! ```text
+//!   Tier 2 (host)   vision, mapping, planning     "steer at (x, y)"
+//!   Tier 1 (chip)   hard-real-time control loop   "wheels do this"
+//! ```
+//!
+//! `G` is the seam between those tiers. Before it existed the chip carried
+//! a hardcoded waypoint list it could not possibly plan around, and the
+//! simulator and the HIL rig ran different missions in different worlds —
+//! not the digital twins they claimed to be.
 //!
 //! # Why this is a crate and not two `split_whitespace` calls
 //!
@@ -51,6 +70,34 @@ pub const DUTY_FULL: i32 = 1000;
 /// knowing which way it travels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Message {
+    /// `G x y budget` — steer at this point, at most this fast.
+    ///
+    /// Host to chip, recomputed every tick, so it silently carries
+    /// replanning: the host may move the point around an obstacle and the
+    /// chip simply follows, knowing nothing about the map.
+    ///
+    /// **`budget` is separate from the point on purpose.** The point is a
+    /// *lookahead* — deliberately close, so steering is smooth. The speed
+    /// must come from distance to the REAL goal, or the robot crawls
+    /// whenever the next path node happens to be nearby. That is why
+    /// `GotoController::steer` takes a budget rather than deriving one,
+    /// and this message mirrors it. (Discovered the hard way: the chip
+    /// stalled 1.28 m short of the goal, commanding zero duty.)
+    Goal { x: f64, y: f64, budget: f64 },
+    /// `T v w` — a body twist to apply directly, bypassing the chip's
+    /// controller. Forward speed in m/s, turn rate in rad/s.
+    ///
+    /// For decisions the chip *cannot* make because they depend on
+    /// sensors it does not have. The obstacle reflex is the case: it needs
+    /// a depth scan, the scan lives on the host (and on the real robot,
+    /// on the Jetson), so the host computes the escape twist and the chip
+    /// simply obeys.
+    ///
+    /// The split is honest rather than convenient — planning and reactive
+    /// sensing sit in Tier 2, the real-time control loop in Tier 1. Adding
+    /// this fixed a rig that ground along a wall for 1019 ticks because
+    /// the reflex had no way to reach the motors.
+    Twist { v: f64, w: f64 },
     /// `P x y theta` — the chip's believed pose, in metres and radians.
     /// Display only; the host never steers with it.
     Pose { x: f64, y: f64, theta: f64 },
@@ -87,6 +134,8 @@ impl Message {
     /// enough for a small UART buffer.
     pub fn write_into<W: Write>(&self, w: &mut W) -> core::fmt::Result {
         match *self {
+            Message::Goal { x, y, budget } => writeln!(w, "G {x:.4} {y:.4} {budget:.4}"),
+            Message::Twist { v, w: tw } => writeln!(w, "T {v:.4} {tw:.4}"),
             Message::Pose { x, y, theta } => writeln!(w, "P {x:.4} {y:.4} {theta:.4}"),
             Message::Motor { duty_l, duty_r } => writeln!(w, "M {duty_l} {duty_r}"),
             Message::Sensors { dl, dr } => writeln!(w, "S {dl} {dr}"),
@@ -100,6 +149,17 @@ impl Message {
         let tag = parts.next().ok_or(ParseError::Empty)?;
 
         match tag {
+            "G" => {
+                let x = next_f64(&mut parts)?;
+                let y = next_f64(&mut parts)?;
+                let budget = next_f64(&mut parts)?;
+                Ok(Message::Goal { x, y, budget })
+            }
+            "T" => {
+                let v = next_f64(&mut parts)?;
+                let w = next_f64(&mut parts)?;
+                Ok(Message::Twist { v, w })
+            }
             "P" => {
                 let x = next_f64(&mut parts)?;
                 let y = next_f64(&mut parts)?;
@@ -123,6 +183,8 @@ impl Message {
     /// The single-character tag this message serialises with.
     pub fn tag(&self) -> char {
         match self {
+            Message::Goal { .. } => 'G',
+            Message::Twist { .. } => 'T',
             Message::Pose { .. } => 'P',
             Message::Motor { .. } => 'M',
             Message::Sensors { .. } => 'S',
@@ -307,6 +369,34 @@ mod tests {
     }
 
     #[test]
+    fn goal_round_trips_within_the_wire_precision() {
+        let m = Message::Goal {
+            x: 6.5,
+            y: 3.25,
+            budget: 0.45,
+        };
+        let text = encode(m);
+        assert_eq!(text.as_str(), "G 6.5000 3.2500 0.4500\n");
+        assert_eq!(Message::parse(text.as_str()).unwrap(), m);
+    }
+
+    #[test]
+    fn a_goal_needs_all_three_fields() {
+        assert_eq!(Message::parse("G"), Err(ParseError::MissingField));
+        assert_eq!(Message::parse("G 1"), Err(ParseError::MissingField));
+        assert_eq!(Message::parse("G 1 2"), Err(ParseError::MissingField));
+        assert_eq!(Message::parse("G 1 x 3"), Err(ParseError::BadNumber));
+    }
+
+    #[test]
+    fn a_twist_round_trips() {
+        let m = Message::Twist { v: 0.12, w: -1.8 };
+        assert_eq!(encode(m).as_str(), "T 0.1200 -1.8000\n");
+        assert_eq!(Message::parse("T 0.1200 -1.8000").unwrap(), m);
+        assert_eq!(Message::parse("T 1"), Err(ParseError::MissingField));
+    }
+
+    #[test]
     fn pose_round_trips_within_the_wire_precision() {
         // Encoded at 4 decimals, so equality is to 0.1 mm — not exact.
         // Values chosen to exercise 4-decimal rounding in both
@@ -419,6 +509,14 @@ mod tests {
     fn tags_match_what_is_encoded() {
         for (m, t) in [
             (
+                Message::Goal {
+                    x: 0.0,
+                    y: 0.0,
+                    budget: 0.0,
+                },
+                'G',
+            ),
+            (
                 Message::Pose {
                     x: 0.0,
                     y: 0.0,
@@ -433,6 +531,7 @@ mod tests {
                 },
                 'M',
             ),
+            (Message::Twist { v: 0.0, w: 0.0 }, 'T'),
             (Message::Sensors { dl: 0, dr: 0 }, 'S'),
         ] {
             assert_eq!(m.tag(), t);

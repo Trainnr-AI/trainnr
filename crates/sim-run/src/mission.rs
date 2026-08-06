@@ -140,6 +140,37 @@ pub struct Tick {
     /// Distance between truth and belief — the accumulated odometry error.
     pub drift: f64,
     pub path: Option<Vec<(f64, f64)>>,
+    /// Encoder counts this tick. The only thing the chip gets to see of
+    /// the physics — everything else here is for the viewer.
+    pub dticks: (i64, i64),
+}
+
+/// Everything a decider needs for one tick, and nothing about how the
+/// decision gets made.
+///
+/// This is the seam that makes the simulator and the HIL rig **digital
+/// twins**: both run the same world and the same physics, and differ only
+/// in who fills the gap between [`Mission::observe`] and
+/// [`Mission::advance`]. In `sim-run` that gap is a function call; in
+/// `hil-host` it is a serial cable with a real chip on the far end.
+#[derive(Debug, Clone)]
+pub struct Observation {
+    pub index: usize,
+    pub t: f64,
+    /// The pose the controller should steer on — truth, or belief if
+    /// `control_on_belief` is set.
+    pub pose: Pose,
+    /// The waypoint currently being driven to.
+    pub goal: (f64, f64),
+    /// Where to actually aim: the path lookahead point, or the goal if
+    /// there is no plan. **This is what gets sent to the chip.**
+    pub target: (f64, f64),
+    pub dist_to_goal: f64,
+    pub mode: Mode,
+    pub mode_changes: Vec<(Mode, Mode)>,
+    pub scan: Vec<f64>,
+    pub summary: sim_core::ScanSummary,
+    pub path: Option<Vec<(f64, f64)>>,
 }
 
 /// How the mission ended.
@@ -242,7 +273,13 @@ impl Mission {
     /// sense/map/plan work and then skip physics, exactly as the original
     /// loop's `continue` did; `step` absorbs those internally so a caller
     /// never sees a half-finished tick.
-    pub fn step(&mut self) -> Option<Tick> {
+    /// SENSE, MAP, PLAN — everything up to the decision.
+    ///
+    /// Returns `None` when the mission is over (all waypoints reached, or
+    /// the deadline passed). Ticks on which a waypoint is *reached* do
+    /// this work and then loop, exactly as the original `continue` did, so
+    /// a caller never sees a half-finished tick.
+    pub fn observe(&mut self) -> Option<Observation> {
         let dt = self.config.dt;
         let mut mode_changes = Vec::new();
 
@@ -297,7 +334,6 @@ impl Mission {
                 );
             }
 
-            // ---- DECIDE.
             let dist_to_goal = (goal.0 - pose.x).hypot(goal.1 - pose.y);
             if dist_to_goal < self.config.gains.arrive_radius {
                 self.wp_index += 1;
@@ -310,70 +346,108 @@ impl Mission {
                 Some(p) => lookahead_point(p, &pose, self.config.lookahead, goal),
                 None => goal,
             };
-            let (v_cmd, w_cmd) = match self.mode {
-                Mode::Goto => {
-                    // Steer at the LOOKAHEAD point but throttle on distance
-                    // to the real goal, so the robot doesn't crawl just
-                    // because the next path node happens to be close.
-                    let bearing = (target.1 - pose.y).atan2(target.0 - pose.x);
-                    let heading_error = shortest_turn(pose.theta, bearing);
-                    self.controller.steer(
-                        heading_error,
-                        self.config.gains.kp_dist * dist_to_goal,
-                        dt,
-                    )
-                }
-                Mode::Avoid => (
-                    self.config.avoid_v,
-                    summary.turn_direction() * self.config.avoid_w,
-                ),
-            };
 
-            // ---- ACT through the imperfect world.
-            let (cmd_l, cmd_r) = self.nominal.inverse(v_cmd, w_cmd);
-            let act_l = self.motor_l.step(cmd_l, dt);
-            let act_r = self.motor_r.step(cmd_r, dt);
-            let slip_l = 1.0 - 0.01 * self.rng.uniform();
-            let slip_r = 1.0 - 0.01 * self.rng.uniform();
-            let before = self.robot.pose;
-            self.robot.step(act_l * slip_l, act_r * slip_r, dt);
-
-            // Walls are solid: if the body would overlap one, the
-            // translation is refused (rotation survives — a bumped robot
-            // can still pivot). The wheels DID spin, so odometry keeps
-            // integrating: grinding against a wall drifts fast, exactly
-            // like a real robot pushing on one.
-            let bumped = self.world.collides(
-                self.robot.pose.x,
-                self.robot.pose.y,
-                self.config.robot_radius,
-            );
-            if bumped {
-                self.robot.pose.x = before.x;
-                self.robot.pose.y = before.y;
-                self.bumps += 1;
-            }
-
-            // ---- OBSERVE: belief from encoder ticks alone.
-            let (dticks_l, dticks_r) = self.encoders.advance(act_l, act_r, dt);
-            self.odometry.update(dticks_l, dticks_r);
-
-            return Some(Tick {
+            return Some(Observation {
                 index,
                 t,
-                scan,
+                pose,
+                goal,
+                target,
+                dist_to_goal,
                 mode: self.mode,
                 mode_changes,
-                min_dist,
-                bumped,
-                target,
-                goal,
-                true_pose: self.robot.pose,
-                belief_pose: self.odometry.pose,
-                drift: self.robot.pose.distance_to(&self.odometry.pose),
+                scan,
+                summary,
                 path: self.path.clone(),
             });
         }
+    }
+
+    /// The decision this mission's own controller would make.
+    ///
+    /// `sim-run` uses it; `hil-host` ignores it and asks the chip instead.
+    pub fn decide(&mut self, obs: &Observation) -> (f64, f64) {
+        match obs.mode {
+            Mode::Goto => {
+                // Steer at the LOOKAHEAD point but throttle on distance to
+                // the real goal, so the robot doesn't crawl just because
+                // the next path node happens to be close.
+                let bearing = (obs.target.1 - obs.pose.y).atan2(obs.target.0 - obs.pose.x);
+                let heading_error = shortest_turn(obs.pose.theta, bearing);
+                self.controller.steer(
+                    heading_error,
+                    self.config.gains.kp_dist * obs.dist_to_goal,
+                    self.config.dt,
+                )
+            }
+            Mode::Avoid => (
+                self.config.avoid_v,
+                obs.summary.turn_direction() * self.config.avoid_w,
+            ),
+        }
+    }
+
+    /// ACT and OBSERVE — the physics, given *commanded wheel speeds*.
+    ///
+    /// Takes wheel speeds rather than a body twist because that is the
+    /// narrowest thing both callers can produce: `sim-run` gets there via
+    /// `DiffDrive::inverse`, `hil-host` via duty × scale from the chip.
+    /// One physics implementation, two sources of command.
+    pub fn advance(&mut self, obs: Observation, cmd_l: f64, cmd_r: f64) -> Tick {
+        let dt = self.config.dt;
+
+        let act_l = self.motor_l.step(cmd_l, dt);
+        let act_r = self.motor_r.step(cmd_r, dt);
+        let slip_l = 1.0 - 0.01 * self.rng.uniform();
+        let slip_r = 1.0 - 0.01 * self.rng.uniform();
+        let before = self.robot.pose;
+        self.robot.step(act_l * slip_l, act_r * slip_r, dt);
+
+        // Walls are solid: if the body would overlap one, the translation
+        // is refused (rotation survives — a bumped robot can still pivot).
+        // The wheels DID spin, so odometry keeps integrating: grinding
+        // against a wall drifts fast, exactly like a real robot pushing
+        // on one.
+        let bumped =
+            self.world
+                .collides(self.robot.pose.x, self.robot.pose.y, self.config.robot_radius);
+        if bumped {
+            self.robot.pose.x = before.x;
+            self.robot.pose.y = before.y;
+            self.bumps += 1;
+        }
+
+        // ---- OBSERVE: belief from encoder ticks alone.
+        let (dticks_l, dticks_r) = self.encoders.advance(act_l, act_r, dt);
+        self.odometry.update(dticks_l, dticks_r);
+
+        Tick {
+            index: obs.index,
+            t: obs.t,
+            scan: obs.scan,
+            mode: obs.mode,
+            mode_changes: obs.mode_changes,
+            min_dist: obs.summary.min,
+            bumped,
+            target: obs.target,
+            goal: obs.goal,
+            true_pose: self.robot.pose,
+            belief_pose: self.odometry.pose,
+            drift: self.robot.pose.distance_to(&self.odometry.pose),
+            path: obs.path,
+            dticks: (dticks_l, dticks_r),
+        }
+    }
+
+    /// One full tick with this mission's own controller in the loop.
+    ///
+    /// `observe` -> `decide` -> `advance`. `hil-host` runs the same first
+    /// and last calls with a serial cable in the middle.
+    pub fn step(&mut self) -> Option<Tick> {
+        let obs = self.observe()?;
+        let (v, w) = self.decide(&obs);
+        let (cmd_l, cmd_r) = self.nominal.inverse(v, w);
+        Some(self.advance(obs, cmd_l, cmd_r))
     }
 
     /// Run to completion, discarding per-tick telemetry.

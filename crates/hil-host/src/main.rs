@@ -1,229 +1,223 @@
 //! LEVEL 3 host — the robot's *body*, for a brain that lives on a chip.
 //!
-//! Spawns the emulator (which runs `firmware/pico-robot`), then plays the
-//! physical world to it: motor lag, wheel slip, quantized encoders, solid
-//! walls. Logs the true pose AND the chip's believed pose to Rerun, so you
-//! can watch dead reckoning drift on hardware you can't see.
+//! # Digital twin, not a second simulator
 //!
-//! The firmware does not know any of this exists. Protocol and rationale:
-//! docs/10-hil-protocol.md
+//! This used to be a separate simulation: its own 3.4×4.6 room with a
+//! pillar, its own four-waypoint tour, and its own copy of the physics
+//! loop — while `sim-run` simulated an 8×6 U-trap with one waypoint. Two
+//! programs that shared primitives and nothing else.
 //!
-//! Run with: tools/sim-hil.sh
+//! Now both run the **same `sim_run::Mission`**: same world, same physics,
+//! same maths, same Rerun drawing. The only difference is who fills the
+//! gap between `observe()` and `advance()`:
+//!
+//! ```text
+//!   sim-run    observe ──▶ mission.decide() ─────────────▶ advance
+//!   hil-host   observe ──▶ [ serial cable · a real chip ] ▶ advance
+//! ```
+//!
+//! # Who plans, and why
+//!
+//! The chip cannot plan — `OccupancyGrid` is a `Vec`, `plan()` uses a
+//! `BinaryHeap`, and bare metal has no allocator. So the host senses, maps
+//! and runs A*, then sends the chip a single point to steer at; the chip
+//! runs the real-time control loop and answers with motor duty.
+//!
+//! That split is not a workaround. It is the two-tier architecture in
+//! docs/00 — Tier 2 plans, Tier 1 controls — and it is what the physical
+//! robot will do with a Jetson in place of this laptop.
+//!
+//! # Two transports
+//!
+//! ```sh
+//! cargo run -p hil-host                                  # the emulator
+//! cargo run -p hil-host -- --serial /dev/cu.usbmodem11   # a REAL Pico
+//! ```
 
 use hil_protocol::Message;
-use sim_core::{DiffDrive, Encoders, Motor, Pose, Rng, Robot, RobotSpec, World};
+use sim_core::RobotSpec;
+use sim_run::{viz, Mission, MissionConfig};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
-
-/// Physics step. Must match the firmware's DT.
-const DT: f64 = 0.02;
-/// Stop after this much simulated time.
-const MAX_STEPS: usize = 3000; // 60 s
-const SEED: u64 = 7;
 
 /// The robot the host simulates. Must be the SAME spec the firmware
 /// believes in, or the rig tests the chip against a machine that does not
 /// exist — hence `REAL_BOT`, matching `pico-robot`.
 const SPEC: RobotSpec = RobotSpec::REAL_BOT;
-/// The robot as it truly is: 1% worn tyres the firmware doesn't know about.
-/// This gap is deliberate — it is what makes the odometry drift real.
-const TRUE_WHEEL_RADIUS: f64 = SPEC.wheel_radius * 0.99;
-/// Motor: first-order lag + saturation (sim-core's model).
-const MOTOR_TAU: f64 = 0.15;
-/// Motor saturation. **Derived, not chosen** — it is the same physical
-/// quantity as `SPEC.max_wheel_rad_s`, and was a second copy of `30.0`
-/// until 2026-08-02. If the two disagree, the host simulates a motor the
-/// firmware does not believe in, and the drift looks like a control bug.
-const MOTOR_MAX: f64 = SPEC.max_wheel_rad_s;
-/// Duty ±1000 maps to ±MOTOR_MAX rad/s of commanded wheel speed.
-const DUTY_SCALE: f64 = MOTOR_MAX / 1000.0;
-const ROBOT_RADIUS: f64 = 0.09;
+/// Duty ±1000 maps to ±`max_wheel_rad_s` of commanded wheel speed.
+/// Derived, not chosen: the same quantity the firmware scales by.
+const DUTY_SCALE: f64 = SPEC.max_wheel_rad_s / 1000.0;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let uf2 = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "firmware/pico-robot/pico-robot.uf2".into());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let serial_port = args
+        .iter()
+        .position(|a| a == "--serial")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
 
     let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
 
-    // ---- the world the firmware will bump into ----
-    let mut world = World::room(3.4, 4.6);
-    world.add_box(1.5, 1.9, 1.9, 2.7); // a pillar mid-room
-
-    let wall_strips: Vec<[[f32; 2]; 2]> = world
-        .walls
-        .iter()
-        .map(|s| [[s.a.0 as f32, s.a.1 as f32], [s.b.0 as f32, s.b.1 as f32]])
-        .collect();
-    rec.log_static(
-        "world/walls",
-        &rerun::LineStrips2D::new(wall_strips).with_colors([rerun::Color::from_rgb(130, 130, 140)]),
-    )?;
-
-    // ---- physical state ----
-    let start = Pose::new(1.0, 1.0, 0.0);
-    let mut robot = Robot {
-        model: DiffDrive {
-            wheel_radius: TRUE_WHEEL_RADIUS,
-            track_width: SPEC.track_width,
-        },
-        pose: start,
+    // The SAME mission sim-run runs. Not a copy — the same type, the same
+    // default config, the same world.
+    let config = MissionConfig {
+        // THE one deliberate difference from sim-run, and it makes the rig
+        // MORE realistic, not less.
+        //
+        // sim-run plans and steers on ground truth — a teaching
+        // simplification that isolates control from estimation. Here the
+        // chip can only steer on its own odometry belief, because that is
+        // all a real robot ever has. If the host planned on truth we would
+        // have two different poses in one loop: the host aims at a point
+        // computed from where the robot really is, the chip turns toward
+        // it from where it *thinks* it is, and the error feeds itself.
+        // Measured: drift ran to 5.7 m and the belief left the room.
+        //
+        // Both sides integrate the same encoder ticks from the same start,
+        // so host and chip odometry stay in lockstep by construction.
+        control_on_belief: true,
+        ..MissionConfig::default()
     };
-    let mut motor_l = Motor::new(MOTOR_TAU, MOTOR_MAX);
-    let mut motor_r = Motor::new(MOTOR_TAU, MOTOR_MAX);
-    let mut encoders = Encoders::new(SPEC.ticks_per_rev);
-    let mut rng = Rng::new(SEED);
+    let dt = config.dt;
+    let mut mission = Mission::new(config);
+    viz::draw_world(&rec, &mission)?;
 
-    // ---- spawn the emulator ----
-    eprintln!("[host] spawning emulator for {uf2}");
-    let mut child: Child = Command::new("npx")
-        .args(["tsx", "demo/hil-bridge.ts", &format!("../../{uf2}")])
-        .current_dir("tools/rp2040js")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
-    // `?`, not `.expect()`: main returns Result, so propagating costs
-    // nothing and a failed spawn reports itself instead of panicking.
-    let mut to_chip = child.stdin.take().ok_or("emulator stdin was not piped")?;
-    let from_chip = BufReader::new(child.stdout.take().ok_or("emulator stdout was not piped")?);
+    // ---- connect to the brain ----
+    let mut emulator: Option<Child> = None;
+    let (mut to_chip, mut from_chip): (Box<dyn Write>, Box<dyn BufRead>) = match &serial_port {
+        Some(port) => {
+            eprintln!("[host] opening {port}");
+            let sp = serialport::new(port, 115_200)
+                .timeout(std::time::Duration::from_secs(5))
+                .open()?;
+            // Two handles: the read side blocks, and we must be able to
+            // write while it does.
+            let reader = sp.try_clone()?;
+            (Box::new(sp), Box::new(BufReader::new(reader)))
+        }
+        None => {
+            let uf2 = args
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "firmware/pico-robot/pico-robot.uf2".into());
+            eprintln!("[host] spawning emulator for {uf2}");
+            let mut child: Child = Command::new("npx")
+                .args(["tsx", "demo/hil-bridge.ts", &format!("../../{uf2}")])
+                .current_dir("tools/rp2040js")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .spawn()?;
+            let w = child.stdin.take().ok_or("emulator stdin was not piped")?;
+            let r = child.stdout.take().ok_or("emulator stdout was not piped")?;
+            emulator = Some(child);
+            (Box::new(w), Box::new(BufReader::new(r)))
+        }
+    };
 
     let mut trail_true: Vec<[f32; 2]> = Vec::new();
     let mut trail_belief: Vec<[f32; 2]> = Vec::new();
-    let mut belief = start;
-    let mut steps = 0usize;
-    let mut bumps = 0usize;
-    let mut idle = 0usize;
+    let mut belief_from_chip = mission.config.start;
+    let mut ticks = 0usize;
 
-    // ---- the loop: read the chip's decisions, answer with consequences ----
-    for line in from_chip.lines() {
-        let line = line?;
-        // Parsed by the SAME code the firmware uses. A line the host
-        // cannot read is skipped loudly rather than guessed at — the chip
-        // also prints human-facing text on this stream.
-        match Message::parse(&line) {
-            // The chip's believed pose — for display only.
-            Ok(Message::Pose { x, y, theta }) => {
-                belief = Pose::new(x, y, theta);
+    // ---- the loop: plan here, control there ----
+    while let Some(obs) = mission.observe() {
+        // 1. Tell the chip where to aim. This is the planner's output —
+        //    the chip never sees the map.
+        // In Goto the chip steers; in Avoid the HOST decides, because the
+        // reflex needs a depth scan the chip does not have. Same split as
+        // the real robot, where the camera is on Tier 2.
+        let command = match obs.mode {
+            sim_core::Mode::Goto => Message::Goal {
+                x: obs.target.0,
+                y: obs.target.1,
+                // The budget sim-run's own `decide()` would use:
+                // proportional to distance to the REAL goal, not to the
+                // lookahead point. Send it, or the chip crawls.
+                budget: mission.config.gains.kp_dist * obs.dist_to_goal,
+            },
+            sim_core::Mode::Avoid => Message::Twist {
+                v: mission.config.avoid_v,
+                w: obs.summary.turn_direction() * mission.config.avoid_w,
+            },
+        };
+        send(&mut to_chip, command)?;
+
+        // 2. Wait for its motor command. Anything else is the chip's
+        //    belief (for the viewer) or human-facing noise.
+        let mut duty = None;
+        while duty.is_none() {
+            let mut line = String::new();
+            if from_chip.read_line(&mut line)? == 0 {
+                eprintln!("[host] chip closed the connection");
+                break;
             }
-            // Motor command: advance physics one step, reply with ticks.
-            Ok(Message::Motor { duty_l, duty_r }) => {
-                // duty -> commanded wheel speed -> what the motor ACTUALLY does
-                let act_l = motor_l.step(duty_l as f64 * DUTY_SCALE, DT);
-                let act_r = motor_r.step(duty_r as f64 * DUTY_SCALE, DT);
-
-                // the ground steals a random 0-1% per wheel per step
-                let slip_l = 1.0 - 0.01 * rng.uniform();
-                let slip_r = 1.0 - 0.01 * rng.uniform();
-                let before = robot.pose;
-                robot.step(act_l * slip_l, act_r * slip_r, DT);
-                if world.collides(robot.pose.x, robot.pose.y, ROBOT_RADIUS) {
-                    // Walls are solid: refuse the translation, keep the turn.
-                    robot.pose.x = before.x;
-                    robot.pose.y = before.y;
-                    bumps += 1;
+            match Message::parse(line.trim_end()) {
+                Ok(Message::Motor { duty_l, duty_r }) => duty = Some((duty_l, duty_r)),
+                Ok(Message::Pose { x, y, theta }) => {
+                    belief_from_chip = sim_core::Pose::new(x, y, theta)
                 }
-
-                // encoders watch the MOTOR shaft, so they never see slip
-                let (dl, dr) = encoders.advance(act_l, act_r, DT);
-                writeln!(to_chip, "S {dl} {dr}")?;
-                to_chip.flush()?;
-
-                // ---- telemetry ----
-                let t = steps as f64 * DT;
-                rec.set_duration_secs("sim_time", t);
-                let (x, y) = (robot.pose.x as f32, robot.pose.y as f32);
-                trail_true.push([x, y]);
-                trail_belief.push([belief.x as f32, belief.y as f32]);
-                rec.log(
-                    "robot/trail",
-                    &rerun::LineStrips2D::new([trail_true.clone()])
-                        .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
-                )?;
-                rec.log(
-                    "robot/body",
-                    &rerun::Points2D::new([[x, y]])
-                        .with_radii([ROBOT_RADIUS as f32])
-                        .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
-                )?;
-                rec.log(
-                    "robot/heading",
-                    &rerun::Arrows2D::from_vectors([[
-                        0.25 * robot.pose.theta.cos() as f32,
-                        0.25 * robot.pose.theta.sin() as f32,
-                    ]])
-                    .with_origins([[x, y]])
-                    .with_colors([rerun::Color::from_rgb(255, 90, 90)]),
-                )?;
-                rec.log(
-                    "chip_belief/trail",
-                    &rerun::LineStrips2D::new([trail_belief.clone()])
-                        .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
-                )?;
-                rec.log(
-                    "chip_belief/body",
-                    &rerun::Points2D::new([[belief.x as f32, belief.y as f32]])
-                        .with_radii([0.06])
-                        .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
-                )?;
-                rec.log(
-                    "telemetry/drift_m",
-                    &rerun::Scalars::single(robot.pose.distance_to(&belief)),
-                )?;
-                rec.log("telemetry/duty_l", &rerun::Scalars::single(duty_l))?;
-                rec.log("telemetry/duty_r", &rerun::Scalars::single(duty_r))?;
-
-                // Progress narration: every simulated second, plus a note
-                // when the chip stops commanding (tour finished).
-                if steps.is_multiple_of(50) {
-                    eprintln!(
-                        "[{:5.1}s] true ({:.2}, {:.2}) th={:+.2}   chip ({:.2}, {:.2})   drift {:.3} m   duty {:>5}/{:<5}",
-                        t,
-                        robot.pose.x,
-                        robot.pose.y,
-                        robot.pose.theta,
-                        belief.x,
-                        belief.y,
-                        robot.pose.distance_to(&belief),
-                        duty_l,
-                        duty_r
-                    );
-                }
-                if duty_l == 0 && duty_r == 0 && steps > 10 {
-                    idle += 1;
-                    if idle == 25 {
-                        eprintln!("[{t:5.1}s] chip has stopped commanding — tour complete");
-                    }
-                } else {
-                    idle = 0;
-                }
-
-                steps += 1;
-                if steps >= MAX_STEPS || idle > 100 {
-                    break;
-                }
+                Ok(_) => {}
+                Err(_) => eprintln!("[host] {}", line.trim_end()),
             }
-            // The chip also prints human-facing text on this stream, so a
-            // parse failure is normal, not fatal. Sensor lines travel the
-            // other way and should never arrive here.
-            Ok(Message::Sensors { .. }) => eprintln!("[host] unexpected S line: {line}"),
-            Err(_) => eprintln!("[host] {line}"),
+        }
+        let Some((duty_l, duty_r)) = duty else { break };
+
+        // 3. Physics — the SAME advance() sim-run calls. Duty scaled to
+        //    commanded wheel speeds is the only translation.
+        let tick = mission.advance(obs, duty_l as f64 * DUTY_SCALE, duty_r as f64 * DUTY_SCALE);
+
+        // 4. Hand back what the encoders saw.
+        send(
+            &mut to_chip,
+            Message::Sensors {
+                dl: tick.dticks.0,
+                dr: tick.dticks.1,
+            },
+        )?;
+
+        // 5. Draw it — the same viewer sim-run uses.
+        viz::draw(&rec, &mission, &tick, &mut trail_true, &mut trail_belief)?;
+        ticks += 1;
+        if ticks % 50 == 0 {
+            eprintln!(
+                "[{:5.1}s] true ({:.2}, {:.2})  chip ({:.2}, {:.2})  drift {:.3} m  duty {duty_l}/{duty_r}",
+                tick.t,
+                tick.true_pose.x,
+                tick.true_pose.y,
+                belief_from_chip.x,
+                belief_from_chip.y,
+                tick.drift
+            );
         }
     }
 
-    let _ = child.kill();
+    if let Some(child) = &mut emulator {
+        let _ = child.kill();
+    }
+
+    let outcome = mission.outcome();
     println!(
-        "\n{} steps ({:.1} s simulated).\n  true pose:   x={:.3} y={:.3} th={:.3}\n  chip belief: x={:.3} y={:.3} th={:.3}\n  drift: {:.3} m,  wall bumps: {}",
-        steps,
-        steps as f64 * DT,
-        robot.pose.x,
-        robot.pose.y,
-        robot.pose.theta,
-        belief.x,
-        belief.y,
-        belief.theta,
-        robot.pose.distance_to(&belief),
-        bumps
+        "\n{} ticks ({:.1} s simulated).\n  waypoints:   {}/{}\n  true pose:   x={:.3} y={:.3}\n  chip belief: x={:.3} y={:.3}\n  drift: {:.3} m,  wall bumps: {}",
+        ticks,
+        ticks as f64 * dt,
+        outcome.waypoints_reached,
+        outcome.waypoints_total,
+        outcome.final_pose.x,
+        outcome.final_pose.y,
+        belief_from_chip.x,
+        belief_from_chip.y,
+        outcome.drift,
+        outcome.bumps
     );
     Ok(())
+}
+
+/// Every send goes through `hil-protocol` rather than being hand-formatted
+/// on this side — that is the whole point of the crate existing.
+fn send(w: &mut Box<dyn Write>, m: Message) -> std::io::Result<()> {
+    let mut s = String::new();
+    let _ = m.write_into(&mut s);
+    w.write_all(s.as_bytes())?;
+    w.flush()
 }
