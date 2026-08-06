@@ -17,6 +17,12 @@
 use core::fmt::Write as _;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
+// ⚠️ RP2350-E9 (see docs/09): our physical board is stepping A2, where an
+// input with an internal PULL-DOWN can latch high instead of reading a
+// clean low. GP16–GP19 below use exactly that configuration. It may
+// never show — a push-pull encoder drives the line itself — but if ticks
+// stick or counts only ever rise, add an external pull-down <=4.7k before
+// suspecting this code. The emulated RP2040 is unaffected.
 use embassy_rp::uart::{Blocking, Config as UartConfig, Uart, UartTx};
 use embassy_time::{Instant, Timer};
 use panic_halt as _;
