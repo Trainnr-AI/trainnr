@@ -170,6 +170,62 @@ impl RobotSpec {
         self.max_wheel_rad_s / core::f64::consts::TAU * 60.0
     }
 
+    /// Does the forward axis alone fit? Split out of [`check`](Self::check)
+    /// so a test can assert *"forward is fine"* independently of the turn
+    /// axis — the distinction that hid a real problem for as long as
+    /// `check` only looked at this half.
+    pub fn v_max_is_reachable(&self, gains: &ControlGains) -> bool {
+        gains.v_max <= self.max_body_speed()
+    }
+
+    /// Fastest the robot can spin, rad/s — the *other* limit, and the one
+    /// that actually bites.
+    ///
+    /// A differential drive has two ceilings, not one. Drive both wheels
+    /// flat out in opposite directions and the body rotates at
+    /// `2·r·ω_max / L` with no forward motion at all:
+    ///
+    /// ```text
+    ///     ω_L = −ω_max  ◀──(L)──▶  ω_R = +ω_max
+    ///     v = r(ω_R + ω_L)/2 = 0        ← they cancel
+    ///     w = r(ω_R − ω_L)/L = 2·r·ω_max/L
+    /// ```
+    ///
+    /// For `SIM_BOT`: 2 × 0.03 × 30 / 0.15 = **12 rad/s**.
+    pub fn max_turn_rate(&self) -> f64 {
+        2.0 * self.wheel_radius * self.max_wheel_rad_s / self.track_width
+    }
+
+    /// The heading error, in radians, below which the steering P term is
+    /// still *proportional* rather than pinned at the motors' limit.
+    ///
+    /// The P term asks for `heading_kp · e`. Past `max_turn_rate / kp` the
+    /// wheels cannot deliver it, so every larger error produces the same
+    /// command — the controller stops being proportional and becomes
+    /// bang-bang:
+    ///
+    /// ```text
+    ///   turn rate
+    ///   commanded
+    ///      ▲
+    ///  12 ─┤        ╱▔▔▔▔▔▔▔▔▔▔▔▔  saturated: every error here
+    ///      │      ╱                 gets the SAME command
+    ///      │    ╱ ← slope = kp
+    ///      │  ╱
+    ///    0 └╱──────┬─────────────▶  |heading error e|
+    ///      0       │
+    ///        band = max_turn_rate/kp
+    /// ```
+    ///
+    /// Saturation is not automatically a bug — see [`RobotSpec::check`]
+    /// for the criterion that decides whether this band is wide enough.
+    pub fn turn_proportional_band(&self, gains: &ControlGains) -> f64 {
+        if gains.heading_kp <= 0.0 {
+            return f64::INFINITY;
+        }
+        self.max_turn_rate() / gains.heading_kp
+    }
+
     /// Is this control profile physically achievable on this robot?
     ///
     /// Catches the mismatch class that is otherwise diagnosed as "the
@@ -186,6 +242,30 @@ impl RobotSpec {
         if gains.v_max > self.max_body_speed() {
             return Err("v_max exceeds what the motors can deliver — the \
                         controller will command speeds the robot cannot reach");
+        }
+        // ---- the turn axis ----
+        //
+        // This used to check only `v_max`, which is half the story: a
+        // differential drive saturates in *rotation* long before it
+        // saturates going forward, and on the shipped gains it does.
+        // `heading_kp · π` = 18.85 rad/s against a 12 rad/s ceiling.
+        //
+        // That is deliberately NOT an error. Demanding a hard turn when
+        // badly misaimed is correct, and `fit_wheels` scales the pair so
+        // the arc survives. Rejecting it would reject a good tune.
+        //
+        // What matters is *where* saturation starts. The alignment
+        // throttle already sets the natural boundary: at |e| ≥ π/2 the
+        // forward speed is zero, so the robot is spinning in place and
+        // bang-bang is exactly what you want. Below π/2 it is driving,
+        // and steering must stay proportional or it will not track.
+        //
+        // So the criterion is: the proportional band must cover the whole
+        // region where the robot is actually moving forward.
+        if self.turn_proportional_band(gains) < core::f64::consts::FRAC_PI_2 {
+            return Err("heading_kp saturates the wheels while the robot is \
+                        still driving forward — steering goes bang-bang \
+                        inside the alignment throttle's ±90° window");
         }
         Ok(())
     }
@@ -300,6 +380,21 @@ impl ControlGains {
         v_max: 0.35,
         arrive_radius: 0.15,
     };
+
+    /// [`WAYPOINT`](Self::WAYPOINT) with a wider arrival radius, for the
+    /// chip driving a robot over a serial link.
+    ///
+    /// The round trip adds a tick of latency on top of the motor lag the
+    /// pure simulator already models, so the robot overshoots a little
+    /// further before it registers arrival.
+    ///
+    /// This lived inline in `firmware/pico-robot` and so could not be
+    /// validated: `RobotSpec::check` never saw it, and neither did any
+    /// test. Shipped profiles belong here, next to the others.
+    pub const HIL: ControlGains = ControlGains {
+        arrive_radius: 0.18,
+        ..Self::WAYPOINT
+    };
 }
 
 #[cfg(test)]
@@ -373,8 +468,59 @@ mod tests {
             slow.check(&greedy).is_err(),
             "should reject an impossible v_max"
         );
-        // ...but the real profile fits comfortably on the ordered motor.
-        assert!(slow.check(&ControlGains::WAYPOINT).is_ok());
+        // The forward axis on the ordered motor is genuinely fine:
+        // 0.45 m/s wanted, 0.628 m/s available.
+        assert!(slow.v_max_is_reachable(&ControlGains::WAYPOINT));
+    }
+
+    /// ⚠️ **A finding, not a passing test.**
+    ///
+    /// This assertion used to read `slow.check(&WAYPOINT).is_ok()` with
+    /// the comment *"the real profile fits comfortably on the ordered
+    /// motor"*. That was true of forward speed and false of rotation —
+    /// and the turn axis was the half `check` did not look at.
+    ///
+    /// The N20 in `docs/09` is 200 RPM against the 286 RPM `SIM_BOT`
+    /// assumes. On the forward axis that is slack. On the turn axis:
+    ///
+    /// ```text
+    ///   max_turn_rate   8.378 rad/s   (vs 12.0 simulated)
+    ///   band = 8.378/6  1.396 rad = 80°     ← need ≥ 90°
+    /// ```
+    ///
+    /// So between **80° and 90°** of heading error the robot would be
+    /// driving forward with the steering pinned at the motor limit —
+    /// bang-bang exactly where it still needs to track a path.
+    ///
+    /// **When the motor arrives, `heading_kp` must come down from 6.0 to
+    /// at most 5.33**, and the mission must be re-run to see what that
+    /// costs. Caught before the part shipped, by a check that had been
+    /// looking at the wrong axis.
+    #[test]
+    fn the_ordered_motor_cannot_run_the_current_heading_gain() {
+        let ordered = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
+        assert!(
+            ordered.check(&ControlGains::WAYPOINT).is_err(),
+            "if this now passes, the motor spec or the gains changed — \
+             re-derive the band before deleting this test"
+        );
+
+        let band = ordered.turn_proportional_band(&ControlGains::WAYPOINT);
+        assert!(
+            (band.to_degrees() - 80.0).abs() < 0.1,
+            "band should be ~80°, got {:.1}°",
+            band.to_degrees()
+        );
+
+        // The gain that *would* fit, quoted in the doc comment above.
+        let retuned = ControlGains {
+            heading_kp: 5.33,
+            ..ControlGains::WAYPOINT
+        };
+        assert!(
+            ordered.check(&retuned).is_ok(),
+            "kp 5.33 should clear the bar on the ordered motor"
+        );
     }
 
     #[test]
@@ -383,6 +529,71 @@ mod tests {
         assert!(bad.check(&ControlGains::WAYPOINT).is_err());
         let no_encoder = RobotSpec::from_measurements(60.0, 150.0, 0.0, 200.0);
         assert!(no_encoder.check(&ControlGains::WAYPOINT).is_err());
+    }
+
+    /// The gap that made `check` worth revisiting: it validated `v_max`
+    /// and ignored rotation, which is the axis that actually saturates.
+    #[test]
+    fn check_looks_at_the_turn_axis_not_just_forward_speed() {
+        // Forward speed alone is comfortable — this is why the old check
+        // passed a profile it should have had an opinion about.
+        let roomy = ControlGains {
+            heading_kp: 40.0, // 12/40 = 0.3 rad band, far inside ±90°
+            ..ControlGains::WAYPOINT
+        };
+        assert!(
+            roomy.v_max < RobotSpec::SIM_BOT.max_body_speed(),
+            "the forward axis must be fine, or this proves nothing"
+        );
+        assert!(
+            RobotSpec::SIM_BOT.check(&roomy).is_err(),
+            "a kp that goes bang-bang while driving must be rejected"
+        );
+    }
+
+    #[test]
+    fn every_shipped_profile_is_physically_achievable() {
+        // Including HIL, which used to be defined inline in the firmware
+        // where nothing could check it.
+        for (name, gains) in [
+            ("WAYPOINT", ControlGains::WAYPOINT),
+            ("VISUAL_SERVO", ControlGains::VISUAL_SERVO),
+            ("HIL", ControlGains::HIL),
+        ] {
+            assert!(
+                RobotSpec::SIM_BOT.check(&gains).is_ok(),
+                "SIM_BOT rejects {name}: {:?}",
+                RobotSpec::SIM_BOT.check(&gains)
+            );
+            assert!(
+                RobotSpec::REAL_BOT.check(&gains).is_ok(),
+                "REAL_BOT rejects {name}: {:?}",
+                RobotSpec::REAL_BOT.check(&gains)
+            );
+        }
+    }
+
+    #[test]
+    fn the_waypoint_band_covers_the_whole_driving_window() {
+        // The margin the criterion actually passes on, spelled out so a
+        // future gain change shows up as a number rather than a surprise.
+        let band = RobotSpec::SIM_BOT.turn_proportional_band(&ControlGains::WAYPOINT);
+        assert!(
+            (band - 2.0).abs() < 1e-12,
+            "12 rad/s / kp 6.0 = 2.0 rad, got {band}"
+        );
+        assert!(band > core::f64::consts::FRAC_PI_2, "2.0 rad > π/2 = 1.571");
+    }
+
+    /// `heading_d_limit` is written as the literal `12.0` with a comment
+    /// saying it *is* `2·r·ω_max/L`. Now that the formula has a function,
+    /// check the literal still matches it.
+    #[test]
+    fn the_d_limit_literal_equals_the_formula_it_claims_to_be() {
+        let computed = RobotSpec::SIM_BOT.max_turn_rate();
+        assert!((computed - 12.0).abs() < 1e-12, "max_turn_rate = {computed}");
+        assert!((ControlGains::WAYPOINT.heading_d_limit - computed).abs() < 1e-12);
+        assert!((ControlGains::VISUAL_SERVO.heading_d_limit - computed).abs() < 1e-12);
     }
 
     #[test]

@@ -46,8 +46,6 @@
 #![allow(async_fn_in_trait)]
 
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Level, Output};
-use embassy_time::Timer;
 use hil_protocol::{LineReader, Message};
 use panic_halt as _;
 use sim_core::exercises::shortest_turn;
@@ -62,13 +60,13 @@ const DT: f64 = 0.02; // 50 Hz
 /// values land in `spec.rs`, they take effect here with no edit.
 const SPEC: RobotSpec = RobotSpec::REAL_BOT;
 
-/// Steering profile. The waypoint gains, with a slightly wider arrival
-/// radius: this loop runs against the host's motor lag over a serial link,
-/// so it overshoots a little more than the pure simulator does.
-const GAINS: ControlGains = ControlGains {
-    arrive_radius: 0.18,
-    ..ControlGains::WAYPOINT
-};
+/// Steering profile — shared, not defined here.
+///
+/// This used to be written out inline, which meant `RobotSpec::check`
+/// never saw it and no test could reach it. It now lives beside the other
+/// profiles in `sim-core`, where `every_shipped_profile_is_physically_
+/// achievable` validates it against both robot specs.
+const GAINS: ControlGains = ControlGains::HIL;
 
 // The waypoint list that used to live here is gone. The chip is a
 // CONTROLLER, not a planner: the host senses, maps, runs A* and sends a
@@ -190,13 +188,20 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
     }
 }
 
-#[embassy_executor::task]
-async fn heartbeat(mut led: Output<'static>) {
-    loop {
-        led.toggle();
-        Timer::after_millis(400).await;
-    }
-}
+// A heartbeat LED task used to live here, driving GP25. It never once
+// blinked: on a Pico **W** board GP25 is the CYW43 wireless chip's
+// **chip-select**, not an LED — `firmware/pico-led` says so in as many
+// words. So it toggled an unpowered radio's CS line at 2.5 Hz while
+// looking, in the source, exactly like a liveness indicator.
+//
+// That is worse than no LED. Anyone debugging a wedged robot looks for a
+// blinking light, does not find one, and concludes the firmware crashed
+// when it is running fine.
+//
+// A real status light on a W board costs 231 KB of CYW43 firmware, a PIO
+// block and a background task (see `pico-led`) — absurd for a heartbeat.
+// When the robot is assembled, wire an LED to a spare GPIO and bring this
+// back honestly.
 
 // ---------------------------------------------------------------------
 // Transport A — UART on GP0/GP1. What the emulator speaks.
@@ -226,10 +231,7 @@ mod transport {
         }
     }
 
-    pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        if let Ok(t) = heartbeat(Output::new(p.PIN_25, Level::Low)) {
-            spawner.spawn(t);
-        }
+    pub async fn run(p: embassy_rp::Peripherals) -> ! {
         let uart = Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, UartConfig::default());
         let mut link = UartLink(uart);
         control_loop(&mut link).await
@@ -270,11 +272,7 @@ mod transport {
         }
     }
 
-    pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        if let Ok(t) = heartbeat(Output::new(p.PIN_25, Level::Low)) {
-            spawner.spawn(t);
-        }
-
+    pub async fn run(p: embassy_rp::Peripherals) -> ! {
         let driver = Driver::new(p.USB, Irqs);
         let mut config = Config::new(0x2e8a, 0x000a);
         config.manufacturer = Some("robotiq");
@@ -318,7 +316,7 @@ mod transport {
 }
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
-    transport::run(p, spawner).await
+    transport::run(p).await
 }

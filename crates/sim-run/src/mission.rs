@@ -220,7 +220,22 @@ pub struct Mission {
 }
 
 impl Mission {
+    /// # Panics
+    ///
+    /// If the spec and gains are physically incompatible — see
+    /// [`RobotSpec::check`](sim_core::RobotSpec::check).
+    ///
+    /// Deliberately a panic rather than a `Result`. This is a
+    /// configuration error in a `const` written by hand, not a runtime
+    /// condition: every caller passes a compile-time constant, so it
+    /// either always fires or never does, and a test catches it the first
+    /// time the suite runs. `check` spent its whole life with no callers
+    /// outside its own unit tests, which is how it went unnoticed that it
+    /// never looked at the turn axis.
     pub fn new(config: MissionConfig) -> Mission {
+        if let Err(why) = config.spec.check(&config.gains) {
+            panic!("MissionConfig is not physically achievable: {why}");
+        }
         let mut world = World::room(config.world_size.0, config.world_size.1);
         world.walls.extend(config.obstacles.iter().copied());
 
