@@ -1,0 +1,38 @@
+[package]
+name = "pico-selftest"
+version = "0.1.0"
+edition = "2021"
+
+# Runs the SHARED maths (sim-core) on real silicon, prints results and
+# timings over USB serial. Answers two questions we had never tested:
+#   1. does sim-core produce the SAME numbers on ARM as on the Mac?
+#   2. does a control tick fit inside the 20 ms budget on this chip?
+#
+#   tools/build-pico2.sh pico-selftest
+#   picotool load -x firmware/pico-selftest/pico-selftest-pico2.uf2
+#   then open the serial port it presents.
+
+[features]
+default = ["rp2040"]
+rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
+pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
+
+[dependencies]
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
+embassy-time = "0.5"
+embassy-usb = "0.6"
+embassy-futures = "0.1"
+static_cell = "2"
+heapless = "0.9"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+sim-core = { path = "../../crates/sim-core", default-features = false }
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "z"
+
+[workspace]
