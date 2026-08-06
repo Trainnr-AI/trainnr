@@ -32,20 +32,44 @@ pub struct Pid {
     /// Without it, a long-blocked robot accumulates a huge integral and then
     /// lurches wildly once freed ("integral windup").
     pub i_limit: f64,
+    /// Anti-**kick** clamp: the derivative's *contribution* is kept in
+    /// [-d_limit, +d_limit].
+    ///
+    /// The mirror of `i_limit`, for the opposite failure. `D = Kd·de/dt`
+    /// with `dt = 0.02` multiplies any error jump by 50, and the error
+    /// jumps whenever the *setpoint* moves — our planner hopping to the
+    /// next lookahead node — even though the robot did not. Measured
+    /// before this clamp: **94 rad/s** of commanded turn rate, ~235 rad/s
+    /// at the wheel, against motors that deliver 30.
+    ///
+    /// `f64::INFINITY` disables it.
+    pub d_limit: f64,
     // Internal state — private, reset via `reset()`.
     integral: f64,
     prev_error: Option<f64>,
 }
 
 impl Pid {
+    /// A PID with no derivative clamp. Prefer [`Self::with_d_limit`] in a
+    /// control path — an unbounded D term is how a setpoint jump becomes a
+    /// command the actuator cannot honour.
     pub fn new(kp: f64, ki: f64, kd: f64, i_limit: f64) -> Self {
         Pid {
             kp,
             ki,
             kd,
             i_limit,
+            d_limit: f64::INFINITY,
             integral: 0.0,
             prev_error: None,
+        }
+    }
+
+    /// As [`Self::new`], with the derivative contribution bounded.
+    pub fn with_d_limit(kp: f64, ki: f64, kd: f64, i_limit: f64, d_limit: f64) -> Self {
+        Pid {
+            d_limit,
+            ..Pid::new(kp, ki, kd, i_limit)
         }
     }
 
@@ -73,7 +97,56 @@ impl Pid {
             None => 0.0,
         };
         self.prev_error = Some(error);
-        self.kp * error + self.ki * self.integral + self.kd * derivative
+        // Clamp the CONTRIBUTION, not the raw derivative: what matters is
+        // how much this term can move the output, and that is `kd * d`.
+        let d_term = (self.kd * derivative).clamp(-self.d_limit, self.d_limit);
+        self.kp * error + self.ki * self.integral + d_term
+    }
+
+    /// PID with the derivative taken on the **measurement** instead of
+    /// the error. Immune to setpoint jumps.
+    ///
+    /// # Why this exists
+    ///
+    /// [`Self::update`] computes `D` from `(error - prev_error)/dt`. When
+    /// the *target* moves — our path planner hopping to the next
+    /// lookahead node — the error jumps even though the robot did not
+    /// move, and `D` spikes on a change that never physically happened.
+    ///
+    /// Measured before this was added: a sideways target jump produced
+    /// **94 rad/s** of commanded turn rate, ~235 rad/s at the wheel,
+    /// against motors that deliver 30. The controller was relying on
+    /// saturation to clean up after it.
+    ///
+    /// Taking `D` from how fast the *robot* is actually turning removes
+    /// the spike entirely — a setpoint jump changes nothing the derivative
+    /// can see — and bounds it by physics: the robot cannot rotate faster
+    /// than its wheels allow.
+    ///
+    /// `measurement_rate` must already be wrapped by the caller if the
+    /// measurement is an angle. Raw subtraction across ±π produces a
+    /// spurious 2π-per-tick spike, which would trade one kick for another.
+    ///
+    /// The sign is negative: when the robot is already turning the way the
+    /// error wants, `D` opposes the change and damps the approach.
+    ///
+    /// # ⚠️ Measured, and NOT used by `GotoController`
+    ///
+    /// This is the textbook fix, and swapping `steer` onto it **broke the
+    /// mission**: 0/1 waypoints, 21.6 m of drift, against 22.5 s and
+    /// 0.052 m before. `Kd = 0.6` was tuned against the *error*
+    /// derivative, which also carries a feed-forward term (`d(bearing)/dt`)
+    /// that anticipates the path curving. Dropping it changes the loop
+    /// dynamics enough to need a full retune.
+    ///
+    /// So the controller keeps derivative-on-error and bounds the spike
+    /// with [`Pid::d_limit`] instead. This method stays because it is the
+    /// right answer for a freshly tuned loop — but it is not a drop-in.
+    pub fn update_on_measurement(&mut self, error: f64, measurement_rate: f64, dt: f64) -> f64 {
+        self.integral += error * dt;
+        self.integral = self.integral.clamp(-self.i_limit, self.i_limit);
+        self.prev_error = Some(error); // kept so `update` stays usable after
+        self.kp * error + self.ki * self.integral - self.kd * measurement_rate
     }
 
     /// Forget accumulated state (use when switching targets/modes).
@@ -116,18 +189,24 @@ impl Pid {
 pub struct GotoController {
     pub heading_pid: Pid,
     pub gains: ControlGains,
+    /// Last heading seen, for the measurement derivative. `None` until the
+    /// first tick, where `D` must be zero — the same no-kick-on-startup
+    /// rule `Pid` applies to its own first call.
+    prev_heading: Option<f64>,
 }
 
 impl GotoController {
     pub fn new(gains: ControlGains) -> Self {
         GotoController {
-            heading_pid: Pid::new(
+            heading_pid: Pid::with_d_limit(
                 gains.heading_kp,
                 gains.heading_ki,
                 gains.heading_kd,
                 gains.heading_i_limit,
+                gains.heading_d_limit,
             ),
             gains,
+            prev_heading: None,
         }
     }
 
@@ -137,7 +216,23 @@ impl GotoController {
     /// aligned — distance-proportional for a waypoint, size-proportional
     /// for a camera target. It is capped at `v_max` here so no caller can
     /// forget to.
-    pub fn steer(&mut self, heading_error: f64, speed_budget: f64, dt: f64) -> (f64, f64) {
+    pub fn steer(
+        &mut self,
+        heading_error: f64,
+        heading: f64,
+        speed_budget: f64,
+        dt: f64,
+    ) -> (f64, f64) {
+        // How fast the robot is ACTUALLY turning, wrapped — heading lives
+        // in (−π, π], so raw subtraction across the seam would read as a
+        // 2π lurch. Zero on the first tick: no previous heading, no rate.
+        let heading_rate = match self.prev_heading {
+            Some(prev) => shortest_turn(prev, heading) / dt,
+            None => 0.0,
+        };
+        self.prev_heading = Some(heading);
+
+        let _ = heading_rate; // see `update_on_measurement`: measured, rejected
         let w = self.heading_pid.update(heading_error, dt);
         let alignment = (1.0 - heading_error.abs() / FRAC_PI_2).max(0.0);
         let v = speed_budget.min(self.gains.v_max) * alignment;
@@ -151,7 +246,7 @@ impl GotoController {
         let bearing = (ty - pose.y).atan2(tx - pose.x);
         let error = shortest_turn(pose.theta, bearing);
         let budget = self.gains.kp_dist * Self::distance(pose, target);
-        self.steer(error, budget, dt)
+        self.steer(error, pose.theta, budget, dt)
     }
 
     /// Straight-line distance from `pose` to `target`, metres.
@@ -168,6 +263,9 @@ impl GotoController {
     /// is lost, so a reappearing object does not inherit a stale integral.
     pub fn reset(&mut self) {
         self.heading_pid.reset();
+        // Drop the heading history too, or the first tick after a mode
+        // switch computes a rate across the gap and kicks.
+        self.prev_heading = None;
     }
 }
 
@@ -224,7 +322,7 @@ mod tests {
     #[test]
     fn facing_the_target_gives_full_speed() {
         let mut c = ctrl();
-        let (v, w) = c.steer(0.0, 10.0, 0.02);
+        let (v, w) = c.steer(0.0, 0.0, 10.0, 0.02);
         assert!((v - ControlGains::WAYPOINT.v_max).abs() < 1e-12, "v = {v}");
         assert!(w.abs() < 1e-12, "no turn needed, got {w}");
     }
@@ -233,7 +331,7 @@ mod tests {
     fn misalignment_throttles_forward_speed() {
         let mut c = ctrl();
         // 45 degrees off: alignment = 1 - (pi/4)/(pi/2) = 0.5
-        let (v, _) = c.steer(core::f64::consts::FRAC_PI_4, 10.0, 0.02);
+        let (v, _) = c.steer(core::f64::consts::FRAC_PI_4, 0.0, 10.0, 0.02);
         assert!(
             (v - ControlGains::WAYPOINT.v_max * 0.5).abs() < 1e-12,
             "v = {v}"
@@ -245,7 +343,7 @@ mod tests {
         let mut c = ctrl();
         // Anything past 90 degrees would give a negative alignment factor.
         for err in [FRAC_PI_2 + 0.1, 2.0, core::f64::consts::PI] {
-            let (v, _) = c.steer(err, 10.0, 0.02);
+            let (v, _) = c.steer(err, 0.0, 10.0, 0.02);
             assert!(v >= 0.0, "error {err} drove backwards at {v}");
             assert!(v.abs() < 1e-12, "should pivot in place, got v = {v}");
         }
@@ -254,7 +352,7 @@ mod tests {
     #[test]
     fn speed_budget_is_capped_at_v_max() {
         let mut c = ctrl();
-        let (v, _) = c.steer(0.0, 1000.0, 0.02);
+        let (v, _) = c.steer(0.0, 0.0, 1000.0, 0.02);
         assert!(v <= ControlGains::WAYPOINT.v_max + 1e-12, "v = {v}");
     }
 

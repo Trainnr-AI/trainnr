@@ -154,7 +154,7 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
             Command::Steer(target, budget) => {
                 let bearing = (target.1 - pose.y).atan2(target.0 - pose.x);
                 let error = shortest_turn(pose.theta, bearing);
-                controller.steer(error, budget, DT)
+                controller.steer(error, pose.theta, budget, DT)
             }
             // A reflex the host computed from sensors we do not have.
             // Obey it, and drop any accumulated PID state so the next
@@ -164,7 +164,8 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
                 (v, w)
             }
         };
-        let (wl, wr) = SPEC.drive().inverse(v, w);
+        // Scale, don't clip — a saturated turn keeps its arc (docs/13).
+        let (wl, wr) = SPEC.fit_wheels_of(SPEC.drive().inverse(v, w));
         out.clear();
         let _ = Message::Motor {
             duty_l: SPEC.duty(wl),

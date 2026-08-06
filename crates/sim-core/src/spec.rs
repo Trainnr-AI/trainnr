@@ -190,6 +190,36 @@ impl RobotSpec {
         Ok(())
     }
 
+    /// Scale a wheel-speed pair down until neither exceeds the motor,
+    /// **keeping their ratio** — and therefore the arc the robot drives.
+    ///
+    /// # Why not just clamp each wheel
+    ///
+    /// Clamping independently distorts the turn. If the controller asks
+    /// for (40, 10) rad/s on a 30 rad/s motor, clamping gives (30, 10) —
+    /// a difference of 20 where 30 was intended, so the robot turns more
+    /// tightly than commanded and leaves the planned path. Scaling gives
+    /// (30, 7.5): same curvature, just slower.
+    ///
+    /// "Slower along the right arc" is almost always what you want; "fast
+    /// along the wrong one" is how a robot ends up somewhere surprising.
+    ///
+    /// Returns the pair unchanged when nothing saturates, so this is free
+    /// in the normal case.
+    pub fn fit_wheels(&self, left: f64, right: f64) -> (f64, f64) {
+        let peak = left.abs().max(right.abs());
+        if peak <= self.max_wheel_rad_s || peak == 0.0 {
+            return (left, right);
+        }
+        let scale = self.max_wheel_rad_s / peak;
+        (left * scale, right * scale)
+    }
+
+    /// [`Self::fit_wheels`] taking the pair `DiffDrive::inverse` returns.
+    pub fn fit_wheels_of(&self, pair: (f64, f64)) -> (f64, f64) {
+        self.fit_wheels(pair.0, pair.1)
+    }
+
     /// Wheel speed (rad/s) → motor command in ±1000 duty units, saturated.
     ///
     /// Lives here because the conversion is only meaningful in terms of
@@ -211,6 +241,18 @@ pub struct ControlGains {
     pub heading_kd: f64,
     /// Anti-windup clamp on the heading integral.
     pub heading_i_limit: f64,
+    /// Anti-**kick** clamp on the heading derivative's contribution, rad/s.
+    ///
+    /// The mirror of `heading_i_limit`, for the opposite failure. `D` is
+    /// `Kd · de/dt`, and at `dt = 0.02` that multiplies any error jump by
+    /// 50 — while the error jumps whenever the *setpoint* moves, which our
+    /// planner does every time it hops to the next lookahead node. The
+    /// robot has not moved; the controller reacts as though it lurched.
+    ///
+    /// Measured before this clamp existed: **94 rad/s** of commanded turn
+    /// rate, ~235 rad/s at the wheel, against motors that deliver 30.
+    /// Sized to the fastest turn the robot can physically make.
+    pub heading_d_limit: f64,
     /// Forward speed per metre of remaining distance, m/s per m.
     pub kp_dist: f64,
     /// Speed cap, m/s.
@@ -231,6 +273,10 @@ impl ControlGains {
         heading_ki: 0.0,
         heading_kd: 0.6,
         heading_i_limit: 1.0,
+        // 12 rad/s = 2·r·max_wheel_rad_s / L for SIM_BOT — the fastest
+        // this robot can spin. Asking the D term for more than the wheels
+        // can deliver only produces a command that gets scaled away.
+        heading_d_limit: 12.0,
         kp_dist: 0.8,
         v_max: 0.45,
         arrive_radius: 0.15,
@@ -249,6 +295,7 @@ impl ControlGains {
         heading_ki: 0.0,
         heading_kd: 0.3,
         heading_i_limit: 1.0,
+        heading_d_limit: 12.0,
         kp_dist: 0.8,
         v_max: 0.35,
         arrive_radius: 0.15,
@@ -364,6 +411,52 @@ mod tests {
              change, and check docs/07 records the new baseline. sim-run \
              stays on SIM_BOT so its regression test still means something."
         );
+    }
+
+    #[test]
+    fn unsaturated_wheel_commands_pass_through_untouched() {
+        let s = RobotSpec::SIM_BOT;
+        assert_eq!(s.fit_wheels(10.0, -5.0), (10.0, -5.0));
+        assert_eq!(s.fit_wheels(0.0, 0.0), (0.0, 0.0));
+        // Exactly at the limit is still fine.
+        let m = s.max_wheel_rad_s;
+        assert_eq!(s.fit_wheels(m, -m), (m, -m));
+    }
+
+    #[test]
+    fn saturated_commands_keep_their_ratio() {
+        // THE point: (40, 10) must not become (30, 10). That would turn
+        // twice as hard as asked.
+        let s = RobotSpec::SIM_BOT; // 30 rad/s
+        let (l, r) = s.fit_wheels(40.0, 10.0);
+        assert!((l - 30.0).abs() < 1e-12, "peak should sit at the limit");
+        assert!((r - 7.5).abs() < 1e-12, "ratio should be preserved");
+        assert!(
+            ((l / r) - 4.0).abs() < 1e-9,
+            "4:1 in must stay 4:1 out, got {l}:{r}"
+        );
+    }
+
+    #[test]
+    fn scaling_handles_the_negative_and_mixed_cases() {
+        let s = RobotSpec::SIM_BOT;
+        // Spin in place, over the limit both ways.
+        let (l, r) = s.fit_wheels(-90.0, 90.0);
+        assert!((l + 30.0).abs() < 1e-12 && (r - 30.0).abs() < 1e-12);
+        // Only one wheel over: both still scale.
+        let (l, r) = s.fit_wheels(60.0, -15.0);
+        assert!((l - 30.0).abs() < 1e-12);
+        assert!((r + 7.5).abs() < 1e-12, "the in-range wheel scales too");
+    }
+
+    #[test]
+    fn nothing_ever_leaves_scaled_above_the_motor() {
+        let s = RobotSpec::SIM_BOT;
+        for (a, b) in [(200.0, 3.0), (-1.0, 400.0), (35.0, -35.0), (1e6, -1e6)] {
+            let (l, r) = s.fit_wheels(a, b);
+            assert!(l.abs() <= s.max_wheel_rad_s + 1e-9, "{a},{b} -> {l}");
+            assert!(r.abs() <= s.max_wheel_rad_s + 1e-9, "{a},{b} -> {r}");
+        }
     }
 
     #[test]

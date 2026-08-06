@@ -101,7 +101,7 @@ fn the_plotted_throttle_curve_is_accurate() {
 
     for (degrees, expected) in [(0.0, 1.0), (45.0, 0.5), (90.0, 0.0), (135.0, 0.0)] {
         c.reset();
-        let (v, _) = c.steer(f64::to_radians(degrees), generous_budget, 0.02);
+        let (v, _) = c.steer(f64::to_radians(degrees), 0.0, generous_budget, 0.02);
         let factor = v / v_max;
         assert!(
             (factor - expected).abs() < 1e-9,
@@ -116,7 +116,7 @@ fn the_flat_section_of_the_curve_never_reverses() {
     let mut c = GotoController::new(ControlGains::WAYPOINT);
     for degrees in [91.0, 120.0, 180.0, -180.0] {
         c.reset();
-        let (v, _) = c.steer(f64::to_radians(degrees), 1000.0, 0.02);
+        let (v, _) = c.steer(f64::to_radians(degrees), 0.0, 1000.0, 0.02);
         assert!(v >= 0.0, "{degrees}° gave v = {v}; the robot would reverse");
     }
 }
@@ -126,7 +126,7 @@ fn speed_budget_is_capped_at_v_max_inside_steer() {
     // Box ⑤: "Capped at v_max inside, so no caller can ask for more than
     // the robot has."
     let mut c = GotoController::new(ControlGains::WAYPOINT);
-    let (v, _) = c.steer(0.0, 99.0, 0.02);
+    let (v, _) = c.steer(0.0, 0.0, 99.0, 0.02);
     assert!(
         (v - ControlGains::WAYPOINT.v_max).abs() < 1e-12,
         "expected the cap at {}, got {v}",

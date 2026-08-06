@@ -376,6 +376,7 @@ impl Mission {
                 let heading_error = shortest_turn(obs.pose.theta, bearing);
                 self.controller.steer(
                     heading_error,
+                    obs.pose.theta,
                     self.config.gains.kp_dist * obs.dist_to_goal,
                     self.config.dt,
                 )
@@ -446,7 +447,8 @@ impl Mission {
     pub fn step(&mut self) -> Option<Tick> {
         let obs = self.observe()?;
         let (v, w) = self.decide(&obs);
-        let (cmd_l, cmd_r) = self.nominal.inverse(v, w);
+        // Scale, don't clip: a saturated turn keeps its arc.
+        let (cmd_l, cmd_r) = self.config.spec.fit_wheels_of(self.nominal.inverse(v, w));
         Some(self.advance(obs, cmd_l, cmd_r))
     }
 
@@ -560,8 +562,11 @@ mod tests {
         let mut m = Mission::new(MissionConfig::default());
         while let Some(obs) = m.observe() {
             let (v, w) = m.decide(&obs);
-            let drive = m.config.spec.drive();
-            let (cmd_l, cmd_r) = drive.inverse(v, w);
+            // Mirror what the chip does: inverse, then fit_wheels, then
+            // (on the wire) duty. Miss the fit and the paths diverge —
+            // which is exactly what this test caught when `step()` gained
+            // the scaling and this did not.
+            let (cmd_l, cmd_r) = m.config.spec.fit_wheels_of(m.config.spec.drive().inverse(v, w));
             m.advance(obs, cmd_l, cmd_r);
         }
         let manual = m.outcome();
@@ -631,10 +636,21 @@ mod tests {
             "unsaturated duty lost {worst_quantisation} rad/s, more than \
              one count ({step})"
         );
+        // Peak overshoot was ~169 rad/s before `heading_d_limit` existed.
+        // It is ~33 now, and what remains is the P term: a large heading
+        // error genuinely warrants a hard turn, and the robot genuinely
+        // cannot make it that fast. That saturation is honest, and
+        // `fit_wheels` handles it by scaling both wheels so the ARC is
+        // preserved rather than the curvature distorted.
+        //
+        // The bound is deliberately loose. Its job is to catch the D clamp
+        // being removed or mis-sized — which would put this back near 169
+        // — not to pin an exact figure that a harmless retune would break.
         assert!(
-            worst_overshoot > 0.0,
-            "no saturation seen — if the controller has been fixed to \
-             clamp its output, delete this test and the note above"
+            worst_overshoot < 60.0,
+            "peak wheel overshoot {worst_overshoot:.1} rad/s. It was ~33 \
+             with heading_d_limit in place and ~169 without; this looks \
+             like the derivative clamp is gone or mis-sized."
         );
     }
 
