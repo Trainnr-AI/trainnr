@@ -1,0 +1,35 @@
+[package]
+name = "pico-led"
+version = "0.1.0"
+edition = "2021"
+
+# The onboard LED on a Pico 2 W is NOT on GP25 — GP25 is the wireless
+# chip's chip-select. The LED hangs off the CYW43439's own GPIO 0, so
+# lighting it means booting the radio. See docs/09 and hw-00.
+#
+#   tools/build-pico2.sh pico-led     # RP2350 — the only chip this makes
+#                                     # sense on; RP2040 Picos have no radio
+
+[features]
+default = ["rp2040"]
+rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
+pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
+
+[dependencies]
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
+embassy-time = "0.5"
+cyw43 = "0.7"
+cyw43-firmware = { version = "0.1", features = ["wifi"] }
+cyw43-pio = "0.10"
+static_cell = "2"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "z"
+
+[workspace]
