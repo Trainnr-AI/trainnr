@@ -3,15 +3,25 @@
 # .uf2 you can drag onto the board.
 #
 #   tools/build-pico2.sh pico-blink
+#   tools/build-pico2.sh pico-robot usb      # extra features, comma-separated
 #
-# Flash it: hold BOOTSEL, plug in USB, drop the .uf2 on the drive that
-# appears. No Debug Probe or soldering needed.
+# Flash it with picotool — hold BOOTSEL, plug in USB, then:
+#
+#   picotool load -x firmware/<crate>/<crate>-pico2.uf2
+#
+# Prefer that over dragging the .uf2 onto the mounted drive: the
+# mass-storage path stalled at "preparing to copy" on one of our boards
+# while picotool flashed the same file first try (docs/07, 2026-08-07).
 set -euo pipefail
 CRATE="${1:-pico-blink}"
+# Everything after the crate name is added to the feature list, so a
+# transport or debug flag does not need its own build script.
+EXTRA="${2:-}"
+FEATURES="pico2${EXTRA:+,$EXTRA}"
 TARGET=thumbv8m.main-none-eabihf
 cd "$(dirname "$0")/../firmware/$CRATE"
 
-cargo build --release --no-default-features --features pico2 --target "$TARGET"
+cargo build --release --no-default-features --features "$FEATURES" --target "$TARGET"
 
 BIN="target/$TARGET/release/$CRATE"
 if command -v picotool >/dev/null; then
