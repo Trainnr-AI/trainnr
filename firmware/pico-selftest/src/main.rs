@@ -212,6 +212,35 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let _ = write!(l, "                w={cw:.17e}\r\n");
     say(class, &l).await?;
 
+    // ---- the saturation fix (2026-08-07) ----
+    // Both of these are branch-heavy rather than trig-heavy, so the risk
+    // is not a low bit — it is a *comparison* landing differently once
+    // f64 is emulated in software. `fit_wheels` branches on
+    // `peak <= max_wheel_rad_s`, and `d_limit` on a clamp boundary. A
+    // divergence here would not be a rounding difference; it would be the
+    // chip taking the other branch.
+    let (fl, fr) = SPEC.fit_wheels(40.0, 10.0);
+    l.clear();
+    let _ = write!(l, "  fit_wheels    l={fl:.17e} r={fr:.17e}\r\n");
+    say(class, &l).await?;
+
+    // A setpoint STEP — precisely the derivative-kick case d_limit exists
+    // to bound. Without the clamp this term runs away.
+    let mut kick = Pid::with_d_limit(6.0, 0.0, 0.6, 1.0, 12.0);
+    let mut k = 0.0;
+    for i in 0..50 {
+        k = kick.update(if i < 25 { 0.05 } else { 3.0 }, DT);
+    }
+    l.clear();
+    let _ = write!(l, "  pid d_limit   out={k:.17e}\r\n");
+    say(class, &l).await?;
+
+    let mut st = GotoController::new(ControlGains::WAYPOINT);
+    let (sv, sw) = st.steer(2.5, 0.3, 1.5, DT);
+    l.clear();
+    let _ = write!(l, "  steer         v={sv:.17e} w={sw:.17e}\r\n");
+    say(class, &l).await?;
+
     // ---- 2. Does a control tick fit in the 20 ms budget? ----
     say(class, "\r\n[2] timing on this chip\r\n").await?;
 
