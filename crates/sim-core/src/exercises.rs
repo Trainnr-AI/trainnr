@@ -10,6 +10,8 @@
 //! compiles fine but panics if the code actually runs — Rust's way of letting
 //! you sketch APIs before filling them in.
 
+use crate::pose::Point;
+
 // Float math (`cos`, `sqrt`, `exp`, ...) lives in `std`. On bare metal it
 // comes from libm through this trait, with identical method syntax.
 #[cfg(not(feature = "std"))]
@@ -21,19 +23,17 @@ use crate::world::Segment;
 /// EXERCISE 1 — warm-up with ownership & floats.
 ///
 /// Return the total length of a path given as a slice of (x, y) points.
-/// A slice `&[(f64, f64)]` is a *borrowed view* into someone else's Vec or
+/// A slice `&[Point]` is a *borrowed view* into someone else's Vec or
 /// array — you can read it, but you don't own it and can't modify it.
 ///
 /// Hints: `points.windows(2)` yields overlapping pairs `[a, b]`;
-/// `f64::hypot(dx, dy)` gives `sqrt(dx² + dy²)`. An iterator-chain solution
+/// `Point::distance_to` gives the straight-line distance between two. An iterator-chain solution
 /// is ~3 lines; a for-loop solution is equally fine — write whichever reads
 /// clearest to you.
-pub fn path_length(points: &[(f64, f64)]) -> f64 {
+pub fn path_length(points: &[Point]) -> f64 {
     let mut total = 0.0;
     for pair in points.windows(2) {
-        let (x1, y1) = pair[0];
-        let (x2, y2) = pair[1];
-        total += (x2 - x1).hypot(y2 - y1);
+        total += pair[0].distance_to(pair[1]);
     }
     total
 }
@@ -62,8 +62,8 @@ pub fn shortest_turn(from: f64, to: f64) -> f64 {
 ///
 /// ```text
 /// dx = angle.cos()      dy = angle.sin()        // ray direction
-/// ex = seg.end.0 - seg.start.0  ey = seg.end.1 - seg.start.1  // segment direction
-/// rx = seg.start.0 - ox     ry = seg.start.1 - oy       // origin → segment start
+/// ex = seg.end.x - seg.start.x  ey = seg.end.y - seg.start.y  // segment direction
+/// rx = seg.start.x - ox     ry = seg.start.y - oy       // origin → segment start
 ///
 /// det = ex * dy - ey * dx
 /// if det ≈ 0 (|det| < 1e-12): parallel → None
@@ -81,10 +81,10 @@ pub fn shortest_turn(from: f64, to: f64) -> f64 {
 pub fn ray_segment_hit(ox: f64, oy: f64, angle: f64, seg: &Segment) -> Option<f64> {
     let dx = angle.cos();
     let dy = angle.sin();
-    let ex = seg.end.0 - seg.start.0;
-    let ey = seg.end.1 - seg.start.1;
-    let rx = seg.start.0 - ox;
-    let ry = seg.start.1 - oy;
+    let ex = seg.end.x - seg.start.x;
+    let ey = seg.end.y - seg.start.y;
+    let rx = seg.start.x - ox;
+    let ry = seg.start.y - oy;
 
     let det = ex * dy - ey * dx;
     if det.abs() < 1e-12 {
@@ -106,15 +106,21 @@ mod tests {
 
     #[test]
     fn path_length_of_square() {
-        let square = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.0, 0.0)];
+        let square = [
+            Point::new(0.0, 0.0),
+            Point::new(1.0, 0.0),
+            Point::new(1.0, 1.0),
+            Point::new(0.0, 1.0),
+            Point::new(0.0, 0.0),
+        ];
         assert!((path_length(&square) - 4.0).abs() < 1e-12);
     }
 
     #[test]
     fn path_length_edge_cases() {
         assert_eq!(path_length(&[]), 0.0);
-        assert_eq!(path_length(&[(3.0, 4.0)]), 0.0);
-        assert!((path_length(&[(0.0, 0.0), (3.0, 4.0)]) - 5.0).abs() < 1e-12);
+        assert_eq!(path_length(&[Point::new(3.0, 4.0)]), 0.0);
+        assert!((path_length(&[Point::new(0.0, 0.0), Point::new(3.0, 4.0)]) - 5.0).abs() < 1e-12);
     }
 
     #[test]
@@ -135,8 +141,8 @@ mod tests {
 
     fn vertical_wall_at_x2() -> Segment {
         Segment {
-            start: (2.0, -1.0),
-            end: (2.0, 1.0),
+            start: Point::new(2.0, -1.0),
+            end: Point::new(2.0, 1.0),
         }
     }
 
@@ -175,8 +181,8 @@ mod tests {
     fn diagonal_hit_at_sqrt2() {
         // Wall from (1,0) to (1,2); aim 45°: hit at (1,1), distance √2.
         let wall = Segment {
-            start: (1.0, 0.0),
-            end: (1.0, 2.0),
+            start: Point::new(1.0, 0.0),
+            end: Point::new(1.0, 2.0),
         };
         let d = ray_segment_hit(0.0, 0.0, PI / 4.0, &wall);
         assert!((d.unwrap() - 2.0_f64.sqrt()).abs() < 1e-12);

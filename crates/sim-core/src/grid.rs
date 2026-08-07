@@ -14,6 +14,8 @@
 //! — cells accumulate evidence instead of flipping hard. Our three-state
 //! version is that idea with the training wheels on.)
 
+use crate::pose::Point;
+
 /// What the robot believes about one patch of floor.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Cell {
@@ -74,8 +76,8 @@ impl OccupancyGrid {
     }
 
     /// Center of a cell, in world coordinates (for the planner).
-    pub fn cell_to_world(&self, cx: usize, cy: usize) -> (f64, f64) {
-        (
+    pub fn cell_to_world(&self, cx: usize, cy: usize) -> Point {
+        Point::new(
             (cx as f64 + 0.5) * self.resolution,
             (cy as f64 + 0.5) * self.resolution,
         )

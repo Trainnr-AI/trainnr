@@ -61,7 +61,7 @@
 #![forbid(unsafe_code)]
 
 use core::fmt::Write;
-use sim_core::Directive;
+use sim_core::{Directive, Point};
 
 /// Motor commands are clamped to this range on both ends. A duty of
 /// `±DUTY_FULL` means "full commanded wheel speed".
@@ -381,8 +381,8 @@ impl From<Directive> for Message {
                 budget,
                 fresh,
             } => Message::Goal {
-                x: target.0,
-                y: target.1,
+                x: target.x,
+                y: target.y,
                 budget,
                 fresh,
             },
@@ -406,7 +406,7 @@ impl Message {
                 budget,
                 fresh,
             } => Some(Directive::Steer {
-                target: (x, y),
+                target: Point::new(x, y),
                 budget,
                 fresh,
             }),
@@ -707,12 +707,12 @@ mod tests {
     fn every_directive_survives_the_wire() {
         let directives = [
             Directive::Steer {
-                target: (6.5, 3.25),
+                target: Point::new(6.5, 3.25),
                 budget: 0.45,
                 fresh: false,
             },
             Directive::Steer {
-                target: (-1.25, 0.0),
+                target: Point::new(-1.25, 0.0),
                 budget: 0.0,
                 fresh: true,
             },
@@ -739,7 +739,7 @@ mod tests {
     fn the_fresh_flag_is_not_dropped_in_transit() {
         for fresh in [true, false] {
             let d = Directive::Steer {
-                target: (1.0, 2.0),
+                target: Point::new(1.0, 2.0),
                 budget: 0.3,
                 fresh,
             };

@@ -15,6 +15,8 @@
 //! and costs kept as integer millimeters so they're orderable (f64 isn't
 //! `Ord` in Rust — NaN ruins total ordering — a famous ergonomic speed bump).
 
+use crate::pose::Point;
+
 use crate::grid::OccupancyGrid;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -49,12 +51,12 @@ fn heuristic(a: (usize, usize), b: (usize, usize)) -> i64 {
 /// current map.
 pub fn plan(
     grid: &OccupancyGrid,
-    start_w: (f64, f64),
-    goal_w: (f64, f64),
+    start_w: Point,
+    goal_w: Point,
     inflation: usize,
-) -> Option<Vec<(f64, f64)>> {
-    let start = grid.world_to_cell(start_w.0, start_w.1)?;
-    let goal = grid.world_to_cell(goal_w.0, goal_w.1)?;
+) -> Option<Vec<Point>> {
+    let start = grid.world_to_cell(start_w.x, start_w.y)?;
+    let goal = grid.world_to_cell(goal_w.x, goal_w.y)?;
 
     let idx = |c: (usize, usize)| c.1 * grid.width + c.0;
 
@@ -80,7 +82,7 @@ pub fn plan(
             }
             cells.reverse();
             // Decimate: every 3rd cell + always the final one, as world pts.
-            let mut path: Vec<(f64, f64)> = cells
+            let mut path: Vec<Point> = cells
                 .iter()
                 .step_by(3)
                 .map(|&(cx, cy)| grid.cell_to_world(cx, cy))
@@ -121,10 +123,10 @@ mod tests {
     #[test]
     fn open_room_finds_a_path() {
         let g = OccupancyGrid::new(2.0, 2.0, 0.1);
-        let path = plan(&g, (0.2, 0.2), (1.8, 1.8), 0).unwrap();
+        let path = plan(&g, Point::new(0.2, 0.2), Point::new(1.8, 1.8), 0).unwrap();
         assert!(path.len() >= 2);
-        let (ex, ey) = *path.last().unwrap();
-        assert!((ex - 1.8).abs() < 1e-9 && (ey - 1.8).abs() < 1e-9);
+        let end = *path.last().unwrap();
+        assert!((end.x - 1.8).abs() < 1e-9 && (end.y - 1.8).abs() < 1e-9);
     }
 
     #[test]
@@ -134,9 +136,9 @@ mod tests {
         for cy in 0..16 {
             g.set(10, cy, Cell::Occupied);
         }
-        let path = plan(&g, (0.2, 0.2), (1.8, 0.2), 0).unwrap();
+        let path = plan(&g, Point::new(0.2, 0.2), Point::new(1.8, 0.2), 0).unwrap();
         // Must detour up through the gap: some waypoint has y near the top.
-        assert!(path.iter().any(|&(_, y)| y > 1.4));
+        assert!(path.iter().any(|p| p.y > 1.4));
     }
 
     #[test]
@@ -145,6 +147,9 @@ mod tests {
         for cy in 0..20 {
             g.set(10, cy, Cell::Occupied); // full wall, no gap
         }
-        assert_eq!(plan(&g, (0.2, 0.2), (1.8, 0.2), 0), None);
+        assert_eq!(
+            plan(&g, Point::new(0.2, 0.2), Point::new(1.8, 0.2), 0),
+            None
+        );
     }
 }

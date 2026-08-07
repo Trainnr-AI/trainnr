@@ -21,7 +21,7 @@ use num_traits::Float as _;
 use core::f64::consts::FRAC_PI_2;
 
 use crate::exercises::shortest_turn;
-use crate::pose::Pose;
+use crate::pose::{Point, Pose};
 use crate::robot::BodyTwist;
 use crate::spec::ControlGains;
 
@@ -178,7 +178,7 @@ impl Pid {
 pub enum Directive {
     /// Steer at this point, at no more than `budget` m/s.
     Steer {
-        target: (f64, f64),
+        target: Point,
         budget: f64,
         /// Drop accumulated PID state before acting: this target is not a
         /// continuation of the last one.
@@ -248,7 +248,7 @@ impl GotoController {
                 // LOOKAHEAD and is deliberately close, so deriving speed
                 // from it would make the robot crawl. The budget comes
                 // from the planner, which knows the real distance left.
-                let bearing = (target.1 - pose.y).atan2(target.0 - pose.x);
+                let bearing = (target.y - pose.y).atan2(target.x - pose.x);
                 let error = shortest_turn(pose.heading, bearing);
                 self.steer(error, budget, dt)
             }
@@ -263,8 +263,8 @@ impl GotoController {
 
     /// Drive toward a known point: bearing → error → [`Self::steer`], with
     /// the speed budget proportional to remaining distance.
-    pub fn goto_point(&mut self, pose: &Pose, target: (f64, f64), dt: f64) -> BodyTwist {
-        let (tx, ty) = target;
+    pub fn goto_point(&mut self, pose: &Pose, target: Point, dt: f64) -> BodyTwist {
+        let (tx, ty) = (target.x, target.y);
         let bearing = (ty - pose.y).atan2(tx - pose.x);
         let error = shortest_turn(pose.heading, bearing);
         let budget = self.gains.distance_proportional * Self::distance(pose, target);
@@ -272,12 +272,12 @@ impl GotoController {
     }
 
     /// Straight-line distance from `pose` to `target`, metres.
-    pub fn distance(pose: &Pose, target: (f64, f64)) -> f64 {
-        (target.0 - pose.x).hypot(target.1 - pose.y)
+    pub fn distance(pose: &Pose, target: Point) -> f64 {
+        (target.x - pose.x).hypot(target.y - pose.y)
     }
 
     /// Has the robot reached `target`?
-    pub fn arrived(&self, pose: &Pose, target: (f64, f64)) -> bool {
+    pub fn arrived(&self, pose: &Pose, target: Point) -> bool {
         Self::distance(pose, target) < self.gains.arrive_radius
     }
 
@@ -393,7 +393,7 @@ mod tests {
             y: 0.0,
             heading: 0.0,
         };
-        let turn = c.goto_point(&pose, (0.0, 1.0), 0.02).turn_rate;
+        let turn = c.goto_point(&pose, Point::new(0.0, 1.0), 0.02).turn_rate;
         assert!(
             turn > 0.0,
             "should turn left (positive turn rate), got {turn}"
@@ -409,8 +409,8 @@ mod tests {
             heading: 0.0,
         };
         let r = ControlGains::WAYPOINT.arrive_radius;
-        assert!(c.arrived(&pose, (r * 0.5, 0.0)));
-        assert!(!c.arrived(&pose, (r * 2.0, 0.0)));
+        assert!(c.arrived(&pose, Point::new(r * 0.5, 0.0)));
+        assert!(!c.arrived(&pose, Point::new(r * 2.0, 0.0)));
     }
 
     #[test]

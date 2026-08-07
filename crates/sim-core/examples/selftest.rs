@@ -19,8 +19,8 @@
 //! *numbers*.
 
 use sim_core::{
-    BodyTwist, ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec,
-    WheelSpeeds,
+    BodyTwist, ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Point, Pose,
+    RobotSpec, WheelSpeeds,
 };
 
 const SPEC: RobotSpec = RobotSpec::SIM_BOT;
@@ -86,7 +86,7 @@ fn main() {
 
     let mut ctrl = GotoController::new(ControlGains::WAYPOINT);
     let pose = Pose::new(1.0, 3.0, 0.2);
-    let commanded = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let commanded = ctrl.goto_point(&pose, Point::new(6.5, 3.0), DT);
     let (cv, cw) = (commanded.forward_speed, commanded.turn_rate);
     println!("  goto_point    v={cv:.17e}\r");
     println!("                w={cw:.17e}\r");

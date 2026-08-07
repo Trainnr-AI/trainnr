@@ -14,6 +14,37 @@ use core::f64::consts::PI;
 
 use crate::robot::BodyTwist;
 
+/// A location in the world, metres.
+///
+/// A [`Pose`] is a place *and a facing*; a `Point` is just the place. The
+/// distinction matters because most of the navigation code deals in
+/// places — waypoints, path nodes, the ends of a wall — and only the robot
+/// itself has a heading.
+///
+/// `x` and `y` keep their names: unlike `v`/`w`/`kp`, they are not jargon
+/// standing in for a longer word — they *are* the words for Cartesian
+/// coordinates, and `horizontal`/`vertical` would read worse.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point {
+    /// Metres along the world's +x axis (to the right on screen).
+    pub x: f64,
+    /// Metres along the world's +y axis (up on screen).
+    pub y: f64,
+}
+
+impl Point {
+    pub const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
+
+    pub const fn new(x: f64, y: f64) -> Point {
+        Point { x, y }
+    }
+
+    /// Straight-line distance to another point, metres.
+    pub fn distance_to(&self, other: Point) -> f64 {
+        (other.x - self.x).hypot(other.y - self.y)
+    }
+}
+
 /// Position + heading in the world frame (an element of SE(2)).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pose {
@@ -28,6 +59,14 @@ impl Pose {
         y: 0.0,
         heading: 0.0,
     };
+
+    /// Where this pose is, discarding which way it faces.
+    pub fn position(&self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y,
+        }
+    }
 
     pub fn new(x: f64, y: f64, heading: f64) -> Self {
         Pose {

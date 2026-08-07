@@ -61,7 +61,7 @@ use static_cell::StaticCell;
 
 use sim_core::{
     BodyTwist, ControlGains, DiffDrive, Encoders, GotoController, Motor, Odometry, Pid,
-    Pose, RobotSpec, WheelSpeeds,
+    Point, Pose, RobotSpec, WheelSpeeds,
 };
 
 bind_interrupts!(struct Irqs {
@@ -212,7 +212,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
 
     let mut ctrl = GotoController::new(ControlGains::WAYPOINT);
     let pose = Pose::new(1.0, 3.0, 0.2);
-    let commanded = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let commanded = ctrl.goto_point(&pose, Point::new(6.5, 3.0), DT);
     let (cv, cw) = (commanded.forward_speed, commanded.turn_rate);
     l.clear();
     let _ = write!(l, "  goto_point    v={cv:.17e}\r\n");
@@ -266,7 +266,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     for _ in 0..ITERS {
         // Exactly what pico-robot does per tick.
         odom.update(37, 41);
-        let want = ctrl.goto_point(&odom.pose, (2.2, 1.0), DT);
+        let want = ctrl.goto_point(&odom.pose, Point::new(2.2, 1.0), DT);
         let wheels = drive.inverse(want);
         core::hint::black_box(wheels);
     }

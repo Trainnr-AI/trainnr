@@ -13,7 +13,7 @@
 #[cfg(not(feature = "std"))]
 use num_traits::Float as _;
 
-use crate::pose::Pose;
+use crate::pose::{Point, Pose};
 
 /// What the robot is currently trying to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,15 +135,10 @@ impl ScanSummary {
 /// so the robot weaves along the path instead of following it. Looking
 /// ahead a fixed distance smooths that out — it is the standard
 /// pure-pursuit trick.
-pub fn lookahead_point(
-    path: &[(f64, f64)],
-    from: &Pose,
-    lookahead: f64,
-    fallback: (f64, f64),
-) -> (f64, f64) {
-    for &(px, py) in path {
-        if (px - from.x).hypot(py - from.y) > lookahead {
-            return (px, py);
+pub fn lookahead_point(path: &[Point], from: &Pose, lookahead: f64, fallback: Point) -> Point {
+    for &node in path {
+        if (node.x - from.x).hypot(node.y - from.y) > lookahead {
+            return node;
         }
     }
     fallback
@@ -285,15 +280,23 @@ mod tests {
 
     #[test]
     fn an_empty_path_falls_back_to_the_goal() {
-        assert_eq!(lookahead_point(&[], &origin(), 0.5, (9.0, 9.0)), (9.0, 9.0));
+        assert_eq!(
+            lookahead_point(&[], &origin(), 0.5, Point::new(9.0, 9.0)),
+            Point::new(9.0, 9.0)
+        );
     }
 
     #[test]
     fn the_first_point_beyond_the_lookahead_is_chosen() {
-        let path = [(0.1, 0.0), (0.2, 0.0), (0.9, 0.0), (1.5, 0.0)];
+        let path = [
+            Point::new(0.1, 0.0),
+            Point::new(0.2, 0.0),
+            Point::new(0.9, 0.0),
+            Point::new(1.5, 0.0),
+        ];
         assert_eq!(
-            lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)),
-            (0.9, 0.0)
+            lookahead_point(&path, &origin(), 0.5, Point::new(9.0, 9.0)),
+            Point::new(0.9, 0.0)
         );
     }
 
@@ -301,10 +304,14 @@ mod tests {
     fn a_path_entirely_within_the_lookahead_falls_back() {
         // Near the end of a path every node is close; steering at the
         // goal is right, and returning the last node would stall.
-        let path = [(0.1, 0.0), (0.2, 0.0), (0.3, 0.0)];
+        let path = [
+            Point::new(0.1, 0.0),
+            Point::new(0.2, 0.0),
+            Point::new(0.3, 0.0),
+        ];
         assert_eq!(
-            lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)),
-            (9.0, 9.0)
+            lookahead_point(&path, &origin(), 0.5, Point::new(9.0, 9.0)),
+            Point::new(9.0, 9.0)
         );
     }
 
@@ -315,18 +322,21 @@ mod tests {
             y: 5.0,
             heading: 0.0,
         };
-        let path = [(5.1, 5.0), (6.0, 5.0)];
-        assert_eq!(lookahead_point(&path, &pose, 0.5, (9.0, 9.0)), (6.0, 5.0));
+        let path = [Point::new(5.1, 5.0), Point::new(6.0, 5.0)];
+        assert_eq!(
+            lookahead_point(&path, &pose, 0.5, Point::new(9.0, 9.0)),
+            Point::new(6.0, 5.0)
+        );
     }
 
     #[test]
     fn distance_is_euclidean_not_axis_aligned() {
         // (0.4, 0.4) is 0.566 away — beyond a 0.5 lookahead, even though
         // neither coordinate alone exceeds it.
-        let path = [(0.4, 0.4)];
+        let path = [Point::new(0.4, 0.4)];
         assert_eq!(
-            lookahead_point(&path, &origin(), 0.5, (9.0, 9.0)),
-            (0.4, 0.4)
+            lookahead_point(&path, &origin(), 0.5, Point::new(9.0, 9.0)),
+            Point::new(0.4, 0.4)
         );
     }
 }

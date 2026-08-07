@@ -5,8 +5,8 @@
 
 use sim_core::{
     lookahead_point, plan, summarize_scan, AvoidHysteresis, BodyTwist, ControlGains, DepthCamera,
-    DiffDrive, Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose,
-    Rng, Robot, RobotSpec, Segment, WheelSpeeds, World,
+    DiffDrive, Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Point,
+    Pose, Rng, Robot, RobotSpec, Segment, WheelSpeeds, World,
 };
 
 /// Everything the mission needs to be reproducible.
@@ -47,7 +47,7 @@ pub struct MissionConfig {
     pub robot_radius: f64,
     pub world_size: (f64, f64),
     pub start: Pose,
-    pub waypoints: Vec<(f64, f64)>,
+    pub waypoints: Vec<Point>,
     /// Extra walls beyond the room's perimeter.
     pub obstacles: Vec<Segment>,
 }
@@ -86,27 +86,27 @@ impl Default for MissionConfig {
             robot_radius: 0.09,
             world_size: (8.0, 6.0),
             start: Pose::new(1.0, 3.0, 0.0), // facing into the U's mouth
-            waypoints: vec![(6.5, 3.0)],     // dead centre behind the back wall
+            waypoints: vec![Point::new(6.5, 3.0)], // dead centre behind the back wall
             obstacles: vec![
                 Segment {
-                    start: (5.0, 2.2),
-                    end: (5.0, 3.8), // back wall
+                    start: Point::new(5.0, 2.2),
+                    end: Point::new(5.0, 3.8), // back wall
                 },
                 Segment {
-                    start: (2.6, 3.8),
-                    end: (5.0, 3.8), // top arm (deep!)
+                    start: Point::new(2.6, 3.8),
+                    end: Point::new(5.0, 3.8), // top arm (deep!)
                 },
                 Segment {
-                    start: (2.6, 2.2),
-                    end: (5.0, 2.2), // bottom arm (deep!)
+                    start: Point::new(2.6, 2.2),
+                    end: Point::new(5.0, 2.2), // bottom arm (deep!)
                 },
                 Segment {
-                    start: (2.6, 3.8),
-                    end: (2.6, 5.2), // spur up from the top arm tip
+                    start: Point::new(2.6, 3.8),
+                    end: Point::new(2.6, 5.2), // spur up from the top arm tip
                 },
                 Segment {
-                    start: (2.6, 0.8),
-                    end: (2.6, 2.2), // spur down from the bottom arm tip
+                    start: Point::new(2.6, 0.8),
+                    end: Point::new(2.6, 2.2), // spur down from the bottom arm tip
                 },
             ],
         }
@@ -154,16 +154,16 @@ pub struct Observation {
     /// `control_on_belief` is set.
     pub pose: Pose,
     /// The waypoint currently being driven to.
-    pub goal: (f64, f64),
+    pub goal: Point,
     /// Where to actually aim: the path lookahead point, or the goal if
     /// there is no plan. **This is what gets sent to the chip.**
-    pub target: (f64, f64),
+    pub target: Point,
     pub dist_to_goal: f64,
     pub mode: Mode,
     pub mode_changes: Vec<(Mode, Mode)>,
     pub scan: Vec<f64>,
     pub summary: sim_core::ScanSummary,
-    pub path: Option<Vec<(f64, f64)>>,
+    pub path: Option<Vec<Point>>,
 }
 
 /// How the mission ended.
@@ -203,7 +203,7 @@ pub struct Mission {
     motor_r: Motor,
     controller: GotoController,
 
-    path: Option<Vec<(f64, f64)>>,
+    path: Option<Vec<Point>>,
     mode: Mode,
     wp_index: usize,
     index: usize,
@@ -354,13 +354,13 @@ impl Mission {
             if index.is_multiple_of(self.config.replan_ticks) || self.path.is_none() {
                 self.path = plan(
                     &self.map,
-                    (pose.x, pose.y),
+                    pose.position(),
                     goal,
                     self.config.inflation_cells,
                 );
             }
 
-            let dist_to_goal = (goal.0 - pose.x).hypot(goal.1 - pose.y);
+            let dist_to_goal = pose.position().distance_to(goal);
             if dist_to_goal < self.config.gains.arrive_radius {
                 self.wp_index += 1;
                 self.pending_reset = true;
@@ -579,7 +579,7 @@ mod tests {
         let config = MissionConfig::default();
         let goal = config.waypoints[0];
         let outcome = Mission::new(config).run();
-        let distance = (outcome.final_pose.x - goal.0).hypot(outcome.final_pose.y - goal.1);
+        let distance = (outcome.final_pose.x - goal.x).hypot(outcome.final_pose.y - goal.y);
         assert!(
             distance < 0.2,
             "claims success but stopped {distance:.2} m from the goal"
@@ -755,7 +755,7 @@ mod tests {
     #[test]
     fn a_goal_at_the_start_is_reached_immediately() {
         let mut config = MissionConfig::default();
-        config.waypoints = vec![(config.start.x, config.start.y)];
+        config.waypoints = vec![Point::new(config.start.x, config.start.y)];
 
         let outcome = Mission::new(config).run();
         assert!(outcome.succeeded());
@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(tick.obs.scan.len(), mission.config.cam_rays);
         assert!(tick.obs.summary.nearest.is_finite());
         assert!(!tick.bumped, "should not start inside a wall");
-        assert_eq!(tick.obs.goal, (6.5, 3.0));
+        assert_eq!(tick.obs.goal, Point::new(6.5, 3.0));
         assert!(tick.drift >= 0.0);
     }
 

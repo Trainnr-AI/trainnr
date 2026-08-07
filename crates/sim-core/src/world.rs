@@ -4,6 +4,8 @@
 //! obstacles are just segments, and later the "lidar" will be rays
 //! intersected against them.
 
+use crate::pose::Point;
+
 // Float math (`cos`, `sqrt`, `exp`, ...) lives in `std`. On bare metal it
 // comes from libm through this trait, with identical method syntax.
 #[cfg(not(feature = "std"))]
@@ -13,9 +15,9 @@ use num_traits::Float as _;
 #[derive(Debug, Clone, Copy)]
 pub struct Segment {
     /// One end of the wall, world metres.
-    pub start: (f64, f64),
+    pub start: Point,
     /// The other end.
-    pub end: (f64, f64),
+    pub end: Point,
 }
 
 impl Segment {
@@ -23,8 +25,8 @@ impl Segment {
     /// Project the point onto the segment's line, clamp to the ends, then
     /// measure. Used for collision: "is the robot's body touching a wall?"
     pub fn distance_to_point(&self, px: f64, py: f64) -> f64 {
-        let (ax, ay) = self.start;
-        let (bx, by) = self.end;
+        let (ax, ay) = (self.start.x, self.start.y);
+        let (bx, by) = (self.end.x, self.end.y);
         let ex = bx - ax;
         let ey = by - ay;
         let len2 = ex * ex + ey * ey;
@@ -56,7 +58,12 @@ impl World {
 
     /// Add an axis-aligned box outline (also used for obstacles).
     pub fn add_box(&mut self, x0: f64, y0: f64, x1: f64, y1: f64) {
-        let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+        let corners = [
+            Point::new(x0, y0),
+            Point::new(x1, y0),
+            Point::new(x1, y1),
+            Point::new(x0, y1),
+        ];
         for i in 0..4 {
             self.walls.push(Segment {
                 start: corners[i],
@@ -94,8 +101,8 @@ mod tests {
     #[test]
     fn distance_to_segment_cases() {
         let s = Segment {
-            start: (0.0, 0.0),
-            end: (2.0, 0.0),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(2.0, 0.0),
         };
         // Straight above the middle: perpendicular distance.
         assert!((s.distance_to_point(1.0, 0.5) - 0.5).abs() < 1e-12);

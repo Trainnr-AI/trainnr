@@ -21,8 +21,8 @@ pub fn draw_world(
         .iter()
         .map(|s| {
             [
-                [s.start.0 as f32, s.start.1 as f32],
-                [s.end.0 as f32, s.end.1 as f32],
+                [s.start.x as f32, s.start.y as f32],
+                [s.end.x as f32, s.end.y as f32],
             ]
         })
         .collect();
@@ -37,7 +37,7 @@ pub fn draw_world(
                 .config
                 .waypoints
                 .iter()
-                .map(|&(x, y)| [x as f32, y as f32])
+                .map(|p| [p.x as f32, p.y as f32])
                 .collect::<Vec<_>>(),
         )
         .with_radii([0.05])
@@ -98,8 +98,8 @@ pub fn draw(
         for cy in 0..map.height {
             for cx in 0..map.width {
                 if map.get(cx, cy) == Cell::Occupied {
-                    let (wx, wy) = map.cell_to_world(cx, cy);
-                    occupied.push([wx as f32, wy as f32]);
+                    let centre = map.cell_to_world(cx, cy);
+                    occupied.push([centre.x as f32, centre.y as f32]);
                 }
             }
         }
@@ -112,7 +112,7 @@ pub fn draw(
     }
 
     if let Some(p) = &tick.obs.path {
-        let pts: Vec<[f32; 2]> = p.iter().map(|&(px, py)| [px as f32, py as f32]).collect();
+        let pts: Vec<[f32; 2]> = p.iter().map(|p| [p.x as f32, p.y as f32]).collect();
         rec.log(
             "plan/path",
             &rerun::LineStrips2D::new([pts]).with_colors([rerun::Color::from_rgb(120, 255, 120)]),
@@ -120,13 +120,13 @@ pub fn draw(
     }
     rec.log(
         "plan/target",
-        &rerun::Points2D::new([[tick.obs.target.0 as f32, tick.obs.target.1 as f32]])
+        &rerun::Points2D::new([[tick.obs.target.x as f32, tick.obs.target.y as f32]])
             .with_radii([0.06])
             .with_colors([rerun::Color::from_rgb(255, 255, 120)]),
     )?;
     rec.log(
         "world/current_goal",
-        &rerun::Points2D::new([[tick.obs.goal.0 as f32, tick.obs.goal.1 as f32]])
+        &rerun::Points2D::new([[tick.obs.goal.x as f32, tick.obs.goal.y as f32]])
             .with_radii([0.09])
             .with_colors([rerun::Color::from_rgb(60, 255, 60)]),
     )?;

@@ -16,7 +16,7 @@
 //! silicon is still the evidence.
 
 use hil_protocol::Message;
-use sim_core::{BodyTwist, Directive, GotoController};
+use sim_core::{BodyTwist, Directive, GotoController, Point};
 use sim_run::{Mission, MissionConfig};
 
 /// Encode and parse a directive exactly as the link does.
@@ -132,7 +132,7 @@ fn a_mission_flown_entirely_through_the_wire_still_succeeds() {
 #[test]
 fn a_waypoint_boundary_tells_the_controller_to_reset() {
     let config = MissionConfig {
-        waypoints: vec![(3.0, 1.2), (6.5, 3.0)],
+        waypoints: vec![Point::new(3.0, 1.2), Point::new(6.5, 3.0)],
         duration: 90.0,
         ..MissionConfig::default()
     };
