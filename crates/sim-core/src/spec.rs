@@ -36,9 +36,9 @@ pub struct RobotSpec {
     /// turning you get per unit of left/right wheel-speed difference.
     pub track_width: f64,
     /// Encoder counts per full wheel revolution (post-quadrature).
-    pub ticks_per_rev: f64,
+    pub ticks_per_revolution: f64,
     /// Wheel speed at full motor command, rad/s. The duty-cycle scale.
-    pub max_wheel_rad_s: f64,
+    pub max_wheel_speed: f64,
 }
 
 impl RobotSpec {
@@ -57,15 +57,15 @@ impl RobotSpec {
     pub const fn from_measurements(
         wheel_diameter_mm: f64,
         track_width_mm: f64,
-        ticks_per_rev: f64,
+        ticks_per_revolution: f64,
         max_rpm: f64,
     ) -> RobotSpec {
         RobotSpec {
             wheel_radius: wheel_diameter_mm / 2000.0, // mm diameter -> m radius
             track_width: track_width_mm / 1000.0,
-            ticks_per_rev,
+            ticks_per_revolution,
             // rev/min -> rev/s -> rad/s
-            max_wheel_rad_s: max_rpm / 60.0 * core::f64::consts::TAU,
+            max_wheel_speed: max_rpm / 60.0 * core::f64::consts::TAU,
         }
     }
 
@@ -81,19 +81,19 @@ impl RobotSpec {
     /// |---|---|
     /// | `wheel_radius` | 60 mm diameter — typical small 2WD chassis wheel |
     /// | `track_width` | plausible for an N20-class chassis |
-    /// | `ticks_per_rev` | a round number |
-    /// | `max_wheel_rad_s` | 30 rad/s ≈ 286 RPM |
+    /// | `ticks_per_revolution` | a round number |
+    /// | `max_wheel_speed` | 30 rad/s ≈ 286 RPM |
     ///
     /// The ordered motor is **~200 RPM** (docs/09), i.e. ~20.9 rad/s — so
-    /// `max_wheel_rad_s` here is ~43% optimistic. That is left alone
+    /// `max_wheel_speed` here is ~43% optimistic. That is left alone
     /// deliberately: retuning the simulator to a motor that has not arrived
     /// would move the recorded Stage 0 baseline (22.5 s, 0.052 m) for no
     /// gain. Measure the real part, then use [`Self::from_measurements`].
     pub const SIM_BOT: RobotSpec = RobotSpec {
         wheel_radius: 0.03,
         track_width: 0.15,
-        ticks_per_rev: 1024.0,
-        max_wheel_rad_s: 30.0,
+        ticks_per_revolution: 1024.0,
+        max_wheel_speed: 30.0,
     };
 
     /// The physical robot. **Fill this in from the bench, not the datasheet.**
@@ -157,17 +157,17 @@ impl RobotSpec {
     /// Ground distance per encoder tick, metres. The resolution of
     /// odometry: no position change smaller than this is observable.
     pub fn metres_per_tick(&self) -> f64 {
-        self.wheel_circumference_m() / self.ticks_per_rev
+        self.wheel_circumference_m() / self.ticks_per_revolution
     }
 
     /// Top forward speed the motors can actually deliver, m/s.
     pub fn max_body_speed(&self) -> f64 {
-        self.wheel_radius * self.max_wheel_rad_s
+        self.wheel_radius * self.max_wheel_speed
     }
 
     /// Motor speed in RPM — the unit the datasheet uses.
     pub fn max_rpm(&self) -> f64 {
-        self.max_wheel_rad_s / core::f64::consts::TAU * 60.0
+        self.max_wheel_speed / core::f64::consts::TAU * 60.0
     }
 
     /// Does the forward axis alone fit? Split out of [`check`](Self::check)
@@ -175,7 +175,7 @@ impl RobotSpec {
     /// axis — the distinction that hid a real problem for as long as
     /// `check` only looked at this half.
     pub fn v_max_is_reachable(&self, gains: &ControlGains) -> bool {
-        gains.v_max <= self.max_body_speed()
+        gains.max_forward_speed <= self.max_body_speed()
     }
 
     /// Fastest the robot can spin, rad/s — the *other* limit, and the one
@@ -193,13 +193,13 @@ impl RobotSpec {
     ///
     /// For `SIM_BOT`: 2 × 0.03 × 30 / 0.15 = **12 rad/s**.
     pub fn max_turn_rate(&self) -> f64 {
-        2.0 * self.wheel_radius * self.max_wheel_rad_s / self.track_width
+        2.0 * self.wheel_radius * self.max_wheel_speed / self.track_width
     }
 
     /// The heading error, in radians, below which the steering P term is
     /// still *proportional* rather than pinned at the motors' limit.
     ///
-    /// The P term asks for `heading_kp · e`. Past `max_turn_rate / kp` the
+    /// The P term asks for `heading_proportional · e`. Past `max_turn_rate / proportional` the
     /// wheels cannot deliver it, so every larger error produces the same
     /// command — the controller stops being proportional and becomes
     /// bang-bang:
@@ -210,20 +210,20 @@ impl RobotSpec {
     ///      ▲
     ///  12 ─┤        ╱▔▔▔▔▔▔▔▔▔▔▔▔  saturated: every error here
     ///      │      ╱                 gets the SAME command
-    ///      │    ╱ ← slope = kp
+    ///      │    ╱ ← slope = proportional
     ///      │  ╱
     ///    0 └╱──────┬─────────────▶  |heading error e|
     ///      0       │
-    ///        band = max_turn_rate/kp
+    ///        band = max_turn_rate/proportional
     /// ```
     ///
     /// Saturation is not automatically a bug — see [`RobotSpec::check`]
     /// for the criterion that decides whether this band is wide enough.
     pub fn turn_proportional_band(&self, gains: &ControlGains) -> f64 {
-        if gains.heading_kp <= 0.0 {
+        if gains.heading_proportional <= 0.0 {
             return f64::INFINITY;
         }
-        self.max_turn_rate() / gains.heading_kp
+        self.max_turn_rate() / gains.heading_proportional
     }
 
     /// Is this control profile physically achievable on this robot?
@@ -236,19 +236,21 @@ impl RobotSpec {
         if self.wheel_radius <= 0.0 || self.track_width <= 0.0 {
             return Err("geometry must be positive");
         }
-        if self.ticks_per_rev <= 0.0 {
-            return Err("ticks_per_rev must be positive");
+        if self.ticks_per_revolution <= 0.0 {
+            return Err("ticks_per_revolution must be positive");
         }
-        if gains.v_max > self.max_body_speed() {
-            return Err("v_max exceeds what the motors can deliver — the \
-                        controller will command speeds the robot cannot reach");
+        if gains.max_forward_speed > self.max_body_speed() {
+            return Err(
+                "max_forward_speed exceeds what the motors can deliver — the \
+                        controller will command speeds the robot cannot reach",
+            );
         }
         // ---- the turn axis ----
         //
-        // This used to check only `v_max`, which is half the story: a
+        // This used to check only `max_forward_speed`, which is half the story: a
         // differential drive saturates in *rotation* long before it
         // saturates going forward, and on the shipped gains it does.
-        // `heading_kp · π` = 18.85 rad/s against a 12 rad/s ceiling.
+        // `heading_proportional · π` = 18.85 rad/s against a 12 rad/s ceiling.
         //
         // That is deliberately NOT an error. Demanding a hard turn when
         // badly misaimed is correct, and `fit_wheels` scales the pair so
@@ -263,9 +265,11 @@ impl RobotSpec {
         // So the criterion is: the proportional band must cover the whole
         // region where the robot is actually moving forward.
         if self.turn_proportional_band(gains) < core::f64::consts::FRAC_PI_2 {
-            return Err("heading_kp saturates the wheels while the robot is \
+            return Err(
+                "heading_proportional saturates the wheels while the robot is \
                         still driving forward — steering goes bang-bang \
-                        inside the alignment throttle's ±90° window");
+                        inside the alignment throttle's ±90° window",
+            );
         }
         Ok(())
     }
@@ -292,10 +296,10 @@ impl RobotSpec {
     /// type to pass. [`WheelSpeeds`] made the second one redundant.
     pub fn fit_wheels(&self, wheels: WheelSpeeds) -> WheelSpeeds {
         let peak = wheels.peak();
-        if peak <= self.max_wheel_rad_s || peak == 0.0 {
+        if peak <= self.max_wheel_speed || peak == 0.0 {
             return wheels;
         }
-        let scale = self.max_wheel_rad_s / peak;
+        let scale = self.max_wheel_speed / peak;
         WheelSpeeds {
             left: wheels.left * scale,
             right: wheels.right * scale,
@@ -305,10 +309,10 @@ impl RobotSpec {
     /// Wheel speed (rad/s) → motor command in ±1000 duty units, saturated.
     ///
     /// Lives here because the conversion is only meaningful in terms of
-    /// [`Self::max_wheel_rad_s`], and firmware was doing it inline.
+    /// [`Self::max_wheel_speed`], and firmware was doing it inline.
     pub fn duty(&self, wheel_rad_s: f64) -> i32 {
         let full = f64::from(DUTY_FULL);
-        ((wheel_rad_s / self.max_wheel_rad_s) * full).clamp(-full, full) as i32
+        ((wheel_rad_s / self.max_wheel_speed) * full).clamp(-full, full) as i32
     }
 }
 
@@ -335,14 +339,14 @@ pub const DUTY_FULL: i32 = 1000;
 /// speed limits travel with them rather than sitting in a separate const.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ControlGains {
-    pub heading_kp: f64,
-    pub heading_ki: f64,
-    pub heading_kd: f64,
+    pub heading_proportional: f64,
+    pub heading_integral: f64,
+    pub heading_derivative: f64,
     /// Anti-windup clamp on the heading integral.
-    pub heading_i_limit: f64,
+    pub heading_integral_limit: f64,
     /// Anti-**kick** clamp on the heading derivative's contribution, rad/s.
     ///
-    /// The mirror of `heading_i_limit`, for the opposite failure. `D` is
+    /// The mirror of `heading_integral_limit`, for the opposite failure. `D` is
     /// `Kd · de/dt`, and at `dt = 0.02` that multiplies any error jump by
     /// 50 — while the error jumps whenever the *setpoint* moves, which our
     /// planner does every time it hops to the next lookahead node. The
@@ -351,11 +355,11 @@ pub struct ControlGains {
     /// Measured before this clamp existed: **94 rad/s** of commanded turn
     /// rate, ~235 rad/s at the wheel, against motors that deliver 30.
     /// Sized to the fastest turn the robot can physically make.
-    pub heading_d_limit: f64,
+    pub heading_derivative_limit: f64,
     /// Forward speed per metre of remaining distance, m/s per m.
-    pub kp_dist: f64,
+    pub distance_proportional: f64,
     /// Speed cap, m/s.
-    pub v_max: f64,
+    pub max_forward_speed: f64,
     /// Close enough to call a waypoint reached, metres.
     pub arrive_radius: f64,
 }
@@ -368,16 +372,16 @@ impl ControlGains {
     /// aggressive: there is no measurement noise for it to amplify.
     /// Tuned by eye in the Rerun viewer during M3.
     pub const WAYPOINT: ControlGains = ControlGains {
-        heading_kp: 6.0,
-        heading_ki: 0.0,
-        heading_kd: 0.6,
-        heading_i_limit: 1.0,
-        // 12 rad/s = 2·r·max_wheel_rad_s / L for SIM_BOT — the fastest
+        heading_proportional: 6.0,
+        heading_integral: 0.0,
+        heading_derivative: 0.6,
+        heading_integral_limit: 1.0,
+        // 12 rad/s = 2·r·max_wheel_speed / L for SIM_BOT — the fastest
         // this robot can spin. Asking the D term for more than the wheels
         // can deliver only produces a command that gets scaled away.
-        heading_d_limit: 12.0,
-        kp_dist: 0.8,
-        v_max: 0.45,
+        heading_derivative_limit: 12.0,
+        distance_proportional: 0.8,
+        max_forward_speed: 0.45,
         arrive_radius: 0.15,
     };
 
@@ -390,13 +394,13 @@ impl ControlGains {
     /// the loop has less authority per unit time and a stiff controller
     /// oscillates. See docs/11-perception-stack.md.
     pub const VISUAL_SERVO: ControlGains = ControlGains {
-        heading_kp: 3.0,
-        heading_ki: 0.0,
-        heading_kd: 0.3,
-        heading_i_limit: 1.0,
-        heading_d_limit: 12.0,
-        kp_dist: 0.8,
-        v_max: 0.35,
+        heading_proportional: 3.0,
+        heading_integral: 0.0,
+        heading_derivative: 0.3,
+        heading_integral_limit: 1.0,
+        heading_derivative_limit: 12.0,
+        distance_proportional: 0.8,
+        max_forward_speed: 0.35,
         arrive_radius: 0.15,
     };
 
@@ -423,9 +427,9 @@ mod tests {
     #[test]
     fn duty_saturates_symmetrically() {
         let s = RobotSpec::SIM_BOT;
-        assert_eq!(s.duty(s.max_wheel_rad_s), 1000);
-        assert_eq!(s.duty(-s.max_wheel_rad_s), -1000);
-        assert_eq!(s.duty(s.max_wheel_rad_s * 10.0), 1000, "must clamp");
+        assert_eq!(s.duty(s.max_wheel_speed), 1000);
+        assert_eq!(s.duty(-s.max_wheel_speed), -1000);
+        assert_eq!(s.duty(s.max_wheel_speed * 10.0), 1000, "must clamp");
         assert_eq!(s.duty(0.0), 0);
     }
 
@@ -439,7 +443,7 @@ mod tests {
         );
         assert!((s.track_width - 0.150).abs() < 1e-12);
         assert!(
-            (s.max_wheel_rad_s - 20.943_951).abs() < 1e-5,
+            (s.max_wheel_speed - 20.943_951).abs() < 1e-5,
             "200 RPM -> rad/s"
         );
     }
@@ -455,8 +459,11 @@ mod tests {
         let s = RobotSpec::SIM_BOT;
         // One revolution of a 30 mm-radius wheel covers 2*pi*r.
         assert!((s.wheel_circumference_m() - 0.188_495).abs() < 1e-5);
-        // ...spread over ticks_per_rev counts.
-        assert!((s.metres_per_tick() * s.ticks_per_rev - s.wheel_circumference_m()).abs() < 1e-12);
+        // ...spread over ticks_per_revolution counts.
+        assert!(
+            (s.metres_per_tick() * s.ticks_per_revolution - s.wheel_circumference_m()).abs()
+                < 1e-12
+        );
         // Sub-millimetre resolution at 1024 ticks: odometry cannot see
         // motion finer than this.
         assert!(
@@ -468,7 +475,7 @@ mod tests {
 
     #[test]
     fn the_simulator_profile_is_physically_achievable() {
-        // The check that would have caught a v_max nobody can reach.
+        // The check that would have caught a max_forward_speed nobody can reach.
         assert!(RobotSpec::SIM_BOT.check(&ControlGains::WAYPOINT).is_ok());
         assert!(RobotSpec::SIM_BOT
             .check(&ControlGains::VISUAL_SERVO)
@@ -480,12 +487,12 @@ mod tests {
         // A 200 RPM motor on 60 mm wheels tops out at ~0.63 m/s.
         let slow = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
         let greedy = ControlGains {
-            v_max: 2.0,
+            max_forward_speed: 2.0,
             ..ControlGains::WAYPOINT
         };
         assert!(
             slow.check(&greedy).is_err(),
-            "should reject an impossible v_max"
+            "should reject an impossible max_forward_speed"
         );
         // The forward axis on the ordered motor is genuinely fine:
         // 0.45 m/s wanted, 0.628 m/s available.
@@ -511,7 +518,7 @@ mod tests {
     /// driving forward with the steering pinned at the motor limit —
     /// bang-bang exactly where it still needs to track a path.
     ///
-    /// **When the motor arrives, `heading_kp` must come down from 6.0 to
+    /// **When the motor arrives, `heading_proportional` must come down from 6.0 to
     /// at most 5.33**, and the mission must be re-run to see what that
     /// costs. Caught before the part shipped, by a check that had been
     /// looking at the wrong axis.
@@ -533,12 +540,12 @@ mod tests {
 
         // The gain that *would* fit, quoted in the doc comment above.
         let retuned = ControlGains {
-            heading_kp: 5.33,
+            heading_proportional: 5.33,
             ..ControlGains::WAYPOINT
         };
         assert!(
             ordered.check(&retuned).is_ok(),
-            "kp 5.33 should clear the bar on the ordered motor"
+            "proportional 5.33 should clear the bar on the ordered motor"
         );
     }
 
@@ -550,23 +557,23 @@ mod tests {
         assert!(no_encoder.check(&ControlGains::WAYPOINT).is_err());
     }
 
-    /// The gap that made `check` worth revisiting: it validated `v_max`
+    /// The gap that made `check` worth revisiting: it validated `max_forward_speed`
     /// and ignored rotation, which is the axis that actually saturates.
     #[test]
     fn check_looks_at_the_turn_axis_not_just_forward_speed() {
         // Forward speed alone is comfortable — this is why the old check
         // passed a profile it should have had an opinion about.
         let roomy = ControlGains {
-            heading_kp: 40.0, // 12/40 = 0.3 rad band, far inside ±90°
+            heading_proportional: 40.0, // 12/40 = 0.3 rad band, far inside ±90°
             ..ControlGains::WAYPOINT
         };
         assert!(
-            roomy.v_max < RobotSpec::SIM_BOT.max_body_speed(),
+            roomy.max_forward_speed < RobotSpec::SIM_BOT.max_body_speed(),
             "the forward axis must be fine, or this proves nothing"
         );
         assert!(
             RobotSpec::SIM_BOT.check(&roomy).is_err(),
-            "a kp that goes bang-bang while driving must be rejected"
+            "a proportional that goes bang-bang while driving must be rejected"
         );
     }
 
@@ -599,12 +606,12 @@ mod tests {
         let band = RobotSpec::SIM_BOT.turn_proportional_band(&ControlGains::WAYPOINT);
         assert!(
             (band - 2.0).abs() < 1e-12,
-            "12 rad/s / kp 6.0 = 2.0 rad, got {band}"
+            "12 rad/s / proportional 6.0 = 2.0 rad, got {band}"
         );
         assert!(band > core::f64::consts::FRAC_PI_2, "2.0 rad > π/2 = 1.571");
     }
 
-    /// `heading_d_limit` is written as the literal `12.0` with a comment
+    /// `heading_derivative_limit` is written as the literal `12.0` with a comment
     /// saying it *is* `2·r·ω_max/L`. Now that the formula has a function,
     /// check the literal still matches it.
     #[test]
@@ -614,8 +621,8 @@ mod tests {
             (computed - 12.0).abs() < 1e-12,
             "max_turn_rate = {computed}"
         );
-        assert!((ControlGains::WAYPOINT.heading_d_limit - computed).abs() < 1e-12);
-        assert!((ControlGains::VISUAL_SERVO.heading_d_limit - computed).abs() < 1e-12);
+        assert!((ControlGains::WAYPOINT.heading_derivative_limit - computed).abs() < 1e-12);
+        assert!((ControlGains::VISUAL_SERVO.heading_derivative_limit - computed).abs() < 1e-12);
     }
 
     #[test]
@@ -625,7 +632,7 @@ mod tests {
         // orders ~200 RPM.
         let ordered = RobotSpec::from_measurements(60.0, 150.0, 1024.0, 200.0);
         assert!(
-            ordered.max_wheel_rad_s < RobotSpec::SIM_BOT.max_wheel_rad_s,
+            ordered.max_wheel_speed < RobotSpec::SIM_BOT.max_wheel_speed,
             "if these ever match, delete this test and the note on SIM_BOT"
         );
     }
@@ -658,7 +665,7 @@ mod tests {
         pass_through(10.0, -5.0);
         pass_through(0.0, 0.0);
         // Exactly at the limit is still fine.
-        pass_through(s.max_wheel_rad_s, -s.max_wheel_rad_s);
+        pass_through(s.max_wheel_speed, -s.max_wheel_speed);
     }
 
     #[test]
@@ -697,7 +704,7 @@ mod tests {
         for (a, b) in [(200.0, 3.0), (-1.0, 400.0), (35.0, -35.0), (1e6, -1e6)] {
             let fitted = s.fit_wheels(WheelSpeeds::new(a, b));
             assert!(
-                fitted.peak() <= s.max_wheel_rad_s + 1e-9,
+                fitted.peak() <= s.max_wheel_speed + 1e-9,
                 "{a},{b} -> {fitted:?}"
             );
         }
@@ -716,8 +723,11 @@ mod tests {
     // A `const` assertion rather than a `#[test]`: both sides are compile
     // -time constants, so this fails the BUILD rather than a test run.
     // You cannot merge a change that breaks it.
-    const _: () =
-        assert!(ControlGains::VISUAL_SERVO.heading_kp < ControlGains::WAYPOINT.heading_kp);
-    const _: () =
-        assert!(ControlGains::VISUAL_SERVO.heading_kd < ControlGains::WAYPOINT.heading_kd);
+    const _: () = assert!(
+        ControlGains::VISUAL_SERVO.heading_proportional
+            < ControlGains::WAYPOINT.heading_proportional
+    );
+    const _: () = assert!(
+        ControlGains::VISUAL_SERVO.heading_derivative < ControlGains::WAYPOINT.heading_derivative
+    );
 }

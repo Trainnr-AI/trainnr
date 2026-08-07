@@ -62,7 +62,7 @@ pub struct Perceived {
     /// recording because the PID differentiates by it. Replaying with a
     /// synthetic `dt` would compute a different `D` term and quietly stop
     /// being the run that was captured.
-    pub dt: f64,
+    pub frame_seconds: f64,
     pub frame_w: u32,
     pub frame_h: u32,
     pub detections: Vec<Detection>,
@@ -91,7 +91,7 @@ impl Perceived {
         let _ = write!(
             out,
             "F {:.6} {} {} {}",
-            self.dt,
+            self.frame_seconds,
             self.frame_w,
             self.frame_h,
             self.target.map_or(-1i64, |i| i as i64)
@@ -223,7 +223,7 @@ pub fn read(path: &Path) -> Result<Vec<Perceived>, String> {
 
         match f.next() {
             Some("F") => {
-                let dt = num(f.next(), &at)?;
+                let frame_seconds = num(f.next(), &at)?;
                 let frame_w = num::<u32>(f.next(), &at)?;
                 let frame_h = num::<u32>(f.next(), &at)?;
                 let idx = num::<i64>(f.next(), &at)?;
@@ -238,7 +238,7 @@ pub fn read(path: &Path) -> Result<Vec<Perceived>, String> {
                     _ => return Err(at("a command needs both v and w")),
                 };
                 frames.push(Perceived {
-                    dt,
+                    frame_seconds,
                     frame_w,
                     frame_h,
                     detections: Vec::new(),
@@ -353,7 +353,7 @@ mod tests {
     fn a_session_survives_the_round_trip() {
         let frames = vec![
             Perceived {
-                dt: 0.05,
+                frame_seconds: 0.05,
                 frame_w: 640,
                 frame_h: 480,
                 detections: vec![det("cup", 0.9), det("book", 0.4)],
@@ -361,7 +361,7 @@ mod tests {
                 command: Some(BodyTwist::new(0.31, -0.42)),
             },
             Perceived {
-                dt: 0.048,
+                frame_seconds: 0.048,
                 frame_w: 640,
                 frame_h: 480,
                 detections: vec![],
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn labels_with_spaces_survive() {
         let frames = vec![Perceived {
-            dt: 0.05,
+            frame_seconds: 0.05,
             frame_w: 1,
             frame_h: 1,
             detections: vec![det("cell phone", 0.5), det("potted plant", 0.6)],
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn dt_keeps_enough_precision_for_the_derivative() {
         let frames = vec![Perceived {
-            dt: 0.0491234,
+            frame_seconds: 0.0491234,
             frame_w: 1,
             frame_h: 1,
             detections: vec![],
@@ -403,9 +403,9 @@ mod tests {
         }];
         let back = round_trip("dt", &frames);
         assert!(
-            (back[0].dt - 0.0491234).abs() < 1e-6,
+            (back[0].frame_seconds - 0.0491234).abs() < 1e-6,
             "dt came back as {}",
-            back[0].dt
+            back[0].frame_seconds
         );
     }
 
@@ -454,7 +454,7 @@ mod tests {
 
     fn blank() -> Perceived {
         Perceived {
-            dt: 0.05,
+            frame_seconds: 0.05,
             frame_w: 4,
             frame_h: 2,
             detections: vec![],

@@ -19,7 +19,12 @@ pub fn draw_world(
         .world
         .walls
         .iter()
-        .map(|s| [[s.a.0 as f32, s.a.1 as f32], [s.b.0 as f32, s.b.1 as f32]])
+        .map(|s| {
+            [
+                [s.start.0 as f32, s.start.1 as f32],
+                [s.end.0 as f32, s.end.1 as f32],
+            ]
+        })
         .collect();
     rec.log_static(
         "world/walls",
@@ -49,12 +54,15 @@ pub fn draw(
     trail_true: &mut Vec<[f32; 2]>,
     trail_belief: &mut Vec<[f32; 2]>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    rec.set_duration_secs("sim_time", tick.obs.t);
+    rec.set_duration_secs("sim_time", tick.obs.elapsed_seconds);
 
     for (from, to) in &tick.obs.mode_changes {
         rec.log(
             "events",
-            &rerun::TextLog::new(format!("t={:.1}s: {from:?} -> {to:?}", tick.obs.t)),
+            &rerun::TextLog::new(format!(
+                "t={:.1}s: {from:?} -> {to:?}",
+                tick.obs.elapsed_seconds
+            )),
         )?;
     }
 
@@ -66,7 +74,7 @@ pub fn draw(
         .iter()
         .enumerate()
         .map(|(idx, &d)| {
-            let a = pose.theta + mission.camera.ray_angle(idx);
+            let a = pose.heading + mission.camera.ray_angle(idx);
             [
                 [pose.x as f32, pose.y as f32],
                 [(pose.x + d * a.cos()) as f32, (pose.y + d * a.sin()) as f32],
@@ -137,8 +145,8 @@ pub fn draw(
             .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
     )?;
     let (hx, hy) = (
-        0.25 * pose.theta.cos() as f32,
-        0.25 * pose.theta.sin() as f32,
+        0.25 * pose.heading.cos() as f32,
+        0.25 * pose.heading.sin() as f32,
     );
     rec.log(
         "robot/heading",
@@ -163,7 +171,7 @@ pub fn draw(
 
     rec.log(
         "telemetry/min_obstacle_m",
-        &rerun::Scalars::single(tick.obs.summary.min),
+        &rerun::Scalars::single(tick.obs.summary.nearest),
     )?;
     rec.log(
         "telemetry/bumped",

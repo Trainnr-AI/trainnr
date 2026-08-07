@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rec = rerun::RecordingStreamBuilder::new("robotiq_stage0").spawn()?;
 
     let config = MissionConfig::default();
-    let dt = config.dt;
+    let dt = config.tick_seconds;
     let mut mission = Mission::new(config);
 
     viz::draw_world(&rec, &mission)?;

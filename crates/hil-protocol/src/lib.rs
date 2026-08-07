@@ -6,10 +6,10 @@
 //!   host -> chip   G <x> <y> <budget>     steer here, at most this fast
 //!   host -> chip   R <x> <y> <budget>     the same, but reset state first
 //!   host -> chip   T <v> <w>              or: just do exactly this
-//!   chip -> host   P <x> <y> <theta>     believed pose (display only)
+//!   chip -> host   P <x> <y> <heading>     believed pose (display only)
 //!   chip -> host   M <duty_l> <duty_r>   motor command, ±1000
 //!   host -> chip   S <dl> <dr>           encoder tick deltas
-//!   host -> chip   I <x> <y> <theta>     begin a session here (once, first)
+//!   host -> chip   I <x> <y> <heading>     begin a session here (once, first)
 //!   chip -> host   H <worst_us>         new worst-case compute time
 //! ```
 //!
@@ -114,9 +114,9 @@ pub enum Message {
     /// this fixed a rig that ground along a wall for 1019 ticks because
     /// the reflex had no way to reach the motors.
     Twist { v: f64, w: f64 },
-    /// `P x y theta` — the chip's believed pose, in metres and radians.
+    /// `P x y heading` — the chip's believed pose, in metres and radians.
     /// Display only; the host never steers with it.
-    Pose { x: f64, y: f64, theta: f64 },
+    Pose { x: f64, y: f64, heading: f64 },
     /// `M duty_l duty_r` — motor command, each in `[-DUTY_FULL, DUTY_FULL]`.
     Motor { duty_l: i32, duty_r: i32 },
     /// `S dl dr` — encoder tick deltas since the previous step. Signed:
@@ -141,7 +141,7 @@ pub enum Message {
     ///
     /// Sent once, before the control loop, so it never shares the UART
     /// FIFO with an `S` line.
-    Start { x: f64, y: f64, theta: f64 },
+    Start { x: f64, y: f64, heading: f64 },
     /// chip → host: a NEW worst-case control-loop compute time, in
     /// microseconds.
     ///
@@ -201,10 +201,10 @@ impl Message {
                 writeln!(w, "{tag} {x:.4} {y:.4} {budget:.4}")
             }
             Message::Twist { v, w: tw } => writeln!(w, "T {v:.4} {tw:.4}"),
-            Message::Pose { x, y, theta } => writeln!(w, "P {x:.4} {y:.4} {theta:.4}"),
+            Message::Pose { x, y, heading } => writeln!(w, "P {x:.4} {y:.4} {heading:.4}"),
             Message::Motor { duty_l, duty_r } => writeln!(w, "M {duty_l} {duty_r}"),
             Message::Sensors { dl, dr } => writeln!(w, "S {dl} {dr}"),
-            Message::Start { x, y, theta } => writeln!(w, "I {x:.4} {y:.4} {theta:.4}"),
+            Message::Start { x, y, heading } => writeln!(w, "I {x:.4} {y:.4} {heading:.4}"),
             Message::Health { worst_us } => writeln!(w, "H {worst_us}"),
         }
     }
@@ -236,8 +236,8 @@ impl Message {
             "P" => {
                 let x = next_f64(&mut parts)?;
                 let y = next_f64(&mut parts)?;
-                let theta = next_f64(&mut parts)?;
-                Ok(Message::Pose { x, y, theta })
+                let heading = next_f64(&mut parts)?;
+                Ok(Message::Pose { x, y, heading })
             }
             "M" => {
                 let duty_l = next_i32(&mut parts)?;
@@ -247,8 +247,8 @@ impl Message {
             "I" => {
                 let x = next_f64(&mut parts)?;
                 let y = next_f64(&mut parts)?;
-                let theta = next_f64(&mut parts)?;
-                Ok(Message::Start { x, y, theta })
+                let heading = next_f64(&mut parts)?;
+                Ok(Message::Start { x, y, heading })
             }
             "H" => {
                 let worst_us = next_i64(&mut parts)?;
@@ -537,14 +537,14 @@ mod tests {
         let m = Message::Pose {
             x: 1.23456,
             y: -0.5,
-            theta: 0.98765,
+            heading: 0.98765,
         };
         let text = encode(m);
         match Message::parse(text.as_str()).unwrap() {
-            Message::Pose { x, y, theta } => {
+            Message::Pose { x, y, heading } => {
                 assert!((x - 1.2346).abs() < 1e-9, "x = {x}");
                 assert!((y + 0.5).abs() < 1e-9, "y = {y}");
-                assert!((theta - 0.9877).abs() < 1e-9, "theta = {theta}");
+                assert!((heading - 0.9877).abs() < 1e-9, "heading = {heading}");
             }
             other => panic!("wrong variant: {other:?}"),
         }
@@ -568,7 +568,7 @@ mod tests {
             encode(Message::Pose {
                 x: 1.0,
                 y: 2.0,
-                theta: 0.0
+                heading: 0.0
             })
             .as_str(),
             "P 1.0000 2.0000 0.0000\n"
@@ -763,7 +763,7 @@ mod tests {
             Message::Pose {
                 x: 1.0,
                 y: 2.0,
-                theta: 0.3,
+                heading: 0.3,
             },
             Message::Motor {
                 duty_l: 500,
@@ -774,7 +774,7 @@ mod tests {
             Message::Start {
                 x: 1.0,
                 y: 3.0,
-                theta: 0.0,
+                heading: 0.0,
             },
         ] {
             assert_eq!(m.directive(), None, "{m:?} is telemetry, not a command");
@@ -797,7 +797,7 @@ mod tests {
                 Message::Pose {
                     x: 0.0,
                     y: 0.0,
-                    theta: 0.0,
+                    heading: 0.0,
                 },
                 'P',
             ),
@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn duty_saturates_at_the_protocol_limit() {
         let spec = sim_core::RobotSpec::SIM_BOT;
-        let max = spec.max_wheel_rad_s;
+        let max = spec.max_wheel_speed;
 
         assert_eq!(spec.duty(0.0), 0);
         assert_eq!(spec.duty(max), DUTY_FULL);
@@ -905,7 +905,7 @@ mod tests {
             Message::Pose {
                 x: 1.0,
                 y: 1.0,
-                theta: 0.0,
+                heading: 0.0,
             },
             Message::Motor {
                 duty_l: 400,

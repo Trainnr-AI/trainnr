@@ -61,7 +61,7 @@ const DT: f64 = 0.02; // 50 Hz
 
 /// Stop if the planner goes quiet for this long.
 ///
-/// Ten missed ticks at 50 Hz, and about 9 cm of travel at `v_max` — well
+/// Ten missed ticks at 50 Hz, and about 9 cm of travel at `max_forward_speed` — well
 /// beyond any real scheduling hiccup, well short of a table edge.
 const COMMAND_TIMEOUT_MS: u64 = 200;
 
@@ -132,7 +132,7 @@ trait Link {
 async fn control_loop<L: Link>(link: &mut L) -> ! {
     let mut odom = Odometry {
         model: SPEC.drive(),
-        ticks_per_rev: SPEC.ticks_per_rev,
+        ticks_per_revolution: SPEC.ticks_per_revolution,
         // Provisional. The host sets the real one with an `I` line before
         // the first directive — see `Message::Start`. Hardcoding it here
         // and never revisiting was a bug: a board left powered between
@@ -162,8 +162,8 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
                     match Message::parse(line) {
                         // A new session: forget everything. Whatever this
                         // chip believed belongs to the previous run.
-                        Ok(Message::Start { x, y, theta }) => {
-                            odom.pose = Pose::new(x, y, theta);
+                        Ok(Message::Start { x, y, heading }) => {
+                            odom.pose = Pose::new(x, y, heading);
                             controller.reset();
                             worst_us = 0;
                             restarted = true;
@@ -189,7 +189,7 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
                 let _ = Message::Pose {
                     x: odom.pose.x,
                     y: odom.pose.y,
-                    theta: odom.pose.theta,
+                    heading: odom.pose.heading,
                 }
                 .write_into(&mut out);
                 link.send(out.as_bytes()).await;
@@ -218,7 +218,7 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
         let _ = Message::Pose {
             x: pose.x,
             y: pose.y,
-            theta: pose.theta,
+            heading: pose.heading,
         }
         .write_into(&mut out);
         link.send(out.as_bytes()).await;

@@ -41,7 +41,7 @@ const WIRE_TOLERANCE: f64 = 1e-2;
 #[test]
 fn the_wire_does_not_change_the_decision() {
     let config = MissionConfig::default();
-    let (gains, dt) = (config.gains, config.dt);
+    let (gains, dt) = (config.gains, config.tick_seconds);
     let mut mission = Mission::new(config);
 
     // Two controllers fed identical observations: one standing in for the
@@ -92,7 +92,7 @@ fn a_mission_flown_entirely_through_the_wire_still_succeeds() {
     let reference = Mission::new(MissionConfig::default()).run();
 
     let config = MissionConfig::default();
-    let (gains, dt) = (config.gains, config.dt);
+    let (gains, dt) = (config.gains, config.tick_seconds);
     let mut mission = Mission::new(config);
     let mut chip = GotoController::new(gains);
 

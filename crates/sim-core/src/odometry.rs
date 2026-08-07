@@ -18,7 +18,7 @@ pub struct Odometry {
     /// separate copy from the true robot's — in Stage 0 experiments we'll
     /// give it a slightly wrong wheel radius and watch the consequences.
     pub model: DiffDrive,
-    pub ticks_per_rev: f64,
+    pub ticks_per_revolution: f64,
     /// The believed pose (starts wherever we're told the robot starts).
     pub pose: Pose,
 }
@@ -29,7 +29,7 @@ impl Odometry {
     /// Given the new ticks observed on each wheel since the last update,
     /// advance `self.pose`. The recipe (derive each step in math-03):
     ///
-    /// 1. ticks → wheel angle traveled:  Δφ = 2π · dticks / ticks_per_rev
+    /// 1. ticks → wheel angle traveled:  Δφ = 2π · dticks / ticks_per_revolution
     /// 2. angle → distance rolled:       d  = wheel_radius · Δφ
     ///    (do 1–2 for each wheel: d_l, d_r)
     /// 3. the two distances → body motion:
@@ -42,8 +42,8 @@ impl Odometry {
     /// Hints: `core::f64::consts::PI` is in scope via `PI`;
     /// `dticks` are `i64` — convert with `as f64` before math.
     pub fn update(&mut self, dticks_l: i64, dticks_r: i64) {
-        let dphi_l = 2.0 * PI * dticks_l as f64 / self.ticks_per_rev;
-        let dphi_r = 2.0 * PI * dticks_r as f64 / self.ticks_per_rev;
+        let dphi_l = 2.0 * PI * dticks_l as f64 / self.ticks_per_revolution;
+        let dphi_r = 2.0 * PI * dticks_r as f64 / self.ticks_per_revolution;
 
         let d_l = self.model.wheel_radius * dphi_l;
         let d_r = self.model.wheel_radius * dphi_r;
@@ -75,7 +75,7 @@ mod tests {
     fn odo() -> Odometry {
         Odometry {
             model: model(),
-            ticks_per_rev: 1000.0,
+            ticks_per_revolution: 1000.0,
             pose: Pose::ORIGIN,
         }
     }
@@ -87,7 +87,7 @@ mod tests {
         o.update(1000, 1000);
         assert!((o.pose.x - 2.0 * PI * 0.03).abs() < 1e-9);
         assert!(o.pose.y.abs() < 1e-9);
-        assert!(o.pose.theta.abs() < 1e-9);
+        assert!(o.pose.heading.abs() < 1e-9);
     }
 
     #[test]
@@ -98,7 +98,7 @@ mod tests {
         assert!(o.pose.y.abs() < 1e-9);
         // Each wheel rolled 0.1 rev = 2π·0.03·0.1 m; dθ = (d_r - d_l)/track.
         let d = 2.0 * PI * 0.03 * 0.1;
-        assert!((o.pose.theta - 2.0 * d / 0.15).abs() < 1e-9);
+        assert!((o.pose.heading - 2.0 * d / 0.15).abs() < 1e-9);
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
         let mut enc = Encoders::new(4096.0);
         let mut o = Odometry {
             model: m,
-            ticks_per_rev: 4096.0,
+            ticks_per_revolution: 4096.0,
             pose: Pose::ORIGIN,
         };
 

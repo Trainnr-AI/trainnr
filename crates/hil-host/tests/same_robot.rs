@@ -74,7 +74,7 @@ fn the_rig_and_the_firmware_drive_the_same_robot() {
 ///
 /// Deliberately checks the two *ingredients* rather than one exact
 /// expression. The first version pinned the literal string
-/// `"...max_wheel_rad_s / 1000.0"` and failed the moment that `1000.0`
+/// `"...max_wheel_speed / 1000.0"` and failed the moment that `1000.0`
 /// was replaced by the shared `DUTY_FULL` — i.e. it failed on an
 /// improvement. A guard that fires on the fix it was asking for is worse
 /// than no guard.
@@ -115,11 +115,11 @@ fn the_duty_scale_comes_from_the_simulated_robot() {
 fn both_sides_agree_on_what_a_duty_count_means() {
     use sim_core::RobotSpec;
     let spec = RobotSpec::REAL_BOT;
-    let scale = spec.max_wheel_rad_s / 1000.0;
+    let scale = spec.max_wheel_speed / 1000.0;
 
     // Full scale in each direction must round-trip through the wire's
     // integer duty back to the motor limit.
-    for wheel in [spec.max_wheel_rad_s, -spec.max_wheel_rad_s] {
+    for wheel in [spec.max_wheel_speed, -spec.max_wheel_speed] {
         let duty = spec.duty(wheel);
         assert_eq!(duty.abs(), 1000, "full speed should be full duty");
         assert!(

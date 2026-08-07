@@ -361,7 +361,7 @@ fn main() -> Result<()> {
         let target = chosen.and_then(|c| detections.iter().position(|d| std::ptr::eq(d, c)));
 
         let mut perceived = Perceived {
-            dt,
+            frame_seconds: dt,
             frame_w: frame.width,
             frame_h: frame.height,
             detections,
@@ -420,10 +420,10 @@ impl Chase {
             },
             controller: GotoController::new(GAINS),
             raw_pid: Pid::new(
-                GAINS.heading_kp,
-                GAINS.heading_ki,
-                GAINS.heading_kd,
-                GAINS.heading_i_limit,
+                GAINS.heading_proportional,
+                GAINS.heading_integral,
+                GAINS.heading_derivative,
+                GAINS.heading_integral_limit,
             ),
             bearing_filter: LowPass::new(BEARING_ALPHA),
             trail: VecDeque::with_capacity(TRAIL_POINTS),
@@ -445,7 +445,7 @@ impl Chase {
         frame: Option<&Frame>,
         rec: &rerun::RecordingStream,
     ) -> Result<BodyTwist> {
-        let dt = p.dt;
+        let dt = p.frame_seconds;
         self.t += dt;
         let (v_cmd, w_cmd, heading_error, w_raw) = match p.target() {
             Some(d) => {
@@ -458,7 +458,7 @@ impl Chase {
 
                 // What the controller WOULD do on the raw signal — computed
                 // only so the viewer can show both curves at once.
-                let raw_error = wrap_angle(shortest(self.robot.pose.theta, measured));
+                let raw_error = wrap_angle(shortest(self.robot.pose.heading, measured));
                 let w_raw = self.raw_pid.update(raw_error, dt);
 
                 // ---- noise handling ----
@@ -467,7 +467,7 @@ impl Chase {
                 // 2. Deadband the error, so sub-degree wobble commands nothing.
                 let target_heading = self.bearing_filter.update(measured);
                 let error = deadband(
-                    wrap_angle(shortest(self.robot.pose.theta, target_heading)),
+                    wrap_angle(shortest(self.robot.pose.heading, target_heading)),
                     HEADING_DEADBAND,
                 );
                 // ---- the open-loop part (see module docs) ----
@@ -477,9 +477,9 @@ impl Chase {
                 // The shared steering law. Identical to the simulator's and
                 // the firmware's — only the speed budget differs, because
                 // here "how far away" comes from box size, not a map.
-                let twist = self
-                    .controller
-                    .steer(error, GAINS.v_max * approach as f64, dt);
+                let twist =
+                    self.controller
+                        .steer(error, GAINS.max_forward_speed * approach as f64, dt);
                 (twist.forward_speed, twist.turn_rate, error, w_raw)
             }
             None => {
@@ -524,8 +524,8 @@ impl Chase {
         rec.log(
             "robot/heading",
             &rerun::Arrows2D::from_vectors([[
-                0.3 * self.robot.pose.theta.cos() as f32,
-                0.3 * self.robot.pose.theta.sin() as f32,
+                0.3 * self.robot.pose.heading.cos() as f32,
+                0.3 * self.robot.pose.heading.sin() as f32,
             ]])
             .with_origins([[rx_, ry_]])
             .with_colors([rerun::Color::from_rgb(255, 90, 90)]),
@@ -547,7 +547,7 @@ impl Chase {
                     heading_error,
                     v_cmd,
                     w_cmd,
-                    self.robot.pose.theta
+                    self.robot.pose.heading
                 ),
                 None => println!("(nothing detected — robot stopped)"),
             }

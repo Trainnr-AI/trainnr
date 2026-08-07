@@ -39,7 +39,7 @@ impl DepthCamera {
     pub fn scan(&self, pose: &Pose, world: &World) -> Vec<f64> {
         (0..self.n_rays)
             .map(|i| {
-                let angle = pose.theta + self.ray_angle(i);
+                let angle = pose.heading + self.ray_angle(i);
                 world
                     .walls
                     .iter()

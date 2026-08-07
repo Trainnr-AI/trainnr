@@ -26,7 +26,7 @@ use sim_run::{Mission, MissionConfig, Outcome, Tick};
 pub struct Rig {
     pub mission: Mission,
     wire: Wire,
-    /// Duty ±`DUTY_FULL` maps to ±`max_wheel_rad_s`. Read off the
+    /// Duty ±`DUTY_FULL` maps to ±`max_wheel_speed`. Read off the
     /// mission's own spec so there is exactly one robot in this program.
     duty_scale: f64,
     /// The chip's own reported pose. For the viewer and the summary — the
@@ -41,7 +41,7 @@ impl Rig {
     pub fn new(config: MissionConfig, wire: Wire) -> Rig {
         let start = config.start;
         let mission = Mission::new(config);
-        let duty_scale = mission.config.spec.max_wheel_rad_s / f64::from(sim_core::DUTY_FULL);
+        let duty_scale = mission.config.spec.max_wheel_speed / f64::from(sim_core::DUTY_FULL);
         Rig {
             mission,
             wire,
@@ -64,11 +64,11 @@ impl Rig {
         self.wire.send(Message::Start {
             x: s.x,
             y: s.y,
-            theta: s.theta,
+            heading: s.heading,
         })?;
         while let Some(line) = self.wire.recv_line()? {
-            if let Ok(Message::Pose { x, y, theta }) = Message::parse(line.trim_end()) {
-                self.belief_from_chip = Pose::new(x, y, theta);
+            if let Ok(Message::Pose { x, y, heading }) = Message::parse(line.trim_end()) {
+                self.belief_from_chip = Pose::new(x, y, heading);
                 break;
             }
         }
@@ -101,7 +101,9 @@ impl Rig {
             };
             match Message::parse(line.trim_end()) {
                 Ok(Message::Motor { duty_l, duty_r }) => duty = Some((duty_l, duty_r)),
-                Ok(Message::Pose { x, y, theta }) => self.belief_from_chip = Pose::new(x, y, theta),
+                Ok(Message::Pose { x, y, heading }) => {
+                    self.belief_from_chip = Pose::new(x, y, heading)
+                }
                 Ok(Message::Health { worst_us }) => self.worst_us = self.worst_us.max(worst_us),
                 Ok(_) => {}
                 Err(_) => eprintln!("[host] {}", line.trim_end()),
@@ -137,9 +139,9 @@ impl Rig {
             outcome: self.mission.outcome(),
             belief_from_chip: self.belief_from_chip,
             ticks: self.ticks,
-            dt: self.mission.config.dt,
+            tick_seconds: self.mission.config.tick_seconds,
             worst_us: self.worst_us,
-            budget_us: (self.mission.config.dt * 1e6) as u32,
+            budget_us: (self.mission.config.tick_seconds * 1e6) as u32,
             divergences: self.wire.divergences().to_vec(),
             unconsumed: self.wire.unconsumed(),
         }
@@ -152,7 +154,7 @@ pub struct Verdict {
     pub outcome: Outcome,
     pub belief_from_chip: Pose,
     pub ticks: usize,
-    pub dt: f64,
+    pub tick_seconds: f64,
     /// 0 when the chip never reported — an old firmware, or a replay of a
     /// log recorded before health existed.
     pub worst_us: u32,
@@ -191,7 +193,7 @@ impl Verdict {
              true pose:   x={:.3} y={:.3}\n  chip belief: x={:.3} y={:.3}\n  \
              drift: {:.3} m,  wall bumps: {}",
             self.ticks,
-            self.ticks as f64 * self.dt,
+            self.ticks as f64 * self.tick_seconds,
             o.waypoints_reached,
             o.waypoints_total,
             o.final_pose.x,
@@ -246,7 +248,7 @@ impl Verdict {
                          (worst {w} us). The loop grew past what the chip can \
                          do at {:.0} Hz.",
                         self.budget_us,
-                        1.0 / self.dt
+                        1.0 / self.tick_seconds
                     );
                 }
             }
@@ -317,7 +319,7 @@ mod tests {
         rig.start().unwrap();
         assert_eq!(rig.belief_from_chip.x, 2.5);
         assert_eq!(rig.belief_from_chip.y, 4.5);
-        assert_eq!(rig.belief_from_chip.theta, 1.2);
+        assert_eq!(rig.belief_from_chip.heading, 1.2);
     }
 
     #[test]

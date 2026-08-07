@@ -26,17 +26,17 @@ use crate::robot::BodyTwist;
 use crate::spec::ControlGains;
 
 pub struct Pid {
-    pub kp: f64,
-    pub ki: f64,
-    pub kd: f64,
-    /// Anti-windup clamp: the integral term is kept in [-i_limit, +i_limit].
+    pub proportional: f64,
+    pub integral_gain: f64,
+    pub derivative: f64,
+    /// Anti-windup clamp: the integral term is kept in [-integral_limit, +integral_limit].
     /// Without it, a long-blocked robot accumulates a huge integral and then
     /// lurches wildly once freed ("integral windup").
-    pub i_limit: f64,
+    pub integral_limit: f64,
     /// Anti-**kick** clamp: the derivative's *contribution* is kept in
-    /// [-d_limit, +d_limit].
+    /// [-derivative_limit, +derivative_limit].
     ///
-    /// The mirror of `i_limit`, for the opposite failure. `D = Kd·de/dt`
+    /// The mirror of `integral_limit`, for the opposite failure. `D = Kd·de/dt`
     /// with `dt = 0.02` multiplies any error jump by 50, and the error
     /// jumps whenever the *setpoint* moves — our planner hopping to the
     /// next lookahead node — even though the robot did not. Measured
@@ -44,7 +44,7 @@ pub struct Pid {
     /// at the wheel, against motors that deliver 30.
     ///
     /// `f64::INFINITY` disables it.
-    pub d_limit: f64,
+    pub derivative_limit: f64,
     // Internal state — private, reset via `reset()`.
     integral: f64,
     prev_error: Option<f64>,
@@ -54,23 +54,34 @@ impl Pid {
     /// A PID with no derivative clamp. Prefer [`Self::with_d_limit`] in a
     /// control path — an unbounded D term is how a setpoint jump becomes a
     /// command the actuator cannot honour.
-    pub fn new(kp: f64, ki: f64, kd: f64, i_limit: f64) -> Self {
+    pub fn new(
+        proportional: f64,
+        integral_gain: f64,
+        derivative: f64,
+        integral_limit: f64,
+    ) -> Self {
         Pid {
-            kp,
-            ki,
-            kd,
-            i_limit,
-            d_limit: f64::INFINITY,
+            proportional,
+            integral_gain,
+            derivative,
+            integral_limit,
+            derivative_limit: f64::INFINITY,
             integral: 0.0,
             prev_error: None,
         }
     }
 
     /// As [`Self::new`], with the derivative contribution bounded.
-    pub fn with_d_limit(kp: f64, ki: f64, kd: f64, i_limit: f64, d_limit: f64) -> Self {
+    pub fn with_d_limit(
+        proportional: f64,
+        integral_gain: f64,
+        derivative: f64,
+        integral_limit: f64,
+        derivative_limit: f64,
+    ) -> Self {
         Pid {
-            d_limit,
-            ..Pid::new(kp, ki, kd, i_limit)
+            derivative_limit,
+            ..Pid::new(proportional, integral_gain, derivative, integral_limit)
         }
     }
 
@@ -80,7 +91,7 @@ impl Pid {
     /// duration `dt`. Returns the control output. The recipe:
     ///
     /// 1. Accumulate the integral: add `error * dt` to `self.integral`,
-    ///    then clamp it into [-i_limit, +i_limit]. Rust:
+    ///    then clamp it into [-integral_limit, +integral_limit]. Rust:
     ///    `x.clamp(lo, hi)` returns x limited to that range.
     /// 2. Compute the derivative: `(error - previous_error) / dt` — but on
     ///    the very first call there IS no previous error, so use 0.0.
@@ -89,19 +100,22 @@ impl Pid {
     ///    `match self.prev_error { Some(prev) => ..., None => 0.0 }`.
     /// 3. Remember this error for next time:
     ///    `self.prev_error = Some(error);`
-    /// 4. Return `kp*error + ki*integral + kd*derivative` (all via `self.`).
+    /// 4. Return `proportional*error + integral_gain*integral + derivative*derivative` (all via `self.`).
     pub fn update(&mut self, error: f64, dt: f64) -> f64 {
         self.integral += error * dt;
-        self.integral = self.integral.clamp(-self.i_limit, self.i_limit);
+        self.integral = self
+            .integral
+            .clamp(-self.integral_limit, self.integral_limit);
         let derivative = match self.prev_error {
             Some(prev) => (error - prev) / dt,
             None => 0.0,
         };
         self.prev_error = Some(error);
         // Clamp the CONTRIBUTION, not the raw derivative: what matters is
-        // how much this term can move the output, and that is `kd * d`.
-        let d_term = (self.kd * derivative).clamp(-self.d_limit, self.d_limit);
-        self.kp * error + self.ki * self.integral + d_term
+        // how much this term can move the output, and that is `derivative * d`.
+        let d_term =
+            (self.derivative * derivative).clamp(-self.derivative_limit, self.derivative_limit);
+        self.proportional * error + self.integral_gain * self.integral + d_term
     }
 
     /// Forget accumulated state (use when switching targets/modes).
@@ -190,11 +204,11 @@ impl GotoController {
     pub fn new(gains: ControlGains) -> Self {
         GotoController {
             heading_pid: Pid::with_d_limit(
-                gains.heading_kp,
-                gains.heading_ki,
-                gains.heading_kd,
-                gains.heading_i_limit,
-                gains.heading_d_limit,
+                gains.heading_proportional,
+                gains.heading_integral,
+                gains.heading_derivative,
+                gains.heading_integral_limit,
+                gains.heading_derivative_limit,
             ),
             gains,
         }
@@ -204,12 +218,12 @@ impl GotoController {
     ///
     /// `speed_budget` is what the caller *would* drive at if perfectly
     /// aligned — distance-proportional for a waypoint, size-proportional
-    /// for a camera target. It is capped at `v_max` here so no caller can
+    /// for a camera target. It is capped at `max_forward_speed` here so no caller can
     /// forget to.
     pub fn steer(&mut self, heading_error: f64, speed_budget: f64, dt: f64) -> BodyTwist {
         let alignment = (1.0 - heading_error.abs() / FRAC_PI_2).max(0.0);
         BodyTwist {
-            forward_speed: speed_budget.min(self.gains.v_max) * alignment,
+            forward_speed: speed_budget.min(self.gains.max_forward_speed) * alignment,
             turn_rate: self.heading_pid.update(heading_error, dt),
         }
     }
@@ -235,7 +249,7 @@ impl GotoController {
                 // from it would make the robot crawl. The budget comes
                 // from the planner, which knows the real distance left.
                 let bearing = (target.1 - pose.y).atan2(target.0 - pose.x);
-                let error = shortest_turn(pose.theta, bearing);
+                let error = shortest_turn(pose.heading, bearing);
                 self.steer(error, budget, dt)
             }
             // Obey it, and drop accumulated state so the next Steer does
@@ -252,8 +266,8 @@ impl GotoController {
     pub fn goto_point(&mut self, pose: &Pose, target: (f64, f64), dt: f64) -> BodyTwist {
         let (tx, ty) = target;
         let bearing = (ty - pose.y).atan2(tx - pose.x);
-        let error = shortest_turn(pose.theta, bearing);
-        let budget = self.gains.kp_dist * Self::distance(pose, target);
+        let error = shortest_turn(pose.heading, bearing);
+        let budget = self.gains.distance_proportional * Self::distance(pose, target);
         self.steer(error, budget, dt)
     }
 
@@ -302,7 +316,7 @@ mod tests {
             pid.update(1.0, 0.1); // would integrate to 100 unclamped
         }
         let out = pid.update(1.0, 0.1);
-        assert!(out <= 0.5 + 1e-12); // held at i_limit
+        assert!(out <= 0.5 + 1e-12); // held at integral_limit
     }
 
     #[test]
@@ -329,7 +343,7 @@ mod tests {
         let mut c = ctrl();
         let twist = c.steer(0.0, 10.0, 0.02);
         assert!(
-            (twist.forward_speed - ControlGains::WAYPOINT.v_max).abs() < 1e-12,
+            (twist.forward_speed - ControlGains::WAYPOINT.max_forward_speed).abs() < 1e-12,
             "{twist:?}"
         );
         assert!(
@@ -344,7 +358,7 @@ mod tests {
         // 45 degrees off: alignment = 1 - (pi/4)/(pi/2) = 0.5
         let twist = c.steer(core::f64::consts::FRAC_PI_4, 10.0, 0.02);
         assert!(
-            (twist.forward_speed - ControlGains::WAYPOINT.v_max * 0.5).abs() < 1e-12,
+            (twist.forward_speed - ControlGains::WAYPOINT.max_forward_speed * 0.5).abs() < 1e-12,
             "{twist:?}"
         );
     }
@@ -364,7 +378,10 @@ mod tests {
     fn speed_budget_is_capped_at_v_max() {
         let mut c = ctrl();
         let speed = c.steer(0.0, 1000.0, 0.02).forward_speed;
-        assert!(speed <= ControlGains::WAYPOINT.v_max + 1e-12, "v = {speed}");
+        assert!(
+            speed <= ControlGains::WAYPOINT.max_forward_speed + 1e-12,
+            "v = {speed}"
+        );
     }
 
     #[test]
@@ -374,7 +391,7 @@ mod tests {
         let pose = Pose {
             x: 0.0,
             y: 0.0,
-            theta: 0.0,
+            heading: 0.0,
         };
         let turn = c.goto_point(&pose, (0.0, 1.0), 0.02).turn_rate;
         assert!(
@@ -389,7 +406,7 @@ mod tests {
         let pose = Pose {
             x: 0.0,
             y: 0.0,
-            theta: 0.0,
+            heading: 0.0,
         };
         let r = ControlGains::WAYPOINT.arrive_radius;
         assert!(c.arrived(&pose, (r * 0.5, 0.0)));

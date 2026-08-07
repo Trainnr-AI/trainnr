@@ -155,13 +155,13 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let _ = write!(
         l,
         "                y={:.17e} th={:.17e}\r\n",
-        moved.y, moved.theta
+        moved.y, moved.heading
     );
     say(class, &l).await?;
 
     let mut odom = Odometry {
         model: drive,
-        ticks_per_rev: SPEC.ticks_per_rev,
+        ticks_per_revolution: SPEC.ticks_per_revolution,
         pose: Pose::new(1.0, 1.0, 0.0),
     };
     for _ in 0..50 {
@@ -174,7 +174,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let _ = write!(
         l,
         "                y={:.17e} th={:.17e}\r\n",
-        odom.pose.y, odom.pose.theta
+        odom.pose.y, odom.pose.heading
     );
     say(class, &l).await?;
 
@@ -188,7 +188,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     say(class, &l).await?;
 
     // Motor lag uses exp().
-    let mut motor = Motor::new(0.15, SPEC.max_wheel_rad_s);
+    let mut motor = Motor::new(0.15, SPEC.max_wheel_speed);
     let mut speed = 0.0;
     for _ in 0..50 {
         speed = motor.step(20.0, DT);
@@ -199,7 +199,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
 
     // Encoders quantise to whole ticks — integers, so these must match
     // exactly or something is very wrong.
-    let mut enc = Encoders::new(SPEC.ticks_per_rev);
+    let mut enc = Encoders::new(SPEC.ticks_per_revolution);
     let (mut tl, mut tr) = (0i64, 0i64);
     for _ in 0..50 {
         let (a, b) = enc.advance(WheelSpeeds::new(12.5, 13.25), DT);
@@ -225,7 +225,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     // Both of these are branch-heavy rather than trig-heavy, so the risk
     // is not a low bit — it is a *comparison* landing differently once
     // f64 is emulated in software. `fit_wheels` branches on
-    // `peak <= max_wheel_rad_s`, and `d_limit` on a clamp boundary. A
+    // `peak <= max_wheel_speed`, and `derivative_limit` on a clamp boundary. A
     // divergence here would not be a rounding difference; it would be the
     // chip taking the other branch.
     let fitted = SPEC.fit_wheels(WheelSpeeds::new(40.0, 10.0));
@@ -234,7 +234,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let _ = write!(l, "  fit_wheels    l={fl:.17e} r={fr:.17e}\r\n");
     say(class, &l).await?;
 
-    // A setpoint STEP — precisely the derivative-kick case d_limit exists
+    // A setpoint STEP — precisely the derivative-kick case derivative_limit exists
     // to bound. Without the clamp this term runs away.
     let mut kick = Pid::with_d_limit(6.0, 0.0, 0.6, 1.0, 12.0);
     let mut k = 0.0;
@@ -242,7 +242,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
         k = kick.update(if i < 25 { 0.05 } else { 3.0 }, DT);
     }
     l.clear();
-    let _ = write!(l, "  pid d_limit   out={k:.17e}\r\n");
+    let _ = write!(l, "  pid derivative_limit   out={k:.17e}\r\n");
     say(class, &l).await?;
 
     let mut st = GotoController::new(ControlGains::WAYPOINT);
@@ -258,7 +258,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let mut ctrl = GotoController::new(ControlGains::WAYPOINT);
     let mut odom = Odometry {
         model: drive,
-        ticks_per_rev: SPEC.ticks_per_rev,
+        ticks_per_revolution: SPEC.ticks_per_revolution,
         pose: Pose::new(1.0, 1.0, 0.0),
     };
     const ITERS: u32 = 1000;

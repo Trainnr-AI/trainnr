@@ -62,8 +62,8 @@ pub fn shortest_turn(from: f64, to: f64) -> f64 {
 ///
 /// ```text
 /// dx = angle.cos()      dy = angle.sin()        // ray direction
-/// ex = seg.b.0 - seg.a.0  ey = seg.b.1 - seg.a.1  // segment direction
-/// rx = seg.a.0 - ox     ry = seg.a.1 - oy       // origin → segment start
+/// ex = seg.end.0 - seg.start.0  ey = seg.end.1 - seg.start.1  // segment direction
+/// rx = seg.start.0 - ox     ry = seg.start.1 - oy       // origin → segment start
 ///
 /// det = ex * dy - ey * dx
 /// if det ≈ 0 (|det| < 1e-12): parallel → None
@@ -81,10 +81,10 @@ pub fn shortest_turn(from: f64, to: f64) -> f64 {
 pub fn ray_segment_hit(ox: f64, oy: f64, angle: f64, seg: &Segment) -> Option<f64> {
     let dx = angle.cos();
     let dy = angle.sin();
-    let ex = seg.b.0 - seg.a.0;
-    let ey = seg.b.1 - seg.a.1;
-    let rx = seg.a.0 - ox;
-    let ry = seg.a.1 - oy;
+    let ex = seg.end.0 - seg.start.0;
+    let ey = seg.end.1 - seg.start.1;
+    let rx = seg.start.0 - ox;
+    let ry = seg.start.1 - oy;
 
     let det = ex * dy - ey * dx;
     if det.abs() < 1e-12 {
@@ -135,8 +135,8 @@ mod tests {
 
     fn vertical_wall_at_x2() -> Segment {
         Segment {
-            a: (2.0, -1.0),
-            b: (2.0, 1.0),
+            start: (2.0, -1.0),
+            end: (2.0, 1.0),
         }
     }
 
@@ -175,8 +175,8 @@ mod tests {
     fn diagonal_hit_at_sqrt2() {
         // Wall from (1,0) to (1,2); aim 45°: hit at (1,1), distance √2.
         let wall = Segment {
-            a: (1.0, 0.0),
-            b: (1.0, 2.0),
+            start: (1.0, 0.0),
+            end: (1.0, 2.0),
         };
         let d = ray_segment_hit(0.0, 0.0, PI / 4.0, &wall);
         assert!((d.unwrap() - 2.0_f64.sqrt()).abs() < 1e-12);

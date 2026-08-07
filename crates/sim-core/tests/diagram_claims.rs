@@ -93,14 +93,14 @@ fn a_target_on_the_left_produces_a_positive_error() {
         "bearing to +y should be π/2, got {b}"
     );
 
-    let e = shortest_turn(pose.theta, b);
+    let e = shortest_turn(pose.heading, b);
     assert!(e > 0.0, "a target on the left must give e > 0, got {e}");
 }
 
 #[test]
 fn a_target_on_the_right_produces_a_negative_error() {
     let pose = Pose::new(0.0, 0.0, 0.0);
-    let e = shortest_turn(pose.theta, (-1.0f64).atan2(0.0));
+    let e = shortest_turn(pose.heading, (-1.0f64).atan2(0.0));
     assert!(e < 0.0, "a target on the right must give e < 0, got {e}");
 }
 
@@ -110,15 +110,15 @@ fn a_target_on_the_right_produces_a_negative_error() {
 fn the_plotted_throttle_curve_is_accurate() {
     // The graph claims: 0° → 1.0, 45° → 0.5, 90° → 0.0, 135° → 0.0.
     let mut c = GotoController::new(ControlGains::WAYPOINT);
-    let v_max = ControlGains::WAYPOINT.v_max;
-    let generous_budget = 1000.0; // capped to v_max inside, so v/v_max is the factor
+    let max_forward_speed = ControlGains::WAYPOINT.max_forward_speed;
+    let generous_budget = 1000.0; // capped to max_forward_speed inside, so v/max_forward_speed is the factor
 
     for (degrees, expected) in [(0.0, 1.0), (45.0, 0.5), (90.0, 0.0), (135.0, 0.0)] {
         c.reset();
         let v = c
             .steer(f64::to_radians(degrees), generous_budget, 0.02)
             .forward_speed;
-        let factor = v / v_max;
+        let factor = v / max_forward_speed;
         assert!(
             (factor - expected).abs() < 1e-9,
             "{degrees}° gives factor {factor}, the graph says {expected}"
@@ -141,14 +141,14 @@ fn the_flat_section_of_the_curve_never_reverses() {
 
 #[test]
 fn speed_budget_is_capped_at_v_max_inside_steer() {
-    // Box ⑤: "Capped at v_max inside, so no caller can ask for more than
+    // Box ⑤: "Capped at max_forward_speed inside, so no caller can ask for more than
     // the robot has."
     let mut c = GotoController::new(ControlGains::WAYPOINT);
     let v = c.steer(0.0, 99.0, 0.02).forward_speed;
     assert!(
-        (v - ControlGains::WAYPOINT.v_max).abs() < 1e-12,
+        (v - ControlGains::WAYPOINT.max_forward_speed).abs() < 1e-12,
         "expected the cap at {}, got {v}",
-        ControlGains::WAYPOINT.v_max
+        ControlGains::WAYPOINT.max_forward_speed
     );
 }
 
@@ -185,8 +185,8 @@ fn a_wheel_turning_once_rolls_its_circumference() {
 #[test]
 fn the_odometry_chain_in_the_doc_is_the_one_in_the_code() {
     // Doc: Δφ = 2π·Δticks/N ,  d = r·Δφ
-    let one_turn_of_ticks = SPEC.ticks_per_rev;
-    let dphi = core::f64::consts::TAU * one_turn_of_ticks / SPEC.ticks_per_rev;
+    let one_turn_of_ticks = SPEC.ticks_per_revolution;
+    let dphi = core::f64::consts::TAU * one_turn_of_ticks / SPEC.ticks_per_revolution;
     assert!(
         (dphi - core::f64::consts::TAU).abs() < 1e-12,
         "one turn is 2π rad"
@@ -197,7 +197,8 @@ fn the_odometry_chain_in_the_doc_is_the_one_in_the_code() {
 
     // and metres_per_tick is that distance spread over N counts
     assert!(
-        (SPEC.metres_per_tick() * SPEC.ticks_per_rev - SPEC.wheel_circumference_m()).abs() < 1e-12
+        (SPEC.metres_per_tick() * SPEC.ticks_per_revolution - SPEC.wheel_circumference_m()).abs()
+            < 1e-12
     );
 }
 
@@ -207,7 +208,7 @@ fn the_constants_printed_on_the_diagrams_are_the_real_ones() {
     assert!((SPEC.wheel_radius - 0.03).abs() < 1e-12, "r on the drawing");
     assert!((SPEC.track_width - 0.15).abs() < 1e-12, "L on the drawing");
     assert!(
-        (SPEC.ticks_per_rev - 1024.0).abs() < 1e-12,
+        (SPEC.ticks_per_revolution - 1024.0).abs() < 1e-12,
         "N on the drawing"
     );
 }

@@ -16,7 +16,7 @@ use sim_core::{
 #[derive(Debug, Clone)]
 pub struct MissionConfig {
     /// Control-loop period, seconds. 50 Hz.
-    pub dt: f64,
+    pub tick_seconds: f64,
     /// Give up after this much simulated time.
     pub duration: f64,
     pub seed: u64,
@@ -62,7 +62,7 @@ impl Default for MissionConfig {
     /// that maps and plans routes around the outside.
     fn default() -> Self {
         MissionConfig {
-            dt: 0.02,
+            tick_seconds: 0.02,
             duration: 60.0,
             seed: 7,
             spec: RobotSpec::SIM_BOT,
@@ -89,24 +89,24 @@ impl Default for MissionConfig {
             waypoints: vec![(6.5, 3.0)],     // dead centre behind the back wall
             obstacles: vec![
                 Segment {
-                    a: (5.0, 2.2),
-                    b: (5.0, 3.8), // back wall
+                    start: (5.0, 2.2),
+                    end: (5.0, 3.8), // back wall
                 },
                 Segment {
-                    a: (2.6, 3.8),
-                    b: (5.0, 3.8), // top arm (deep!)
+                    start: (2.6, 3.8),
+                    end: (5.0, 3.8), // top arm (deep!)
                 },
                 Segment {
-                    a: (2.6, 2.2),
-                    b: (5.0, 2.2), // bottom arm (deep!)
+                    start: (2.6, 2.2),
+                    end: (5.0, 2.2), // bottom arm (deep!)
                 },
                 Segment {
-                    a: (2.6, 3.8),
-                    b: (2.6, 5.2), // spur up from the top arm tip
+                    start: (2.6, 3.8),
+                    end: (2.6, 5.2), // spur up from the top arm tip
                 },
                 Segment {
-                    a: (2.6, 0.8),
-                    b: (2.6, 2.2), // spur down from the bottom arm tip
+                    start: (2.6, 0.8),
+                    end: (2.6, 2.2), // spur down from the bottom arm tip
                 },
             ],
         }
@@ -119,7 +119,7 @@ impl Default for MissionConfig {
 /// it says so structurally rather than by copying. It used to restate
 /// eight of `Observation`'s fields — `index`, `t`, `scan`, `mode`,
 /// `mode_changes`, `target`, `goal`, `path` — plus `min_dist`, which
-/// duplicated `summary.min`. `advance` then moved each one across by
+/// duplicated `summary.nearest`. `advance` then moved each one across by
 /// hand. Nine chances for the two to disagree, and nine lines of moving
 /// that carried no information.
 #[derive(Debug, Clone)]
@@ -148,7 +148,8 @@ pub struct Tick {
 #[derive(Debug, Clone)]
 pub struct Observation {
     pub index: usize,
-    pub t: f64,
+    /// Simulated seconds since the mission started.
+    pub elapsed_seconds: f64,
     /// The pose the controller should steer on — truth, or belief if
     /// `control_on_belief` is set.
     pub pose: Pose,
@@ -269,10 +270,10 @@ impl Mission {
             },
             odometry: Odometry {
                 model: nominal,
-                ticks_per_rev: config.spec.ticks_per_rev,
+                ticks_per_revolution: config.spec.ticks_per_revolution,
                 pose: config.start,
             },
-            encoders: Encoders::new(config.spec.ticks_per_rev),
+            encoders: Encoders::new(config.spec.ticks_per_revolution),
             rng: Rng::new(config.seed),
             // Saturation comes from the spec, not a separate field.
             // `motor_max` used to duplicate it — and was hardcoded to
@@ -281,15 +282,15 @@ impl Mission {
             // `fit_wheels` scaled against another. The scaler would then
             // hand over a "safe" pair the motor still clipped, distorting
             // the very arc the scaling exists to preserve.
-            motor_l: Motor::new(config.motor_tau, config.spec.max_wheel_rad_s),
-            motor_r: Motor::new(config.motor_tau, config.spec.max_wheel_rad_s),
+            motor_l: Motor::new(config.motor_tau, config.spec.max_wheel_speed),
+            motor_r: Motor::new(config.motor_tau, config.spec.max_wheel_speed),
             controller: GotoController::new(config.gains),
             nominal,
             path: None,
             mode: Mode::Goto,
             wp_index: 0,
             index: 0,
-            max_steps: (config.duration / config.dt) as usize,
+            max_steps: (config.duration / config.tick_seconds) as usize,
             bumps: 0,
             completed_at: None,
             pending_reset: false,
@@ -305,7 +306,7 @@ impl Mission {
     /// this work and then loop, exactly as the original `continue` did, so
     /// a caller never sees a half-finished tick.
     pub fn observe(&mut self) -> Option<Observation> {
-        let dt = self.config.dt;
+        let dt = self.config.tick_seconds;
         let mut mode_changes = Vec::new();
 
         loop {
@@ -314,10 +315,10 @@ impl Mission {
             }
             let index = self.index;
             self.index += 1;
-            let t = index as f64 * dt;
+            let elapsed_seconds = index as f64 * dt;
 
             if self.wp_index >= self.config.waypoints.len() {
-                self.completed_at = Some(t);
+                self.completed_at = Some(elapsed_seconds);
                 return None; // mission complete
             }
             let goal = self.config.waypoints[self.wp_index];
@@ -325,7 +326,7 @@ impl Mission {
             // ---- SENSE: the camera sees the PHYSICAL world (true pose).
             let scan = self.camera.scan(&self.robot.pose, &self.world);
             let summary = summarize_scan(&scan);
-            let min_dist = summary.min;
+            let min_dist = summary.nearest;
 
             // ---- The reflex state machine, with hysteresis.
             let prev_mode = self.mode;
@@ -344,7 +345,7 @@ impl Mission {
 
             // ---- MAP: burn every camera ray into memory.
             for (idx, &d) in scan.iter().enumerate() {
-                let a = pose.theta + self.camera.ray_angle(idx);
+                let a = pose.heading + self.camera.ray_angle(idx);
                 self.map
                     .mark_ray(pose.x, pose.y, a, d, self.config.cam_range);
             }
@@ -374,7 +375,7 @@ impl Mission {
 
             return Some(Observation {
                 index,
-                t,
+                elapsed_seconds,
                 pose,
                 goal,
                 target,
@@ -405,7 +406,7 @@ impl Mission {
             // path node happens to be close.
             Mode::Goto => Directive::Steer {
                 target: obs.target,
-                budget: self.config.gains.kp_dist * obs.dist_to_goal,
+                budget: self.config.gains.distance_proportional * obs.dist_to_goal,
                 fresh,
             },
             // A reflex from a depth scan the controller does not have.
@@ -425,7 +426,7 @@ impl Mission {
     pub fn decide(&mut self, obs: &Observation) -> BodyTwist {
         let directive = self.plan(obs);
         self.controller
-            .execute(directive, &obs.pose, self.config.dt)
+            .execute(directive, &obs.pose, self.config.tick_seconds)
     }
 
     /// ACT and OBSERVE — the physics, given *commanded wheel speeds*.
@@ -435,7 +436,7 @@ impl Mission {
     /// `DiffDrive::inverse`, `hil-host` via duty × scale from the chip.
     /// One physics implementation, two sources of command.
     pub fn advance(&mut self, obs: Observation, commanded: WheelSpeeds) -> Tick {
-        let dt = self.config.dt;
+        let dt = self.config.tick_seconds;
 
         // Each motor lags its command independently — that asymmetry is
         // part of why the robot drifts.
@@ -633,7 +634,7 @@ mod tests {
     /// the error jumps whenever the planner hops to the next lookahead
     /// node — even though the robot has not moved.
     ///
-    /// Fixed 2026-08-07 by `Pid::d_limit` (bounding the derivative's
+    /// Fixed 2026-08-07 by `Pid::derivative_limit` (bounding the derivative's
     /// contribution) plus `RobotSpec::fit_wheels` (scaling a saturated
     /// pair instead of clipping each wheel). Peak is **~33 rad/s** now,
     /// and what remains is the P term: a large heading error genuinely
@@ -645,7 +646,7 @@ mod tests {
     #[test]
     fn duty_quantisation_is_lossless_but_the_controller_saturates() {
         let spec = MissionConfig::default().spec;
-        let step = spec.max_wheel_rad_s / 1000.0; // one duty count, rad/s
+        let step = spec.max_wheel_speed / 1000.0; // one duty count, rad/s
         let mut m = Mission::new(MissionConfig::default());
         let mut worst_quantisation: f64 = 0.0;
         let mut worst_overshoot: f64 = 0.0;
@@ -655,7 +656,7 @@ mod tests {
             let twist = m.decide(&obs);
             let commanded = spec.drive().inverse(twist);
             for cmd in [commanded.left, commanded.right] {
-                let over = cmd.abs() - spec.max_wheel_rad_s;
+                let over = cmd.abs() - spec.max_wheel_speed;
                 if over > 0.0 {
                     // Saturated: the duty cannot represent this at all.
                     worst_overshoot = worst_overshoot.max(over);
@@ -673,7 +674,7 @@ mod tests {
             "unsaturated duty lost {worst_quantisation} rad/s, more than \
              one count ({step})"
         );
-        // Peak overshoot was ~169 rad/s before `heading_d_limit` existed.
+        // Peak overshoot was ~169 rad/s before `heading_derivative_limit` existed.
         // It is ~33 now, and what remains is the P term: a large heading
         // error genuinely warrants a hard turn, and the robot genuinely
         // cannot make it that fast. That saturation is honest, and
@@ -686,7 +687,7 @@ mod tests {
         assert!(
             worst_overshoot < 60.0,
             "peak wheel overshoot {worst_overshoot:.1} rad/s. It was ~33 \
-             with heading_d_limit in place and ~169 without; this looks \
+             with heading_derivative_limit in place and ~169 without; this looks \
              like the derivative clamp is gone or mis-sized."
         );
     }
@@ -768,7 +769,7 @@ mod tests {
 
         assert_eq!(tick.obs.index, 0);
         assert_eq!(tick.obs.scan.len(), mission.config.cam_rays);
-        assert!(tick.obs.summary.min.is_finite());
+        assert!(tick.obs.summary.nearest.is_finite());
         assert!(!tick.bumped, "should not start inside a wall");
         assert_eq!(tick.obs.goal, (6.5, 3.0));
         assert!(tick.drift >= 0.0);
@@ -779,7 +780,7 @@ mod tests {
         // The start pose points straight into the U's mouth: the naive
         // path is the wrong one, which is the entire scenario.
         let config = MissionConfig::default();
-        assert!((config.start.theta - 0.0).abs() < 1e-12, "should face +x");
+        assert!((config.start.heading - 0.0).abs() < 1e-12, "should face +x");
         assert!(config.start.x < 2.6, "should start outside the trap mouth");
 
         let outcome = Mission::new(config).run();

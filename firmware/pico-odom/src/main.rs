@@ -9,7 +9,7 @@
 //!   pin transitions      ->  believed pose, computed on emulated ARM
 //!
 //! Two encoders (left GP16/17, right GP18/19) feed the same tick-to-pose
-//! math the simulator uses, and the firmware reports x/y/theta over UART.
+//! math the simulator uses, and the firmware reports x/y/heading over UART.
 
 #![no_std]
 #![no_main]
@@ -66,7 +66,7 @@ async fn odometry_task(
             wheel_radius: WHEEL_RADIUS,
             track_width: TRACK_WIDTH,
         },
-        ticks_per_rev: TICKS_PER_REV,
+        ticks_per_revolution: TICKS_PER_REV,
         pose: Pose::ORIGIN,
     };
 
@@ -95,7 +95,7 @@ async fn odometry_task(
                 "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}\r\n",
                 p.x,
                 p.y,
-                p.theta,
+                p.heading,
                 left.count,
                 right.count,
                 left.errors + right.errors

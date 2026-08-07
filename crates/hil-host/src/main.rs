@@ -143,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if rig.ticks.is_multiple_of(50) {
             eprintln!(
                 "[{:5.1}s] true ({:.2}, {:.2})  chip ({:.2}, {:.2})  drift {:.3} m",
-                tick.obs.t,
+                tick.obs.elapsed_seconds,
                 tick.true_pose.x,
                 tick.true_pose.y,
                 rig.belief_from_chip.x,

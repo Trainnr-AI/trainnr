@@ -3,7 +3,7 @@
 //! Conventions (used everywhere in this repo, worth memorizing):
 //! - Units: meters, seconds, radians.
 //! - World frame: x right, y up, angles counter-clockwise from the +x axis.
-//! - `theta` is always kept wrapped to (-π, π].
+//! - `heading` is always kept wrapped to (-π, π].
 
 // Float math (`cos`, `sqrt`, `exp`, ...) lives in `std`. On bare metal it
 // comes from libm through this trait, with identical method syntax.
@@ -19,21 +19,21 @@ use crate::robot::BodyTwist;
 pub struct Pose {
     pub x: f64,
     pub y: f64,
-    pub theta: f64,
+    pub heading: f64,
 }
 
 impl Pose {
     pub const ORIGIN: Pose = Pose {
         x: 0.0,
         y: 0.0,
-        theta: 0.0,
+        heading: 0.0,
     };
 
-    pub fn new(x: f64, y: f64, theta: f64) -> Self {
+    pub fn new(x: f64, y: f64, heading: f64) -> Self {
         Pose {
             x,
             y,
-            theta: wrap_angle(theta),
+            heading: wrap_angle(heading),
         }
     }
 
@@ -57,17 +57,17 @@ impl Pose {
 
         if w.abs() < STRAIGHT_EPS {
             Pose {
-                x: self.x + v * dt * self.theta.cos(),
-                y: self.y + v * dt * self.theta.sin(),
-                theta: self.theta,
+                x: self.x + v * dt * self.heading.cos(),
+                y: self.y + v * dt * self.heading.sin(),
+                heading: self.heading,
             }
         } else {
             let r = v / w; // signed arc radius
-            let theta_next = self.theta + w * dt;
+            let theta_next = self.heading + w * dt;
             Pose {
-                x: self.x + r * (theta_next.sin() - self.theta.sin()),
-                y: self.y - r * (theta_next.cos() - self.theta.cos()),
-                theta: wrap_angle(theta_next),
+                x: self.x + r * (theta_next.sin() - self.heading.sin()),
+                y: self.y - r * (theta_next.cos() - self.heading.cos()),
+                heading: wrap_angle(theta_next),
             }
         }
     }
@@ -105,7 +105,7 @@ mod tests {
         let p = Pose::new(0.0, 0.0, 0.0).integrate(BodyTwist::new(1.0, 0.0), 2.0);
         assert!((p.x - 2.0).abs() < TOL);
         assert!(p.y.abs() < TOL);
-        assert!(p.theta.abs() < TOL);
+        assert!(p.heading.abs() < TOL);
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         let start = Pose::new(0.5, -0.25, 0.7);
         let p = start.integrate(BodyTwist::new(1.0, 1.0), 2.0 * PI);
         assert!(p.distance_to(&start) < 1e-6);
-        assert!((wrap_angle(p.theta - start.theta)).abs() < 1e-6);
+        assert!((wrap_angle(p.heading - start.heading)).abs() < 1e-6);
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
         let p = Pose::new(1.0, 2.0, 0.0).integrate(BodyTwist::new(0.0, 3.0), 0.5);
         assert!((p.x - 1.0).abs() < TOL);
         assert!((p.y - 2.0).abs() < TOL);
-        assert!((p.theta - 1.5).abs() < TOL);
+        assert!((p.heading - 1.5).abs() < TOL);
     }
 
     #[test]

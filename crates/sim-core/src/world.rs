@@ -12,8 +12,10 @@ use num_traits::Float as _;
 /// A wall piece from point `a` to point `b` (world frame, meters).
 #[derive(Debug, Clone, Copy)]
 pub struct Segment {
-    pub a: (f64, f64),
-    pub b: (f64, f64),
+    /// One end of the wall, world metres.
+    pub start: (f64, f64),
+    /// The other end.
+    pub end: (f64, f64),
 }
 
 impl Segment {
@@ -21,8 +23,8 @@ impl Segment {
     /// Project the point onto the segment's line, clamp to the ends, then
     /// measure. Used for collision: "is the robot's body touching a wall?"
     pub fn distance_to_point(&self, px: f64, py: f64) -> f64 {
-        let (ax, ay) = self.a;
-        let (bx, by) = self.b;
+        let (ax, ay) = self.start;
+        let (bx, by) = self.end;
         let ex = bx - ax;
         let ey = by - ay;
         let len2 = ex * ex + ey * ey;
@@ -57,8 +59,8 @@ impl World {
         let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
         for i in 0..4 {
             self.walls.push(Segment {
-                a: corners[i],
-                b: corners[(i + 1) % 4],
+                start: corners[i],
+                end: corners[(i + 1) % 4],
             });
         }
     }
@@ -92,8 +94,8 @@ mod tests {
     #[test]
     fn distance_to_segment_cases() {
         let s = Segment {
-            a: (0.0, 0.0),
-            b: (2.0, 0.0),
+            start: (0.0, 0.0),
+            end: (2.0, 0.0),
         };
         // Straight above the middle: perpendicular distance.
         assert!((s.distance_to_point(1.0, 0.5) - 0.5).abs() < 1e-12);

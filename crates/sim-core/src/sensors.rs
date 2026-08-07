@@ -18,7 +18,7 @@ use crate::robot::WheelSpeeds;
 /// A pair of quantizing encoders (left + right wheel).
 pub struct Encoders {
     /// Ticks per full wheel revolution (real hobby encoders: 300–4096).
-    pub ticks_per_rev: f64,
+    pub ticks_per_revolution: f64,
     // True accumulated wheel angles (radians) — the encoders' internal
     // ground truth that the outside world never sees directly.
     angle_l: f64,
@@ -29,9 +29,9 @@ pub struct Encoders {
 }
 
 impl Encoders {
-    pub fn new(ticks_per_rev: f64) -> Self {
+    pub fn new(ticks_per_revolution: f64) -> Self {
         Encoders {
-            ticks_per_rev,
+            ticks_per_revolution,
             angle_l: 0.0,
             angle_r: 0.0,
             reported_l: 0,
@@ -50,8 +50,8 @@ impl Encoders {
         self.angle_l += wheels.left * dt;
         self.angle_r += wheels.right * dt;
 
-        let total_l = (self.angle_l / (2.0 * PI) * self.ticks_per_rev).floor() as i64;
-        let total_r = (self.angle_r / (2.0 * PI) * self.ticks_per_rev).floor() as i64;
+        let total_l = (self.angle_l / (2.0 * PI) * self.ticks_per_revolution).floor() as i64;
+        let total_r = (self.angle_r / (2.0 * PI) * self.ticks_per_revolution).floor() as i64;
 
         let delta = (total_l - self.reported_l, total_r - self.reported_r);
         self.reported_l = total_l;

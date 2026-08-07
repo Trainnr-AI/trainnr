@@ -70,7 +70,7 @@ impl AvoidHysteresis {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScanSummary {
     /// Nearest reading anywhere in the fan.
-    pub min: f64,
+    pub nearest: f64,
     /// Nearest reading in the left half (later indices — see below).
     pub left_min: f64,
     /// Nearest reading in the right half (earlier indices).
@@ -93,7 +93,7 @@ pub struct ScanSummary {
 pub fn summarize_scan(scan: &[f64]) -> ScanSummary {
     if scan.is_empty() {
         return ScanSummary {
-            min: f64::INFINITY,
+            nearest: f64::INFINITY,
             left_min: f64::INFINITY,
             right_min: f64::INFINITY,
         };
@@ -101,7 +101,7 @@ pub fn summarize_scan(scan: &[f64]) -> ScanSummary {
     let centre = scan.len() / 2;
     let fold = |s: &[f64]| s.iter().copied().fold(f64::INFINITY, f64::min);
     ScanSummary {
-        min: fold(scan),
+        nearest: fold(scan),
         right_min: fold(&scan[..centre]),
         left_min: fold(&scan[centre + 1..]),
     }
@@ -224,17 +224,17 @@ mod tests {
     #[test]
     fn an_empty_scan_reports_no_obstacles() {
         let s = summarize_scan(&[]);
-        assert!(s.min.is_infinite());
+        assert!(s.nearest.is_infinite());
         assert!(s.left_min.is_infinite());
         assert!(s.right_min.is_infinite());
         // And must NOT trigger avoidance.
-        assert_eq!(H.next(Mode::Goto, s.min), Mode::Goto);
+        assert_eq!(H.next(Mode::Goto, s.nearest), Mode::Goto);
     }
 
     #[test]
     fn the_minimum_is_the_nearest_reading_anywhere() {
         let s = summarize_scan(&[3.0, 1.2, 2.5, 0.7, 4.0]);
-        assert!((s.min - 0.7).abs() < 1e-12);
+        assert!((s.nearest - 0.7).abs() < 1e-12);
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
         assert!((s.right_min - 8.0).abs() < 1e-12, "right = {}", s.right_min);
         assert!((s.left_min - 2.0).abs() < 1e-12, "left = {}", s.left_min);
         // The centre ray is the nearest overall but belongs to neither half.
-        assert!((s.min - 0.1).abs() < 1e-12);
+        assert!((s.nearest - 0.1).abs() < 1e-12);
     }
 
     #[test]
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn a_single_ray_scan_has_no_halves() {
         let s = summarize_scan(&[1.5]);
-        assert!((s.min - 1.5).abs() < 1e-12);
+        assert!((s.nearest - 1.5).abs() < 1e-12);
         assert!(s.left_min.is_infinite());
         assert!(s.right_min.is_infinite());
     }
@@ -279,7 +279,7 @@ mod tests {
         Pose {
             x: 0.0,
             y: 0.0,
-            theta: 0.0,
+            heading: 0.0,
         }
     }
 
@@ -313,7 +313,7 @@ mod tests {
         let pose = Pose {
             x: 5.0,
             y: 5.0,
-            theta: 0.0,
+            heading: 0.0,
         };
         let path = [(5.1, 5.0), (6.0, 5.0)];
         assert_eq!(lookahead_point(&path, &pose, 0.5, (9.0, 9.0)), (6.0, 5.0));
