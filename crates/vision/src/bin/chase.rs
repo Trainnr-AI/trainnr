@@ -114,7 +114,11 @@ fn main() -> Result<()> {
     // attached, quietly untrue.
     if let Some(path) = &args.replay {
         let frames = vision::session::read(path).map_err(|e| anyhow::anyhow!(e))?;
-        println!("replaying {} frames from {}\n", frames.len(), path.display());
+        println!(
+            "replaying {} frames from {}\n",
+            frames.len(),
+            path.display()
+        );
         let mut chase = Chase::new();
         rec.log("camera/image/named", &rerun::Clear::flat())?;
         rec.log("camera/image/candidates", &rerun::Clear::flat())?;
@@ -138,7 +142,9 @@ fn main() -> Result<()> {
 
         let mut divergences: Vec<String> = Vec::new();
         for (i, p) in frames.iter().enumerate() {
-            let img = footage.then(|| vision::session::load_frame(path, i)).flatten();
+            let img = footage
+                .then(|| vision::session::load_frame(path, i))
+                .flatten();
             let got = chase.step(p, img.as_ref(), &rec)?;
             if let Err(d) = vision::session::check_command(i, p, got) {
                 divergences.push(d);

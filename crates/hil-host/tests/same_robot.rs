@@ -80,11 +80,24 @@ fn the_rig_and_the_firmware_drive_the_same_robot() {
 /// than no guard.
 #[test]
 fn the_duty_scale_comes_from_the_simulated_robot() {
-    let host = read("crates/hil-host/src/main.rs");
+    // Scans the whole crate rather than one named file. The first version
+    // read `main.rs`, and broke the moment the loop moved into `rig.rs` —
+    // the second time this guard has failed on a refactor rather than on a
+    // regression. What matters is that the scale exists somewhere in the
+    // crate and is built from the right two things.
+    let host: String = std::fs::read_dir(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
+    )
+    .expect("hil-host has a src directory")
+    .filter_map(|e| e.ok())
+    .filter(|e| e.path().extension().is_some_and(|x| x == "rs"))
+    .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+    .collect();
+
     let scale = host
         .lines()
         .find(|l| l.contains("duty_scale ="))
-        .expect("hil-host must compute a duty_scale");
+        .expect("hil-host must compute a duty_scale somewhere in src/");
 
     assert!(
         scale.contains("mission.config.spec"),

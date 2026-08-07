@@ -26,10 +26,16 @@ fn faster_wheel_is_on_the_outside_of_the_turn() {
     let d = SPEC.drive();
 
     let (_, w) = d.forward(10.0, 5.0); // left faster
-    assert!(w < 0.0, "left faster should turn RIGHT (w < 0), got w = {w}");
+    assert!(
+        w < 0.0,
+        "left faster should turn RIGHT (w < 0), got w = {w}"
+    );
 
     let (_, w) = d.forward(5.0, 10.0); // right faster
-    assert!(w > 0.0, "right faster should turn LEFT (w > 0), got w = {w}");
+    assert!(
+        w > 0.0,
+        "right faster should turn LEFT (w > 0), got w = {w}"
+    );
 }
 
 #[test]
@@ -42,7 +48,10 @@ fn equal_wheels_go_straight_and_opposite_wheels_spin_in_place() {
     assert!(w.abs() < 1e-12, "equal wheels should not turn, got w = {w}");
 
     let (v, w) = d.forward(-10.0, 10.0);
-    assert!(v.abs() < 1e-12, "opposite wheels should not advance, got v = {v}");
+    assert!(
+        v.abs() < 1e-12,
+        "opposite wheels should not advance, got v = {v}"
+    );
     assert!(w != 0.0, "opposite wheels should turn, got w = {w}");
 }
 
@@ -145,7 +154,10 @@ fn speed_budget_is_capped_at_v_max_inside_steer() {
 fn the_radian_conversion_numbers_are_right() {
     // "radians × 57.3 ≈ degrees"; the table's entries.
     assert!((1.0f64.to_degrees() - 57.2957).abs() < 1e-3);
-    assert!((0.02f64.to_degrees() - 1.1459).abs() < 1e-3, "the deadband row");
+    assert!(
+        (0.02f64.to_degrees() - 1.1459).abs() < 1e-3,
+        "the deadband row"
+    );
     assert!((core::f64::consts::FRAC_PI_2.to_degrees() - 90.0).abs() < 1e-9);
     assert!((core::f64::consts::PI.to_degrees() - 180.0).abs() < 1e-9);
     assert!((core::f64::consts::TAU - 6.2832).abs() < 1e-4);
@@ -166,7 +178,10 @@ fn the_odometry_chain_in_the_doc_is_the_one_in_the_code() {
     // Doc: Δφ = 2π·Δticks/N ,  d = r·Δφ
     let one_turn_of_ticks = SPEC.ticks_per_rev;
     let dphi = core::f64::consts::TAU * one_turn_of_ticks / SPEC.ticks_per_rev;
-    assert!((dphi - core::f64::consts::TAU).abs() < 1e-12, "one turn is 2π rad");
+    assert!(
+        (dphi - core::f64::consts::TAU).abs() < 1e-12,
+        "one turn is 2π rad"
+    );
 
     let d = SPEC.wheel_radius * dphi;
     assert!((d - SPEC.wheel_circumference_m()).abs() < 1e-12);
@@ -182,5 +197,8 @@ fn the_constants_printed_on_the_diagrams_are_the_real_ones() {
     // The anatomy drawing and box ⑥ print r = 0.03, L = 0.15, N = 1024.
     assert!((SPEC.wheel_radius - 0.03).abs() < 1e-12, "r on the drawing");
     assert!((SPEC.track_width - 0.15).abs() < 1e-12, "L on the drawing");
-    assert!((SPEC.ticks_per_rev - 1024.0).abs() < 1e-12, "N on the drawing");
+    assert!(
+        (SPEC.ticks_per_rev - 1024.0).abs() < 1e-12,
+        "N on the drawing"
+    );
 }

@@ -5,8 +5,8 @@
 
 use sim_core::{
     lookahead_point, plan, summarize_scan, AvoidHysteresis, ControlGains, DepthCamera, DiffDrive,
-    Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose, Rng, Robot, RobotSpec,
-    Directive, Segment, World,
+    Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose, Rng, Robot,
+    RobotSpec, Segment, World,
 };
 
 /// Everything the mission needs to be reproducible.
@@ -424,7 +424,8 @@ impl Mission {
     /// the whole mission both ways and requires identical outcomes.
     pub fn decide(&mut self, obs: &Observation) -> (f64, f64) {
         let directive = self.plan(obs);
-        self.controller.execute(directive, &obs.pose, self.config.dt)
+        self.controller
+            .execute(directive, &obs.pose, self.config.dt)
     }
 
     /// ACT and OBSERVE — the physics, given *commanded wheel speeds*.
@@ -448,9 +449,11 @@ impl Mission {
         // The wheels DID spin, so odometry keeps integrating: grinding
         // against a wall drifts fast, exactly like a real robot pushing
         // on one.
-        let bumped =
-            self.world
-                .collides(self.robot.pose.x, self.robot.pose.y, self.config.robot_radius);
+        let bumped = self.world.collides(
+            self.robot.pose.x,
+            self.robot.pose.y,
+            self.config.robot_radius,
+        );
         if bumped {
             self.robot.pose.x = before.x;
             self.robot.pose.y = before.y;
@@ -597,7 +600,10 @@ mod tests {
             // (on the wire) duty. Miss the fit and the paths diverge —
             // which is exactly what this test caught when `step()` gained
             // the scaling and this did not.
-            let (cmd_l, cmd_r) = m.config.spec.fit_wheels_of(m.config.spec.drive().inverse(v, w));
+            let (cmd_l, cmd_r) = m
+                .config
+                .spec
+                .fit_wheels_of(m.config.spec.drive().inverse(v, w));
             m.advance(obs, cmd_l, cmd_r);
         }
         let manual = m.outcome();

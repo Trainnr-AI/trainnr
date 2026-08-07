@@ -108,7 +108,11 @@ pub enum Wire {
 }
 
 impl Wire {
-    pub fn live(to: Box<dyn Write>, from: Box<dyn BufRead>, record: Option<&Path>) -> std::io::Result<Wire> {
+    pub fn live(
+        to: Box<dyn Write>,
+        from: Box<dyn BufRead>,
+        record: Option<&Path>,
+    ) -> std::io::Result<Wire> {
         Ok(Wire::Live {
             to,
             from,
@@ -118,11 +122,25 @@ impl Wire {
 
     pub fn replay(path: &Path) -> Result<Wire, Box<dyn std::error::Error>> {
         let body = std::fs::read_to_string(path)?;
-        let entries = parse_log(&body)?;
+        let wire = Wire::from_log(&body).map_err(|e| format!("{}: {e}", path.display()))?;
+        eprintln!(
+            "[host] replaying {} lines from {}",
+            wire.unconsumed(),
+            path.display()
+        );
+        Ok(wire)
+    }
+
+    /// A replay wire from a transcript already in memory.
+    ///
+    /// This is the seam that made the host loop testable at all: taking a
+    /// `&str` means the whole exchange runs in `cargo test` with no chip,
+    /// no emulator and no serial port. See [`crate::rig`].
+    pub fn from_log(body: &str) -> Result<Wire, String> {
+        let entries = parse_log(body)?;
         if entries.is_empty() {
-            return Err(format!("{} has no protocol lines", path.display()).into());
+            return Err("no protocol lines".into());
         }
-        eprintln!("[host] replaying {} lines from {}", entries.len(), path.display());
         Ok(Wire::Replay {
             entries: entries.into_iter(),
             divergences: Vec::new(),
@@ -250,7 +268,10 @@ mod tests {
             fresh: false,
         })
         .unwrap();
-        assert_eq!(w.recv_line().unwrap().as_deref(), Some("P 1.0000 3.0000 0.0000"));
+        assert_eq!(
+            w.recv_line().unwrap().as_deref(),
+            Some("P 1.0000 3.0000 0.0000")
+        );
         assert_eq!(w.recv_line().unwrap().as_deref(), Some("M 383 525"));
         w.send(Message::Sensors { dl: 5, dr: 5 }).unwrap();
 

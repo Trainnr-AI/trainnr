@@ -472,11 +472,17 @@ mod tests {
     #[test]
     fn a_changed_command_is_caught() {
         let p = blank(); // commands (0.1, -0.2)
-        assert!(check_command(0, &p, (0.1, -0.2)).is_ok(), "identical must pass");
+        assert!(
+            check_command(0, &p, (0.1, -0.2)).is_ok(),
+            "identical must pass"
+        );
 
         let err = check_command(7, &p, (0.15, -0.2)).unwrap_err();
         assert!(err.contains("frame 7"), "{err}");
-        assert!(err.contains("0.150000") && err.contains("0.100000"), "{err}");
+        assert!(
+            err.contains("0.150000") && err.contains("0.100000"),
+            "{err}"
+        );
 
         assert!(check_command(0, &p, (0.1, -0.25)).is_err(), "w matters too");
     }
@@ -495,7 +501,10 @@ mod tests {
     /// claim it verified anything.
     #[test]
     fn a_log_without_commands_cannot_be_verified_and_says_so() {
-        let p = Perceived { command: None, ..blank() };
+        let p = Perceived {
+            command: None,
+            ..blank()
+        };
         assert!(
             check_command(0, &p, (99.0, -99.0)).is_ok(),
             "nothing recorded means nothing to contradict"

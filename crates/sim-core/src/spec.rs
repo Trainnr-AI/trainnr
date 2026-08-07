@@ -608,7 +608,10 @@ mod tests {
     #[test]
     fn the_d_limit_literal_equals_the_formula_it_claims_to_be() {
         let computed = RobotSpec::SIM_BOT.max_turn_rate();
-        assert!((computed - 12.0).abs() < 1e-12, "max_turn_rate = {computed}");
+        assert!(
+            (computed - 12.0).abs() < 1e-12,
+            "max_turn_rate = {computed}"
+        );
         assert!((ControlGains::WAYPOINT.heading_d_limit - computed).abs() < 1e-12);
         assert!((ControlGains::VISUAL_SERVO.heading_d_limit - computed).abs() < 1e-12);
     }

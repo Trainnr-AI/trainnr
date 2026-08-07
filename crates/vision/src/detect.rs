@@ -231,7 +231,6 @@ impl ObjectDetector {
         Self::load(DetectorModel::DFineN, min_confidence, Backend::Cpu)
     }
 
-
     pub fn load(model: DetectorModel, min_confidence: f32, backend: Backend) -> Result<Self> {
         let config = model.config();
         let config = match backend {

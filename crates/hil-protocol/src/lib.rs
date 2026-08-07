@@ -301,7 +301,6 @@ fn next_i64<'a, I: Iterator<Item = &'a str>>(it: &mut I) -> Result<i64, ParseErr
         .map_err(|_| ParseError::BadNumber)
 }
 
-
 /// Accumulates bytes from a serial link into complete lines.
 ///
 /// Firmware reads a UART one byte at a time and needs somewhere to put
@@ -365,7 +364,6 @@ impl<const N: usize> LineReader<N> {
             }
         }
     }
-
 }
 
 /// A planner's [`Directive`] becomes exactly one wire message.
@@ -695,7 +693,8 @@ mod tests {
             budget: -0.4500,
             fresh: true,
         };
-        let burst = encode(worst).as_str().len() + encode(Message::Sensors { dl: -98, dr: -98 }).as_str().len();
+        let burst = encode(worst).as_str().len()
+            + encode(Message::Sensors { dl: -98, dr: -98 }).as_str().len();
         assert!(
             burst > 32,
             "negative coordinates now fit in the FIFO ({burst} bytes) —              the encoding must have shrunk. Good, but update this test and              the note on the module so the limit stays honest."
@@ -745,7 +744,10 @@ mod tests {
                 fresh,
             };
             let text = encode(Message::from(d));
-            match Message::parse(text.as_str().trim_end()).unwrap().directive() {
+            match Message::parse(text.as_str().trim_end())
+                .unwrap()
+                .directive()
+            {
                 Some(Directive::Steer { fresh: got, .. }) => {
                     assert_eq!(got, fresh, "fresh={fresh} arrived as {got}")
                 }

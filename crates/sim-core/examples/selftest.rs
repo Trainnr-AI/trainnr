@@ -18,9 +18,7 @@
 //! places; this checks whether the same source produces the same
 //! *numbers*.
 
-use sim_core::{
-    ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec,
-};
+use sim_core::{ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec};
 
 const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 const DT: f64 = 0.02;
@@ -39,7 +37,10 @@ fn main() {
 
     let moved = Pose::new(1.0, 3.0, 0.0).integrate(0.45, 1.2, DT);
     println!("  integrate     x={:.17e}\r", moved.x);
-    println!("                y={:.17e} th={:.17e}\r", moved.y, moved.theta);
+    println!(
+        "                y={:.17e} th={:.17e}\r",
+        moved.y, moved.theta
+    );
 
     let mut odom = Odometry {
         model: drive,
