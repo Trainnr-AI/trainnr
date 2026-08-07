@@ -85,14 +85,12 @@ fn the_duty_scale_comes_from_the_simulated_robot() {
     // the second time this guard has failed on a refactor rather than on a
     // regression. What matters is that the scale exists somewhere in the
     // crate and is built from the right two things.
-    let host: String = std::fs::read_dir(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
-    )
-    .expect("hil-host has a src directory")
-    .filter_map(|e| e.ok())
-    .filter(|e| e.path().extension().is_some_and(|x| x == "rs"))
-    .filter_map(|e| std::fs::read_to_string(e.path()).ok())
-    .collect();
+    let host: String = std::fs::read_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"))
+        .expect("hil-host has a src directory")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rs"))
+        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+        .collect();
 
     let scale = host
         .lines()

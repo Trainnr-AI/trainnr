@@ -37,8 +37,8 @@
 mod rig;
 mod wire;
 
-use sim_core::RobotSpec;
 use rig::Rig;
+use sim_core::RobotSpec;
 use sim_run::{viz, MissionConfig};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -116,7 +116,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         control_on_belief: true,
         ..MissionConfig::default()
     };
-    let mut rig = Rig::new(config, wire_for(&args, &serial_port, &replay, &record, &mut emulator)?);
+    let mut rig = Rig::new(
+        config,
+        wire_for(&args, &serial_port, &replay, &record, &mut emulator)?,
+    );
     viz::draw_world(&rec, &rig.mission)?;
     if let Some(p) = &record {
         eprintln!("[host] recording to {}", p.display());
@@ -130,8 +133,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Drawing stays here: it is the one part of the loop that needs a
         // window, and keeping it out of `Rig` is what lets the whole
         // exchange run in `cargo test`.
-        viz::draw(&rec, &rig.mission, &tick, &mut trail_true, &mut trail_belief)?;
-        if rig.ticks % 50 == 0 {
+        viz::draw(
+            &rec,
+            &rig.mission,
+            &tick,
+            &mut trail_true,
+            &mut trail_belief,
+        )?;
+        if rig.ticks.is_multiple_of(50) {
             eprintln!(
                 "[{:5.1}s] true ({:.2}, {:.2})  chip ({:.2}, {:.2})  drift {:.3} m",
                 tick.obs.t,
@@ -184,7 +193,8 @@ fn wire_for(
             )?)
         }
         (None, None) => {
-            let uf2 = positional(args).unwrap_or_else(|| "firmware/pico-robot/pico-robot.uf2".into());
+            let uf2 =
+                positional(args).unwrap_or_else(|| "firmware/pico-robot/pico-robot.uf2".into());
             eprintln!("[host] spawning emulator for {uf2}");
             let mut child: Child = Command::new("npx")
                 .args(["tsx", "demo/hil-bridge.ts", &format!("../../{uf2}")])

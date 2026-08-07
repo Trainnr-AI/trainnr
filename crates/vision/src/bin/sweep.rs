@@ -22,8 +22,11 @@ use vision::{CameraSource, Frame, NokhwaCamera};
 const WARMUP: usize = 3;
 const RUNS: usize = 20;
 
-/// (label, config factory). All Apache-2.0, all NMS-free DETR-family.
-fn candidates() -> Vec<(&'static str, fn() -> Config)> {
+/// A model to try: how to name it, and how to build it.
+type Candidate = (&'static str, fn() -> Config);
+
+/// All Apache-2.0, all NMS-free DETR-family.
+fn candidates() -> Vec<Candidate> {
     vec![
         ("d-fine-n (current)", || Config::d_fine_n_coco()),
         ("d-fine-s", || Config::d_fine_s_coco()),

@@ -268,12 +268,12 @@ mod tests {
         s.push_str("> I 1.0000 3.0000 0.0000\n< P 1.0000 3.0000 0.0000\n");
         for i in 0..ticks {
             s.push_str("> ?\n"); // the goal (content checked separately)
-            // Health arrives at the START of a chip block, not after `M`.
-            // The host stops reading the moment it has an `M`, so a health
-            // line the chip emitted just after one is not seen until the
-            // next tick's read — and the recording, which logs in the
-            // order the HOST acts, shows it there. Copied from a real
-            // capture rather than reasoned about, after guessing wrong.
+                                 // Health arrives at the START of a chip block, not after `M`.
+                                 // The host stops reading the moment it has an `M`, so a health
+                                 // line the chip emitted just after one is not seen until the
+                                 // next tick's read — and the recording, which logs in the
+                                 // order the HOST acts, shows it there. Copied from a real
+                                 // capture rather than reasoned about, after guessing wrong.
             if let Some(h) = health {
                 if i == 1 {
                     s.push_str(&format!("< H {h}\n"));
@@ -335,7 +335,10 @@ mod tests {
     fn full_duty_drives_at_the_specs_top_speed() {
         let cfg = short();
         let spec = cfg.spec;
-        let v = run(cfg, &transcript(20, (sim_core::DUTY_FULL, sim_core::DUTY_FULL), None));
+        let v = run(
+            cfg,
+            &transcript(20, (sim_core::DUTY_FULL, sim_core::DUTY_FULL), None),
+        );
         // 20 ticks x 0.02 s at up to max_body_speed, minus motor lag.
         let travelled = v.outcome.final_pose.x - 1.0;
         let ceiling = spec.max_body_speed() * 0.4;
@@ -378,7 +381,9 @@ mod tests {
         assert_eq!(v.worst_us, 25_000, "the chip's report should be kept");
         assert!(v.missed_deadline());
         assert!(v.failed(), "a missed period must fail the run");
-        assert!(v.report(false).contains("missed its 20000 us control deadline"));
+        assert!(v
+            .report(false)
+            .contains("missed its 20000 us control deadline"));
     }
 
     #[test]
@@ -401,7 +406,9 @@ mod tests {
         v.divergences.clear();
         v.unconsumed = 12;
         assert!(v.diverged() && v.failed());
-        assert!(v.report(true).contains("12 recorded lines were never reached"));
+        assert!(v
+            .report(true)
+            .contains("12 recorded lines were never reached"));
     }
 
     /// A silent "0 µs" must not read as a passing timing check.
