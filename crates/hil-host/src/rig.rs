@@ -18,7 +18,7 @@
 
 use crate::wire::Wire;
 use hil_protocol::Message;
-use sim_core::Pose;
+use sim_core::{Pose, WheelSpeeds};
 use sim_run::{Mission, MissionConfig, Outcome, Tick};
 
 /// The rig: a simulated body, a real brain somewhere on the far end of a
@@ -115,8 +115,10 @@ impl Rig {
         //    commanded wheel speeds is the only translation.
         let tick = self.mission.advance(
             obs,
-            f64::from(duty_l) * self.duty_scale,
-            f64::from(duty_r) * self.duty_scale,
+            WheelSpeeds::new(
+                f64::from(duty_l) * self.duty_scale,
+                f64::from(duty_r) * self.duty_scale,
+            ),
         );
 
         // 4. Hand back what the encoders saw.

@@ -12,7 +12,7 @@
 //! disagree, this fails, and whichever one is wrong gets fixed.
 
 use sim_core::exercises::shortest_turn;
-use sim_core::{ControlGains, DiffDrive, GotoController, Pose, RobotSpec};
+use sim_core::{BodyTwist, ControlGains, DiffDrive, GotoController, Pose, RobotSpec, WheelSpeeds};
 
 const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 
@@ -25,17 +25,11 @@ fn faster_wheel_is_on_the_outside_of_the_turn() {
     // because θ grows anticlockwise.
     let d = SPEC.drive();
 
-    let (_, w) = d.forward(10.0, 5.0); // left faster
-    assert!(
-        w < 0.0,
-        "left faster should turn RIGHT (w < 0), got w = {w}"
-    );
+    let turn = d.forward(WheelSpeeds::new(10.0, 5.0)).turn_rate; // left faster
+    assert!(turn < 0.0, "left faster should turn RIGHT, got {turn}");
 
-    let (_, w) = d.forward(5.0, 10.0); // right faster
-    assert!(
-        w > 0.0,
-        "right faster should turn LEFT (w > 0), got w = {w}"
-    );
+    let turn = d.forward(WheelSpeeds::new(5.0, 10.0)).turn_rate; // right faster
+    assert!(turn > 0.0, "right faster should turn LEFT, got {turn}");
 }
 
 #[test]
@@ -43,16 +37,19 @@ fn equal_wheels_go_straight_and_opposite_wheels_spin_in_place() {
     // Diagram cases 1 and 4: "v > 0, w = 0" and "v = 0, w ≠ 0".
     let d = SPEC.drive();
 
-    let (v, w) = d.forward(10.0, 10.0);
-    assert!(v > 0.0, "equal wheels should advance, got v = {v}");
-    assert!(w.abs() < 1e-12, "equal wheels should not turn, got w = {w}");
-
-    let (v, w) = d.forward(-10.0, 10.0);
+    let straight = d.forward(WheelSpeeds::new(10.0, 10.0));
+    assert!(straight.forward_speed > 0.0, "equal wheels should advance");
     assert!(
-        v.abs() < 1e-12,
-        "opposite wheels should not advance, got v = {v}"
+        straight.turn_rate.abs() < 1e-12,
+        "equal wheels should not turn, got {straight:?}"
     );
-    assert!(w != 0.0, "opposite wheels should turn, got w = {w}");
+
+    let spin = d.forward(WheelSpeeds::new(-10.0, 10.0));
+    assert!(
+        spin.forward_speed.abs() < 1e-12,
+        "opposite wheels should not advance, got {spin:?}"
+    );
+    assert!(spin.turn_rate != 0.0, "opposite wheels should turn");
 }
 
 #[test]
@@ -62,14 +59,22 @@ fn kinematics_equations_in_the_doc_are_the_ones_in_the_code() {
         wheel_radius: SPEC.wheel_radius,
         track_width: SPEC.track_width,
     };
-    let (wl, wr) = (3.0, 7.0);
-    let (v, w) = d.forward(wl, wr);
+    let wheels = WheelSpeeds::new(3.0, 7.0);
+    let twist = d.forward(wheels);
 
-    let v_doc = SPEC.wheel_radius * (wr + wl) / 2.0;
-    let w_doc = SPEC.wheel_radius * (wr - wl) / SPEC.track_width;
+    let v_doc = SPEC.wheel_radius * (wheels.right + wheels.left) / 2.0;
+    let w_doc = SPEC.wheel_radius * (wheels.right - wheels.left) / SPEC.track_width;
 
-    assert!((v - v_doc).abs() < 1e-12, "v: code {v}, doc {v_doc}");
-    assert!((w - w_doc).abs() < 1e-12, "w: code {w}, doc {w_doc}");
+    assert!(
+        (twist.forward_speed - v_doc).abs() < 1e-12,
+        "v: code {}, doc {v_doc}",
+        twist.forward_speed
+    );
+    assert!(
+        (twist.turn_rate - w_doc).abs() < 1e-12,
+        "w: code {}, doc {w_doc}",
+        twist.turn_rate
+    );
 }
 
 // ---- The loop: ③ bearing and ④ heading error ----
@@ -110,7 +115,9 @@ fn the_plotted_throttle_curve_is_accurate() {
 
     for (degrees, expected) in [(0.0, 1.0), (45.0, 0.5), (90.0, 0.0), (135.0, 0.0)] {
         c.reset();
-        let (v, _) = c.steer(f64::to_radians(degrees), generous_budget, 0.02);
+        let v = c
+            .steer(f64::to_radians(degrees), generous_budget, 0.02)
+            .forward_speed;
         let factor = v / v_max;
         assert!(
             (factor - expected).abs() < 1e-9,
@@ -125,7 +132,9 @@ fn the_flat_section_of_the_curve_never_reverses() {
     let mut c = GotoController::new(ControlGains::WAYPOINT);
     for degrees in [91.0, 120.0, 180.0, -180.0] {
         c.reset();
-        let (v, _) = c.steer(f64::to_radians(degrees), 1000.0, 0.02);
+        let v = c
+            .steer(f64::to_radians(degrees), 1000.0, 0.02)
+            .forward_speed;
         assert!(v >= 0.0, "{degrees}° gave v = {v}; the robot would reverse");
     }
 }
@@ -135,7 +144,7 @@ fn speed_budget_is_capped_at_v_max_inside_steer() {
     // Box ⑤: "Capped at v_max inside, so no caller can ask for more than
     // the robot has."
     let mut c = GotoController::new(ControlGains::WAYPOINT);
-    let (v, _) = c.steer(0.0, 99.0, 0.02);
+    let v = c.steer(0.0, 99.0, 0.02).forward_speed;
     assert!(
         (v - ControlGains::WAYPOINT.v_max).abs() < 1e-12,
         "expected the cap at {}, got {v}",

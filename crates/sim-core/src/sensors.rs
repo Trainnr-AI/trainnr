@@ -13,6 +13,8 @@ use num_traits::Float as _;
 
 use core::f64::consts::PI;
 
+use crate::robot::WheelSpeeds;
+
 /// A pair of quantizing encoders (left + right wheel).
 pub struct Encoders {
     /// Ticks per full wheel revolution (real hobby encoders: 300–4096).
@@ -37,16 +39,16 @@ impl Encoders {
         }
     }
 
-    /// Advance the wheels by their angular velocities (rad/s) over `dt`,
-    /// and return the NEW whole ticks observed on (left, right).
+    /// Advance the wheels at the given speeds over `dt`, and return the
+    /// NEW whole ticks observed on (left, right).
     ///
     /// Fractional progress is never lost — it stays in the accumulated
     /// angle and surfaces as a tick later. (Real encoders work the same
     /// way: the disc position remembers everything, you just read it in
     /// steps.)
-    pub fn advance(&mut self, omega_l: f64, omega_r: f64, dt: f64) -> (i64, i64) {
-        self.angle_l += omega_l * dt;
-        self.angle_r += omega_r * dt;
+    pub fn advance(&mut self, wheels: WheelSpeeds, dt: f64) -> (i64, i64) {
+        self.angle_l += wheels.left * dt;
+        self.angle_r += wheels.right * dt;
 
         let total_l = (self.angle_l / (2.0 * PI) * self.ticks_per_rev).floor() as i64;
         let total_r = (self.angle_r / (2.0 * PI) * self.ticks_per_rev).floor() as i64;
@@ -68,7 +70,7 @@ mod tests {
         // Spin both wheels one full turn (2π rad) in 100 steps.
         let mut total = (0, 0);
         for _ in 0..100 {
-            let (l, r) = enc.advance(2.0 * PI, 2.0 * PI, 0.01);
+            let (l, r) = enc.advance(WheelSpeeds::new(2.0 * PI, 2.0 * PI), 0.01);
             total.0 += l;
             total.1 += r;
         }
@@ -88,7 +90,7 @@ mod tests {
         let mut zero_steps = 0;
         let mut total = 0;
         for _ in 0..1000 {
-            let (l, _) = enc.advance(0.01, 0.0, 0.01); // 0.0001 rad/step
+            let (l, _) = enc.advance(WheelSpeeds::new(0.01, 0.0), 0.01); // 0.0001 rad/step
             if l == 0 {
                 zero_steps += 1;
             }
@@ -102,7 +104,7 @@ mod tests {
     #[test]
     fn reverse_counts_negative() {
         let mut enc = Encoders::new(1000.0);
-        let (l, r) = enc.advance(-2.0 * PI, 0.0, 1.0);
+        let (l, r) = enc.advance(WheelSpeeds::new(-2.0 * PI, 0.0), 1.0);
         assert_eq!(l, -1000);
         assert_eq!(r, 0);
     }

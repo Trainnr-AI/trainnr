@@ -20,7 +20,7 @@
 //! or `AVOID_ENTER`. Those exist to be edited while watching the viewer.
 //! DRY applies to definitions, not to knobs.
 
-use crate::robot::DiffDrive;
+use crate::robot::{DiffDrive, WheelSpeeds};
 
 /// The physical robot: the numbers firmware and simulator must agree on.
 ///
@@ -284,20 +284,22 @@ impl RobotSpec {
     /// "Slower along the right arc" is almost always what you want; "fast
     /// along the wrong one" is how a robot ends up somewhere surprising.
     ///
-    /// Returns the pair unchanged when nothing saturates, so this is free
-    /// in the normal case.
-    pub fn fit_wheels(&self, left: f64, right: f64) -> (f64, f64) {
-        let peak = left.abs().max(right.abs());
+    /// Returns the speeds unchanged when nothing saturates, so this is
+    /// free in the normal case.
+    ///
+    /// There used to be two of these — `fit_wheels(left, right)` and
+    /// `fit_wheels_of(pair)` — which existed only because there was no
+    /// type to pass. [`WheelSpeeds`] made the second one redundant.
+    pub fn fit_wheels(&self, wheels: WheelSpeeds) -> WheelSpeeds {
+        let peak = wheels.peak();
         if peak <= self.max_wheel_rad_s || peak == 0.0 {
-            return (left, right);
+            return wheels;
         }
         let scale = self.max_wheel_rad_s / peak;
-        (left * scale, right * scale)
-    }
-
-    /// [`Self::fit_wheels`] taking the pair `DiffDrive::inverse` returns.
-    pub fn fit_wheels_of(&self, pair: (f64, f64)) -> (f64, f64) {
-        self.fit_wheels(pair.0, pair.1)
+        WheelSpeeds {
+            left: wheels.left * scale,
+            right: wheels.right * scale,
+        }
     }
 
     /// Wheel speed (rad/s) → motor command in ±1000 duty units, saturated.
@@ -647,11 +649,16 @@ mod tests {
     #[test]
     fn unsaturated_wheel_commands_pass_through_untouched() {
         let s = RobotSpec::SIM_BOT;
-        assert_eq!(s.fit_wheels(10.0, -5.0), (10.0, -5.0));
-        assert_eq!(s.fit_wheels(0.0, 0.0), (0.0, 0.0));
+        let pass_through = |left, right| {
+            assert_eq!(
+                s.fit_wheels(WheelSpeeds::new(left, right)),
+                WheelSpeeds::new(left, right)
+            );
+        };
+        pass_through(10.0, -5.0);
+        pass_through(0.0, 0.0);
         // Exactly at the limit is still fine.
-        let m = s.max_wheel_rad_s;
-        assert_eq!(s.fit_wheels(m, -m), (m, -m));
+        pass_through(s.max_wheel_rad_s, -s.max_wheel_rad_s);
     }
 
     #[test]
@@ -659,12 +666,13 @@ mod tests {
         // THE point: (40, 10) must not become (30, 10). That would turn
         // twice as hard as asked.
         let s = RobotSpec::SIM_BOT; // 30 rad/s
-        let (l, r) = s.fit_wheels(40.0, 10.0);
-        assert!((l - 30.0).abs() < 1e-12, "peak should sit at the limit");
-        assert!((r - 7.5).abs() < 1e-12, "ratio should be preserved");
+        let fitted = s.fit_wheels(WheelSpeeds::new(40.0, 10.0));
+        let (left, right) = (fitted.left, fitted.right);
+        assert!((left - 30.0).abs() < 1e-12, "peak should sit at the limit");
+        assert!((right - 7.5).abs() < 1e-12, "ratio should be preserved");
         assert!(
-            ((l / r) - 4.0).abs() < 1e-9,
-            "4:1 in must stay 4:1 out, got {l}:{r}"
+            ((left / right) - 4.0).abs() < 1e-9,
+            "4:1 in must stay 4:1 out, got {left}:{right}"
         );
     }
 
@@ -672,21 +680,26 @@ mod tests {
     fn scaling_handles_the_negative_and_mixed_cases() {
         let s = RobotSpec::SIM_BOT;
         // Spin in place, over the limit both ways.
-        let (l, r) = s.fit_wheels(-90.0, 90.0);
-        assert!((l + 30.0).abs() < 1e-12 && (r - 30.0).abs() < 1e-12);
+        let spun = s.fit_wheels(WheelSpeeds::new(-90.0, 90.0));
+        assert!((spun.left + 30.0).abs() < 1e-12 && (spun.right - 30.0).abs() < 1e-12);
         // Only one wheel over: both still scale.
-        let (l, r) = s.fit_wheels(60.0, -15.0);
-        assert!((l - 30.0).abs() < 1e-12);
-        assert!((r + 7.5).abs() < 1e-12, "the in-range wheel scales too");
+        let lopsided = s.fit_wheels(WheelSpeeds::new(60.0, -15.0));
+        assert!((lopsided.left - 30.0).abs() < 1e-12);
+        assert!(
+            (lopsided.right + 7.5).abs() < 1e-12,
+            "the in-range wheel scales too"
+        );
     }
 
     #[test]
     fn nothing_ever_leaves_scaled_above_the_motor() {
         let s = RobotSpec::SIM_BOT;
         for (a, b) in [(200.0, 3.0), (-1.0, 400.0), (35.0, -35.0), (1e6, -1e6)] {
-            let (l, r) = s.fit_wheels(a, b);
-            assert!(l.abs() <= s.max_wheel_rad_s + 1e-9, "{a},{b} -> {l}");
-            assert!(r.abs() <= s.max_wheel_rad_s + 1e-9, "{a},{b} -> {r}");
+            let fitted = s.fit_wheels(WheelSpeeds::new(a, b));
+            assert!(
+                fitted.peak() <= s.max_wheel_rad_s + 1e-9,
+                "{a},{b} -> {fitted:?}"
+            );
         }
     }
 

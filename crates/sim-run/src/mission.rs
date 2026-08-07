@@ -4,9 +4,9 @@
 //! time. See the module docs in `lib.rs` for why.
 
 use sim_core::{
-    lookahead_point, plan, summarize_scan, AvoidHysteresis, ControlGains, DepthCamera, DiffDrive,
-    Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose, Rng, Robot,
-    RobotSpec, Segment, World,
+    lookahead_point, plan, summarize_scan, AvoidHysteresis, BodyTwist, ControlGains, DepthCamera,
+    DiffDrive, Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose,
+    Rng, Robot, RobotSpec, Segment, WheelSpeeds, World,
 };
 
 /// Everything the mission needs to be reproducible.
@@ -422,7 +422,7 @@ impl Mission {
     /// the chip run the identical `execute` instead. Those two paths must
     /// agree — see `crates/hil-host/tests/twin_decision.rs`, which drives
     /// the whole mission both ways and requires identical outcomes.
-    pub fn decide(&mut self, obs: &Observation) -> (f64, f64) {
+    pub fn decide(&mut self, obs: &Observation) -> BodyTwist {
         let directive = self.plan(obs);
         self.controller
             .execute(directive, &obs.pose, self.config.dt)
@@ -434,15 +434,22 @@ impl Mission {
     /// narrowest thing both callers can produce: `sim-run` gets there via
     /// `DiffDrive::inverse`, `hil-host` via duty × scale from the chip.
     /// One physics implementation, two sources of command.
-    pub fn advance(&mut self, obs: Observation, cmd_l: f64, cmd_r: f64) -> Tick {
+    pub fn advance(&mut self, obs: Observation, commanded: WheelSpeeds) -> Tick {
         let dt = self.config.dt;
 
-        let act_l = self.motor_l.step(cmd_l, dt);
-        let act_r = self.motor_r.step(cmd_r, dt);
+        // Each motor lags its command independently — that asymmetry is
+        // part of why the robot drifts.
+        let actual = WheelSpeeds {
+            left: self.motor_l.step(commanded.left, dt),
+            right: self.motor_r.step(commanded.right, dt),
+        };
         let slip_l = 1.0 - 0.01 * self.rng.uniform();
         let slip_r = 1.0 - 0.01 * self.rng.uniform();
         let before = self.robot.pose;
-        self.robot.step(act_l * slip_l, act_r * slip_r, dt);
+        self.robot.step(
+            WheelSpeeds::new(actual.left * slip_l, actual.right * slip_r),
+            dt,
+        );
 
         // Walls are solid: if the body would overlap one, the translation
         // is refused (rotation survives — a bumped robot can still pivot).
@@ -461,7 +468,7 @@ impl Mission {
         }
 
         // ---- OBSERVE: belief from encoder ticks alone.
-        let (dticks_l, dticks_r) = self.encoders.advance(act_l, act_r, dt);
+        let (dticks_l, dticks_r) = self.encoders.advance(actual, dt);
         self.odometry.update(dticks_l, dticks_r);
 
         Tick {
@@ -480,10 +487,10 @@ impl Mission {
     /// and last calls with a serial cable in the middle.
     pub fn step(&mut self) -> Option<Tick> {
         let obs = self.observe()?;
-        let (v, w) = self.decide(&obs);
+        let twist = self.decide(&obs);
         // Scale, don't clip: a saturated turn keeps its arc.
-        let (cmd_l, cmd_r) = self.config.spec.fit_wheels_of(self.nominal.inverse(v, w));
-        Some(self.advance(obs, cmd_l, cmd_r))
+        let commanded = self.config.spec.fit_wheels(self.nominal.inverse(twist));
+        Some(self.advance(obs, commanded))
     }
 
     /// Run to completion, discarding per-tick telemetry.
@@ -595,16 +602,16 @@ mod tests {
         // The hil-host path: observe, decide outside, advance.
         let mut m = Mission::new(MissionConfig::default());
         while let Some(obs) = m.observe() {
-            let (v, w) = m.decide(&obs);
+            let twist = m.decide(&obs);
             // Mirror what the chip does: inverse, then fit_wheels, then
             // (on the wire) duty. Miss the fit and the paths diverge —
             // which is exactly what this test caught when `step()` gained
             // the scaling and this did not.
-            let (cmd_l, cmd_r) = m
+            let commanded = m
                 .config
                 .spec
-                .fit_wheels_of(m.config.spec.drive().inverse(v, w));
-            m.advance(obs, cmd_l, cmd_r);
+                .fit_wheels(m.config.spec.drive().inverse(twist));
+            m.advance(obs, commanded);
         }
         let manual = m.outcome();
 
@@ -645,9 +652,9 @@ mod tests {
 
         for _ in 0..300 {
             let Some(obs) = m.observe() else { break };
-            let (v, w) = m.decide(&obs);
-            let (cmd_l, cmd_r) = spec.drive().inverse(v, w);
-            for cmd in [cmd_l, cmd_r] {
+            let twist = m.decide(&obs);
+            let commanded = spec.drive().inverse(twist);
+            for cmd in [commanded.left, commanded.right] {
                 let over = cmd.abs() - spec.max_wheel_rad_s;
                 if over > 0.0 {
                     // Saturated: the duty cannot represent this at all.
@@ -658,7 +665,7 @@ mod tests {
                     worst_quantisation = worst_quantisation.max((back - cmd).abs());
                 }
             }
-            m.advance(obs, cmd_l, cmd_r);
+            m.advance(obs, commanded);
         }
 
         assert!(

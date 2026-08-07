@@ -230,13 +230,14 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
         let started = Instant::now();
         // Literally the same call `Mission::decide` makes on the laptop.
         // Not "the same algorithm" — the same function.
-        let (v, w) = controller.execute(command, &pose, DT);
+        let twist = controller.execute(command, &pose, DT);
         // Scale, don't clip — a saturated turn keeps its arc (docs/13).
-        let (wl, wr) = SPEC.fit_wheels_of(SPEC.drive().inverse(v, w));
+        let wheels = SPEC.fit_wheels(SPEC.drive().inverse(twist));
         // THE FAILSAFE. Everything the robot does physically passes through
         // this line. While the planner is fresh it is the identity; once it
         // goes quiet the duty is zero, whatever the controller computed.
-        let (duty_l, duty_r) = watchdog.gate(now_ms(), (SPEC.duty(wl), SPEC.duty(wr)));
+        let (duty_l, duty_r) =
+            watchdog.gate(now_ms(), (SPEC.duty(wheels.left), SPEC.duty(wheels.right)));
         let elapsed_us = started.elapsed().as_micros() as u32;
         out.clear();
         let _ = Message::Motor { duty_l, duty_r }.write_into(&mut out);

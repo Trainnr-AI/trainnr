@@ -10,7 +10,7 @@
 //! Math: see docs/learning/math-03-odometry.md.
 
 use crate::pose::Pose;
-use crate::robot::DiffDrive;
+use crate::robot::{BodyTwist, DiffDrive};
 use core::f64::consts::PI;
 
 pub struct Odometry {
@@ -51,7 +51,10 @@ impl Odometry {
         let d_center = (d_r + d_l) / 2.0;
         let d_theta = (d_r - d_l) / self.model.track_width;
 
-        self.pose = self.pose.integrate(d_center, d_theta, 1.0)
+        // dt = 1.0 because these are already DISTANCES, not speeds: one
+        // "second" of travelling at d_center m/s covers d_center metres.
+        // The arc formula is the same either way.
+        self.pose = self.pose.integrate(BodyTwist::new(d_center, d_theta), 1.0)
     }
 }
 
@@ -122,10 +125,10 @@ mod tests {
         };
 
         // Drive a wandering path for 10 simulated seconds at 50 Hz.
-        let (wl, wr) = m.inverse(0.3, 0.5);
+        let wheels = m.inverse(BodyTwist::new(0.3, 0.5));
         for _ in 0..500 {
-            robot.step(wl, wr, 0.02);
-            let (dl, dr) = enc.advance(wl, wr, 0.02);
+            robot.step(wheels, 0.02);
+            let (dl, dr) = enc.advance(wheels, 0.02);
             o.update(dl, dr);
         }
         // Only quantization separates belief from truth here (ticks are

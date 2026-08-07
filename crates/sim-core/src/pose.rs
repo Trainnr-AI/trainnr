@@ -12,6 +12,8 @@ use num_traits::Float as _;
 
 use core::f64::consts::PI;
 
+use crate::robot::BodyTwist;
+
 /// Position + heading in the world frame (an element of SE(2)).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pose {
@@ -35,14 +37,20 @@ impl Pose {
         }
     }
 
-    /// Advance this pose by body velocities held constant for `dt`:
-    /// `v` = forward speed (m/s), `w` = turn rate (rad/s, CCW positive).
+    /// Advance this pose by a body twist held constant for `dt`.
     ///
-    /// Uses the exact arc solution: with constant (v, w) the robot traces a
-    /// circular arc of radius v/w. Euler integration (x += v·cosθ·dt) would
-    /// drift outward on curves — with a 50 Hz loop the error is small but
-    /// there is no reason to accept it when the closed form is this short.
-    pub fn integrate(&self, v: f64, w: f64, dt: f64) -> Pose {
+    /// Uses the exact arc solution: with a constant twist the robot traces
+    /// a circular arc of radius `forward_speed / turn_rate`. Euler
+    /// integration (x += v·cosθ·dt) would drift outward on curves — with a
+    /// 50 Hz loop the error is small but there is no reason to accept it
+    /// when the closed form is this short.
+    pub fn integrate(&self, twist: BodyTwist, dt: f64) -> Pose {
+        // Locals keep their short names on purpose: below, the arithmetic
+        // is the textbook arc formula and reads best in the textbook's
+        // letters. The *stored* values say what they are; the working
+        // inside one formula does not need to.
+        let (v, w) = (twist.forward_speed, twist.turn_rate);
+
         // Below this turn rate the arc radius v/w blows up numerically;
         // the motion is indistinguishable from a straight line.
         const STRAIGHT_EPS: f64 = 1e-9;
@@ -88,12 +96,13 @@ pub fn wrap_angle(a: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::robot::BodyTwist;
 
     const TOL: f64 = 1e-9;
 
     #[test]
     fn straight_line_travels_v_times_dt() {
-        let p = Pose::new(0.0, 0.0, 0.0).integrate(1.0, 0.0, 2.0);
+        let p = Pose::new(0.0, 0.0, 0.0).integrate(BodyTwist::new(1.0, 0.0), 2.0);
         assert!((p.x - 2.0).abs() < TOL);
         assert!(p.y.abs() < TOL);
         assert!(p.theta.abs() < TOL);
@@ -101,7 +110,7 @@ mod tests {
 
     #[test]
     fn straight_line_follows_heading() {
-        let p = Pose::new(0.0, 0.0, PI / 2.0).integrate(1.0, 0.0, 3.0);
+        let p = Pose::new(0.0, 0.0, PI / 2.0).integrate(BodyTwist::new(1.0, 0.0), 3.0);
         assert!(p.x.abs() < TOL);
         assert!((p.y - 3.0).abs() < TOL);
     }
@@ -110,7 +119,7 @@ mod tests {
     fn full_circle_returns_to_start() {
         // v = 1 m/s, w = 1 rad/s → circle of radius 1 m, period 2π s.
         let start = Pose::new(0.5, -0.25, 0.7);
-        let p = start.integrate(1.0, 1.0, 2.0 * PI);
+        let p = start.integrate(BodyTwist::new(1.0, 1.0), 2.0 * PI);
         assert!(p.distance_to(&start) < 1e-6);
         assert!((wrap_angle(p.theta - start.theta)).abs() < 1e-6);
     }
@@ -119,7 +128,7 @@ mod tests {
     fn arc_radius_is_v_over_w() {
         // Quarter turn: after θ sweeps 90°, the center of the circle is at
         // distance R to the robot's left; check the chord length R·√2.
-        let p = Pose::new(0.0, 0.0, 0.0).integrate(2.0, 1.0, PI / 2.0);
+        let p = Pose::new(0.0, 0.0, 0.0).integrate(BodyTwist::new(2.0, 1.0), PI / 2.0);
         let r = 2.0;
         let chord = (p.x * p.x + p.y * p.y).sqrt();
         assert!((chord - r * 2.0_f64.sqrt()).abs() < 1e-9);
@@ -127,7 +136,7 @@ mod tests {
 
     #[test]
     fn spin_in_place_moves_nothing() {
-        let p = Pose::new(1.0, 2.0, 0.0).integrate(0.0, 3.0, 0.5);
+        let p = Pose::new(1.0, 2.0, 0.0).integrate(BodyTwist::new(0.0, 3.0), 0.5);
         assert!((p.x - 1.0).abs() < TOL);
         assert!((p.y - 2.0).abs() < TOL);
         assert!((p.theta - 1.5).abs() < TOL);
@@ -136,10 +145,10 @@ mod tests {
     #[test]
     fn many_small_steps_match_one_big_step() {
         // The exact integrator must be consistent under subdivision.
-        let big = Pose::ORIGIN.integrate(1.0, 0.8, 1.0);
+        let big = Pose::ORIGIN.integrate(BodyTwist::new(1.0, 0.8), 1.0);
         let mut small = Pose::ORIGIN;
         for _ in 0..1000 {
-            small = small.integrate(1.0, 0.8, 0.001);
+            small = small.integrate(BodyTwist::new(1.0, 0.8), 0.001);
         }
         assert!(big.distance_to(&small) < 1e-9);
     }

@@ -48,6 +48,7 @@
 
 use crate::camera::Frame;
 use crate::detect::Detection;
+use sim_core::BodyTwist;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Write as _;
@@ -77,7 +78,7 @@ pub struct Perceived {
     ///
     /// `None` in a log written before this field existed — replay then
     /// says it cannot verify, rather than pretending it did.
-    pub command: Option<(f64, f64)>,
+    pub command: Option<BodyTwist>,
 }
 
 impl Perceived {
@@ -96,8 +97,8 @@ impl Perceived {
             self.target.map_or(-1i64, |i| i as i64)
         );
         // Trailing and optional, so a log without commands still parses.
-        if let Some((v, w)) = self.command {
-            let _ = write!(out, " {v:.6} {w:.6}");
+        if let Some(twist) = self.command {
+            let _ = write!(out, " {:.6} {:.6}", twist.forward_speed, twist.turn_rate);
         }
         let _ = writeln!(out);
         for d in &self.detections {
@@ -229,9 +230,9 @@ pub fn read(path: &Path) -> Result<Vec<Perceived>, String> {
                 // Both or neither: half a command is a malformed line, not
                 // an old one.
                 let command = match (f.next(), f.next()) {
-                    (Some(v), Some(w)) => Some((
-                        v.parse().map_err(|_| at("bad commanded v"))?,
-                        w.parse().map_err(|_| at("bad commanded w"))?,
+                    (Some(v), Some(w)) => Some(BodyTwist::new(
+                        v.parse().map_err(|_| at("bad commanded forward speed"))?,
+                        w.parse().map_err(|_| at("bad commanded turn rate"))?,
                     )),
                     (None, None) => None,
                     _ => return Err(at("a command needs both v and w")),
@@ -301,16 +302,18 @@ pub const COMMAND_TOLERANCE: f64 = 1e-5;
 /// `Ok(())` when they agree or the log predates commands; `Err` describes
 /// the disagreement in the same shape `hil-host` uses, because it is the
 /// same question asked of a different boundary.
-pub fn check_command(frame: usize, p: &Perceived, got: (f64, f64)) -> Result<(), String> {
-    let Some((v, w)) = p.command else {
+pub fn check_command(frame: usize, p: &Perceived, got: BodyTwist) -> Result<(), String> {
+    let Some(recorded) = p.command else {
         return Ok(()); // nothing recorded to check against
     };
-    if (got.0 - v).abs() <= COMMAND_TOLERANCE && (got.1 - w).abs() <= COMMAND_TOLERANCE {
+    let speed_differs = (got.forward_speed - recorded.forward_speed).abs() > COMMAND_TOLERANCE;
+    let turn_differs = (got.turn_rate - recorded.turn_rate).abs() > COMMAND_TOLERANCE;
+    if !speed_differs && !turn_differs {
         return Ok(());
     }
     Err(format!(
-        "frame {frame}: would command v={:.6} w={:.6}, recording has v={v:.6} w={w:.6}",
-        got.0, got.1
+        "frame {frame}: would command v={:.6} w={:.6}, recording has v={:.6} w={:.6}",
+        got.forward_speed, got.turn_rate, recorded.forward_speed, recorded.turn_rate
     ))
 }
 
@@ -355,7 +358,7 @@ mod tests {
                 frame_h: 480,
                 detections: vec![det("cup", 0.9), det("book", 0.4)],
                 target: Some(0),
-                command: Some((0.31, -0.42)),
+                command: Some(BodyTwist::new(0.31, -0.42)),
             },
             Perceived {
                 dt: 0.048,
@@ -363,7 +366,7 @@ mod tests {
                 frame_h: 480,
                 detections: vec![],
                 target: None,
-                command: Some((0.0, 0.0)),
+                command: Some(BodyTwist::STOPPED),
             },
         ];
         assert_eq!(round_trip("session", &frames), frames);
@@ -456,7 +459,7 @@ mod tests {
             frame_h: 2,
             detections: vec![],
             target: None,
-            command: Some((0.1, -0.2)),
+            command: Some(BodyTwist::new(0.1, -0.2)),
         }
     }
 
@@ -471,20 +474,23 @@ mod tests {
     /// The point of recording commands at all.
     #[test]
     fn a_changed_command_is_caught() {
-        let p = blank(); // commands (0.1, -0.2)
+        let p = blank(); // commands forward 0.1 m/s, turning -0.2 rad/s
         assert!(
-            check_command(0, &p, (0.1, -0.2)).is_ok(),
+            check_command(0, &p, BodyTwist::new(0.1, -0.2)).is_ok(),
             "identical must pass"
         );
 
-        let err = check_command(7, &p, (0.15, -0.2)).unwrap_err();
+        let err = check_command(7, &p, BodyTwist::new(0.15, -0.2)).unwrap_err();
         assert!(err.contains("frame 7"), "{err}");
         assert!(
             err.contains("0.150000") && err.contains("0.100000"),
             "{err}"
         );
 
-        assert!(check_command(0, &p, (0.1, -0.25)).is_err(), "w matters too");
+        assert!(
+            check_command(0, &p, BodyTwist::new(0.1, -0.25)).is_err(),
+            "turn rate matters too"
+        );
     }
 
     /// Six decimals on the wire means re-running identical code differs by
@@ -492,9 +498,9 @@ mod tests {
     #[test]
     fn rounding_is_not_a_divergence() {
         let p = blank();
-        assert!(check_command(0, &p, (0.1 + 4e-7, -0.2 - 4e-7)).is_ok());
+        assert!(check_command(0, &p, BodyTwist::new(0.1 + 4e-7, -0.2 - 4e-7)).is_ok());
         // ...but a real change, three hundred times larger, is caught.
-        assert!(check_command(0, &p, (0.1 + 2e-3, -0.2)).is_err());
+        assert!(check_command(0, &p, BodyTwist::new(0.1 + 2e-3, -0.2)).is_err());
     }
 
     /// A log written before commands existed must replay, and must NOT
@@ -506,7 +512,7 @@ mod tests {
             ..blank()
         };
         assert!(
-            check_command(0, &p, (99.0, -99.0)).is_ok(),
+            check_command(0, &p, BodyTwist::new(99.0, -99.0)).is_ok(),
             "nothing recorded means nothing to contradict"
         );
     }

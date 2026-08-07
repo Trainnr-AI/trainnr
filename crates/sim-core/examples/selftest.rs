@@ -18,7 +18,10 @@
 //! places; this checks whether the same source produces the same
 //! *numbers*.
 
-use sim_core::{ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec};
+use sim_core::{
+    BodyTwist, ControlGains, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec,
+    WheelSpeeds,
+};
 
 const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 const DT: f64 = 0.02;
@@ -29,13 +32,15 @@ fn main() {
 
     let drive = SPEC.drive();
 
-    let (v, w) = drive.forward(3.0, 7.0);
+    let twist = drive.forward(WheelSpeeds::new(3.0, 7.0));
+    let (v, w) = (twist.forward_speed, twist.turn_rate);
     println!("  forward       v={v:.17e} w={w:.17e}\r");
 
-    let (ol, or) = drive.inverse(v, w);
+    let wheels = drive.inverse(twist);
+    let (ol, or) = (wheels.left, wheels.right);
     println!("  inverse       l={ol:.17e} r={or:.17e}\r");
 
-    let moved = Pose::new(1.0, 3.0, 0.0).integrate(0.45, 1.2, DT);
+    let moved = Pose::new(1.0, 3.0, 0.0).integrate(BodyTwist::new(0.45, 1.2), DT);
     println!("  integrate     x={:.17e}\r", moved.x);
     println!(
         "                y={:.17e} th={:.17e}\r",
@@ -73,7 +78,7 @@ fn main() {
     let mut enc = Encoders::new(SPEC.ticks_per_rev);
     let (mut tl, mut tr) = (0i64, 0i64);
     for _ in 0..50 {
-        let (a, b) = enc.advance(12.5, 13.25, DT);
+        let (a, b) = enc.advance(WheelSpeeds::new(12.5, 13.25), DT);
         tl += a;
         tr += b;
     }
@@ -81,7 +86,8 @@ fn main() {
 
     let mut ctrl = GotoController::new(ControlGains::WAYPOINT);
     let pose = Pose::new(1.0, 3.0, 0.2);
-    let (cv, cw) = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let commanded = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let (cv, cw) = (commanded.forward_speed, commanded.turn_rate);
     println!("  goto_point    v={cv:.17e}\r");
     println!("                w={cw:.17e}\r");
 
@@ -92,7 +98,8 @@ fn main() {
     // `peak <= max_wheel_rad_s`, and `d_limit` on a clamp boundary. A
     // divergence here would not be a rounding difference; it would be the
     // chip taking the other branch.
-    let (fl, fr) = SPEC.fit_wheels(40.0, 10.0);
+    let fitted = SPEC.fit_wheels(WheelSpeeds::new(40.0, 10.0));
+    let (fl, fr) = (fitted.left, fitted.right);
     println!("  fit_wheels    l={fl:.17e} r={fr:.17e}\r");
 
     // A setpoint STEP — precisely the derivative-kick case d_limit exists
@@ -105,6 +112,7 @@ fn main() {
     println!("  pid d_limit   out={k:.17e}\r");
 
     let mut st = GotoController::new(ControlGains::WAYPOINT);
-    let (sv, sw) = st.steer(2.5, 1.5, DT);
+    let steered = st.steer(2.5, 1.5, DT);
+    let (sv, sw) = (steered.forward_speed, steered.turn_rate);
     println!("  steer         v={sv:.17e} w={sw:.17e}\r");
 }

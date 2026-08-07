@@ -22,6 +22,7 @@ use core::f64::consts::FRAC_PI_2;
 
 use crate::exercises::shortest_turn;
 use crate::pose::Pose;
+use crate::robot::BodyTwist;
 use crate::spec::ControlGains;
 
 pub struct Pid {
@@ -205,11 +206,12 @@ impl GotoController {
     /// aligned — distance-proportional for a waypoint, size-proportional
     /// for a camera target. It is capped at `v_max` here so no caller can
     /// forget to.
-    pub fn steer(&mut self, heading_error: f64, speed_budget: f64, dt: f64) -> (f64, f64) {
-        let w = self.heading_pid.update(heading_error, dt);
+    pub fn steer(&mut self, heading_error: f64, speed_budget: f64, dt: f64) -> BodyTwist {
         let alignment = (1.0 - heading_error.abs() / FRAC_PI_2).max(0.0);
-        let v = speed_budget.min(self.gains.v_max) * alignment;
-        (v, w)
+        BodyTwist {
+            forward_speed: speed_budget.min(self.gains.v_max) * alignment,
+            turn_rate: self.heading_pid.update(heading_error, dt),
+        }
     }
 
     /// Carry out a [`Directive`] — **the only place a directive becomes
@@ -218,7 +220,7 @@ impl GotoController {
     /// `pose` is what the controller believes about itself. On the robot
     /// that is its own odometry; in the simulator it is whatever
     /// `Observation::pose` carries.
-    pub fn execute(&mut self, directive: Directive, pose: &Pose, dt: f64) -> (f64, f64) {
+    pub fn execute(&mut self, directive: Directive, pose: &Pose, dt: f64) -> BodyTwist {
         match directive {
             Directive::Steer {
                 target,
@@ -240,14 +242,14 @@ impl GotoController {
             // not inherit an integral from before the swerve.
             Directive::Twist { v, w } => {
                 self.reset();
-                (v, w)
+                BodyTwist::new(v, w)
             }
         }
     }
 
     /// Drive toward a known point: bearing → error → [`Self::steer`], with
     /// the speed budget proportional to remaining distance.
-    pub fn goto_point(&mut self, pose: &Pose, target: (f64, f64), dt: f64) -> (f64, f64) {
+    pub fn goto_point(&mut self, pose: &Pose, target: (f64, f64), dt: f64) -> BodyTwist {
         let (tx, ty) = target;
         let bearing = (ty - pose.y).atan2(tx - pose.x);
         let error = shortest_turn(pose.theta, bearing);
@@ -325,19 +327,25 @@ mod tests {
     #[test]
     fn facing_the_target_gives_full_speed() {
         let mut c = ctrl();
-        let (v, w) = c.steer(0.0, 10.0, 0.02);
-        assert!((v - ControlGains::WAYPOINT.v_max).abs() < 1e-12, "v = {v}");
-        assert!(w.abs() < 1e-12, "no turn needed, got {w}");
+        let twist = c.steer(0.0, 10.0, 0.02);
+        assert!(
+            (twist.forward_speed - ControlGains::WAYPOINT.v_max).abs() < 1e-12,
+            "{twist:?}"
+        );
+        assert!(
+            twist.turn_rate.abs() < 1e-12,
+            "no turn needed, got {twist:?}"
+        );
     }
 
     #[test]
     fn misalignment_throttles_forward_speed() {
         let mut c = ctrl();
         // 45 degrees off: alignment = 1 - (pi/4)/(pi/2) = 0.5
-        let (v, _) = c.steer(core::f64::consts::FRAC_PI_4, 10.0, 0.02);
+        let twist = c.steer(core::f64::consts::FRAC_PI_4, 10.0, 0.02);
         assert!(
-            (v - ControlGains::WAYPOINT.v_max * 0.5).abs() < 1e-12,
-            "v = {v}"
+            (twist.forward_speed - ControlGains::WAYPOINT.v_max * 0.5).abs() < 1e-12,
+            "{twist:?}"
         );
     }
 
@@ -346,17 +354,17 @@ mod tests {
         let mut c = ctrl();
         // Anything past 90 degrees would give a negative alignment factor.
         for err in [FRAC_PI_2 + 0.1, 2.0, core::f64::consts::PI] {
-            let (v, _) = c.steer(err, 10.0, 0.02);
-            assert!(v >= 0.0, "error {err} drove backwards at {v}");
-            assert!(v.abs() < 1e-12, "should pivot in place, got v = {v}");
+            let speed = c.steer(err, 10.0, 0.02).forward_speed;
+            assert!(speed >= 0.0, "error {err} drove backwards at {speed}");
+            assert!(speed.abs() < 1e-12, "should pivot in place, got {speed}");
         }
     }
 
     #[test]
     fn speed_budget_is_capped_at_v_max() {
         let mut c = ctrl();
-        let (v, _) = c.steer(0.0, 1000.0, 0.02);
-        assert!(v <= ControlGains::WAYPOINT.v_max + 1e-12, "v = {v}");
+        let speed = c.steer(0.0, 1000.0, 0.02).forward_speed;
+        assert!(speed <= ControlGains::WAYPOINT.v_max + 1e-12, "v = {speed}");
     }
 
     #[test]
@@ -368,8 +376,11 @@ mod tests {
             y: 0.0,
             theta: 0.0,
         };
-        let (_, w) = c.goto_point(&pose, (0.0, 1.0), 0.02);
-        assert!(w > 0.0, "should turn left (positive w), got {w}");
+        let turn = c.goto_point(&pose, (0.0, 1.0), 0.02).turn_rate;
+        assert!(
+            turn > 0.0,
+            "should turn left (positive turn rate), got {turn}"
+        );
     }
 
     #[test]

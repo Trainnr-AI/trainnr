@@ -44,7 +44,7 @@ pub use nav::{lookahead_point, summarize_scan, AvoidHysteresis, Mode, ScanSummar
 pub use odometry::Odometry;
 pub use pose::{wrap_angle, Pose};
 pub use rng::Rng;
-pub use robot::{DiffDrive, Robot};
+pub use robot::{BodyTwist, DiffDrive, Robot, WheelSpeeds};
 pub use safety::{CommandWatchdog, Millis};
 pub use sensors::Encoders;
 pub use spec::{ControlGains, RobotSpec, DUTY_FULL};

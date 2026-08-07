@@ -16,7 +16,7 @@
 //! silicon is still the evidence.
 
 use hil_protocol::Message;
-use sim_core::{Directive, GotoController};
+use sim_core::{BodyTwist, Directive, GotoController};
 use sim_run::{Mission, MissionConfig};
 
 /// Encode and parse a directive exactly as the link does.
@@ -56,20 +56,20 @@ fn the_wire_does_not_change_the_decision() {
     while let Some(obs) = mission.observe() {
         let directive = mission.plan(&obs);
 
-        let (v_local, w_local) = local.execute(directive, &obs.pose, dt);
-        let (v_chip, w_chip) = chip.execute(through_the_wire(directive), &obs.pose, dt);
+        let on_laptop = local.execute(directive, &obs.pose, dt);
+        let on_chip = chip.execute(through_the_wire(directive), &obs.pose, dt);
 
-        worst_v = worst_v.max((v_local - v_chip).abs());
-        worst_w = worst_w.max((w_local - w_chip).abs());
+        worst_v = worst_v.max((on_laptop.forward_speed - on_chip.forward_speed).abs());
+        worst_w = worst_w.max((on_laptop.turn_rate - on_chip.turn_rate).abs());
         ticks += 1;
 
         // Drive on the local decision so the trajectory is the simulator's
         // and both controllers keep seeing the same observations.
-        let (l, r) = mission
+        let commanded = mission
             .config
             .spec
-            .fit_wheels_of(mission.config.spec.drive().inverse(v_local, w_local));
-        mission.advance(obs, l, r);
+            .fit_wheels(mission.config.spec.drive().inverse(on_laptop));
+        mission.advance(obs, commanded);
     }
 
     assert!(ticks > 500, "only {ticks} ticks — the mission did not run");
@@ -98,12 +98,12 @@ fn a_mission_flown_entirely_through_the_wire_still_succeeds() {
 
     while let Some(obs) = mission.observe() {
         let directive = through_the_wire(mission.plan(&obs));
-        let (v, w) = chip.execute(directive, &obs.pose, dt);
-        let (l, r) = mission
+        let twist = chip.execute(directive, &obs.pose, dt);
+        let commanded = mission
             .config
             .spec
-            .fit_wheels_of(mission.config.spec.drive().inverse(v, w));
-        mission.advance(obs, l, r);
+            .fit_wheels(mission.config.spec.drive().inverse(twist));
+        mission.advance(obs, commanded);
     }
     let wired = mission.outcome();
 
@@ -143,12 +143,12 @@ fn a_waypoint_boundary_tells_the_controller_to_reset() {
         if let Directive::Steer { fresh: true, .. } = mission.plan(&obs) {
             fresh_steers += 1;
         }
-        let (v, w) = mission.decide(&obs);
-        let (l, r) = mission
+        let twist = mission.decide(&obs);
+        let commanded = mission
             .config
             .spec
-            .fit_wheels_of(mission.config.spec.drive().inverse(v, w));
-        mission.advance(obs, l, r);
+            .fit_wheels(mission.config.spec.drive().inverse(twist));
+        mission.advance(obs, commanded);
     }
 
     assert!(

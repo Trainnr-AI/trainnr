@@ -60,7 +60,8 @@ use panic_halt as _;
 use static_cell::StaticCell;
 
 use sim_core::{
-    ControlGains, DiffDrive, Encoders, GotoController, Motor, Odometry, Pid, Pose, RobotSpec,
+    BodyTwist, ControlGains, DiffDrive, Encoders, GotoController, Motor, Odometry, Pid,
+    Pose, RobotSpec, WheelSpeeds,
 };
 
 bind_interrupts!(struct Irqs {
@@ -132,19 +133,21 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
 
     let drive: DiffDrive = SPEC.drive();
 
-    let (v, w) = drive.forward(3.0, 7.0);
+    let twist = drive.forward(WheelSpeeds::new(3.0, 7.0));
+    let (v, w) = (twist.forward_speed, twist.turn_rate);
     l.clear();
     let _ = write!(l, "  forward       v={v:.17e} w={w:.17e}\r\n");
     say(class, &l).await?;
 
-    let (ol, or) = drive.inverse(v, w);
+    let wheels = drive.inverse(twist);
+    let (ol, or) = (wheels.left, wheels.right);
     l.clear();
     let _ = write!(l, "  inverse       l={ol:.17e} r={or:.17e}\r\n");
     say(class, &l).await?;
 
     // Arc integration — trig-heavy, so most likely to differ between libm
     // implementations.
-    let moved = Pose::new(1.0, 3.0, 0.0).integrate(0.45, 1.2, DT);
+    let moved = Pose::new(1.0, 3.0, 0.0).integrate(BodyTwist::new(0.45, 1.2), DT);
     l.clear();
     let _ = write!(l, "  integrate     x={:.17e}\r\n", moved.x);
     say(class, &l).await?;
@@ -199,7 +202,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     let mut enc = Encoders::new(SPEC.ticks_per_rev);
     let (mut tl, mut tr) = (0i64, 0i64);
     for _ in 0..50 {
-        let (a, b) = enc.advance(12.5, 13.25, DT);
+        let (a, b) = enc.advance(WheelSpeeds::new(12.5, 13.25), DT);
         tl += a;
         tr += b;
     }
@@ -209,7 +212,8 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
 
     let mut ctrl = GotoController::new(ControlGains::WAYPOINT);
     let pose = Pose::new(1.0, 3.0, 0.2);
-    let (cv, cw) = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let commanded = ctrl.goto_point(&pose, (6.5, 3.0), DT);
+    let (cv, cw) = (commanded.forward_speed, commanded.turn_rate);
     l.clear();
     let _ = write!(l, "  goto_point    v={cv:.17e}\r\n");
     say(class, &l).await?;
@@ -224,7 +228,8 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     // `peak <= max_wheel_rad_s`, and `d_limit` on a clamp boundary. A
     // divergence here would not be a rounding difference; it would be the
     // chip taking the other branch.
-    let (fl, fr) = SPEC.fit_wheels(40.0, 10.0);
+    let fitted = SPEC.fit_wheels(WheelSpeeds::new(40.0, 10.0));
+    let (fl, fr) = (fitted.left, fitted.right);
     l.clear();
     let _ = write!(l, "  fit_wheels    l={fl:.17e} r={fr:.17e}\r\n");
     say(class, &l).await?;
@@ -241,7 +246,8 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     say(class, &l).await?;
 
     let mut st = GotoController::new(ControlGains::WAYPOINT);
-    let (sv, sw) = st.steer(2.5, 1.5, DT);
+    let steered = st.steer(2.5, 1.5, DT);
+    let (sv, sw) = (steered.forward_speed, steered.turn_rate);
     l.clear();
     let _ = write!(l, "  steer         v={sv:.17e} w={sw:.17e}\r\n");
     say(class, &l).await?;
@@ -260,9 +266,9 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     for _ in 0..ITERS {
         // Exactly what pico-robot does per tick.
         odom.update(37, 41);
-        let (v, w) = ctrl.goto_point(&odom.pose, (2.2, 1.0), DT);
-        let (a, b) = drive.inverse(v, w);
-        core::hint::black_box((a, b));
+        let want = ctrl.goto_point(&odom.pose, (2.2, 1.0), DT);
+        let wheels = drive.inverse(want);
+        core::hint::black_box(wheels);
     }
     let elapsed_us = t0.elapsed().as_micros();
     let per_tick_ns = elapsed_us as f64 * 1000.0 / ITERS as f64;

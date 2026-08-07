@@ -43,7 +43,7 @@
 //! or just yourself — and move it left and right.
 
 use anyhow::Result;
-use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
+use sim_core::{wrap_angle, BodyTwist, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
 use std::collections::VecDeque;
 use std::time::Instant;
 use vision::session::Perceived;
@@ -444,7 +444,7 @@ impl Chase {
         p: &Perceived,
         frame: Option<&Frame>,
         rec: &rerun::RecordingStream,
-    ) -> Result<(f64, f64)> {
+    ) -> Result<BodyTwist> {
         let dt = p.dt;
         self.t += dt;
         let (v_cmd, w_cmd, heading_error, w_raw) = match p.target() {
@@ -477,10 +477,10 @@ impl Chase {
                 // The shared steering law. Identical to the simulator's and
                 // the firmware's — only the speed budget differs, because
                 // here "how far away" comes from box size, not a map.
-                let (v, w) = self
+                let twist = self
                     .controller
                     .steer(error, GAINS.v_max * approach as f64, dt);
-                (v, w, error, w_raw)
+                (twist.forward_speed, twist.turn_rate, error, w_raw)
             }
             None => {
                 // Nothing seen: stop, and forget accumulated PID state so a
@@ -492,8 +492,8 @@ impl Chase {
             }
         };
 
-        let (omega_l, omega_r) = SPEC.drive().inverse(v_cmd, w_cmd);
-        self.robot.step(omega_l, omega_r, dt);
+        let commanded = BodyTwist::new(v_cmd, w_cmd);
+        self.robot.step(SPEC.drive().inverse(commanded), dt);
 
         // ---- telemetry ----
         rec.set_duration_secs("time", self.t);
@@ -553,7 +553,7 @@ impl Chase {
             }
             self.last_print_t = self.t;
         }
-        Ok((v_cmd, w_cmd))
+        Ok(commanded)
     }
 }
 
