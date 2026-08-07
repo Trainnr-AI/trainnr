@@ -103,6 +103,7 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/16-the-map.md`](docs/16-the-map.md) — every symbol, unit and formula, and how
   the maths, the physics and the code connect
 - [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
+- [`docs/18-code-quality.md`](docs/18-code-quality.md) — an honest scorecard, and what would move it
 - [`recordings/README.md`](recordings/README.md) — recorded sessions, and how replay
   turns one into a regression test
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
