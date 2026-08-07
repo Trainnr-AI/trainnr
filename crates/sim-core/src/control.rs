@@ -101,7 +101,28 @@ impl Pid {
     /// 3. Remember this error for next time:
     ///    `self.prev_error = Some(error);`
     /// 4. Return `proportional*error + integral_gain*integral + derivative*derivative` (all via `self.`).
+    ///
+    /// # A non-finite error is refused, not absorbed
+    ///
+    /// `self.integral += NaN * dt` makes the integral NaN **permanently**,
+    /// and every later tick then outputs NaN however good its input.
+    /// Measured before this guard: three good ticks, one NaN tick, and the
+    /// controller never steered again — while `duty()` mapped NaN to 0, so
+    /// the robot simply stopped turning and reported nothing wrong.
+    ///
+    /// The wire rejects non-finite numbers already (`hil_protocol`'s
+    /// `next_f64`). This is the second line: a NaN reaching here from a
+    /// sensor, a division, or a caller we have not thought of costs one
+    /// tick of zero output instead of the rest of the session.
+    ///
+    /// Returning zero rather than the last good value is deliberate. A
+    /// stale command applied confidently is how a robot drives into
+    /// something; zero is the same thing the watchdog does, and for the
+    /// same reason.
     pub fn update(&mut self, error: f64, dt: f64) -> f64 {
+        if !error.is_finite() || !dt.is_finite() {
+            return 0.0;
+        }
         self.integral += error * dt;
         self.integral = self
             .integral
@@ -291,6 +312,52 @@ impl GotoController {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The bug this guard exists for.**
+    ///
+    /// One NaN used to disable the controller for the rest of the session:
+    /// the integral became NaN and stayed NaN, so every later tick output
+    /// NaN however good its input. `duty()` maps NaN to 0, so the symptom
+    /// was a robot that quietly stopped steering and reported nothing.
+    #[test]
+    fn one_bad_number_does_not_disable_the_controller_forever() {
+        let mut pid = Pid::new(2.0, 0.5, 0.0, 10.0);
+
+        let good = pid.update(1.0, 0.02);
+        assert!(good.is_finite() && good != 0.0);
+
+        assert_eq!(
+            pid.update(f64::NAN, 0.02),
+            0.0,
+            "a NaN tick commands nothing"
+        );
+        assert_eq!(
+            pid.update(f64::INFINITY, 0.02),
+            0.0,
+            "and so does an infinite one"
+        );
+
+        // The tick AFTER the bad one must behave exactly as if the bad one
+        // had never happened.
+        let mut clean = Pid::new(2.0, 0.5, 0.0, 10.0);
+        let _ = clean.update(1.0, 0.02);
+        assert_eq!(
+            pid.update(1.0, 0.02),
+            clean.update(1.0, 0.02),
+            "state must be untouched by the bad ticks"
+        );
+    }
+
+    /// A non-finite `dt` is the same class of hazard, via `error / dt`.
+    #[test]
+    fn a_non_finite_timestep_is_refused_too() {
+        let mut pid = Pid::new(2.0, 0.5, 0.6, 10.0);
+        assert_eq!(pid.update(1.0, f64::NAN), 0.0);
+        assert!(
+            pid.update(1.0, 0.02).is_finite(),
+            "must still work afterwards"
+        );
+    }
 
     #[test]
     fn pure_p_is_proportional() {

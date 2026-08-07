@@ -280,11 +280,36 @@ impl Message {
     }
 }
 
+/// Parse the next field as a **finite** number.
+///
+/// # Why non-finite is a parse error, not a value
+///
+/// `"NaN".parse::<f64>()` succeeds. So does `"inf"`. Without this check a
+/// single `G NaN NaN NaN` on the wire parses as a perfectly valid
+/// directive, and NaN then propagates into the PID's integral — where it
+/// **stays**. Measured: three good ticks, one NaN tick, and every
+/// subsequent tick outputs NaN even with a perfectly good target. Duty
+/// maps NaN to 0, so the robot silently stops steering for the rest of the
+/// session while still reporting healthy.
+///
+/// Rejecting here means the chip treats the line the way it treats any
+/// other garbage — ignore it and wait for a good one — and if garbage is
+/// all that arrives, `CommandWatchdog` goes stale and zeroes the output.
+/// Both are paths that already exist and are already tested.
+///
+/// Every quantity this protocol carries is a physical measurement. None of
+/// them has a meaningful infinite or undefined value.
 fn next_f64<'a, I: Iterator<Item = &'a str>>(it: &mut I) -> Result<f64, ParseError> {
-    it.next()
+    let value: f64 = it
+        .next()
         .ok_or(ParseError::MissingField)?
         .parse()
-        .map_err(|_| ParseError::BadNumber)
+        .map_err(|_| ParseError::BadNumber)?;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(ParseError::BadNumber)
+    }
 }
 
 fn next_i32<'a, I: Iterator<Item = &'a str>>(it: &mut I) -> Result<i32, ParseError> {
@@ -635,6 +660,33 @@ mod tests {
     fn a_float_where_an_int_belongs_is_rejected() {
         // Motor duty is an integer. "1.5" must not silently truncate.
         assert_eq!(Message::parse("M 1.5 2"), Err(ParseError::BadNumber));
+    }
+
+    /// A NaN on the wire is corruption, not a command.
+    ///
+    /// `"NaN".parse::<f64>()` succeeds, so without the check in `next_f64`
+    /// this line parses as a valid `Directive::Steer` and poisons the
+    /// chip's PID permanently.
+    #[test]
+    fn non_finite_numbers_are_rejected_as_corrupt() {
+        for line in [
+            "G NaN 3.0 0.5",
+            "G 1.0 nan 0.5",
+            "G 1.0 3.0 inf",
+            "R 1.0 3.0 -inf",
+            "T NaN 1.0",
+            "T 0.1 infinity",
+            "I NaN 0.0 0.0",
+            "P 1.0 NaN 0.0",
+        ] {
+            assert!(
+                Message::parse(line).is_err(),
+                "{line:?} must not parse as a command"
+            );
+        }
+        // ...and the ordinary values still do.
+        assert!(Message::parse("G 1.0 3.0 0.5").is_ok());
+        assert!(Message::parse("T -0.12 1.8").is_ok());
     }
 
     /// **The wire has a hard byte budget, and it is not documentation —

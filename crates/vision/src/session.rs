@@ -223,17 +223,16 @@ pub fn read(path: &Path) -> Result<Vec<Perceived>, String> {
 
         match f.next() {
             Some("F") => {
-                let frame_seconds = num(f.next(), &at)?;
+                let frame_seconds = finite(f.next(), &at)?;
                 let frame_w = num::<u32>(f.next(), &at)?;
                 let frame_h = num::<u32>(f.next(), &at)?;
                 let idx = num::<i64>(f.next(), &at)?;
                 // Both or neither: half a command is a malformed line, not
                 // an old one.
                 let command = match (f.next(), f.next()) {
-                    (Some(v), Some(w)) => Some(BodyTwist::new(
-                        v.parse().map_err(|_| at("bad commanded forward speed"))?,
-                        w.parse().map_err(|_| at("bad commanded turn rate"))?,
-                    )),
+                    (Some(v), Some(w)) => {
+                        Some(BodyTwist::new(finite(Some(v), &at)?, finite(Some(w), &at)?))
+                    }
                     (None, None) => None,
                     _ => return Err(at("a command needs both v and w")),
                 };
@@ -286,6 +285,22 @@ fn num<T: std::str::FromStr>(tok: Option<&str>, at: &impl Fn(&str) -> String) ->
     tok.ok_or_else(|| at("ran out of fields"))?
         .parse()
         .map_err(|_| at("could not parse a number"))
+}
+
+/// As [`num`], but rejects NaN and infinity.
+///
+/// `"NaN".parse::<f64>()` succeeds, and a NaN `frame_seconds` would make
+/// the replayed session time NaN from that frame on — the same class of
+/// permanent, silent poisoning that a NaN on the HIL wire used to cause in
+/// the PID. A recording is a file we may not have written; treat it as
+/// input, not as fact.
+fn finite(tok: Option<&str>, at: &impl Fn(&str) -> String) -> Result<f64, String> {
+    let value: f64 = num(tok, at)?;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(at("not a finite number"))
+    }
 }
 
 /// How far a recomputed command may drift from the recorded one before it
@@ -520,6 +535,23 @@ mod tests {
     /// Half a command is a corrupt line, not an old one — and the
     /// difference matters, because treating it as old would silently skip
     /// verification for that frame.
+    /// A recording is input, not fact — the same NaN guard the HIL wire has.
+    #[test]
+    fn non_finite_values_in_a_recording_are_rejected() {
+        for body in [
+            "F NaN 640 480 -1\n",
+            "F inf 640 480 -1\n",
+            "F 0.05 640 480 -1 NaN 0.0\n",
+            "F 0.05 640 480 -1 0.1 -inf\n",
+        ] {
+            let path = std::env::temp_dir().join("perc-nonfinite.perc");
+            std::fs::write(&path, body).unwrap();
+            let got = read(&path);
+            std::fs::remove_file(&path).ok();
+            assert!(got.is_err(), "{body:?} must be rejected");
+        }
+    }
+
     #[test]
     fn half_a_command_is_rejected() {
         let path = std::env::temp_dir().join("perc-halfcmd.perc");

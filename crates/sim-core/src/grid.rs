@@ -58,13 +58,26 @@ impl OccupancyGrid {
     /// EXERCISE 6a — which cell is the world point (x, y) in?
     ///
     /// `Some((cx, cy))` if inside the grid, `None` if outside. Recipe:
-    /// 1. If `x < 0.0 || y < 0.0`, return None (off the map's corner).
+    /// 1. If `x` or `y` is not a finite, non-negative number, return None.
     /// 2. `cx = (x / resolution).floor() as usize` — same for cy with y.
     ///    (floor: a point at 0.37 m with 0.1 m cells is in cell 3.)
     /// 3. If `cx >= width || cy >= height`, return None (off the far edge).
     /// 4. Otherwise `Some((cx, cy))`.
+    ///
+    /// # Why step 1 tests `is_finite` and not just `< 0.0`
+    ///
+    /// **`NaN < 0.0` is false.** A NaN coordinate sailed through the
+    /// original guard, and `NaN as usize` saturates to **0** — so a
+    /// position of "no idea" reported itself as `Some((0, 30))`: a
+    /// perfectly valid-looking cell near the map's edge. The robot would
+    /// have marked obstacles there and planned from there, with nothing
+    /// anywhere indicating the input was meaningless.
+    ///
+    /// Infinity was already handled by accident — `inf as usize` saturates
+    /// to `usize::MAX`, which fails the bounds check at step 3. Relying on
+    /// that is not a plan.
     pub fn world_to_cell(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if x < 0.0 || y < 0.0 {
+        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
             return None;
         }
         let cx = (x / self.resolution).floor() as usize;
@@ -144,6 +157,29 @@ impl OccupancyGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `NaN < 0.0` is false, so a NaN coordinate passed the original
+    /// guard, and `NaN as usize` saturates to 0 — a position of "no idea"
+    /// reported itself as a valid cell near the map's edge.
+    #[test]
+    fn a_meaningless_coordinate_is_outside_the_grid() {
+        let g = OccupancyGrid::new(8.0, 6.0, 0.1);
+        for (x, y) in [
+            (f64::NAN, 3.0),
+            (3.0, f64::NAN),
+            (f64::NAN, f64::NAN),
+            (f64::INFINITY, 3.0),
+            (3.0, f64::NEG_INFINITY),
+        ] {
+            assert_eq!(
+                g.world_to_cell(x, y),
+                None,
+                "({x}, {y}) is not a place on the map"
+            );
+        }
+        // Real coordinates still resolve.
+        assert_eq!(g.world_to_cell(1.0, 3.0), Some((10, 30)));
+    }
 
     fn grid() -> OccupancyGrid {
         OccupancyGrid::new(2.0, 2.0, 0.1) // 20 x 20 cells
