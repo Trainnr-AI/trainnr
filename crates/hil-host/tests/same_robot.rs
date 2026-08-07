@@ -69,15 +69,32 @@ fn the_rig_and_the_firmware_drive_the_same_robot() {
     );
 }
 
-/// The duty scale must be derived from the mission's own spec, not from a
-/// constant that can disagree with it.
+/// The duty scale must be derived from the mission's own spec and from
+/// the shared full-scale constant — never from a second copy of either.
+///
+/// Deliberately checks the two *ingredients* rather than one exact
+/// expression. The first version pinned the literal string
+/// `"...max_wheel_rad_s / 1000.0"` and failed the moment that `1000.0`
+/// was replaced by the shared `DUTY_FULL` — i.e. it failed on an
+/// improvement. A guard that fires on the fix it was asking for is worse
+/// than no guard.
 #[test]
 fn the_duty_scale_comes_from_the_simulated_robot() {
     let host = read("crates/hil-host/src/main.rs");
+    let scale = host
+        .lines()
+        .find(|l| l.contains("duty_scale ="))
+        .expect("hil-host must compute a duty_scale");
+
     assert!(
-        host.contains("mission.config.spec.max_wheel_rad_s / 1000.0"),
-        "hil-host should derive duty_scale from `mission.config.spec` so \
-         that only one robot exists in the program"
+        scale.contains("mission.config.spec"),
+        "duty_scale must come from the mission's own spec, or the rig \
+         scales for one robot and simulates another: {scale:?}"
+    );
+    assert!(
+        scale.contains("DUTY_FULL"),
+        "duty_scale must use the shared DUTY_FULL, not its own copy of \
+         1000 — that literal was once written three times: {scale:?}"
     );
 }
 

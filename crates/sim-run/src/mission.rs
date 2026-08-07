@@ -235,6 +235,16 @@ impl Mission {
         if let Err(why) = config.spec.check(&config.gains) {
             panic!("MissionConfig is not physically achievable: {why}");
         }
+        // `is_valid` documented itself as "callers can assert on this
+        // rather than discovering it in the viewer" and had no callers,
+        // exactly like `check` before it. `exit <= enter` collapses the
+        // dead zone and the robot judders between Goto and Avoid.
+        assert!(
+            config.avoid.is_valid(),
+            "avoid hysteresis is not hysteretic: exit {} must exceed enter {}",
+            config.avoid.exit,
+            config.avoid.enter
+        );
         let mut world = World::room(config.world_size.0, config.world_size.1);
         world.walls.extend(config.obstacles.iter().copied());
 

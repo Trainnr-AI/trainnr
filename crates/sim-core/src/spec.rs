@@ -305,9 +305,26 @@ impl RobotSpec {
     /// Lives here because the conversion is only meaningful in terms of
     /// [`Self::max_wheel_rad_s`], and firmware was doing it inline.
     pub fn duty(&self, wheel_rad_s: f64) -> i32 {
-        ((wheel_rad_s / self.max_wheel_rad_s) * 1000.0).clamp(-1000.0, 1000.0) as i32
+        let full = f64::from(DUTY_FULL);
+        ((wheel_rad_s / self.max_wheel_rad_s) * full).clamp(-full, full) as i32
     }
 }
+
+/// Full-scale motor command on the wire. `±DUTY_FULL` is "everything the
+/// motor has".
+///
+/// # Why it lives here and not in `hil-protocol`
+///
+/// It is the protocol's number, but `RobotSpec::duty` is the only thing
+/// that *produces* it, and `hil-protocol` already depends on this crate —
+/// so putting it there would leave the encoder unable to name the limit it
+/// must respect. It did: the literal `1000` was written three times across
+/// two crates, and `hil_protocol::clamp_duty` documented itself as
+/// *"Both ends call this"* while nobody called it, because `duty` had
+/// reimplemented the clamp inline.
+///
+/// `hil-protocol` re-exports it, so the protocol still names it.
+pub const DUTY_FULL: i32 = 1000;
 
 /// A tuned control profile: gains plus the speed policy they were tuned
 /// against.

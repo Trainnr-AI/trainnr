@@ -47,7 +47,7 @@ pub use rng::Rng;
 pub use robot::{DiffDrive, Robot};
 pub use safety::{CommandWatchdog, Millis};
 pub use sensors::Encoders;
-pub use spec::{ControlGains, RobotSpec};
+pub use spec::{ControlGains, RobotSpec, DUTY_FULL};
 pub use world::Segment;
 
 // ---- std only: these allocate. ----

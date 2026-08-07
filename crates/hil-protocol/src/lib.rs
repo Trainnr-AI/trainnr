@@ -65,7 +65,12 @@ use sim_core::Directive;
 
 /// Motor commands are clamped to this range on both ends. A duty of
 /// `±DUTY_FULL` means "full commanded wheel speed".
-pub const DUTY_FULL: i32 = 1000;
+///
+/// Re-exported from `sim-core`, where `RobotSpec::duty` — the only thing
+/// that produces a duty — can name it. Defining it here left the encoder
+/// unable to reference its own limit, so the literal `1000` ended up
+/// written three times across two crates.
+pub use sim_core::DUTY_FULL;
 
 /// One message in either direction.
 ///
@@ -296,14 +301,6 @@ fn next_i64<'a, I: Iterator<Item = &'a str>>(it: &mut I) -> Result<i64, ParseErr
         .map_err(|_| ParseError::BadNumber)
 }
 
-/// Clamp a motor command into the protocol's legal range.
-///
-/// Both ends call this. A duty outside `±DUTY_FULL` is not a protocol
-/// error — it is a control law that asked for more than the motor has, and
-/// saturating is the correct physical answer.
-pub fn clamp_duty(duty: i32) -> i32 {
-    duty.clamp(-DUTY_FULL, DUTY_FULL)
-}
 
 /// Accumulates bytes from a serial link into complete lines.
 ///
@@ -369,10 +366,6 @@ impl<const N: usize> LineReader<N> {
         }
     }
 
-    /// Bytes buffered so far in the current, incomplete line.
-    pub fn pending(&self) -> usize {
-        self.len
-    }
 }
 
 /// A planner's [`Directive`] becomes exactly one wire message.
@@ -823,15 +816,24 @@ mod tests {
 
     // ---- duty clamping ----
 
+    /// The property survives; the duplicate function that used to hold it
+    /// does not. `hil_protocol::clamp_duty` claimed "Both ends call this"
+    /// and had no callers, because `RobotSpec::duty` — the only thing that
+    /// makes a duty — clamped inline with its own copy of the literal.
+    /// This now tests the real encoder against the shared constant.
     #[test]
     fn duty_saturates_at_the_protocol_limit() {
-        assert_eq!(clamp_duty(0), 0);
-        assert_eq!(clamp_duty(DUTY_FULL), DUTY_FULL);
-        assert_eq!(clamp_duty(-DUTY_FULL), -DUTY_FULL);
-        assert_eq!(clamp_duty(50_000), DUTY_FULL);
-        assert_eq!(clamp_duty(-50_000), -DUTY_FULL);
-        assert_eq!(clamp_duty(i32::MAX), DUTY_FULL);
-        assert_eq!(clamp_duty(i32::MIN), -DUTY_FULL);
+        let spec = sim_core::RobotSpec::SIM_BOT;
+        let max = spec.max_wheel_rad_s;
+
+        assert_eq!(spec.duty(0.0), 0);
+        assert_eq!(spec.duty(max), DUTY_FULL);
+        assert_eq!(spec.duty(-max), -DUTY_FULL);
+        // Well past what the motor can do: saturate, never wrap.
+        assert_eq!(spec.duty(max * 50.0), DUTY_FULL);
+        assert_eq!(spec.duty(-max * 50.0), -DUTY_FULL);
+        assert_eq!(spec.duty(f64::MAX), DUTY_FULL);
+        assert_eq!(spec.duty(f64::MIN), -DUTY_FULL);
     }
 
     // ---- LineReader ----
@@ -862,16 +864,6 @@ mod tests {
         let mut r: LineReader<64> = LineReader::new();
         assert_eq!(feed(&mut r, "M 1 2\n"), Some("M 1 2"));
         assert_eq!(feed(&mut r, "S 9 8\n"), Some("S 9 8"));
-        assert_eq!(r.pending(), 0);
-    }
-
-    #[test]
-    fn line_reader_reports_pending_bytes() {
-        let mut r: LineReader<64> = LineReader::new();
-        for b in b"M 1" {
-            r.push(*b);
-        }
-        assert_eq!(r.pending(), 3);
     }
 
     #[test]
@@ -895,11 +887,13 @@ mod tests {
         }
     }
 
+    /// Compared by BEHAVIOUR rather than by peeking at the buffer count.
+    /// The accessor that used to be peeked at existed only for this test.
     #[test]
     fn line_reader_default_matches_new() {
-        let a: LineReader<8> = LineReader::default();
-        let b: LineReader<8> = LineReader::new();
-        assert_eq!(a.pending(), b.pending());
+        let mut a: LineReader<8> = LineReader::default();
+        let mut b: LineReader<8> = LineReader::new();
+        assert_eq!(feed(&mut a, "M 1 2\n"), feed(&mut b, "M 1 2\n"));
     }
 
     /// The end-to-end property: what the chip writes, the host reads.

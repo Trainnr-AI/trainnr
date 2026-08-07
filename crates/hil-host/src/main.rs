@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Duty ±1000 maps to ±`max_wheel_rad_s`. Read off the mission's own
     // spec so there is exactly one robot in this program — the firmware
     // scales by the same quantity from the same constant.
-    let duty_scale = mission.config.spec.max_wheel_rad_s / 1000.0;
+    let duty_scale = mission.config.spec.max_wheel_rad_s / f64::from(sim_core::DUTY_FULL);
     viz::draw_world(&rec, &mission)?;
 
     // ---- connect to the brain, or to a recording of one ----
