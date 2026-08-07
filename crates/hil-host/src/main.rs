@@ -34,19 +34,54 @@
 //! cargo run -p hil-host -- --serial /dev/cu.usbmodem11   # a REAL Pico
 //! ```
 
+mod wire;
+
 use hil_protocol::Message;
 use sim_core::RobotSpec;
 use sim_run::{viz, Mission, MissionConfig};
-use std::io::{BufRead, BufReader, Write};
+use std::io::BufReader;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use wire::Wire;
+
+/// Every flag this binary takes. Listed once so that [`flag`] and
+/// [`positional`] cannot disagree about what counts as a flag — they did,
+/// briefly, and `--record run.wire` was read as a path to a UF2 image.
+const FLAGS: [&str; 3] = ["--serial", "--record", "--replay"];
+
+/// `--name <value>`, or `None`.
+fn flag(args: &[String], name: &str) -> Option<String> {
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+}
+
+/// The first argument that is neither a flag nor a flag's value — the UF2
+/// to hand the emulator.
+fn positional(args: &[String]) -> Option<String> {
+    let mut skip_next = false;
+    for a in args {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if FLAGS.contains(&a.as_str()) {
+            skip_next = true;
+            continue;
+        }
+        if !a.starts_with("--") {
+            return Some(a.clone());
+        }
+    }
+    None
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let serial_port = args
-        .iter()
-        .position(|a| a == "--serial")
-        .and_then(|i| args.get(i + 1))
-        .cloned();
+    let serial_port = flag(&args, "--serial");
+    let record = flag(&args, "--record").map(PathBuf::from);
+    let replay = flag(&args, "--replay").map(PathBuf::from);
 
     let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
 
@@ -86,10 +121,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let duty_scale = mission.config.spec.max_wheel_rad_s / 1000.0;
     viz::draw_world(&rec, &mission)?;
 
-    // ---- connect to the brain ----
+    // ---- connect to the brain, or to a recording of one ----
     let mut emulator: Option<Child> = None;
-    let (mut to_chip, mut from_chip): (Box<dyn Write>, Box<dyn BufRead>) = match &serial_port {
-        Some(port) => {
+    let mut wire = match (&replay, &serial_port) {
+        // A recording stands in for the chip entirely: no serial port, no
+        // emulator, no 20 s wait. And it checks what the host says.
+        (Some(path), _) => Wire::replay(path)?,
+        (None, Some(port)) => {
             eprintln!("[host] opening {port}");
             let sp = serialport::new(port, 115_200)
                 .timeout(std::time::Duration::from_secs(5))
@@ -97,12 +135,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Two handles: the read side blocks, and we must be able to
             // write while it does.
             let reader = sp.try_clone()?;
-            (Box::new(sp), Box::new(BufReader::new(reader)))
+            Wire::live(Box::new(sp), Box::new(BufReader::new(reader)), record.as_deref())?
         }
-        None => {
-            let uf2 = args
-                .first()
-                .cloned()
+        (None, None) => {
+            let uf2 = positional(&args)
                 .unwrap_or_else(|| "firmware/pico-robot/pico-robot.uf2".into());
             eprintln!("[host] spawning emulator for {uf2}");
             let mut child: Child = Command::new("npx")
@@ -115,9 +151,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let w = child.stdin.take().ok_or("emulator stdin was not piped")?;
             let r = child.stdout.take().ok_or("emulator stdout was not piped")?;
             emulator = Some(child);
-            (Box::new(w), Box::new(BufReader::new(r)))
+            Wire::live(Box::new(w), Box::new(BufReader::new(r)), record.as_deref())?
         }
     };
+    if let Some(p) = &record {
+        eprintln!("[host] recording to {}", p.display());
+    }
 
     let mut trail_true: Vec<[f32; 2]> = Vec::new();
     let mut trail_belief: Vec<[f32; 2]> = Vec::new();
@@ -125,6 +164,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The chip's worst control-loop compute time, straight from the chip.
     let mut worst_us = 0u32;
     let mut ticks = 0usize;
+
+    // Tell the chip where this session begins, before anything else.
+    // Without it the chip carries its previous run's belief into this one
+    // — measured: 0/1 waypoints, 4.97 m drift, 2036 wall bumps.
+    wire.send(Message::Start {
+        x: mission.config.start.x,
+        y: mission.config.start.y,
+        theta: mission.config.start.theta,
+    })?;
+    // Wait for the chip to confirm before saying anything else. Sending
+    // the first goal straight after would put both lines in its UART FIFO
+    // at once — 46 bytes against 32 — and shred the command.
+    while let Some(line) = wire.recv_line()? {
+        if let Ok(Message::Pose { x, y, theta }) = Message::parse(line.trim_end()) {
+            belief_from_chip = sim_core::Pose::new(x, y, theta);
+            break;
+        }
+    }
 
     // ---- the loop: plan here, control there ----
     while let Some(obs) = mission.observe() {
@@ -135,17 +192,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         //    rested on the two staying identical with nothing checking it.
         //    Now the rig ships exactly what the simulator decided.
         let directive = mission.plan(&obs);
-        send(&mut to_chip, directive.into())?;
+        wire.send(directive.into())?;
 
         // 2. Wait for its motor command. Anything else is the chip's
         //    belief (for the viewer) or human-facing noise.
         let mut duty = None;
         while duty.is_none() {
-            let mut line = String::new();
-            if from_chip.read_line(&mut line)? == 0 {
+            let Some(line) = wire.recv_line()? else {
                 eprintln!("[host] chip closed the connection");
                 break;
-            }
+            };
             match Message::parse(line.trim_end()) {
                 Ok(Message::Motor { duty_l, duty_r }) => duty = Some((duty_l, duty_r)),
                 Ok(Message::Pose { x, y, theta }) => {
@@ -163,13 +219,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tick = mission.advance(obs, duty_l as f64 * duty_scale, duty_r as f64 * duty_scale);
 
         // 4. Hand back what the encoders saw.
-        send(
-            &mut to_chip,
-            Message::Sensors {
-                dl: tick.dticks.0,
-                dr: tick.dticks.1,
-            },
-        )?;
+        wire.send(Message::Sensors {
+            dl: tick.dticks.0,
+            dr: tick.dticks.1,
+        })?;
 
         // 5. Draw it — the same viewer sim-run uses.
         viz::draw(&rec, &mission, &tick, &mut trail_true, &mut trail_belief)?;
@@ -206,6 +259,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         outcome.bumps
     );
 
+    // ---- did today's code agree with the recording? ----
+    let divergences = wire.divergences();
+    if !divergences.is_empty() || wire.unconsumed() > 0 {
+        eprintln!("\nREPLAY DIVERGED from the recorded session:");
+        for d in divergences.iter().take(10) {
+            eprintln!("  - {d}");
+        }
+        if divergences.len() > 10 {
+            eprintln!("  ... and {} more", divergences.len() - 10);
+        }
+        if wire.unconsumed() > 0 {
+            eprintln!(
+                "  - {} recorded lines were never reached — this run ended \
+                 earlier than the one captured",
+                wire.unconsumed()
+            );
+        }
+        eprintln!(
+            "\nThe robot would behave differently from the recording. If that \
+             is intended, re-record; if not, this is the regression."
+        );
+        std::process::exit(1);
+    }
+    if replay.is_some() {
+        println!("  replay:      matched the recording exactly");
+    }
+
     // The deadline, checked against the chip rather than remembered.
     let budget_us = (dt * 1e6) as u32;
     if worst_us == 0 {
@@ -231,11 +311,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Every send goes through `hil-protocol` rather than being hand-formatted
-/// on this side — that is the whole point of the crate existing.
-fn send(w: &mut Box<dyn Write>, m: Message) -> std::io::Result<()> {
-    let mut s = String::new();
-    let _ = m.write_into(&mut s);
-    w.write_all(s.as_bytes())?;
-    w.flush()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(s: &str) -> Vec<String> {
+        s.split_whitespace().map(String::from).collect()
+    }
+
+    /// The bug this guards: `--record run.wire` was read as a positional
+    /// UF2 path, so the emulator was asked to boot a file called
+    /// `--record` and the run died after one line.
+    #[test]
+    fn a_flags_value_is_not_mistaken_for_the_uf2() {
+        assert_eq!(positional(&argv("--record run.wire")), None);
+        assert_eq!(positional(&argv("--serial /dev/cu.x --record r.wire")), None);
+        assert_eq!(
+            positional(&argv("--record r.wire firmware/x.uf2")).as_deref(),
+            Some("firmware/x.uf2")
+        );
+        assert_eq!(
+            positional(&argv("firmware/x.uf2 --record r.wire")).as_deref(),
+            Some("firmware/x.uf2")
+        );
+    }
+
+    #[test]
+    fn flags_read_their_own_values() {
+        let a = argv("--serial /dev/cu.usbmodem11 --record run.wire");
+        assert_eq!(flag(&a, "--serial").as_deref(), Some("/dev/cu.usbmodem11"));
+        assert_eq!(flag(&a, "--record").as_deref(), Some("run.wire"));
+        assert_eq!(flag(&a, "--replay"), None);
+    }
+
+    #[test]
+    fn a_trailing_flag_with_no_value_is_not_a_panic() {
+        assert_eq!(flag(&argv("--record"), "--record"), None);
+        assert_eq!(positional(&argv("--record")), None);
+    }
 }

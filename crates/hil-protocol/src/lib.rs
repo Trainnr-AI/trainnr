@@ -9,6 +9,7 @@
 //!   chip -> host   P <x> <y> <theta>     believed pose (display only)
 //!   chip -> host   M <duty_l> <duty_r>   motor command, ±1000
 //!   host -> chip   S <dl> <dr>           encoder tick deltas
+//!   host -> chip   I <x> <y> <theta>     begin a session here (once, first)
 //!   chip -> host   H <worst_us>         new worst-case compute time
 //! ```
 //!
@@ -116,6 +117,26 @@ pub enum Message {
     /// `S dl dr` — encoder tick deltas since the previous step. Signed:
     /// a reversing wheel counts down.
     Sensors { dl: i64, dr: i64 },
+    /// host → chip: **begin a session here.** Sets the believed pose and
+    /// clears every scrap of accumulated state.
+    ///
+    /// # Why the chip cannot just know
+    ///
+    /// The firmware used to initialise its pose once, at boot, to a
+    /// hardcoded start. That is correct exactly once. A board left powered
+    /// between runs — which is every board on a bench, and every robot
+    /// that is restarted without a power cycle — begins the next session
+    /// believing it is wherever the last one left it.
+    ///
+    /// Found by replaying a recorded hardware session: the second line of
+    /// the log was the chip announcing it was at (6.38, 3.09), the finish
+    /// of the *previous* run, and commanding a full-speed spin to correct
+    /// an error that did not exist. 0/1 waypoints, 4.97 m drift, 2036 wall
+    /// bumps.
+    ///
+    /// Sent once, before the control loop, so it never shares the UART
+    /// FIFO with an `S` line.
+    Start { x: f64, y: f64, theta: f64 },
     /// chip → host: a NEW worst-case control-loop compute time, in
     /// microseconds.
     ///
@@ -178,6 +199,7 @@ impl Message {
             Message::Pose { x, y, theta } => writeln!(w, "P {x:.4} {y:.4} {theta:.4}"),
             Message::Motor { duty_l, duty_r } => writeln!(w, "M {duty_l} {duty_r}"),
             Message::Sensors { dl, dr } => writeln!(w, "S {dl} {dr}"),
+            Message::Start { x, y, theta } => writeln!(w, "I {x:.4} {y:.4} {theta:.4}"),
             Message::Health { worst_us } => writeln!(w, "H {worst_us}"),
         }
     }
@@ -217,6 +239,12 @@ impl Message {
                 let duty_r = next_i32(&mut parts)?;
                 Ok(Message::Motor { duty_l, duty_r })
             }
+            "I" => {
+                let x = next_f64(&mut parts)?;
+                let y = next_f64(&mut parts)?;
+                let theta = next_f64(&mut parts)?;
+                Ok(Message::Start { x, y, theta })
+            }
             "H" => {
                 let worst_us = next_i64(&mut parts)?;
                 Ok(Message::Health {
@@ -242,6 +270,7 @@ impl Message {
             Message::Motor { .. } => 'M',
             Message::Sensors { .. } => 'S',
             Message::Health { .. } => 'H',
+            Message::Start { .. } => 'I',
         }
     }
 }
@@ -394,7 +423,11 @@ impl Message {
             Message::Pose { .. }
             | Message::Motor { .. }
             | Message::Sensors { .. }
-            | Message::Health { .. } => None,
+            | Message::Health { .. }
+            // A session start is a command, but not a *steering* one: it
+            // resets state rather than producing motion, so it is handled
+            // before the controller ever sees it.
+            | Message::Start { .. } => None,
         }
     }
 }
@@ -743,6 +776,11 @@ mod tests {
             },
             Message::Sensors { dl: 7, dr: 9 },
             Message::Health { worst_us: 198 },
+            Message::Start {
+                x: 1.0,
+                y: 3.0,
+                theta: 0.0,
+            },
         ] {
             assert_eq!(m.directive(), None, "{m:?} is telemetry, not a command");
         }

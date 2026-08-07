@@ -128,7 +128,12 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
     let mut odom = Odometry {
         model: SPEC.drive(),
         ticks_per_rev: SPEC.ticks_per_rev,
-        pose: Pose::new(1.0, 3.0, 0.0), // told where it starts, once
+        // Provisional. The host sets the real one with an `I` line before
+        // the first directive — see `Message::Start`. Hardcoding it here
+        // and never revisiting was a bug: a board left powered between
+        // runs began each new session believing it was wherever the last
+        // one finished.
+        pose: Pose::new(0.0, 0.0, 0.0),
     };
     let mut controller = GotoController::new(GAINS);
 
@@ -146,14 +151,43 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
             // Bounded by the transport, not by a timer wrapped around it.
             let n = link.recv(&mut rx, POLL).await;
             let mut found = None;
+            let mut restarted = false;
             for &b in &rx[..n] {
                 if let Some(line) = reader.push(b) {
-                    // Telemetry parses fine and yields `None` here, so the
-                    // chip cannot be commanded by a stray status line.
-                    if let Some(d) = Message::parse(line).ok().and_then(|m| m.directive()) {
-                        found = Some(d);
+                    match Message::parse(line) {
+                        // A new session: forget everything. Whatever this
+                        // chip believed belongs to the previous run.
+                        Ok(Message::Start { x, y, theta }) => {
+                            odom.pose = Pose::new(x, y, theta);
+                            controller.reset();
+                            worst_us = 0;
+                            restarted = true;
+                        }
+                        // Telemetry parses fine and yields `None`, so the
+                        // chip cannot be commanded by a stray status line.
+                        Ok(m) => {
+                            if let Some(d) = m.directive() {
+                                found = Some(d);
+                            }
+                        }
+                        Err(_) => {}
                     }
                 }
+            }
+            // Acknowledge a session start by reporting the pose we
+            // accepted. Two jobs: it confirms the chip took the reset, and
+            // it makes the host WAIT — without that pause the host's `I`
+            // and its first `G` land in the UART FIFO together (46 bytes
+            // against 32) and the command is shredded.
+            if restarted {
+                out.clear();
+                let _ = Message::Pose {
+                    x: odom.pose.x,
+                    y: odom.pose.y,
+                    theta: odom.pose.theta,
+                }
+                .write_into(&mut out);
+                link.send(out.as_bytes()).await;
             }
             if let Some(g) = found {
                 watchdog.feed(now_ms());
