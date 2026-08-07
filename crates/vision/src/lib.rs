@@ -19,6 +19,7 @@ pub mod lock;
 pub mod logging;
 pub mod openvocab;
 pub mod rig;
+pub mod session;
 pub mod stats;
 pub mod target;
 
@@ -29,5 +30,6 @@ pub use filter::{deadband, LowPass};
 pub use lock::{hue_distance, iou, TargetLock};
 pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};
 pub use rig::{CameraRig, FrameSet};
+pub use session::{Perceived, Recorder};
 pub use stats::{percentile, Stats};
 pub use target::{approach_factor, pick_target};

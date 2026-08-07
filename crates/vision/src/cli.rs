@@ -9,6 +9,7 @@
 //! real arguments; tests pass whatever they like.
 
 use anyhow::Result;
+use std::path::PathBuf;
 
 use crate::detect::DetectorModel;
 
@@ -23,6 +24,12 @@ pub struct Args {
     /// Explicit camera index. `None` means "look for the Brio by name",
     /// which is the reliable path on macOS.
     pub camera: Option<u32>,
+    /// Write every frame's perception result here — see
+    /// [`crate::session`].
+    pub record: Option<PathBuf>,
+    /// Drive the control loop from a recording instead of a camera. No
+    /// camera is opened and no detector is loaded.
+    pub replay: Option<PathBuf>,
 }
 
 impl Default for Args {
@@ -31,8 +38,30 @@ impl Default for Args {
             model: DetectorModel::DFineN,
             find: None,
             camera: None,
+            record: None,
+            replay: None,
         }
     }
+}
+
+/// A flag's value as a path, or a clear error naming the flag.
+///
+/// Factored out because `--record --replay x` must not silently record to
+/// a file called `--replay`; the same slip cost two debugging runs on the
+/// HIL host.
+fn path_value<I, S>(it: &mut I, flag: &str) -> Result<PathBuf>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let v = it
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("{flag} needs a path"))?;
+    let v = v.as_ref();
+    if v.starts_with('-') {
+        anyhow::bail!("{flag} needs a path, got the flag {v:?}");
+    }
+    Ok(PathBuf::from(v))
 }
 
 impl Args {
@@ -69,6 +98,12 @@ impl Args {
                         .ok_or_else(|| anyhow::anyhow!("--find needs a phrase"))?;
                     parsed.find = Some(phrase.as_ref().to_string());
                 }
+                "--record" => {
+                    parsed.record = Some(path_value(&mut it, "--record")?);
+                }
+                "--replay" => {
+                    parsed.replay = Some(path_value(&mut it, "--replay")?);
+                }
                 other if other.starts_with('-') => {
                     anyhow::bail!("unknown flag {other:?}");
                 }
@@ -100,6 +135,32 @@ impl Args {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn record_and_replay_take_paths() {
+        let a = Args::parse_from(["--record", "run.perc"]).unwrap();
+        assert_eq!(a.record.unwrap().to_str(), Some("run.perc"));
+        let a = Args::parse_from(["--replay", "run.perc"]).unwrap();
+        assert_eq!(a.replay.unwrap().to_str(), Some("run.perc"));
+    }
+
+    /// The HIL host briefly read `--record run.wire` as a positional UF2
+    /// path. Same shape of mistake, caught here instead.
+    #[test]
+    fn a_flag_is_not_accepted_as_a_paths_value() {
+        let err = Args::parse_from(["--record", "--replay"]).unwrap_err();
+        assert!(err.to_string().contains("got the flag"), "{err}");
+        assert!(Args::parse_from(["--record"]).is_err(), "missing value");
+    }
+
+    /// A camera index must still parse when flags are present — the
+    /// positional argument and the flags share one loop.
+    #[test]
+    fn a_camera_index_survives_alongside_flags() {
+        let a = Args::parse_from(["--record", "r.perc", "2"]).unwrap();
+        assert_eq!(a.camera, Some(2));
+        assert_eq!(a.record.unwrap().to_str(), Some("r.perc"));
+    }
 
     #[test]
     fn no_arguments_gives_the_documented_defaults() {

@@ -46,6 +46,7 @@ use anyhow::Result;
 use sim_core::{wrap_angle, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
 use std::collections::VecDeque;
 use std::time::Instant;
+use vision::session::Perceived;
 use vision::{
     approach_factor, deadband, pick_target, Args, Detection, Detector, Frame, LowPass,
     ObjectDetector, OpenVocabDetector, Source, Stream, TargetLock,
@@ -103,6 +104,26 @@ fn main() -> Result<()> {
             (73, "book", rerun::Rgba32::from_rgb(200, 140, 255)),
         ]),
     )?;
+
+    // ---- replay: before any hardware is touched ----
+    //
+    // Deliberately ahead of the camera and the detector. Placed after
+    // them, replay still asked macOS for camera permission and spent
+    // seconds loading a model it would never call — which makes the one
+    // thing this mode is for, re-running a moment instantly with nothing
+    // attached, quietly untrue.
+    if let Some(path) = &args.replay {
+        let frames = vision::session::read(path).map_err(|e| anyhow::anyhow!(e))?;
+        println!("replaying {} frames from {}\n", frames.len(), path.display());
+        let mut chase = Chase::new();
+        rec.log("camera/image/named", &rerun::Clear::flat())?;
+        rec.log("camera/image/candidates", &rerun::Clear::flat())?;
+        for p in &frames {
+            chase.step(p, None, &rec)?;
+        }
+        println!("\nreplay complete: {} frames", frames.len());
+        return Ok(());
+    }
 
     // Permission + capture thread + latest-wins channel, in one call.
     let source = match args.camera {
@@ -223,21 +244,7 @@ fn main() -> Result<()> {
         }
     };
 
-    // The Stage 0 robot, unchanged.
-    let mut robot = Robot {
-        model: SPEC.drive(),
-        pose: Pose::ORIGIN,
-    };
-    let mut controller = GotoController::new(GAINS);
-    // A second, identical PID fed the UNFILTERED signal. It steers
-    // nothing — it exists so the viewer can plot what we avoided.
-    let mut raw_pid = Pid::new(
-        GAINS.heading_kp,
-        GAINS.heading_ki,
-        GAINS.heading_kd,
-        GAINS.heading_i_limit,
-    );
-    let mut bearing_filter = LowPass::new(BEARING_ALPHA);
+    let mut chase = Chase::new();
 
     // Clear the acquisition overlay before the loop starts.
     //
@@ -249,91 +256,174 @@ fn main() -> Result<()> {
     rec.log("camera/image/named", &rerun::Clear::flat())?;
     rec.log("camera/image/candidates", &rerun::Clear::flat())?;
 
+    let mut recorder = vision::session::Recorder::create(args.record.as_deref())?;
+    if let Some(p) = &args.record {
+        println!("recording perception to {}\n", p.display());
+    }
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
-    let start = Instant::now();
-    // Bounded, because this loop never ends. An unbounded trail grows at
-    // 20 points/s AND is cloned into Rerun every frame, so the per-frame
-    // cost climbs with runtime — after an hour it is cloning 72k points
-    // 20x a second. A fixed window keeps that constant.
-    let mut trail: VecDeque<[f32; 2]> = VecDeque::with_capacity(TRAIL_POINTS);
     let mut last_tick = Instant::now();
-    let mut last_print = Instant::now();
-
     for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);
         last_tick = Instant::now();
 
         let detections = detector.detect(&frame)?;
         // Locked: track that class (and colour). Otherwise: most confident.
-        let target = match &lock {
+        // Selection happens HERE, on the live frame, because the lock
+        // matches on hue and needs pixels. Its *result* is recorded — see
+        // `vision::session`.
+        let chosen = match &lock {
             Some(l) => l.pick(&detections, &frame),
             None => pick_target(&detections),
         };
+        let target = chosen.and_then(|c| detections.iter().position(|d| std::ptr::eq(d, c)));
 
-        let (v_cmd, w_cmd, heading_error, w_raw) = match target {
+        let perceived = Perceived {
+            dt,
+            frame_w: frame.width,
+            frame_h: frame.height,
+            detections,
+            target,
+        };
+        recorder.write(&perceived)?;
+        chase.step(&perceived, Some(&frame), &rec)?;
+    }
+    Ok(())
+}
+
+/// Everything that persists between frames — and the one place a frame's
+/// perception becomes motion.
+///
+/// Split out so that a live camera and a recording drive **the same code**.
+/// That is the same seam the HIL rig has between `observe` and `advance`,
+/// and it exists for the same reason: two loops that "do the same thing"
+/// drift, and nothing notices until the robot behaves differently from the
+/// session you thought you were reproducing.
+struct Chase {
+    robot: Robot,
+    controller: GotoController,
+    /// A second, identical PID fed the UNFILTERED signal. It steers
+    /// nothing — it exists so the viewer can plot what we avoided.
+    raw_pid: Pid,
+    bearing_filter: LowPass,
+    /// Bounded, because this loop never ends. An unbounded trail grows at
+    /// 20 points/s AND is cloned into Rerun every frame, so the per-frame
+    /// cost climbs with runtime — after an hour it is cloning 72k points
+    /// 20x a second. A fixed window keeps that constant.
+    trail: VecDeque<[f32; 2]>,
+    /// Session time, accumulated from the per-frame `dt` rather than read
+    /// off a clock.
+    ///
+    /// It has to be, or replay lies: 140 recorded frames worth 7 seconds
+    /// replay in well under one, so a wall-clock timeline would squash the
+    /// whole session into the first instant of the Rerun scrubber and
+    /// print nothing to the console. Accumulating `dt` makes the live and
+    /// replayed timelines the same timeline — which is the entire point of
+    /// recording it.
+    t: f64,
+    /// Session time of the last console line.
+    last_print_t: f64,
+}
+
+impl Chase {
+    fn new() -> Chase {
+        Chase {
+            // The Stage 0 robot, unchanged.
+            robot: Robot {
+                model: SPEC.drive(),
+                pose: Pose::ORIGIN,
+            },
+            controller: GotoController::new(GAINS),
+            raw_pid: Pid::new(
+                GAINS.heading_kp,
+                GAINS.heading_ki,
+                GAINS.heading_kd,
+                GAINS.heading_i_limit,
+            ),
+            bearing_filter: LowPass::new(BEARING_ALPHA),
+            trail: VecDeque::with_capacity(TRAIL_POINTS),
+            t: 0.0,
+            last_print_t: 0.0,
+        }
+    }
+
+    /// One frame: perception in, motion out. `frame` is `None` on replay,
+    /// where there are no pixels — everything except the camera image is
+    /// identical.
+    fn step(
+        &mut self,
+        p: &Perceived,
+        frame: Option<&Frame>,
+        rec: &rerun::RecordingStream,
+    ) -> Result<()> {
+        let dt = p.dt;
+        self.t += dt;
+        let (v_cmd, w_cmd, heading_error, w_raw) = match p.target() {
             Some(d) => {
                 // ---- the closed loop ----
                 // The object's bearing IS the heading we want, expressed in
                 // camera coordinates. shortest_turn gives the error from
                 // where the robot currently points — the same function that
                 // steered it toward waypoints in Stage 0.
-                let measured = d.bearing(frame.width, HORIZONTAL_FOV) as f64;
+                let measured = d.bearing(p.frame_w, HORIZONTAL_FOV) as f64;
 
                 // What the controller WOULD do on the raw signal — computed
                 // only so the viewer can show both curves at once.
-                let raw_error = wrap_angle(shortest(robot.pose.theta, measured));
-                let w_raw = raw_pid.update(raw_error, dt);
+                let raw_error = wrap_angle(shortest(self.robot.pose.theta, measured));
+                let w_raw = self.raw_pid.update(raw_error, dt);
 
                 // ---- noise handling ----
                 // 1. Smooth the measurement before it reaches the PID, because
                 //    the D term differentiates whatever jitter survives.
                 // 2. Deadband the error, so sub-degree wobble commands nothing.
-                let target_heading = bearing_filter.update(measured);
+                let target_heading = self.bearing_filter.update(measured);
                 let error = deadband(
-                    wrap_angle(shortest(robot.pose.theta, target_heading)),
+                    wrap_angle(shortest(self.robot.pose.theta, target_heading)),
                     HEADING_DEADBAND,
                 );
                 // ---- the open-loop part (see module docs) ----
                 // Box height as a distance proxy: taller box = closer.
-                let approach = approach_factor(d.height, frame.height, STOP_AT_HEIGHT_FRACTION);
+                let approach = approach_factor(d.height, p.frame_h, STOP_AT_HEIGHT_FRACTION);
 
                 // The shared steering law. Identical to the simulator's and
                 // the firmware's — only the speed budget differs, because
                 // here "how far away" comes from box size, not a map.
-                let (v, w) = controller.steer(error, GAINS.v_max * approach as f64, dt);
+                let (v, w) = self
+                    .controller
+                    .steer(error, GAINS.v_max * approach as f64, dt);
                 (v, w, error, w_raw)
             }
             None => {
                 // Nothing seen: stop, and forget accumulated PID state so a
                 // reappearing object doesn't inherit a stale integral.
-                controller.reset();
-                raw_pid.reset();
-                bearing_filter.reset();
+                self.controller.reset();
+                self.raw_pid.reset();
+                self.bearing_filter.reset();
                 (0.0, 0.0, 0.0, 0.0)
             }
         };
 
         let (omega_l, omega_r) = SPEC.drive().inverse(v_cmd, w_cmd);
-        robot.step(omega_l, omega_r, dt);
+        self.robot.step(omega_l, omega_r, dt);
 
         // ---- telemetry ----
-        let t = start.elapsed().as_secs_f64();
-        rec.set_duration_secs("time", t);
-        rec.log(
-            "camera/image",
-            &rerun::Image::from_rgb24(frame.rgb, [frame.width, frame.height]),
-        )?;
-        log_boxes(&rec, &detections)?;
-
-        let (rx_, ry_) = (robot.pose.x as f32, robot.pose.y as f32);
-        if trail.len() == TRAIL_POINTS {
-            trail.pop_front();
+        rec.set_duration_secs("time", self.t);
+        if let Some(f) = frame {
+            rec.log(
+                "camera/image",
+                &rerun::Image::from_rgb24(f.rgb.clone(), [f.width, f.height]),
+            )?;
         }
-        trail.push_back([rx_, ry_]);
+        log_boxes(rec, &p.detections)?;
+
+        let (rx_, ry_) = (self.robot.pose.x as f32, self.robot.pose.y as f32);
+        if self.trail.len() == TRAIL_POINTS {
+            self.trail.pop_front();
+        }
+        self.trail.push_back([rx_, ry_]);
         rec.log(
             "robot/trail",
-            &rerun::LineStrips2D::new([trail.iter().copied().collect::<Vec<_>>()])
+            &rerun::LineStrips2D::new([self.trail.iter().copied().collect::<Vec<_>>()])
                 .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
         )?;
         rec.log(
@@ -345,8 +435,8 @@ fn main() -> Result<()> {
         rec.log(
             "robot/heading",
             &rerun::Arrows2D::from_vectors([[
-                0.3 * robot.pose.theta.cos() as f32,
-                0.3 * robot.pose.theta.sin() as f32,
+                0.3 * self.robot.pose.theta.cos() as f32,
+                0.3 * self.robot.pose.theta.sin() as f32,
             ]])
             .with_origins([[rx_, ry_]])
             .with_colors([rerun::Color::from_rgb(255, 90, 90)]),
@@ -359,8 +449,8 @@ fn main() -> Result<()> {
         rec.log("control/turn_rate_raw", &rerun::Scalars::single(w_raw))?;
         rec.log("control/forward_speed", &rerun::Scalars::single(v_cmd))?;
 
-        if last_print.elapsed().as_secs_f64() >= 1.0 {
-            match target {
+        if self.t - self.last_print_t >= 1.0 {
+            match p.target() {
                 Some(d) => println!(
                     "{:>11} {:.0}%  err={:+.3} rad  ->  v={:.2} w={:+.2}  robot θ={:+.2}",
                     d.label,
@@ -368,14 +458,14 @@ fn main() -> Result<()> {
                     heading_error,
                     v_cmd,
                     w_cmd,
-                    robot.pose.theta
+                    self.robot.pose.theta
                 ),
                 None => println!("(nothing detected — robot stopped)"),
             }
-            last_print = Instant::now();
+            self.last_print_t = self.t;
         }
+        Ok(())
     }
-    Ok(())
 }
 
 /// Shortest signed rotation from `from` to `to` — the exercise-2 function,

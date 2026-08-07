@@ -27,7 +27,12 @@ use usls::{Config, Image};
 use crate::camera::Frame;
 
 /// One detected object, in pixel coordinates of the source frame.
-#[derive(Debug, Clone)]
+///
+/// `PartialEq` compares the floats bitwise-ish (`f32` equality), which is
+/// wrong for arithmetic but exactly right for the one thing it is used
+/// for: asserting that a recorded detection survived a round trip through
+/// `session`'s text format unchanged.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Detection {
     pub x: f32,
     pub y: f32,
