@@ -301,7 +301,7 @@ fn main() -> Result<()> {
                 // The shared steering law. Identical to the simulator's and
                 // the firmware's — only the speed budget differs, because
                 // here "how far away" comes from box size, not a map.
-                let (v, w) = controller.steer(error, robot.pose.theta, GAINS.v_max * approach as f64, dt);
+                let (v, w) = controller.steer(error, GAINS.v_max * approach as f64, dt);
                 (v, w, error, w_raw)
             }
             None => {

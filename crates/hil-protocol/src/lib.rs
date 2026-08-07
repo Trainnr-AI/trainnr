@@ -3,7 +3,8 @@
 //! The chip decides; the host owns physics. Every 20 ms:
 //!
 //! ```text
-//!   host -> chip   G <x> <y> <budget>    steer here, at most this fast
+//!   host -> chip   G <x> <y> <budget>     steer here, at most this fast
+//!   host -> chip   R <x> <y> <budget>     the same, but reset state first
 //!   host -> chip   T <v> <w>              or: just do exactly this
 //!   chip -> host   P <x> <y> <theta>     believed pose (display only)
 //!   chip -> host   M <duty_l> <duty_r>   motor command, ±1000
@@ -58,6 +59,7 @@
 #![forbid(unsafe_code)]
 
 use core::fmt::Write;
+use sim_core::Directive;
 
 /// Motor commands are clamped to this range on both ends. A duty of
 /// `±DUTY_FULL` means "full commanded wheel speed".
@@ -83,7 +85,14 @@ pub enum Message {
     /// `GotoController::steer` takes a budget rather than deriving one,
     /// and this message mirrors it. (Discovered the hard way: the chip
     /// stalled 1.28 m short of the goal, commanding zero duty.)
-    Goal { x: f64, y: f64, budget: f64 },
+    Goal {
+        x: f64,
+        y: f64,
+        budget: f64,
+        /// Drop accumulated controller state first — see
+        /// [`sim_core::Directive::Steer::fresh`].
+        fresh: bool,
+    },
     /// `T v w` — a body twist to apply directly, bypassing the chip's
     /// controller. Forward speed in m/s, turn rate in rad/s.
     ///
@@ -134,7 +143,18 @@ impl Message {
     /// enough for a small UART buffer.
     pub fn write_into<W: Write>(&self, w: &mut W) -> core::fmt::Result {
         match *self {
-            Message::Goal { x, y, budget } => writeln!(w, "G {x:.4} {y:.4} {budget:.4}"),
+            Message::Goal {
+                x,
+                y,
+                budget,
+                fresh,
+            } => {
+                // The reset bit rides in the TAG, not as a field. See the
+                // FIFO note on this module: the wire has a hard byte
+                // budget, and `R` costs nothing where ` 1` cost two.
+                let tag = if fresh { 'R' } else { 'G' };
+                writeln!(w, "{tag} {x:.4} {y:.4} {budget:.4}")
+            }
             Message::Twist { v, w: tw } => writeln!(w, "T {v:.4} {tw:.4}"),
             Message::Pose { x, y, theta } => writeln!(w, "P {x:.4} {y:.4} {theta:.4}"),
             Message::Motor { duty_l, duty_r } => writeln!(w, "M {duty_l} {duty_r}"),
@@ -149,11 +169,17 @@ impl Message {
         let tag = parts.next().ok_or(ParseError::Empty)?;
 
         match tag {
-            "G" => {
+            // `R` is `G` plus "drop your accumulated state first".
+            "G" | "R" => {
                 let x = next_f64(&mut parts)?;
                 let y = next_f64(&mut parts)?;
                 let budget = next_f64(&mut parts)?;
-                Ok(Message::Goal { x, y, budget })
+                Ok(Message::Goal {
+                    x,
+                    y,
+                    budget,
+                    fresh: tag == "R",
+                })
             }
             "T" => {
                 let v = next_f64(&mut parts)?;
@@ -183,7 +209,8 @@ impl Message {
     /// The single-character tag this message serialises with.
     pub fn tag(&self) -> char {
         match self {
-            Message::Goal { .. } => 'G',
+            Message::Goal { fresh: false, .. } => 'G',
+            Message::Goal { fresh: true, .. } => 'R',
             Message::Twist { .. } => 'T',
             Message::Pose { .. } => 'P',
             Message::Motor { .. } => 'M',
@@ -292,6 +319,56 @@ impl<const N: usize> LineReader<N> {
     }
 }
 
+/// A planner's [`Directive`] becomes exactly one wire message.
+///
+/// This impl and [`Message::directive`] are the *only* translation between
+/// the control vocabulary and the wire. Both ends of the link go through
+/// them, so the host cannot encode something the chip decodes differently
+/// — which is what happened when each side built its own commands from
+/// the observation.
+impl From<Directive> for Message {
+    fn from(d: Directive) -> Message {
+        match d {
+            Directive::Steer {
+                target,
+                budget,
+                fresh,
+            } => Message::Goal {
+                x: target.0,
+                y: target.1,
+                budget,
+                fresh,
+            },
+            Directive::Twist { v, w } => Message::Twist { v, w },
+        }
+    }
+}
+
+impl Message {
+    /// The directive this message carries, or `None` if it is telemetry
+    /// rather than a command.
+    ///
+    /// `Pose`, `Motor` and `Sensors` flow the other way (chip → host) and
+    /// are deliberately not directives: a robot that could be commanded by
+    /// its own status report is a robot with a feedback loop nobody drew.
+    pub fn directive(&self) -> Option<Directive> {
+        match *self {
+            Message::Goal {
+                x,
+                y,
+                budget,
+                fresh,
+            } => Some(Directive::Steer {
+                target: (x, y),
+                budget,
+                fresh,
+            }),
+            Message::Twist { v, w } => Some(Directive::Twist { v, w }),
+            Message::Pose { .. } | Message::Motor { .. } | Message::Sensors { .. } => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,9 +451,10 @@ mod tests {
             x: 6.5,
             y: 3.25,
             budget: 0.45,
+            fresh: true,
         };
         let text = encode(m);
-        assert_eq!(text.as_str(), "G 6.5000 3.2500 0.4500\n");
+        assert_eq!(text.as_str(), "R 6.5000 3.2500 0.4500\n");
         assert_eq!(Message::parse(text.as_str()).unwrap(), m);
     }
 
@@ -505,6 +583,140 @@ mod tests {
         assert_eq!(Message::parse("M 1.5 2"), Err(ParseError::BadNumber));
     }
 
+    /// **The wire has a hard byte budget, and it is not documentation —
+    /// it is the RP2040's 32-byte UART RX FIFO.**
+    ///
+    /// The emulator transport reads straight out of that FIFO
+    /// (`Uart<Blocking>`; `BufferedUart` would fix it but storms the
+    /// emulator's interrupt controller). The host writes `S` and then the
+    /// next `G` back to back, so those two messages share the FIFO. Go
+    /// over and bytes are silently dropped, the command line corrupts, the
+    /// chip never sees a valid directive, and the host waits forever for
+    /// an `M` that cannot come.
+    ///
+    /// That is not hypothetical. Adding a ` <fresh>` field to `G` took the
+    /// burst from 31 to 33 bytes and cost hours: it presented as a hang,
+    /// with a chip that was provably fast in isolation (52 ticks/s) and a
+    /// host that was provably fast in isolation. The fix was to move the
+    /// bit into the tag (`R`), where it costs nothing.
+    ///
+    /// So: any new field is a byte budget decision. This test is the thing
+    /// that says so.
+    #[test]
+    fn a_command_and_a_sensor_report_fit_in_one_uart_fifo() {
+        /// RP2040 / RP2350 UART RX FIFO depth, in bytes. Hardware.
+        const FIFO: usize = 32;
+
+        // Worst case actually reachable in the U-trap: an 8 m world, and
+        // encoder deltas bounded by one tick at full motor speed
+        // (30 rad/s * 0.02 s / 2pi * 1024 ~= 98 counts).
+        let goal = Message::Goal {
+            x: 7.9999,
+            y: 5.9999,
+            budget: 0.4500,
+            fresh: true,
+        };
+        let sensors = Message::Sensors { dl: 98, dr: 98 };
+
+        let burst = encode(goal).as_str().len() + encode(sensors).as_str().len();
+        assert!(
+            burst <= FIFO,
+            "a back-to-back S+G burst is {burst} bytes against a {FIFO}-byte              FIFO. The emulator will drop bytes and the run will hang.              Shorten the encoding or move the transport to BufferedUart."
+        );
+    }
+
+    /// ⚠️ The budget above is **not** met for negative coordinates, and
+    /// that is a real latent limit rather than an oversight.
+    ///
+    /// A world with negative coordinates adds a sign per field. This test
+    /// records the headroom that actually exists so the next person meets
+    /// the constraint as a number rather than as a mystery hang.
+    #[test]
+    fn negative_coordinates_would_not_fit_and_we_know_it() {
+        let worst = Message::Goal {
+            x: -7.9999,
+            y: -5.9999,
+            budget: -0.4500,
+            fresh: true,
+        };
+        let burst = encode(worst).as_str().len() + encode(Message::Sensors { dl: -98, dr: -98 }).as_str().len();
+        assert!(
+            burst > 32,
+            "negative coordinates now fit in the FIFO ({burst} bytes) —              the encoding must have shrunk. Good, but update this test and              the note on the module so the limit stays honest."
+        );
+    }
+
+    /// Every directive must survive encode → parse unchanged. If it does
+    /// not, the chip acts on something the host did not decide.
+    #[test]
+    fn every_directive_survives_the_wire() {
+        let directives = [
+            Directive::Steer {
+                target: (6.5, 3.25),
+                budget: 0.45,
+                fresh: false,
+            },
+            Directive::Steer {
+                target: (-1.25, 0.0),
+                budget: 0.0,
+                fresh: true,
+            },
+            Directive::Twist { v: 0.12, w: -1.8 },
+            Directive::Twist { v: 0.0, w: 0.0 },
+        ];
+        for d in directives {
+            let text = encode(Message::from(d));
+            let line = text.as_str().trim_end();
+            let parsed = Message::parse(line).expect("must parse");
+            assert_eq!(
+                parsed.directive(),
+                Some(d),
+                "directive changed crossing the wire: {line:?}"
+            );
+        }
+    }
+
+    /// `fresh` is a single bit and the most forgettable field on the wire.
+    /// Losing it means the chip keeps a stale integral across a new
+    /// segment while the host drops it — a divergence with no symptom
+    /// except the two slowly disagreeing.
+    #[test]
+    fn the_fresh_flag_is_not_dropped_in_transit() {
+        for fresh in [true, false] {
+            let d = Directive::Steer {
+                target: (1.0, 2.0),
+                budget: 0.3,
+                fresh,
+            };
+            let text = encode(Message::from(d));
+            match Message::parse(text.as_str().trim_end()).unwrap().directive() {
+                Some(Directive::Steer { fresh: got, .. }) => {
+                    assert_eq!(got, fresh, "fresh={fresh} arrived as {got}")
+                }
+                other => panic!("expected a Steer, got {other:?}"),
+            }
+        }
+    }
+
+    /// Telemetry must never be mistaken for a command.
+    #[test]
+    fn chip_to_host_messages_are_not_directives() {
+        for m in [
+            Message::Pose {
+                x: 1.0,
+                y: 2.0,
+                theta: 0.3,
+            },
+            Message::Motor {
+                duty_l: 500,
+                duty_r: -500,
+            },
+            Message::Sensors { dl: 7, dr: 9 },
+        ] {
+            assert_eq!(m.directive(), None, "{m:?} is telemetry, not a command");
+        }
+    }
+
     #[test]
     fn tags_match_what_is_encoded() {
         for (m, t) in [
@@ -513,6 +725,7 @@ mod tests {
                     x: 0.0,
                     y: 0.0,
                     budget: 0.0,
+                    fresh: false,
                 },
                 'G',
             ),

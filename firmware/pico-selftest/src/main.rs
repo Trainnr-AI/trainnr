@@ -236,7 +236,7 @@ async fn run_report<'d, D: embassy_usb::driver::Driver<'d>>(
     say(class, &l).await?;
 
     let mut st = GotoController::new(ControlGains::WAYPOINT);
-    let (sv, sw) = st.steer(2.5, 0.3, 1.5, DT);
+    let (sv, sw) = st.steer(2.5, 1.5, DT);
     l.clear();
     let _ = write!(l, "  steer         v={sv:.17e} w={sw:.17e}\r\n");
     say(class, &l).await?;

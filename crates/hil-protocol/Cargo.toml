@@ -10,6 +10,9 @@ edition.workspace = true
 default = []
 
 [dependencies]
+# The protocol carries control `Directive`s verbatim, so that the policy
+# is expressed once instead of re-derived on each side of the wire.
+sim-core = { path = "../sim-core", default-features = false }
 
 # Panic discipline. Scoped deliberately: this crate is compiled into
 # firmware and/or parses input we do not control, so a panic here is a

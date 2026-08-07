@@ -3,11 +3,10 @@
 //! Pure simulation. Knows nothing about Rerun, threads, or wall-clock
 //! time. See the module docs in `lib.rs` for why.
 
-use sim_core::exercises::shortest_turn;
 use sim_core::{
     lookahead_point, plan, summarize_scan, AvoidHysteresis, ControlGains, DepthCamera, DiffDrive,
     Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Pose, Rng, Robot, RobotSpec,
-    Segment, World,
+    Directive, Segment, World,
 };
 
 /// Everything the mission needs to be reproducible.
@@ -30,9 +29,6 @@ pub struct MissionConfig {
     /// docs/learning/math-03.
     pub wheel_wear: f64,
     pub motor_tau: f64,
-    /// Motor saturation, rad/s. Defaults to `spec.max_wheel_rad_s` — the
-    /// same physical quantity, and a third copy of `30.0` until 2026-08-02.
-    pub motor_max: f64,
     /// Steer on odometry belief instead of ground truth. `false` is the
     /// honest simulator default; `true` shows how drift compounds.
     pub control_on_belief: bool,
@@ -73,7 +69,6 @@ impl Default for MissionConfig {
             gains: ControlGains::WAYPOINT,
             wheel_wear: 0.99,
             motor_tau: 0.15,
-            motor_max: RobotSpec::SIM_BOT.max_wheel_rad_s,
             control_on_belief: false,
             cam_rays: 21,
             cam_fov: 1.22,
@@ -217,6 +212,13 @@ pub struct Mission {
     max_steps: usize,
     bumps: usize,
     completed_at: Option<f64>,
+    /// The controller must drop accumulated state before the next Steer.
+    ///
+    /// Set where the mission used to call `controller.reset()` directly.
+    /// The difference is that this travels: it becomes `Directive::fresh`
+    /// and reaches the chip, which previously had no way to learn that a
+    /// waypoint boundary had been crossed.
+    pending_reset: bool,
 }
 
 impl Mission {
@@ -265,8 +267,15 @@ impl Mission {
             },
             encoders: Encoders::new(config.spec.ticks_per_rev),
             rng: Rng::new(config.seed),
-            motor_l: Motor::new(config.motor_tau, config.motor_max),
-            motor_r: Motor::new(config.motor_tau, config.motor_max),
+            // Saturation comes from the spec, not a separate field.
+            // `motor_max` used to duplicate it — and was hardcoded to
+            // `SIM_BOT` rather than derived from `config.spec`, so a
+            // mission on a different robot clamped at one limit while
+            // `fit_wheels` scaled against another. The scaler would then
+            // hand over a "safe" pair the motor still clipped, distorting
+            // the very arc the scaling exists to preserve.
+            motor_l: Motor::new(config.motor_tau, config.spec.max_wheel_rad_s),
+            motor_r: Motor::new(config.motor_tau, config.spec.max_wheel_rad_s),
             controller: GotoController::new(config.gains),
             nominal,
             path: None,
@@ -276,18 +285,12 @@ impl Mission {
             max_steps: (config.duration / config.dt) as usize,
             bumps: 0,
             completed_at: None,
+            pending_reset: false,
             world,
             config,
         }
     }
 
-    /// Advance one control tick.
-    ///
-    /// Returns `None` when the mission is over — all waypoints reached, or
-    /// the deadline passed. Ticks on which a waypoint is *reached* do the
-    /// sense/map/plan work and then skip physics, exactly as the original
-    /// loop's `continue` did; `step` absorbs those internally so a caller
-    /// never sees a half-finished tick.
     /// SENSE, MAP, PLAN — everything up to the decision.
     ///
     /// Returns `None` when the mission is over (all waypoints reached, or
@@ -321,7 +324,7 @@ impl Mission {
             let prev_mode = self.mode;
             self.mode = self.config.avoid.next(self.mode, min_dist);
             if self.mode != prev_mode {
-                self.controller.reset(); // stale momentum doesn't cross modes
+                self.pending_reset = true; // stale momentum doesn't cross modes
                 mode_changes.push((prev_mode, self.mode));
             }
 
@@ -352,7 +355,7 @@ impl Mission {
             let dist_to_goal = (goal.0 - pose.x).hypot(goal.1 - pose.y);
             if dist_to_goal < self.config.gains.arrive_radius {
                 self.wp_index += 1;
-                self.controller.reset();
+                self.pending_reset = true;
                 self.path = None;
                 continue; // no physics on an arrival tick
             }
@@ -378,29 +381,43 @@ impl Mission {
         }
     }
 
+    /// **THE POLICY** — the one place this robot decides what to do.
+    ///
+    /// Returns a [`Directive`] rather than a twist, which is the whole
+    /// point: `sim-run` hands it straight to its own controller, and
+    /// `hil-host` puts it on the wire. Both therefore send the *same
+    /// decision* rather than each rebuilding it from the observation, and
+    /// the chip cannot interpret it differently because it runs the same
+    /// [`GotoController::execute`].
+    pub fn plan(&mut self, obs: &Observation) -> Directive {
+        // Consume the flag: a reset applies to the next command only.
+        let fresh = core::mem::take(&mut self.pending_reset);
+        match obs.mode {
+            // Steer at the LOOKAHEAD point but throttle on distance to the
+            // real goal, so the robot doesn't crawl just because the next
+            // path node happens to be close.
+            Mode::Goto => Directive::Steer {
+                target: obs.target,
+                budget: self.config.gains.kp_dist * obs.dist_to_goal,
+                fresh,
+            },
+            // A reflex from a depth scan the controller does not have.
+            Mode::Avoid => Directive::Twist {
+                v: self.config.avoid_v,
+                w: obs.summary.turn_direction() * self.config.avoid_w,
+            },
+        }
+    }
+
     /// The decision this mission's own controller would make.
     ///
-    /// `sim-run` uses it; `hil-host` ignores it and asks the chip instead.
+    /// `sim-run` uses it; `hil-host` sends `plan()` down the wire and lets
+    /// the chip run the identical `execute` instead. Those two paths must
+    /// agree — see `crates/hil-host/tests/twin_decision.rs`, which drives
+    /// the whole mission both ways and requires identical outcomes.
     pub fn decide(&mut self, obs: &Observation) -> (f64, f64) {
-        match obs.mode {
-            Mode::Goto => {
-                // Steer at the LOOKAHEAD point but throttle on distance to
-                // the real goal, so the robot doesn't crawl just because
-                // the next path node happens to be close.
-                let bearing = (obs.target.1 - obs.pose.y).atan2(obs.target.0 - obs.pose.x);
-                let heading_error = shortest_turn(obs.pose.theta, bearing);
-                self.controller.steer(
-                    heading_error,
-                    obs.pose.theta,
-                    self.config.gains.kp_dist * obs.dist_to_goal,
-                    self.config.dt,
-                )
-            }
-            Mode::Avoid => (
-                self.config.avoid_v,
-                obs.summary.turn_direction() * self.config.avoid_w,
-            ),
-        }
+        let directive = self.plan(obs);
+        self.controller.execute(directive, &obs.pose, self.config.dt)
     }
 
     /// ACT and OBSERVE — the physics, given *commanded wheel speeds*.
@@ -596,30 +613,23 @@ mod tests {
     /// The wire carries *duty*, not wheel speeds. Two separate questions:
     /// is the quantisation lossless, and does anything saturate?
     ///
-    /// # A real finding, deliberately recorded rather than fixed
+    /// # History, kept because the numbers are the point
     ///
-    /// The second one is not benign. The controller regularly commands
-    /// wheel speeds the motors cannot deliver — this test measured a peak
-    /// **overshoot of ~169 rad/s against a 30 rad/s motor**, i.e. asking
-    /// for over six times what exists.
+    /// This test used to *document* an unfixed bug: peak wheel overshoot
+    /// of **~169 rad/s against a 30 rad/s motor**, from the PID's D term.
+    /// `Kd · de/dt` with `dt = 0.02` multiplies any error jump by 50, and
+    /// the error jumps whenever the planner hops to the next lookahead
+    /// node — even though the robot has not moved.
     ///
-    /// The source is the PID's D term. `Kd · de/dt` with `dt = 0.02` means
-    /// a target that jumps sideways gives `de/dt ≈ 157`, so `w ≈ 94 rad/s`
-    /// of turn rate, which is ~235 rad/s at the wheel.
+    /// Fixed 2026-08-07 by `Pid::d_limit` (bounding the derivative's
+    /// contribution) plus `RobotSpec::fit_wheels` (scaling a saturated
+    /// pair instead of clipping each wheel). Peak is **~33 rad/s** now,
+    /// and what remains is the P term: a large heading error genuinely
+    /// warrants a turn the robot cannot physically make that fast.
     ///
-    /// It does not break the simulation: `Motor::step` clamps, the mission
-    /// still completes in 22.5 s. But the controller is **relying on
-    /// saturation to clean up after it**, which is a different thing from
-    /// being correct, and on real hardware it means the turn's shape
-    /// differs from what the controller computed — with no feedback path
-    /// telling the PID its output was ignored.
-    ///
-    /// Not fixed here because clamping `steer`'s output would move the
-    /// recorded Stage 0 baseline, and that is a decision to make
-    /// deliberately rather than inside a test. Note also that
-    /// `RobotSpec::check` claims to catch "commanding speeds the robot
-    /// cannot reach" and misses this entirely — it only validates `v_max`,
-    /// never the turn component.
+    /// The bound below is deliberately loose. Its job is to catch the D
+    /// clamp being removed or mis-sized — which puts this back near 169 —
+    /// not to pin a figure a harmless retune would break.
     #[test]
     fn duty_quantisation_is_lossless_but_the_controller_saturates() {
         let spec = MissionConfig::default().spec;

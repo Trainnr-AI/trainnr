@@ -104,6 +104,6 @@ fn main() {
     println!("  pid d_limit   out={k:.17e}\r");
 
     let mut st = GotoController::new(ControlGains::WAYPOINT);
-    let (sv, sw) = st.steer(2.5, 0.3, 1.5, DT);
+    let (sv, sw) = st.steer(2.5, 1.5, DT);
     println!("  steer         v={sv:.17e} w={sw:.17e}\r");
 }

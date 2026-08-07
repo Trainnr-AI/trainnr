@@ -40,14 +40,6 @@ use sim_run::{viz, Mission, MissionConfig};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
-/// The robot the host simulates. Must be the SAME spec the firmware
-/// believes in, or the rig tests the chip against a machine that does not
-/// exist — hence `REAL_BOT`, matching `pico-robot`.
-const SPEC: RobotSpec = RobotSpec::REAL_BOT;
-/// Duty ±1000 maps to ±`max_wheel_rad_s` of commanded wheel speed.
-/// Derived, not chosen: the same quantity the firmware scales by.
-const DUTY_SCALE: f64 = SPEC.max_wheel_rad_s / 1000.0;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let serial_port = args
@@ -61,6 +53,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The SAME mission sim-run runs. Not a copy — the same type, the same
     // default config, the same world.
     let config = MissionConfig {
+        // The rig must simulate the SAME robot the firmware believes in.
+        //
+        // This used to be a `const SPEC = REAL_BOT` used only for the duty
+        // scale, while the mission ran on `MissionConfig::default()`'s
+        // `SIM_BOT` — two different robots in one program. Invisible while
+        // `REAL_BOT == SIM_BOT`, and a silent trap the moment the measured
+        // values land in `spec.rs`, which is the documented plan.
+        spec: RobotSpec::REAL_BOT,
         // THE one deliberate difference from sim-run, and it makes the rig
         // MORE realistic, not less.
         //
@@ -80,6 +80,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let dt = config.dt;
     let mut mission = Mission::new(config);
+    // Duty ±1000 maps to ±`max_wheel_rad_s`. Read off the mission's own
+    // spec so there is exactly one robot in this program — the firmware
+    // scales by the same quantity from the same constant.
+    let duty_scale = mission.config.spec.max_wheel_rad_s / 1000.0;
     viz::draw_world(&rec, &mission)?;
 
     // ---- connect to the brain ----
@@ -122,26 +126,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ---- the loop: plan here, control there ----
     while let Some(obs) = mission.observe() {
-        // 1. Tell the chip where to aim. This is the planner's output —
-        //    the chip never sees the map.
-        // In Goto the chip steers; in Avoid the HOST decides, because the
-        // reflex needs a depth scan the chip does not have. Same split as
-        // the real robot, where the camera is on Tier 2.
-        let command = match obs.mode {
-            sim_core::Mode::Goto => Message::Goal {
-                x: obs.target.0,
-                y: obs.target.1,
-                // The budget sim-run's own `decide()` would use:
-                // proportional to distance to the REAL goal, not to the
-                // lookahead point. Send it, or the chip crawls.
-                budget: mission.config.gains.kp_dist * obs.dist_to_goal,
-            },
-            sim_core::Mode::Avoid => Message::Twist {
-                v: mission.config.avoid_v,
-                w: obs.summary.turn_direction() * mission.config.avoid_w,
-            },
-        };
-        send(&mut to_chip, command)?;
+        // 1. Send the planner's decision. Note what is NOT here any more:
+        //    a second copy of the policy. This used to rebuild the Goal
+        //    and Twist messages from the observation, mirroring
+        //    `Mission::decide` by hand — and the whole digital-twin claim
+        //    rested on the two staying identical with nothing checking it.
+        //    Now the rig ships exactly what the simulator decided.
+        let directive = mission.plan(&obs);
+        send(&mut to_chip, directive.into())?;
 
         // 2. Wait for its motor command. Anything else is the chip's
         //    belief (for the viewer) or human-facing noise.
@@ -165,7 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // 3. Physics — the SAME advance() sim-run calls. Duty scaled to
         //    commanded wheel speeds is the only translation.
-        let tick = mission.advance(obs, duty_l as f64 * DUTY_SCALE, duty_r as f64 * DUTY_SCALE);
+        let tick = mission.advance(obs, duty_l as f64 * duty_scale, duty_r as f64 * duty_scale);
 
         // 4. Hand back what the encoders saw.
         send(

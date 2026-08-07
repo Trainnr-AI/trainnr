@@ -38,7 +38,7 @@ pub mod sensors;
 pub mod spec;
 pub mod world;
 
-pub use control::{GotoController, Pid};
+pub use control::{Directive, GotoController, Pid};
 pub use motor::Motor;
 pub use nav::{lookahead_point, summarize_scan, AvoidHysteresis, Mode, ScanSummary};
 pub use odometry::Odometry;
