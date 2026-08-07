@@ -7,3 +7,6 @@ edition.workspace = true
 # Pico AND under `cargo test` on the Mac. No hardware traits needed —
 # this crate only ever sees two booleans.
 [dependencies]
+
+[lints]
+workspace = true

@@ -27,7 +27,17 @@ num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 # control loop, substituting a default for a failed measurement is worse
 # than crashing: the robot acts confidently on a fiction. Propagate with
 # `?`, or return Option/Result to a caller that can stop.
+# STRICTER than the workspace default, deliberately. Cargo does not allow
+# inheriting and overriding in the same `[lints]`, so this crate spells its
+# own out — including the unsafe gate, which must not be lost by opting out
+# of the workspace block.
+[lints.rust]
+unsafe_code = "forbid"
+
 [lints.clippy]
+# `deny`, not `warn`: this crate runs inside the control loop AND compiles into
+# firmware, so a panic here is a stopped robot.
 unwrap_used = "deny"
 expect_used = "warn"
 panic_in_result_fn = "deny"
+indexing_slicing = "warn"

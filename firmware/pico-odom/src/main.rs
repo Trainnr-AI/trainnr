@@ -13,6 +13,11 @@
 
 #![no_std]
 #![no_main]
+// No unsafe anywhere in this firmware. `forbid`, not `deny`: it cannot be
+// switched off locally with an `#[allow]`. Embassy's HAL already wraps the
+// peripheral access that would otherwise need it — if that ever stops being
+// true, the argument belongs in a commit that changes this line.
+#![forbid(unsafe_code)]
 
 use core::fmt::Write as _;
 use embassy_executor::Spawner;

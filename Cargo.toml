@@ -16,3 +16,32 @@ exclude = ["firmware"]
 
 [workspace.package]
 edition = "2021"
+
+# ---------------------------------------------------------------------
+# Lints, declared once for every workspace member.
+#
+# Each crate opts in with `[lints] workspace = true`, which is one line
+# there instead of a block of `#![forbid(...)]` attributes that drift.
+# ---------------------------------------------------------------------
+[workspace.lints.rust]
+# There is currently NO unsafe code anywhere in this repo, and the point of
+# forbidding rather than denying it is that `forbid` cannot be locally
+# overridden with an `#[allow]`. If a future need is genuine — a DMA buffer,
+# a peripheral register — it must be argued for in a commit that changes
+# this line, not slipped in behind an attribute.
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# The panic discipline, workspace-wide. A panic in a control loop is a
+# stopped robot; on the chip it is a robot that stops with the motors in
+# whatever state they were. These are `warn` rather than `deny` because the
+# BINARIES legitimately panic at startup (a bad argument should fail loudly
+# and immediately) — the libraries that run inside the loop set them to
+# deny individually.
+#
+# NOTE: `unwrap_or_default()` is deliberately NOT the escape hatch. In a
+# control loop, substituting a default for a failed measurement is worse
+# than crashing: the robot acts confidently on a fiction.
+unwrap_used = "warn"
+expect_used = "warn"
+indexing_slicing = "warn"

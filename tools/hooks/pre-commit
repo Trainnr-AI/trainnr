@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Fast gates, run on every commit. Anything slower belongs in
+# tools/verify.sh, which you run before pushing.
+#
+# Installed by tools/setup-hooks.sh, which points core.hooksPath here so
+# the hooks are versioned like everything else. A hook living only in
+# .git/hooks is a hook that exists on one machine.
+#
+# Bypass with `git commit --no-verify` when you genuinely mean to — for a
+# work-in-progress commit on a branch, say. Not for main.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+source "$HOME/.cargo/env" 2>/dev/null || true
+
+fail=0
+gate() {
+  printf "  %-34s" "$1"
+  if out=$(eval "$2" 2>&1); then echo "ok"; else echo "FAIL"; echo "$out" | tail -12; fail=1; fi
+}
+
+echo "pre-commit:"
+gate "formatting"            "cargo fmt --all --check"
+gate "clippy (no errors)"    "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
+# NOT a grep for `unsafe`. The COMPILER forbids it — `unsafe_code =
+# "forbid"` in every manifest, `#![forbid(unsafe_code)]` in every
+# firmware — so a grep here would only duplicate that, worse. The first
+# version did exactly that, required `unsafe` at the start of a line, and
+# cheerfully passed `fn f() { unsafe { } }`. A gate that gives false
+# confidence is worse than no gate.
+#
+# So this checks the GUARD, not the code: that every crate still declares
+# the forbid. Deleting a line from a manifest is the only way unsafe gets
+# in, and that is the thing to notice.
+gate "unsafe still forbidden everywhere" "python3 tools/check-unsafe-gates.py"
+gate "docs describe real code" "python3 tools/check-docs.py"
+
+[ "$fail" -eq 0 ] || {
+  echo
+  echo "Commit blocked. Fix the above, or --no-verify if you mean it."
+  exit 1
+}

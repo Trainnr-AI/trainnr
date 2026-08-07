@@ -7,3 +7,6 @@ edition.workspace = true
 sim-core = { path = "../sim-core" }
 # Pinned to match the installed viewer binary (rerun-cli 0.35.0).
 rerun = "0.35"
+
+[lints]
+workspace = true

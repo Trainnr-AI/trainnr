@@ -13,3 +13,6 @@ hil-protocol = { path = "../hil-protocol" }
 sim-run = { path = "../sim-run" }
 serialport = "4"
 rerun = "0.35"
+
+[lints]
+workspace = true
