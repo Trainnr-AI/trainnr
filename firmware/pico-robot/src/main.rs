@@ -150,7 +150,7 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
     // Worst compute time seen, microseconds. Reported only when beaten.
     let mut worst_us: u32 = 0;
 
-    loop {
+    'session: loop {
         // ---- 1. wait for the host to say where to aim ----
         let command = loop {
             // Bounded by the transport, not by a timer wrapped around it.
@@ -282,10 +282,38 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
             }
             for &b in &rx[..n] {
                 if let Some(line) = reader.push(b) {
-                    if let Ok(Message::Sensors { dl, dr }) = Message::parse(line) {
-                        // ---- 5. update belief (Stage 0's odometry) ----
-                        odom.update(dl, dr);
-                        break 'wait;
+                    match Message::parse(line) {
+                        Ok(Message::Sensors { dl, dr }) => {
+                            // ---- 5. update belief (Stage 0's odometry) ----
+                            odom.update(dl, dr);
+                            break 'wait;
+                        }
+                        // A NEW SESSION SUPERSEDES THE TICK IN FLIGHT.
+                        //
+                        // Without this the chip waits here forever for an
+                        // `S` that a dead host will never send, and the
+                        // next host's `I` is discarded — the link is
+                        // wedged until someone power-cycles the board.
+                        //
+                        // Found by aborting a session mid-tick and simply
+                        // reconnecting, which is what happens every time a
+                        // host crashes or is Ctrl-C'd. No test covered it
+                        // because it needs a crash and a restart.
+                        Ok(Message::Start { x, y, heading }) => {
+                            odom.pose = Pose::new(x, y, heading);
+                            controller.reset();
+                            worst_us = 0;
+                            out.clear();
+                            let _ = Message::Pose {
+                                x: odom.pose.x,
+                                y: odom.pose.y,
+                                heading: odom.pose.heading,
+                            }
+                            .write_into(&mut out);
+                            link.send(out.as_bytes()).await;
+                            continue 'session;
+                        }
+                        _ => {}
                     }
                 }
             }

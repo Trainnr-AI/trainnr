@@ -54,6 +54,11 @@ step "HIL on the emulator (RP2040)" \
 if [ -n "$SERIAL" ]; then
   step "HIL on real silicon ($SERIAL)" \
        "cargo run -q -p hil-host -- --serial $SERIAL | grep -q 'waypoints:   1/1'"
+  # The failures a SUCCESSFUL mission never exercises: a corrupt command,
+  # and a host that dies and reconnects. Both were broken on hardware and
+  # invisible from the laptop.
+  step "chip conformance (corrupt cmd, reconnect)" \
+       "cargo run -q -p hil-host --example chip_probe -- $SERIAL"
 else
   echo "HIL on real silicon                            skipped (pass --serial <port>)"
 fi

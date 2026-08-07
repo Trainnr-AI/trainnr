@@ -56,6 +56,21 @@ pub fn draw(
 ) -> Result<(), Box<dyn std::error::Error>> {
     rec.set_duration_secs("sim_time", tick.obs.elapsed_seconds);
 
+    // A trail is CUMULATIVE: to draw it you must re-send every point it
+    // has ever had. Doing that 50 times a second is quadratic — a 22.5 s
+    // run pushed **1.27 million points** where 2,252 would do, 564x more
+    // data than necessary, and `sim-run` emits the whole run in about a
+    // second. Rerun then ingests for several seconds afterwards, so
+    // entities surface progressively and the trails — the heaviest
+    // payload — arrive last. That is not a late trail; it is a saturated
+    // viewer.
+    //
+    // `chase.rs` hit this and solved it with a bounded window. Here the
+    // full path is worth keeping, so the trails redraw at the same 5 Hz
+    // cadence the map already uses. Ten times less data, and 0.2 s of
+    // trail lag that nobody can see.
+    let redraw_trails = tick.obs.index.is_multiple_of(10);
+
     for (from, to) in &tick.obs.mode_changes {
         rec.log(
             "events",
@@ -92,7 +107,7 @@ pub fn draw(
 
     // The MAP as the robot remembers it, every 10th tick to keep the
     // stream light.
-    if tick.obs.index.is_multiple_of(10) {
+    if redraw_trails {
         let map = &mission.map;
         let mut occupied: Vec<[f32; 2]> = Vec::new();
         for cy in 0..map.height {
@@ -133,11 +148,13 @@ pub fn draw(
 
     let (x, y) = (pose.x as f32, pose.y as f32);
     trail_true.push([x, y]);
-    rec.log(
-        "robot/trail",
-        &rerun::LineStrips2D::new([trail_true.clone()])
-            .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
-    )?;
+    if redraw_trails {
+        rec.log(
+            "robot/trail",
+            &rerun::LineStrips2D::new([trail_true.clone()])
+                .with_colors([rerun::Color::from_rgb(255, 200, 60)]),
+        )?;
+    }
     rec.log(
         "robot/body",
         &rerun::Points2D::new([[x, y]])
@@ -157,11 +174,22 @@ pub fn draw(
 
     let (bx, by) = (tick.belief_pose.x as f32, tick.belief_pose.y as f32);
     trail_belief.push([bx, by]);
-    rec.log(
-        "belief/trail",
-        &rerun::LineStrips2D::new([trail_belief.clone()])
-            .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
-    )?;
+    if redraw_trails {
+        rec.log(
+            "belief/trail",
+            &rerun::LineStrips2D::new([trail_belief.clone()])
+                .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+        )?;
+    }
+    // Smaller than the true body (0.09) so it reads as a marker *inside*
+    // the robot rather than a second robot.
+    //
+    // Worth knowing when watching: for the first several seconds the blue
+    // belief and the yellow truth are **on top of each other**. Drift is
+    // 0.0001 m at t=0 and still only 0.026 m at t=4 — well inside these
+    // markers — so the blue trail does not become distinguishable until
+    // around t=5. That is the odometry being good, not the viewer being
+    // late.
     rec.log(
         "belief/body",
         &rerun::Points2D::new([[bx, by]])
