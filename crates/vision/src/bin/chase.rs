@@ -118,8 +118,14 @@ fn main() -> Result<()> {
         let mut chase = Chase::new();
         rec.log("camera/image/named", &rerun::Clear::flat())?;
         rec.log("camera/image/candidates", &rerun::Clear::flat())?;
-        for p in &frames {
-            chase.step(p, None, &rec)?;
+        // Footage if `--video` captured it; boxes on black otherwise.
+        let footage = vision::session::frames_dir(path).is_dir();
+        if !footage {
+            println!("(no footage: this log was recorded without --video)");
+        }
+        for (i, p) in frames.iter().enumerate() {
+            let img = footage.then(|| vision::session::load_frame(path, i)).flatten();
+            chase.step(p, img.as_ref(), &rec)?;
         }
         println!("\nreplay complete: {} frames", frames.len());
         return Ok(());
@@ -256,9 +262,19 @@ fn main() -> Result<()> {
     rec.log("camera/image/named", &rerun::Clear::flat())?;
     rec.log("camera/image/candidates", &rerun::Clear::flat())?;
 
-    let mut recorder = vision::session::Recorder::create(args.record.as_deref())?;
+    let mut recorder = vision::session::Recorder::create(args.record.as_deref(), args.video)?;
     if let Some(p) = &args.record {
-        println!("recording perception to {}\n", p.display());
+        match args.video {
+            true => println!(
+                "recording perception to {} and footage to {}\n",
+                p.display(),
+                vision::session::frames_dir(p).display()
+            ),
+            false => println!(
+                "recording perception to {} (add --video for footage)\n",
+                p.display()
+            ),
+        }
     }
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
@@ -285,7 +301,7 @@ fn main() -> Result<()> {
             detections,
             target,
         };
-        recorder.write(&perceived)?;
+        recorder.write(&perceived, Some(&frame))?;
         chase.step(&perceived, Some(&frame), &rec)?;
     }
     Ok(())

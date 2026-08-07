@@ -30,6 +30,10 @@ pub struct Args {
     /// Drive the control loop from a recording instead of a camera. No
     /// camera is opened and no detector is loaded.
     pub replay: Option<PathBuf>,
+    /// Also save each frame as a JPEG beside the log, so a replay shows
+    /// the real footage instead of boxes on black. 150x the size — see
+    /// [`crate::session`].
+    pub video: bool,
 }
 
 impl Default for Args {
@@ -40,6 +44,7 @@ impl Default for Args {
             camera: None,
             record: None,
             replay: None,
+            video: false,
         }
     }
 }
@@ -104,6 +109,7 @@ impl Args {
                 "--replay" => {
                     parsed.replay = Some(path_value(&mut it, "--replay")?);
                 }
+                "--video" => parsed.video = true,
                 other if other.starts_with('-') => {
                     anyhow::bail!("unknown flag {other:?}");
                 }
@@ -115,6 +121,9 @@ impl Args {
                     );
                 }
             }
+        }
+        if parsed.video && parsed.record.is_none() {
+            anyhow::bail!("--video needs --record <file>: there is nowhere to put the frames");
         }
         Ok(parsed)
     }
@@ -135,6 +144,15 @@ impl Args {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `--video` without `--record` records nothing and would look like it
+    /// worked. Say so at the point the user can still fix it.
+    #[test]
+    fn video_without_record_is_rejected() {
+        let err = Args::parse_from(["--video"]).unwrap_err();
+        assert!(err.to_string().contains("--record"), "{err}");
+        assert!(Args::parse_from(["--record", "r.perc", "--video"]).is_ok());
+    }
 
     #[test]
     fn record_and_replay_take_paths() {

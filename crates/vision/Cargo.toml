@@ -7,6 +7,9 @@ edition.workspace = true
 nokhwa = { version = "0.10", features = ["input-native"] }
 rerun = "0.35"
 anyhow = "1"
+# Already in the tree via usls; named directly so `session` can write
+# and read the JPEGs that make a replay watchable.
+image = "0.25"
 usls = { version = "0.2.0-alpha.3", features = ["coreml", "vlm"] }
 sim-core = { version = "0.1.0", path = "../sim-core" }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

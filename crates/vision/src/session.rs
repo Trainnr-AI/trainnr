@@ -22,13 +22,23 @@
 //! cargo run -p vision --bin chase -- --replay chase.perc   # no camera
 //! ```
 //!
-//! # What is captured, and what is not
+//! # Two levels, because they answer different questions
 //!
-//! One line per frame plus one per detection — a few hundred bytes a
-//! second, not video. That is deliberate: the question this answers is
-//! *"given what the detector saw, did the control law do the right
-//! thing?"*, and that is the half that has to keep working when the
-//! motors arrive.
+//! | mode | cost | answers |
+//! |---|---|---|
+//! | `--record` | **6 KB/s** | did the control law do the right thing? |
+//! | `--record --video` | **0.9 MB/s** | *and* was the detector right? |
+//!
+//! The default records one line per frame plus one per detection, and
+//! nothing else. That is enough to re-run every steering decision, and
+//! cheap enough to leave on forever.
+//!
+//! It is *not* enough to see why a box appeared. Boxes floating on a black
+//! background cannot tell you whether the detector was looking at a person
+//! or a coat on a chair. `--video` adds JPEG frames beside the log — 150×
+//! larger, still only 55 MB a minute, and the difference between watching
+//! a replay and merely reading one. (Raw RGB would be 1.1 GB a minute,
+//! which is why it is JPEG.)
 //!
 //! **Target selection is recorded, not re-run.** `TargetLock::pick`
 //! matches on hue and needs the frame's pixels, which are not here. So the
@@ -36,11 +46,12 @@
 //! selection offline would need frames — a different, heavier facility,
 //! and a different question.
 
+use crate::camera::Frame;
 use crate::detect::Detection;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// One frame's perception result: what was seen, and which one is being
 /// chased.
@@ -85,20 +96,95 @@ impl Perceived {
     }
 }
 
+/// Where the JPEGs live for a given log: `chase.perc` → `chase.perc.frames/`.
+///
+/// Derived rather than configured, so a log and its footage cannot be
+/// separated by a careless move — and replay can just look.
+pub fn frames_dir(log: &Path) -> PathBuf {
+    let mut d = log.as_os_str().to_os_string();
+    d.push(".frames");
+    PathBuf::from(d)
+}
+
+fn frame_path(dir: &Path, index: usize) -> PathBuf {
+    dir.join(format!("{index:06}.jpg"))
+}
+
 /// Appends frames to a file, or does nothing when no `--record` was given.
-pub struct Recorder(Option<File>);
+pub struct Recorder {
+    log: Option<File>,
+    /// `Some` when `--video` was asked for.
+    frames: Option<PathBuf>,
+    index: usize,
+}
 
 impl Recorder {
-    pub fn create(path: Option<&Path>) -> std::io::Result<Recorder> {
-        Ok(Recorder(path.map(File::create).transpose()?))
+    pub fn create(path: Option<&Path>, video: bool) -> std::io::Result<Recorder> {
+        let frames = match (path, video) {
+            (Some(p), true) => {
+                let dir = frames_dir(p);
+                std::fs::create_dir_all(&dir)?;
+                Some(dir)
+            }
+            _ => None,
+        };
+        Ok(Recorder {
+            log: path.map(File::create).transpose()?,
+            frames,
+            index: 0,
+        })
     }
 
-    pub fn write(&mut self, p: &Perceived) -> std::io::Result<()> {
-        let Some(f) = &mut self.0 else { return Ok(()) };
-        let mut buf = String::new();
-        p.encode(&mut buf);
-        f.write_all(buf.as_bytes())
+    /// Record one frame's perception, and its pixels if `--video`.
+    ///
+    /// The index advances with the log, not with the images, so the two
+    /// stay aligned even if an encode fails.
+    pub fn write(&mut self, p: &Perceived, frame: Option<&Frame>) -> std::io::Result<()> {
+        if let Some(f) = &mut self.log {
+            let mut buf = String::new();
+            p.encode(&mut buf);
+            f.write_all(buf.as_bytes())?;
+        }
+        if let (Some(dir), Some(fr)) = (&self.frames, frame) {
+            save_jpeg(&frame_path(dir, self.index), fr)?;
+        }
+        self.index += 1;
+        Ok(())
     }
+}
+
+/// Quality 80: visually indistinguishable for this purpose, and a third
+/// the size of 95.
+fn save_jpeg(path: &Path, frame: &Frame) -> std::io::Result<()> {
+    let buf: image::RgbImage =
+        image::ImageBuffer::from_raw(frame.width, frame.height, frame.rgb.clone()).ok_or_else(
+            || {
+                std::io::Error::other(format!(
+                    "frame is {} bytes, not {}x{}x3",
+                    frame.rgb.len(),
+                    frame.width,
+                    frame.height
+                ))
+            },
+        )?;
+    let mut out = std::io::BufWriter::new(File::create(path)?);
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80)
+        .encode_image(&buf)
+        .map_err(std::io::Error::other)
+}
+
+/// The recorded frame at `index`, if `--video` captured one.
+///
+/// A missing image is `None`, not an error: a log recorded without
+/// `--video` must still replay, just without pictures.
+pub fn load_frame(log: &Path, index: usize) -> Option<Frame> {
+    let img = image::open(frame_path(&frames_dir(log), index)).ok()?;
+    let rgb = img.to_rgb8();
+    Some(Frame {
+        width: rgb.width(),
+        height: rgb.height(),
+        rgb: rgb.into_raw(),
+    })
 }
 
 /// Read a recorded session.
@@ -300,14 +386,69 @@ mod tests {
 
     #[test]
     fn recording_nothing_writes_nothing() {
-        let mut r = Recorder::create(None).unwrap();
-        r.write(&Perceived {
+        let mut r = Recorder::create(None, false).unwrap();
+        r.write(&blank(), None)
+            .expect("a no-op recorder cannot fail");
+    }
+
+    fn blank() -> Perceived {
+        Perceived {
             dt: 0.05,
-            frame_w: 1,
-            frame_h: 1,
+            frame_w: 4,
+            frame_h: 2,
             detections: vec![],
             target: None,
-        })
-        .expect("a no-op recorder cannot fail");
+        }
+    }
+
+    fn checkerboard() -> Frame {
+        Frame {
+            width: 4,
+            height: 2,
+            rgb: (0..4 * 2 * 3).map(|i| (i * 7 % 256) as u8).collect(),
+        }
+    }
+
+    #[test]
+    fn the_frames_directory_is_derived_from_the_log() {
+        assert_eq!(
+            frames_dir(Path::new("runs/chase.perc")),
+            PathBuf::from("runs/chase.perc.frames")
+        );
+    }
+
+    #[test]
+    fn video_round_trips_and_stays_aligned_with_the_log() {
+        let log = std::env::temp_dir().join("perc-video.perc");
+        let _ = std::fs::remove_dir_all(frames_dir(&log));
+
+        let mut r = Recorder::create(Some(&log), true).unwrap();
+        let fr = checkerboard();
+        r.write(&blank(), Some(&fr)).unwrap();
+        r.write(&blank(), Some(&fr)).unwrap();
+        drop(r);
+
+        // Both frames present, and indexed from zero alongside the log.
+        assert_eq!(read(&log).unwrap().len(), 2);
+        let back = load_frame(&log, 1).expect("frame 1 should exist");
+        assert_eq!((back.width, back.height), (4, 2));
+        assert_eq!(back.rgb.len(), 4 * 2 * 3);
+        assert!(load_frame(&log, 2).is_none(), "only two were written");
+
+        std::fs::remove_file(&log).ok();
+        std::fs::remove_dir_all(frames_dir(&log)).ok();
+    }
+
+    /// A log recorded WITHOUT `--video` must still replay — just silently,
+    /// without pictures. Erroring here would make the cheap mode useless.
+    #[test]
+    fn a_log_with_no_video_loads_no_frame_and_does_not_fail() {
+        let log = std::env::temp_dir().join("perc-novideo.perc");
+        let mut r = Recorder::create(Some(&log), false).unwrap();
+        r.write(&blank(), Some(&checkerboard())).unwrap();
+        drop(r);
+        assert!(!frames_dir(&log).exists(), "no directory should be made");
+        assert!(load_frame(&log, 0).is_none());
+        std::fs::remove_file(&log).ok();
     }
 }
