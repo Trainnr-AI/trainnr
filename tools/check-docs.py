@@ -6,11 +6,12 @@ stays, and the next person goes looking for something that is not there —
 which is worse than no documentation, because it costs them a search
 before they stop trusting the page.
 
-Checks three things, all mechanically:
+Checks four things, all mechanically:
 
   1. every `path/to/file.ext` in backticks resolves
   2. every markdown link to a local file resolves
   3. every backticked `OurType::member` exists in the source
+  4. the progress log's dates run newest-first, as its header promises
 
 Only types WE define are checked. `Pull::Up` and `Level::High` belong to
 embassy, `ModelFormat::MLProgram` to CoreML, and this script has no
@@ -79,6 +80,23 @@ for doc in docs:
         ) or re.search(rf"^\s*{re.escape(member)}\s*[ ,({{]", source, re.M)
         if not defined:
             problems.append(f"{rel}: no such item in the source: {ident}")
+
+# ---- 4. the progress log is ordered ----
+#
+# It says "Newest entries first" at the top, and an entry once landed in
+# the newest slot while belonging eight entries down — a scripted insert
+# whose anchor did not land where intended. Nothing noticed, because
+# nothing was looking. Dates only: same-day ordering ("late", "night",
+# "very late") is a human judgement and stays one.
+log = ROOT / "docs" / HISTORY
+if log.exists():
+    dates = re.findall(r"^## (\d{4}-\d{2}-\d{2})", log.read_text(), re.M)
+    for older, newer in zip(dates[1:], dates):
+        if older > newer:
+            problems.append(
+                f"docs/{HISTORY}: {older} appears below {newer}, but the log "
+                f"is newest-first"
+            )
 
 for p in sorted(problems):
     print(f"  {p}")
