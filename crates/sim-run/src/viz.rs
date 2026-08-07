@@ -213,5 +213,29 @@ pub fn draw(
         }),
     )?;
     rec.log("telemetry/drift_m", &rerun::Scalars::single(tick.drift))?;
+
+    // The actuator command, in both the physical unit and the one that
+    // will reach an H-bridge. Two questions, two answers: "what did we ask
+    // the wheels for" and "what did the motor driver actually get".
+    //
+    // Plotted in BOTH runners on purpose — comparing the same signal from
+    // the simulator and from the chip is the whole point of the twin.
+    let spec = &mission.config.spec;
+    rec.log(
+        "telemetry/cmd_left_rad_s",
+        &rerun::Scalars::single(tick.commanded.left),
+    )?;
+    rec.log(
+        "telemetry/cmd_right_rad_s",
+        &rerun::Scalars::single(tick.commanded.right),
+    )?;
+    rec.log(
+        "telemetry/duty_l",
+        &rerun::Scalars::single(f64::from(spec.duty(tick.commanded.left))),
+    )?;
+    rec.log(
+        "telemetry/duty_r",
+        &rerun::Scalars::single(f64::from(spec.duty(tick.commanded.right))),
+    )?;
     Ok(())
 }

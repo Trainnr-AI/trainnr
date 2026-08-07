@@ -135,6 +135,14 @@ pub struct Tick {
     /// Encoder counts this tick. The only thing the chip gets to see of
     /// the physics — everything else here is for the viewer.
     pub dticks: (i64, i64),
+    /// What the wheels were **asked** for, before motor lag and slip.
+    ///
+    /// Kept because it is the actuator command — the signal that matters
+    /// most once a real H-bridge is on the end of it. It was plotted until
+    /// the digital-twins refactor moved drawing into the shared `viz`,
+    /// where duty had no home; the panels went blank and nobody noticed
+    /// until Prakhar saw two empty plots in the viewer.
+    pub commanded: WheelSpeeds,
 }
 
 /// Everything a decider needs for one tick, and nothing about how the
@@ -474,6 +482,7 @@ impl Mission {
 
         Tick {
             obs,
+            commanded,
             bumped,
             true_pose: self.robot.pose,
             belief_pose: self.odometry.pose,
@@ -760,6 +769,34 @@ mod tests {
         let outcome = Mission::new(config).run();
         assert!(outcome.succeeded());
         assert_eq!(outcome.ticks, 2, "one tick to arrive, one to notice");
+    }
+
+    /// The actuator command must survive into the `Tick`.
+    ///
+    /// It did not, for a while: the digital-twins refactor moved drawing
+    /// into the shared `viz` and duty had no home there, so the plots went
+    /// blank. Nothing failed, because nothing asserted on it — the symptom
+    /// was two empty panels in the viewer, spotted by eye.
+    #[test]
+    fn the_tick_reports_what_the_wheels_were_asked_for() {
+        let mut mission = Mission::new(MissionConfig::default());
+        let mut moved = false;
+        for _ in 0..200 {
+            let Some(tick) = mission.step() else { break };
+            assert!(
+                tick.commanded.left.is_finite() && tick.commanded.right.is_finite(),
+                "a command must always be a real number"
+            );
+            assert!(
+                tick.commanded.peak() <= mission.config.spec.max_wheel_speed + 1e-9,
+                "fit_wheels should have kept this within the motor: {:?}",
+                tick.commanded
+            );
+            if tick.commanded.peak() > 0.0 {
+                moved = true;
+            }
+        }
+        assert!(moved, "the robot never commanded any wheel speed at all");
     }
 
     #[test]
