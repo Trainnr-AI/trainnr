@@ -701,6 +701,70 @@ mod tests {
         );
     }
 
+    /// **An H4 risk, measured and pinned rather than discovered on a bench.**
+    ///
+    /// The duty plots are not smooth. The commanded duty reaches full
+    /// scale on about 2% of ticks and can swing **1500 counts inside one
+    /// 20 ms tick** — a full-scale reversal, the motor slammed from one
+    /// direction to the other.
+    ///
+    /// In simulation this is harmless: `Motor::step` is a first-order lag
+    /// with tau = 0.15 s, so the wheel cannot follow a 20 ms step and the
+    /// mission completes cleanly. **A real motor has no such courtesy.** A
+    /// commanded reversal means back-EMF opposing the drive, a current
+    /// spike toward stall, battery sag on six AA cells, and mechanical
+    /// shock through a small plastic gearbox.
+    ///
+    /// The source is legitimate: the lookahead point hops to the next path
+    /// node when A* replans, the heading error steps, and the D term
+    /// responds. `derivative_limit` already bounds it to 12 rad/s — the
+    /// robot's physical spin limit — but 12 rad/s of turn rate *is* full
+    /// duty on this geometry, so the clamp alone cannot prevent this.
+    ///
+    /// Deliberately NOT fixed here. The remedy is a slew-rate limit on the
+    /// duty, and the right ramp is a number to **measure against the real
+    /// motor**, not guess against a simulated one. Fixing it now would move
+    /// the Stage 0 baseline on a guess.
+    ///
+    /// This test pins today's figures so the change is visible when it
+    /// happens, in either direction.
+    #[test]
+    fn commanded_duty_slews_hard_enough_to_matter_on_real_motors() {
+        let spec = MissionConfig::default().spec;
+        let mut mission = Mission::new(MissionConfig::default());
+        let (mut previous, mut worst_slew, mut saturated, mut ticks) =
+            ((0i32, 0i32), 0i32, 0usize, 0usize);
+
+        while let Some(tick) = mission.step() {
+            let now = (
+                spec.duty(tick.commanded.left),
+                spec.duty(tick.commanded.right),
+            );
+            if now.0.abs() == sim_core::DUTY_FULL || now.1.abs() == sim_core::DUTY_FULL {
+                saturated += 1;
+            }
+            worst_slew = worst_slew
+                .max((now.0 - previous.0).abs())
+                .max((now.1 - previous.1).abs());
+            previous = now;
+            ticks += 1;
+        }
+
+        // Loose bounds: this records the shape of the problem, not an
+        // exact figure a harmless retune would break.
+        assert!(
+            saturated * 100 / ticks <= 5,
+            "{saturated}/{ticks} ticks at full duty — saturation has grown"
+        );
+        assert!(
+            (1000..=2000).contains(&worst_slew),
+            "worst duty slew is {worst_slew} counts per 20 ms tick; it was \
+             ~1500 when measured. A large drop means a slew limiter landed \
+             (good — record the new baseline); a rise means something is \
+             commanding even harder reversals."
+        );
+    }
+
     /// Determinism is what makes every assertion above meaningful.
     #[test]
     fn the_same_seed_produces_the_same_run() {
