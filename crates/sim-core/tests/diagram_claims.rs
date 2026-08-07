@@ -12,7 +12,7 @@
 //! disagree, this fails, and whichever one is wrong gets fixed.
 
 use sim_core::exercises::shortest_turn;
-use sim_core::{BodyTwist, ControlGains, DiffDrive, GotoController, Pose, RobotSpec, WheelSpeeds};
+use sim_core::{ControlGains, DiffDrive, GotoController, Pose, RobotSpec, WheelSpeeds};
 
 const SPEC: RobotSpec = RobotSpec::SIM_BOT;
 

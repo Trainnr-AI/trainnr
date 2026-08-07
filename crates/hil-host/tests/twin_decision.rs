@@ -16,7 +16,7 @@
 //! silicon is still the evidence.
 
 use hil_protocol::Message;
-use sim_core::{BodyTwist, Directive, GotoController, Point};
+use sim_core::{Directive, GotoController, Point};
 use sim_run::{Mission, MissionConfig};
 
 /// Encode and parse a directive exactly as the link does.
