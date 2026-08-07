@@ -137,6 +137,8 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
     let mut rx = [0u8; 64];
     // Starts stale — never fed is not "no news is good news".
     let mut watchdog = CommandWatchdog::new(COMMAND_TIMEOUT_MS);
+    // Worst compute time seen, microseconds. Reported only when beaten.
+    let mut worst_us: u32 = 0;
 
     loop {
         // ---- 1. wait for the host to say where to aim ----
@@ -183,6 +185,10 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
         link.send(out.as_bytes()).await;
 
         // ---- 3. decide ----
+        // Timed: everything from here to the duty is the real-time work,
+        // and the only part with a deadline. Waiting on the host is not
+        // ours to account for.
+        let started = Instant::now();
         // Literally the same call `Mission::decide` makes on the laptop.
         // Not "the same algorithm" — the same function.
         let (v, w) = controller.execute(command, &pose, DT);
@@ -192,9 +198,20 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
         // this line. While the planner is fresh it is the identity; once it
         // goes quiet the duty is zero, whatever the controller computed.
         let (duty_l, duty_r) = watchdog.gate(now_ms(), (SPEC.duty(wl), SPEC.duty(wr)));
+        let elapsed_us = started.elapsed().as_micros() as u32;
         out.clear();
         let _ = Message::Motor { duty_l, duty_r }.write_into(&mut out);
         link.send(out.as_bytes()).await;
+
+        // Only on a new record, so a healthy run says almost nothing.
+        // Sent AFTER the motor line: the host is waiting on `M`, and an
+        // `H` in front of it would just sit in its buffer.
+        if elapsed_us > worst_us {
+            worst_us = elapsed_us;
+            out.clear();
+            let _ = Message::Health { worst_us }.write_into(&mut out);
+            link.send(out.as_bytes()).await;
+        }
 
         // ---- 4. wait for the host's physics update ----
         //

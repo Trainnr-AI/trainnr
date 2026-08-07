@@ -114,27 +114,24 @@ impl Default for MissionConfig {
 }
 
 /// One completed control tick — everything a viewer needs to draw it.
+///
+/// **This is the [`Observation`] plus what the physics did with it**, and
+/// it says so structurally rather than by copying. It used to restate
+/// eight of `Observation`'s fields — `index`, `t`, `scan`, `mode`,
+/// `mode_changes`, `target`, `goal`, `path` — plus `min_dist`, which
+/// duplicated `summary.min`. `advance` then moved each one across by
+/// hand. Nine chances for the two to disagree, and nine lines of moving
+/// that carried no information.
 #[derive(Debug, Clone)]
 pub struct Tick {
-    pub index: usize,
-    /// Simulated seconds since the start.
-    pub t: f64,
-    /// Depth reading per camera ray, right to left.
-    pub scan: Vec<f64>,
-    pub mode: Mode,
-    /// Mode transitions that happened this tick, as `(from, to)`.
-    pub mode_changes: Vec<(Mode, Mode)>,
-    pub min_dist: f64,
+    /// What the robot saw and steered on, verbatim.
+    pub obs: Observation,
     /// Did the body overlap a wall, so the translation was refused?
     pub bumped: bool,
-    /// The point being steered at (path lookahead, or the goal).
-    pub target: (f64, f64),
-    pub goal: (f64, f64),
     pub true_pose: Pose,
     pub belief_pose: Pose,
     /// Distance between truth and belief — the accumulated odometry error.
     pub drift: f64,
-    pub path: Option<Vec<(f64, f64)>>,
     /// Encoder counts this tick. The only thing the chip gets to see of
     /// the physics — everything else here is for the viewer.
     pub dticks: (i64, i64),
@@ -455,19 +452,11 @@ impl Mission {
         self.odometry.update(dticks_l, dticks_r);
 
         Tick {
-            index: obs.index,
-            t: obs.t,
-            scan: obs.scan,
-            mode: obs.mode,
-            mode_changes: obs.mode_changes,
-            min_dist: obs.summary.min,
+            obs,
             bumped,
-            target: obs.target,
-            goal: obs.goal,
             true_pose: self.robot.pose,
             belief_pose: self.odometry.pose,
             drift: self.robot.pose.distance_to(&self.odometry.pose),
-            path: obs.path,
             dticks: (dticks_l, dticks_r),
         }
     }
@@ -754,11 +743,11 @@ mod tests {
         let mut mission = Mission::new(MissionConfig::default());
         let tick = mission.step().expect("first tick");
 
-        assert_eq!(tick.index, 0);
-        assert_eq!(tick.scan.len(), mission.config.cam_rays);
-        assert!(tick.min_dist.is_finite());
+        assert_eq!(tick.obs.index, 0);
+        assert_eq!(tick.obs.scan.len(), mission.config.cam_rays);
+        assert!(tick.obs.summary.min.is_finite());
         assert!(!tick.bumped, "should not start inside a wall");
-        assert_eq!(tick.goal, (6.5, 3.0));
+        assert_eq!(tick.obs.goal, (6.5, 3.0));
         assert!(tick.drift >= 0.0);
     }
 

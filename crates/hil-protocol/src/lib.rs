@@ -9,6 +9,7 @@
 //!   chip -> host   P <x> <y> <theta>     believed pose (display only)
 //!   chip -> host   M <duty_l> <duty_r>   motor command, ±1000
 //!   host -> chip   S <dl> <dr>           encoder tick deltas
+//!   chip -> host   H <worst_us>         new worst-case compute time
 //! ```
 //!
 //! # Why the host sends the goal
@@ -115,6 +116,24 @@ pub enum Message {
     /// `S dl dr` — encoder tick deltas since the previous step. Signed:
     /// a reversing wheel counts down.
     Sensors { dl: i64, dr: i64 },
+    /// chip → host: a NEW worst-case control-loop compute time, in
+    /// microseconds.
+    ///
+    /// Sent only when the record is beaten, so a healthy run costs a
+    /// handful of lines rather than one per tick. That matters: this
+    /// direction is not FIFO-constrained, but a per-tick line would still
+    /// be 1139 lines of noise to say nothing changed.
+    ///
+    /// # Why the chip reports this at all
+    ///
+    /// The 50 Hz deadline was measured **once**, on a bench, at 198 us
+    /// against a 20 000 us budget. That is a snapshot of one binary on one
+    /// day. When the loop grows — reading encoders, driving an H-bridge,
+    /// a heavier planner — nothing would notice it eating the budget until
+    /// the robot started missing ticks in a way that looks like bad
+    /// tuning. Reporting it makes the headroom a continuously checked
+    /// property instead of a remembered number.
+    Health { worst_us: u32 },
 }
 
 /// Why a line could not be parsed.
@@ -159,6 +178,7 @@ impl Message {
             Message::Pose { x, y, theta } => writeln!(w, "P {x:.4} {y:.4} {theta:.4}"),
             Message::Motor { duty_l, duty_r } => writeln!(w, "M {duty_l} {duty_r}"),
             Message::Sensors { dl, dr } => writeln!(w, "S {dl} {dr}"),
+            Message::Health { worst_us } => writeln!(w, "H {worst_us}"),
         }
     }
 
@@ -197,6 +217,12 @@ impl Message {
                 let duty_r = next_i32(&mut parts)?;
                 Ok(Message::Motor { duty_l, duty_r })
             }
+            "H" => {
+                let worst_us = next_i64(&mut parts)?;
+                Ok(Message::Health {
+                    worst_us: worst_us.max(0) as u32,
+                })
+            }
             "S" => {
                 let dl = next_i64(&mut parts)?;
                 let dr = next_i64(&mut parts)?;
@@ -215,6 +241,7 @@ impl Message {
             Message::Pose { .. } => 'P',
             Message::Motor { .. } => 'M',
             Message::Sensors { .. } => 'S',
+            Message::Health { .. } => 'H',
         }
     }
 }
@@ -364,7 +391,10 @@ impl Message {
                 fresh,
             }),
             Message::Twist { v, w } => Some(Directive::Twist { v, w }),
-            Message::Pose { .. } | Message::Motor { .. } | Message::Sensors { .. } => None,
+            Message::Pose { .. }
+            | Message::Motor { .. }
+            | Message::Sensors { .. }
+            | Message::Health { .. } => None,
         }
     }
 }
@@ -712,6 +742,7 @@ mod tests {
                 duty_r: -500,
             },
             Message::Sensors { dl: 7, dr: 9 },
+            Message::Health { worst_us: 198 },
         ] {
             assert_eq!(m.directive(), None, "{m:?} is telemetry, not a command");
         }

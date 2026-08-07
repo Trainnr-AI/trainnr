@@ -49,18 +49,19 @@ pub fn draw(
     trail_true: &mut Vec<[f32; 2]>,
     trail_belief: &mut Vec<[f32; 2]>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    rec.set_duration_secs("sim_time", tick.t);
+    rec.set_duration_secs("sim_time", tick.obs.t);
 
-    for (from, to) in &tick.mode_changes {
+    for (from, to) in &tick.obs.mode_changes {
         rec.log(
             "events",
-            &rerun::TextLog::new(format!("t={:.1}s: {from:?} -> {to:?}", tick.t)),
+            &rerun::TextLog::new(format!("t={:.1}s: {from:?} -> {to:?}", tick.obs.t)),
         )?;
     }
 
     // The robot's vision, drawn: one line per sight-line, out to its hit.
     let pose = tick.true_pose;
     let vision: Vec<[[f32; 2]; 2]> = tick
+        .obs
         .scan
         .iter()
         .enumerate()
@@ -72,7 +73,7 @@ pub fn draw(
             ]
         })
         .collect();
-    let vision_color = match tick.mode {
+    let vision_color = match tick.obs.mode {
         Mode::Goto => rerun::Color::from_rgb(80, 110, 140),
         Mode::Avoid => rerun::Color::from_rgb(255, 120, 40),
     };
@@ -83,7 +84,7 @@ pub fn draw(
 
     // The MAP as the robot remembers it, every 10th tick to keep the
     // stream light.
-    if tick.index.is_multiple_of(10) {
+    if tick.obs.index.is_multiple_of(10) {
         let map = &mission.map;
         let mut occupied: Vec<[f32; 2]> = Vec::new();
         for cy in 0..map.height {
@@ -102,7 +103,7 @@ pub fn draw(
         )?;
     }
 
-    if let Some(p) = &tick.path {
+    if let Some(p) = &tick.obs.path {
         let pts: Vec<[f32; 2]> = p.iter().map(|&(px, py)| [px as f32, py as f32]).collect();
         rec.log(
             "plan/path",
@@ -111,13 +112,13 @@ pub fn draw(
     }
     rec.log(
         "plan/target",
-        &rerun::Points2D::new([[tick.target.0 as f32, tick.target.1 as f32]])
+        &rerun::Points2D::new([[tick.obs.target.0 as f32, tick.obs.target.1 as f32]])
             .with_radii([0.06])
             .with_colors([rerun::Color::from_rgb(255, 255, 120)]),
     )?;
     rec.log(
         "world/current_goal",
-        &rerun::Points2D::new([[tick.goal.0 as f32, tick.goal.1 as f32]])
+        &rerun::Points2D::new([[tick.obs.goal.0 as f32, tick.obs.goal.1 as f32]])
             .with_radii([0.09])
             .with_colors([rerun::Color::from_rgb(60, 255, 60)]),
     )?;
@@ -162,7 +163,7 @@ pub fn draw(
 
     rec.log(
         "telemetry/min_obstacle_m",
-        &rerun::Scalars::single(tick.min_dist),
+        &rerun::Scalars::single(tick.obs.summary.min),
     )?;
     rec.log(
         "telemetry/bumped",
@@ -170,7 +171,7 @@ pub fn draw(
     )?;
     rec.log(
         "telemetry/mode",
-        &rerun::Scalars::single(match tick.mode {
+        &rerun::Scalars::single(match tick.obs.mode {
             Mode::Goto => 0.0,
             Mode::Avoid => 1.0,
         }),

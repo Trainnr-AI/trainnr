@@ -122,6 +122,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut trail_true: Vec<[f32; 2]> = Vec::new();
     let mut trail_belief: Vec<[f32; 2]> = Vec::new();
     let mut belief_from_chip = mission.config.start;
+    // The chip's worst control-loop compute time, straight from the chip.
+    let mut worst_us = 0u32;
     let mut ticks = 0usize;
 
     // ---- the loop: plan here, control there ----
@@ -149,6 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(Message::Pose { x, y, theta }) => {
                     belief_from_chip = sim_core::Pose::new(x, y, theta)
                 }
+                Ok(Message::Health { worst_us: us }) => worst_us = worst_us.max(us),
                 Ok(_) => {}
                 Err(_) => eprintln!("[host] {}", line.trim_end()),
             }
@@ -174,7 +177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if ticks % 50 == 0 {
             eprintln!(
                 "[{:5.1}s] true ({:.2}, {:.2})  chip ({:.2}, {:.2})  drift {:.3} m  duty {duty_l}/{duty_r}",
-                tick.t,
+                tick.obs.t,
                 tick.true_pose.x,
                 tick.true_pose.y,
                 belief_from_chip.x,
@@ -202,6 +205,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         outcome.drift,
         outcome.bumps
     );
+
+    // The deadline, checked against the chip rather than remembered.
+    let budget_us = (dt * 1e6) as u32;
+    if worst_us == 0 {
+        eprintln!("  timing:      chip reported none (old firmware?)");
+    } else {
+        let used = 100.0 * worst_us as f64 / budget_us as f64;
+        println!(
+            "  timing:      worst {worst_us} us of {budget_us} us ({used:.2}%), {:.0}x headroom",
+            budget_us as f64 / worst_us as f64
+        );
+        if worst_us > budget_us {
+            // Not a warning. A robot that misses its control period is
+            // integrating stale sensor data and steering on it.
+            eprintln!(
+                "\nFAIL: the chip missed its {budget_us} us control deadline \
+                 (worst {worst_us} us). The loop grew past what the chip can \
+                 do at {:.0} Hz.",
+                1.0 / dt
+            );
+            std::process::exit(1);
+        }
+    }
     Ok(())
 }
 
