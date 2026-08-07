@@ -27,6 +27,7 @@ echo "=== robotiq end-to-end verification ==="
 step "formatting"            "cargo fmt --all --check"
 step "clippy (all targets)"  "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
 step "tests"                 "cargo test -q --workspace"
+step "docs describe real code" "python3 tools/check-docs.py"
 step "simulator solves the U-trap" \
      "cargo run -q -p sim-run | grep -q 'Waypoints reached: 1/1'"
 

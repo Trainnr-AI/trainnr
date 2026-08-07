@@ -102,6 +102,9 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/15-testing-and-coverage.md`](docs/15-testing-and-coverage.md) — test suite, coverage, LOC
 - [`docs/16-the-map.md`](docs/16-the-map.md) — every symbol, unit and formula, and how
   the maths, the physics and the code connect
+- [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
+- [`recordings/README.md`](recordings/README.md) — recorded sessions, and how replay
+  turns one into a regression test
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
   - [`math-00-symbol-decoder.md`](docs/learning/math-00-symbol-decoder.md) — what every
     maths symbol means, in plain words. Start here if formulas look alien.
@@ -120,16 +123,28 @@ robotiq/
 │   ├── sim-core/            # robot math + simulator. Builds twice:
 │   │                        #   std = full sim; no_std = the MCU subset
 │   │                        #   exercises.rs — YOUR code goes there
-│   ├── sim-run/             # streams the sim to the Rerun viewer
+│   ├── sim-run/             # the mission, and the Rerun viewer
+│   ├── vision/              # camera, detectors, target lock, the chase loop
+│   ├── hil-protocol/        # the host↔chip wire format, one definition
+│   ├── hil-host/            # simulated body for a real chip; record/replay
 │   ├── mpu6050-driver/      # IMU driver (host-tested against a mock bus)
 │   └── quad-encoder/        # quadrature decoding
 ├── firmware/                # no_std, ARM target — outside the workspace
+│   ├── build-support/       #   one copy of the linker scripts + build.rs
 │   ├── pico-blink/          #   H0  async tasks
 │   ├── pico-button/         #   H1  input + PWM
 │   ├── pico-imu/            #   H2  I2C sensor
 │   ├── pico-encoder/        #   H3  encoder decoding
-│   └── pico-odom/           #   L1  sim-core's odometry, on the chip
+│   ├── pico-odom/           #   L1  sim-core's odometry, on the chip
+│   ├── pico-led/            #   the CYW43 onboard LED (a real Pico 2 W)
+│   ├── pico-selftest/       #   the shared maths on real silicon, diffed
+│   └── pico-robot/          #   the controller: UART (emulator) or USB (real)
+├── recordings/              # committed sessions that replay as regression tests
 └── tools/
+    ├── verify.sh            # EVERYTHING, end to end, one command
+    ├── coverage.sh          # coverage + lines-of-code report
+    ├── check-docs.py        # do the docs describe code that exists?
+    ├── build-robot.sh       # pico-robot for BOTH chips, together
     ├── setup-emulator.sh    # clones + patches wokwi/rp2040js (not committed)
     ├── harness/             # our emulator harnesses (virtual sensors, tests)
     ├── patches/             # our fix to the upstream emulator
@@ -142,7 +157,8 @@ robotiq/
 [Rerun viewer](https://rerun.io) 0.35):
 
 ```sh
-cargo test                  # the whole suite (73 tests)
+tools/verify.sh             # everything: fmt, clippy, 333 tests, firmware,
+                            # both replay fixtures, and the emulator HIL run
 cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
 ```
 
@@ -159,3 +175,37 @@ tools/sim-odom.sh           # L1  sim-core's Odometry running on emulated ARM
 
 No microcontroller required — `tools/rp2040js` is a local emulator, and
 the firmware built here is the same UF2 that will run on a real Pico.
+
+**Level 3 — hardware in the loop.** The chip is the brain; the laptop is
+the body and the world. Same mission either way:
+
+```sh
+tools/sim-hil.sh                                     # emulated RP2040
+cargo run -p hil-host -- --serial /dev/cu.usbmodem11 # a REAL Pico 2 W
+```
+
+Measured on all three, one trajectory:
+
+| | ticks | waypoints | drift | worst compute |
+|---|---:|---:|---:|---:|
+| `sim-run` (Mac, hardware `f64`) | — | 1/1 | 0.052 m | — |
+| emulated RP2040 (M0+, no FPU) | 1139 | 1/1 | 0.052 m | 278 µs |
+| real RP2350 (M33, SP FPU) | 1139 | 1/1 | 0.052 m | 268 µs |
+
+Both physical Pico 2 W boards command **byte-identical** duty across all
+1139 ticks.
+
+**Recording and replay.** Every session can be captured and re-run with no
+hardware attached — and replay checks what the code *would now command*,
+so a behaviour change fails loudly:
+
+```sh
+cargo run -p hil-host -- --serial /dev/cu.usbmodem11 --record run.wire
+cargo run -p hil-host -- --replay run.wire            # ~4 s, no board
+
+cargo run -p vision --bin chase -- --record chase.perc --video
+cargo run -p vision --bin chase -- --replay chase.perc  # no camera
+```
+
+This is what found a chip carrying its previous run's pose into a new
+session — from four lines of log. See [`recordings/README.md`](recordings/README.md).
