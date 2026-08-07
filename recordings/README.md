@@ -31,6 +31,27 @@ REPLAY DIVERGED from the recorded session:
 | file | what it is |
 |---|---|
 | `rp2350-utrap.wire` | The Stage 0 U-trap solved by a real RP2350 over USB. 1139 ticks, 1/1 waypoints, drift 0.052 m, 0 wall bumps, worst compute 311 µs of a 20 000 µs budget. |
+| `chase-sweep.perc` | A **synthetic** perception session: an object enters from the right, is tracked to centre, grows as the robot closes, then vanishes. 225 frames, 20 KB. Exercises the bearing low-pass, the heading deadband, `approach_factor` and the shared PID. Synthetic on purpose — deterministic, and no footage of anyone's living room in the repo. |
+
+```sh
+# the camera path
+cargo run -p vision --bin chase -- --record chase.perc [--video]
+cargo run -p vision --bin chase -- --replay chase.perc
+
+# accept a deliberate change: same perception, freshly computed commands
+cargo run -p vision --bin chase -- --replay chase.perc --record chase.perc
+```
+
+A perception log records the commanded `(v, w)` per frame, so replay
+checks the **output** and not just re-runs the input. Mutation-verified
+against four separate pieces of glue:
+
+| changed | frames that diverged (of 327) |
+|---|---|
+| bearing filter α | 233 |
+| heading deadband | 143 |
+| `approach_factor` curve | 153 — exactly the frames with forward motion |
+| shared `heading_kp` | 213 |
 
 Re-record it deliberately, never to make a failing replay pass. A
 divergence is either a regression or a decision — and if it is a decision,

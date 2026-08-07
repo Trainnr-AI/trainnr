@@ -67,6 +67,17 @@ pub struct Perceived {
     pub detections: Vec<Detection>,
     /// Index into `detections` of the one being chased, if any.
     pub target: Option<usize>,
+    /// The `(v, w)` the controller commanded from this frame.
+    ///
+    /// **This is what makes a replay a test rather than a viewing.**
+    /// Without it a recording says only what the camera saw; replay can
+    /// re-run the control law but has nothing to check it against, so a
+    /// change to the filter, the deadband or the approach curve replays
+    /// happily and silently differently.
+    ///
+    /// `None` in a log written before this field existed — replay then
+    /// says it cannot verify, rather than pretending it did.
+    pub command: Option<(f64, f64)>,
 }
 
 impl Perceived {
@@ -76,7 +87,7 @@ impl Perceived {
     }
 
     fn encode(&self, out: &mut String) {
-        let _ = writeln!(
+        let _ = write!(
             out,
             "F {:.6} {} {} {}",
             self.dt,
@@ -84,6 +95,11 @@ impl Perceived {
             self.frame_h,
             self.target.map_or(-1i64, |i| i as i64)
         );
+        // Trailing and optional, so a log without commands still parses.
+        if let Some((v, w)) = self.command {
+            let _ = write!(out, " {v:.6} {w:.6}");
+        }
+        let _ = writeln!(out);
         for d in &self.detections {
             // The label goes last because it can contain spaces
             // ("cell phone", "potted plant").
@@ -210,12 +226,23 @@ pub fn read(path: &Path) -> Result<Vec<Perceived>, String> {
                 let frame_w = num::<u32>(f.next(), &at)?;
                 let frame_h = num::<u32>(f.next(), &at)?;
                 let idx = num::<i64>(f.next(), &at)?;
+                // Both or neither: half a command is a malformed line, not
+                // an old one.
+                let command = match (f.next(), f.next()) {
+                    (Some(v), Some(w)) => Some((
+                        v.parse().map_err(|_| at("bad commanded v"))?,
+                        w.parse().map_err(|_| at("bad commanded w"))?,
+                    )),
+                    (None, None) => None,
+                    _ => return Err(at("a command needs both v and w")),
+                };
                 frames.push(Perceived {
                     dt,
                     frame_w,
                     frame_h,
                     detections: Vec::new(),
                     target: (idx >= 0).then_some(idx as usize),
+                    command,
                 });
             }
             Some("D") => {
@@ -260,6 +287,33 @@ fn num<T: std::str::FromStr>(tok: Option<&str>, at: &impl Fn(&str) -> String) ->
         .map_err(|_| at("could not parse a number"))
 }
 
+/// How far a recomputed command may drift from the recorded one before it
+/// counts as a behaviour change.
+///
+/// The log carries six decimals, so re-running identical code differs by
+/// under 5e-7 — pure formatting. A 1% gain change moves `v` by ~2e-3, three
+/// hundred times this bar. Wide enough never to cry wolf, tight enough that
+/// nothing real slips through.
+pub const COMMAND_TOLERANCE: f64 = 1e-5;
+
+/// Compare a freshly computed command against what the session recorded.
+///
+/// `Ok(())` when they agree or the log predates commands; `Err` describes
+/// the disagreement in the same shape `hil-host` uses, because it is the
+/// same question asked of a different boundary.
+pub fn check_command(frame: usize, p: &Perceived, got: (f64, f64)) -> Result<(), String> {
+    let Some((v, w)) = p.command else {
+        return Ok(()); // nothing recorded to check against
+    };
+    if (got.0 - v).abs() <= COMMAND_TOLERANCE && (got.1 - w).abs() <= COMMAND_TOLERANCE {
+        return Ok(());
+    }
+    Err(format!(
+        "frame {frame}: would command v={:.6} w={:.6}, recording has v={v:.6} w={w:.6}",
+        got.0, got.1
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,6 +355,7 @@ mod tests {
                 frame_h: 480,
                 detections: vec![det("cup", 0.9), det("book", 0.4)],
                 target: Some(0),
+                command: Some((0.31, -0.42)),
             },
             Perceived {
                 dt: 0.048,
@@ -308,6 +363,7 @@ mod tests {
                 frame_h: 480,
                 detections: vec![],
                 target: None,
+                command: Some((0.0, 0.0)),
             },
         ];
         assert_eq!(round_trip("session", &frames), frames);
@@ -323,6 +379,7 @@ mod tests {
             frame_h: 1,
             detections: vec![det("cell phone", 0.5), det("potted plant", 0.6)],
             target: Some(1),
+            command: None,
         }];
         let back = round_trip("labels", &frames);
         assert_eq!(back[0].detections[0].label, "cell phone");
@@ -339,6 +396,7 @@ mod tests {
             frame_h: 1,
             detections: vec![],
             target: None,
+            command: None,
         }];
         let back = round_trip("dt", &frames);
         assert!(
@@ -398,6 +456,7 @@ mod tests {
             frame_h: 2,
             detections: vec![],
             target: None,
+            command: Some((0.1, -0.2)),
         }
     }
 
@@ -407,6 +466,52 @@ mod tests {
             height: 2,
             rgb: (0..4 * 2 * 3).map(|i| (i * 7 % 256) as u8).collect(),
         }
+    }
+
+    /// The point of recording commands at all.
+    #[test]
+    fn a_changed_command_is_caught() {
+        let p = blank(); // commands (0.1, -0.2)
+        assert!(check_command(0, &p, (0.1, -0.2)).is_ok(), "identical must pass");
+
+        let err = check_command(7, &p, (0.15, -0.2)).unwrap_err();
+        assert!(err.contains("frame 7"), "{err}");
+        assert!(err.contains("0.150000") && err.contains("0.100000"), "{err}");
+
+        assert!(check_command(0, &p, (0.1, -0.25)).is_err(), "w matters too");
+    }
+
+    /// Six decimals on the wire means re-running identical code differs by
+    /// rounding alone. That must not read as a regression.
+    #[test]
+    fn rounding_is_not_a_divergence() {
+        let p = blank();
+        assert!(check_command(0, &p, (0.1 + 4e-7, -0.2 - 4e-7)).is_ok());
+        // ...but a real change, three hundred times larger, is caught.
+        assert!(check_command(0, &p, (0.1 + 2e-3, -0.2)).is_err());
+    }
+
+    /// A log written before commands existed must replay, and must NOT
+    /// claim it verified anything.
+    #[test]
+    fn a_log_without_commands_cannot_be_verified_and_says_so() {
+        let p = Perceived { command: None, ..blank() };
+        assert!(
+            check_command(0, &p, (99.0, -99.0)).is_ok(),
+            "nothing recorded means nothing to contradict"
+        );
+    }
+
+    /// Half a command is a corrupt line, not an old one — and the
+    /// difference matters, because treating it as old would silently skip
+    /// verification for that frame.
+    #[test]
+    fn half_a_command_is_rejected() {
+        let path = std::env::temp_dir().join("perc-halfcmd.perc");
+        std::fs::write(&path, "F 0.05 640 480 -1 0.3\n").unwrap();
+        let err = read(&path).unwrap_err();
+        std::fs::remove_file(&path).ok();
+        assert!(err.contains("both v and w"), "{err}");
     }
 
     #[test]

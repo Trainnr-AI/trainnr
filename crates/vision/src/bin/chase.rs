@@ -123,11 +123,71 @@ fn main() -> Result<()> {
         if !footage {
             println!("(no footage: this log was recorded without --video)");
         }
+        // `--replay X --record Y` re-records: same perception, freshly
+        // computed commands. Without it the advice this mode prints on a
+        // divergence — "if that is intended, re-record" — would mean
+        // "go and find a camera and stage the scene again", which for a
+        // moment that has already happened is no advice at all.
+        let mut rerecord = vision::session::Recorder::create(args.record.as_deref(), false)?;
+        if let Some(out) = &args.record {
+            println!("re-recording commands to {}", out.display());
+            if args.video {
+                eprintln!("  (--video ignored: re-recording keeps the original footage)");
+            }
+        }
+
+        let mut divergences: Vec<String> = Vec::new();
         for (i, p) in frames.iter().enumerate() {
             let img = footage.then(|| vision::session::load_frame(path, i)).flatten();
-            chase.step(p, img.as_ref(), &rec)?;
+            let got = chase.step(p, img.as_ref(), &rec)?;
+            if let Err(d) = vision::session::check_command(i, p, got) {
+                divergences.push(d);
+            }
+            rerecord.write(
+                &vision::session::Perceived {
+                    command: Some(got),
+                    ..p.clone()
+                },
+                None,
+            )?;
         }
-        println!("\nreplay complete: {} frames", frames.len());
+
+        // Re-recording is a deliberate act of saying "the new behaviour is
+        // correct", so it must not also fail on the difference it just
+        // captured.
+        if args.record.is_some() {
+            println!(
+                "re-recorded {} frames ({} command(s) changed)",
+                frames.len(),
+                divergences.len()
+            );
+            return Ok(());
+        }
+
+        let checked = frames.iter().filter(|p| p.command.is_some()).count();
+        if !divergences.is_empty() {
+            eprintln!("\nREPLAY DIVERGED from the recorded session:");
+            for d in divergences.iter().take(10) {
+                eprintln!("  - {d}");
+            }
+            if divergences.len() > 10 {
+                eprintln!("  ... and {} more", divergences.len() - 10);
+            }
+            eprintln!(
+                "\n{} of {checked} checked frames command differently. If that \
+                 is intended, re-record; if not, this is the regression.",
+                divergences.len()
+            );
+            std::process::exit(1);
+        }
+        match checked {
+            0 => println!(
+                "\nreplayed {} frames — NOT verified: this log predates \
+                 recorded commands, so there was nothing to check against",
+                frames.len()
+            ),
+            n => println!("\nreplay complete: {n} frames, every command matched"),
+        }
         return Ok(());
     }
 
@@ -294,15 +354,18 @@ fn main() -> Result<()> {
         };
         let target = chosen.and_then(|c| detections.iter().position(|d| std::ptr::eq(d, c)));
 
-        let perceived = Perceived {
+        let mut perceived = Perceived {
             dt,
             frame_w: frame.width,
             frame_h: frame.height,
             detections,
             target,
+            command: None,
         };
+        // Step FIRST: the command is part of the record, so there is
+        // something for a replay to check against.
+        perceived.command = Some(chase.step(&perceived, Some(&frame), &rec)?);
         recorder.write(&perceived, Some(&frame))?;
-        chase.step(&perceived, Some(&frame), &rec)?;
     }
     Ok(())
 }
@@ -366,12 +429,16 @@ impl Chase {
     /// One frame: perception in, motion out. `frame` is `None` on replay,
     /// where there are no pixels — everything except the camera image is
     /// identical.
+    ///
+    /// Returns the commanded `(v, w)`, which the live loop records and the
+    /// replay loop checks. That return value is the whole difference
+    /// between a replay you watch and a replay that can fail.
     fn step(
         &mut self,
         p: &Perceived,
         frame: Option<&Frame>,
         rec: &rerun::RecordingStream,
-    ) -> Result<()> {
+    ) -> Result<(f64, f64)> {
         let dt = p.dt;
         self.t += dt;
         let (v_cmd, w_cmd, heading_error, w_raw) = match p.target() {
@@ -480,7 +547,7 @@ impl Chase {
             }
             self.last_print_t = self.t;
         }
-        Ok(())
+        Ok((v_cmd, w_cmd))
     }
 }
 
