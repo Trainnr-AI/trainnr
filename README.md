@@ -114,6 +114,10 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
   - [`hw-01-bench-rig.md`](docs/learning/hw-01-bench-rig.md) — **the physical rig in
     one page**: breadboard, pin→column map, encoder wiring with colours, the
     commands, what has been measured, and every trap that cost time.
+  - [`hw-02-power-and-motor-decoder.md`](docs/learning/hw-02-power-and-motor-decoder.md) —
+    everything that is not the chip: why one driver has two power pins, what
+    `AO1`/`AO2` really are, pull-up vs pull-down and the erratum, push-pull vs
+    open-drain, and why the test LED must be red.
 - [`docs/photos/`](docs/photos/README.md) — dated photo record of the build, so a
   claim about the hardware can be checked against what was on the desk
 
