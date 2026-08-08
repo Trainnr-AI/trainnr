@@ -118,8 +118,32 @@ impl RobotSpec {
     ///
     /// # ⚠️ NOT YET MEASURED
     ///
-    /// This is currently `SIM_BOT` — placeholders, not measurements. The
-    /// parts were ordered 2026-08-02 and have not arrived.
+    /// This is currently `SIM_BOT` — placeholders, not measurements.
+    ///
+    /// ## What *has* been measured (2026-08-08)
+    ///
+    /// The motors are **GA12-N20**, and their encoder resolution is
+    /// **28 ticks per MOTOR revolution** (7 PPR × 4 quadrature edges),
+    /// measured on real hardware — one revolution backward then one
+    /// forward, with the count returning to exactly its starting value.
+    /// The seller's listing claims 3 PPR, i.e. 12; that is wrong.
+    ///
+    /// **That is not this field.** `ticks_per_revolution` is per *wheel*
+    /// revolution, and the two differ by the gearbox:
+    ///
+    /// ```text
+    ///     ticks_per_revolution  =  28  ×  gear_ratio
+    /// ```
+    ///
+    /// The listing gives **no gear ratio**, and the GA12-N20 ships in
+    /// 1:30 through 1:298 — so it must be measured too, by turning the
+    /// *output* shaft. Step 3 below is still the procedure; the 28 above
+    /// simply means the answer can be cross-checked once both are known,
+    /// and that dividing them yields the true ratio rather than the
+    /// advertised one.
+    ///
+    /// See `docs/09-shopping-list.md` for the method and why bulk-counting
+    /// revolutions gave an answer 45% too high while looking plausible.
     ///
     /// **Do not fill this in with plausible-looking guesses.** It was
     /// briefly set to invented values while testing the mechanism, and the
