@@ -157,6 +157,30 @@ impl RobotSpec {
     /// including why bulk-counting revolutions gave an answer 45% too high
     /// while looking entirely plausible.
     ///
+    /// ## Why 4290 is NOT written in below yet
+    ///
+    /// It is measured, and putting it here would make odometry *less*
+    /// wrong. It still waits, for two reasons.
+    ///
+    /// **Editing this constant is not a one-line change.**
+    /// `firmware/pico-robot` reads `REAL_BOT`, so the duty it commands
+    /// moves — and `recordings/rp2350-utrap.wire` is a recording of that
+    /// firmware, replayed by `tools/verify.sh` as a regression test. A new
+    /// number here invalidates the fixture and needs a **hardware
+    /// re-record**. Doing that now, then again when `wheel_radius` and
+    /// `track_width` arrive, is two hardware sessions for one result.
+    ///
+    /// **And a part-measured spec is the exact trap described above.**
+    /// Three placeholders beside one real number still `check()`s clean and
+    /// still reads as a robot that exists. Leaving this as a single
+    /// `= SIM_BOT` line keeps "not measured" impossible to miss.
+    ///
+    /// So: measure all four, then edit once, re-record once, and delete
+    /// `changing_real_bot_is_a_single_edit` in the same commit. The
+    /// remaining two need wheels — which also makes them the two that
+    /// dominate the error, since step 1 below is the largest source of
+    /// odometry drift and cannot be measured at all without them.
+    ///
     /// **Do not fill this in with plausible-looking guesses.** It was
     /// briefly set to invented values while testing the mechanism, and the
     /// danger was instructive: every derived quantity came out physically
