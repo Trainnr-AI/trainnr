@@ -10,6 +10,10 @@ edition = "2021"
 default = ["rp2040"]
 rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
 pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
+# Report over USB CDC instead of the UART pins — for a REAL board on a USB
+# cable, where GP0/GP1 are wired to nothing:
+#   tools/build-pico2.sh pico-odom usb
+usb = ["dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
 
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
@@ -19,6 +23,9 @@ cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "1.0"
 heapless = "0.9"
+embassy-usb = { version = "0.6", optional = true }
+embassy-futures = { version = "0.1", optional = true }
+static_cell = { version = "2", optional = true }
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { path = "../../crates/quad-encoder" }
