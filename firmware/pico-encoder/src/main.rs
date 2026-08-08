@@ -168,9 +168,12 @@ fn shared_setup(
     let a = Input::new(pin_a, Pull::Down);
     let b = Input::new(pin_b, Pull::Down);
 
-    // The heartbeat is the only sign of life the UART build gives on real
-    // hardware, and the only sign the USB build gives before a host opens
-    // the port. Worth a task of its own for that reason alone.
+    // ⚠️ On a **Pico 2 W this lights nothing**: GP25 is the CYW43 radio's
+    // chip-select there, not an LED — see `firmware/pico-led`, which boots
+    // the radio precisely because that is the only way to reach it.
+    // Driving it is harmless, and it is a real heartbeat on a non-W board
+    // and on the emulated RP2040. But do not read "no blink" as "dead
+    // board": on a W, the sign of life is the USB port appearing.
     spawner.spawn(heartbeat(Output::new(pin_led, Level::Low)).unwrap());
 
     (a, b)
