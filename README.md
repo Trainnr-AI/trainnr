@@ -111,6 +111,11 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
     maths symbol means, in plain words. Start here if formulas look alien.
   - [`hw-00-microcontroller-decoder.md`](docs/learning/hw-00-microcontroller-decoder.md) —
     the chip: pins, boot, GPIO/UART/I2C, embassy, and where the maths meets the metal.
+  - [`hw-01-bench-rig.md`](docs/learning/hw-01-bench-rig.md) — **the physical rig in
+    one page**: breadboard, pin→column map, encoder wiring with colours, the
+    commands, what has been measured, and every trap that cost time.
+- [`docs/photos/`](docs/photos/README.md) — dated photo record of the build, so a
+  claim about the hardware can be checked against what was on the desk
 
 ## Repository layout
 
