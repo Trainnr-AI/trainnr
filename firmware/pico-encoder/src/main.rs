@@ -151,20 +151,33 @@ fn shared_setup(
     pin_b: Peri<'static, PIN_17>,
     pin_led: Peri<'static, PIN_25>,
 ) -> (Input<'static>, Input<'static>) {
-    // ⚠️ RP2350-E9 (see docs/09): our physical board is stepping A2, where
-    // an input with an internal PULL-DOWN can latch high instead of
-    // reading a clean low. These two pins use exactly that configuration.
+    // ⚠️ `Pull::Up` here is a MEASURED result, not a preference. Do not
+    // "tidy" it back to `Pull::Down`.
     //
-    // `Pull::Down` is right for a PUSH-PULL encoder, which drives the line
-    // itself. If the motor's Hall outputs turn out to be open-drain the
-    // line is only ever pulled low, and this reads a constant — the
-    // symptom is a count that never moves. In that case switch both to
-    // `Pull::Up`, which also sidesteps E9 entirely, since the erratum is
-    // specifically about pull-downs.
+    // RP2350-E9 (docs/09): on stepping A2 — which our board is — an input
+    // configured with an internal PULL-DOWN can latch high instead of
+    // reading a clean low. These two pins are exactly that configuration,
+    // and docs/09 predicted the failure before the motors existed.
     //
-    // If ticks stick or counts only ever rise with a push-pull encoder,
-    // add an external pull-down <=4.7k before suspecting this code. The
-    // emulated RP2040 is unaffected.
+    // Measured on real hardware, 2026-08-08, same motor and wiring,
+    // turning the encoder magnet by hand:
+    //
+    //     Pull::Down   44 counts,  15 errors    (~25% of steps lost)
+    //     Pull::Up     53 counts,   0 errors
+    //
+    // An error is a state change to a non-adjacent state, i.e. a missed
+    // transition — so those 15 were an *undercount*, silently. At hand
+    // speed against a 10 kHz poll the true figure is 0, which is what
+    // makes 15 diagnostic rather than noise.
+    //
+    // The pull-up also settles the open-drain question: `Pull::Down`
+    // produced counts at all, so the Hall outputs actively drive high and
+    // are push-pull. A pull-up cannot fight a driven output, which is why
+    // this change is free of side effects — it removes the erratum's
+    // preconditions and nothing else.
+    //
+    // The emulated RP2040 has no E9 and is unaffected either way;
+    // tools/sim-encoder.sh passes identically.
     let a = Input::new(pin_a, Pull::Up);
     let b = Input::new(pin_b, Pull::Up);
 
