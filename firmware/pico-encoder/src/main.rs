@@ -165,8 +165,8 @@ fn shared_setup(
     // If ticks stick or counts only ever rise with a push-pull encoder,
     // add an external pull-down <=4.7k before suspecting this code. The
     // emulated RP2040 is unaffected.
-    let a = Input::new(pin_a, Pull::Down);
-    let b = Input::new(pin_b, Pull::Down);
+    let a = Input::new(pin_a, Pull::Up);
+    let b = Input::new(pin_b, Pull::Up);
 
     // ⚠️ On a **Pico 2 W this lights nothing**: GP25 is the CYW43 radio's
     // chip-select there, not an LED — see `firmware/pico-led`, which boots
