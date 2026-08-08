@@ -44,9 +44,12 @@
 #![forbid(unsafe_code)]
 
 use core::fmt::Write as _;
+use core::sync::atomic::{AtomicU16, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::peripherals::{PIN_16, PIN_17, PIN_18, PIN_19, PIN_25};
+use embassy_rp::peripherals::PWM_SLICE3;
+use embassy_rp::peripherals::{PIN_16, PIN_17, PIN_18, PIN_19, PIN_25, PIN_6, PIN_7, PIN_8, PIN_9};
+use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
 use panic_halt as _;
@@ -58,6 +61,30 @@ const POLL_US: u64 = 100;
 
 /// How often a pose line goes out.
 const REPORT_MS: u64 = 100;
+
+/// PWM counter wrap. 5000 counts at ~150 MHz gives roughly **30 kHz**,
+/// deliberately above the audible band — a motor driven at 2 kHz whines,
+/// and the winding heats more on the switching edges.
+const PWM_TOP: u16 = 5000;
+
+/// The duty sweep, as percentages held for [`STEP_SECS`] each.
+///
+/// It **ends at zero and parks**, rather than looping. A bench motor on
+/// four thin encoder wires should not run unattended, and a firmware whose
+/// natural end state is "stopped" cannot be left running by accident.
+const SWEEP: [u16; 6] = [0, 25, 50, 75, 100, 0];
+const STEP_SECS: u64 = 3;
+
+/// The duty the sweep is currently commanding, so the report line can say
+/// so. Written by one task and read by another, which is the whole reason
+/// it is an atomic rather than a `static mut`.
+///
+/// `Relaxed` is sufficient: it orders nothing else, and a report that
+/// catches the value one tick early is a cosmetic mislabel, not a wrong
+/// measurement. Note that RP2040 (thumbv6m) has no atomic compare-and-swap
+/// — plain load and store like this are fine, which is why the emulator
+/// build still compiles.
+static DUTY_PERCENT: AtomicU16 = AtomicU16::new(0);
 
 /// Where a status line goes. The odometry loop does not care.
 ///
@@ -86,6 +113,74 @@ async fn heartbeat(mut led: Output<'static>) {
     loop {
         led.toggle();
         Timer::after_millis(500).await;
+    }
+}
+
+/// Drives motor A through [`SWEEP`], then stops and parks forever.
+///
+/// This is the rig `crates/sim-core/src/spec.rs` step 4 asks for:
+/// `max_wheel_speed` measured *"on your battery at the voltage the robot
+/// actually runs at, not the datasheet's nominal 6 V"*. Read the encoder
+/// rate at the 100% step — under real load, on real cells, with whatever
+/// sag they have.
+///
+/// # The TB6612's three controls
+///
+/// ```text
+///   STBY   low = outputs off entirely. Default state, and the reason a
+///          correctly wired board looks dead: nothing moves until this
+///          is driven high.
+///   AIN1/2 direction. HIGH/LOW is forward, LOW/HIGH reverse,
+///          LOW/LOW coasts, HIGH/HIGH brakes.
+///   PWMA   speed, as a duty cycle.
+/// ```
+///
+/// # Why it parks rather than loops
+///
+/// The motor sits loose on a desk attached to four thin encoder wires
+/// that have already come adrift once tonight. A sweep that ends leaves
+/// the bench safe if nobody is watching; one that repeats does not. The
+/// last entry in [`SWEEP`] is `0` and `STBY` drops after it — belt and
+/// braces, because a zero duty with the driver still enabled is a stopped
+/// motor that can still be commanded, and this one should not be.
+#[embassy_executor::task]
+async fn drive_sweep(
+    mut pwm: Pwm<'static>,
+    mut ain1: Output<'static>,
+    mut ain2: Output<'static>,
+    mut stby: Output<'static>,
+) {
+    // Forward. Direction is fixed for this sweep — one variable at a time,
+    // and reverse is a sign, not a separate experiment.
+    ain1.set_high();
+    ain2.set_low();
+
+    let mut cfg = PwmConfig::default();
+    cfg.top = PWM_TOP;
+    cfg.compare_a = 0;
+    pwm.set_config(&cfg);
+
+    // Enable only after the duty is known-zero, so the first thing the
+    // driver ever sees is "stopped" rather than whatever the register
+    // happened to hold.
+    stby.set_high();
+
+    for percent in SWEEP {
+        cfg.compare_a = PWM_TOP / 100 * percent;
+        pwm.set_config(&cfg);
+        DUTY_PERCENT.store(percent, Ordering::Relaxed);
+        Timer::after_secs(STEP_SECS).await;
+    }
+
+    cfg.compare_a = 0;
+    pwm.set_config(&cfg);
+    DUTY_PERCENT.store(0, Ordering::Relaxed);
+    stby.set_low();
+
+    // Park. The odometry task keeps reporting, so the final counts stay
+    // readable after the motor has stopped.
+    loop {
+        Timer::after_secs(60).await;
     }
 }
 
@@ -138,13 +233,14 @@ async fn odometry_forever(
             let p = odom.pose;
             let _ = write!(
                 line,
-                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}\r\n",
+                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}  duty={}%\r\n",
                 p.x,
                 p.y,
                 p.heading,
                 left.count,
                 right.count,
-                left.errors + right.errors
+                left.errors + right.errors,
+                DUTY_PERCENT.load(Ordering::Relaxed)
             );
             out.send(line.as_bytes()).await;
             line.clear();
@@ -155,6 +251,19 @@ async fn odometry_forever(
     }
 }
 
+/// The TB6612 side, bundled so `shared_setup`'s signature stays readable.
+///
+/// GP6 is PWM slice 3 channel A — on RP2040/RP2350 a GPIO's slice is
+/// `n / 2` and its channel is A for even `n`, which is why the pin and the
+/// slice cannot be chosen independently.
+struct MotorPins {
+    slice: Peri<'static, PWM_SLICE3>,
+    pwm: Peri<'static, PIN_6>,
+    ain1: Peri<'static, PIN_7>,
+    ain2: Peri<'static, PIN_8>,
+    stby: Peri<'static, PIN_9>,
+}
+
 /// The four encoder pins and the LED, identical whichever transport is built.
 fn shared_setup(
     spawner: Spawner,
@@ -163,6 +272,7 @@ fn shared_setup(
     ra: Peri<'static, PIN_18>,
     rb: Peri<'static, PIN_19>,
     pin_led: Peri<'static, PIN_25>,
+    motor: MotorPins,
 ) -> (
     Input<'static>,
     Input<'static>,
@@ -194,6 +304,18 @@ fn shared_setup(
     // port appearing.
     spawner.spawn(heartbeat(Output::new(pin_led, Level::Low)).unwrap());
 
+    // The driver starts DISABLED and at zero duty. Every output below is
+    // created in its safe state before `drive_sweep` enables anything.
+    spawner.spawn(
+        drive_sweep(
+            Pwm::new_output_a(motor.slice, motor.pwm, PwmConfig::default()),
+            Output::new(motor.ain1, Level::Low),
+            Output::new(motor.ain2, Level::Low),
+            Output::new(motor.stby, Level::Low),
+        )
+        .unwrap(),
+    );
+
     (la, lb, ra, rb)
 }
 
@@ -217,8 +339,21 @@ mod transport {
     }
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        let (la, lb, ra, rb) =
-            shared_setup(spawner, p.PIN_16, p.PIN_17, p.PIN_18, p.PIN_19, p.PIN_25);
+        let (la, lb, ra, rb) = shared_setup(
+            spawner,
+            p.PIN_16,
+            p.PIN_17,
+            p.PIN_18,
+            p.PIN_19,
+            p.PIN_25,
+            MotorPins {
+                slice: p.PWM_SLICE3,
+                pwm: p.PIN_6,
+                ain1: p.PIN_7,
+                ain2: p.PIN_8,
+                stby: p.PIN_9,
+            },
+        );
 
         let uart = Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, UartConfig::default());
         let (tx, _rx) = uart.split();
@@ -287,8 +422,21 @@ mod transport {
     }
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        let (la, lb, ra, rb) =
-            shared_setup(spawner, p.PIN_16, p.PIN_17, p.PIN_18, p.PIN_19, p.PIN_25);
+        let (la, lb, ra, rb) = shared_setup(
+            spawner,
+            p.PIN_16,
+            p.PIN_17,
+            p.PIN_18,
+            p.PIN_19,
+            p.PIN_25,
+            MotorPins {
+                slice: p.PWM_SLICE3,
+                pwm: p.PIN_6,
+                ain1: p.PIN_7,
+                ain2: p.PIN_8,
+                stby: p.PIN_9,
+            },
+        );
 
         let driver = Driver::new(p.USB, Irqs);
         // 0x2e8a is Raspberry Pi's vendor ID. Product IDs differ per
