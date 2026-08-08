@@ -39,6 +39,12 @@ done
 for c in $(ls firmware | grep pico-); do
   step "firmware $c (RP2350)" "tools/build-pico2.sh $c"
 done
+# The loop above builds each crate's DEFAULT transport, which for
+# pico-encoder is the UART one the emulator speaks. Its USB build is the
+# one that runs on a real board, and nothing else here compiles it.
+# (pico-robot's USB build is covered, but only transitively — the HIL step
+# below runs tools/build-robot.sh, which builds it.)
+step "firmware pico-encoder (RP2350, USB)" "tools/build-pico2.sh pico-encoder usb"
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.

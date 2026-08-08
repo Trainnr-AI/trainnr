@@ -177,6 +177,21 @@ tools/sim-odom.sh           # L1  sim-core's Odometry running on emulated ARM
 No microcontroller required — `tools/rp2040js` is a local emulator, and
 the firmware built here is the same UF2 that will run on a real Pico.
 
+To read a **real** encoder, build the USB variant instead — on a physical
+board GP0/GP1 are bare header pins, so the UART build reports into the
+void:
+
+```sh
+tools/build-pico2.sh pico-encoder usb   # then: picotool load -x <the .uf2>
+screen /dev/cu.usbmodem11 115200        # count / direction / ticks-per-s / errors
+```
+
+Turn the output shaft ten revolutions by hand and divide `count` by ten —
+that is `ticks_per_revolution` measured rather than computed, which
+`crates/sim-core/src/spec.rs` insists on because advertised gear ratios
+are approximations. Wiring is in
+[`docs/09-shopping-list.md`](docs/09-shopping-list.md).
+
 **Level 3 — hardware in the loop.** The chip is the brain; the laptop is
 the body and the world. Same mission either way:
 
