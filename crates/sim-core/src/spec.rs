@@ -128,22 +128,34 @@ impl RobotSpec {
     /// forward, with the count returning to exactly its starting value.
     /// The seller's listing claims 3 PPR, i.e. 12; that is wrong.
     ///
-    /// **That is not this field.** `ticks_per_revolution` is per *wheel*
-    /// revolution, and the two differ by the gearbox:
+    /// And `ticks_per_revolution` itself — per *wheel* revolution, which
+    /// is what odometry needs — measured the same day by turning the rotor
+    /// until the **output** shaft had completed exactly one turn:
     ///
     /// ```text
-    ///     ticks_per_revolution  =  28  ×  gear_ratio
+    ///     run 1   4327 ticks     errors 0
+    ///     run 2   4253 ticks     errors 0
+    ///     ────────────────────────────────
+    ///     mean    4290           +/- 0.9%
+    ///
+    ///     4290 / 28  =  153:1    the TRUE gear ratio, which no listing
+    ///                            stated (nominal is probably 150:1)
     /// ```
     ///
-    /// The listing gives **no gear ratio**, and the GA12-N20 ships in
-    /// 1:30 through 1:298 — so it must be measured too, by turning the
-    /// *output* shaft. Step 3 below is still the procedure; the 28 above
-    /// simply means the answer can be cross-checked once both are known,
-    /// and that dividing them yields the true ratio rather than the
-    /// advertised one.
+    /// **The placeholder above is out by 4.2x.** `1024.0` is described in
+    /// its own row as "a round number", and it is: real resolution is four
+    /// times finer.
     ///
-    /// See `docs/09-shopping-list.md` for the method and why bulk-counting
-    /// revolutions gave an answer 45% too high while looking plausible.
+    /// The residual ±0.9% is one stopping judgement per run — the flag on
+    /// the output shaft parked by eye to about ±3°. **Not worth tightening
+    /// yet**, because step 1 below (wheel radius *under load*) is the
+    /// dominant odometry error and cannot be measured at all until wheels
+    /// exist. Tightening the smaller unknown while the larger one is
+    /// unmeasured buys nothing.
+    ///
+    /// See `docs/learning/hw-01-bench-rig.md` for the rig and the method,
+    /// including why bulk-counting revolutions gave an answer 45% too high
+    /// while looking entirely plausible.
     ///
     /// **Do not fill this in with plausible-looking guesses.** It was
     /// briefly set to invented values while testing the mechanism, and the
