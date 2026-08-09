@@ -14,5 +14,14 @@ sim-run = { path = "../sim-run" }
 serialport = "4"
 rerun = "0.35"
 
+# `odom_view` parses a format string that lives in `firmware/pico-odom`,
+# and nothing checks the two against each other. `test = true` makes
+# `cargo test` run the example's own tests — without it the tests compile
+# and never execute, which is how the format drifted apart unnoticed once
+# already. See the header of examples/odom_view.rs.
+[[example]]
+name = "odom_view"
+test = true
+
 [lints]
 workspace = true
