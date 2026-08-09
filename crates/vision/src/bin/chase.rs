@@ -90,6 +90,9 @@ use vision::{
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 const MIN_CONFIDENCE: f32 = 0.40;
+/// `pico-odom`'s `COMMAND_TIMEOUT_MS`, in seconds. Named here so the
+/// viewer can plot how close each frame comes to tripping it.
+const WATCHDOG_SECONDS: f64 = 0.200;
 /// Acquisition threshold for the open-vocabulary pass — **lower than
 /// [`MIN_CONFIDENCE`] on purpose.**
 ///
@@ -393,11 +396,31 @@ fn main() -> Result<()> {
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
     let mut last_tick = Instant::now();
+    let mut last_chip_print = Instant::now();
     for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);
         last_tick = Instant::now();
 
+        let inference_started = Instant::now();
         let detections = detector.detect(&frame)?;
+        let inference_seconds = inference_started.elapsed().as_secs_f64();
+
+        // ---- the loop's own health ----
+        //
+        // Logged because this loop feeds a 200 ms watchdog. If a frame
+        // ever takes longer than that, the chip stops the motors mid-
+        // manoeuvre and the robot stutters — and nothing else on screen
+        // would say why. Measured 2026-08-10: median 65 ms, max 112 ms,
+        // so the margin is 1.8x and worth watching rather than assuming.
+        rec.log("loop/frame_ms", &rerun::Scalars::single(dt * 1000.0))?;
+        rec.log(
+            "loop/inference_ms",
+            &rerun::Scalars::single(inference_seconds * 1000.0),
+        )?;
+        rec.log(
+            "loop/watchdog_margin",
+            &rerun::Scalars::single(WATCHDOG_SECONDS / dt),
+        )?;
         // Locked: track that class (and colour). Otherwise: most confident.
         // Selection happens HERE, on the live frame, because the lock
         // matches on hue and needs pixels. Its *result* is recorded — see
@@ -424,14 +447,51 @@ fn main() -> Result<()> {
         // ---- the last link: perception reaches real wheels ----
         if let Some(w) = &mut wheels {
             w.command(commanded)?;
-            let Some(report) = w.latest() else {
+            let Some(feedback) = w.feedback() else {
                 // The board is gone. Stop rather than carry on computing
                 // twists for a chip that cannot hear them — a loop still
                 // drawing confident commands into a viewer after its robot
                 // unplugged is the most misleading thing on the screen.
                 anyhow::bail!("the board stopped reporting — cable or power?");
             };
-            vision::drive::log(&rec, report, commanded)?;
+            vision::drive::log(&rec, &feedback, commanded)?;
+
+            // The chip reports at 50 Hz against this loop's ~15, so two or
+            // three lines should arrive every frame. None means the link
+            // is degrading while the channel is still nominally open, and
+            // the controller is now acting on a stale measurement.
+            if feedback.fresh_reports == 0 {
+                eprintln!(
+                    "⚠️  no telemetry this frame — acting on a {:.0} ms old reading",
+                    feedback.age_seconds * 1000.0
+                );
+            }
+            if feedback.report.stalled {
+                eprintln!("⚠️  chip reports STALLED — commanded but not moving");
+            }
+
+            // The comparison, once a second, in the terminal — so it is
+            // visible without opening the viewer. Asked-for beside
+            // actually-did is the only pair that can say the robot is
+            // doing its job; either alone can look perfect while the
+            // wheels sit still.
+            if last_chip_print.elapsed().as_secs_f64() >= 1.0 {
+                last_chip_print = Instant::now();
+                let a = feedback.achieved;
+                println!(
+                    "   chip  v {:+.2}->{:+.2}  w {:+.2}->{:+.2} m/s,rad/s   \
+duty {:>3}%  ticks {:>7}/{:<7} err {}/{}",
+                    commanded.forward_speed,
+                    a.forward_speed,
+                    commanded.turn_rate,
+                    a.turn_rate,
+                    feedback.report.duty_percent,
+                    feedback.report.ticks_left,
+                    feedback.report.ticks_right,
+                    feedback.report.errors_left,
+                    feedback.report.errors_right,
+                );
+            }
         }
 
         recorder.write(&perceived, Some(&frame))?;

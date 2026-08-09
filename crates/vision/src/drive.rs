@@ -15,6 +15,21 @@
 //!                                        ◀─ pose, ticks, duty
 //! ```
 //!
+//! # The one plot that matters: commanded against achieved
+//!
+//! Logging what we asked for is easy and nearly worthless on its own. A
+//! command of `v=0.25` proves the controller ran; it says nothing about
+//! whether a wheel turned. This module therefore closes the comparison:
+//! encoder deltas become wheel speeds, [`DiffDrive::forward`] turns those
+//! into the twist the robot **actually performed**, and both go to the
+//! viewer on the same axes.
+//!
+//! That is the repo's oldest lesson in its newest clothes. The blank duty
+//! panels, the battery pack switched off, the `errL`/`errR` viewer that
+//! drew nothing — every one was two facts held in the same program that
+//! nobody compared. Commanded and achieved are the two facts this program
+//! holds.
+//!
 //! # One process owns the port
 //!
 //! Not a design preference — a constraint discovered by violating it. On
@@ -36,12 +51,24 @@
 
 use anyhow::{Context, Result};
 use hil_protocol::Message;
-use sim_core::BodyTwist;
+use sim_core::{BodyTwist, RobotSpec, WheelSpeeds};
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc::{Receiver, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-/// What the chip reports back, parsed from `pico-odom`'s status line.
+/// The robot the chip believes it is. **The same constant the firmware
+/// reads**, so the achieved twist computed here and the pose computed on
+/// the chip cannot disagree about geometry.
+///
+/// ⚠️ Still `SIM_BOT` placeholders. `ticks_per_revolution` is `1024.0`
+/// where the bench measured **4290**, so every achieved speed below reads
+/// **4.2x too fast**; `max_wheel_speed` is `30.0` against a measured
+/// **7.77**, so every command is 3.9x too weak. Both errors are *visible*
+/// in the commanded-vs-achieved plot rather than hidden by it, which is
+/// the argument for computing achieved at all.
+const SPEC: RobotSpec = RobotSpec::REAL_BOT;
+
+/// One status line from `pico-odom`.
 ///
 /// ⚠️ That line is ad-hoc text, not `hil-protocol`. The **commands** this
 /// module sends are shared-vocabulary and therefore safe; the telemetry it
@@ -51,12 +78,24 @@ use std::time::Duration;
 /// an unparseable line is skipped, never guessed at.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ChipReport {
+    /// The chip's OWN dead reckoning — `sim-core`'s `Odometry`, running on
+    /// the microcontroller. Not the same thing as the simulated robot the
+    /// viewer also draws, and the difference between them is the point.
+    pub x: f64,
+    pub y: f64,
+    pub heading: f64,
     pub ticks_left: i64,
     pub ticks_right: i64,
+    /// Per wheel. A decode error is a MISSED transition and therefore an
+    /// undercount, so a summed figure cannot say which wheel reads low —
+    /// which is exactly the confound that made the left/right speed
+    /// comparison untrustworthy until the firmware split them.
     pub errors_left: u64,
     pub errors_right: u64,
     /// Magnitude of the duty the chip is applying, 0–100.
     pub duty_percent: u64,
+    /// The chip decided it commanded motion and got none.
+    pub stalled: bool,
 }
 
 impl ChipReport {
@@ -68,6 +107,9 @@ impl ChipReport {
                 continue;
             };
             match key {
+                "x" => report.x = value.parse().ok()?,
+                "y" => report.y = value.parse().ok()?,
+                "th" => report.heading = value.parse().ok()?,
                 "L" => report.ticks_left = value.parse().ok()?,
                 "R" => report.ticks_right = value.parse().ok()?,
                 "errL" => report.errors_left = value.parse().ok()?,
@@ -77,18 +119,44 @@ impl ChipReport {
             }
             seen += 1;
         }
-        (seen == 5).then_some(report)
+        report.stalled = line.contains("STALLED");
+        (seen == 8).then_some(report)
     }
+}
+
+/// What the robot actually did, derived from the encoders.
+#[derive(Debug, Clone, Copy)]
+pub struct Feedback {
+    pub report: ChipReport,
+    /// Measured wheel angular velocities, rad/s, from tick deltas over the
+    /// wall time between reads.
+    pub wheels: WheelSpeeds,
+    /// The twist those wheel speeds correspond to — the robot's ACTUAL
+    /// motion, to be read beside the commanded one.
+    pub achieved: BodyTwist,
+    /// How many fresh status lines arrived since the last call.
+    ///
+    /// **Zero is a warning, not a normal quiet frame.** The chip reports
+    /// at 50 Hz and this loop runs at ~15, so two or three should arrive
+    /// every time. Zero means the link is degrading while the channel is
+    /// still nominally open — which no other signal here reveals.
+    pub fresh_reports: usize,
+    /// Age of the newest report when it was used, in seconds. This is the
+    /// staleness the controller is actually acting on.
+    pub age_seconds: f64,
 }
 
 /// The serial link to `pico-odom --features teleop`.
 pub struct Wheels {
     port: Box<dyn serialport::SerialPort>,
-    /// Latest-wins, like the camera's frame channel. The chip reports at
-    /// 50 Hz and the control loop runs at ~20 — draining to the newest is
-    /// right, because a stale tick count is worse than none.
-    reports: Receiver<ChipReport>,
-    latest: ChipReport,
+    /// Latest-wins, like the camera's frame channel. A quiet chip must
+    /// never stall the control loop — this loop's deadline belongs to the
+    /// robot, not to whichever I/O happens to be slowest.
+    reports: Receiver<(ChipReport, Instant)>,
+    latest: Option<(ChipReport, Instant)>,
+    /// The previous sample, kept so tick deltas can become speeds. Without
+    /// it every rate here would be a difference against zero.
+    previous: Option<(ChipReport, Instant)>,
     line: String,
 }
 
@@ -108,9 +176,6 @@ impl Wheels {
                 )
             })?;
 
-        // A reader thread, so a quiet chip never stalls the control loop.
-        // The same reason the camera has one: this loop's deadline belongs
-        // to the robot, not to whichever I/O happens to be slowest.
         let reader_port = port
             .try_clone()
             .context("could not clone the serial handle")?;
@@ -129,7 +194,11 @@ impl Wheels {
                     Ok(_) => {}
                 }
                 if let Some(report) = ChipReport::parse(&line) {
-                    if tx.send(report).is_err() {
+                    // Stamped HERE, at arrival, not when the control loop
+                    // gets round to reading it. Otherwise the age this
+                    // reports is the age of the read, which is always zero
+                    // and always useless.
+                    if tx.send((report, Instant::now())).is_err() {
                         return;
                     }
                 }
@@ -139,7 +208,8 @@ impl Wheels {
         Ok(Wheels {
             port,
             reports,
-            latest: ChipReport::default(),
+            latest: None,
+            previous: None,
             line: String::new(),
         })
     }
@@ -161,51 +231,152 @@ impl Wheels {
         Ok(())
     }
 
-    /// The newest telemetry, or the last seen if none arrived this frame.
+    /// Drain the telemetry channel and work out what the robot did.
     ///
     /// Returns `None` once the board disconnects, which the caller should
     /// treat as fatal — a control loop still computing twists for a chip
     /// that is gone is a loop lying to its own viewer.
-    pub fn latest(&mut self) -> Option<ChipReport> {
+    pub fn feedback(&mut self) -> Option<Feedback> {
+        let mut fresh = 0;
         loop {
             match self.reports.try_recv() {
-                Ok(report) => self.latest = report,
-                Err(TryRecvError::Empty) => return Some(self.latest),
+                Ok(sample) => {
+                    // The one we are about to replace becomes the baseline
+                    // for the delta, so speeds are measured over the real
+                    // interval between two adjacent samples.
+                    self.previous = self.latest.replace(sample);
+                    fresh += 1;
+                }
+                Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return None,
             }
         }
+
+        let (report, stamped) = self.latest?;
+        let wheels = match self.previous {
+            Some((before, before_at)) => {
+                let seconds = stamped.duration_since(before_at).as_secs_f64();
+                // A zero interval would divide by zero; two samples with
+                // the same timestamp carry no rate information anyway.
+                if seconds <= 0.0 {
+                    WheelSpeeds::STOPPED
+                } else {
+                    let turns = |now: i64, then: i64| {
+                        (now - then) as f64 / SPEC.ticks_per_revolution * core::f64::consts::TAU
+                            / seconds
+                    };
+                    WheelSpeeds::new(
+                        turns(report.ticks_left, before.ticks_left),
+                        turns(report.ticks_right, before.ticks_right),
+                    )
+                }
+            }
+            // First sample of the session: one point defines no rate.
+            None => WheelSpeeds::STOPPED,
+        };
+
+        Some(Feedback {
+            report,
+            wheels,
+            // Forward kinematics — the SAME function the simulator uses to
+            // turn wheel speeds into robot motion. Nothing bespoke.
+            achieved: SPEC.drive().forward(wheels),
+            fresh_reports: fresh,
+            age_seconds: stamped.elapsed().as_secs_f64(),
+        })
     }
 }
 
 /// Draw what the wheels did, beside what they were asked to do.
 ///
-/// The pairing is the point. Commanded duty rising while the tick lines
-/// stay flat is a stall; ticks moving while the command is zero is a push
-/// or a runaway. Neither is visible in either series alone.
-pub fn log(rec: &rerun::RecordingStream, report: ChipReport, commanded: BodyTwist) -> Result<()> {
+/// The pairing is the whole point. Commanded duty rising while the tick
+/// lines stay flat is a stall; ticks moving while the command is zero is a
+/// push or a runaway; commanded and achieved diverging by a constant
+/// factor is a wrong number in [`SPEC`]. None of the three is visible in
+/// any one series alone.
+pub fn log(rec: &rerun::RecordingStream, fb: &Feedback, commanded: BodyTwist) -> Result<()> {
+    let r = &fb.report;
+
+    // ---- the comparison, on shared axes ----
     rec.log(
-        "chip/ticks_left",
-        &rerun::Scalars::single(report.ticks_left as f64),
-    )?;
-    rec.log(
-        "chip/ticks_right",
-        &rerun::Scalars::single(report.ticks_right as f64),
-    )?;
-    rec.log(
-        "chip/duty_percent",
-        &rerun::Scalars::single(report.duty_percent as f64),
-    )?;
-    rec.log(
-        "chip/errors",
-        &rerun::Scalars::single((report.errors_left + report.errors_right) as f64),
-    )?;
-    rec.log(
-        "chip/commanded_forward",
+        "robot/forward_speed/commanded",
         &rerun::Scalars::single(commanded.forward_speed),
     )?;
     rec.log(
-        "chip/commanded_turn",
+        "robot/forward_speed/achieved",
+        &rerun::Scalars::single(fb.achieved.forward_speed),
+    )?;
+    rec.log(
+        "robot/turn_rate/commanded",
         &rerun::Scalars::single(commanded.turn_rate),
+    )?;
+    rec.log(
+        "robot/turn_rate/achieved",
+        &rerun::Scalars::single(fb.achieved.turn_rate),
+    )?;
+
+    // ---- per wheel, measured ----
+    rec.log("wheels/left_rad_s", &rerun::Scalars::single(fb.wheels.left))?;
+    rec.log(
+        "wheels/right_rad_s",
+        &rerun::Scalars::single(fb.wheels.right),
+    )?;
+    rec.log(
+        "wheels/ticks_left",
+        &rerun::Scalars::single(r.ticks_left as f64),
+    )?;
+    rec.log(
+        "wheels/ticks_right",
+        &rerun::Scalars::single(r.ticks_right as f64),
+    )?;
+    // Separate series, never summed — see `ChipReport::errors_left`.
+    rec.log(
+        "wheels/errors_left",
+        &rerun::Scalars::single(r.errors_left as f64),
+    )?;
+    rec.log(
+        "wheels/errors_right",
+        &rerun::Scalars::single(r.errors_right as f64),
+    )?;
+    rec.log(
+        "chip/duty_percent",
+        &rerun::Scalars::single(r.duty_percent as f64),
+    )?;
+
+    // ---- the chip's OWN belief, which is not the simulated robot ----
+    //
+    // `robot/body` and `robot/trail` are the in-process simulation. THIS
+    // is dead reckoning computed on the microcontroller from real
+    // encoders. Drawing only the first would put a confident, entirely
+    // synthetic trail on screen and call it the robot.
+    rec.log(
+        "chip/belief/body",
+        &rerun::Points2D::new([[r.x as f32, r.y as f32]])
+            .with_radii([0.02])
+            .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+    )?;
+    rec.log(
+        "chip/belief/heading",
+        &rerun::Arrows2D::from_vectors([[
+            0.15 * r.heading.cos() as f32,
+            0.15 * r.heading.sin() as f32,
+        ]])
+        .with_origins([[r.x as f32, r.y as f32]])
+        .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+    )?;
+    rec.log(
+        "chip/belief/heading_rad",
+        &rerun::Scalars::single(r.heading),
+    )?;
+
+    // ---- link health ----
+    rec.log(
+        "link/fresh_reports",
+        &rerun::Scalars::single(fb.fresh_reports as f64),
+    )?;
+    rec.log(
+        "link/telemetry_age_ms",
+        &rerun::Scalars::single(fb.age_seconds * 1000.0),
     )?;
     Ok(())
 }
@@ -225,16 +396,39 @@ mod tests {
         let Some(report) = ChipReport::parse(CAPTURED) else {
             panic!("the firmware's real output no longer parses");
         };
+        assert_eq!(report.x, -0.001);
+        assert_eq!(report.heading, -0.863);
         assert_eq!(report.ticks_left, -37793);
         assert_eq!(report.ticks_right, 38304);
         assert_eq!(report.errors_left, 235);
         assert_eq!(report.errors_right, 207);
         assert_eq!(report.duty_percent, 0);
+        assert!(!report.stalled);
+    }
+
+    #[test]
+    fn the_stall_banner_is_seen() {
+        let stalled = format!("{CAPTURED}  *** STALLED: commanded but not moving ***");
+        let Some(report) = ChipReport::parse(&stalled) else {
+            panic!("the banner must not stop the rest of the line parsing");
+        };
+        assert!(report.stalled);
     }
 
     #[test]
     fn a_partial_line_is_skipped_not_guessed() {
         assert!(ChipReport::parse("pose x=-0.001 ticks L=5").is_none());
         assert!(ChipReport::parse("").is_none());
+    }
+
+    /// The pose fields were absent from the first version of this parser,
+    /// so the chip's own dead reckoning — the thing `pico-odom` exists to
+    /// compute — was read off the wire and thrown away.
+    #[test]
+    fn the_chips_pose_is_not_discarded() {
+        let Some(report) = ChipReport::parse(CAPTURED) else {
+            panic!("must parse");
+        };
+        assert!(report.x != 0.0 || report.y != 0.0 || report.heading != 0.0);
     }
 }
