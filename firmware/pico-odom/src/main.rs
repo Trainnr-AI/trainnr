@@ -63,11 +63,23 @@ const POLL_US: u64 = 100;
 
 /// How often a pose line goes out — and how often odometry integrates.
 ///
-/// **20 ms, not 100 ms, and the reason is measurement.** A first-order
-/// motor lag with tau ~0.15 s covers 63% of its rise in 150 ms, so at
-/// 100 ms there are one or two samples in the whole transient — nowhere
-/// near enough to fit a curve to. At 20 ms each duty step in [`SWEEP`]
-/// yields ~8 points inside the first tau and ~22 before it settles.
+/// **20 ms, not 100 ms, and the reason is measurement.** The argument for
+/// dropping it was that a first-order motor lag with tau ~0.15 s would
+/// give only one or two samples per transient at 100 ms — nowhere near
+/// enough to fit a curve to.
+///
+/// ⚠️ **That 0.15 s was the placeholder, and the sweep this rate enabled
+/// went on to measure tau at ~0.03–0.05 s** — see `sim_core::Motor::tau`.
+/// So the conclusion held and the reasoning did not: 20 ms does not give
+/// ~8 samples inside the first tau, it gives **one or two**, which is
+/// exactly why the answer came back as "30 ms or 50 ms" and not as a
+/// fitted curve. The measurement is trustworthy because eight independent
+/// transitions clustered, not because any one of them was well resolved.
+///
+/// **To resolve tau properly, this must drop to ~5 ms**, which the note
+/// below says the UART build cannot carry. That is the real cost of the
+/// shared constant, and it is not being paid today: ±20 ms on a 40 ms
+/// time constant is already enough to show the simulator was 4x out.
 ///
 /// It also makes the odometry itself better: `Odometry::update` integrates
 /// an arc per call, and five times more calls is five times finer.
