@@ -186,6 +186,46 @@ impl RobotSpec {
     /// ticks/s is past that. Errors were 50 in 38,507 ticks (0.13%), so
     /// 7.77 rad/s is a very slight *under*-estimate.
     ///
+    /// ## Both motors, and what the mismatch actually is (2026-08-09)
+    ///
+    /// Driving both channels together, over two runs that repeat to within
+    /// 0.2% on the left and 0.7% on the right:
+    ///
+    /// ```text
+    ///     motor (1)   speed = 55.06 * (duty - 4.29%)
+    ///     motor (2)   speed = 55.37 * (duty - 3.91%)
+    ///                    ^^^^           ^^^^
+    ///               0.6% apart      10% apart
+    ///
+    ///     max_wheel_speed   (1) 7.71 rad/s     (2) 7.79 rad/s
+    /// ```
+    ///
+    /// **The gains are nearly identical; the deadbands are not.** So the
+    /// two wheels do not differ in "speed per volt" — one simply has more
+    /// friction. That is the sensible physical answer, since gearbox
+    /// friction varies far more between units than windings and magnets do.
+    ///
+    /// It also explains the shape: the gap is 2.6% at 25% duty and 0.9% at
+    /// 100%. A deadband is a *fixed* duty offset, so its relative effect
+    /// shrinks as duty rises. Both terms together predict the 100% gap at
+    /// 51 ticks/s against 50 observed.
+    ///
+    /// **This vindicates `wheel_wear: 0.99`** in `crates/sim-run`, a 1%
+    /// systematic wheel bias invented in Stage 0 with no hardware in the
+    /// room. Measured reality is 1.0–1.5%, and of the same character.
+    ///
+    /// The measurement is trustworthy because the errors were checked *per
+    /// wheel*: `errL=40, errR=39` on ~38,000 ticks each. An error is a
+    /// missed transition and therefore an undercount, so an asymmetric
+    /// error count could have manufactured the entire difference. It did
+    /// not — both channels lost 0.10%.
+    ///
+    /// **Do not correct this at the spec layer.** Friction changes with
+    /// temperature, load and wear, so a per-wheel trim is a number that
+    /// goes stale. The encoders already measure actual wheel speed; a
+    /// per-wheel [`crate::Pid`] commanding *speed* rather than duty makes
+    /// the mismatch stop existing. That is what the encoders are for.
+    ///
     /// ⚠️ **Not yet complete: the battery voltage was not recorded.** Step
     /// 4 below asks for the speed *at the voltage the robot actually runs
     /// at*, and without an ADC on `VM` we have the speed but not the volts.

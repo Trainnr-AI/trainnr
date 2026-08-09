@@ -296,13 +296,21 @@ async fn odometry_forever(
             let p = odom.pose;
             let _ = write!(
                 line,
-                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}  duty={}%{}\r\n",
+                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%{}\r\n",
                 p.x,
                 p.y,
                 p.heading,
                 left.count,
                 right.count,
-                left.errors + right.errors,
+                // Reported PER WHEEL, not summed. An error is a missed
+                // transition, so it is an UNDERCOUNT — and a combined
+                // figure cannot say which wheel reads low. That matters
+                // the moment the two are compared: on 2026-08-09 the right
+                // motor measured 1.3% faster than the left, and a summed
+                // error count could not rule out that the left had simply
+                // lost more ticks.
+                left.errors,
+                right.errors,
                 DUTY_PERCENT.load(Ordering::Relaxed),
                 if STALLED.load(Ordering::Relaxed) {
                     "  *** STALLED: commanded but not moving — check power ***"
