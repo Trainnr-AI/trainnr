@@ -50,84 +50,19 @@ use std::time::{Duration, Instant};
 /// in 6.0 s off the bench board on 2026-08-10.
 const REPORTS_PER_SECOND: u64 = 50;
 
-/// A parsed `pose … ticks … errL= errR= … duty=` line.
-struct Report {
-    x: f64,
-    y: f64,
-    heading: f64,
-    ticks_left: i64,
-    ticks_right: i64,
-    /// Per wheel, because an error is a *missed* transition and therefore
-    /// an undercount — a combined figure cannot say which wheel reads low.
-    /// That distinction is load-bearing: the 1.3% left/right speed
-    /// difference measured on 2026-08-09 was only trustworthy once the
-    /// error counts were shown to be symmetric (40 vs 39).
-    errors_left: u64,
-    errors_right: u64,
-    /// What the sweep is commanding right now, 0–100.
-    duty_percent: u64,
-    /// The firmware decided it commanded motion and got none.
-    stalled: bool,
-}
-
-impl Report {
-    /// Parse one line of `pico-odom` output.
-    ///
-    /// ```text
-    /// pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%
-    /// ```
-    ///
-    /// Deliberately keyed on the `name=value` tokens rather than on
-    /// position, so adding a field to the firmware's format cannot
-    /// silently shift what this reads. Any line missing a key is skipped
-    /// whole — a half-parsed pose plotted as if it were complete is worse
-    /// than a dropped frame, and the firmware's own docs admit a cancelled
-    /// USB write may garble a line.
-    fn parse(line: &str) -> Option<Report> {
-        let mut x = None;
-        let mut y = None;
-        let mut heading = None;
-        let mut ticks_left = None;
-        let mut ticks_right = None;
-        let mut errors_left = None;
-        let mut errors_right = None;
-        let mut duty_percent = None;
-
-        for token in line.split_whitespace() {
-            let Some((key, value)) = token.split_once('=') else {
-                continue;
-            };
-            match key {
-                "x" => x = value.parse().ok(),
-                "y" => y = value.parse().ok(),
-                "th" => heading = value.parse().ok(),
-                "L" => ticks_left = value.parse().ok(),
-                "R" => ticks_right = value.parse().ok(),
-                "errL" => errors_left = value.parse().ok(),
-                "errR" => errors_right = value.parse().ok(),
-                // The only field carrying a unit. Trimming rather than
-                // parsing-and-failing keeps a future `duty=12%` or a bare
-                // `duty=12` both readable.
-                "duty" => duty_percent = value.trim_end_matches('%').parse().ok(),
-                _ => {}
-            }
-        }
-
-        Some(Report {
-            x: x?,
-            y: y?,
-            heading: heading?,
-            ticks_left: ticks_left?,
-            ticks_right: ticks_right?,
-            errors_left: errors_left?,
-            errors_right: errors_right?,
-            duty_percent: duty_percent?,
-            // Not a `key=value` field — the firmware appends it as prose,
-            // so it is matched as prose.
-            stalled: line.contains("STALLED"),
-        })
-    }
-}
+/// One status line, as the shared [`hil_protocol::Status`] type.
+///
+/// **This file used to own a parser.** On 2026-08-09 the firmware split
+/// its error counter per wheel, this parser kept looking for the old key,
+/// and every line was silently dropped — an empty viewer with
+/// `tools/verify.sh` green at 25/25, because a parser that agrees with
+/// itself compiles fine.
+///
+/// Pinning it to a captured line fixed that instance. Sharing the type
+/// with the firmware that writes it fixes the class: `hil-protocol`
+/// round-trips writer against parser, so a renamed field is a failing
+/// test rather than a blank screen.
+use hil_protocol::Status as Report;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::args()
@@ -282,58 +217,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::Report;
 
-    /// The regression guard for the bug in this file's header.
+    /// The parsing tests live in `hil-protocol` now, beside the writer,
+    /// where they cover the round trip instead of one direction. Keeping a
+    /// second copy of the captured fixture here would recreate exactly the
+    /// duplication that emptied this viewer in the first place.
     ///
-    /// This string was captured verbatim from `/dev/cu.usbmodem11` on
-    /// 2026-08-10 with the bench rig parked after a sweep. It is evidence,
-    /// not an example — do not "tidy" the numbers.
-    const CAPTURED: &str =
-        "pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%";
-
+    /// What is worth checking here is that this file has not quietly grown
+    /// its own parser again.
     #[test]
-    fn a_line_the_board_actually_sent() {
-        // `panic!` rather than `expect`: the workspace warns on
-        // `expect_used`, and the message is the point of the test.
-        let Some(report) = Report::parse(CAPTURED) else {
-            panic!("the firmware's real output no longer parses — capture a fresh line");
-        };
-        assert_eq!(report.x, -0.001);
-        assert_eq!(report.y, 0.003);
-        assert_eq!(report.heading, -0.863);
-        // Opposite signs are correct, not a bug: the two motors face
-        // opposite ways on the bench, so driving both forward counts one
-        // encoder up and the other down.
-        assert_eq!(report.ticks_left, -37793);
-        assert_eq!(report.ticks_right, 38304);
-        assert_eq!(report.errors_left, 235);
-        assert_eq!(report.errors_right, 207);
-        assert_eq!(report.duty_percent, 0);
-        assert!(!report.stalled);
-    }
-
-    #[test]
-    fn the_stall_banner_is_seen() {
-        let stalled =
-            format!("{CAPTURED}  *** STALLED: commanded but not moving — check power ***");
-        let Some(report) = Report::parse(&stalled) else {
-            panic!("the stall banner must not stop the rest of the line parsing");
-        };
-        assert!(report.stalled);
-    }
-
-    /// A cancelled USB write may truncate a line — `pico-odom`'s own docs
-    /// say so. Half a pose must be dropped, never plotted.
-    #[test]
-    fn a_truncated_line_is_dropped() {
-        assert!(Report::parse("pose x=-0.001 y=+0.003 th=-0.8").is_none());
-        assert!(Report::parse("").is_none());
-    }
-
-    /// The specific shape of the 2026-08-09 break: the old single `err=`
-    /// field can no longer satisfy a parser that needs both wheels.
-    #[test]
-    fn the_superseded_format_is_rejected_rather_than_half_read() {
-        let old = "pose x=+0.013 y=-0.001 th=-0.180  ticks L=147 R=0  err=0  duty=0%";
-        assert!(Report::parse(old).is_none());
+    fn the_viewer_uses_the_shared_protocol_type() {
+        let shared = hil_protocol::Status::default();
+        let _: Report = shared;
     }
 }

@@ -50,7 +50,7 @@
 //! coast.
 
 use anyhow::{Context, Result};
-use hil_protocol::Message;
+use hil_protocol::{Message, Status};
 use sim_core::{BodyTwist, RobotSpec, WheelSpeeds};
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -87,61 +87,14 @@ use std::time::{Duration, Instant};
 /// numbers together or the robot will appear 4x broken.
 const SPEC: RobotSpec = RobotSpec::REAL_BOT;
 
-/// One status line from `pico-odom`.
+/// One status line from `pico-odom`, as the shared
+/// [`hil_protocol::Status`] type.
 ///
-/// ⚠️ That line is ad-hoc text, not `hil-protocol`. The **commands** this
-/// module sends are shared-vocabulary and therefore safe; the telemetry it
-/// reads is the one format in this system that no compiler checks, and it
-/// has already drifted from its parser once — see the header of
-/// `crates/hil-host/examples/odom_view.rs`. Treated as best-effort here:
-/// an unparseable line is skipped, never guessed at.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ChipReport {
-    /// The chip's OWN dead reckoning — `sim-core`'s `Odometry`, running on
-    /// the microcontroller. Not the same thing as the simulated robot the
-    /// viewer also draws, and the difference between them is the point.
-    pub x: f64,
-    pub y: f64,
-    pub heading: f64,
-    pub ticks_left: i64,
-    pub ticks_right: i64,
-    /// Per wheel. A decode error is a MISSED transition and therefore an
-    /// undercount, so a summed figure cannot say which wheel reads low —
-    /// which is exactly the confound that made the left/right speed
-    /// comparison untrustworthy until the firmware split them.
-    pub errors_left: u64,
-    pub errors_right: u64,
-    /// Magnitude of the duty the chip is applying, 0–100.
-    pub duty_percent: u64,
-    /// The chip decided it commanded motion and got none.
-    pub stalled: bool,
-}
-
-impl ChipReport {
-    fn parse(line: &str) -> Option<ChipReport> {
-        let mut report = ChipReport::default();
-        let mut seen = 0;
-        for token in line.split_whitespace() {
-            let Some((key, value)) = token.split_once('=') else {
-                continue;
-            };
-            match key {
-                "x" => report.x = value.parse().ok()?,
-                "y" => report.y = value.parse().ok()?,
-                "th" => report.heading = value.parse().ok()?,
-                "L" => report.ticks_left = value.parse().ok()?,
-                "R" => report.ticks_right = value.parse().ok()?,
-                "errL" => report.errors_left = value.parse().ok()?,
-                "errR" => report.errors_right = value.parse().ok()?,
-                "duty" => report.duty_percent = value.trim_end_matches('%').parse().ok()?,
-                _ => continue,
-            }
-            seen += 1;
-        }
-        report.stalled = line.contains("STALLED");
-        (seen == 8).then_some(report)
-    }
-}
+/// **This was a second, independent parser** with its own copy of the
+/// captured fixture — added hours after the first one's drift emptied a
+/// viewer, which made it the third implementation of one format. It is
+/// now an alias, so there is exactly one.
+pub type ChipReport = Status;
 
 /// What the robot actually did, derived from the encoders.
 #[derive(Debug, Clone, Copy)]
@@ -422,52 +375,16 @@ pub fn log(rec: &rerun::RecordingStream, fb: &Feedback, commanded: BodyTwist) ->
 
 #[cfg(test)]
 mod tests {
-    use super::ChipReport;
+    use super::*;
 
-    /// Captured verbatim from `/dev/cu.usbmodem11`, 2026-08-10. Evidence,
-    /// not an example — see the note on [`ChipReport`] about why this
-    /// format gets a real line rather than an invented one.
-    const CAPTURED: &str =
-        "pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%";
-
+    /// The parsing tests moved to `hil-protocol`, where the writer lives,
+    /// so they cover the round trip rather than one direction. What stays
+    /// here is the thing only this crate can check: that the alias really
+    /// is the shared type, so re-introducing a private parser is a
+    /// compile error rather than a slow drift.
     #[test]
-    fn a_line_the_board_actually_sent() {
-        let Some(report) = ChipReport::parse(CAPTURED) else {
-            panic!("the firmware's real output no longer parses");
-        };
-        assert_eq!(report.x, -0.001);
-        assert_eq!(report.heading, -0.863);
-        assert_eq!(report.ticks_left, -37793);
-        assert_eq!(report.ticks_right, 38304);
-        assert_eq!(report.errors_left, 235);
-        assert_eq!(report.errors_right, 207);
-        assert_eq!(report.duty_percent, 0);
-        assert!(!report.stalled);
-    }
-
-    #[test]
-    fn the_stall_banner_is_seen() {
-        let stalled = format!("{CAPTURED}  *** STALLED: commanded but not moving ***");
-        let Some(report) = ChipReport::parse(&stalled) else {
-            panic!("the banner must not stop the rest of the line parsing");
-        };
-        assert!(report.stalled);
-    }
-
-    #[test]
-    fn a_partial_line_is_skipped_not_guessed() {
-        assert!(ChipReport::parse("pose x=-0.001 ticks L=5").is_none());
-        assert!(ChipReport::parse("").is_none());
-    }
-
-    /// The pose fields were absent from the first version of this parser,
-    /// so the chip's own dead reckoning — the thing `pico-odom` exists to
-    /// compute — was read off the wire and thrown away.
-    #[test]
-    fn the_chips_pose_is_not_discarded() {
-        let Some(report) = ChipReport::parse(CAPTURED) else {
-            panic!("must parse");
-        };
-        assert!(report.x != 0.0 || report.y != 0.0 || report.heading != 0.0);
+    fn the_chip_report_is_the_shared_protocol_type() {
+        let shared: Status = Status::default();
+        let _: ChipReport = shared;
     }
 }

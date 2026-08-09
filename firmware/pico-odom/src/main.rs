@@ -440,30 +440,25 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             );
 
             let p = odom.pose;
-            let _ = write!(
-                line,
-                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%{}\r\n",
-                p.x,
-                p.y,
-                p.heading,
-                left_count,
-                right_count,
-                // Reported PER WHEEL, not summed. An error is a missed
-                // transition, so it is an UNDERCOUNT — and a combined
-                // figure cannot say which wheel reads low. That matters
-                // the moment the two are compared: on 2026-08-09 the right
-                // motor measured 1.3% faster than the left, and a summed
-                // error count could not rule out that the left had simply
-                // lost more ticks.
-                left.errors,
-                right.errors,
-                DUTY_PERCENT.load(Ordering::Relaxed),
-                if STALLED.load(Ordering::Relaxed) {
-                    "  *** STALLED: commanded but not moving — check power ***"
-                } else {
-                    ""
-                }
-            );
+            // ONE definition of this line, shared with both hosts.
+            //
+            // It used to be a `write!` here and two independent parsers
+            // over there. When the error counter was split per wheel, one
+            // of those parsers kept looking for the old key, dropped every
+            // line, and drew an empty viewer while the gate stayed green.
+            // `hil_protocol::Status` round-trips, so that cannot recur.
+            let _ = hil_protocol::Status {
+                x: p.x,
+                y: p.y,
+                heading: p.heading,
+                ticks_left: i64::from(left_count),
+                ticks_right: i64::from(right_count),
+                errors_left: left.errors as u64,
+                errors_right: right.errors as u64,
+                duty_percent: u64::from(DUTY_PERCENT.load(Ordering::Relaxed)),
+                stalled: STALLED.load(Ordering::Relaxed),
+            }
+            .write_into(&mut line);
             out.send(line.as_bytes()).await;
             line.clear();
             last_report = now;

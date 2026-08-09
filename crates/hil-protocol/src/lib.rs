@@ -448,6 +448,116 @@ impl Message {
     }
 }
 
+/// The human-readable status line `firmware/pico-odom` emits, 50 times a
+/// second.
+///
+/// # Why this is a shared type and not a `write!` in the firmware
+///
+/// It was a `write!` in the firmware, and two hosts each grew their own
+/// parser for it. On 2026-08-09 the firmware split its error counter into
+/// `errL`/`errR`; `hil-host`'s viewer kept looking for `err`, dropped
+/// every line, and **drew an empty screen while `tools/verify.sh` stayed
+/// green at 25/25** — a parser that agrees with itself compiles fine.
+///
+/// That was fixed by pinning the viewer's parser to a captured line. Then,
+/// hours later, `crates/vision` needed the same data and got a *second*
+/// independent parser with its own copy of the same fixture. Three
+/// implementations of one format, two of them added in response to a bug
+/// caused by having two.
+///
+/// So it lives here, in the crate both ends already share, where
+/// [`tests::a_status_line_survives_the_round_trip`] makes drift a
+/// compile-and-test failure rather than a blank screen.
+///
+/// # Human-readable on purpose
+///
+/// Unlike [`Message`], which is byte-budgeted for a 32-byte UART FIFO,
+/// this is meant to be read by a person with `screen` open. That is why
+/// it spells out `errL=` rather than packing fields positionally — and
+/// why it is a separate type rather than a `Message` variant.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Status {
+    /// The chip's own dead reckoning.
+    pub x: f64,
+    pub y: f64,
+    pub heading: f64,
+    pub ticks_left: i64,
+    pub ticks_right: i64,
+    /// Per wheel, never summed. A decode error is a MISSED transition and
+    /// therefore an undercount, so a combined figure cannot say which
+    /// wheel reads low — which is exactly the confound that made the
+    /// left/right speed comparison untrustworthy until they were split.
+    pub errors_left: u64,
+    pub errors_right: u64,
+    /// Magnitude of the duty being applied, 0–100.
+    pub duty_percent: u64,
+    /// The chip commanded motion and the encoders disagreed.
+    pub stalled: bool,
+}
+
+impl Status {
+    /// The banner appended when [`Self::stalled`]. Prose, not a field:
+    /// it is aimed at whoever is watching the terminal.
+    pub const STALL_BANNER: &'static str =
+        "*** STALLED: commanded but not moving — check power ***";
+
+    /// Number of `name=value` fields a complete line carries.
+    const FIELDS: usize = 8;
+
+    pub fn write_into<W: Write>(&self, w: &mut W) -> core::fmt::Result {
+        write!(
+            w,
+            "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%",
+            self.x,
+            self.y,
+            self.heading,
+            self.ticks_left,
+            self.ticks_right,
+            self.errors_left,
+            self.errors_right,
+            self.duty_percent
+        )?;
+        if self.stalled {
+            write!(w, "  {}", Self::STALL_BANNER)?;
+        }
+        write!(w, "\r\n")
+    }
+
+    /// Parse one line, or `None` if any field is missing or malformed.
+    ///
+    /// Keyed on the `name=value` tokens rather than on position, so adding
+    /// a field cannot silently shift what this reads. A line missing a key
+    /// is rejected whole — half a pose plotted as though it were complete
+    /// is worse than a dropped frame, and a cancelled USB write can
+    /// genuinely truncate one.
+    pub fn parse(line: &str) -> Option<Status> {
+        let mut status = Status::default();
+        let mut seen = 0;
+        for token in line.split_whitespace() {
+            // Tokens without an `=` are prose — the `pose` prefix, the
+            // `ticks` label, the stall banner. Skipped, not fatal.
+            let Some((key, value)) = token.split_once('=') else {
+                continue;
+            };
+            match key {
+                "x" => status.x = value.parse().ok()?,
+                "y" => status.y = value.parse().ok()?,
+                "th" => status.heading = value.parse().ok()?,
+                "L" => status.ticks_left = value.parse().ok()?,
+                "R" => status.ticks_right = value.parse().ok()?,
+                "errL" => status.errors_left = value.parse().ok()?,
+                "errR" => status.errors_right = value.parse().ok()?,
+                // The only field carrying a unit.
+                "duty" => status.duty_percent = value.trim_end_matches('%').parse().ok()?,
+                _ => continue,
+            }
+            seen += 1;
+        }
+        status.stalled = line.contains("STALLED");
+        (seen == Self::FIELDS).then_some(status)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -984,5 +1094,69 @@ mod tests {
         assert_eq!(i, 3, "expected three complete lines");
         assert_eq!(received[1], Some(outgoing[1]));
         assert_eq!(received[2], Some(outgoing[2]));
+    }
+
+    // ---- Status ----
+
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10.
+    /// Evidence, not an example. Previously copied into two host crates.
+    const CAPTURED: &str =
+        "pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%";
+
+    #[test]
+    fn a_line_the_board_actually_sent() {
+        let Some(s) = Status::parse(CAPTURED) else {
+            panic!("the firmware's real output no longer parses");
+        };
+        assert_eq!(s.x, -0.001);
+        assert_eq!(s.heading, -0.863);
+        assert_eq!(s.ticks_left, -37793);
+        assert_eq!(s.ticks_right, 38304);
+        assert_eq!(s.errors_left, 235);
+        assert_eq!(s.errors_right, 207);
+        assert_eq!(s.duty_percent, 0);
+        assert!(!s.stalled);
+    }
+
+    /// **The test that makes the 2026-08-09 bug impossible.** Writer and
+    /// parser are now one type, so a field renamed on one side fails here
+    /// rather than silently emptying a viewer.
+    #[test]
+    fn a_status_line_survives_the_round_trip() {
+        let sent = Status {
+            x: -1.25,
+            y: 0.5,
+            heading: 3.0,
+            ticks_left: -37793,
+            ticks_right: 38304,
+            errors_left: 235,
+            errors_right: 207,
+            duty_percent: 42,
+            stalled: false,
+        };
+        let mut line = String::new();
+        assert!(sent.write_into(&mut line).is_ok());
+        assert_eq!(Status::parse(&line), Some(sent));
+    }
+
+    #[test]
+    fn the_stall_banner_survives_it_too() {
+        let sent = Status {
+            stalled: true,
+            ..Status::default()
+        };
+        let mut line = String::new();
+        assert!(sent.write_into(&mut line).is_ok());
+        assert_eq!(Status::parse(&line), Some(sent));
+    }
+
+    #[test]
+    fn a_truncated_line_is_dropped_not_guessed() {
+        assert!(Status::parse("pose x=-0.001 y=+0.003 th=-0.8").is_none());
+        assert!(Status::parse("").is_none());
+        // The superseded single-`err` format, which is what drifted.
+        assert!(
+            Status::parse("pose x=+0.0 y=+0.0 th=+0.0  ticks L=1 R=0  err=0  duty=0%").is_none()
+        );
     }
 }

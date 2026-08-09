@@ -380,7 +380,7 @@ impl RobotSpec {
     /// ```
     ///
     /// For `SIM_BOT`: 2 × 0.03 × 30 / 0.15 = **12 rad/s**.
-    pub fn max_turn_rate(&self) -> f64 {
+    pub const fn max_turn_rate(&self) -> f64 {
         2.0 * self.wheel_radius * self.max_wheel_speed / self.track_width
     }
 
@@ -553,6 +553,46 @@ pub struct ControlGains {
 }
 
 impl ControlGains {
+    /// Move a profile tuned on one robot onto another, preserving the
+    /// property that actually matters: the **proportional band**, the
+    /// heading error below which steering stays proportional instead of
+    /// going bang-bang.
+    ///
+    /// `heading_proportional` maps a heading error onto a turn rate, so on
+    /// a robot whose turn ceiling is `k` times lower the same gain
+    /// saturates `k` times sooner. Scaling P, D and the speeds by the same
+    /// `k` holds the band exactly where it was.
+    ///
+    /// # Why this is a function and not four literals
+    ///
+    /// It was four literals — `1.554`, `0.155`, `3.108`, `0.117` — with a
+    /// comment saying they were `WAYPOINT × 7.77/30.0`. That comment was
+    /// the only thing connecting them to the measurement they came from,
+    /// so the next change to `max_wheel_speed` would have left four
+    /// plausible numbers describing a robot that no longer exists. This is
+    /// the same failure `RobotSpec::REAL_BOT` documents at length, one
+    /// layer up: **a derived value written down by hand stops being
+    /// derived.**
+    ///
+    /// `arrive_radius` is deliberately NOT scaled. It is a distance
+    /// tolerance set by how precisely the robot needs to stop, not by how
+    /// fast it can go.
+    pub const fn scaled_from(base: ControlGains, from: RobotSpec, to: RobotSpec) -> ControlGains {
+        let k = to.max_wheel_speed / from.max_wheel_speed;
+        ControlGains {
+            heading_proportional: base.heading_proportional * k,
+            heading_integral: base.heading_integral * k,
+            heading_derivative: base.heading_derivative * k,
+            heading_integral_limit: base.heading_integral_limit,
+            // Not `base × k` but the destination robot's actual ceiling —
+            // which is the same number, and says why.
+            heading_derivative_limit: to.max_turn_rate(),
+            distance_proportional: base.distance_proportional,
+            max_forward_speed: base.max_forward_speed * k,
+            arrive_radius: base.arrive_radius,
+        }
+    }
+
     /// Driving to a **known coordinate** — Stage 0's waypoint follower and
     /// the Pico's tour.
     ///
@@ -596,18 +636,20 @@ impl ControlGains {
     /// `chase` drives real motors through this profile, so it has to be
     /// achievable on `REAL_BOT` and no longer was: 0.35 m/s against a
     /// 0.233 m/s ceiling.
-    pub const VISUAL_SERVO: ControlGains = ControlGains {
-        heading_proportional: 0.777,
-        heading_integral: 0.0,
-        heading_derivative: 0.078,
-        heading_integral_limit: 1.0,
-        // 3.108 rad/s = 2·r·max_wheel_speed / L for REAL_BOT — the fastest
-        // this robot can actually spin.
-        heading_derivative_limit: 3.108,
-        distance_proportional: 0.8,
-        max_forward_speed: 0.091,
-        arrive_radius: 0.15,
-    };
+    pub const VISUAL_SERVO: ControlGains = ControlGains::scaled_from(
+        ControlGains {
+            heading_proportional: 3.0,
+            heading_integral: 0.0,
+            heading_derivative: 0.3,
+            heading_integral_limit: 1.0,
+            heading_derivative_limit: 12.0,
+            distance_proportional: 0.8,
+            max_forward_speed: 0.35,
+            arrive_radius: 0.15,
+        },
+        RobotSpec::SIM_BOT,
+        RobotSpec::REAL_BOT,
+    );
 
     /// [`WAYPOINT`](Self::WAYPOINT) with a wider arrival radius, for the
     /// chip driving a robot over a serial link.
@@ -631,14 +673,16 @@ impl ControlGains {
     /// `the_waypoint_band_covers_the_whole_driving_window` pins for
     /// `WAYPOINT` on `SIM_BOT`. Same controller shape, slower robot.
     pub const HIL: ControlGains = ControlGains {
-        heading_proportional: 1.554,
-        heading_integral: 0.0,
-        heading_derivative: 0.155,
-        heading_integral_limit: 1.0,
-        heading_derivative_limit: 3.108,
-        distance_proportional: 0.8,
-        max_forward_speed: 0.117,
+        // A wider arrival radius: the serial round trip adds a tick of
+        // latency on top of the motor lag, so the robot overshoots a
+        // little further before it registers arrival. A tolerance, not a
+        // speed — which is why `scaled_from` leaves it alone.
         arrive_radius: 0.18,
+        ..ControlGains::scaled_from(
+            ControlGains::WAYPOINT,
+            RobotSpec::SIM_BOT,
+            RobotSpec::REAL_BOT,
+        )
     };
 }
 
@@ -865,6 +909,31 @@ mod tests {
     /// motor was measured at 7.77 rad/s the two ceilings split, and a
     /// profile carrying the wrong one would ask its D term for four times
     /// the turn rate the wheels can produce.
+    /// The property `scaled_from` exists to preserve, stated as a test
+    /// rather than trusted to a comment.
+    ///
+    /// The proportional band is the heading error below which steering
+    /// stays proportional instead of saturating. `WAYPOINT` on `SIM_BOT`
+    /// has 2.0 rad of it; the profiles derived for the real robot must
+    /// have the same, or the controller changes character rather than
+    /// merely slowing down.
+    #[test]
+    fn scaling_a_profile_preserves_its_proportional_band() {
+        let simulated = RobotSpec::SIM_BOT.turn_proportional_band(&ControlGains::WAYPOINT);
+        let real = RobotSpec::REAL_BOT.turn_proportional_band(&ControlGains::HIL);
+        assert!(
+            (simulated - real).abs() < 1e-9,
+            "HIL is WAYPOINT moved onto a slower robot, so the band must be \
+             identical: {simulated} vs {real}"
+        );
+
+        // And the numbers the hand-written literals used to carry, so
+        // replacing them with a computation is visibly the same profile.
+        assert!((ControlGains::HIL.heading_proportional - 1.554).abs() < 1e-3);
+        assert!((ControlGains::HIL.max_forward_speed - 0.1166).abs() < 1e-3);
+        assert!((ControlGains::VISUAL_SERVO.heading_proportional - 0.777).abs() < 1e-3);
+    }
+
     #[test]
     fn the_d_limit_literal_equals_the_formula_it_claims_to_be() {
         let simulated = RobotSpec::SIM_BOT.max_turn_rate();
