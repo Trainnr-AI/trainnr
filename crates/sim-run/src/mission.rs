@@ -35,18 +35,6 @@ pub struct MissionConfig {
     /// this repo. `hil-host` sets the measured value, because it is a twin
     /// of hardware rather than a teaching simulator.
     pub motor_deadband_fraction: f64,
-    /// Ticks of "asked to move, didn't" before backing out. 25 at 50 Hz
-    /// is half a second — past any motor lag, short of grinding.
-    pub stuck_patience: u32,
-    /// Ticks spent backing out, before the ladder escalates it.
-    ///
-    /// **120 (2.4 s) was found by sweep, not chosen.** Against four
-    /// configurations that each wedged the robot permanently, escape
-    /// duration was the load-bearing parameter and patience barely
-    /// mattered: 50 cleared 2 of 4 at every patience value, 120 cleared
-    /// all 4 at every patience value. A short reverse leaves the planner
-    /// aimed at the same corner.
-    pub stuck_escape: u32,
     /// Steer on odometry belief instead of ground truth. `false` is the
     /// honest simulator default; `true` shows how drift compounds.
     pub control_on_belief: bool,
@@ -88,8 +76,6 @@ impl Default for MissionConfig {
             wheel_wear: 0.99,
             motor_tau: 0.15,
             motor_deadband_fraction: 0.0,
-            stuck_patience: 25,
-            stuck_escape: 120,
             control_on_belief: false,
             cam_rays: 21,
             cam_fov: 1.22,
