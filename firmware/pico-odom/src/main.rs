@@ -61,8 +61,22 @@ use sim_core::{Odometry, Pose, RobotSpec};
 /// Encoder sampling period. 100 µs = 10 kHz (see math-09 on aliasing).
 const POLL_US: u64 = 100;
 
-/// How often a pose line goes out.
-const REPORT_MS: u64 = 100;
+/// How often a pose line goes out — and how often odometry integrates.
+///
+/// **20 ms, not 100 ms, and the reason is measurement.** A first-order
+/// motor lag with tau ~0.15 s covers 63% of its rise in 150 ms, so at
+/// 100 ms there are one or two samples in the whole transient — nowhere
+/// near enough to fit a curve to. At 20 ms each duty step in [`SWEEP`]
+/// yields ~8 points inside the first tau and ~22 before it settles.
+///
+/// It also makes the odometry itself better: `Odometry::update` integrates
+/// an arc per call, and five times more calls is five times finer.
+///
+/// Not lower than this. At 10 ms the UART build would need ~10 KB/s, which
+/// is the whole 115200-baud budget, and the USB write deadline
+/// (`REPORT_TIMEOUT_MS`, 5 ms) becomes a quarter of the reporting period
+/// rather than a twentieth — and a blocked write is missed encoder ticks.
+const REPORT_MS: u64 = 20;
 
 /// PWM counter wrap. 5000 counts at ~150 MHz gives roughly **30 kHz**,
 /// deliberately above the audible band — a motor driven at 2 kHz whines,
