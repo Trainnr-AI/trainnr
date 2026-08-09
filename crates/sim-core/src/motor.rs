@@ -45,16 +45,39 @@ pub struct Motor {
     /// Measured 2026-08-09: **7.71 rad/s** (motor ①) and **7.79** (motor
     /// ②) on four AA cells. `SIM_BOT` assumes 30.0 — 3.9× too fast.
     pub max_speed: f64,
+    /// Fraction of full command below which the motor does not turn at
+    /// all, 0.0 for the idealised motor. See [`Self::with_deadband`].
+    pub deadband_fraction: f64,
     /// Actual current speed (rad/s). Private: the world reads it via
     /// the return value of `step` (or `speed()`), never sets it.
     omega: f64,
 }
 
 impl Motor {
+    /// A motor with **no deadband** — the idealised one Stage 0 modelled.
+    ///
+    /// Kept as the default so `sim-run`'s frozen baseline does not move.
+    /// Use [`Self::with_deadband`] for a twin of the real hardware.
     pub fn new(tau: f64, max_speed: f64) -> Self {
         Motor {
             tau,
             max_speed,
+            deadband_fraction: 0.0,
+            omega: 0.0,
+        }
+    }
+
+    /// A motor that refuses to move below `deadband_fraction` of full
+    /// command, as every real one does.
+    ///
+    /// Measured on this hardware 2026-08-09: **0.0429** and **0.0391** for
+    /// the two motors. See [`Self::step`] for what the number means and
+    /// why the response above it stays linear.
+    pub fn with_deadband(tau: f64, max_speed: f64, deadband_fraction: f64) -> Self {
+        Motor {
+            tau,
+            max_speed,
+            deadband_fraction,
             omega: 0.0,
         }
     }
@@ -84,6 +107,22 @@ impl Motor {
     pub fn step(&mut self, command: f64, dt: f64) -> f64 {
         // Saturation: physics doesn't care what you ask for.
         let target = command.clamp(-self.max_speed, self.max_speed);
+        // Deadband: below it the motor cannot overcome its own friction,
+        // so it does nothing at all. Above it the measured response is
+        // linear, which is why the remainder is rescaled to span the full
+        // range rather than simply offset — a full command must still
+        // reach `max_speed`, and the measured line does.
+        let target = if self.deadband_fraction > 0.0 {
+            let magnitude = (target / self.max_speed).abs();
+            if magnitude <= self.deadband_fraction {
+                0.0
+            } else {
+                let usable = (magnitude - self.deadband_fraction) / (1.0 - self.deadband_fraction);
+                target.signum() * usable * self.max_speed
+            }
+        } else {
+            target
+        };
         // Exact discretization of the first-order lag dω/dt = (target-ω)/τ:
         // each step closes a fixed *fraction* of the remaining gap.
         let alpha = 1.0 - (-dt / self.tau).exp();

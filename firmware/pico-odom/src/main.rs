@@ -251,6 +251,21 @@ fn now_ms() -> u64 {
 /// this constant, which is about the encoder agreeing with the motor.
 const LEFT_ENCODER_SIGN: i32 = -1;
 
+/// Duty above which a commanded motor **must** be turning, in the
+/// `±DUTY_FULL` units the wire carries.
+///
+/// 150 of 1000 is 15%, clear of the measured ~4.3% deadband with margin —
+/// below that, "not moving" is legitimate physics rather than a fault.
+#[cfg(feature = "teleop")]
+const STALL_DUTY_FLOOR: i32 = 150;
+
+/// Consecutive polls of commanded-but-not-moving before cutting the
+/// motors. At [`POLL`] = 50 ms, four polls is 200 ms — long enough that a
+/// motor still overcoming its own inertia is never mistaken for a stall,
+/// short enough that a genuinely locked rotor is not held at full duty.
+#[cfg(feature = "teleop")]
+const STALL_POLLS: u32 = 4;
+
 /// Duty above which the motor **must** move, or something is wrong.
 ///
 /// The measured deadband is ~4.6% (docs/07, 2026-08-09), so 15% is clear
@@ -599,6 +614,8 @@ async fn follow_host_forever(
     // What the host last asked for, before the watchdog has its say.
     let mut wanted = (0i32, 0i32);
     let mut enabled = false;
+    let mut ticks_at_last_check = TOTAL_TICKS.load(Ordering::Relaxed);
+    let mut stalled_polls: u32 = 0;
 
     loop {
         // Bounded, so staleness is noticed within one poll of becoming
@@ -626,7 +643,44 @@ async fn follow_host_forever(
             }
         }
 
-        let (left, right) = watchdog.gate(now_ms(), wanted);
+        let (mut left, mut right) = watchdog.gate(now_ms(), wanted);
+
+        // ---- commanded, but not moving ----
+        //
+        // The sweep has had this check since a dead battery produced a
+        // textbook-looking run with zero motion in it. **`teleop` shipped
+        // without it**, because `STALLED` and `MUST_MOVE_ABOVE` were gated
+        // out with the sweep — so the host could hold a stalled motor at
+        // full duty indefinitely, drawing near its ~500 mA stall current
+        // and heating, and nothing would say so.
+        //
+        // The chip STOPS rather than escaping. Reversing is recovery, and
+        // recovery needs to know what is behind the robot — which the host
+        // knows and the chip does not. Tier 0 protects the hardware; Tier
+        // 2 decides where to go. The host sees `STALLED` in the report
+        // line and can act on it.
+        let ticks_now = TOTAL_TICKS.load(Ordering::Relaxed);
+        let commanded_hard = left.unsigned_abs().max(right.unsigned_abs())
+            > STALL_DUTY_FLOOR.unsigned_abs();
+        if commanded_hard && ticks_now == ticks_at_last_check {
+            stalled_polls += 1;
+            if stalled_polls >= STALL_POLLS {
+                STALLED.store(true, Ordering::Relaxed);
+            }
+        } else {
+            stalled_polls = 0;
+            // Clears itself once the wheels turn again, so a single
+            // scuff does not latch the robot off for the session.
+            if ticks_now != ticks_at_last_check {
+                STALLED.store(false, Ordering::Relaxed);
+            }
+        }
+        ticks_at_last_check = ticks_now;
+        if STALLED.load(Ordering::Relaxed) {
+            left = 0;
+            right = 0;
+        }
+
         let should_run = left != 0 || right != 0;
 
         // `STBY` is touched only on a transition. It is a GPIO write

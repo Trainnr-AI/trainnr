@@ -78,7 +78,9 @@
 //! or just yourself — and move it left and right.
 
 use anyhow::Result;
-use sim_core::{wrap_angle, BodyTwist, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
+use sim_core::{
+    wrap_angle, BodyTwist, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec, StuckMonitor,
+};
 use std::collections::VecDeque;
 use std::time::Instant;
 use vision::session::Perceived;
@@ -397,6 +399,11 @@ fn main() -> Result<()> {
 
     let mut last_tick = Instant::now();
     let mut last_chip_print = Instant::now();
+    // Patience and escape length from `MissionConfig`'s swept defaults,
+    // converted from 50 Hz ticks to this loop's ~15 Hz: 0.5 s of trying
+    // and failing, then 2.4 s of backing out.
+    let mut stuck = StuckMonitor::new(8, 36, 0.01);
+    let mut was_escaping = false;
     for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);
         last_tick = Instant::now();
@@ -446,7 +453,9 @@ fn main() -> Result<()> {
 
         // ---- the last link: perception reaches real wheels ----
         if let Some(w) = &mut wheels {
-            w.command(commanded)?;
+            // Read BEFORE commanding, so the escape decision is made on
+            // what the wheels just did rather than on a reading taken
+            // after the next command was already sent.
             let Some(feedback) = w.feedback() else {
                 // The board is gone. Stop rather than carry on computing
                 // twists for a chip that cannot hear them — a loop still
@@ -454,7 +463,36 @@ fn main() -> Result<()> {
                 // unplugged is the most misleading thing on the screen.
                 anyhow::bail!("the board stopped reporting — cable or power?");
             };
-            vision::drive::log(&rec, &feedback, commanded)?;
+            // ---- commanded, but not moving ----
+            //
+            // The same `StuckMonitor` the simulator runs, on the same
+            // signal: what was asked for against what the encoders
+            // measured. Recovery lives HERE rather than on the chip
+            // because reversing needs to know what is behind the robot,
+            // and the chip cannot see. The chip's job is to stop a stalled
+            // motor before it heats; deciding where to go instead is this
+            // loop's.
+            //
+            // ⚠️ **Untested on hardware.** In the simulator the "measured"
+            // signal comes from true displacement, so a wheel held by a
+            // wall reads zero. Here it comes from encoders, and a wheel
+            // that SLIPS reports motion while the robot goes nowhere —
+            // that is the hole in this, and only a real floor can show it.
+            let sent = match stuck.update(
+                commanded.forward_speed.abs(),
+                feedback.achieved.forward_speed.abs(),
+            ) {
+                Some(escape) => {
+                    if !was_escaping {
+                        println!("   stuck — backing out");
+                    }
+                    escape
+                }
+                None => commanded,
+            };
+            was_escaping = stuck.is_escaping();
+            w.command(sent)?;
+            vision::drive::log(&rec, &feedback, sent)?;
 
             // The chip reports at 50 Hz against this loop's ~15, so two or
             // three lines should arrive every frame. None means the link

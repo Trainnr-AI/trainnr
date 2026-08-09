@@ -53,7 +53,21 @@ step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleo
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.
-step "replay: RP2350 wire recording" \
+# ⚠️ STALE since 2026-08-10, and deliberately still run.
+#
+# `RobotSpec::REAL_BOT` gained its measured values that day, so `hil-host`
+# now commands the chip differently and this replay diverges — correctly.
+# The recording is a capture of a REAL RP2350 over USB, so re-making it
+# needs the board:
+#
+#   picotool load -x firmware/pico-robot/pico-robot-pico2.uf2   # after BOOTSEL
+#   cargo run -p hil-host -- --serial /dev/cu.usbmodem11 \
+#       --record recordings/rp2350-utrap.wire
+#
+# Left FAILING rather than skipped, because a skip is a thing people stop
+# reading. A red step with this comment above it is a re-record that has
+# not happened yet; a green one would be a regression that nobody noticed.
+step "replay: RP2350 wire recording  [STALE - re-record on hardware]" \
      "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep -q 'matched the recording exactly'"
 step "replay: perception fixture" \
      "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"

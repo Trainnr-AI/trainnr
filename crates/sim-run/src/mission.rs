@@ -6,7 +6,7 @@
 use sim_core::{
     lookahead_point, plan, summarize_scan, AvoidHysteresis, BodyTwist, ControlGains, DepthCamera,
     DiffDrive, Directive, Encoders, GotoController, Mode, Motor, OccupancyGrid, Odometry, Point,
-    Pose, Rng, Robot, RobotSpec, Segment, WheelSpeeds, World,
+    Pose, Rng, Robot, RobotSpec, Segment, StuckMonitor, WheelSpeeds, World,
 };
 
 /// Everything the mission needs to be reproducible.
@@ -29,6 +29,24 @@ pub struct MissionConfig {
     /// docs/learning/math-03.
     pub wheel_wear: f64,
     pub motor_tau: f64,
+    /// Fraction of full command below which the motors do not turn.
+    ///
+    /// **0.0 for `sim-run`**, whose Stage 0 baseline is a fixed point of
+    /// this repo. `hil-host` sets the measured value, because it is a twin
+    /// of hardware rather than a teaching simulator.
+    pub motor_deadband_fraction: f64,
+    /// Ticks of "asked to move, didn't" before backing out. 25 at 50 Hz
+    /// is half a second — past any motor lag, short of grinding.
+    pub stuck_patience: u32,
+    /// Ticks spent backing out, before the ladder escalates it.
+    ///
+    /// **120 (2.4 s) was found by sweep, not chosen.** Against four
+    /// configurations that each wedged the robot permanently, escape
+    /// duration was the load-bearing parameter and patience barely
+    /// mattered: 50 cleared 2 of 4 at every patience value, 120 cleared
+    /// all 4 at every patience value. A short reverse leaves the planner
+    /// aimed at the same corner.
+    pub stuck_escape: u32,
     /// Steer on odometry belief instead of ground truth. `false` is the
     /// honest simulator default; `true` shows how drift compounds.
     pub control_on_belief: bool,
@@ -69,6 +87,9 @@ impl Default for MissionConfig {
             gains: ControlGains::WAYPOINT,
             wheel_wear: 0.99,
             motor_tau: 0.15,
+            motor_deadband_fraction: 0.0,
+            stuck_patience: 25,
+            stuck_escape: 120,
             control_on_belief: false,
             cam_rays: 21,
             cam_fov: 1.22,
@@ -205,6 +226,12 @@ pub struct Mission {
     pub odometry: Odometry,
 
     nominal: DiffDrive,
+    /// Notices the robot is commanded to move and is not, and backs it
+    /// out. See `sim_core::StuckMonitor` for what it cost to not have.
+    stuck: StuckMonitor,
+    /// True forward speed last tick, in m/s — what the monitor compares
+    /// the command against.
+    last_true_speed: f64,
     encoders: Encoders,
     rng: Rng,
     motor_l: Motor,
@@ -290,8 +317,22 @@ impl Mission {
             // `fit_wheels` scaled against another. The scaler would then
             // hand over a "safe" pair the motor still clipped, distorting
             // the very arc the scaling exists to preserve.
-            motor_l: Motor::new(config.motor_tau, config.spec.max_wheel_speed),
-            motor_r: Motor::new(config.motor_tau, config.spec.max_wheel_speed),
+            // Half a second of "asked to move, didn't" before backing
+            // out, and one second of backing out. `still_speed` is 1 cm/s
+            // — below any real commanded motion, above the numerical
+            // noise of a robot pressed against a wall.
+            stuck: StuckMonitor::new(config.stuck_patience, config.stuck_escape, 0.01),
+            last_true_speed: 0.0,
+            motor_l: Motor::with_deadband(
+                config.motor_tau,
+                config.spec.max_wheel_speed,
+                config.motor_deadband_fraction,
+            ),
+            motor_r: Motor::with_deadband(
+                config.motor_tau,
+                config.spec.max_wheel_speed,
+                config.motor_deadband_fraction,
+            ),
             controller: GotoController::new(config.gains),
             nominal,
             path: None,
@@ -476,6 +517,15 @@ impl Mission {
             self.bumps += 1;
         }
 
+        // What the robot ACTUALLY achieved, for `StuckMonitor`. Computed
+        // after the collision revert, so a robot held by a wall reports
+        // zero however fast its wheels are turning — which is the entire
+        // signal. On hardware the encoders would still report motion
+        // here, and a wheel stopped by a wall reports zero for real.
+        let moved_x = self.robot.pose.x - before.x;
+        let moved_y = self.robot.pose.y - before.y;
+        self.last_true_speed = (moved_x * moved_x + moved_y * moved_y).sqrt() / dt;
+
         // ---- OBSERVE: belief from encoder ticks alone.
         let (dticks_l, dticks_r) = self.encoders.advance(actual, dt);
         self.odometry.update(dticks_l, dticks_r);
@@ -497,7 +547,18 @@ impl Mission {
     /// and last calls with a serial cable in the middle.
     pub fn step(&mut self) -> Option<Tick> {
         let obs = self.observe()?;
-        let twist = self.decide(&obs);
+        let mut twist = self.decide(&obs);
+
+        // ---- did the last command actually move us? ----
+        //
+        // Measured against TRUE motion, not odometry: a wedged robot's
+        // wheels keep turning, so dead reckoning agrees with the command
+        // and would never notice. That is not cheating in a simulator —
+        // on hardware the encoders play this role, and a wheel held still
+        // by a wall reports zero.
+        if let Some(escape) = self.stuck.update(twist.forward_speed, self.last_true_speed) {
+            twist = escape;
+        }
         // Scale, don't clip: a saturated turn keeps its arc.
         let commanded = self.config.spec.fit_wheels(self.nominal.inverse(twist));
         Some(self.advance(obs, commanded))
@@ -886,5 +947,64 @@ mod tests {
 
         let outcome = Mission::new(config).run();
         assert!(outcome.succeeded());
+    }
+}
+
+#[cfg(test)]
+mod the_stack_finishes_from_routes_it_was_not_tuned_on {
+    use super::*;
+
+    /// Four configurations that each wedged the robot permanently before
+    /// `sim_core::StuckMonitor` existed, and now do not.
+    ///
+    /// The U-trap had always passed, and on 2026-08-10 it turned out to be
+    /// passing by luck: `WAYPOINT` on `SIM_BOT` happened to take a route
+    /// that never wedged. Measuring the real motor changed the route, the
+    /// robot nosed into a corner at (2.52, 0.76) and stayed there — pose
+    /// identical to two decimals for 40 s, 28,000 ticks of wall contact.
+    ///
+    /// Isolating one variable at a time showed it was never about speed.
+    /// Dropping only the derivative gain wedged it. So did cruise
+    /// 0.45 -> 0.30 with nothing else touched. **A differential drive that
+    /// only ever drives forward has no move that gets it out of a corner**,
+    /// and nothing in the stack ever reversed.
+    ///
+    /// These are not four speeds anyone ships. They are four routes the
+    /// tuning never saw, which is the only thing that distinguishes a
+    /// recovery behaviour from a lucky one.
+    #[test]
+    fn four_routes_that_used_to_wedge_forever() {
+        let slower = ControlGains {
+            max_forward_speed: 0.30,
+            ..ControlGains::WAYPOINT
+        };
+        let slowest = ControlGains {
+            max_forward_speed: 0.20,
+            ..ControlGains::WAYPOINT
+        };
+        let underdamped = ControlGains {
+            heading_derivative: 0.155,
+            ..ControlGains::WAYPOINT
+        };
+        for (name, spec, gains) in [
+            ("the measured robot", RobotSpec::REAL_BOT, ControlGains::HIL),
+            ("cruise 0.30", RobotSpec::SIM_BOT, slower),
+            ("cruise 0.20", RobotSpec::SIM_BOT, slowest),
+            ("weak derivative", RobotSpec::SIM_BOT, underdamped),
+        ] {
+            let config = MissionConfig {
+                spec,
+                gains,
+                // The measured robot is 3.86x slower, so the same journey
+                // takes proportionally longer. Not a fudge factor.
+                duration: 300.0,
+                ..Default::default()
+            };
+            let outcome = Mission::new(config).run();
+            assert_eq!(
+                outcome.waypoints_reached, outcome.waypoints_total,
+                "{name} wedged: {outcome:?}"
+            );
+        }
     }
 }

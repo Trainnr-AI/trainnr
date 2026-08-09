@@ -38,7 +38,7 @@ mod rig;
 mod wire;
 
 use rig::Rig;
-use sim_core::RobotSpec;
+use sim_core::{ControlGains, RobotSpec};
 use sim_run::{viz, MissionConfig};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -99,6 +99,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // `REAL_BOT == SIM_BOT`, and a silent trap the moment the measured
         // values land in `spec.rs`, which is the documented plan.
         spec: RobotSpec::REAL_BOT,
+        // ⚠️ The SAME profile `firmware/pico-robot` runs, for the same
+        // reason the spec above is shared: this rig exists to model the
+        // robot the firmware believes in.
+        //
+        // This was never set, so the host silently ran `WAYPOINT` while
+        // the chip ran `HIL` — two different controllers in one loop.
+        // Undetectable until 2026-08-10, because `HIL` was `..WAYPOINT`
+        // differing only in `arrive_radius`, which the host does not use;
+        // the chip decides arrival. The moment `HIL` was retuned for the
+        // measured motor, `RobotSpec::check` refused the config outright.
+        //
+        // The exact shape of the `REAL_BOT`/`SIM_BOT` trap described
+        // below, one layer up: two things that must agree, agreeing by
+        // coincidence, in a rig whose whole purpose is that they agree.
+        gains: ControlGains::HIL,
+        // The measured motor, not the invented one. `MissionConfig`'s
+        // defaults describe sim-run's teaching robot; this rig is a twin
+        // of hardware, so it gets the bench numbers of 2026-08-09.
+        //
+        //   motor_tau   0.15 -> ~0.04 s   (eight step responses clustered)
+        //   deadband    none -> 4.3%      (0.0429 and 0.0391 per motor)
+        //
+        // The deadband is the one that changes behaviour visibly: below
+        // ~4.3% of full command the real robot does not move, so a twin
+        // without it lets the chip's controller creep at speeds the
+        // hardware cannot produce — and creeping is exactly what a
+        // waypoint follower does as it arrives.
+        // ⚠️ 60 s was the budget for a robot that could do 0.45 m/s. The
+        // measured one does 0.117, so the same journey across the same
+        // 8x6 m room takes about four times as long. Not a fudge factor —
+        // the identical trip at a quarter of the speed.
+        //
+        // **This makes the emulator gate step roughly 4x slower**, which
+        // is the honest cost of simulating the robot that exists rather
+        // than the one that was assumed. If that becomes intolerable the
+        // fix is a nearer waypoint for the emulator run, not a faster
+        // robot in the config.
+        duration: 300.0,
+        motor_tau: 0.04,
+        motor_deadband_fraction: 0.043,
         // THE one deliberate difference from sim-run, and it makes the rig
         // MORE realistic, not less.
         //
