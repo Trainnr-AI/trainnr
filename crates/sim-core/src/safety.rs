@@ -236,9 +236,19 @@ pub struct StuckMonitor {
     patience_ticks: u32,
     /// How long an escape lasts once triggered.
     escape_ticks: u32,
-    /// Speed below which a wheel counts as not moving, in the same units
-    /// as the speeds passed to [`Self::update`].
+    /// Speed below which the robot counts as not moving, in the same
+    /// units as the speeds passed to [`Self::update`].
+    ///
+    /// A **detection threshold only.** It used to also set how hard the
+    /// robot reversed, via an `escape_speed = still_speed * 20.0` that
+    /// nobody would predict: lowering the noise floor would have quietly
+    /// made every escape gentler. The escape magnitude is now given
+    /// explicitly by the caller, which is the only place that knows what
+    /// the robot can do.
     still_speed: f64,
+    /// How to back out: reverse speed (positive; the sign is applied for
+    /// you) and turn rate, in the caller's own units.
+    escape: (f64, f64),
     no_progress: u32,
     escaping: u32,
     /// Consecutive escapes without a decent run of progress in between.
@@ -260,11 +270,21 @@ impl StuckMonitor {
     /// failing, which is long enough that a momentary stall on carpet or
     /// a motor's own lag never triggers it, and short enough that the
     /// robot does not grind.
-    pub const fn new(patience_ticks: u32, escape_ticks: u32, still_speed: f64) -> Self {
+    /// `escape` is `(reverse_speed, turn_rate)`. **Pick both from the
+    /// robot's own limits, not by feel.** A reverse faster than the robot
+    /// ever drives forward is a surprise waiting on a real floor, and a
+    /// turn rate above what the wheels can deliver just gets scaled away.
+    pub const fn new(
+        patience_ticks: u32,
+        escape_ticks: u32,
+        still_speed: f64,
+        escape: (f64, f64),
+    ) -> Self {
         StuckMonitor {
             patience_ticks,
             escape_ticks,
             still_speed,
+            escape,
             no_progress: 0,
             escaping: 0,
             attempts: 0,
@@ -345,16 +365,16 @@ impl StuckMonitor {
     }
 
     fn escape_speed(&self) -> f64 {
-        self.still_speed * 20.0
+        self.escape.0.abs()
     }
 
     /// Alternates with each consecutive attempt, so a failed escape is
     /// never repeated identically.
     fn escape_turn(&self) -> f64 {
         if self.attempts % 2 == 0 {
-            1.0
+            self.escape.1
         } else {
-            -1.0
+            -self.escape.1
         }
     }
 }
@@ -364,7 +384,7 @@ mod stuck_tests {
     use super::*;
 
     fn wedged() -> StuckMonitor {
-        StuckMonitor::new(3, 5, 0.01)
+        StuckMonitor::new(3, 5, 0.01, (0.2, 1.0))
     }
 
     #[test]

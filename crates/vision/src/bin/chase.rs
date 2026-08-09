@@ -402,7 +402,20 @@ fn main() -> Result<()> {
     // Patience and escape length from `MissionConfig`'s swept defaults,
     // converted from 50 Hz ticks to this loop's ~15 Hz: 0.5 s of trying
     // and failing, then 2.4 s of backing out.
-    let mut stuck = StuckMonitor::new(8, 36, 0.01);
+    // Escape magnitudes from the robot the CHIP believes in, because the
+    // chip is what converts this twist into duty. `SPEC` above is
+    // `SIM_BOT` and drives only the on-screen simulation.
+    //
+    // ⚠️ **A blind reverse, and untested on hardware.** 0.85 of top speed
+    // for 2.4 s backs the robot up roughly half a metre with nothing
+    // watching behind it — and on a bench that means cables. Before
+    // trusting this on a tethered robot, run it once with the motors
+    // powered down and confirm the twist appears on the wire.
+    let escape = (
+        RobotSpec::REAL_BOT.max_body_speed() * 0.85,
+        RobotSpec::REAL_BOT.max_turn_rate() / 3.0,
+    );
+    let mut stuck = StuckMonitor::new(8, 36, 0.01, escape);
     let mut was_escaping = false;
     for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);

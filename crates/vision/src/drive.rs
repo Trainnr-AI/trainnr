@@ -224,10 +224,30 @@ impl Wheels {
             }
         });
 
+        // Block for the first report before returning.
+        //
+        // Two jobs. It makes `latest` always `Some` afterwards, so a
+        // `None` from `feedback` means **disconnected** and nothing else —
+        // without this, a control loop that asked for feedback before the
+        // first line arrived would die at startup reporting that the board
+        // had stopped, which it never started.
+        //
+        // And it turns "wrong firmware flashed" into an error here, with a
+        // sentence saying so, instead of a puzzle three seconds into a run
+        // with the motors already live.
+        let first = reports.recv_timeout(Duration::from_secs(2)).map_err(|_| {
+            anyhow::anyhow!(
+                "opened {port_name} but no status line arrived in 2 s. Is \
+                 pico-odom flashed with `teleop`? The sweep and USB builds \
+                 report the same format, so check the duty column changes \
+                 when a twist is sent."
+            )
+        })?;
+
         Ok(Wheels {
             port,
             reports,
-            latest: None,
+            latest: Some(first),
             previous: None,
             line: String::new(),
         })
