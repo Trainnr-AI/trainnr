@@ -14,6 +14,14 @@ pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
 # cable, where GP0/GP1 are wired to nothing:
 #   tools/build-pico2.sh pico-odom usb
 usb = ["dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
+# Take motor commands FROM THE HOST instead of running the calibration
+# sweep. Implies `usb`, because a command channel needs a host on the
+# other end and GP0/GP1 are wired to nothing on a real board:
+#   tools/build-pico2.sh pico-odom teleop
+#
+# The sweep is not deleted — it is still how `max_wheel_speed` and
+# `motor_tau` get measured, and `wheel_radius` is not measured yet.
+teleop = ["usb"]
 
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
@@ -30,6 +38,12 @@ static_cell = { version = "2", optional = true }
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { path = "../../crates/quad-encoder" }
 sim-core = { path = "../../crates/sim-core", default-features = false }
+# The host<->chip vocabulary, shared rather than reinvented. `pico-odom`'s
+# STATUS line is still ad-hoc text (see the note in examples/odom_view.rs
+# about what that cost); its COMMAND channel is not, because `pico-robot`
+# already proved this parser on hardware and `Message::Twist` already
+# means exactly what a camera-driven controller wants to say.
+hil-protocol = { path = "../../crates/hil-protocol" }
 
 [build-dependencies]
 firmware-build-support = { path = "../build-support" }

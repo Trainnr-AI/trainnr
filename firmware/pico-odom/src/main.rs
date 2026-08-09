@@ -11,15 +11,33 @@
 //! Two encoders (left GP16/17, right GP18/19) feed the same tick-to-pose
 //! math the simulator uses, and the firmware reports x/y/heading.
 //!
-//! # Two transports, one odometry loop
+//! # Three builds, one odometry loop
 //!
 //! ```text
-//!   default          UART on GP0/GP1   → the rp2040js emulator
-//!   --features usb   USB CDC serial    → a REAL Pico on a USB cable
+//!   default             UART on GP0/GP1  → the rp2040js emulator
+//!   --features usb      USB CDC serial   → a REAL Pico on a USB cable
+//!   --features teleop   USB + commands   → the host drives the motors
 //! ```
 //!
 //! On a real board GP0/GP1 are bare header pins wired to nothing, so the
 //! UART build runs perfectly and reports into the void.
+//!
+//! The first two run a **calibration sweep**: a fixed 0→100% duty ramp
+//! that measured `max_wheel_speed`, `motor_tau` and the deadband. It is
+//! kept, not superseded — `wheel_radius` still needs it once wheels exist.
+//!
+//! `teleop` replaces the sweep with a **command channel**. The host sends
+//! `T v w` twists in `hil-protocol`'s vocabulary; the chip converts them
+//! through the same `DiffDrive::inverse` the simulator uses and drives the
+//! H-bridge — and stops it when the host goes quiet. See
+//! [`follow_host_forever`].
+//!
+//! ```text
+//!   camera ─▶ host control law ─▶ T v w ─▶ chip ─▶ TB6612 ─▶ motors
+//!                                            │
+//!                                            └── CommandWatchdog:
+//!                                                silence ⇒ coast, STBY low
+//! ```
 //!
 //! # What this can and cannot prove on real hardware
 //!
@@ -54,9 +72,13 @@ use embassy_rp::peripherals::{PWM_SLICE3, PWM_SLICE5};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
+#[cfg(feature = "teleop")]
+use embassy_time::Duration;
 use panic_halt as _;
 use quad_encoder::QuadratureDecoder;
 use sim_core::{Odometry, Pose, RobotSpec};
+#[cfg(feature = "teleop")]
+use sim_core::{BodyTwist, CommandWatchdog, DUTY_FULL};
 
 /// Encoder sampling period. 100 µs = 10 kHz (see math-09 on aliasing).
 const POLL_US: u64 = 100;
@@ -100,7 +122,9 @@ const PWM_TOP: u16 = 5000;
 /// It **ends at zero and parks**, rather than looping. A bench motor on
 /// four thin encoder wires should not run unattended, and a firmware whose
 /// natural end state is "stopped" cannot be left running by accident.
+#[cfg(not(feature = "teleop"))]
 const SWEEP: [u16; 6] = [0, 25, 50, 75, 100, 0];
+#[cfg(not(feature = "teleop"))]
 const STEP_SECS: u64 = 3;
 
 /// The duty the sweep is currently commanding, so the report line can say
@@ -155,11 +179,38 @@ static TOTAL_TICKS: AtomicU32 = AtomicU32::new(0);
 /// firmware cannot tell which, so it stops driving and says why.
 static STALLED: AtomicBool = AtomicBool::new(false);
 
+/// Stop the motors if the host goes quiet for this long.
+///
+/// The same 200 ms `pico-robot` uses, and the same reasoning: ten missed
+/// ticks at 50 Hz, and about 9 cm of travel at top speed — well beyond any
+/// real scheduling hiccup, well short of a table edge.
+///
+/// ⚠️ The 9 cm assumed `max_wheel_speed = 30.0`. The bench measured
+/// **7.77 rad/s**, so this robot covers roughly **2 cm** in a lost 200 ms.
+/// The number is left alone: it was chosen as a bound on *jitter*, which
+/// has not changed, and it is now four times more conservative in
+/// distance than it was designed to be.
+#[cfg(feature = "teleop")]
+const COMMAND_TIMEOUT_MS: u64 = 200;
+
+/// How long a read waits before coming up for air to check the watchdog.
+/// Shorter than [`COMMAND_TIMEOUT_MS`], so staleness is acted on within
+/// one poll of becoming true.
+#[cfg(feature = "teleop")]
+const POLL: Duration = Duration::from_millis(50);
+
+/// Milliseconds since boot — the unit [`CommandWatchdog`] speaks.
+#[cfg(feature = "teleop")]
+fn now_ms() -> u64 {
+    Instant::now().as_millis()
+}
+
 /// Duty above which the motor **must** move, or something is wrong.
 ///
 /// The measured deadband is ~4.6% (docs/07, 2026-08-09), so 15% is clear
 /// of it with margin — below that, "not moving" is legitimate physics
 /// rather than a fault.
+#[cfg(not(feature = "teleop"))]
 const MUST_MOVE_ABOVE: u16 = 15;
 
 /// Where a status line goes. The odometry loop does not care.
@@ -219,8 +270,9 @@ async fn heartbeat(mut led: Output<'static>) {
 /// last entry in [`SWEEP`] is `0` and `STBY` drops after it — belt and
 /// braces, because a zero duty with the driver still enabled is a stopped
 /// motor that can still be commanded, and this one should not be.
+#[cfg(not(feature = "teleop"))]
 #[embassy_executor::task]
-async fn drive_sweep(mut a: Channel, mut b: Channel, mut stby: Output<'static>) {
+async fn drive_sweep(mut motors: Motors) {
     // Nothing moves until a host is listening. See `HOST_WATCHING`.
     while !HOST_WATCHING.load(Ordering::Relaxed) {
         Timer::after_millis(100).await;
@@ -228,17 +280,17 @@ async fn drive_sweep(mut a: Channel, mut b: Channel, mut stby: Output<'static>) 
 
     let mut cfg = PwmConfig::default();
     cfg.top = PWM_TOP;
-    a.arm(&mut cfg);
-    b.arm(&mut cfg);
+    motors.left.arm(&mut cfg);
+    motors.right.arm(&mut cfg);
 
     // Enable only after BOTH channels read zero, so the first thing the
     // driver ever sees is "stopped" rather than whatever the registers
     // happened to hold. `STBY` gates all four switches of both bridges.
-    stby.set_high();
+    motors.standby.set_high();
 
     for percent in SWEEP {
-        a.set_duty(&mut cfg, percent);
-        b.set_duty(&mut cfg, percent);
+        motors.left.set_duty(&mut cfg, percent);
+        motors.right.set_duty(&mut cfg, percent);
         DUTY_PERCENT.store(percent, Ordering::Relaxed);
 
         // Commanded versus achieved. The two numbers were always both in
@@ -254,10 +306,10 @@ async fn drive_sweep(mut a: Channel, mut b: Channel, mut stby: Output<'static>) 
         }
     }
 
-    a.set_duty(&mut cfg, 0);
-    b.set_duty(&mut cfg, 0);
+    motors.left.set_duty(&mut cfg, 0);
+    motors.right.set_duty(&mut cfg, 0);
     DUTY_PERCENT.store(0, Ordering::Relaxed);
-    stby.set_low();
+    motors.standby.set_low();
 
     // Park. The odometry task keeps reporting, so the final counts stay
     // readable after the motor has stopped.
@@ -271,13 +323,13 @@ async fn drive_sweep(mut a: Channel, mut b: Channel, mut stby: Output<'static>) 
 /// Deliberately a plain `async fn` rather than an `#[embassy_executor::task]`:
 /// tasks cannot be generic, and being generic over [`Report`] is what
 /// keeps this loop from being written twice.
-async fn odometry_forever(
-    la: Input<'static>,
-    lb: Input<'static>,
-    ra: Input<'static>,
-    rb: Input<'static>,
-    out: &mut impl Report,
-) -> ! {
+async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
+    let Encoders {
+        left_a: la,
+        left_b: lb,
+        right_a: ra,
+        right_b: rb,
+    } = pins;
     let mut left = QuadratureDecoder::new(la.is_high(), lb.is_high());
     let mut right = QuadratureDecoder::new(ra.is_high(), rb.is_high());
 
@@ -353,6 +405,16 @@ async fn odometry_forever(
     }
 }
 
+/// The four encoder pins, named so left and right cannot be swapped by
+/// argument order. They were four positional `Input`s in a row, which is
+/// exactly the shape that lets `ra` and `lb` trade places silently.
+struct Encoders {
+    left_a: Input<'static>,
+    left_b: Input<'static>,
+    right_a: Input<'static>,
+    right_b: Input<'static>,
+}
+
 /// One TB6612 channel: speed, and the two pins that pick direction.
 ///
 /// `STBY` is deliberately NOT in here — it is shared by both channels, and
@@ -366,6 +428,7 @@ struct Channel {
 impl Channel {
     /// Forward, stopped. Direction is fixed for the sweep — one variable
     /// at a time, and reverse is a sign rather than a separate experiment.
+    #[cfg(not(feature = "teleop"))]
     fn arm(&mut self, cfg: &mut PwmConfig) {
         self.in1.set_high();
         self.in2.set_low();
@@ -373,10 +436,179 @@ impl Channel {
         self.pwm.set_config(cfg);
     }
 
+    #[cfg(not(feature = "teleop"))]
     fn set_duty(&mut self, cfg: &mut PwmConfig, percent: u16) {
         cfg.compare_a = PWM_TOP / 100 * percent;
         self.pwm.set_config(cfg);
     }
+
+    /// Drive at a signed command in `±DUTY_FULL` units — the scale
+    /// `RobotSpec::duty` produces and `hil-protocol` carries.
+    ///
+    /// Sign picks the direction pins; magnitude picks the duty. **Zero
+    /// coasts** (both inputs low) rather than braking (both high): a
+    /// stopped command should let the wheels turn freely, so a robot that
+    /// has lost its host can be pushed off whatever it is against.
+    ///
+    /// ⚠️ **The measured ~4.3% deadband is not compensated here.** A
+    /// command under about 43 units produces no motion at all, silently.
+    /// That is deliberate and it is the same decision `sim_core::Motor`
+    /// records: the deadband gets modelled once, together, when
+    /// `RobotSpec::REAL_BOT` is finally written — not patched into one
+    /// call site where the simulator would then disagree with the robot.
+    #[cfg(feature = "teleop")]
+    fn set_signed(&mut self, cfg: &mut PwmConfig, duty: i32) {
+        let magnitude = duty.unsigned_abs().min(DUTY_FULL.unsigned_abs());
+        match duty.signum() {
+            1 => {
+                self.in1.set_high();
+                self.in2.set_low();
+            }
+            -1 => {
+                self.in1.set_low();
+                self.in2.set_high();
+            }
+            _ => {
+                self.in1.set_low();
+                self.in2.set_low();
+            }
+        }
+        // u32 throughout: `magnitude * PWM_TOP` reaches 5,000,000 and
+        // would overflow the u16 the register finally takes.
+        cfg.compare_a = (magnitude * u32::from(PWM_TOP) / DUTY_FULL.unsigned_abs()) as u16;
+        self.pwm.set_config(cfg);
+    }
+}
+
+/// The TB6612 as one object: both channels and the enable they share.
+///
+/// `STBY` is in here and NOT in [`Channel`] because it gates both bridges
+/// at once — a per-channel copy would suggest each could be disabled
+/// alone, which the chip does not offer.
+struct Motors {
+    left: Channel,
+    right: Channel,
+    standby: Output<'static>,
+}
+
+/// Drive the motors from `T v w` twists sent by the host, and **stop them
+/// when the host goes quiet**.
+///
+/// This is the failsafe `firmware/pico-robot` describes and could not
+/// perform: its own comment reads *"⚠️ AT H4 THIS IS WHERE THE H-BRIDGE
+/// GETS WRITTEN TO ZERO"*, because on that firmware the host owned the
+/// motors and the chip owned nothing physical. Here the chip owns the
+/// H-bridge, so here the marker gets filled in.
+///
+/// ```text
+///   host                              chip
+///   ────                              ────
+///   T 0.20 0.00   ──── USB CDC ────▶  DiffDrive::inverse   twist → wheels
+///                                     RobotSpec::fit_wheels  clamp to real
+///                                     RobotSpec::duty        rad/s → ±1000
+///                                     CommandWatchdog::gate  ← the failsafe
+///                                     TB6612 AIN/BIN + PWM
+///   (silence)     ─────────────────▶  zero duty, STBY low, wheels coast
+/// ```
+///
+/// # Two layers of stop, on purpose
+///
+/// Zeroing the duty is a *software* stop: the bridge is still enabled and
+/// would obey the next value written to it. Dropping `STBY` is a
+/// *hardware* stop — it disables all four switches of both bridges at
+/// once, and no PWM register can undo it. A failsafe that shares its
+/// failure modes with the thing it is guarding is not one, so both fire.
+///
+/// # Why the watchdog is not optional here
+///
+/// It has existed in `sim-core` since Stage 0 and has never guarded
+/// anything that could move. A host that crashes mid-command leaves the
+/// last twist latched in the H-bridge, and an H-bridge holds its output
+/// indefinitely — the robot does not coast to a stop, it drives into the
+/// wall at whatever it was last told. [`COMMAND_TIMEOUT_MS`] is the whole
+/// distance between those two outcomes.
+#[cfg(feature = "teleop")]
+async fn follow_host_forever(
+    rx: &mut impl CommandSource,
+    mut motors: Motors,
+    spec: RobotSpec,
+) -> ! {
+    use hil_protocol::{LineReader, Message};
+
+    let mut cfg = PwmConfig::default();
+    cfg.top = PWM_TOP;
+    motors.left.set_signed(&mut cfg, 0);
+    motors.right.set_signed(&mut cfg, 0);
+
+    let mut watchdog = CommandWatchdog::new(COMMAND_TIMEOUT_MS);
+    let mut reader: LineReader<64> = LineReader::new();
+    let mut rx_bytes = [0u8; 64];
+    // What the host last asked for, before the watchdog has its say.
+    let mut wanted = (0i32, 0i32);
+    let mut enabled = false;
+
+    loop {
+        // Bounded, so staleness is noticed within one poll of becoming
+        // true rather than whenever the next byte happens to arrive. A
+        // watchdog that only runs when the thing it watches is alive is
+        // not a watchdog.
+        let n = rx.recv(&mut rx_bytes, POLL).await;
+        for &byte in &rx_bytes[..n] {
+            let Some(line) = reader.push(byte) else {
+                continue;
+            };
+            // Anything that is not a twist is ignored rather than
+            // rejected — including this firmware's OWN status lines, so
+            // looping the port back on itself cannot command the motors.
+            if let Ok(Message::Twist { v, w }) = Message::parse(line) {
+                let wheels = spec.fit_wheels(spec.drive().inverse(BodyTwist {
+                    forward_speed: v,
+                    turn_rate: w,
+                }));
+                wanted = (spec.duty(wheels.left), spec.duty(wheels.right));
+                // Fed on a VALID twist only. A host dribbling malformed
+                // bytes is a host that has lost its mind, and must not
+                // count as one that is still in control.
+                watchdog.feed(now_ms());
+            }
+        }
+
+        let (left, right) = watchdog.gate(now_ms(), wanted);
+        let should_run = left != 0 || right != 0;
+
+        // `STBY` is touched only on a transition. It is a GPIO write
+        // either way, but reporting it every 50 ms would bury the one
+        // event that matters in a thousand that do not.
+        if should_run != enabled {
+            motors.standby.set_level(Level::from(should_run));
+            enabled = should_run;
+            STALLED.store(false, Ordering::Relaxed);
+        }
+        motors.left.set_signed(&mut cfg, left);
+        motors.right.set_signed(&mut cfg, right);
+
+        // Reported as a magnitude percentage, which is all the existing
+        // status line has room to say. The sign is visible in the encoder
+        // counts either way.
+        DUTY_PERCENT.store(
+            (left.unsigned_abs().max(right.unsigned_abs()) * 100 / DUTY_FULL.unsigned_abs()) as u16,
+            Ordering::Relaxed,
+        );
+    }
+}
+
+/// The read half of the host link, mirroring [`Report`] for the other
+/// direction.
+///
+/// Separate from `Report` because the two halves have different owners
+/// once `CdcAcmClass` is split, and because the deadline belongs here:
+/// `pico-robot` measured that wrapping a blocking read in `with_timeout`
+/// from outside cost the emulator 95% of its throughput.
+#[cfg(feature = "teleop")]
+trait CommandSource {
+    /// Fill `buf` with whatever has arrived, waiting at most `poll`.
+    /// Returns how many bytes, possibly 0.
+    async fn recv(&mut self, buf: &mut [u8], poll: Duration) -> usize;
 }
 
 /// The TB6612 side, bundled so `shared_setup`'s signature stays readable.
@@ -405,12 +637,7 @@ fn shared_setup(
     rb: Peri<'static, PIN_19>,
     pin_led: Peri<'static, PIN_25>,
     motor: MotorPins,
-) -> (
-    Input<'static>,
-    Input<'static>,
-    Input<'static>,
-    Input<'static>,
-) {
+) -> (Encoders, Motors) {
     // ⚠️ `Pull::Up` is a MEASURED result, not a preference. Do not "tidy"
     // it back to `Pull::Down`.
     //
@@ -436,26 +663,31 @@ fn shared_setup(
     // port appearing.
     spawner.spawn(heartbeat(Output::new(pin_led, Level::Low)).unwrap());
 
-    // The driver starts DISABLED and at zero duty. Every output below is
-    // created in its safe state before `drive_sweep` enables anything.
-    spawner.spawn(
-        drive_sweep(
-            Channel {
-                pwm: Pwm::new_output_a(motor.slice_a, motor.pwma, PwmConfig::default()),
-                in1: Output::new(motor.ain1, Level::Low),
-                in2: Output::new(motor.ain2, Level::Low),
-            },
-            Channel {
-                pwm: Pwm::new_output_a(motor.slice_b, motor.pwmb, PwmConfig::default()),
-                in1: Output::new(motor.bin1, Level::Low),
-                in2: Output::new(motor.bin2, Level::Low),
-            },
-            Output::new(motor.stby, Level::Low),
-        )
-        .unwrap(),
-    );
+    // The driver is built DISABLED and at zero duty, and handed back
+    // rather than committed to a job. Who drives it is a build-time
+    // choice — the calibration sweep, or the host — and every output here
+    // is created in its safe state either way.
+    let motors = Motors {
+        left: Channel {
+            pwm: Pwm::new_output_a(motor.slice_a, motor.pwma, PwmConfig::default()),
+            in1: Output::new(motor.ain1, Level::Low),
+            in2: Output::new(motor.ain2, Level::Low),
+        },
+        right: Channel {
+            pwm: Pwm::new_output_a(motor.slice_b, motor.pwmb, PwmConfig::default()),
+            in1: Output::new(motor.bin1, Level::Low),
+            in2: Output::new(motor.bin2, Level::Low),
+        },
+        standby: Output::new(motor.stby, Level::Low),
+    };
 
-    (la, lb, ra, rb)
+    let encoders = Encoders {
+        left_a: la,
+        left_b: lb,
+        right_a: ra,
+        right_b: rb,
+    };
+    (encoders, motors)
 }
 
 // ---------------------------------------------------------------------
@@ -480,7 +712,7 @@ mod transport {
     }
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        let (la, lb, ra, rb) = shared_setup(
+        let (encoders, motors) = shared_setup(
             spawner,
             p.PIN_16,
             p.PIN_17,
@@ -499,11 +731,14 @@ mod transport {
                 bin2: p.PIN_12,
             },
         );
+        // `teleop` implies `usb`, so this transport is never built with it
+        // — the sweep is the only thing that can own the motors here.
+        spawner.spawn(drive_sweep(motors).unwrap());
 
         let uart = Uart::new_blocking(p.UART0, p.PIN_0, p.PIN_1, UartConfig::default());
         let (tx, _rx) = uart.split();
 
-        odometry_forever(la, lb, ra, rb, &mut UartReport(tx)).await
+        odometry_forever(encoders, &mut UartReport(tx)).await
     }
 }
 
@@ -513,12 +748,17 @@ mod transport {
 #[cfg(feature = "usb")]
 mod transport {
     use super::*;
+    #[cfg(not(feature = "teleop"))]
     use embassy_futures::join::join;
     use embassy_rp::bind_interrupts;
     use embassy_rp::peripherals::USB;
     use embassy_rp::usb::{Driver, InterruptHandler};
     use embassy_time::{with_timeout, Duration};
-    use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+    #[cfg(feature = "teleop")]
+    use embassy_futures::join::join3;
+    #[cfg(feature = "teleop")]
+    use embassy_usb::class::cdc_acm::Receiver;
+    use embassy_usb::class::cdc_acm::{CdcAcmClass, Sender, State};
     use embassy_usb::driver::Driver as UsbDriver;
     use embassy_usb::{Builder, Config};
     use static_cell::StaticCell;
@@ -537,7 +777,33 @@ mod transport {
     /// on a host that has genuinely stopped reading.
     const REPORT_TIMEOUT_MS: u64 = 5;
 
-    struct UsbReport<'d, D: UsbDriver<'d>>(CdcAcmClass<'d, D>);
+    struct UsbReport<'d, D: UsbDriver<'d>>(Sender<'d, D>);
+
+    /// The read half. Its deadline lives inside `recv` rather than being
+    /// wrapped around it by the caller — see [`CommandSource`].
+    ///
+    /// A read that times out is **not** an error and must not zero the
+    /// command by itself: silence for 50 ms is normal, silence for
+    /// [`COMMAND_TIMEOUT_MS`] is not, and only the watchdog is allowed to
+    /// tell those apart.
+    #[cfg(feature = "teleop")]
+    struct UsbCommands<'d, D: UsbDriver<'d>>(Receiver<'d, D>);
+
+    #[cfg(feature = "teleop")]
+    impl<'d, D: UsbDriver<'d>> CommandSource for UsbCommands<'d, D> {
+        async fn recv(&mut self, buf: &mut [u8], poll: Duration) -> usize {
+            // Cancelling this read IS proven safe: `pico-robot` justifies
+            // it from embassy-rp's source — the endpoint read registers a
+            // waker and tests a bit, with every side effect after the
+            // await. That argument is why the timeout can sit here at all.
+            match with_timeout(poll, self.0.read_packet(buf)).await {
+                Ok(Ok(n)) => n,
+                // Timed out, or the host vanished mid-packet. Both are
+                // "no bytes", and the watchdog decides what that means.
+                _ => 0,
+            }
+        }
+    }
 
     impl<'d, D: UsbDriver<'d>> Report for UsbReport<'d, D> {
         /// Skipped entirely when no terminal has opened the port, and
@@ -568,7 +834,7 @@ mod transport {
     }
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
-        let (la, lb, ra, rb) = shared_setup(
+        let (encoders, motors) = shared_setup(
             spawner,
             p.PIN_16,
             p.PIN_17,
@@ -615,14 +881,34 @@ mod transport {
         );
         let class = CdcAcmClass::new(&mut builder, state, MAX_PACKET as u16);
         let mut usb = builder.build();
-        let mut out = UsbReport(class);
+        let (tx, _rx) = class.split();
+        let mut out = UsbReport(tx);
 
         // Sampling starts immediately rather than waiting for a host: the
         // decoders' job is to miss nothing, and gating them on a terminal
         // being open would silently lose every tick between power-up and
         // the first `screen`. `send` already declines to write while
         // `dtr()` is low.
-        join(usb.run(), odometry_forever(la, lb, ra, rb, &mut out)).await;
+        #[cfg(not(feature = "teleop"))]
+        {
+            spawner.spawn(drive_sweep(motors).unwrap());
+            join(usb.run(), odometry_forever(encoders, &mut out)).await;
+        }
+
+        // Three futures on one stack: the USB stack, the sampler, and the
+        // command loop. `follow_host_forever` is a plain `async fn` for
+        // the same reason `odometry_forever` is — an embassy task cannot
+        // be generic, and both are generic over their transport.
+        #[cfg(feature = "teleop")]
+        {
+            let mut commands = UsbCommands(_rx);
+            join3(
+                usb.run(),
+                odometry_forever(encoders, &mut out),
+                follow_host_forever(&mut commands, motors, RobotSpec::REAL_BOT),
+            )
+            .await;
+        }
 
         // `join` over a `!` future never returns, but the compiler wants a
         // value for the `-> !` signature.

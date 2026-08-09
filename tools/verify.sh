@@ -46,6 +46,10 @@ done
 # below runs tools/build-robot.sh, which builds it.)
 step "firmware pico-encoder (RP2350, USB)" "tools/build-pico2.sh pico-encoder usb"
 step "firmware pico-odom (RP2350, USB)" "tools/build-pico2.sh pico-odom usb"
+# `teleop` replaces the calibration sweep with a host command channel, so
+# it compiles a different half of the file — the watchdog, the signed duty
+# path and the H-bridge failsafe. Nothing above reaches any of it.
+step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleop"
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.

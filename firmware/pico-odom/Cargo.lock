@@ -701,6 +701,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hil-protocol"
+version = "0.1.0"
+dependencies = [
+ "sim-core",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -973,6 +980,7 @@ dependencies = [
  "embassy-usb",
  "firmware-build-support",
  "heapless 0.9.3",
+ "hil-protocol",
  "panic-halt",
  "quad-encoder",
  "sim-core",
