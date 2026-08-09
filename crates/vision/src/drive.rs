@@ -60,12 +60,31 @@ use std::time::{Duration, Instant};
 /// reads**, so the achieved twist computed here and the pose computed on
 /// the chip cannot disagree about geometry.
 ///
-/// ⚠️ Still `SIM_BOT` placeholders. `ticks_per_revolution` is `1024.0`
-/// where the bench measured **4290**, so every achieved speed below reads
-/// **4.2x too fast**; `max_wheel_speed` is `30.0` against a measured
-/// **7.77**, so every command is 3.9x too weak. Both errors are *visible*
-/// in the commanded-vs-achieved plot rather than hidden by it, which is
-/// the argument for computing achieved at all.
+/// ⚠️ Still `SIM_BOT` placeholders, and **they hide each other.**
+///
+/// The command path divides by `max_wheel_speed` (30.0, measured 7.77);
+/// the feedback path divides by `ticks_per_revolution` (1024, measured
+/// 4290). Both are wrong in opposite directions by nearly the same
+/// factor, so at v = 0.27 through the motor's measured response:
+///
+/// ```text
+///   today             (1024, 30.0)   achieved 0.26   0.97x  "perfect"
+///   fix max_wheel_speed only         achieved 1.13   4.19x  looks broken
+///   fix ticks_per_rev only           achieved 0.06   0.23x  looks broken
+///   fix BOTH          (4290, 7.77)   achieved 0.27   1.00x  correct
+/// ```
+///
+/// **So [`log`]'s commanded-vs-achieved plot cannot detect this class of
+/// error.** Both sides read these same constants, which makes a
+/// correlated mistake structurally invisible to the comparison — the
+/// robot is self-consistent and unanchored, doing what it is told in
+/// units that are not metres. Only an external measurement, a ruler
+/// against real travel, can anchor it.
+///
+/// That is a limit of the best instrument this system has, and it is
+/// written here rather than in a commit message because the plot looks
+/// most trustworthy exactly when it is least informative. Fix the two
+/// numbers together or the robot will appear 4x broken.
 const SPEC: RobotSpec = RobotSpec::REAL_BOT;
 
 /// One status line from `pico-odom`.
