@@ -44,11 +44,13 @@
 #![forbid(unsafe_code)]
 
 use core::fmt::Write as _;
-use core::sync::atomic::{AtomicU16, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::peripherals::PWM_SLICE3;
-use embassy_rp::peripherals::{PIN_16, PIN_17, PIN_18, PIN_19, PIN_25, PIN_6, PIN_7, PIN_8, PIN_9};
+use embassy_rp::peripherals::{
+    PIN_10, PIN_11, PIN_12, PIN_16, PIN_17, PIN_18, PIN_19, PIN_25, PIN_6, PIN_7, PIN_8, PIN_9,
+};
+use embassy_rp::peripherals::{PWM_SLICE3, PWM_SLICE5};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
@@ -85,6 +87,54 @@ const STEP_SECS: u64 = 3;
 /// — plain load and store like this are fine, which is why the emulator
 /// build still compiles.
 static DUTY_PERCENT: AtomicU16 = AtomicU16::new(0);
+
+/// Set once a host has actually opened the serial port.
+///
+/// [`drive_sweep`] waits for this before it enables anything, so **the
+/// motor cannot move unless someone is watching.** Plugging the board into
+/// a charger, or into a laptop with no terminal open, leaves it inert.
+///
+/// That started as a way to make the run catchable — an 18-second sweep
+/// that begins at power-up is over before you can start reading it — but
+/// the safety property is the better reason to keep it. A bench motor that
+/// spins the instant it receives power is one loose battery lead away from
+/// a surprise.
+static HOST_WATCHING: AtomicBool = AtomicBool::new(false);
+
+/// Total distance the encoders have seen, published by the odometry loop
+/// so [`drive_sweep`] can check whether the robot did what it was told.
+///
+/// **Plain `store`, never `fetch_add`.** RP2040 is thumbv6m, which has no
+/// atomic read-modify-write — the emulator build would not compile. The
+/// odometry task already holds the running totals, so it publishes them
+/// rather than accumulating here.
+static TOTAL_TICKS: AtomicU32 = AtomicU32::new(0);
+
+/// Set when the sweep commanded motion and the encoders disagreed.
+///
+/// # Why this exists
+///
+/// On 2026-08-09 the battery pack's switch was off. The firmware
+/// commanded a full 0→100% sweep, the encoders read zero throughout, and
+/// **nothing anywhere said so** — the run looked exactly like a successful
+/// one until a human noticed the motors were silent.
+///
+/// That is the same failure this repo keeps finding in other clothes: two
+/// facts held in the same program that nobody compared. The fix is to
+/// compare them.
+///
+/// It is also a *safety* fix rather than a diagnostic one. A motor that is
+/// commanded and not turning is either disconnected — harmless — or
+/// **stalled**, drawing near its ~500 mA stall current and heating. The
+/// firmware cannot tell which, so it stops driving and says why.
+static STALLED: AtomicBool = AtomicBool::new(false);
+
+/// Duty above which the motor **must** move, or something is wrong.
+///
+/// The measured deadband is ~4.6% (docs/07, 2026-08-09), so 15% is clear
+/// of it with margin — below that, "not moving" is legitimate physics
+/// rather than a fault.
+const MUST_MOVE_ABOVE: u16 = 15;
 
 /// Where a status line goes. The odometry loop does not care.
 ///
@@ -144,36 +194,42 @@ async fn heartbeat(mut led: Output<'static>) {
 /// braces, because a zero duty with the driver still enabled is a stopped
 /// motor that can still be commanded, and this one should not be.
 #[embassy_executor::task]
-async fn drive_sweep(
-    mut pwm: Pwm<'static>,
-    mut ain1: Output<'static>,
-    mut ain2: Output<'static>,
-    mut stby: Output<'static>,
-) {
-    // Forward. Direction is fixed for this sweep — one variable at a time,
-    // and reverse is a sign, not a separate experiment.
-    ain1.set_high();
-    ain2.set_low();
+async fn drive_sweep(mut a: Channel, mut b: Channel, mut stby: Output<'static>) {
+    // Nothing moves until a host is listening. See `HOST_WATCHING`.
+    while !HOST_WATCHING.load(Ordering::Relaxed) {
+        Timer::after_millis(100).await;
+    }
 
     let mut cfg = PwmConfig::default();
     cfg.top = PWM_TOP;
-    cfg.compare_a = 0;
-    pwm.set_config(&cfg);
+    a.arm(&mut cfg);
+    b.arm(&mut cfg);
 
-    // Enable only after the duty is known-zero, so the first thing the
-    // driver ever sees is "stopped" rather than whatever the register
-    // happened to hold.
+    // Enable only after BOTH channels read zero, so the first thing the
+    // driver ever sees is "stopped" rather than whatever the registers
+    // happened to hold. `STBY` gates all four switches of both bridges.
     stby.set_high();
 
     for percent in SWEEP {
-        cfg.compare_a = PWM_TOP / 100 * percent;
-        pwm.set_config(&cfg);
+        a.set_duty(&mut cfg, percent);
+        b.set_duty(&mut cfg, percent);
         DUTY_PERCENT.store(percent, Ordering::Relaxed);
+
+        // Commanded versus achieved. The two numbers were always both in
+        // this program; nothing compared them until a dead battery pack
+        // produced a textbook-looking run with zero motion in it.
+        let before = TOTAL_TICKS.load(Ordering::Relaxed);
         Timer::after_secs(STEP_SECS).await;
+        let moved = TOTAL_TICKS.load(Ordering::Relaxed) != before;
+
+        if percent > MUST_MOVE_ABOVE && !moved {
+            STALLED.store(true, Ordering::Relaxed);
+            break; // fall through to the shutdown below
+        }
     }
 
-    cfg.compare_a = 0;
-    pwm.set_config(&cfg);
+    a.set_duty(&mut cfg, 0);
+    b.set_duty(&mut cfg, 0);
     DUTY_PERCENT.store(0, Ordering::Relaxed);
     stby.set_low();
 
@@ -230,17 +286,29 @@ async fn odometry_forever(
             last_r = right.count;
             odom.update(dl as i64, dr as i64);
 
+            // Publish for the stall check. Sum of magnitudes, so motion in
+            // either direction on either wheel counts as "it moved".
+            TOTAL_TICKS.store(
+                left.count.unsigned_abs() + right.count.unsigned_abs(),
+                Ordering::Relaxed,
+            );
+
             let p = odom.pose;
             let _ = write!(
                 line,
-                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}  duty={}%\r\n",
+                "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  err={}  duty={}%{}\r\n",
                 p.x,
                 p.y,
                 p.heading,
                 left.count,
                 right.count,
                 left.errors + right.errors,
-                DUTY_PERCENT.load(Ordering::Relaxed)
+                DUTY_PERCENT.load(Ordering::Relaxed),
+                if STALLED.load(Ordering::Relaxed) {
+                    "  *** STALLED: commanded but not moving — check power ***"
+                } else {
+                    ""
+                }
             );
             out.send(line.as_bytes()).await;
             line.clear();
@@ -251,17 +319,47 @@ async fn odometry_forever(
     }
 }
 
+/// One TB6612 channel: speed, and the two pins that pick direction.
+///
+/// `STBY` is deliberately NOT in here — it is shared by both channels, and
+/// putting it in a per-channel struct would suggest otherwise.
+struct Channel {
+    pwm: Pwm<'static>,
+    in1: Output<'static>,
+    in2: Output<'static>,
+}
+
+impl Channel {
+    /// Forward, stopped. Direction is fixed for the sweep — one variable
+    /// at a time, and reverse is a sign rather than a separate experiment.
+    fn arm(&mut self, cfg: &mut PwmConfig) {
+        self.in1.set_high();
+        self.in2.set_low();
+        cfg.compare_a = 0;
+        self.pwm.set_config(cfg);
+    }
+
+    fn set_duty(&mut self, cfg: &mut PwmConfig, percent: u16) {
+        cfg.compare_a = PWM_TOP / 100 * percent;
+        self.pwm.set_config(cfg);
+    }
+}
+
 /// The TB6612 side, bundled so `shared_setup`'s signature stays readable.
 ///
 /// GP6 is PWM slice 3 channel A — on RP2040/RP2350 a GPIO's slice is
 /// `n / 2` and its channel is A for even `n`, which is why the pin and the
 /// slice cannot be chosen independently.
 struct MotorPins {
-    slice: Peri<'static, PWM_SLICE3>,
-    pwm: Peri<'static, PIN_6>,
+    slice_a: Peri<'static, PWM_SLICE3>,
+    pwma: Peri<'static, PIN_6>,
     ain1: Peri<'static, PIN_7>,
     ain2: Peri<'static, PIN_8>,
     stby: Peri<'static, PIN_9>,
+    slice_b: Peri<'static, PWM_SLICE5>,
+    pwmb: Peri<'static, PIN_10>,
+    bin1: Peri<'static, PIN_11>,
+    bin2: Peri<'static, PIN_12>,
 }
 
 /// The four encoder pins and the LED, identical whichever transport is built.
@@ -308,9 +406,16 @@ fn shared_setup(
     // created in its safe state before `drive_sweep` enables anything.
     spawner.spawn(
         drive_sweep(
-            Pwm::new_output_a(motor.slice, motor.pwm, PwmConfig::default()),
-            Output::new(motor.ain1, Level::Low),
-            Output::new(motor.ain2, Level::Low),
+            Channel {
+                pwm: Pwm::new_output_a(motor.slice_a, motor.pwma, PwmConfig::default()),
+                in1: Output::new(motor.ain1, Level::Low),
+                in2: Output::new(motor.ain2, Level::Low),
+            },
+            Channel {
+                pwm: Pwm::new_output_a(motor.slice_b, motor.pwmb, PwmConfig::default()),
+                in1: Output::new(motor.bin1, Level::Low),
+                in2: Output::new(motor.bin2, Level::Low),
+            },
             Output::new(motor.stby, Level::Low),
         )
         .unwrap(),
@@ -334,6 +439,8 @@ mod transport {
         /// into the hardware FIFO at 115200 baud with nothing on the other
         /// end to apply back-pressure. The emulator is the only consumer.
         async fn send(&mut self, bytes: &[u8]) {
+            // The emulator is always listening, so the gate opens at once.
+            HOST_WATCHING.store(true, Ordering::Relaxed);
             let _ = self.0.blocking_write(bytes);
         }
     }
@@ -347,11 +454,15 @@ mod transport {
             p.PIN_19,
             p.PIN_25,
             MotorPins {
-                slice: p.PWM_SLICE3,
-                pwm: p.PIN_6,
+                slice_a: p.PWM_SLICE3,
+                pwma: p.PIN_6,
                 ain1: p.PIN_7,
                 ain2: p.PIN_8,
                 stby: p.PIN_9,
+                slice_b: p.PWM_SLICE5,
+                pwmb: p.PIN_10,
+                bin1: p.PIN_11,
+                bin2: p.PIN_12,
             },
         );
 
@@ -410,6 +521,7 @@ mod transport {
             if !self.0.dtr() {
                 return;
             }
+            HOST_WATCHING.store(true, Ordering::Relaxed);
             let write_all = async {
                 for chunk in bytes.chunks(MAX_PACKET) {
                     if self.0.write_packet(chunk).await.is_err() {
@@ -430,11 +542,15 @@ mod transport {
             p.PIN_19,
             p.PIN_25,
             MotorPins {
-                slice: p.PWM_SLICE3,
-                pwm: p.PIN_6,
+                slice_a: p.PWM_SLICE3,
+                pwma: p.PIN_6,
                 ain1: p.PIN_7,
                 ain2: p.PIN_8,
                 stby: p.PIN_9,
+                slice_b: p.PWM_SLICE5,
+                pwmb: p.PIN_10,
+                bin1: p.PIN_11,
+                bin2: p.PIN_12,
             },
         );
 

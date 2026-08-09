@@ -157,6 +157,39 @@ impl RobotSpec {
     /// including why bulk-counting revolutions gave an answer 45% too high
     /// while looking entirely plausible.
     ///
+    /// And `max_wheel_speed`, measured 2026-08-09 by driving the motor
+    /// from the TB6612 on four AA cells and counting ticks per second:
+    ///
+    /// ```text
+    ///     duty    ticks/s   output rev/s   RPM
+    ///      25%      1128       0.263       15.8
+    ///      50%      2522       0.588       35.3
+    ///      75%      3906       0.910       54.6
+    ///     100%      5302       1.236       74.2
+    ///
+    ///     max_wheel_speed = 2*pi * (5302 / 4290) = 7.77 rad/s
+    /// ```
+    ///
+    /// **The placeholder of 30.0 is 3.9x too fast.** The simulator has
+    /// modelled a robot four times quicker than this one.
+    ///
+    /// Two things fell out that the sweep was not looking for:
+    ///
+    /// **A ~4.6% duty deadband.** Fitting the four points gives
+    /// `speed = 55.6 * (duty - 4.6)` to within 6 ticks/s everywhere — so
+    /// the motor is beautifully linear *above* the voltage needed to
+    /// overcome friction and cogging. `crates/sim-core/src/motor.rs` does
+    /// not model deadband and says so; this is the number for when it does.
+    ///
+    /// **The 100% figure sits on the sampling ceiling.** The firmware polls
+    /// at 10 kHz, so it can track transitions below 5 kHz — and 5302
+    /// ticks/s is past that. Errors were 50 in 38,507 ticks (0.13%), so
+    /// 7.77 rad/s is a very slight *under*-estimate.
+    ///
+    /// ⚠️ **Not yet complete: the battery voltage was not recorded.** Step
+    /// 4 below asks for the speed *at the voltage the robot actually runs
+    /// at*, and without an ADC on `VM` we have the speed but not the volts.
+    ///
     /// ## Why 4290 is NOT written in below yet
     ///
     /// It is measured, and putting it here would make odometry *less*
