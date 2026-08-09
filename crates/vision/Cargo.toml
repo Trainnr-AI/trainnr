@@ -12,6 +12,11 @@ anyhow = "1"
 image = "0.25"
 usls = { version = "0.2.0-alpha.3", features = ["coreml", "vlm"] }
 sim-core = { version = "0.1.0", path = "../sim-core" }
+# The command channel to the chip. `hil-protocol` because the host<->chip
+# vocabulary is shared rather than reinvented; `serialport` because one
+# process must own the port (see src/drive.rs).
+hil-protocol = { path = "../hil-protocol" }
+serialport = "4"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # Panic discipline. Scoped deliberately: this crate is compiled into

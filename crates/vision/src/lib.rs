@@ -14,6 +14,7 @@
 pub mod camera;
 pub mod cli;
 pub mod detect;
+pub mod drive;
 pub mod filter;
 pub mod lock;
 pub mod logging;
@@ -26,6 +27,7 @@ pub mod target;
 pub use camera::{name_matches, request_access, CameraSource, Frame, NokhwaCamera, Source, Stream};
 pub use cli::Args;
 pub use detect::{Backend, Detection, Detector, DetectorModel, ObjectDetector};
+pub use drive::{ChipReport, Wheels};
 pub use filter::{deadband, LowPass};
 pub use lock::{hue_distance, iou, TargetLock};
 pub use openvocab::{dominant_hue, hue_name, OpenVocabDetector, Promptable};

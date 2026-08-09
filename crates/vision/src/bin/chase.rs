@@ -26,6 +26,41 @@
 //! a crude proxy the research warned about — and nothing corrects it.
 //! Stage 3 closes that loop, when the camera physically rides the robot.
 //!
+//! # `--drive` — the same twists, sent to real motors
+//!
+//! ```sh
+//! tools/build-pico2.sh pico-odom teleop     # once, then BOOTSEL + picotool
+//! cargo run --release -p vision --bin chase -- --drive /dev/cu.usbmodem11
+//! ```
+//!
+//! ```text
+//!   camera → Detector → bearing → GotoController → BodyTwist
+//!                                                      ├─▶ simulated Robot
+//!                                                      └─▶ T v w → pico-odom
+//!                                                                     ↓
+//!                                                          TB6612 → motors
+//! ```
+//!
+//! **Nothing about the control law changes.** The twist that drove a
+//! simulated robot is the twist that goes down the wire — which is the
+//! point, and the reason this is a flag rather than a second binary. Two
+//! loops that "do the same thing" drift.
+//!
+//! Three things worth knowing before running it:
+//!
+//! - **Stopping this program stops the motors.** No shutdown handler; the
+//!   chip's watchdog does it after 200 ms of silence. Measured: 160 ms to
+//!   zero duty, then 8 ticks of coast. A failsafe that needs the dying
+//!   process to say goodbye does not cover the deaths that matter.
+//! - **Below ~11% duty the robot veers rather than creeps.** The two
+//!   wheels' deadbands differ (4.29% vs 3.91%), so near the floor they
+//!   disagree by 15% where at 50% duty they agree to 1.5%. Measured
+//!   2026-08-10, docs/07.
+//! - **The forward term is still open-loop.** The camera is on the laptop,
+//!   not the robot, so driving forward does not change the view. Real
+//!   wheels do not make it a closed loop — they make it a closed loop in
+//!   *rotation* and an open one in *approach*, exactly as above.
+//!
 //! Run from Terminal.app (not an editor terminal):
 //!
 //! ```sh
@@ -342,6 +377,19 @@ fn main() -> Result<()> {
             ),
         }
     }
+    // ⚠️ Opening the port raises DTR, which un-gates the chip. Motors can
+    // move from this line on — so it happens AFTER the camera and the
+    // detector are up. A board sitting armed while a model loads for ten
+    // seconds is ten seconds of a robot waiting to be told anything.
+    let mut wheels = match &args.drive {
+        None => None,
+        Some(port) => {
+            println!("driving REAL MOTORS on {port}");
+            println!("  stop the loop and they stop themselves within 200 ms");
+            Some(vision::Wheels::open(port)?)
+        }
+    };
+
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
     let mut last_tick = Instant::now();
@@ -370,7 +418,22 @@ fn main() -> Result<()> {
         };
         // Step FIRST: the command is part of the record, so there is
         // something for a replay to check against.
-        perceived.command = Some(chase.step(&perceived, Some(&frame), &rec)?);
+        let commanded = chase.step(&perceived, Some(&frame), &rec)?;
+        perceived.command = Some(commanded);
+
+        // ---- the last link: perception reaches real wheels ----
+        if let Some(w) = &mut wheels {
+            w.command(commanded)?;
+            let Some(report) = w.latest() else {
+                // The board is gone. Stop rather than carry on computing
+                // twists for a chip that cannot hear them — a loop still
+                // drawing confident commands into a viewer after its robot
+                // unplugged is the most misleading thing on the screen.
+                anyhow::bail!("the board stopped reporting — cable or power?");
+            };
+            vision::drive::log(&rec, report, commanded)?;
+        }
+
         recorder.write(&perceived, Some(&frame))?;
     }
     Ok(())

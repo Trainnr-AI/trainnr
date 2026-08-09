@@ -12424,9 +12424,11 @@ name = "vision"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hil-protocol",
  "image",
  "nokhwa",
  "rerun",
+ "serialport",
  "sim-core",
  "tracing-subscriber",
  "usls",
