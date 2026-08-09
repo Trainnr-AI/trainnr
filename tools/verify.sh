@@ -13,6 +13,17 @@ source "$HOME/.cargo/env" 2>/dev/null || true
 SERIAL=""
 [ "${1:-}" = "--serial" ] && SERIAL="${2:-}"
 
+# --ci skips the two steps a hosted runner cannot do, and nothing else.
+#
+#   the emulator      `tools/rp2040js` is a local checkout and gitignored
+#   the wire replay   STALE pending a hardware re-record (see below)
+#
+# Everything else — every build, every test, both firmware architectures,
+# the perception replay — runs there. That is the point: the slow step
+# leaves your loop and the rest gates every push.
+CI=""
+[ "${1:-}" = "--ci" ] && CI=1
+
 pass=0; fail=0
 step() {                      # step "name" "command"
   printf "%-46s" "$1"
@@ -67,12 +78,18 @@ step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleo
 # Left FAILING rather than skipped, because a skip is a thing people stop
 # reading. A red step with this comment above it is a re-record that has
 # not happened yet; a green one would be a regression that nobody noticed.
+# ⚠️ Excluded from --ci ONLY because it is currently stale. A CI that is
+# red from its first commit teaches everyone to ignore red, which is worse
+# than a skip. Locally it still runs and still fails, so it is not hidden.
+# **Delete the `[ -z "$CI" ] &&` guard the moment it is re-recorded.**
+[ -z "$CI" ] && \
 step "replay: RP2350 wire recording  [STALE - re-record on hardware]" \
      "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep -q 'matched the recording exactly'"
 step "replay: perception fixture" \
      "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"
 
 # Slowest, and needs npx + the emulator checkout.
+[ -z "$CI" ] && \
 step "HIL on the emulator (RP2040)" \
      "tools/build-robot.sh && cargo run -q -p hil-host | grep -q 'waypoints:   1/1'"
 
