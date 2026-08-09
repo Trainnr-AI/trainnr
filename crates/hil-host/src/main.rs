@@ -78,19 +78,17 @@ fn positional(args: &[String]) -> Option<String> {
     None
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let serial_port = flag(&args, "--serial");
-    let record = flag(&args, "--record").map(PathBuf::from);
-    let replay = flag(&args, "--replay").map(PathBuf::from);
-
-    let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
-    // Held so the child can be killed when the run ends.
-    let mut emulator: Option<Child> = None;
-
-    // The SAME mission sim-run runs. Not a copy — the same type, the same
-    // default config, the same world.
-    let config = MissionConfig {
+/// The mission this rig runs — **the single definition**, so nothing has
+/// to keep a second copy of it in step by hand.
+///
+/// It was inline in `main`, and a test in `sim-run` then reproduced it
+/// field by field with a comment saying "keep in step with hil-host".
+/// That is the same trap this function's own comments describe twice
+/// over: two things that must agree, agreeing by hand. `sim-run` cannot
+/// depend on `hil-host`, so the definition lives here and the test reaches
+/// for it.
+pub fn mission_config() -> MissionConfig {
+    MissionConfig {
         // The rig must simulate the SAME robot the firmware believes in.
         //
         // This used to be a `const SPEC = REAL_BOT` used only for the duty
@@ -155,7 +153,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // so host and chip odometry stay in lockstep by construction.
         control_on_belief: true,
         ..MissionConfig::default()
-    };
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let serial_port = flag(&args, "--serial");
+    let record = flag(&args, "--record").map(PathBuf::from);
+    let replay = flag(&args, "--replay").map(PathBuf::from);
+
+    let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
+    // Held so the child can be killed when the run ends.
+    let mut emulator: Option<Child> = None;
+
+    // The SAME mission sim-run runs. Not a copy — the same type, the same
+    // default config, the same world.
+    let config = mission_config();
     let mut rig = Rig::new(
         config,
         wire_for(&args, &serial_port, &replay, &record, &mut emulator)?,
@@ -258,6 +271,28 @@ fn wire_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// This rig's own config, solved natively in under a second.
+    ///
+    /// # Why it is worth a test of its own
+    ///
+    /// `control_on_belief: true` is strictly harder than the ground-truth
+    /// case every `sim-run` test uses — the chip steers on its odometry,
+    /// so drift feeds back into the steering. And the emulator step that
+    /// exercises this same config takes minutes, so a failure there is
+    /// slow to find and slower to iterate on. Here it costs 0.4 s.
+    ///
+    /// It also pins `duration`. That budget was 60 s for a robot that
+    /// could do 0.45 m/s; the measured one does 0.117, and this test is
+    /// what says the new number is enough rather than merely larger.
+    #[test]
+    fn the_rig_config_can_actually_be_solved() {
+        let outcome = sim_run::Mission::new(mission_config()).run();
+        assert_eq!(
+            outcome.waypoints_reached, outcome.waypoints_total,
+            "the rig's own mission is unsolvable: {outcome:?}"
+        );
+    }
 
     fn argv(s: &str) -> Vec<String> {
         s.split_whitespace().map(String::from).collect()

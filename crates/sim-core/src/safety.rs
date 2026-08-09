@@ -38,7 +38,7 @@ pub type Millis = u64;
 /// 0.45 m/s top speed, 200 ms is ten missed ticks and about 9 cm of
 /// travel — comfortably beyond any real scheduling hiccup, comfortably
 /// less than a table edge.
-use crate::BodyTwist;
+use crate::{BodyTwist, RobotSpec};
 
 #[derive(Debug, Clone, Copy)]
 pub struct CommandWatchdog {
@@ -274,6 +274,40 @@ impl StuckMonitor {
     /// robot's own limits, not by feel.** A reverse faster than the robot
     /// ever drives forward is a surprise waiting on a real floor, and a
     /// turn rate above what the wheels can deliver just gets scaled away.
+    /// The policy, derived from the robot and the loop it runs in —
+    /// **the one place that knows how to build one of these.**
+    ///
+    /// It was built by hand in two places: `sim-run`'s `Mission` at 50 Hz
+    /// and `chase`'s camera loop at ~15 Hz, each converting seconds into
+    /// its own ticks and each deriving the escape magnitudes from the spec
+    /// separately. Two copies of one policy, differing only in a rate — so
+    /// a change to the policy meant remembering the other one existed.
+    ///
+    /// The durations are the swept values: **0.5 s of trying and failing**
+    /// before backing out, then **2.4 s of backing out.** The second is
+    /// the load-bearing one. Against four configurations that each wedged
+    /// the robot permanently, a 1 s escape cleared 2 of 4 and a 2.4 s
+    /// escape cleared 4 of 4, while the patience barely mattered — because
+    /// what clears a corner is the DISTANCE reversed, and distance is
+    /// speed times duration.
+    pub fn for_robot(spec: &RobotSpec, loop_hz: f64) -> Self {
+        let ticks = |seconds: f64| ((seconds * loop_hz) as u32).max(1);
+        StuckMonitor::new(
+            ticks(0.5),
+            ticks(2.4),
+            // A centimetre per second: below any real commanded motion,
+            // above the numerical noise of a robot pressed against a wall.
+            0.01,
+            (
+                // Near TOP speed, not cruise. At half cruise the real
+                // robot backed off 0.14 m in 2.4 s — under two robot radii
+                // — and never cleared the corner. 0.85 of top gives ~5.
+                spec.max_body_speed() * 0.85,
+                spec.max_turn_rate() / 3.0,
+            ),
+        )
+    }
+
     pub const fn new(
         patience_ticks: u32,
         escape_ticks: u32,

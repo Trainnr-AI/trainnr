@@ -321,29 +321,10 @@ impl Mission {
             // out, and one second of backing out. `still_speed` is 1 cm/s
             // — below any real commanded motion, above the numerical
             // noise of a robot pressed against a wall.
-            // Reverse near the robot's TOP speed, not its cruise gain.
-            //
-            // Measured the hard way: at half cruise (0.059 m/s for the
-            // real robot) a 2.4 s escape backs off 0.14 m — less than two
-            // robot radii — and it never clears the corner. What matters
-            // is the DISTANCE reversed, and distance is speed x duration.
-            // 0.85 of top speed gives ~0.5 m, about five robot radii, and
-            // scales with the machine instead of inheriting a number tuned
-            // for a faster one.
-            //
-            // A recovery manoeuvre is also the one time being brisk is
-            // correct: the robot is stationary against an obstacle, the
-            // longer it stays the longer it is stuck, and it is retracing
-            // ground it has just covered.
-            stuck: StuckMonitor::new(
-                config.stuck_patience,
-                config.stuck_escape,
-                0.01,
-                (
-                    config.spec.max_body_speed() * 0.85,
-                    config.spec.max_turn_rate() / 3.0,
-                ),
-            ),
+            // One definition of the policy, in sim-core. This used to be
+            // built here AND in `chase`, each converting seconds to its
+            // own tick rate by hand.
+            stuck: StuckMonitor::for_robot(&config.spec, 1.0 / config.tick_seconds),
             last_true_speed: 0.0,
             motor_l: Motor::with_deadband(
                 config.motor_tau,
@@ -1028,47 +1009,5 @@ mod the_stack_finishes_from_routes_it_was_not_tuned_on {
                 "{name} wedged: {outcome:?}"
             );
         }
-    }
-}
-
-#[cfg(test)]
-mod the_hil_rig_config_is_solvable {
-    use super::*;
-
-    /// `hil-host`'s exact mission, run natively.
-    ///
-    /// # Why this is separate from the four-routes test
-    ///
-    /// That test steers on **ground truth**, which is `sim-run`'s teaching
-    /// simplification. The HIL rig sets `control_on_belief: true`, because
-    /// a real robot only ever has its own odometry — and that is a
-    /// strictly harder problem: the drift feeds back into the steering.
-    ///
-    /// It also carries the measured motor: `tau` 0.04 and a 4.3% deadband,
-    /// neither of which `sim-run` models.
-    ///
-    /// Worth its own test because the emulator step that exercises this
-    /// combination takes minutes, so a failure there is expensive to find
-    /// and slow to iterate on. Here it costs a second.
-    ///
-    /// ⚠️ Keep in step with `crates/hil-host/src/main.rs`. Two configs
-    /// that must agree, agreeing by hand — the exact shape of the bug that
-    /// let the host run WAYPOINT while the chip ran HIL.
-    #[test]
-    fn the_measured_robot_solves_it_steering_on_belief() {
-        let config = MissionConfig {
-            spec: RobotSpec::REAL_BOT,
-            gains: ControlGains::HIL,
-            duration: 300.0,
-            motor_tau: 0.04,
-            motor_deadband_fraction: 0.043,
-            control_on_belief: true,
-            ..Default::default()
-        };
-        let outcome = Mission::new(config).run();
-        assert_eq!(
-            outcome.waypoints_reached, outcome.waypoints_total,
-            "the HIL rig's own config cannot be solved: {outcome:?}"
-        );
     }
 }
