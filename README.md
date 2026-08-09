@@ -127,6 +127,25 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/photos/`](docs/photos/README.md) — dated photo record of the build, so a
   claim about the hardware can be checked against what was on the desk
 
+## Verification
+
+`tools/verify.sh` is the single definition of "does this repo work", and
+CI calls it rather than restating the steps — a workflow file that lists
+the same checks again is one more pair of things that must agree and
+eventually will not.
+
+| | steps | where |
+|---|---|---|
+| `tools/verify.sh` | 26 | a laptop, before pushing |
+| `tools/verify.sh --ci` | 24 | every push, via GitHub Actions |
+| `tools/verify.sh --serial <port>` | 27 | with a Pico on a cable |
+
+`--ci` drops exactly two, both named in the script with the reason: the
+emulator (its checkout is gitignored) and the RP2350 wire replay, which is
+**stale pending a hardware re-record**. That one still runs and still
+fails locally, so it is not hidden — a CI red from its first commit
+teaches everyone to ignore red, which is worse than a skip.
+
 ## Repository layout
 
 ```
@@ -173,8 +192,10 @@ robotiq/
 [Rerun viewer](https://rerun.io) 0.35):
 
 ```sh
-tools/verify.sh             # everything: fmt, clippy, 333 tests, firmware,
+tools/verify.sh             # everything: fmt, clippy, 354 tests, firmware,
                             # both replay fixtures, and the emulator HIL run
+tools/verify.sh --ci        # the same, minus the two steps a hosted runner
+                            # cannot do — what .github/workflows/verify.yml runs
 cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
 ```
 
@@ -222,6 +243,39 @@ Measured on all three, one trajectory:
 | `sim-run` (Mac, hardware `f64`) | — | 1/1 | 0.052 m | — |
 | emulated RP2040 (M0+, no FPU) | 1139 | 1/1 | 0.052 m | 278 µs |
 | real RP2350 (M33, SP FPU) | 1139 | 1/1 | 0.052 m | 268 µs |
+
+⚠️ Those tick counts are from before `RobotSpec::REAL_BOT` carried its
+bench measurements. The measured robot is **3.86× slower**, so the same
+journey now takes ~4460 ticks — about 90 s on real hardware, and about
+nine minutes on the emulator, which is why the emulator step is one of
+two that CI skips.
+
+**Level 4 — a camera drives real motors.** The whole chain, on hardware:
+
+```sh
+tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
+cargo run --release -p vision --bin chase -- --drive /dev/cu.usbmodem11
+```
+
+```text
+  camera ─▶ detector ─▶ bearing ─▶ GotoController ─▶ BodyTwist
+                                                        │
+                                       T v w over USB ──┴─▶ pico-odom
+                                                             │
+                                             CommandWatchdog ┤ TB6612
+                                             StuckMonitor    ┘   │
+                                                              motors
+```
+
+`--drive` is a flag on the existing `chase` loop, not a second binary:
+the twist that drove a simulated robot is the twist that goes down the
+wire. Two loops that "do the same thing" drift.
+
+**Stopping the program stops the motors** — there is no shutdown handler,
+because a failsafe that needs the dying process to say goodbye does not
+cover the deaths that matter. The chip's watchdog does it after 200 ms of
+silence. Measured on the bench: 160 ms to zero duty, then 8 ticks of
+coast.
 
 Both physical Pico 2 W boards command **byte-identical** duty across all
 1139 ticks.
