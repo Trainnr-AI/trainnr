@@ -104,6 +104,12 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
   the maths, the physics and the code connect
 - [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
 - [`docs/18-code-quality.md`](docs/18-code-quality.md) — an honest scorecard, and what would move it
+- [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
+  (2026-08-08): what it would take to build, deploy and operate a small
+  commercial fleet of mobile manipulators.** Nine documents on policies, data
+  collection, data generation, simulation and real→sim, compute and hardware,
+  fleet operations, and safety and regulation. Research notes, not a plan —
+  nothing here has been built or bought.
 - [`recordings/README.md`](recordings/README.md) — recorded sessions, and how replay
   turns one into a regression test
 - [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
