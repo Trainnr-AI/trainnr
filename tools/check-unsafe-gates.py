@@ -29,11 +29,28 @@ if not re.search(r'^unsafe_code\s*=\s*"forbid"', (ROOT / "Cargo.toml").read_text
     missing.append("Cargo.toml: [workspace.lints.rust] no longer forbids unsafe")
 
 # Firmware is outside the workspace, so each declares it in source.
-for main in sorted((ROOT / "firmware").glob("*/src/main.rs")):
-    text = main.read_text()
+#
+# ⚠️ Both `main.rs` AND `lib.rs`. This used to glob only `main.rs`, and on
+# 2026-08-11 `firmware/support` was added as a library — code compiled
+# into EVERY firmware binary, and therefore running on the robot, that
+# this check could not see. It happened to carry the attribute. Nothing
+# would have noticed if it stopped.
+#
+# A crate root is enough: `#![forbid(unsafe_code)]` covers every module in
+# the crate, so `support/src/usb.rs` needs no line of its own.
+#
+# `build.rs` is deliberately NOT checked — build scripts run on the
+# laptop at compile time and never reach the chip.
+firmware_roots = sorted(
+    p
+    for pattern in ("*/src/main.rs", "*/src/lib.rs")
+    for p in (ROOT / "firmware").glob(pattern)
+)
+for root in firmware_roots:
+    text = root.read_text()
     # Must be a real attribute, not the words inside a doc comment.
     if not re.search(r"^#!\[forbid\(unsafe_code\)\]", text, re.M):
-        missing.append(f"{main.relative_to(ROOT)}: no #![forbid(unsafe_code)]")
+        missing.append(f"{root.relative_to(ROOT)}: no #![forbid(unsafe_code)]")
 
 for m in missing:
     print(f"  {m}")
