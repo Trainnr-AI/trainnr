@@ -1245,6 +1245,30 @@ mod wifi_link {
     /// at 8–63 ASCII characters, so anything shorter **cannot** be a WPA2
     /// key, whatever it was called when it was written down.
     const SHORTEST_WPA2_KEY: usize = 8;
+    const LONGEST_WPA2_KEY: usize = 63;
+
+    /// Whether the robot **hosts** the network or joins one.
+    ///
+    /// Hosting is the default, and it is the right default for a machine
+    /// that drives around: it needs no router, no site credentials and no
+    /// permission from anyone's IT department, and it works identically in
+    /// a lab, a car park and a customer's warehouse. Joining an existing
+    /// network is `WIFI_MODE=station`, and is what you want when several
+    /// robots must be watched from one laptop.
+    ///
+    /// ⚠️ Hosting means the laptop leaves whatever network it was on.
+    const HOSTING: bool = match option_env!("WIFI_MODE") {
+        Some(m) => matches!(m.as_bytes(), b"ap"),
+        None => true,
+    };
+
+    /// 2.4 GHz channel to host on. Six is the middle of the three
+    /// non-overlapping channels (1, 6, 11) and the conventional default.
+    const AP_CHANNEL: u8 = 6;
+
+    /// The robot's address when it is hosting. Clients get no DHCP — see
+    /// the note where the AP starts.
+    const AP_ADDRESS: Ipv4Addr = Ipv4Addr::new(192, 168, 4, 1);
 
     /// How to authenticate, decided from the passphrase itself.
     ///
@@ -1317,6 +1341,45 @@ mod wifi_link {
         if SSID.is_empty() {
             loop {
                 blink(&mut control, BLINK_NO_CREDENTIALS).await;
+            }
+        }
+
+        if HOSTING {
+            // ⚠️ `start_ap_wpa2` PANICS on a passphrase outside 8..=63 —
+            // it is an assert in the driver, not an error return. A panic
+            // here halts the executor, which on a W board means a dark LED
+            // and no USB: the exact unfalsifiable state that cost this
+            // session hours. So the length is checked HERE, before the
+            // driver gets a chance to be right about it in the worst
+            // possible way.
+            if (SHORTEST_WPA2_KEY..=LONGEST_WPA2_KEY).contains(&PASSWORD.len()) {
+                control.start_ap_wpa2(SSID, PASSWORD, AP_CHANNEL).await;
+                note("# hosting WPA2 network");
+            } else {
+                control.start_ap_open(SSID, AP_CHANNEL).await;
+                note("# hosting OPEN network — set an 8..=63 character WIFI_PASSWORD for WPA2");
+            }
+            let mut text: heapless::String<160> = heapless::String::new();
+            let _ = write!(
+                text,
+                "# ssid={:?} channel={} address={} — join it, then odom_view --udp",
+                SSID, AP_CHANNEL, AP_ADDRESS
+            );
+            note(&text);
+            // No DHCP server: a client that joins will self-assign a
+            // link-local address rather than being handed one. That is
+            // enough for broadcast telemetry, which is addressed to
+            // 255.255.255.255 and delivered at layer 2 regardless of
+            // whose subnet anyone thinks they are on. It is NOT enough to
+            // reach this board by address, which is what a command path
+            // would need — that is when a DHCP server earns its keep.
+            loop {
+                if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
+                    control.gpio_set(0, true).await;
+                    Timer::after_millis(500).await;
+                } else {
+                    blink(&mut control, BLINK_LINKED_BUT_MUTE).await;
+                }
             }
         }
 
@@ -1569,9 +1632,20 @@ mod wifi_link {
         // network exists.
         let seed = RoscRng.next_u64();
         static RESOURCES: StaticCell<StackResources<2>> = StaticCell::new();
+        // Hosting means nobody is going to hand us an address, so we pick
+        // one; joining means waiting for a lease.
+        let config = if HOSTING {
+            embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {
+                address: embassy_net::Ipv4Cidr::new(AP_ADDRESS, 24),
+                gateway: None,
+                dns_servers: heapless::Vec::new(),
+            })
+        } else {
+            embassy_net::Config::dhcpv4(Default::default())
+        };
         let (stack, net_runner) = embassy_net::new(
             net_device,
-            embassy_net::Config::dhcpv4(Default::default()),
+            config,
             RESOURCES.init(StackResources::new()),
             seed,
         );
