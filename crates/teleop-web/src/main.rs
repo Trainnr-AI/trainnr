@@ -169,6 +169,9 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
     let mut line = String::new();
     // Consecutive writes the chip did not take. See the timeout branch.
     let mut unheard: u64 = 0;
+    // The last twist announced, so a held stick prints once rather than
+    // fifty times a second.
+    let mut announced = (f64::NAN, f64::NAN);
 
     loop {
         next += period;
@@ -183,6 +186,17 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
                 turn_rate: 0.0,
             },
         };
+
+        // ⚠️ Printed from the LAPTOP side, because the chip cannot tell
+        // you this. `Status::duty_percent` is documented as a MAGNITUDE,
+        // 0-100 — forward and reverse both read the same number, and so
+        // do left and right. Verifying a direction mapping against it is
+        // impossible; this is the only place the sign exists.
+        let (v, w) = (twist.forward_speed, twist.turn_rate);
+        if (v - announced.0).abs() > 0.005 || (w - announced.1).abs() > 0.02 {
+            println!("sent: v={v:+.3} m/s  w={w:+.3} rad/s   {}", describe(v, w));
+            announced = (v, w);
+        }
 
         line.clear();
         // Built through `hil-protocol`, never formatted by hand — the chip
@@ -270,5 +284,31 @@ fn report_forever(serial: Box<dyn serialport::SerialPort>) {
             );
             last_duty = status.duty_percent;
         }
+    }
+}
+
+/// Plain words for a twist, so a direction test does not require reading
+/// signs off a screen while holding a phone.
+fn describe(v: f64, w: f64) -> String {
+    let go = if v > 0.01 {
+        "forward"
+    } else if v < -0.01 {
+        "REVERSE"
+    } else {
+        ""
+    };
+    // Negative `turn_rate` is clockwise — see `Stick::to_twist`.
+    let spin = if w < -0.05 {
+        "right"
+    } else if w > 0.05 {
+        "left"
+    } else {
+        ""
+    };
+    match (go, spin) {
+        ("", "") => "stopped".to_string(),
+        (g, "") => g.to_string(),
+        ("", s) => format!("turning {s}"),
+        (g, s) => format!("{g} + {s}"),
     }
 }

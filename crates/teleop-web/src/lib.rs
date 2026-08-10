@@ -69,7 +69,10 @@ pub const SPEED_FRACTION: f64 = 0.35;
 /// nothing about differential drive.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Stick {
+    /// Positive is away from you — forward.
     pub forward: f64,
+    /// Positive is **right**, as the thumb sees it. Note that this is the
+    /// opposite sign to [`BodyTwist::turn_rate`]; see [`Stick::to_twist`].
     pub turn: f64,
 }
 
@@ -97,7 +100,17 @@ impl Stick {
         let top_turn = 2.0 * top_speed / spec.track_width;
         BodyTwist {
             forward_speed: clamp_unit(self.forward) * top_speed,
-            turn_rate: clamp_unit(self.turn) * top_turn,
+            // ⚠️ NEGATED, and this is the whole reason `Stick` exists as a
+            // separate type from `BodyTwist`.
+            //
+            // `turn_rate` is positive counter-CLOCKWISE, matching
+            // `Pose::heading` and the right-hand rule. A thumb pushed
+            // right means "go right", which is CLOCKWISE. Passing the
+            // stick straight through made the robot steer away from the
+            // direction of the push — an inversion that is obvious with a
+            // robot in front of you and invisible in a duty percentage,
+            // because `Status::duty_percent` is a magnitude.
+            turn_rate: -clamp_unit(self.turn) * top_turn,
         }
     }
 }
@@ -177,6 +190,43 @@ mod tests {
 
     fn bot() -> RobotSpec {
         RobotSpec::REAL_BOT
+    }
+
+    /// The sign convention, pinned. `BodyTwist::turn_rate` is positive
+    /// counter-clockwise; a thumb pushed right means clockwise. Getting
+    /// this backwards steers the robot away from the push, and no
+    /// amount of staring at `duty_percent` reveals it — that field is a
+    /// magnitude.
+    #[test]
+    fn pushing_the_stick_right_turns_the_robot_clockwise() {
+        let right = Stick {
+            forward: 0.0,
+            turn: 1.0,
+        }
+        .to_twist(&bot());
+        assert!(
+            right.turn_rate < 0.0,
+            "stick right must be clockwise (negative turn_rate), got {right:?}"
+        );
+
+        let left = Stick {
+            forward: 0.0,
+            turn: -1.0,
+        }
+        .to_twist(&bot());
+        assert!(left.turn_rate > 0.0, "stick left must be counter-clockwise");
+        assert_eq!(right.turn_rate, -left.turn_rate, "and symmetric");
+    }
+
+    /// Pulling back must reverse, not brake to zero.
+    #[test]
+    fn pulling_the_stick_back_commands_reverse() {
+        let back = Stick {
+            forward: -1.0,
+            turn: 0.0,
+        }
+        .to_twist(&bot());
+        assert!(back.forward_speed < 0.0, "got {back:?}");
     }
 
     #[test]
