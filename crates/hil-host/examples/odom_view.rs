@@ -307,6 +307,13 @@ fn read_serial(port: String, tx: Sender<Arrival>) -> Result<(), Box<dyn std::err
             // than a message here.
             Err(_) => continue,
         }
+        // The firmware can send prose as well as poses — `#` lines are how
+        // the radio reports what it can see, which used to be knowable
+        // only by asking a human to watch an LED.
+        if let Some(note) = line.trim_end().strip_prefix('#') {
+            println!("  chip:{note}");
+            continue;
+        }
         if let Some(report) = Report::parse(&line) {
             let arrival = Arrival {
                 wire: Wire::Usb,
@@ -433,6 +440,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(arrival) => arrival,
                 Err(_) => {
                     println!("\nno reports for {QUIET_BEFORE_GIVING_UP:?} — stopping");
+                    break;
+                }
+            }
+        } else if let Some(limit) = run_for {
+            // `--seconds N` means N seconds, including the wait for the
+            // first line. Without this a board that never reports leaves
+            // the viewer hanging forever, which is fine at a bench with a
+            // human present and useless when something else is driving it.
+            match rx.recv_timeout(limit.saturating_sub(started.elapsed())) {
+                Ok(arrival) => arrival,
+                Err(_) => {
+                    println!("\n{limit:?} elapsed with no reports at all");
                     break;
                 }
             }

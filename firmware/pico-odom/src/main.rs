@@ -422,6 +422,26 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
         pose: Pose::ORIGIN,
     };
 
+    // Whatever the radio wants said, sent down the same transports as the
+    // pose. Drained HERE rather than by a task of its own because this is
+    // the one place that already owns `out` — and because a diagnostic
+    // channel with its own transport is a second thing that can be broken
+    // while the first looks fine.
+    #[cfg(feature = "wifi")]
+    macro_rules! drain_notes {
+        ($out:expr) => {
+            while let Ok(note) = wifi_link::DIAG.try_receive() {
+                $out.send(&note).await;
+            }
+        };
+    }
+    #[cfg(not(feature = "wifi"))]
+    macro_rules! drain_notes {
+        ($out:expr) => {{
+            let _ = &$out;
+        }};
+    }
+
     let mut line: heapless::String<192> = heapless::String::new();
     // Counts reports, not loop iterations, so a gap on the host side means
     // exactly one thing: a line this loop emitted did not arrive. Never
@@ -484,6 +504,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             .write_into(&mut line);
             out.send(line.as_bytes()).await;
             line.clear();
+            drain_notes!(out);
             last_report = now;
         }
 
@@ -1143,6 +1164,7 @@ impl<A: Report, B: Report> Report for Tee<A, B> {
 #[cfg(feature = "wifi")]
 mod wifi_link {
     use super::*;
+    use core::fmt::Write as _;
     use core::net::Ipv4Addr;
     use core::task::Poll;
     use cyw43::{Aligned, A4};
@@ -1152,6 +1174,7 @@ mod wifi_link {
     use embassy_net::{IpEndpoint, StackResources};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::channel::Channel;
+    use embassy_time::{with_timeout, Duration};
     use embassy_rp::bind_interrupts;
     use embassy_rp::clocks::RoscRng;
     use embassy_rp::dma;
@@ -1212,6 +1235,30 @@ mod wifi_link {
     /// ```
     const BLINK_NO_CREDENTIALS: (u64, u64) = (60, 1940);
     const BLINK_JOINING: (u64, u64) = (120, 120);
+
+    /// Longest a single association attempt may take before it is
+    /// abandoned and retried. Generous — real APs can take several seconds
+    /// — but finite, which `cyw43::Control::join` is not.
+    const JOIN_TIMEOUT: Duration = Duration::from_secs(15);
+
+    /// Shortest passphrase WPA2-PSK permits. IEEE 802.11i fixes the range
+    /// at 8–63 ASCII characters, so anything shorter **cannot** be a WPA2
+    /// key, whatever it was called when it was written down.
+    const SHORTEST_WPA2_KEY: usize = 8;
+
+    /// How to authenticate, decided from the passphrase itself.
+    ///
+    /// A passphrase too short to be a WPA2 key almost certainly means the
+    /// network is open and the string is something else — a hotspot name,
+    /// a note to self. Sending it as a PMK anyway is what this build did
+    /// on 2026-08-10, and the radio simply never answered.
+    fn join_options() -> cyw43::JoinOptions<'static> {
+        if PASSWORD.len() < SHORTEST_WPA2_KEY {
+            cyw43::JoinOptions::new_open()
+        } else {
+            cyw43::JoinOptions::new(PASSWORD.as_bytes())
+        }
+    }
     /// Joined, addressed, and **nothing is getting out**. Its own pattern
     /// because that state used to be invisible: the link was up, so the
     /// LED went solid, while every datagram was being dropped. A board
@@ -1274,17 +1321,73 @@ mod wifi_link {
         }
 
         loop {
-            // A failed join is normal: the AP may not be up yet, or the
-            // robot may have driven out of range. Retry forever, blinking
-            // the joining pattern throughout — there is no host to tell.
-            if control
-                .join(SSID, cyw43::JoinOptions::new(PASSWORD.as_bytes()))
-                .await
-                .is_err()
-            {
+            // ⚠️ Blink BEFORE attempting, not only after failing.
+            //
+            // `join` does not return until the radio answers, and on
+            // 2026-08-10 it did not answer — so `link_task` sat inside it
+            // with the LED never having been touched. Dark is also what a
+            // panicked board looks like, and what a board stuck in
+            // firmware upload looks like. Three very different faults, one
+            // indistinguishable symptom, on the only output an untethered
+            // board has. Blinking first makes "trying" visible.
+            for _ in 0..8 {
                 blink(&mut control, BLINK_JOINING).await;
+            }
+
+            // What the radio can actually SEE, said out loud. A failed
+            // join has several causes that look identical from outside —
+            // wrong name, out of range, wrong band, wrong security — and
+            // a scan separates them in one flash instead of four guesses.
+            // The CYW43439 is **2.4 GHz only**, so an access point missing
+            // from this list is very often one that exists perfectly well
+            // on 5 GHz.
+            let mut seen = 0u32;
+            let mut scanner = control.scan(cyw43::ScanOptions::default()).await;
+            while let Some(bss) = scanner.next().await {
+                let len = (bss.ssid_len as usize).min(bss.ssid.len());
+                let Ok(name) = core::str::from_utf8(&bss.ssid[..len]) else {
+                    continue;
+                };
+                if name.is_empty() {
+                    continue;
+                }
+                seen += 1;
+                let mut text: heapless::String<160> = heapless::String::new();
+                let _ = write!(
+                    text,
+                    "# saw ssid={:?} rssi={} chanspec={:#06x}{}",
+                    name,
+                    bss.rssi,
+                    bss.chanspec,
+                    if name == SSID { "  <-- OURS" } else { "" }
+                );
+                note(&text);
+            }
+            drop(scanner);
+            let mut summary: heapless::String<160> = heapless::String::new();
+            let _ = write!(
+                summary,
+                "# scan done: {} networks visible; joining {:?} as {}",
+                seen,
+                SSID,
+                if PASSWORD.len() < SHORTEST_WPA2_KEY {
+                    "open"
+                } else {
+                    "wpa2"
+                }
+            );
+            note(&summary);
+
+            // ⚠️ Bounded. `join` awaits a radio event with no timeout of
+            // its own, so a radio that never answers parks this task
+            // forever — and with it any chance of retrying, rejoining
+            // after driving out of range, or saying anything on the LED.
+            let attempt = with_timeout(JOIN_TIMEOUT, control.join(SSID, join_options())).await;
+            if !matches!(attempt, Ok(Ok(()))) {
+                note("# join failed or timed out");
                 continue;
             }
+            note("# joined; waiting for a DHCP lease");
 
             // Associated. DHCP may still be outstanding, so the LED stays
             // in the joining pattern until `LINK_UP` says otherwise, and
@@ -1336,6 +1439,34 @@ mod wifi_link {
     /// telemetry rather than accumulate a backlog that arrives late and
     /// describes a robot that has since moved.
     static OUTBOX: Channel<CriticalSectionRawMutex, Line, 2> = Channel::new();
+
+    /// Prose the radio wants the host to see, drained by the report loop
+    /// and sent down whatever transports exist.
+    ///
+    /// # Why this exists
+    ///
+    /// Because on 2026-08-10 the only output an untethered radio had was
+    /// **one LED**, and every diagnosis cost a round trip to a human
+    /// squinting at it: dark meant three unrelated faults, and "is it
+    /// blinking fast or slow" was load-bearing evidence. Meanwhile a
+    /// perfectly good USB cable was attached and carrying 50 reports a
+    /// second.
+    ///
+    /// Lines here start with `#` so a host can tell prose from a pose
+    /// without parsing it, and so `Status::parse` rejects them — which it
+    /// does anyway, having no keys to find.
+    pub static DIAG: Channel<CriticalSectionRawMutex, Line, 8> = Channel::new();
+
+    /// Queue a note for the host, dropping it if nobody is draining.
+    /// Diagnostics must never be able to block the thing they diagnose.
+    fn note(text: &str) {
+        let mut line = Line::new();
+        if line.extend_from_slice(text.as_bytes()).is_ok()
+            && line.extend_from_slice(b"\r\n").is_ok()
+        {
+            let _ = DIAG.try_send(line);
+        }
+    }
 
     /// A handle, not a socket.
     ///
