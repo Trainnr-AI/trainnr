@@ -22,6 +22,18 @@ usb = ["dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
 # The sweep is not deleted — it is still how `max_wheel_speed` and
 # `motor_tau` get measured, and `wheel_radius` is not measured yet.
 teleop = ["usb"]
+# Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
+# no tether. RP2350-only, because RP2040 Picos in this project have no
+# radio, and telemetry-only by design (see the compile_error! below):
+#   WIFI_SSID=... WIFI_PASSWORD=... tools/build-pico2.sh pico-odom wifi
+wifi = [
+    "dep:cyw43",
+    "dep:cyw43-firmware",
+    "dep:cyw43-pio",
+    "dep:embassy-net",
+    "dep:embassy-futures",
+    "dep:static_cell",
+]
 
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
@@ -34,6 +46,21 @@ heapless = "0.9"
 embassy-usb = { version = "0.6", optional = true }
 embassy-futures = { version = "0.1", optional = true }
 static_cell = { version = "2", optional = true }
+# The radio, and the TCP/IP stack that rides on it. Versions match
+# `firmware/pico-led`, which is the build proven to bring the radio up on
+# our board #2 — 6 power cycles, 6 successes (docs/e2e-research/28).
+cyw43 = { version = "0.7", optional = true }
+cyw43-firmware = { version = "0.1", features = ["wifi"], optional = true }
+cyw43-pio = { version = "0.10", optional = true }
+# `medium-ethernet` because the CYW43 presents as an Ethernet device;
+# `dhcpv4` because a bench AP hands out addresses and a hardcoded one is a
+# thing that breaks when the robot moves rooms.
+embassy-net = { version = "0.9", optional = true, features = [
+    "dhcpv4",
+    "medium-ethernet",
+    "proto-ipv4",
+    "udp",
+] }
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { path = "../../crates/quad-encoder" }

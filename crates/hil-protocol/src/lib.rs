@@ -477,6 +477,19 @@ impl Message {
 /// why it is a separate type rather than a `Message` variant.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Status {
+    /// Report number, counted on the chip and never reset. **The only
+    /// field that makes loss measurable.**
+    ///
+    /// Without it, a status line that never arrived and a robot that did
+    /// not move are the same bytes: identical ticks, identical pose. That
+    /// was tolerable while the only transport was a cable, which does not
+    /// silently drop. It is not tolerable over UDP, where dropping is the
+    /// designed behaviour — so comparing the two transports means being
+    /// able to say *which* lines went missing, not just how many arrived.
+    ///
+    /// A gap in this sequence is a lost report. A repeat is a duplicate.
+    /// A decrease is the chip having rebooted.
+    pub seq: u64,
     /// The chip's own dead reckoning.
     pub x: f64,
     pub y: f64,
@@ -502,12 +515,13 @@ impl Status {
         "*** STALLED: commanded but not moving — check power ***";
 
     /// Number of `name=value` fields a complete line carries.
-    const FIELDS: usize = 8;
+    const FIELDS: usize = 9;
 
     pub fn write_into<W: Write>(&self, w: &mut W) -> core::fmt::Result {
         write!(
             w,
-            "pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%",
+            "n={} pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%",
+            self.seq,
             self.x,
             self.y,
             self.heading,
@@ -540,6 +554,7 @@ impl Status {
                 continue;
             };
             match key {
+                "n" => status.seq = value.parse().ok()?,
                 "x" => status.x = value.parse().ok()?,
                 "y" => status.y = value.parse().ok()?,
                 "th" => status.heading = value.parse().ok()?,
@@ -1098,24 +1113,33 @@ mod tests {
 
     // ---- Status ----
 
-    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10.
-    /// Evidence, not an example. Previously copied into two host crates.
-    const CAPTURED: &str =
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10, from a
+    /// board flashed **before** status lines carried a sequence number.
+    /// Evidence, not an example.
+    const CAPTURED_BEFORE_SEQ: &str =
         "pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%";
 
+    /// A board flashed before sequence numbers existed must be REJECTED,
+    /// not read as `seq: 0`.
+    ///
+    /// This is the whole argument for `seq` being required rather than
+    /// optional. If a missing `n=` parsed as zero, a stale binary would
+    /// report every line as sequence 0 — which a loss detector reads as
+    /// "50 duplicates a second", i.e. a transport fault, on a board whose
+    /// only fault is needing a reflash. Tested against bytes a real board
+    /// really sent, so the rejection is not merely this file agreeing with
+    /// itself.
+    ///
+    /// ⚠️ **This crate is currently missing its positive capture.** The
+    /// line above is genuine but stale, and inventing a replacement is
+    /// exactly what the header of `hil-host/examples/odom_view.rs` warns
+    /// against — a fixture written from this file's *idea* of the format
+    /// only proves the parser matches that idea. Paste a fresh line here
+    /// off the board and restore the positive assertions; until then the
+    /// round-trip test is what guards writer against parser.
     #[test]
-    fn a_line_the_board_actually_sent() {
-        let Some(s) = Status::parse(CAPTURED) else {
-            panic!("the firmware's real output no longer parses");
-        };
-        assert_eq!(s.x, -0.001);
-        assert_eq!(s.heading, -0.863);
-        assert_eq!(s.ticks_left, -37793);
-        assert_eq!(s.ticks_right, 38304);
-        assert_eq!(s.errors_left, 235);
-        assert_eq!(s.errors_right, 207);
-        assert_eq!(s.duty_percent, 0);
-        assert!(!s.stalled);
+    fn a_line_from_firmware_without_sequence_numbers_is_rejected() {
+        assert_eq!(Status::parse(CAPTURED_BEFORE_SEQ), None);
     }
 
     /// **The test that makes the 2026-08-09 bug impossible.** Writer and
@@ -1124,6 +1148,7 @@ mod tests {
     #[test]
     fn a_status_line_survives_the_round_trip() {
         let sent = Status {
+            seq: 9_001,
             x: -1.25,
             y: 0.5,
             heading: 3.0,

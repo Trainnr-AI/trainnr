@@ -62,6 +62,18 @@ step "firmware pico-odom (RP2350, USB)" "tools/build-pico2.sh pico-odom usb"
 # it compiles a different half of the file — the watchdog, the signed duty
 # path and the H-bridge failsafe. Nothing above reaches any of it.
 step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleop"
+# The radio transport, and the tee that sends every line down BOTH wires.
+# Neither is reachable from any build above: `wifi` brings in the CYW43
+# driver, the IP stack and a third `Report` impl, and `usb,wifi` compiles
+# the `Tee` combinator that nothing else instantiates.
+#
+# Built WITHOUT credentials on purpose. `WIFI_SSID` unset is a supported
+# state — the firmware blinks a distinct pattern and never tries to join —
+# precisely so that this step can exist on a machine that has none. A
+# `compile_error!` there would have made the radio build the one variant
+# never checked.
+step "firmware pico-odom (RP2350, wifi)" "tools/build-pico2.sh pico-odom wifi"
+step "firmware pico-odom (RP2350, usb+wifi)" "tools/build-pico2.sh pico-odom usb,wifi"
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.

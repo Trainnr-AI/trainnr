@@ -61,13 +61,29 @@
 // true, the argument belongs in a commit that changes this line.
 #![forbid(unsafe_code)]
 
-use core::fmt::Write as _;
+// ⚠️ This is a DESIGN boundary, not a missing feature. `teleop` puts the
+// host inside the 50 Hz control loop, and doing that over a lossy radio is
+// a decision with its own failure modes: `CommandWatchdog` turns silence
+// into a stop, so a dropped datagram burst becomes a robot that halts
+// mid-manoeuvre. That may well be the right trade — but it needs a bench
+// session and a measured jitter number, not a feature flag that happens to
+// compile. Telemetry is one-directional and safe to ship first.
+#[cfg(all(feature = "wifi", feature = "teleop"))]
+compile_error!(
+    "`wifi` is telemetry-only. Commands over UDP need the watchdog timeout \
+     re-derived from measured radio jitter first — see docs/e2e-research/28."
+);
+#[cfg(all(feature = "wifi", not(feature = "pico2")))]
+compile_error!("`wifi` needs the CYW43 radio, which only the Pico 2 W here has");
+
 use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::peripherals::{
-    PIN_10, PIN_11, PIN_12, PIN_16, PIN_17, PIN_18, PIN_19, PIN_25, PIN_6, PIN_7, PIN_8, PIN_9,
+    PIN_10, PIN_11, PIN_12, PIN_16, PIN_17, PIN_18, PIN_19, PIN_6, PIN_7, PIN_8, PIN_9,
 };
+#[cfg(feature = "wifi")]
+use embassy_rp::peripherals::{PIN_23, PIN_24, PIN_25, PIN_29};
 use embassy_rp::peripherals::{PWM_SLICE3, PWM_SLICE5};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
@@ -407,6 +423,11 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
     };
 
     let mut line: heapless::String<192> = heapless::String::new();
+    // Counts reports, not loop iterations, so a gap on the host side means
+    // exactly one thing: a line this loop emitted did not arrive. Never
+    // reset — a sequence that goes backwards is the chip having rebooted,
+    // which is worth being able to see.
+    let mut seq = 0u64;
     let mut last_report = Instant::now();
     let mut last_l = 0i32;
     let mut last_r = 0i32;
@@ -447,7 +468,9 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // of those parsers kept looking for the old key, dropped every
             // line, and drew an empty viewer while the gate stayed green.
             // `hil_protocol::Status` round-trips, so that cannot recur.
+            seq += 1;
             let _ = hil_protocol::Status {
+                seq,
                 x: p.x,
                 y: p.y,
                 heading: p.heading,
@@ -730,14 +753,26 @@ struct MotorPins {
     bin2: Peri<'static, PIN_12>,
 }
 
-/// The four encoder pins and the LED, identical whichever transport is built.
+/// The four encoder pins and the motor driver, identical whichever
+/// transport is built.
+///
+/// # Why the LED is not set up here
+///
+/// It used to be, taking `PIN_25` alongside the encoder pins. That stopped
+/// working the moment a third transport existed: **on a Pico 2 W, GP25 is
+/// the radio's chip-select**, so the `wifi` build has to hand that pin to
+/// `PioSpi` and blink the radio's own GPIO 0 instead. A function that
+/// claimed the pin unconditionally would have made the wifi transport
+/// impossible to write without a flag saying "don't do the thing you were
+/// named for".
+///
+/// So the heartbeat belongs to the transport, which is the thing that
+/// knows what a sign of life looks like on its board.
 fn shared_setup(
-    spawner: Spawner,
     la: Peri<'static, PIN_16>,
     lb: Peri<'static, PIN_17>,
     ra: Peri<'static, PIN_18>,
     rb: Peri<'static, PIN_19>,
-    pin_led: Peri<'static, PIN_25>,
     motor: MotorPins,
 ) -> (Encoders, Motors) {
     // ⚠️ `Pull::Up` is a MEASURED result, not a preference. Do not "tidy"
@@ -757,13 +792,6 @@ fn shared_setup(
     let lb = Input::new(lb, Pull::Up);
     let ra = Input::new(ra, Pull::Up);
     let rb = Input::new(rb, Pull::Up);
-
-    // ⚠️ On a **Pico 2 W this lights nothing**: GP25 is the CYW43 radio's
-    // chip-select there, not an LED — see `firmware/pico-led`, which boots
-    // the radio precisely because that is the only way to reach it. Do not
-    // read "no blink" as "dead board"; on a W the sign of life is the USB
-    // port appearing.
-    spawner.spawn(heartbeat(Output::new(pin_led, Level::Low)).unwrap());
 
     // The driver is built DISABLED and at zero duty, and handed back
     // rather than committed to a job. Who drives it is a build-time
@@ -795,7 +823,7 @@ fn shared_setup(
 // ---------------------------------------------------------------------
 // Transport A — UART on GP0/GP1. What the emulator speaks.
 // ---------------------------------------------------------------------
-#[cfg(not(feature = "usb"))]
+#[cfg(not(any(feature = "usb", feature = "wifi")))]
 mod transport {
     use super::*;
     use embassy_rp::uart::{Blocking, Config as UartConfig, Uart, UartTx};
@@ -815,12 +843,10 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
         let (encoders, motors) = shared_setup(
-            spawner,
             p.PIN_16,
             p.PIN_17,
             p.PIN_18,
             p.PIN_19,
-            p.PIN_25,
             MotorPins {
                 slice_a: p.PWM_SLICE3,
                 pwma: p.PIN_6,
@@ -833,6 +859,7 @@ mod transport {
                 bin2: p.PIN_12,
             },
         );
+        spawner.spawn(heartbeat(Output::new(p.PIN_25, Level::Low)).unwrap());
         // `teleop` implies `usb`, so this transport is never built with it
         // — the sweep is the only thing that can own the motors here.
         spawner.spawn(drive_sweep(motors).unwrap());
@@ -845,7 +872,8 @@ mod transport {
 }
 
 // ---------------------------------------------------------------------
-// Transport B — USB CDC serial. What a real Pico on a cable speaks.
+// Transport B — USB CDC serial. What a real Pico on a cable speaks, and —
+// when built with `wifi` too — one half of the transport comparison.
 // ---------------------------------------------------------------------
 #[cfg(feature = "usb")]
 mod transport {
@@ -937,12 +965,10 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
         let (encoders, motors) = shared_setup(
-            spawner,
             p.PIN_16,
             p.PIN_17,
             p.PIN_18,
             p.PIN_19,
-            p.PIN_25,
             MotorPins {
                 slice_a: p.PWM_SLICE3,
                 pwma: p.PIN_6,
@@ -955,6 +981,16 @@ mod transport {
                 bin2: p.PIN_12,
             },
         );
+        // ⚠️ On a **Pico 2 W this lights nothing**: GP25 is the CYW43
+        // radio's chip-select there, not an LED — see `firmware/pico-led`,
+        // which boots the radio precisely because that is the only way to
+        // reach it. Do not read "no blink" as "dead board"; on a W the
+        // sign of life is the USB port appearing.
+        //
+        // With `wifi` the pin goes to the radio instead, and the radio's
+        // own LED takes over as the sign of life.
+        #[cfg(not(feature = "wifi"))]
+        spawner.spawn(heartbeat(Output::new(p.PIN_25, Level::Low)).unwrap());
 
         let driver = Driver::new(p.USB, Irqs);
         // 0x2e8a is Raspberry Pi's vendor ID. Product IDs differ per
@@ -984,6 +1020,26 @@ mod transport {
         let class = CdcAcmClass::new(&mut builder, state, MAX_PACKET as u16);
         let mut usb = builder.build();
         let (tx, _rx) = class.split();
+
+        // One report stream, two wires. Both carry the same `Status::seq`,
+        // which is what turns "the radio feels laggy" into a number.
+        #[cfg(feature = "wifi")]
+        let mut out = Tee(
+            UsbReport(tx),
+            wifi_link::start(
+                spawner,
+                wifi_link::RadioPins {
+                    pwr: p.PIN_23,
+                    cs: p.PIN_25,
+                    dio: p.PIN_24,
+                    clk: p.PIN_29,
+                    pio: p.PIO0,
+                    dma: p.DMA_CH0,
+                },
+            )
+            .await,
+        );
+        #[cfg(not(feature = "wifi"))]
         let mut out = UsbReport(tx);
 
         // Sampling starts immediately rather than waiting for a host: the
@@ -1017,6 +1073,387 @@ mod transport {
         loop {
             Timer::after_secs(1).await;
         }
+    }
+}
+
+/// Sends every line down two transports.
+///
+/// Built for one question — **does the radio deliver what the cable
+/// delivers?** — and it can only answer it because both halves receive the
+/// *same* bytes from the *same* loop iteration, carrying the same
+/// [`Status::seq`]. Any difference in what arrives is therefore the
+/// transport's and not the robot's, which is not something two separate
+/// runs could ever establish.
+///
+/// The two sends are joined rather than sequenced. USB's write carries a
+/// 5 ms deadline and UDP's cannot block at all; running them in order
+/// would put the cable's worst case in front of the radio's every single
+/// report, and then measure the delay it had just caused.
+#[cfg(all(feature = "usb", feature = "wifi"))]
+struct Tee<A, B>(A, B);
+
+#[cfg(all(feature = "usb", feature = "wifi"))]
+impl<A: Report, B: Report> Report for Tee<A, B> {
+    async fn send(&mut self, bytes: &[u8]) {
+        embassy_futures::join::join(self.0.send(bytes), self.1.send(bytes)).await;
+    }
+}
+
+// ---------------------------------------------------------------------
+// The radio link — UDP over CYW43. A `Report`, not a transport: the USB
+// build tees into it, and the radio-only build wraps it in Transport C.
+// ---------------------------------------------------------------------
+//
+// # Why this is a `Report` impl and not a new firmware
+//
+// The whole transport is ~40 lines of actual logic. Everything else here
+// is bringing the radio up, and `firmware/pico-led` already proved that
+// sequence on this exact board — 6 power cycles, 6 successes
+// (docs/e2e-research/28). The odometry loop, the pose integrator and the
+// wire format are untouched, because `Report` was already the seam.
+//
+// # Why UDP, and why broadcast
+//
+// `Report`'s contract says reports are best-effort and ticks are not: a
+// late report is worse than a missing one, because every microsecond
+// blocked here is a missed encoder transition. UDP *is* that contract —
+// fire the datagram, never wait for an acknowledgement. TCP would add
+// retransmission delay fighting a design that has already chosen to drop.
+//
+// Broadcast (255.255.255.255) rather than a configured host address, so
+// there is nothing to set up on either side: the board shouts, and any
+// machine on the LAN that binds the port hears it. That is right for a
+// bench and wrong for a customer site — it does not cross subnets and it
+// authenticates nobody. docs/e2e-research/28 is explicit that the radio
+// stays a bench side-channel; this is that side-channel.
+//
+// # Why a radio-only board never starts the motor sweep
+//
+// It falls out of the existing gate rather than needing a rule. The sweep
+// waits on `HOST_WATCHING`, which only a transport that can *tell* sets —
+// USB raises it when a host opens the port, UART when the emulator
+// attaches. **A broadcast socket cannot know whether anyone is
+// listening**, so `UdpReport::send` never raises it, and a radio-only
+// board therefore parks at the top of `drive_sweep` forever.
+//
+// That is the correct behaviour and it is worth stating why: an untethered
+// robot beginning a blind motor sweep on power-up, with no cable attached
+// to stop it, is precisely the surprise `HOST_WATCHING` was added to
+// prevent. Tee'd with USB the sweep runs as it always did, because then
+// there genuinely is a host on a cable.
+#[cfg(feature = "wifi")]
+mod wifi_link {
+    use super::*;
+    use core::net::Ipv4Addr;
+    use cyw43::{Aligned, A4};
+    use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
+    use embassy_net::udp::{PacketMetadata, UdpSocket};
+    use embassy_net::{IpEndpoint, StackResources};
+    use embassy_rp::bind_interrupts;
+    use embassy_rp::clocks::RoscRng;
+    use embassy_rp::dma;
+    use embassy_rp::peripherals::{DMA_CH0, PIO0};
+    use embassy_rp::pio::{InterruptHandler, Pio};
+    use static_cell::StaticCell;
+
+    bind_interrupts!(struct Irqs {
+        PIO0_IRQ_0 => InterruptHandler<PIO0>;
+        DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
+    });
+
+    /// Where status lines are broadcast, and where `odom_view --udp`
+    /// listens. One number, hardcoded on both sides on purpose: a port
+    /// that can disagree is one more pair of facts nobody compares.
+    const TELEMETRY_PORT: u16 = 9870;
+
+    /// Credentials, baked in at build time:
+    ///
+    /// ```sh
+    /// WIFI_SSID='bench' WIFI_PASSWORD='...' tools/build-pico2.sh pico-odom wifi
+    /// ```
+    ///
+    /// **Empty is a supported state, not a build failure.** `verify.sh`
+    /// has to be able to compile this transport on a machine with no
+    /// credentials — that is the whole point of building every firmware
+    /// variant — and a `compile_error!` here would mean the wifi build was
+    /// the one thing never checked. So an unset SSID compiles, and the
+    /// board says so at runtime by blinking [`BLINK_NO_CREDENTIALS`]
+    /// rather than pretending to join.
+    ///
+    /// `build.rs` marks both as rebuild triggers, so changing the password
+    /// rebuilds rather than silently reusing a binary with the old one.
+    const SSID: &str = match option_env!("WIFI_SSID") {
+        Some(s) => s,
+        None => "",
+    };
+    const PASSWORD: &str = match option_env!("WIFI_PASSWORD") {
+        Some(s) => s,
+        None => "",
+    };
+
+    /// The radio's firmware and this board's settings — the same bytes
+    /// `pico-led` uploads, from the same shared directory. See that crate
+    /// for why 231 KB of it lives in our flash.
+    static FW: Aligned<A4, [u8; 231_077]> = Aligned(*cyw43_firmware::CYW43_43439A0);
+    static NVRAM: Aligned<A4, [u8; 742]> =
+        Aligned(*include_bytes!("../../cyw43-firmware/nvram_rp2040.bin"));
+
+    /// LED cadence, in milliseconds on and off, for each thing that can be
+    /// true. The LED is the **only** output an untethered board has, so it
+    /// has to distinguish the failures rather than just proving power:
+    ///
+    /// ```text
+    ///   long gap, short flash   no credentials — rebuild with WIFI_SSID
+    ///   fast even blink         joining, or joined but no DHCP lease yet
+    ///   solid on                address held, datagrams going out
+    /// ```
+    const BLINK_NO_CREDENTIALS: (u64, u64) = (60, 1940);
+    const BLINK_JOINING: (u64, u64) = (120, 120);
+
+    /// True once DHCP has given us an address. Read by the LED task to go
+    /// solid, and by [`UdpReport`] to skip the send entirely — a datagram
+    /// with no source address is an error return we would only throw away.
+    static LINK_UP: AtomicBool = AtomicBool::new(false);
+
+    /// Services the radio. Must run forever, or the chip stops answering.
+    #[embassy_executor::task]
+    async fn cyw43_task(
+        runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>>,
+    ) -> ! {
+        runner.run().await
+    }
+
+    /// Services the TCP/IP stack: ARP, DHCP renewal, and moving frames
+    /// between smoltcp and the radio.
+    #[embassy_executor::task]
+    async fn net_task(
+        mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>,
+    ) -> ! {
+        runner.run().await
+    }
+
+    /// Owns `control` for the life of the program: joins the network, then
+    /// blinks what happened.
+    ///
+    /// Joining lives here rather than in `run` because `control` cannot be
+    /// shared, and a link that drops has to be able to rejoin — which means
+    /// whoever blinks the LED must also be whoever can call `join`.
+    #[embassy_executor::task]
+    async fn link_task(mut control: cyw43::Control<'static>) -> ! {
+        control.init(cyw43_firmware::CYW43_43439A0_CLM).await;
+
+        // ⚠️ Default power management is PM2, which parks the radio for up
+        // to 200 ms between beacons. That is a good trade for a sensor
+        // that wakes once a minute and a bad one for a 50 Hz telemetry
+        // stream — it would show up as periodic 200 ms gaps in the trail
+        // and look exactly like a firmware stall. Costs battery; say so
+        // in the log rather than discovering it as jitter.
+        control
+            .set_power_management(cyw43::PowerManagementMode::None)
+            .await;
+
+        if SSID.is_empty() {
+            loop {
+                blink(&mut control, BLINK_NO_CREDENTIALS).await;
+            }
+        }
+
+        loop {
+            // A failed join is normal: the AP may not be up yet, or the
+            // robot may have driven out of range. Retry forever, blinking
+            // the joining pattern throughout — there is no host to tell.
+            if control
+                .join(SSID, cyw43::JoinOptions::new(PASSWORD.as_bytes()))
+                .await
+                .is_err()
+            {
+                blink(&mut control, BLINK_JOINING).await;
+                continue;
+            }
+
+            // Associated. DHCP may still be outstanding, so the LED stays
+            // in the joining pattern until `LINK_UP` says otherwise, and
+            // goes solid once an address is held.
+            while !LINK_UP.load(Ordering::Relaxed) {
+                blink(&mut control, BLINK_JOINING).await;
+            }
+            control.gpio_set(0, true).await;
+            while LINK_UP.load(Ordering::Relaxed) {
+                Timer::after_millis(200).await;
+            }
+            control.gpio_set(0, false).await;
+        }
+    }
+
+    /// One on/off cycle of the radio's own GPIO 0 — the LED on a Pico 2 W.
+    async fn blink(control: &mut cyw43::Control<'static>, (on, off): (u64, u64)) {
+        control.gpio_set(0, true).await;
+        Timer::after_millis(on).await;
+        control.gpio_set(0, false).await;
+        Timer::after_millis(off).await;
+    }
+
+    /// Polls the stack for a DHCP lease and publishes it to [`LINK_UP`].
+    ///
+    /// A task rather than a future joined into the report loop, so that
+    /// the USB build can tee into the radio without also having to know
+    /// that the radio needs servicing.
+    #[embassy_executor::task]
+    async fn link_state_task(stack: embassy_net::Stack<'static>) -> ! {
+        loop {
+            LINK_UP.store(stack.is_config_up(), Ordering::Relaxed);
+            Timer::after_millis(200).await;
+        }
+    }
+
+    pub struct UdpReport {
+        socket: UdpSocket<'static>,
+        broadcast: IpEndpoint,
+    }
+
+    impl Report for UdpReport {
+        /// Fire and forget. Every failure here — no address yet, no route,
+        /// transmit buffer full — is a dropped status line, which is
+        /// precisely what this trait's contract permits and what the
+        /// odometry loop needs. Nothing is retried and nothing blocks.
+        ///
+        /// `HOST_WATCHING` is deliberately never set: see the module
+        /// header. There is no host to watch on a broadcast socket, so the
+        /// motor gate it guards is left shut and the sweep is not built.
+        async fn send(&mut self, bytes: &[u8]) {
+            if !LINK_UP.load(Ordering::Relaxed) {
+                return;
+            }
+            let _ = self.socket.send_to(bytes, self.broadcast).await;
+        }
+    }
+
+    /// The four pins the radio needs. Named rather than passed loose,
+    /// because `PIN_25` arriving here instead of at the heartbeat is the
+    /// whole difference between a W board that talks and one that blinks.
+    pub struct RadioPins {
+        pub pwr: Peri<'static, PIN_23>,
+        pub cs: Peri<'static, PIN_25>,
+        pub dio: Peri<'static, PIN_24>,
+        pub clk: Peri<'static, PIN_29>,
+        pub pio: Peri<'static, PIO0>,
+        pub dma: Peri<'static, DMA_CH0>,
+    }
+
+    /// Brings the radio and the IP stack up, and hands back something that
+    /// can be reported into. Returns as soon as the hardware is
+    /// initialised — **not** when the network is up, because waiting for
+    /// DHCP here would mean not sampling encoders until an access point
+    /// answered, and a tick missed is a tick missing from the pose
+    /// forever.
+    pub async fn start(spawner: Spawner, pins: RadioPins) -> UdpReport {
+        // The four lines to the radio. Fixed by the board's wiring — and
+        // the reason this cannot coexist with the GP25 heartbeat the
+        // cable-only builds spawn.
+        let pwr = Output::new(pins.pwr, Level::Low);
+        let cs = Output::new(pins.cs, Level::High);
+        let mut pio = Pio::new(pins.pio, Irqs);
+        let spi = PioSpi::new(
+            &mut pio.common,
+            pio.sm0,
+            RM2_CLOCK_DIVIDER,
+            pio.irq0,
+            cs,
+            pins.dio,
+            pins.clk,
+            dma::Channel::new(pins.dma, Irqs),
+        );
+
+        static STATE: StaticCell<cyw43::State> = StaticCell::new();
+        let (net_device, control, runner) =
+            cyw43::new(STATE.init(cyw43::State::new()), pwr, spi, &FW, &NVRAM).await;
+        spawner.spawn(cyw43_task(runner).unwrap());
+        spawner.spawn(link_task(control).unwrap());
+
+        // smoltcp seeds its port and sequence randomness from this. The
+        // ring oscillator is the one entropy source available before the
+        // network exists.
+        let seed = RoscRng.next_u64();
+        static RESOURCES: StaticCell<StackResources<2>> = StaticCell::new();
+        let (stack, net_runner) = embassy_net::new(
+            net_device,
+            embassy_net::Config::dhcpv4(Default::default()),
+            RESOURCES.init(StackResources::new()),
+            seed,
+        );
+        spawner.spawn(net_task(net_runner).unwrap());
+        spawner.spawn(link_state_task(stack).unwrap());
+
+        // One datagram of headroom each way. Status lines are ~100 bytes
+        // and sent every 20 ms; a backlog would be stale data we would
+        // rather drop than deliver late.
+        static RX_META: StaticCell<[PacketMetadata; 4]> = StaticCell::new();
+        static RX_BUF: StaticCell<[u8; 512]> = StaticCell::new();
+        static TX_META: StaticCell<[PacketMetadata; 4]> = StaticCell::new();
+        static TX_BUF: StaticCell<[u8; 512]> = StaticCell::new();
+        let mut socket = UdpSocket::new(
+            stack,
+            RX_META.init([PacketMetadata::EMPTY; 4]),
+            RX_BUF.init([0; 512]),
+            TX_META.init([PacketMetadata::EMPTY; 4]),
+            TX_BUF.init([0; 512]),
+        );
+        // Bound to the same port it broadcasts to, so a host that replies
+        // has somewhere to reply *to* when the command path lands.
+        let _ = socket.bind(TELEMETRY_PORT);
+        UdpReport {
+            socket,
+            broadcast: IpEndpoint::new(Ipv4Addr::BROADCAST.into(), TELEMETRY_PORT),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Transport C — the radio alone. An untethered board with no cable at all.
+// ---------------------------------------------------------------------
+#[cfg(all(feature = "wifi", not(feature = "usb")))]
+mod transport {
+    use super::*;
+
+    pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
+        let (encoders, motors) = shared_setup(
+            p.PIN_16,
+            p.PIN_17,
+            p.PIN_18,
+            p.PIN_19,
+            MotorPins {
+                slice_a: p.PWM_SLICE3,
+                pwma: p.PIN_6,
+                ain1: p.PIN_7,
+                ain2: p.PIN_8,
+                stby: p.PIN_9,
+                slice_b: p.PWM_SLICE5,
+                pwmb: p.PIN_10,
+                bin1: p.PIN_11,
+                bin2: p.PIN_12,
+            },
+        );
+        // Spawned exactly as the cable builds spawn it, and it will park
+        // forever on `HOST_WATCHING` — see the note above `wifi_link`.
+        // Left spawned rather than `#[cfg]`'d away so that the safety
+        // property is enforced by the gate that exists for it, instead of
+        // by this build happening not to call the function.
+        spawner.spawn(drive_sweep(motors).unwrap());
+
+        let mut out = wifi_link::start(
+            spawner,
+            wifi_link::RadioPins {
+                pwr: p.PIN_23,
+                cs: p.PIN_25,
+                dio: p.PIN_24,
+                clk: p.PIN_29,
+                pio: p.PIO0,
+                dma: p.DMA_CH0,
+            },
+        )
+        .await;
+
+        odometry_forever(encoders, &mut out).await
     }
 }
 
