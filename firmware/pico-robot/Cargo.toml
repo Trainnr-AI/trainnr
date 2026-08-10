@@ -13,7 +13,7 @@ pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
 # Talk to the host over USB CDC instead of UART pins — for a REAL board on
 # a USB cable. The emulator cannot do USB, so this is pico2-only in
 # practice.
-usb = ["dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
+usb = ["firmware-support/usb", "dep:embassy-usb", "dep:embassy-futures"]
 
 [dependencies]
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
@@ -24,8 +24,8 @@ cortex-m-rt = "0.7"
 panic-halt = "1.0"
 heapless = "0.9"
 embassy-usb = { version = "0.6", optional = true }
+firmware-support = { path = "../support" }
 embassy-futures = { version = "0.1", optional = true }
-static_cell = { version = "2", optional = true }
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { path = "../../crates/quad-encoder" }

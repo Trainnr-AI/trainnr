@@ -37,14 +37,6 @@ const PERIOD_US: u64 = 10_000;
 static DUTY_PERCENT: AtomicU8 = AtomicU8::new(0);
 
 /// Proof of life: if this stops beating, the firmware crashed.
-#[embassy_executor::task]
-async fn heartbeat(mut led: Output<'static>) {
-    loop {
-        led.toggle();
-        Timer::after_millis(250).await;
-    }
-}
-
 /// The async-input showpiece: this task consumes ZERO cpu while idle —
 /// `wait_for_falling_edge` puts it to sleep until the pin's interrupt
 /// fires (button pressed = pin pulled from high to low).
@@ -105,7 +97,7 @@ async fn main(spawner: Spawner) {
     // convention exists is a Falstad CircuitJS side quest.)
     let button = Input::new(p.PIN_14, Pull::Up);
 
-    spawner.spawn(heartbeat(heart).unwrap());
+    spawner.spawn(firmware_support::heartbeat(heart, 250).unwrap());
     spawner.spawn(button_watcher(button).unwrap());
     spawner.spawn(soft_pwm(led).unwrap());
 }

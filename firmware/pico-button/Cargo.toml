@@ -19,6 +19,7 @@ embassy-time = "0.5"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "1.0"
+firmware-support = { path = "../support" }
 
 [build-dependencies]
 firmware-build-support = { path = "../build-support" }

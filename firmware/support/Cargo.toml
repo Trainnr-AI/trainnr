@@ -1,0 +1,29 @@
+[package]
+name = "firmware-support"
+version = "0.1.0"
+edition = "2021"
+
+# The parts every firmware here was writing out again.
+#
+# Sibling of `build-support`, which does the same job for linker scripts.
+# That one holds the ONE copy of the memory layouts; this holds the one
+# copy of the USB bring-up, the heartbeat, and the contract a status
+# transport has to honour.
+
+[features]
+# USB CDC serial. Optional because pico-blink, pico-button, pico-imu and
+# pico-led have no host link at all, and pulling embassy-usb into a 6 KB
+# blink binary would be absurd.
+usb = ["dep:embassy-usb", "dep:static_cell"]
+
+[dependencies]
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+# ⚠️ No chip feature here on purpose. `rp2040` vs `rp235xa` is the BINARY
+# crate's choice; naming either one here would silently win the feature
+# unification and build the wrong chip's HAL.
+embassy-rp = { version = "0.10", default-features = false, features = ["time-driver"] }
+embassy-time = "0.5"
+embassy-usb = { version = "0.6", optional = true }
+static_cell = { version = "2", optional = true }
+
+[workspace]

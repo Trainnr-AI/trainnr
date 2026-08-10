@@ -130,6 +130,7 @@ use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
 #[cfg(feature = "teleop")]
 use embassy_time::Duration;
+use firmware_support::Report;
 use panic_halt as _;
 use quad_encoder::QuadratureDecoder;
 use sim_core::{Odometry, Pose, RobotSpec};
@@ -255,11 +256,6 @@ const COMMAND_TIMEOUT_MS: u64 = 200;
 #[cfg(feature = "teleop")]
 const POLL: Duration = Duration::from_millis(50);
 
-/// Milliseconds since boot — the unit [`CommandWatchdog`] speaks.
-#[cfg(feature = "teleop")]
-fn now_ms() -> u64 {
-    Instant::now().as_millis()
-}
 
 /// Which way the LEFT encoder counts, relative to the right.
 ///
@@ -341,25 +337,6 @@ const MUST_MOVE_ABOVE: u16 = 15;
 /// tidy-up, and doing it badly at the moment this firmware first meets
 /// real hardware is the worse trade.
 ///
-/// **Trigger to extract: a third copy** — `pico-imu` will want one.
-trait Report {
-    /// Send bytes, or give up quietly. Only the USB transport can stall,
-    /// so only it carries a deadline.
-    ///
-    /// Reports are best-effort and ticks are not: every microsecond spent
-    /// blocked here is a microsecond of missed transitions, and a missed
-    /// transition corrupts the pose this loop exists to compute.
-    async fn send(&mut self, bytes: &[u8]);
-}
-
-#[embassy_executor::task]
-async fn heartbeat(mut led: Output<'static>) {
-    loop {
-        led.toggle();
-        Timer::after_millis(500).await;
-    }
-}
-
 /// Drives motor A through [`SWEEP`], then stops and parks forever.
 ///
 /// This is the rig `crates/sim-core/src/spec.rs` step 4 asks for:
@@ -718,11 +695,11 @@ async fn follow_host_forever(
                 // Fed on a VALID twist only. A host dribbling malformed
                 // bytes is a host that has lost its mind, and must not
                 // count as one that is still in control.
-                watchdog.feed(now_ms());
+                watchdog.feed(firmware_support::now_ms());
             }
         }
 
-        let (mut left, mut right) = watchdog.gate(now_ms(), wanted);
+        let (mut left, mut right) = watchdog.gate(firmware_support::now_ms(), wanted);
 
         // ---- commanded, but not moving ----
         //
@@ -920,7 +897,7 @@ mod transport {
                 bin2: p.PIN_12,
             },
         );
-        spawner.spawn(heartbeat(Output::new(p.PIN_25, Level::Low)).unwrap());
+        spawner.spawn(firmware_support::heartbeat(Output::new(p.PIN_25, Level::Low), 500).unwrap());
         // `teleop` implies `usb`, so this transport is never built with it
         // — the sweep is the only thing that can own the motors here.
         spawner.spawn(drive_sweep(motors).unwrap());
@@ -949,18 +926,13 @@ mod transport {
     use embassy_futures::join::join3;
     #[cfg(feature = "teleop")]
     use embassy_usb::class::cdc_acm::Receiver;
-    use embassy_usb::class::cdc_acm::{CdcAcmClass, Sender, State};
+    use embassy_usb::class::cdc_acm::Sender;
     use embassy_usb::driver::Driver as UsbDriver;
-    use embassy_usb::{Builder, Config};
-    use static_cell::StaticCell;
 
     bind_interrupts!(struct Irqs {
         USBCTRL_IRQ => InterruptHandler<USB>;
     });
 
-    /// The endpoint's max packet size. A longer write must be split or the
-    /// transfer is rejected, and our pose line is up to 192 bytes.
-    const MAX_PACKET: usize = 64;
 
     /// Longest a status line may spend trying to reach the host before it
     /// is abandoned. Sized against the 1 ms USB full-speed frame: a
@@ -1014,7 +986,7 @@ mod transport {
             }
             HOST_WATCHING.store(true, Ordering::Relaxed);
             let write_all = async {
-                for chunk in bytes.chunks(MAX_PACKET) {
+                for chunk in bytes.chunks(firmware_support::usb::MAX_PACKET) {
                     if self.0.write_packet(chunk).await.is_err() {
                         return;
                     }
@@ -1051,35 +1023,13 @@ mod transport {
         // With `wifi` the pin goes to the radio instead, and the radio's
         // own LED takes over as the sign of life.
         #[cfg(not(feature = "wifi"))]
-        spawner.spawn(heartbeat(Output::new(p.PIN_25, Level::Low)).unwrap());
+        spawner.spawn(firmware_support::heartbeat(Output::new(p.PIN_25, Level::Low), 500).unwrap());
 
         let driver = Driver::new(p.USB, Irqs);
         // 0x2e8a is Raspberry Pi's vendor ID. Product IDs differ per
         // firmware — pico-robot 0x000a, pico-encoder 0x000b — so several
         // boards can be plugged in and still told apart.
-        let mut config = Config::new(0x2e8a, 0x000c);
-        config.manufacturer = Some("robotiq");
-        config.product = Some("pico-odom");
-        config.serial_number = Some("1");
-        config.max_power = 100;
-        config.max_packet_size_0 = MAX_PACKET as u8;
-
-        static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-        static STATE: StaticCell<State> = StaticCell::new();
-
-        let state = STATE.init(State::new());
-        let mut builder = Builder::new(
-            driver,
-            config,
-            CONFIG_DESC.init([0; 256]),
-            BOS_DESC.init([0; 256]),
-            &mut [],
-            CONTROL_BUF.init([0; 64]),
-        );
-        let class = CdcAcmClass::new(&mut builder, state, MAX_PACKET as u16);
-        let mut usb = builder.build();
+        let (mut usb, class) = firmware_support::usb::cdc(driver, "pico-odom", 0x000c);
         let (tx, _rx) = class.split();
 
         // One report stream, two wires. Both carry the same `Status::seq`,

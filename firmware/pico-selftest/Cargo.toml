@@ -22,8 +22,8 @@ embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executo
 embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
 embassy-time = "0.5"
 embassy-usb = "0.6"
+firmware-support = { path = "../support", features = ["usb"] }
 embassy-futures = "0.1"
-static_cell = "2"
 heapless = "0.9"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"

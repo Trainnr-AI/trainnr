@@ -25,14 +25,6 @@ use mpu6050_driver::Mpu6050;
 use panic_halt as _;
 
 /// Heartbeat: proof the firmware is alive even if the sensor misbehaves.
-#[embassy_executor::task]
-async fn heartbeat(mut led: Output<'static>) {
-    loop {
-        led.toggle();
-        Timer::after_millis(500).await;
-    }
-}
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -43,7 +35,7 @@ async fn main(_spawner: Spawner) {
     let i2c = I2c::new_blocking(p.I2C0, p.PIN_5, p.PIN_4, I2cConfig::default());
 
     let led = Output::new(p.PIN_25, Level::Low);
-    _spawner.spawn(heartbeat(led).unwrap());
+    _spawner.spawn(firmware_support::heartbeat(led, 500).unwrap());
 
     let mut sensor = Mpu6050::new(i2c);
     let mut line: heapless::String<160> = heapless::String::new();

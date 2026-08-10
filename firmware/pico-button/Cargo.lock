@@ -547,6 +547,15 @@ name = "firmware-build-support"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-support"
+version = "0.1.0"
+dependencies = [
+ "embassy-executor",
+ "embassy-rp",
+ "embassy-time",
+]
+
+[[package]]
 name = "fixed"
 version = "1.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -906,6 +915,7 @@ dependencies = [
  "embassy-rp",
  "embassy-time",
  "firmware-build-support",
+ "firmware-support",
  "panic-halt",
 ]
 
