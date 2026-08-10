@@ -1130,16 +1130,42 @@ mod tests {
     /// really sent, so the rejection is not merely this file agreeing with
     /// itself.
     ///
-    /// ⚠️ **This crate is currently missing its positive capture.** The
-    /// line above is genuine but stale, and inventing a replacement is
-    /// exactly what the header of `hil-host/examples/odom_view.rs` warns
-    /// against — a fixture written from this file's *idea* of the format
-    /// only proves the parser matches that idea. Paste a fresh line here
-    /// off the board and restore the positive assertions; until then the
-    /// round-trip test is what guards writer against parser.
     #[test]
     fn a_line_from_firmware_without_sequence_numbers_is_rejected() {
         assert_eq!(Status::parse(CAPTURED_BEFORE_SEQ), None);
+    }
+
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10, off
+    /// board #2 (chipid `0xf1a2ad734cb687d4`) running `pico-odom` built
+    /// with `usb,wifi`. Evidence, not an example.
+    ///
+    /// ⚠️ **A weak fixture, and worth knowing why.** Board #2 has no
+    /// encoders and no motors, so every pose and tick field is zero. That
+    /// proves the keys parse, but it could not catch `L` and `R` being
+    /// swapped, or `x` and `y`, because zero is zero either way. The
+    /// previous capture had rich values precisely because it came off the
+    /// bench rig. **Replace this with a board #1 capture under motion**
+    /// the next time that board is flashed — until then this is real
+    /// bytes with a known blind spot, which still beats an invented line
+    /// with an unknown one.
+    const CAPTURED: &str =
+        "n=2757 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%\r\n";
+
+    #[test]
+    fn a_line_the_board_actually_sent() {
+        let Some(s) = Status::parse(CAPTURED) else {
+            panic!("the firmware's real output no longer parses");
+        };
+        assert_eq!(s.seq, 2757);
+        assert_eq!(s.x, 0.0);
+        assert_eq!(s.y, 0.0);
+        assert_eq!(s.heading, 0.0);
+        assert_eq!(s.ticks_left, 0);
+        assert_eq!(s.ticks_right, 0);
+        assert_eq!(s.errors_left, 0);
+        assert_eq!(s.errors_right, 0);
+        assert_eq!(s.duty_percent, 25);
+        assert!(!s.stalled);
     }
 
     /// **The test that makes the 2026-08-09 bug impossible.** Writer and

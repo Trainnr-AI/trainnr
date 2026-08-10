@@ -354,9 +354,29 @@ fn read_udp(tx: Sender<Arrival>) -> Result<(), Box<dyn std::error::Error>> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let want_udp = args.iter().any(|a| a == "--udp");
-    let serial_port = args.iter().find(|a| !a.starts_with("--")).cloned();
+    // A fixed-length run, so a measurement can be repeated and compared
+    // rather than depending on when someone pressed Ctrl-C. Without it the
+    // only way to stop a live board is a kill, which loses the summary
+    // that is the entire point of a comparison run.
+    let run_for = args
+        .iter()
+        .position(|a| a == "--seconds")
+        .and_then(|i| args.get(i + 1))
+        .map(|s| s.parse::<u64>())
+        .transpose()?
+        .map(Duration::from_secs);
+    let serial_port = args
+        .iter()
+        .enumerate()
+        .find(|(i, a)| {
+            !a.starts_with("--")
+                && args.get(i.wrapping_sub(1)).map(String::as_str) != Some("--seconds")
+        })
+        .map(|(_, a)| a.clone());
     if serial_port.is_none() && !want_udp {
-        return Err("usage: odom_view [<serial-port>] [--udp]  (at least one)".into());
+        return Err(
+            "usage: odom_view [<serial-port>] [--udp] [--seconds N]  (at least one source)".into(),
+        );
     }
 
     let (tx, rx) = channel();
@@ -423,6 +443,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(_) => break,
             }
         };
+        if let Some(limit) = run_for {
+            if started.elapsed() >= limit {
+                println!("\n{limit:?} elapsed — stopping");
+                break;
+            }
+        }
         let Arrival { wire, at, report } = arrival;
         if !parsed_any {
             println!("✅ first line from {}", wire.name());
