@@ -1036,8 +1036,7 @@ mod transport {
                     pio: p.PIO0,
                     dma: p.DMA_CH0,
                 },
-            )
-            .await,
+            ),
         );
         #[cfg(not(feature = "wifi"))]
         let mut out = UsbReport(tx);
@@ -1145,10 +1144,14 @@ impl<A: Report, B: Report> Report for Tee<A, B> {
 mod wifi_link {
     use super::*;
     use core::net::Ipv4Addr;
+    use core::task::Poll;
     use cyw43::{Aligned, A4};
     use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
+    use embassy_futures::poll_once;
     use embassy_net::udp::{PacketMetadata, UdpSocket};
     use embassy_net::{IpEndpoint, StackResources};
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
     use embassy_rp::bind_interrupts;
     use embassy_rp::clocks::RoscRng;
     use embassy_rp::dma;
@@ -1209,11 +1212,23 @@ mod wifi_link {
     /// ```
     const BLINK_NO_CREDENTIALS: (u64, u64) = (60, 1940);
     const BLINK_JOINING: (u64, u64) = (120, 120);
+    /// Joined, addressed, and **nothing is getting out**. Its own pattern
+    /// because that state used to be invisible: the link was up, so the
+    /// LED went solid, while every datagram was being dropped. A board
+    /// that looks identical whether it is delivering or silently failing
+    /// is the thing that cost this session an hour.
+    const BLINK_LINKED_BUT_MUTE: (u64, u64) = (500, 500);
 
     /// True once DHCP has given us an address. Read by the LED task to go
     /// solid, and by [`UdpReport`] to skip the send entirely — a datagram
     /// with no source address is an error return we would only throw away.
     static LINK_UP: AtomicBool = AtomicBool::new(false);
+
+    /// Set by [`UdpReport::send`] when a datagram actually left, cleared
+    /// by the LED task each time it looks. Distinguishes "linked and
+    /// delivering" from "linked and dropping every packet", which are the
+    /// same thing to `LINK_UP` and were the same thing to the LED.
+    static SENT_RECENTLY: AtomicBool = AtomicBool::new(false);
 
     /// Services the radio. Must run forever, or the chip stops answering.
     #[embassy_executor::task]
@@ -1277,9 +1292,14 @@ mod wifi_link {
             while !LINK_UP.load(Ordering::Relaxed) {
                 blink(&mut control, BLINK_JOINING).await;
             }
-            control.gpio_set(0, true).await;
             while LINK_UP.load(Ordering::Relaxed) {
-                Timer::after_millis(200).await;
+                if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
+                    // Solid: addressed and delivering.
+                    control.gpio_set(0, true).await;
+                    Timer::after_millis(500).await;
+                } else {
+                    blink(&mut control, BLINK_LINKED_BUT_MUTE).await;
+                }
             }
             control.gpio_set(0, false).await;
         }
@@ -1306,25 +1326,55 @@ mod wifi_link {
         }
     }
 
-    pub struct UdpReport {
-        socket: UdpSocket<'static>,
-        broadcast: IpEndpoint,
-    }
+    /// One status line waiting to go out.
+    type Line = heapless::Vec<u8, 192>;
+
+    /// Lines handed to the radio but not yet transmitted.
+    ///
+    /// **Deliberately tiny.** This is a drop queue, not a buffer: if the
+    /// radio is slower than 50 Hz, the right thing is to lose the oldest
+    /// telemetry rather than accumulate a backlog that arrives late and
+    /// describes a robot that has since moved.
+    static OUTBOX: Channel<CriticalSectionRawMutex, Line, 2> = Channel::new();
+
+    /// A handle, not a socket.
+    ///
+    /// # Why the radio is on the other side of a queue
+    ///
+    /// Because on 2026-08-10 it took the whole board down twice, in two
+    /// different ways, and both were structural rather than bad luck:
+    ///
+    /// 1. `send_to` awaited on a full transmit buffer, so the report loop
+    ///    stopped — **and USB stopped with it**, because `Tee` joins both
+    ///    sends and a join finishes only when both halves do.
+    /// 2. `cyw43::new()` hung during firmware upload, and since USB was
+    ///    started *after* radio bring-up, the board enumerated nothing at
+    ///    all. A dark LED and no serial port is an unfalsifiable state:
+    ///    "the radio hung", "the flash is bad" and "the board is dead"
+    ///    look identical.
+    ///
+    /// A queue fixes the class. Nothing the radio does — uploading
+    /// firmware, scanning, associating, failing DHCP, blocking on a full
+    /// buffer — can now reach the odometry loop or the USB stack. A radio
+    /// that never comes up costs exactly one dropped datagram per report,
+    /// and the cable keeps saying so.
+    pub struct UdpReport;
 
     impl Report for UdpReport {
-        /// Fire and forget. Every failure here — no address yet, no route,
-        /// transmit buffer full — is a dropped status line, which is
-        /// precisely what this trait's contract permits and what the
-        /// odometry loop needs. Nothing is retried and nothing blocks.
+        /// Never awaits anything. `try_send` either takes the line or
+        /// does not, which is precisely this trait's contract: *every
+        /// microsecond spent blocked here is a microsecond of missed
+        /// encoder transitions.*
         ///
         /// `HOST_WATCHING` is deliberately never set: see the module
         /// header. There is no host to watch on a broadcast socket, so the
-        /// motor gate it guards is left shut and the sweep is not built.
+        /// motor gate it guards is left shut.
         async fn send(&mut self, bytes: &[u8]) {
-            if !LINK_UP.load(Ordering::Relaxed) {
+            let mut line = Line::new();
+            if line.extend_from_slice(bytes).is_err() {
                 return;
             }
-            let _ = self.socket.send_to(bytes, self.broadcast).await;
+            let _ = OUTBOX.try_send(line);
         }
     }
 
@@ -1340,13 +1390,26 @@ mod wifi_link {
         pub dma: Peri<'static, DMA_CH0>,
     }
 
-    /// Brings the radio and the IP stack up, and hands back something that
-    /// can be reported into. Returns as soon as the hardware is
-    /// initialised — **not** when the network is up, because waiting for
-    /// DHCP here would mean not sampling encoders until an access point
-    /// answered, and a tick missed is a tick missing from the pose
-    /// forever.
-    pub async fn start(spawner: Spawner, pins: RadioPins) -> UdpReport {
+    /// Hands back a report sink **immediately**, and does every slow or
+    /// fallible thing in a task behind it.
+    ///
+    /// ⚠️ Deliberately not `async`. It used to await radio bring-up, which
+    /// put `cyw43::new()` — a 231 KB firmware upload over a bit-banged SPI
+    /// bus — in front of USB enumeration. When that upload hung, the board
+    /// presented no serial port, no LED and no way to tell a hung radio
+    /// from a bad flash. Nothing that can fail belongs on this path.
+    pub fn start(spawner: Spawner, pins: RadioPins) -> UdpReport {
+        spawner.spawn(radio_task(spawner, pins).unwrap());
+        UdpReport
+    }
+
+    /// Owns the radio for the life of the program: brings it up, then
+    /// drains [`OUTBOX`] onto the air.
+    ///
+    /// Everything in here is allowed to be slow, to fail, or to hang. That
+    /// is the whole point of it being over here.
+    #[embassy_executor::task]
+    async fn radio_task(spawner: Spawner, pins: RadioPins) -> ! {
         // The four lines to the radio. Fixed by the board's wiring — and
         // the reason this cannot coexist with the GP25 heartbeat the
         // cable-only builds spawn.
@@ -1401,9 +1464,24 @@ mod wifi_link {
         // Bound to the same port it broadcasts to, so a host that replies
         // has somewhere to reply *to* when the command path lands.
         let _ = socket.bind(TELEMETRY_PORT);
-        UdpReport {
-            socket,
-            broadcast: IpEndpoint::new(Ipv4Addr::BROADCAST.into(), TELEMETRY_PORT),
+        let broadcast = IpEndpoint::new(Ipv4Addr::BROADCAST.into(), TELEMETRY_PORT);
+
+        loop {
+            let line = OUTBOX.receive().await;
+            if !LINK_UP.load(Ordering::Relaxed) {
+                continue;
+            }
+            // ⚠️ Polled ONCE, never awaited. `send_to` returns
+            // `Poll::Pending` when the transmit buffer is full and only
+            // wakes when space appears — and if the link is associated but
+            // frames are not actually leaving, that space never comes.
+            // Awaiting it here would stall this task forever, which is
+            // survivable now (the queue just fills and drops) but would
+            // still hide the fault behind a silent radio rather than
+            // showing it as the mute-LED pattern.
+            if let Poll::Ready(Ok(())) = poll_once(socket.send_to(&line, broadcast)) {
+                SENT_RECENTLY.store(true, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -1450,8 +1528,7 @@ mod transport {
                 pio: p.PIO0,
                 dma: p.DMA_CH0,
             },
-        )
-        .await;
+        );
 
         odometry_forever(encoders, &mut out).await
     }

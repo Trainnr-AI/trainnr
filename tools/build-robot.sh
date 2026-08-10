@@ -22,9 +22,9 @@ echo "      firmware/pico-robot/pico-robot.uf2"
 
 echo "[2/2] RP2350 (real board, USB)"
 tools/build-pico2.sh pico-robot usb >/dev/null
-echo "      firmware/pico-robot/pico-robot-pico2.uf2"
+echo "      firmware/pico-robot/pico-robot-pico2-usb.uf2"
 
 # Same source, same minute. If these disagree, something did not rebuild.
-for f in firmware/pico-robot/pico-robot.uf2 firmware/pico-robot/pico-robot-pico2.uf2; do
+for f in firmware/pico-robot/pico-robot.uf2 firmware/pico-robot/pico-robot-pico2-usb.uf2; do
   printf "      %-46s %s\n" "$f" "$(date -r "$f" '+%H:%M:%S')"
 done

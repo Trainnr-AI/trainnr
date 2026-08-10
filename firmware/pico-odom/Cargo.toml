@@ -32,6 +32,7 @@ wifi = [
     "dep:cyw43-pio",
     "dep:embassy-net",
     "dep:embassy-futures",
+    "dep:embassy-sync",
     "dep:static_cell",
 ]
 
@@ -52,6 +53,10 @@ static_cell = { version = "2", optional = true }
 cyw43 = { version = "0.7", optional = true }
 cyw43-firmware = { version = "0.1", features = ["wifi"], optional = true }
 cyw43-pio = { version = "0.10", optional = true }
+# The drop queue between the report loop and the radio. Already a
+# transitive dependency of embassy-net; named here because `OUTBOX` is
+# what keeps a hung radio from reaching the odometry loop.
+embassy-sync = { version = "0.7", optional = true }
 # `medium-ethernet` because the CYW43 presents as an Ethernet device;
 # `dhcpv4` because a bench AP hands out addresses and a hardcoded one is a
 # thing that breaks when the robot moves rooms.

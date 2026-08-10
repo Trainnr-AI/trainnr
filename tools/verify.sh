@@ -49,19 +49,19 @@ for c in pico-blink pico-button pico-encoder pico-imu pico-odom pico-robot; do
   step "firmware $c (RP2040)" "(cd firmware/$c && cargo build -q --release --target thumbv6m-none-eabi)"
 done
 for c in $(ls firmware | grep pico-); do
-  step "firmware $c (RP2350)" "tools/build-pico2.sh $c"
+  step "firmware $c (RP2350)" "SKIP_UF2=1 tools/build-pico2.sh $c"
 done
 # The loop above builds each crate's DEFAULT transport, which for
 # pico-encoder and pico-odom is the UART one the emulator speaks. Their USB
 # builds are what run on a real board, and nothing else here compiles them.
 # (pico-robot's USB build is covered, but only transitively — the HIL step
 # below runs tools/build-robot.sh, which builds it.)
-step "firmware pico-encoder (RP2350, USB)" "tools/build-pico2.sh pico-encoder usb"
-step "firmware pico-odom (RP2350, USB)" "tools/build-pico2.sh pico-odom usb"
+step "firmware pico-encoder (RP2350, USB)" "SKIP_UF2=1 tools/build-pico2.sh pico-encoder usb"
+step "firmware pico-odom (RP2350, USB)" "SKIP_UF2=1 tools/build-pico2.sh pico-odom usb"
 # `teleop` replaces the calibration sweep with a host command channel, so
 # it compiles a different half of the file — the watchdog, the signed duty
 # path and the H-bridge failsafe. Nothing above reaches any of it.
-step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleop"
+step "firmware pico-odom (RP2350, teleop)" "SKIP_UF2=1 tools/build-pico2.sh pico-odom teleop"
 # The radio transport, and the tee that sends every line down BOTH wires.
 # Neither is reachable from any build above: `wifi` brings in the CYW43
 # driver, the IP stack and a third `Report` impl, and `usb,wifi` compiles
@@ -72,8 +72,8 @@ step "firmware pico-odom (RP2350, teleop)" "tools/build-pico2.sh pico-odom teleo
 # precisely so that this step can exist on a machine that has none. A
 # `compile_error!` there would have made the radio build the one variant
 # never checked.
-step "firmware pico-odom (RP2350, wifi)" "tools/build-pico2.sh pico-odom wifi"
-step "firmware pico-odom (RP2350, usb+wifi)" "tools/build-pico2.sh pico-odom usb,wifi"
+step "firmware pico-odom (RP2350, wifi)" "SKIP_UF2=1 tools/build-pico2.sh pico-odom wifi"
+step "firmware pico-odom (RP2350, usb+wifi)" "SKIP_UF2=1 tools/build-pico2.sh pico-odom usb,wifi"
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.
@@ -84,7 +84,7 @@ step "firmware pico-odom (RP2350, usb+wifi)" "tools/build-pico2.sh pico-odom usb
 # The recording is a capture of a REAL RP2350 over USB, so re-making it
 # needs the board:
 #
-#   picotool load -x firmware/pico-robot/pico-robot-pico2.uf2   # after BOOTSEL
+#   picotool load -x firmware/pico-robot/pico-robot-pico2-usb.uf2   # after BOOTSEL
 #   cargo run -p hil-host -- --serial /dev/cu.usbmodem11 \
 #       --record recordings/rp2350-utrap.wire
 #
