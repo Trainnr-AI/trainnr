@@ -13,16 +13,17 @@ source "$HOME/.cargo/env" 2>/dev/null || true
 SERIAL=""
 [ "${1:-}" = "--serial" ] && SERIAL="${2:-}"
 
-# --ci skips the two steps a hosted runner cannot do, and nothing else.
+# --fast skips the two slow/blocked steps and runs everything else.
 #
-#   the emulator      `tools/rp2040js` is a local checkout and gitignored
+#   the emulator      ~9 minutes since the measured robot speed landed,
+#                     because it simulates a 3.86x slower machine
 #   the wire replay   STALE pending a hardware re-record (see below)
 #
 # Everything else — every build, every test, both firmware architectures,
-# the perception replay — runs there. That is the point: the slow step
-# leaves your loop and the rest gates every push.
+# the perception replay — still runs. Use it while iterating; run the
+# whole thing before pushing.
 CI=""
-[ "${1:-}" = "--ci" ] && CI=1
+[ "${1:-}" = "--fast" ] && CI=1
 
 pass=0; fail=0
 step() {                      # step "name" "command"

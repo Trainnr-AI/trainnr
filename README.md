@@ -134,17 +134,16 @@ CI calls it rather than restating the steps — a workflow file that lists
 the same checks again is one more pair of things that must agree and
 eventually will not.
 
-| | steps | where |
+| | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 26 | a laptop, before pushing |
-| `tools/verify.sh --ci` | 24 | every push, via GitHub Actions |
+| `tools/verify.sh` | 26 | before pushing |
+| `tools/verify.sh --fast` | 24 | while iterating |
 | `tools/verify.sh --serial <port>` | 27 | with a Pico on a cable |
 
-`--ci` drops exactly two, both named in the script with the reason: the
-emulator (its checkout is gitignored) and the RP2350 wire replay, which is
-**stale pending a hardware re-record**. That one still runs and still
-fails locally, so it is not hidden — a CI red from its first commit
-teaches everyone to ignore red, which is worse than a skip.
+`--fast` drops exactly two, both named in the script with the reason: the
+emulator step, which takes ~9 minutes since the measured robot speed
+landed, and the RP2350 wire replay, which is **stale pending a hardware
+re-record**. Both still run in the full gate, so neither is hidden.
 
 ## Repository layout
 
@@ -194,8 +193,8 @@ robotiq/
 ```sh
 tools/verify.sh             # everything: fmt, clippy, 354 tests, firmware,
                             # both replay fixtures, and the emulator HIL run
-tools/verify.sh --ci        # the same, minus the two steps a hosted runner
-                            # cannot do — what .github/workflows/verify.yml runs
+tools/verify.sh --fast      # the same, minus the emulator and the stale
+                            # wire replay — for iterating
 cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
 ```
 
