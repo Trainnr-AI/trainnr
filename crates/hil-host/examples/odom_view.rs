@@ -122,10 +122,12 @@ impl Wire {
         }
     }
 
-    /// Belief blue for the cable, amber for the radio.
+    /// Belief blue for the cable, amber for the radio. The radio's colour
+    /// is NOT `belief_viz::truth()` despite looking similar — yellow means
+    /// ground truth everywhere else, and there is none on a bench.
     fn colour(self) -> rerun::Color {
         match self {
-            Wire::Usb => rerun::Color::from_rgb(90, 200, 255),
+            Wire::Usb => belief_viz::belief(),
             Wire::Wifi => rerun::Color::from_rgb(255, 176, 60),
         }
     }
@@ -142,7 +144,6 @@ struct Tally {
     first_seq: Option<u64>,
     highest_seq: u64,
     last_arrival: Option<Instant>,
-    trail: Vec<[f32; 2]>,
 }
 
 impl Tally {
@@ -418,7 +419,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let started = Instant::now();
     let mut tallies: HashMap<Wire, Tally> = wires.iter().map(|&w| (w, Tally::default())).collect();
-    let mut frame = 0u64;
+    let mut trails: HashMap<Wire, belief_viz::Trail> = HashMap::new();
     let mut last_errors_left = 0u64;
     let mut last_errors_right = 0u64;
     let mut announced_stall = false;
@@ -524,44 +525,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // ---- the pose itself ----
-        let (x, y) = (report.x as f32, report.y as f32);
-        tally.trail.push([x, y]);
-
-        // The trail is CUMULATIVE: drawing it means re-sending every point
-        // it has ever had. At 50 reports a second that is quadratic, and
-        // `sim-run/src/viz.rs` records what it costs — a 22.5 s run pushed
-        // 1.27 million points where 2,252 would do. Redraw at 1 Hz.
-        if frame.is_multiple_of(REPORTS_PER_SECOND) {
-            rec.log(
-                format!("{}/belief/trail", wire.name()),
-                &rerun::LineStrips2D::new([tally.trail.clone()]).with_colors([wire.colour()]),
+        trails
+            .entry(wire)
+            .or_insert_with(|| {
+                belief_viz::Trail::new(wire.colour(), belief_viz::Size::BENCH, REPORTS_PER_SECOND)
+            })
+            .draw(
+                &rec,
+                &format!("{}/belief", wire.name()),
+                sim_core::Pose::new(report.x, report.y, report.heading),
             )?;
-        }
 
-        rec.log(
-            format!("{}/belief/body", wire.name()),
-            &rerun::Points2D::new([[x, y]])
-                .with_radii([0.02])
-                .with_colors([wire.colour()]),
-        )?;
-        rec.log(
-            format!("{}/belief/heading", wire.name()),
-            &rerun::Arrows2D::from_vectors([[
-                0.05 * report.heading.cos() as f32,
-                0.05 * report.heading.sin() as f32,
-            ]])
-            .with_origins([[x, y]])
-            .with_colors([rerun::Color::from_rgb(255, 90, 90)]),
-        )?;
-
-        rec.log(
-            format!("{}/ticks/left", wire.name()),
-            &rerun::Scalars::single(report.ticks_left as f64),
-        )?;
-        rec.log(
-            format!("{}/ticks/right", wire.name()),
-            &rerun::Scalars::single(report.ticks_right as f64),
-        )?;
         rec.log(
             format!("{}/belief/heading_rad", wire.name()),
             &rerun::Scalars::single(report.heading),
@@ -620,8 +594,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("⚠️  STALLED — commanded but not moving. Check the battery switch.");
             announced_stall = true;
         }
-
-        frame += 1;
     }
 
     if !parsed_any {

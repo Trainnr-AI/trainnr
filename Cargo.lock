@@ -1009,6 +1009,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "belief-viz"
+version = "0.1.0"
+dependencies = [
+ "rerun",
+ "sim-core",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4354,6 +4362,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 name = "hil-host"
 version = "0.1.0"
 dependencies = [
+ "belief-viz",
  "hil-protocol",
  "rerun",
  "serialport",
@@ -12424,6 +12433,7 @@ name = "vision"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "belief-viz",
  "hil-protocol",
  "image",
  "nokhwa",

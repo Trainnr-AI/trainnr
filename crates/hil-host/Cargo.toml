@@ -9,6 +9,7 @@ edition.workspace = true
 
 [dependencies]
 sim-core = { path = "../sim-core" }
+belief-viz = { path = "../belief-viz" }
 hil-protocol = { path = "../hil-protocol" }
 sim-run = { path = "../sim-run" }
 serialport = "4"

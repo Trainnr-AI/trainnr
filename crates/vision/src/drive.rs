@@ -341,20 +341,18 @@ pub fn log(rec: &rerun::RecordingStream, fb: &Feedback, commanded: BodyTwist) ->
     // is dead reckoning computed on the microcontroller from real
     // encoders. Drawing only the first would put a confident, entirely
     // synthetic trail on screen and call it the robot.
-    rec.log(
-        "chip/belief/body",
-        &rerun::Points2D::new([[r.x as f32, r.y as f32]])
-            .with_radii([0.02])
-            .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
-    )?;
-    rec.log(
-        "chip/belief/heading",
-        &rerun::Arrows2D::from_vectors([[
-            0.15 * r.heading.cos() as f32,
-            0.15 * r.heading.sin() as f32,
-        ]])
-        .with_origins([[r.x as f32, r.y as f32]])
-        .with_colors([rerun::Color::from_rgb(90, 200, 255)]),
+    belief_viz::marker(
+        rec,
+        "chip/belief",
+        sim_core::Pose::new(r.x, r.y, r.heading),
+        belief_viz::belief(),
+        // 0.15, not `Size::BENCH`'s 0.05: this arrow is read against the
+        // camera frame rather than a metre grid, and a shorter one
+        // disappears against the detection boxes.
+        belief_viz::Size {
+            body_radius: 0.02,
+            arrow: 0.15,
+        },
     )?;
     rec.log(
         "chip/belief/heading_rad",
