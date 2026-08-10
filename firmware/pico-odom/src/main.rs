@@ -1359,13 +1359,7 @@ mod wifi_link {
                 control.start_ap_open(SSID, AP_CHANNEL).await;
                 note("# hosting OPEN network — set an 8..=63 character WIFI_PASSWORD for WPA2");
             }
-            let mut text: heapless::String<160> = heapless::String::new();
-            let _ = write!(
-                text,
-                "# ssid={:?} channel={} address={} — join it, then odom_view --udp",
-                SSID, AP_CHANNEL, AP_ADDRESS
-            );
-            note(&text);
+            announce_ap();
             // No DHCP server: a client that joins will self-assign a
             // link-local address rather than being handed one. That is
             // enough for broadcast telemetry, which is addressed to
@@ -1373,7 +1367,21 @@ mod wifi_link {
             // whose subnet anyone thinks they are on. It is NOT enough to
             // reach this board by address, which is what a command path
             // would need — that is when a DHCP server earns its keep.
+            let mut ticks = 0u32;
             loop {
+                // ⚠️ Re-announced, not said once.
+                //
+                // `UsbReport` drops anything written while DTR is low —
+                // correctly, since nothing is listening — so a banner
+                // emitted at boot is gone by the time someone opens the
+                // port. The station path got away with this only because
+                // its join loop happened to repeat every 15 seconds. A
+                // diagnostic you have to have been present for is not a
+                // diagnostic.
+                if ticks % 20 == 0 {
+                    announce_ap();
+                }
+                ticks += 1;
                 if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
                     control.gpio_set(0, true).await;
                     Timer::after_millis(500).await;
@@ -1519,6 +1527,17 @@ mod wifi_link {
     /// without parsing it, and so `Status::parse` rejects them — which it
     /// does anyway, having no keys to find.
     pub static DIAG: Channel<CriticalSectionRawMutex, Line, 8> = Channel::new();
+
+    /// What network the robot is hosting, and where it is.
+    fn announce_ap() {
+        let mut text: heapless::String<160> = heapless::String::new();
+        let _ = write!(
+            text,
+            "# hosting ssid={:?} channel={} address={} — join it, then odom_view --udp",
+            SSID, AP_CHANNEL, AP_ADDRESS
+        );
+        note(&text);
+    }
 
     /// Queue a note for the host, dropping it if nobody is draining.
     /// Diagnostics must never be able to block the thing they diagnose.
