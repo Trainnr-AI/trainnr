@@ -39,6 +39,46 @@
 //!                                                silence ⇒ coast, STBY low
 //! ```
 //!
+//! # Telemetry over the radio, and how to read the LED
+//!
+//! Built with `wifi`, the board reports over UDP as well as (or instead
+//! of) the cable. It has one output when untethered, so that LED encodes
+//! the whole state machine:
+//!
+//! ```text
+//!   ··   ··   ··       double flash ~1/s   DELIVERING — datagrams leaving
+//!   ▬▬  ▬▬  ▬▬         even blink ~1/s     joined, but nothing getting out
+//!   ▪▪▪▪▪▪▪▪▪▪▪▪       fast blink ~4/s     associating, not joined yet
+//!   ·          ·       one blip / 2 s      no WIFI_SSID compiled in
+//! ```
+//!
+//! **The healthy state blinks rather than staying lit on purpose**: a
+//! solid LED cannot prove the firmware is still running, so a board that
+//! panicked with the light on would look exactly like one working
+//! perfectly. A heartbeat is only produced by code still executing.
+//!
+//! It means datagrams are *leaving the chip*, not that anyone receives
+//! them — a broadcast socket cannot know whether a host is listening.
+//! `odom_view --udp` measures delivery, against the chip's own sequence
+//! numbers.
+//!
+//! ```sh
+//! # host the network (default) — no router needed, laptop must join it
+//! WIFI_SSID=pico2w WIFI_PASSWORD=8-to-63-chars \
+//!     tools/build-pico2.sh pico-odom usb,wifi
+//!
+//! # or join an existing one — laptop keeps its internet
+//! WIFI_MODE=station WIFI_SSID=... WIFI_PASSWORD=... \
+//!     tools/build-pico2.sh pico-odom usb,wifi
+//!
+//! cargo run -p hil-host --example odom_view -- /dev/cu.usbmodem11 --udp
+//! ```
+//!
+//! Measured on 2026-08-11, board #2 joining a domestic 2.4 GHz AP, 60 s:
+//! **2992 reports on the cable with no loss, 2876 over the air — 3.88%
+//! lost, median 66 ms behind the cable, p99 128 ms.** Good enough to watch
+//! a robot; not good enough to steer one.
+//!
 //! # What this can and cannot prove on real hardware
 //!
 //! The geometry it reads from [`RobotSpec::REAL_BOT`] is **still
@@ -1235,6 +1275,9 @@ mod wifi_link {
     /// ```
     const BLINK_NO_CREDENTIALS: (u64, u64) = (60, 1940);
     const BLINK_JOINING: (u64, u64) = (120, 120);
+    /// Half of the delivering heartbeat: two quick flashes, then a pause.
+    const BLINK_DELIVERING: (u64, u64) = (70, 90);
+    const DELIVERING_PAUSE_MS: u64 = 700;
 
     /// Longest a single association attempt may take before it is
     /// abandoned and retried. Generous — real APs can take several seconds
@@ -1382,12 +1425,7 @@ mod wifi_link {
                     announce_ap();
                 }
                 ticks += 1;
-                if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
-                    control.gpio_set(0, true).await;
-                    Timer::after_millis(500).await;
-                } else {
-                    blink(&mut control, BLINK_LINKED_BUT_MUTE).await;
-                }
+                show_link_health(&mut control).await;
             }
         }
 
@@ -1467,13 +1505,7 @@ mod wifi_link {
                 blink(&mut control, BLINK_JOINING).await;
             }
             while LINK_UP.load(Ordering::Relaxed) {
-                if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
-                    // Solid: addressed and delivering.
-                    control.gpio_set(0, true).await;
-                    Timer::after_millis(500).await;
-                } else {
-                    blink(&mut control, BLINK_LINKED_BUT_MUTE).await;
-                }
+                show_link_health(&mut control).await;
             }
             control.gpio_set(0, false).await;
         }
@@ -1485,6 +1517,42 @@ mod wifi_link {
         Timer::after_millis(on).await;
         control.gpio_set(0, false).await;
         Timer::after_millis(off).await;
+    }
+
+    /// Shows, on the one output an untethered board has, whether telemetry
+    /// is actually going out. Shared by both modes, because "is the radio
+    /// working" has one answer and should have one pattern.
+    ///
+    /// ```text
+    ///   ··   ··   ··      double flash, ~1/s   DELIVERING — datagrams leaving
+    ///   ▬▬  ▬▬  ▬▬        even blink,  ~1/s    linked, but nothing getting out
+    ///   ▪▪▪▪▪▪▪▪▪▪        fast blink,  ~4/s    associating, not yet joined
+    ///   ·         ·       one blip / 2 s       no SSID compiled in
+    /// ```
+    ///
+    /// # Why the healthy state blinks rather than staying lit
+    ///
+    /// Because a solid LED cannot prove the firmware is still running. A
+    /// board that panicked with the light on looks exactly like a board
+    /// delivering perfectly — and this session already spent hours on
+    /// states that were indistinguishable from the outside. A heartbeat is
+    /// only produced by code that is still executing.
+    ///
+    /// # What it can and cannot tell you
+    ///
+    /// It means **datagrams are leaving the chip**, not that anyone is
+    /// receiving them. A broadcast socket has no way to know whether a
+    /// host is listening. For delivery you need the other end —
+    /// `odom_view --udp` reports loss against the chip's own sequence
+    /// numbers, which is the measurement this cannot make alone.
+    async fn show_link_health(control: &mut cyw43::Control<'static>) {
+        if SENT_RECENTLY.swap(false, Ordering::Relaxed) {
+            blink(control, BLINK_DELIVERING).await;
+            blink(control, BLINK_DELIVERING).await;
+            Timer::after_millis(DELIVERING_PAUSE_MS).await;
+        } else {
+            blink(control, BLINK_LINKED_BUT_MUTE).await;
+        }
     }
 
     /// Polls the stack for a DHCP lease and publishes it to [`LINK_UP`].

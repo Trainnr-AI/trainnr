@@ -423,6 +423,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_errors_right = 0u64;
     let mut announced_stall = false;
     let mut parsed_any = false;
+    // Every lag sample, kept so the summary can quote a distribution
+    // rather than a plot. The plot shows the shape; a number is what ends
+    // up in the progress log and in an argument about whether the radio
+    // could ever carry commands.
+    let mut lags: Vec<f64> = Vec::new();
 
     // `recv_timeout` rather than `rx.iter()`: the UDP reader never returns
     // — a socket with nobody sending to it is indistinguishable from one
@@ -507,6 +512,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match verdict {
                 Verdict::Lag { wifi_lag_ms, .. } => {
                     rec.log("compare/wifi_lag_ms", &rerun::Scalars::single(wifi_lag_ms))?;
+                    lags.push(wifi_lag_ms);
                 }
                 Verdict::Lost { seq, wire } => {
                     rec.log(
@@ -624,7 +630,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("    on purpose — reflash it.");
     }
     summarise(&tallies);
+    summarise_lag(&mut lags);
     Ok(())
+}
+
+/// How far behind the cable the radio ran, for reports both delivered.
+///
+/// Percentiles rather than a mean, because the mean of a latency
+/// distribution is the one statistic that cannot fail a deadline: what
+/// matters for control is the tail, and a radio that is usually 3 ms
+/// behind and occasionally 300 ms behind is not a 6 ms radio.
+fn summarise_lag(lags: &mut [f64]) {
+    if lags.is_empty() {
+        return;
+    }
+    lags.sort_by(|a, b| a.partial_cmp(b).expect("lag samples are never NaN"));
+    let at = |q: f64| lags[((lags.len() - 1) as f64 * q) as usize];
+    println!();
+    println!(
+        "wifi lag behind usb, for the {} reports both delivered:",
+        lags.len()
+    );
+    println!(
+        "   median {:.1} ms · p95 {:.1} ms · p99 {:.1} ms · worst {:.1} ms",
+        at(0.50),
+        at(0.95),
+        at(0.99),
+        lags[lags.len() - 1],
+    );
 }
 
 /// Printed on exit, because the plots go away with the viewer and the
