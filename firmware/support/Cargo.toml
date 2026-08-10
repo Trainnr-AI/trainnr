@@ -1,7 +1,7 @@
 [package]
 name = "firmware-support"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 # The parts every firmware here was writing out again.
 #
@@ -17,13 +17,12 @@ edition = "2021"
 usb = ["dep:embassy-usb", "dep:static_cell"]
 
 [dependencies]
-embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
+embassy-executor = { workspace = true }
 # ⚠️ No chip feature here on purpose. `rp2040` vs `rp235xa` is the BINARY
 # crate's choice; naming either one here would silently win the feature
 # unification and build the wrong chip's HAL.
-embassy-rp = { version = "0.10", default-features = false, features = ["time-driver"] }
-embassy-time = "0.5"
-embassy-usb = { version = "0.6", optional = true }
-static_cell = { version = "2", optional = true }
+embassy-rp = { workspace = true }
+embassy-time = { workspace = true }
+embassy-usb = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
 
-[workspace]

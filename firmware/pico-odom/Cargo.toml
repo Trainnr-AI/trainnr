@@ -1,7 +1,7 @@
 [package]
 name = "pico-odom"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 # H2b: read a real sensor over I2C, using OUR driver crate — the same
 # crate that is unit-tested on the Mac with a mocked bus.
@@ -37,27 +37,27 @@ wifi = [
 ]
 
 [dependencies]
-embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
-embassy-time = "0.5"
-cortex-m = "0.7"
-cortex-m-rt = "0.7"
-panic-halt = "1.0"
-heapless = "0.9"
-embassy-usb = { version = "0.6", optional = true }
-firmware-support = { path = "../support" }
-embassy-futures = { version = "0.1", optional = true }
-static_cell = { version = "2", optional = true }
+embassy-executor = { workspace = true }
+embassy-rp = { workspace = true }
+embassy-time = { workspace = true }
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+panic-halt = { workspace = true }
+heapless = { workspace = true }
+embassy-usb = { workspace = true, optional = true }
+firmware-support = { workspace = true }
+embassy-futures = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
 # The radio, and the TCP/IP stack that rides on it. Versions match
 # `firmware/pico-led`, which is the build proven to bring the radio up on
 # our board #2 — 6 power cycles, 6 successes (docs/e2e-research/28).
-cyw43 = { version = "0.7", optional = true }
-cyw43-firmware = { version = "0.1", features = ["wifi"], optional = true }
-cyw43-pio = { version = "0.10", optional = true }
+cyw43 = { workspace = true, optional = true }
+cyw43-firmware = { workspace = true, optional = true }
+cyw43-pio = { workspace = true, optional = true }
 # The drop queue between the report loop and the radio. Already a
 # transitive dependency of embassy-net; named here because `OUTBOX` is
 # what keeps a hung radio from reaching the odometry loop.
-embassy-sync = { version = "0.7", optional = true }
+embassy-sync = { workspace = true, optional = true }
 # `medium-ethernet` because the CYW43 presents as an Ethernet device;
 # `dhcpv4` because a bench AP hands out addresses and a hardcoded one is a
 # thing that breaks when the robot moves rooms.
@@ -69,21 +69,15 @@ embassy-net = { version = "0.9", optional = true, features = [
 ] }
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
-quad-encoder = { path = "../../crates/quad-encoder" }
-sim-core = { path = "../../crates/sim-core", default-features = false }
+quad-encoder = { workspace = true }
+sim-core = { workspace = true }
 # The host<->chip vocabulary, shared rather than reinvented. `pico-odom`'s
 # STATUS line is still ad-hoc text (see the note in examples/odom_view.rs
 # about what that cost); its COMMAND channel is not, because `pico-robot`
 # already proved this parser on hardware and `Message::Twist` already
 # means exactly what a camera-driven controller wants to say.
-hil-protocol = { path = "../../crates/hil-protocol" }
+hil-protocol = { workspace = true }
 
 [build-dependencies]
-firmware-build-support = { path = "../build-support" }
+firmware-build-support = { workspace = true }
 
-[profile.release]
-debug = true
-lto = true
-opt-level = "z"
-
-[workspace]
