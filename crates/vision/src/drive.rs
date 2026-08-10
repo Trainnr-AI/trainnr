@@ -138,10 +138,8 @@ impl Wheels {
     /// ⚠️ Opening raises DTR, which is what un-gates the chip. **From this
     /// call on, the motors can move.**
     pub fn open(port_name: &str) -> Result<Wheels> {
-        let port = serialport::new(port_name, 115_200)
-            .timeout(Duration::from_millis(200))
-            .open()
-            .with_context(|| {
+        let port =
+            hil_protocol::link::open(port_name, Duration::from_millis(200)).with_context(|| {
                 format!(
                     "could not open {port_name}. Another program holding it? \
                      serialport opens exclusively — one process at a time."

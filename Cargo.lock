@@ -4374,6 +4374,7 @@ dependencies = [
 name = "hil-protocol"
 version = "0.1.0"
 dependencies = [
+ "serialport",
  "sim-core",
 ]
 

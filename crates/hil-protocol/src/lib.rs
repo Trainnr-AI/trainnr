@@ -57,7 +57,10 @@
 //! caller-supplied [`core::fmt::Write`] (a `heapless::String` on the chip,
 //! a `String` or socket on the host) so this crate never allocates.
 
-#![cfg_attr(not(test), no_std)]
+// `host` pulls in `serialport`, which is std-only. Firmware never
+// enables it, so the no_std discipline this crate exists under is
+// unchanged for the target that actually needs it.
+#![cfg_attr(not(any(test, feature = "host")), no_std)]
 #![forbid(unsafe_code)]
 
 use core::fmt::Write;
@@ -1209,5 +1212,48 @@ mod tests {
         assert!(
             Status::parse("pose x=+0.0 y=+0.0 th=+0.0  ticks L=1 R=0  err=0  duty=0%").is_none()
         );
+    }
+}
+
+/// Opening the serial link to a chip, with the facts that are the same
+/// every time.
+///
+/// Five call sites across two crates each spelled out the baud rate and
+/// called `.open()`. The baud is genuinely shared; the timeout genuinely
+/// is not — a viewer waiting on 50 Hz status lines, a prober expecting a
+/// reply, and a mission runner tolerating an emulator's startup all want
+/// different patience, and they ranged from 200 ms to 5 s.
+///
+/// So this fixes the one thing that must not vary and takes the one that
+/// must as an argument.
+#[cfg(feature = "host")]
+pub mod link {
+    use std::time::Duration;
+
+    /// Every firmware here runs its CDC/UART link at this rate.
+    ///
+    /// On USB CDC the number is ignored by the hardware — a CDC device
+    /// does not have a baud rate — but it must still be passed, and
+    /// passing the same one everywhere means a UART board and a USB board
+    /// are opened by identical code.
+    pub const BAUD: u32 = 115_200;
+
+    /// Open the port to a chip.
+    ///
+    /// # ⚠️ This can start the motors
+    ///
+    /// Opening a CDC port **raises DTR**, and DTR is what the firmware
+    /// waits on before it will drive anything — see `HOST_WATCHING` in
+    /// `firmware/pico-odom`. That gate exists so a board on a charger sits
+    /// still. From the moment this returns, a robot with power to its
+    /// H-bridge can move.
+    ///
+    /// That warning previously appeared at exactly one of the five call
+    /// sites, and it is true of all of them.
+    pub fn open(
+        port: &str,
+        timeout: Duration,
+    ) -> serialport::Result<Box<dyn serialport::SerialPort>> {
+        serialport::new(port, BAUD).timeout(timeout).open()
     }
 }

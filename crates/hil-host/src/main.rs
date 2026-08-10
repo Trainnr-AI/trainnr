@@ -233,9 +233,7 @@ fn wire_for(
         (Some(path), _) => Wire::replay(path),
         (None, Some(port)) => {
             eprintln!("[host] opening {port}");
-            let sp = serialport::new(port, 115_200)
-                .timeout(std::time::Duration::from_secs(5))
-                .open()?;
+            let sp = hil_protocol::link::open(port, std::time::Duration::from_secs(5))?;
             // Two handles: the read side blocks, and we must be able to
             // write while it does.
             let reader = sp.try_clone()?;

@@ -292,9 +292,7 @@ struct Arrival {
 
 /// Reads lines from a serial port until it closes.
 fn read_serial(port: String, tx: Sender<Arrival>) -> Result<(), Box<dyn std::error::Error>> {
-    let serial = serialport::new(&port, 115_200)
-        .timeout(Duration::from_millis(2000))
-        .open()?;
+    let serial = hil_protocol::link::open(&port, Duration::from_millis(2000))?;
     let mut reader = BufReader::new(serial);
     let mut line = String::new();
     loop {

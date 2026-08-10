@@ -44,9 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nth(1)
         .ok_or("usage: chip_probe <serial-port>")?;
     let open = || -> Result<(Box<dyn serialport::SerialPort>, Port), Box<dyn std::error::Error>> {
-        let sp = serialport::new(&port, 115_200)
-            .timeout(Duration::from_millis(1200))
-            .open()?;
+        let sp = hil_protocol::link::open(&port, Duration::from_millis(1200))?;
         let reader = BufReader::new(sp.try_clone()?);
         Ok((sp, reader))
     };

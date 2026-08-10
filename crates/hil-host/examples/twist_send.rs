@@ -56,9 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let turn_rate: f64 = turn.parse()?;
     let seconds: f64 = seconds.parse()?;
 
-    let mut serial = serialport::new(&port, 115_200)
-        .timeout(Duration::from_millis(200))
-        .open()?;
+    let mut serial = hil_protocol::link::open(&port, Duration::from_millis(200))?;
 
     // ⚠️ Opening the port raises DTR, which is what un-gates the chip.
     // From this line on, the motors can move.
