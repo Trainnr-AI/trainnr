@@ -148,10 +148,27 @@ struct Incoming {
 /// exercised continuously rather than only when something goes wrong.
 fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Error>> {
     let mut serial = hil_protocol::link::open(port, Duration::from_millis(200))?;
+
+    // Read the chip's side of the conversation back.
+    //
+    // Not decoration: without it this program is write-only, and "the
+    // joystick moved" and "the robot heard it" are indistinguishable from
+    // the laptop. `duty` is the chip's own account of what it is doing
+    // with the twists being sent, which is the only thing that closes the
+    // loop when the robot has no wheels to watch.
+    //
+    // A CLONE of the handle, because macOS gives a serial port to one
+    // opener — the reader cannot open the port a second time, and this
+    // thread must not block the 50 Hz writer below.
+    let listening = serial.try_clone()?;
+    std::thread::spawn(move || report_forever(listening));
+
     let started = Instant::now();
     let period = Duration::from_micros(1_000_000 / SEND_HZ);
     let mut next = Instant::now();
     let mut line = String::new();
+    // Consecutive writes the chip did not take. See the timeout branch.
+    let mut unheard: u64 = 0;
 
     loop {
         next += period;
@@ -175,12 +192,83 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
             w: twist.turn_rate,
         }
         .write_into(&mut line)?;
-        // A write error ends the loop and the thread. That is correct:
-        // the chip stops on its own, and pretending to still have a link
-        // would leave the page showing a robot that is not listening.
-        std::io::Write::write_all(&mut serial, line.as_bytes())?;
+        // ⚠️ A write timeout is NOT fatal, and treating it as fatal was a
+        // bug worth keeping the note for.
+        //
+        // Writing to a USB CDC device blocks when the firmware is not
+        // draining its OUT endpoint. A firmware built WITHOUT `teleop`
+        // never reads commands at all — `class.split()` leaves the
+        // receiver unused — so every write fills a buffer nobody empties
+        // and times out after 200 ms. Ending the thread there killed the
+        // command path permanently while the page cheerfully went on
+        // showing "connected".
+        //
+        // The chip is safe either way: no commands means the watchdog
+        // stops the wheels. What was lost was any chance of recovery, and
+        // any hint about why.
+        if let Err(e) = std::io::Write::write_all(&mut serial, line.as_bytes()) {
+            if e.kind() == std::io::ErrorKind::TimedOut {
+                unheard += 1;
+                // Once, then rarely — a line per failed write at 50 Hz is
+                // 3,000 a minute saying the same thing.
+                if unheard == 1 || unheard.is_multiple_of(SEND_HZ * 10) {
+                    eprintln!(
+                        "⚠️  the chip is not reading commands ({unheard} writes timed out).\n    \
+                         Is it flashed with `tools/build-pico2.sh pico-odom teleop`? \
+                         A plain `usb` build never drains the command endpoint."
+                    );
+                }
+                continue;
+            }
+            // Anything else — unplugged, port revoked — genuinely ends it.
+            return Err(e.into());
+        }
+        if unheard > 0 {
+            println!("chip is reading commands again after {unheard} timed-out writes");
+            unheard = 0;
+        }
 
         let sleep_for = next.saturating_duration_since(Instant::now());
         std::thread::sleep(sleep_for);
+    }
+}
+
+/// Print the chip's reported duty whenever it changes.
+///
+/// Rate-limited to changes rather than the 50 Hz the chip reports at,
+/// because a line per report is 3,000 lines a minute saying nothing
+/// happened — the same reasoning that makes `pico-robot` send its
+/// worst-case compute time only when the record is beaten.
+///
+/// ⚠️ On a board with no encoders the tick counts stay at zero and the
+/// chip will latch STALLED, correctly: it commanded motion and measured
+/// none. That is the stall detector working, not a fault.
+fn report_forever(serial: Box<dyn serialport::SerialPort>) {
+    use std::io::BufRead;
+    let mut reader = std::io::BufReader::new(serial);
+    let mut line = String::new();
+    let mut last_duty = u64::MAX;
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => return,
+            Ok(_) => {}
+            // A timeout is normal — it just means the chip had nothing to
+            // say yet. Only a closed port ends this loop.
+            Err(_) => continue,
+        }
+        let Some(status) = hil_protocol::Status::parse(&line) else {
+            continue;
+        };
+        if status.duty_percent != last_duty {
+            println!(
+                "chip: duty={:>3}%  ticks L={} R={}{}",
+                status.duty_percent,
+                status.ticks_left,
+                status.ticks_right,
+                if status.stalled { "  [STALLED]" } else { "" }
+            );
+            last_duty = status.duty_percent;
+        }
     }
 }
