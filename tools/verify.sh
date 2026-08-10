@@ -98,6 +98,15 @@ step "firmware pico-odom (RP2350, usb+wifi)" "SKIP_UF2=1 tools/build-pico2.sh pi
 [ -z "$CI" ] && \
 step "replay: RP2350 wire recording  [STALE - re-record on hardware]" \
      "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep -q 'matched the recording exactly'"
+# The teleop page is compiled into the binary with `include_str!`, so a
+# missing or renamed file is a build error rather than a 404 discovered by
+# someone standing in a room holding a phone over a robot. This checks the
+# thing that file is FOR: that the joystick handler survives to the
+# `touch-action` rule iOS needs, without which the page silently does
+# nothing on the only device it exists to run on.
+step "teleop page still has its touch handlers" \
+     "grep -q 'touch-action: none' crates/teleop-web/src/index.html && \
+      grep -q touchcancel crates/teleop-web/src/index.html"
 step "replay: perception fixture" \
      "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"
 

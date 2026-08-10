@@ -1,0 +1,31 @@
+[package]
+name = "teleop-web"
+version = "0.1.0"
+edition = "2021"
+
+# Drive the robot from a phone.
+#
+# A separate crate rather than another `hil-host` example, because it is
+# the only thing here that wants an async runtime and an HTTP server.
+# Putting tokio and axum into `hil-host` would drag them into `odom_view`,
+# `twist_send` and `chip_probe`, none of which have any use for them.
+
+[dependencies]
+# The command vocabulary and the serial link, shared with every other
+# host tool so the two ends of the wire cannot drift.
+hil-protocol = { path = "../hil-protocol", features = ["host"] }
+# `CommandWatchdog` — reused, not reimplemented. See the note in `lib.rs`.
+sim-core = { path = "../sim-core" }
+serialport = "4"
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+local-ip-address = "0.6"
+
+# No unsafe here. `forbid`, not `deny`: it cannot be switched off locally
+# with an `#[allow]`. This crate maps a joystick to a twist and copies
+# bytes to a serial port; if that ever needs unsafe, the argument belongs
+# in the commit that changes this line.
+[lints.rust]
+unsafe_code = "forbid"

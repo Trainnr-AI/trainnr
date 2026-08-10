@@ -279,6 +279,32 @@ coast.
 Both physical Pico 2 W boards command **byte-identical** duty across all
 1139 ticks.
 
+**Level 5 — drive it from a phone.** The same command path, with a thumb
+on the other end instead of a camera:
+
+```sh
+tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
+cargo run --release -p teleop-web -- /dev/cu.usbmodem11
+```
+
+It prints a URL; open it on a phone on the same WiFi.
+
+```text
+  phone browser ──WebSocket──▶ teleop-web ──USB──▶ pico-odom ──▶ motors
+                        │                    │
+             500 ms phone timeout   200 ms CommandWatchdog, on the chip
+```
+
+**Two watchdogs, not one.** The laptop resends the current twist at 50 Hz
+regardless of what the phone is doing, and judges the phone's own liveness
+on a slacker 500 ms budget. Forwarding phone messages directly would let
+ordinary WiFi jitter trip the chip's 200 ms window and read as a fault.
+
+Both use `sim_core::CommandWatchdog` — the same tested type, on both hops.
+
+This doubles as a **manual override**: something to hold while
+`chase --drive` is running, for the first time it aims at a wall.
+
 **Recording and replay.** Every session can be captured and re-run with no
 hardware attached — and replay checks what the code *would now command*,
 so a behaviour change fails loudly:

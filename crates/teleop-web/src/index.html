@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>robotiq teleop</title>
+<style>
+  /* `touch-action: none` is load-bearing, not styling. Without it iOS
+     scrolls and rubber-bands the page instead of delivering touchmove,
+     and the joystick simply does not work on the device this exists for. */
+  html, body { margin: 0; height: 100%; background: #14161a; color: #cfd6e0;
+               font: 15px/1.4 -apple-system, system-ui, sans-serif;
+               touch-action: none; overscroll-behavior: none;
+               -webkit-user-select: none; user-select: none; }
+  #wrap { display: flex; flex-direction: column; height: 100%; }
+  header { padding: 10px 14px; display: flex; gap: 10px; align-items: baseline; }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: #d04b4b; }
+  #dot.live { background: #5ac85a; }
+  #pad { flex: 1; position: relative; touch-action: none; }
+  #knob { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px;
+          border-radius: 50%; background: #5ab0ff; opacity: .85;
+          left: 50%; top: 50%; }
+  #ring { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px;
+          margin: -130px 0 0 -130px; border: 1px solid #2c3440; border-radius: 50%; }
+  #stop { border: 0; background: #d04b4b; color: #fff; font-size: 22px;
+          font-weight: 600; padding: 22px; width: 100%; }
+  #stop:active { background: #a83a3a; }
+  code { color: #8a93a0; }
+</style>
+
+<div id="wrap">
+  <header><span id="dot"></span><strong>robotiq</strong> <code id="msg">connecting…</code></header>
+  <div id="pad"><div id="ring"></div><div id="knob"></div></div>
+  <button id="stop">STOP</button>
+</div>
+
+<script>
+// The page's whole job: turn a thumb into {forward, turn} and send it
+// often. Every safety decision lives on the chip (a 200 ms watchdog that
+// drops the H-bridge) and in the laptop (a 500 ms phone timeout). This
+// file is deliberately not trusted by either of them.
+const pad = document.getElementById('pad');
+const knob = document.getElementById('knob');
+const dot = document.getElementById('dot');
+const msg = document.getElementById('msg');
+
+const RADIUS = 130;              // matches #ring, in CSS pixels
+const SEND_MS = 50;              // 20 Hz; the laptop resends at 50 Hz
+let stick = { forward: 0, turn: 0 };
+let socket = null;
+
+function connect() {
+  socket = new WebSocket(`ws://${location.host}/drive`);
+  socket.onopen = () => { dot.classList.add('live'); msg.textContent = 'connected'; };
+  socket.onclose = () => {
+    dot.classList.remove('live');
+    msg.textContent = 'disconnected — robot stops';
+    // Reconnect, but do NOT resume driving: `stick` is centred here, so a
+    // reconnect that happens while the phone is in a pocket cannot pick
+    // up the twist that was in flight when the link dropped.
+    centre();
+    setTimeout(connect, 1000);
+  };
+}
+connect();
+
+// Sent on a fixed timer rather than on every touchmove. A finger dragged
+// fast can fire touchmove far more often than 20 Hz, and flooding the
+// socket delays the messages that matter without steering any better.
+setInterval(() => {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(stick));
+  }
+}, SEND_MS);
+
+function centre() {
+  stick = { forward: 0, turn: 0 };
+  knob.style.left = '50%';
+  knob.style.top = '50%';
+}
+
+function move(touch) {
+  const r = pad.getBoundingClientRect();
+  let dx = touch.clientX - (r.left + r.width / 2);
+  let dy = touch.clientY - (r.top + r.height / 2);
+  const len = Math.hypot(dx, dy);
+  if (len > RADIUS) { dx *= RADIUS / len; dy *= RADIUS / len; }
+  knob.style.left = `calc(50% + ${dx}px)`;
+  knob.style.top = `calc(50% + ${dy}px)`;
+  // Screen y grows downward, so up-is-forward needs the negation.
+  stick = { forward: -dy / RADIUS, turn: dx / RADIUS };
+}
+
+pad.addEventListener('touchstart', e => { move(e.touches[0]); e.preventDefault(); });
+pad.addEventListener('touchmove',  e => { move(e.touches[0]); e.preventDefault(); });
+// Both endings matter. `touchcancel` is what fires when a call arrives or
+// the system takes over the gesture — without it a thumb can leave the
+// glass while the last twist keeps being sent.
+pad.addEventListener('touchend', centre);
+pad.addEventListener('touchcancel', centre);
+// Mouse, so it can be tested on the laptop before trusting a phone.
+pad.addEventListener('mousedown', e => move(e));
+pad.addEventListener('mousemove', e => { if (e.buttons) move(e); });
+pad.addEventListener('mouseup', centre);
+pad.addEventListener('mouseleave', centre);
+
+document.getElementById('stop').addEventListener('click', centre);
+// A phone that locks or an app that backgrounds keeps the socket open for
+// a while; without this the robot would coast on the last twist until the
+// laptop's 500 ms timeout noticed.
+document.addEventListener('visibilitychange', () => { if (document.hidden) centre(); });
+window.addEventListener('blur', centre);
+</script>
