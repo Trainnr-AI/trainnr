@@ -100,6 +100,11 @@ const TELEMETRY_PORT: u16 = 9870;
 /// reports is far beyond any plausible lag and still bounded.
 const MATCH_WINDOW: u64 = REPORTS_PER_SECOND * 2;
 
+/// How long every source may go quiet before the run is declared over and
+/// the summary printed. Generous, because a board mid-reflash or a robot
+/// waiting for someone to turn a wheel is not a finished run.
+const QUIET_BEFORE_GIVING_UP: Duration = Duration::from_secs(5);
+
 /// Which wire a line came down. The whole point of the comparison is that
 /// this is the *only* thing that differs between two copies of a report.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -154,6 +159,126 @@ impl Tally {
 
     fn lost(&self) -> u64 {
         self.sent_since_first().saturating_sub(self.delivered)
+    }
+}
+
+/// What comparing the two wires concluded about one report.
+#[derive(Debug, PartialEq)]
+enum Verdict {
+    /// Both wires delivered it. Signed: positive means the radio landed
+    /// after the cable, which is the expected direction and the number
+    /// that decides whether the radio could ever carry commands.
+    Lag { seq: u64, wifi_lag_ms: f64 },
+    /// This wire did not deliver it, and is now far enough behind that it
+    /// never will. Named per wire, because "a line went missing" and "the
+    /// radio lost it" are different bug reports.
+    Lost { seq: u64, wire: Wire },
+}
+
+/// Pairs up the two copies of each report.
+///
+/// Split out from the draw loop and unit-tested because it is the one
+/// piece here with no other way to be checked: the loss counters can be
+/// proved against a stream with known drops, but lag needs two wires
+/// arriving at controlled times, and the `serialport` crate cannot open a
+/// pty on macOS — so the only way to exercise it with real timings is a
+/// real board, which is exactly the thing this is meant to measure.
+struct Comparison {
+    wires: Vec<Wire>,
+    /// Reports seen on at least one wire, until they fall out of the
+    /// window. Entries stay after matching rather than being deleted — see
+    /// [`Tracked::resolved`].
+    pending: HashMap<u64, Tracked>,
+    /// The furthest ahead any wire has got, which is what the window is
+    /// measured back from.
+    highest_seq: u64,
+}
+
+/// One report's progress through the comparison.
+#[derive(Default)]
+struct Tracked {
+    seen: HashMap<Wire, Instant>,
+    /// Set once every wire has delivered this report.
+    ///
+    /// **The entry is kept, not removed.** Deleting it on completion is
+    /// what the duplicate test caught: UDP is allowed to deliver the same
+    /// datagram twice, and a second copy arriving after deletion created a
+    /// *fresh* entry containing only the radio — which then aged out and
+    /// blamed the cable for losing a report it had delivered perfectly.
+    /// A resolved entry absorbs duplicates silently and is pruned by the
+    /// same window as everything else.
+    resolved: bool,
+}
+
+impl Comparison {
+    fn new(wires: Vec<Wire>) -> Self {
+        Comparison {
+            wires,
+            pending: HashMap::new(),
+            highest_seq: 0,
+        }
+    }
+
+    /// Record one arrival and return whatever became knowable because of
+    /// it. Nothing is reported twice for the same sequence number.
+    fn observe(&mut self, seq: u64, wire: Wire, at: Instant) -> Vec<Verdict> {
+        // With one source there is nothing to compare against, and every
+        // report would otherwise be declared lost by the absent wire.
+        if self.wires.len() < 2 {
+            return Vec::new();
+        }
+        let mut verdicts = Vec::new();
+        self.highest_seq = self.highest_seq.max(seq);
+        let cutoff = self.highest_seq.saturating_sub(MATCH_WINDOW);
+
+        // A report from before the window has already been judged. Letting
+        // it back in would re-open a decision that was made with more
+        // information than this straggler carries.
+        if seq < cutoff {
+            return verdicts;
+        }
+
+        let tracked = self.pending.entry(seq).or_default();
+        if tracked.resolved {
+            return verdicts;
+        }
+        let seen = &mut tracked.seen;
+        seen.insert(wire, at);
+        if seen.len() == self.wires.len() {
+            if let (Some(&usb), Some(&wifi)) = (seen.get(&Wire::Usb), seen.get(&Wire::Wifi)) {
+                // Signed, and `Instant` subtraction saturates rather than
+                // going negative — so the two directions are computed
+                // separately instead of trusting one of them to be
+                // representable.
+                let wifi_lag_ms = if wifi >= usb {
+                    wifi.duration_since(usb).as_secs_f64() * 1000.0
+                } else {
+                    -(usb.duration_since(wifi).as_secs_f64() * 1000.0)
+                };
+                verdicts.push(Verdict::Lag { seq, wifi_lag_ms });
+            }
+            tracked.resolved = true;
+        }
+
+        // Anything this far behind is never coming. Waiting a window
+        // rather than deciding immediately is what makes a slow wire read
+        // as *late* instead of being miscounted as *lossy*.
+        let wires = &self.wires;
+        self.pending.retain(|&old, tracked| {
+            if old >= cutoff {
+                return true;
+            }
+            if !tracked.resolved {
+                for &missing in wires.iter().filter(|w| !tracked.seen.contains_key(w)) {
+                    verdicts.push(Verdict::Lost {
+                        seq: old,
+                        wire: missing,
+                    });
+                }
+            }
+            false
+        });
+        verdicts
     }
 }
 
@@ -260,22 +385,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // open forever and the loop below would never see a disconnect.
     drop(tx);
 
-    let comparing = wires.len() > 1;
+    let mut comparison = Comparison::new(wires.clone());
     let rec = rerun::RecordingStreamBuilder::new("robotiq_odom").spawn()?;
     println!("turn a wheel");
 
     let started = Instant::now();
     let mut tallies: HashMap<Wire, Tally> = wires.iter().map(|&w| (w, Tally::default())).collect();
-    // seq -> when each wire delivered it, for lines still inside the
-    // matching window.
-    let mut pending: HashMap<u64, HashMap<Wire, Instant>> = HashMap::new();
     let mut frame = 0u64;
     let mut last_errors_left = 0u64;
     let mut last_errors_right = 0u64;
     let mut announced_stall = false;
     let mut parsed_any = false;
 
-    for arrival in rx.iter() {
+    // `recv_timeout` rather than `rx.iter()`: the UDP reader never returns
+    // — a socket with nobody sending to it is indistinguishable from one
+    // whose sender is between packets — so waiting for every sender to
+    // hang up would mean the summary never printed on a `--udp` run.
+    // Silence this long means the board stopped or the run is over.
+    loop {
+        // Before the first report, wait indefinitely: the bench workflow
+        // is to start the viewer and *then* power the board, so a timeout
+        // that applied from launch would quit during the reflash it is
+        // waiting for. After the first report, silence means the run is
+        // over and the summary is owed.
+        let arrival = if parsed_any {
+            match rx.recv_timeout(QUIET_BEFORE_GIVING_UP) {
+                Ok(arrival) => arrival,
+                Err(_) => {
+                    println!("\nno reports for {QUIET_BEFORE_GIVING_UP:?} — stopping");
+                    break;
+                }
+            }
+        } else {
+            match rx.recv() {
+                Ok(arrival) => arrival,
+                // Every reader has hung up without ever parsing a line.
+                Err(_) => break,
+            }
+        };
         let Arrival { wire, at, report } = arrival;
         if !parsed_any {
             println!("✅ first line from {}", wire.name());
@@ -311,41 +458,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
         // ---- the cross-transport comparison ----
-        if comparing {
-            let seen = pending.entry(report.seq).or_default();
-            seen.insert(wire, at);
-            // Both copies in hand: report how far apart they landed,
-            // signed so the sign says which wire won.
-            if seen.len() == wires.len() {
-                if let (Some(&usb), Some(&wifi)) = (seen.get(&Wire::Usb), seen.get(&Wire::Wifi)) {
-                    let lag_ms = if wifi >= usb {
-                        wifi.duration_since(usb).as_secs_f64() * 1000.0
-                    } else {
-                        -(usb.duration_since(wifi).as_secs_f64() * 1000.0)
-                    };
-                    rec.log("compare/wifi_lag_ms", &rerun::Scalars::single(lag_ms))?;
+        for verdict in comparison.observe(report.seq, wire, at) {
+            match verdict {
+                Verdict::Lag { wifi_lag_ms, .. } => {
+                    rec.log("compare/wifi_lag_ms", &rerun::Scalars::single(wifi_lag_ms))?;
                 }
-                pending.remove(&report.seq);
-            }
-
-            // Anything older than the window is never coming. Whichever
-            // wire is missing from the entry is the one that lost it —
-            // named, because "a line went missing" and "the radio lost it"
-            // are different bug reports.
-            let cutoff = report.seq.saturating_sub(MATCH_WINDOW);
-            pending.retain(|&seq, seen| {
-                if seq >= cutoff {
-                    return true;
-                }
-                for missing in wires.iter().filter(|w| !seen.contains_key(w)) {
+                Verdict::Lost { seq, wire } => {
                     rec.log(
                         "events",
-                        &rerun::TextLog::new(format!("{} lost report {seq}", missing.name())),
-                    )
-                    .ok();
+                        &rerun::TextLog::new(format!("{} lost report {seq}", wire.name())),
+                    )?;
                 }
-                false
-            });
+            }
         }
 
         // ---- the pose itself ----
@@ -531,5 +655,114 @@ mod tests {
         let tally = Tally::default();
         assert_eq!(tally.sent_since_first(), 0);
         assert_eq!(tally.lost(), 0);
+    }
+
+    fn both_wires() -> Comparison {
+        Comparison::new(vec![Wire::Usb, Wire::Wifi])
+    }
+
+    /// The headline measurement: when both wires deliver the same report,
+    /// how much later the radio landed.
+    #[test]
+    fn a_report_both_wires_delivered_yields_the_signed_lag() {
+        let mut c = both_wires();
+        let t0 = Instant::now();
+        assert_eq!(c.observe(1, Wire::Usb, t0), vec![]);
+        let verdicts = c.observe(1, Wire::Wifi, t0 + Duration::from_millis(30));
+        match verdicts.as_slice() {
+            [Verdict::Lag {
+                seq: 1,
+                wifi_lag_ms,
+            }] => {
+                assert!(
+                    (wifi_lag_ms - 30.0).abs() < 0.001,
+                    "expected ~30 ms, got {wifi_lag_ms}"
+                );
+            }
+            other => panic!("expected one Lag verdict, got {other:?}"),
+        }
+    }
+
+    /// `Instant` subtraction saturates at zero, so a radio that somehow
+    /// beat the cable would silently read as 0 ms rather than negative —
+    /// which would hide the very anomaly worth investigating.
+    #[test]
+    fn a_radio_that_beats_the_cable_reads_negative_not_zero() {
+        let mut c = both_wires();
+        let t0 = Instant::now();
+        c.observe(1, Wire::Wifi, t0);
+        let verdicts = c.observe(1, Wire::Usb, t0 + Duration::from_millis(5));
+        match verdicts.as_slice() {
+            [Verdict::Lag { wifi_lag_ms, .. }] => {
+                assert!(*wifi_lag_ms < 0.0, "expected negative, got {wifi_lag_ms}");
+            }
+            other => panic!("expected one Lag verdict, got {other:?}"),
+        }
+    }
+
+    /// A report only one wire ever delivered is blamed on the other — by
+    /// name, and only once it is far enough in the past to be certain.
+    #[test]
+    fn a_report_only_one_wire_delivered_is_blamed_on_the_other() {
+        let mut c = both_wires();
+        let t0 = Instant::now();
+        c.observe(1, Wire::Usb, t0);
+
+        // Still inside the window: the radio may yet be running late, and
+        // calling it lost here is the mistake the window exists to avoid.
+        for seq in 2..=MATCH_WINDOW {
+            let verdicts = c.observe(seq, Wire::Usb, t0);
+            assert!(
+                !verdicts.iter().any(|v| matches!(v, Verdict::Lost { .. })),
+                "report 1 declared lost after only {seq} reports"
+            );
+        }
+
+        let verdicts = c.observe(MATCH_WINDOW + 2, Wire::Usb, t0);
+        assert!(
+            verdicts.contains(&Verdict::Lost {
+                seq: 1,
+                wire: Wire::Wifi
+            }),
+            "the radio lost report 1 and nothing said so: {verdicts:?}"
+        );
+    }
+
+    /// With one source there is nothing to compare against. Without this
+    /// guard every report would be declared lost by the wire that was
+    /// never connected — turning a perfectly good cable-only run into a
+    /// screen full of loss events.
+    #[test]
+    fn a_single_wire_run_produces_no_verdicts_at_all() {
+        let mut c = Comparison::new(vec![Wire::Usb]);
+        let t0 = Instant::now();
+        for seq in 1..=(MATCH_WINDOW * 2) {
+            assert_eq!(c.observe(seq, Wire::Usb, t0), vec![]);
+        }
+    }
+
+    /// Neither a lag nor a loss may be announced twice, or the plots
+    /// double-count and the event log becomes unreadable.
+    #[test]
+    fn nothing_is_reported_twice_for_one_sequence_number() {
+        let mut c = both_wires();
+        let t0 = Instant::now();
+        c.observe(7, Wire::Usb, t0);
+        c.observe(7, Wire::Wifi, t0 + Duration::from_millis(10));
+        // A duplicate datagram — UDP permits it — must not re-emit.
+        assert_eq!(
+            c.observe(7, Wire::Wifi, t0 + Duration::from_millis(11)),
+            vec![]
+        );
+
+        let mut lost_count = 0;
+        for seq in 8..=(MATCH_WINDOW * 2) {
+            lost_count += c
+                .observe(seq, Wire::Usb, t0)
+                .iter()
+                .filter(|v| matches!(v, Verdict::Lost { seq: 7, .. }))
+                .count();
+        }
+        assert_eq!(lost_count, 0, "report 7 arrived on both wires");
     }
 }
