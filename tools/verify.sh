@@ -13,15 +13,18 @@ source "$HOME/.cargo/env" 2>/dev/null || true
 SERIAL=""
 [ "${1:-}" = "--serial" ] && SERIAL="${2:-}"
 
-# --fast skips the two slow/blocked steps and runs everything else.
+# --fast skips ONE step and runs everything else.
 #
 #   the emulator      ~9 minutes since the measured robot speed landed,
 #                     because it simulates a 3.86x slower machine
-#   the wire replay   STALE pending a hardware re-record (see below)
 #
-# Everything else — every build, every test, both firmware architectures,
-# the perception replay — still runs. Use it while iterating; run the
-# whole thing before pushing.
+# It used to skip the wire replay too, which was stale from 2026-08-10 to
+# 2026-08-11. Re-recorded, so it runs everywhere again.
+#
+# ⚠️ `--fast` is a real gap, not just a slower/faster choice: the emulator
+# is the ONLY step where firmware EXECUTES rather than merely compiling.
+# Eight crates were refactored behind it on 2026-08-11 and the resulting
+# images were never run. Run the whole thing before pushing.
 CI=""
 [ "${1:-}" = "--fast" ] && CI=1
 
@@ -77,26 +80,21 @@ step "firmware pico-odom (RP2350, usb+wifi)" "SKIP_UF2=1 tools/build-pico2.sh pi
 
 # The two committed fixtures: a real hardware session, and a synthetic
 # perception one. Both fail on a behaviour change, neither needs hardware.
-# ⚠️ STALE since 2026-08-10, and deliberately still run.
 #
-# `RobotSpec::REAL_BOT` gained its measured values that day, so `hil-host`
-# now commands the chip differently and this replay diverges — correctly.
-# The recording is a capture of a REAL RP2350 over USB, so re-making it
-# needs the board:
+# Re-recorded 2026-08-11 against board #1 (chipid 0x12ea158439ef5cea)
+# running `pico-robot` over USB, after `RobotSpec::REAL_BOT` gained its
+# measured values and made the previous capture diverge by 2,264 steps.
+# 1/1 waypoints, 0 wall bumps, 0.394 m drift, worst compute 319 us.
+#
+# ⚠️ It is a capture of REAL silicon, so re-making it needs the board:
 #
 #   picotool load -x firmware/pico-robot/pico-robot-pico2-usb.uf2   # after BOOTSEL
 #   cargo run -p hil-host -- --serial /dev/cu.usbmodem11 \
 #       --record recordings/rp2350-utrap.wire
 #
-# Left FAILING rather than skipped, because a skip is a thing people stop
-# reading. A red step with this comment above it is a re-record that has
-# not happened yet; a green one would be a regression that nobody noticed.
-# ⚠️ Excluded from --ci ONLY because it is currently stale. A CI that is
-# red from its first commit teaches everyone to ignore red, which is worse
-# than a skip. Locally it still runs and still fails, so it is not hidden.
-# **Delete the `[ -z "$CI" ] &&` guard the moment it is re-recorded.**
-[ -z "$CI" ] && \
-step "replay: RP2350 wire recording  [STALE - re-record on hardware]" \
+# No longer excluded from --fast: it passes, so it guards every run
+# rather than only the ones somebody remembered to make slow.
+step "replay: RP2350 wire recording" \
      "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep -q 'matched the recording exactly'"
 # The teleop page is compiled into the binary with `include_str!`, so a
 # missing or renamed file is a build error rather than a 404 discovered by

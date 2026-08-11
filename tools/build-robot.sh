@@ -15,9 +15,16 @@ cd "$(dirname "$0")/.."
 source "$HOME/.cargo/env" 2>/dev/null || true
 
 echo "[1/2] RP2040 (emulator, UART)"
+# ⚠️ ASK cargo where the binary is. This was `target/…` relative to the
+# crate, which broke silently when `firmware/` became one workspace on
+# 2026-08-11 — cargo moved its output to `firmware/target/` and this kept
+# pointing at the abandoned per-crate directory. `build-pico2.sh` had the
+# identical bug and produced five byte-identical images from a stale elf.
 (cd firmware/pico-robot \
   && cargo build --release --quiet \
-  && elf2uf2-rs target/thumbv6m-none-eabi/release/pico-robot pico-robot.uf2)
+  && TARGET_DIR=$(cargo metadata --format-version 1 --no-deps --offline 2>/dev/null \
+       | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])') \
+  && elf2uf2-rs "${TARGET_DIR}/thumbv6m-none-eabi/release/pico-robot" pico-robot.uf2)
 echo "      firmware/pico-robot/pico-robot.uf2"
 
 echo "[2/2] RP2350 (real board, USB)"
