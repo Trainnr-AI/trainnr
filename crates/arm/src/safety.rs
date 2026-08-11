@@ -86,6 +86,15 @@ pub enum Verdict {
     /// Hold, and shed load if you can. A joint is too hot to keep
     /// holding, and holding is what made it hot.
     HoldOverheated { joint: &'static str, celsius: f64 },
+    /// Hold. This joint has no thermometer and [`Thermal`] was told not to
+    /// trust one that cannot be measured.
+    ///
+    /// A separate variant rather than an overheat with a missing reading:
+    /// "too hot at 61 °C" and "cannot tell how hot" are different facts,
+    /// they call for different fixes, and squeezing the second into the
+    /// first needs a sentinel temperature. This repo has already lost an
+    /// evening to a NaN sentinel that silenced an entire output stream.
+    HoldUnmeasurable { joint: &'static str },
     /// Refused: the command was not this arm's width.
     Refused { wanted: usize, joints: usize },
 }
@@ -142,8 +151,8 @@ impl Guard {
 
         // Heat first: a joint that is cooking must stop being asked to
         // hold, and no amount of freshness in the command changes that.
-        if let Some((joint, celsius)) = self.thermal.too_hot(&self.spec, measured.len()) {
-            return Verdict::HoldOverheated { joint, celsius };
+        if let Some(objection) = self.thermal.objection(&self.spec) {
+            return objection;
         }
 
         match self.source.observe(now_ms) {
@@ -230,21 +239,24 @@ impl Thermal {
         self.reported[joint] = celsius;
     }
 
-    /// The first joint over the ceiling, if any.
-    fn too_hot(&self, spec: &ArmSpec, joints: usize) -> Option<(&'static str, f64)> {
-        for index in 0..joints {
+    /// The first joint that is a reason not to keep holding, if any.
+    ///
+    /// Takes its joint count from `spec` alone. It used to also receive a
+    /// length from the caller, which is the same fact stored twice with
+    /// nothing comparing the two — the shape of most bugs in this repo.
+    fn objection(&self, spec: &ArmSpec) -> Option<Verdict> {
+        spec.joints.iter().enumerate().find_map(|(index, joint)| {
             match self.reported.get(index).copied().flatten() {
-                Some(celsius) if celsius >= self.ceiling_celsius => {
-                    return Some((spec.joints[index].name, celsius));
-                }
-                Some(_) => {}
+                Some(celsius) if celsius >= self.ceiling_celsius => Some(Verdict::HoldOverheated {
+                    joint: joint.name,
+                    celsius,
+                }),
                 None if !self.trust_joints_without_a_thermometer => {
-                    return Some((spec.joints[index].name, f64::NAN));
+                    Some(Verdict::HoldUnmeasurable { joint: joint.name })
                 }
-                None => {}
+                _ => None,
             }
-        }
-        None
+        })
     }
 }
 
@@ -417,9 +429,12 @@ mod tests {
             ..Thermal::default()
         });
         strict.fed(0);
-        assert!(matches!(
+        assert_eq!(
             strict.authorise(0, &at_rest(), &[0.01; 4]),
-            Verdict::HoldOverheated { .. }
-        ));
+            Verdict::HoldUnmeasurable {
+                joint: "shoulder_pan"
+            },
+            "'cannot tell how hot' is its own answer, not an overheat with a missing number"
+        );
     }
 }

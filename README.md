@@ -104,6 +104,9 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
   the maths, the physics and the code connect
 - [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
 - [`docs/18-code-quality.md`](docs/18-code-quality.md) — an honest scorecard, and what would move it
+- [`docs/19-the-arm.md`](docs/19-the-arm.md) — **the arm: why its failsafe is the
+  opposite of the base's**, the four limits and why their order matters, one input
+  type that a VLA can drive unchanged, and what the viewer caught that the tests could not
 - [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
   (2026-08-08): what it would take to build, deploy and operate a small
   commercial fleet of mobile manipulators.** Nine documents on policies, data
@@ -129,21 +132,34 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 
 ## Verification
 
-`tools/verify.sh` is the single definition of "does this repo work", and
-CI calls it rather than restating the steps — a workflow file that lists
-the same checks again is one more pair of things that must agree and
-eventually will not.
+`tools/verify.sh` is the single definition of "does this repo work" — one
+script rather than a workflow file restating the same checks, which would
+be one more pair of things that must agree and eventually will not.
+
+⚠️ **There is no CI.** No `.github/workflows` exists; the gate runs only
+when a human runs it. This README previously claimed CI called it, which
+was not true, and the cost of that gap is the next warning.
 
 | | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 26 | before pushing |
-| `tools/verify.sh --fast` | 24 | while iterating |
-| `tools/verify.sh --serial <port>` | 27 | with a Pico on a cable |
+| `tools/verify.sh` | 30 | before pushing |
+| `tools/verify.sh --fast` | 28 | while iterating |
+| `tools/verify.sh --serial <port>` | 32 | with a Pico on a cable |
 
 `--fast` drops exactly two, both named in the script with the reason: the
 emulator step, which takes ~9 minutes since the measured robot speed
 landed, and the RP2350 wire replay, which is **stale pending a hardware
 re-record**. Both still run in the full gate, so neither is hidden.
+
+⚠️ **`HIL on the emulator (RP2040)` is currently RED**, on `main` as well
+as on the branches merged into it. On `main` the mission finishes and
+misses the waypoint (0/1, 19.7 m drift); more recently the chip stops
+answering at ~14.6 s and the step hangs rather than failing. Full evidence
+and what has been ruled out is in
+[`docs/07-progress-log.md`](docs/07-progress-log.md) (2026-08-12). Until
+it is fixed, **"the full suite passes" is not a claim this repo can
+make** — `--fast` being green is not the same statement, and a step that
+can hang means a red gate and a slow one look identical.
 
 ## Repository layout
 
@@ -159,12 +175,18 @@ robotiq/
 │   │                        #   exercises.rs — YOUR code goes there
 │   ├── sim-run/             # the mission, and the Rerun viewer
 │   ├── vision/              # camera, detectors, target lock, the chase loop
+│   ├── arm/                 # joint-space arm control: limits, plans, safety.
+│   │                        #   No servo driver, no geometry — all of it
+│   │                        #   runs in `cargo test` with nothing plugged in
+│   ├── belief-viz/          # one definition of how a belief is drawn
+│   ├── teleop-web/          # drive the robot from a phone browser
 │   ├── hil-protocol/        # the host↔chip wire format, one definition
 │   ├── hil-host/            # simulated body for a real chip; record/replay
 │   ├── mpu6050-driver/      # IMU driver (host-tested against a mock bus)
 │   └── quad-encoder/        # quadrature decoding
 ├── firmware/                # no_std, ARM target — outside the workspace
 │   ├── build-support/       #   one copy of the linker scripts + build.rs
+│   ├── support/             #   USB CDC, heartbeat, Report — one copy each
 │   ├── pico-blink/          #   H0  async tasks
 │   ├── pico-button/         #   H1  input + PWM
 │   ├── pico-imu/            #   H2  I2C sensor
@@ -197,6 +219,19 @@ tools/verify.sh --fast      # the same, minus the emulator and the stale
                             # wire replay — for iterating
 cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
 ```
+
+**Stage 5 — the arm, before owning one.** Joint-space control with no servo
+attached; the safety layer is the point, and it is the *opposite* of the base's
+(silence must make an arm hold, not stop). Four acts in Rerun — a plan followed,
+an absurd command turned into a ramp, a commander that dies, a joint that
+overheats:
+
+```sh
+cargo run -p arm --example watch
+```
+
+Watch the `authorised` panel fall to 0 at 6.48 s and stay there while the plan
+runs on without it. See [`docs/19-the-arm.md`](docs/19-the-arm.md).
 
 **Stage 2 — firmware** (needs Node ≥18 and `cargo install elf2uf2-rs`):
 

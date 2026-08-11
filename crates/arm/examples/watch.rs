@@ -83,9 +83,7 @@ fn to_view(world: [f32; 2]) -> [f32; 2] {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let spec = ArmSpec::so101_four_dof();
-    let mut guard = Guard::new(spec.clone(), PERIOD_SECONDS, SOURCE_TIMEOUT_MS);
-    let mut joints: Vec<SimJoint> = (0..spec.joints()).map(|_| SimJoint::at(0.0)).collect();
+    let mut bench = Bench::new(ArmSpec::so101_four_dof());
 
     let rec = rerun::RecordingStreamBuilder::new("robotiq_arm")
         .with_blueprint(layout())
@@ -103,140 +101,155 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_colors([rerun::Color::from_rgb(110, 110, 120)]),
     )?;
 
-    let mut tick: u64 = 0;
-    let mut last_reported: Option<(&'static str, &'static str)> = None;
-    let act = |rec: &rerun::RecordingStream,
-               last_reported: &mut Option<(&'static str, &'static str)>,
-               guard: &mut Guard,
-               joints: &mut Vec<SimJoint>,
-               tick: &mut u64,
-               name: &str,
-               steps: u64,
-               plan: &mut Plan,
-               feeding: bool|
-     -> Result<(), Box<dyn std::error::Error>> {
-        rec.set_duration_secs("wall_time", *tick as f64 * PERIOD_SECONDS);
+    // 1 — a plan is followed, and the servo's lag is visible behind it.
+    let mut plan = Plan::interpolate(&vec![0.0; 4], &[0.9, 0.7, -0.6, 0.5], 100).unwrap();
+    bench.act(&rec, "follow a plan", 150, &mut plan, Commander::Alive)?;
+
+    // 2 — an absurd command. Travel clamps it, then the step limit turns
+    // what is left into a ramp instead of a lurch.
+    let mut plan = Plan::hold(vec![99.0; 4]);
+    bench.act(
+        &rec,
+        "step limit vs an absurd command",
+        150,
+        &mut plan,
+        Commander::Alive,
+    )?;
+
+    // 3 — the commander dies mid-plan. THE ACT THAT MATTERS: the arm
+    // finishes its grace period and then holds, rather than releasing.
+    let mut plan = Plan::interpolate(&bench.here()?, &vec![0.0; 4], 400).unwrap();
+    bench.act(
+        &rec,
+        "commander dies — grace, then HOLD",
+        300,
+        &mut plan,
+        Commander::Dead,
+    )?;
+
+    // 4 — a hot joint outranks a perfectly fresh plan.
+    bench.joints[1].heat_to(70.0);
+    let mut plan = Plan::hold(vec![0.0; 4]);
+    bench.act(&rec, "shoulder overheats", 150, &mut plan, Commander::Alive)?;
+
+    println!(
+        "\n{:.1} s logged. In the viewer pick the newest source, `robotiq_arm`.",
+        bench.elapsed_seconds()
+    );
+    Ok(())
+}
+
+/// Whether anything is still feeding the guard during an act.
+///
+/// A named pair rather than a `bool` argument: `act(…, 150, &mut plan,
+/// false)` at the call site says nothing about *what* is false, and this
+/// is the flag that decides whether the arm keeps moving or holds.
+#[derive(Clone, Copy, PartialEq)]
+enum Commander {
+    Alive,
+    Dead,
+}
+
+/// Everything that persists from one act to the next.
+///
+/// This began as a closure with nine parameters, six of them `&mut` to
+/// state the caller was only holding on its behalf. The state belongs
+/// here; an act is then a method with five arguments, all of which are
+/// about the act rather than about plumbing.
+struct Bench {
+    spec: ArmSpec,
+    guard: Guard,
+    joints: Vec<SimJoint>,
+    tick: u64,
+    /// The decision most recently announced to the event log, so the same
+    /// one is not announced 150 times running. It lives at bench scope
+    /// because it must survive **across** acts: a hold that runs from act
+    /// 3 into act 4 for a *different* reason is a transition worth a line,
+    /// and per-act state would miss it.
+    last_reported: Option<(&'static str, &'static str)>,
+}
+
+impl Bench {
+    fn new(spec: ArmSpec) -> Self {
+        Bench {
+            guard: Guard::new(spec.clone(), PERIOD_SECONDS, SOURCE_TIMEOUT_MS),
+            joints: (0..spec.joints()).map(|_| SimJoint::at(0.0)).collect(),
+            spec,
+            tick: 0,
+            last_reported: None,
+        }
+    }
+
+    fn elapsed_seconds(&self) -> f64 {
+        self.tick as f64 * PERIOD_SECONDS
+    }
+
+    /// Where the joints are now — the starting point for a plan that has
+    /// to begin from wherever the last act left the arm.
+    fn here(&mut self) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+        Ok(self
+            .joints
+            .iter_mut()
+            .map(|joint| joint.measured())
+            .collect::<Result<_, _>>()?)
+    }
+
+    /// Run one act: `steps` control periods against `plan`.
+    fn act(
+        &mut self,
+        rec: &rerun::RecordingStream,
+        name: &str,
+        steps: u64,
+        plan: &mut Plan,
+        commander: Commander,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let opened_at = self.elapsed_seconds();
+        rec.set_duration_secs("wall_time", opened_at);
         rec.log("events", &rerun::TextLog::new(format!("── {name} ──")))?;
-        let opened_at = *tick as f64 * PERIOD_SECONDS;
+
         let mut authorised_ticks = 0u64;
         for _ in 0..steps {
-            let now_ms = *tick * PERIOD_MS;
-            rec.set_duration_secs("wall_time", *tick as f64 * PERIOD_SECONDS);
+            let now_ms = self.tick * PERIOD_MS;
+            rec.set_duration_secs("wall_time", self.elapsed_seconds());
 
-            if feeding {
-                guard.fed(now_ms);
+            if commander == Commander::Alive {
+                self.guard.fed(now_ms);
             }
 
             // Temperatures come from the joints themselves, exactly as
             // they will off register 63 on a real STS3215.
-            for (index, joint) in joints.iter_mut().enumerate() {
+            for (index, joint) in self.joints.iter_mut().enumerate() {
                 let celsius = joint.temperature_celsius()?;
-                guard.observe_temperature(index, celsius);
+                self.guard.observe_temperature(index, celsius);
             }
 
-            let measured: Vec<f64> = joints
-                .iter_mut()
-                .map(|j| j.measured())
-                .collect::<Result<_, _>>()?;
-            let verdict = guard.authorise(now_ms, &measured, plan.current());
+            let measured = self.here()?;
+            let verdict = self.guard.authorise(now_ms, &measured, plan.current());
 
             if let Verdict::Move { radians } = &verdict {
                 authorised_ticks += 1;
-                for (joint, angle) in joints.iter_mut().zip(radians) {
+                for (joint, angle) in self.joints.iter_mut().zip(radians) {
                     joint.command(*angle)?;
                 }
             }
-            draw(
-                rec,
-                &spec,
-                plan.current(),
-                &measured,
-                &verdict,
-                joints,
-                last_reported,
-            )?;
+            self.draw(rec, plan.current(), &measured, &verdict)?;
 
-            joints.iter_mut().for_each(SimJoint::step);
+            self.joints.iter_mut().for_each(SimJoint::step);
             plan.advance();
-            *tick += 1;
+            self.tick += 1;
         }
+
         // Say in the terminal WHEN to look and WHAT the `authorised` panel
         // should show there, so the two can be COMPARED. A screen you have
         // to take on trust is the same failure as a log you have to take
         // on trust — and both numbers here are derived, never asserted,
         // so neither can drift away from what was actually logged.
-        let closed_at = *tick as f64 * PERIOD_SECONDS;
         println!(
-            "  {opened_at:5.1}–{closed_at:4.1} s  authorised {authorised_ticks:3}/{steps:<3}  {name}"
+            "  {opened_at:5.1}–{:4.1} s  authorised {authorised_ticks:3}/{steps:<3}  {name}",
+            self.elapsed_seconds()
         );
         Ok(())
-    };
-
-    // 1 — a plan is followed, and the servo's lag is visible behind it.
-    let mut plan = Plan::interpolate(&vec![0.0; 4], &[0.9, 0.7, -0.6, 0.5], 100).unwrap();
-    act(
-        &rec,
-        &mut last_reported,
-        &mut guard,
-        &mut joints,
-        &mut tick,
-        "follow a plan",
-        150,
-        &mut plan,
-        true,
-    )?;
-
-    // 2 — an absurd command. Travel clamps it, then the step limit turns
-    // what is left into a ramp instead of a lurch.
-    let mut plan = Plan::hold(vec![99.0; 4]);
-    act(
-        &rec,
-        &mut last_reported,
-        &mut guard,
-        &mut joints,
-        &mut tick,
-        "step limit vs an absurd command",
-        150,
-        &mut plan,
-        true,
-    )?;
-
-    // 3 — the commander dies mid-plan. THE ACT THAT MATTERS: the arm
-    // finishes its grace period and then holds, rather than releasing.
-    let here: Vec<f64> = joints.iter_mut().map(|j| j.measured().unwrap()).collect();
-    let mut plan = Plan::interpolate(&here, &vec![0.0; 4], 400).unwrap();
-    act(
-        &rec,
-        &mut last_reported,
-        &mut guard,
-        &mut joints,
-        &mut tick,
-        "commander dies — grace, then HOLD",
-        300,
-        &mut plan,
-        false,
-    )?;
-
-    // 4 — a hot joint outranks a perfectly fresh plan.
-    joints[1].heat_to(70.0);
-    let mut plan = Plan::hold(vec![0.0; 4]);
-    act(
-        &rec,
-        &mut last_reported,
-        &mut guard,
-        &mut joints,
-        &mut tick,
-        "shoulder overheats",
-        150,
-        &mut plan,
-        true,
-    )?;
-
-    println!(
-        "\n{:.1} s logged. In the viewer pick the newest source, `robotiq_arm`.",
-        tick as f64 * PERIOD_SECONDS
-    );
-    Ok(())
+    }
 }
 
 /// Where the panels go.
@@ -294,136 +307,139 @@ fn layout() -> rerun::blueprint::Blueprint {
     .with_auto_views(false)
 }
 
-/// One frame: the plots that show behaviour over time, and the stick
-/// figure that shows a joint bending the wrong way.
-///
-/// `last_reported` is the decision most recently announced to the event
-/// log, so the same one is not announced 150 times running. It belongs to
-/// the caller because it must survive **across** acts: a hold that runs
-/// from act 3 into act 4 for a *different* reason is a transition, and
-/// state reset per act would miss it.
-fn draw(
-    rec: &rerun::RecordingStream,
-    spec: &ArmSpec,
-    wanted: &[f64],
-    measured: &[f64],
-    verdict: &Verdict,
-    joints: &mut [SimJoint],
-    last_reported: &mut Option<(&'static str, &'static str)>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Grouped by UNIT, not by joint — radians under `angles/`, Celsius
-    // under `temperature/`. Not cosmetic: a view is selected by entity
-    // path prefix, and Rerun's `**` is a trailing wildcard only, so
-    // `angles/<joint>/measured` can be picked out by prefix while
-    // `joints/**/measured` matches nothing at all.
-    //
-    // What the plan ASKED for lives outside `angles/`, on its own panel,
-    // because a plan may ask for 99 rad and an axis stretched to 99 draws
-    // every real angle as a line at zero. Same reason radians and Celsius
-    // are not on one axis: one outlier erases the signal.
-    for (index, joint) in spec.joints.iter().enumerate() {
+impl Bench {
+    /// One frame: the plots that show behaviour over time, and the stick
+    /// figure that shows a joint bending the wrong way.
+    fn draw(
+        &mut self,
+        rec: &rerun::RecordingStream,
+        wanted: &[f64],
+        measured: &[f64],
+        verdict: &Verdict,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Grouped by UNIT, not by joint — radians under `angles/`, Celsius
+        // under `temperature/`. Not cosmetic: a view is selected by entity
+        // path prefix, and Rerun's `**` is a trailing wildcard only, so
+        // `angles/<joint>/measured` can be picked out by prefix while
+        // `joints/**/measured` matches nothing at all.
+        //
+        // What the plan ASKED for lives outside `angles/`, on its own panel,
+        // because a plan may ask for 99 rad and an axis stretched to 99 draws
+        // every real angle as a line at zero. Same reason radians and Celsius
+        // are not on one axis: one outlier erases the signal.
+        for index in 0..self.spec.joints() {
+            // Copied out rather than borrowed, so reading the joint's own
+            // temperature below is not a second borrow of `self`.
+            let name = self.spec.joints[index].name;
+            rec.log(
+                format!("asked/{name}"),
+                &rerun::Scalars::single(wanted[index]),
+            )?;
+            rec.log(
+                format!("angles/{name}/measured"),
+                &rerun::Scalars::single(measured[index]),
+            )?;
+            // Only when the guard actually authorised something. A gap in
+            // this series is not missing data — it is the arm being told
+            // nothing, which is what a hold IS.
+            if let Verdict::Move { radians } = verdict {
+                rec.log(
+                    format!("angles/{name}/commanded"),
+                    &rerun::Scalars::single(radians[index]),
+                )?;
+            }
+            if let Some(celsius) = self.joints[index].temperature_celsius()? {
+                rec.log(
+                    format!("temperature/{name}"),
+                    &rerun::Scalars::single(celsius),
+                )?;
+            }
+        }
+
+        // A step plot of the decision itself. 1 while motion is authorised,
+        // 0 while the arm is holding — the shape of the failsafe, visible at
+        // a glance rather than read out of a log.
+        let authorised = f64::from(u8::from(matches!(verdict, Verdict::Move { .. })));
+        rec.log("guard/authorised", &rerun::Scalars::single(authorised))?;
+
+        // Say WHY, but only when the DECISION changes — at 50 Hz an
+        // unfiltered line per tick is 3,000 a minute saying nothing happened,
+        // and the one transition that matters scrolls off the top.
+        //
+        // Keyed on the kind of verdict, never on the message: `HoldStale`
+        // carries an age that climbs every tick, so deduplicating on the text
+        // would filter nothing at all. The joint rides along so a second
+        // joint overheating is a new line rather than a continuation.
+        let key: (&'static str, &'static str) = match verdict {
+            Verdict::Move { .. } => ("move", ""),
+            Verdict::HoldUncommanded => ("uncommanded", ""),
+            Verdict::HoldStale { .. } => ("stale", ""),
+            Verdict::HoldClockFault { .. } => ("clock", ""),
+            Verdict::HoldOverheated { joint, .. } => ("hot", joint),
+            Verdict::HoldUnmeasurable { joint } => ("unmeasurable", joint),
+            Verdict::Refused { .. } => ("refused", ""),
+        };
+        let changed = self.last_reported != Some(key);
+        self.last_reported = Some(key);
+        let reason = match verdict {
+            Verdict::Move { .. } => None,
+            Verdict::HoldUncommanded => {
+                Some("HOLD — nothing has commanded this arm yet".to_string())
+            }
+            Verdict::HoldStale { age_ms } => Some(format!("HOLD — source quiet for {age_ms} ms")),
+            Verdict::HoldClockFault { age_ms } => {
+                Some(format!("HOLD — clock fault, age jumped {age_ms} ms"))
+            }
+            Verdict::HoldOverheated { joint, celsius } => {
+                Some(format!("HOLD — {joint} at {celsius:.0} °C"))
+            }
+            Verdict::HoldUnmeasurable { joint } => {
+                Some(format!("HOLD — {joint} cannot report its temperature"))
+            }
+            Verdict::Refused { wanted, joints } => {
+                Some(format!("REFUSED — {wanted} angles for {joints} joints"))
+            }
+        };
+        if let (true, Some(reason)) = (changed, reason) {
+            rec.log("events", &rerun::TextLog::new(reason))?;
+        }
+
+        // Side view. shoulder_lift and elbow_flex are the joints that move
+        // the arm in this plane; shoulder_pan rotates the plane itself and so
+        // is honestly not drawable here — read it off its plot instead.
+        //
+        // Zero is arm-straight-out-to-the-right. The vendor drawing's pose is
+        // lift = +90°, elbow = −90°, which is a fact about the drawing, not
+        // about where the servos read zero.
+        let lift = measured[self.spec.index_of("shoulder_lift").unwrap()] as f32;
+        let elbow = measured[self.spec.index_of("elbow_flex").unwrap()] as f32;
+        let shoulder = [0.0f32, SHOULDER_HEIGHT_METRES];
+        let elbow_at = [
+            shoulder[0] + LINK_METRES[0] * lift.cos(),
+            shoulder[1] + LINK_METRES[0] * lift.sin(),
+        ];
+        let tip = [
+            elbow_at[0] + LINK_METRES[1] * (lift + elbow).cos(),
+            elbow_at[1] + LINK_METRES[1] * (lift + elbow).sin(),
+        ];
+        // Amber while holding, blue while moving — the same "belief" blue the
+        // rest of the repo uses for a robot acting on what it believes.
+        let colour = if authorised > 0.5 {
+            belief_viz::belief()
+        } else {
+            rerun::Color::from_rgb(255, 176, 60)
+        };
+        let drawn = [to_view(shoulder), to_view(elbow_at), to_view(tip)];
         rec.log(
-            format!("asked/{}", joint.name),
-            &rerun::Scalars::single(wanted[index]),
+            "arm/links",
+            &rerun::LineStrips2D::new([drawn.to_vec()]).with_colors([colour]),
         )?;
         rec.log(
-            format!("angles/{}/measured", joint.name),
-            &rerun::Scalars::single(measured[index]),
+            "arm/joints",
+            &rerun::Points2D::new(drawn)
+                .with_radii([0.008])
+                .with_colors([colour]),
         )?;
-        // Only when the guard actually authorised something. A gap in
-        // this series is not missing data — it is the arm being told
-        // nothing, which is what a hold IS.
-        if let Verdict::Move { radians } = verdict {
-            rec.log(
-                format!("angles/{}/commanded", joint.name),
-                &rerun::Scalars::single(radians[index]),
-            )?;
-        }
-        if let Some(celsius) = joints[index].temperature_celsius()? {
-            rec.log(
-                format!("temperature/{}", joint.name),
-                &rerun::Scalars::single(celsius),
-            )?;
-        }
+        Ok(())
     }
-
-    // A step plot of the decision itself. 1 while motion is authorised,
-    // 0 while the arm is holding — the shape of the failsafe, visible at
-    // a glance rather than read out of a log.
-    let authorised = f64::from(u8::from(matches!(verdict, Verdict::Move { .. })));
-    rec.log("guard/authorised", &rerun::Scalars::single(authorised))?;
-
-    // Say WHY, but only when the DECISION changes — at 50 Hz an
-    // unfiltered line per tick is 3,000 a minute saying nothing happened,
-    // and the one transition that matters scrolls off the top.
-    //
-    // Keyed on the kind of verdict, never on the message: `HoldStale`
-    // carries an age that climbs every tick, so deduplicating on the text
-    // would filter nothing at all. The joint rides along so a second
-    // joint overheating is a new line rather than a continuation.
-    let key: (&'static str, &'static str) = match verdict {
-        Verdict::Move { .. } => ("move", ""),
-        Verdict::HoldUncommanded => ("uncommanded", ""),
-        Verdict::HoldStale { .. } => ("stale", ""),
-        Verdict::HoldClockFault { .. } => ("clock", ""),
-        Verdict::HoldOverheated { joint, .. } => ("hot", joint),
-        Verdict::Refused { .. } => ("refused", ""),
-    };
-    let changed = *last_reported != Some(key);
-    *last_reported = Some(key);
-    let reason = match verdict {
-        Verdict::Move { .. } => None,
-        Verdict::HoldUncommanded => Some("HOLD — nothing has commanded this arm yet".to_string()),
-        Verdict::HoldStale { age_ms } => Some(format!("HOLD — source quiet for {age_ms} ms")),
-        Verdict::HoldClockFault { age_ms } => {
-            Some(format!("HOLD — clock fault, age jumped {age_ms} ms"))
-        }
-        Verdict::HoldOverheated { joint, celsius } => {
-            Some(format!("HOLD — {joint} at {celsius:.0} °C"))
-        }
-        Verdict::Refused { wanted, joints } => {
-            Some(format!("REFUSED — {wanted} angles for {joints} joints"))
-        }
-    };
-    if let (true, Some(reason)) = (changed, reason) {
-        rec.log("events", &rerun::TextLog::new(reason))?;
-    }
-
-    // Side view. shoulder_lift and elbow_flex are the joints that move
-    // the arm in this plane; shoulder_pan rotates the plane itself and so
-    // is honestly not drawable here — read it off its plot instead.
-    //
-    // Zero is arm-straight-out-to-the-right. The vendor drawing's pose is
-    // lift = +90°, elbow = −90°, which is a fact about the drawing, not
-    // about where the servos read zero.
-    let lift = measured[spec.index_of("shoulder_lift").unwrap()] as f32;
-    let elbow = measured[spec.index_of("elbow_flex").unwrap()] as f32;
-    let shoulder = [0.0f32, SHOULDER_HEIGHT_METRES];
-    let elbow_at = [
-        shoulder[0] + LINK_METRES[0] * lift.cos(),
-        shoulder[1] + LINK_METRES[0] * lift.sin(),
-    ];
-    let tip = [
-        elbow_at[0] + LINK_METRES[1] * (lift + elbow).cos(),
-        elbow_at[1] + LINK_METRES[1] * (lift + elbow).sin(),
-    ];
-    // Amber while holding, blue while moving — the same "belief" blue the
-    // rest of the repo uses for a robot acting on what it believes.
-    let colour = if authorised > 0.5 {
-        belief_viz::belief()
-    } else {
-        rerun::Color::from_rgb(255, 176, 60)
-    };
-    let drawn = [to_view(shoulder), to_view(elbow_at), to_view(tip)];
-    rec.log(
-        "arm/links",
-        &rerun::LineStrips2D::new([drawn.to_vec()]).with_colors([colour]),
-    )?;
-    rec.log(
-        "arm/joints",
-        &rerun::Points2D::new(drawn)
-            .with_radii([0.008])
-            .with_colors([colour]),
-    )?;
-    Ok(())
 }
