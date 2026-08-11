@@ -17,6 +17,12 @@ edition = "2021"
 # definition across the whole project.
 sim-core = { path = "../sim-core" }
 
+[dev-dependencies]
+# Only the viewer needs these. The library itself draws nothing and must
+# stay free of them — `cargo test -p arm` should never build a GUI.
+rerun = "0.35"
+belief-viz = { path = "../belief-viz" }
+
 # No unsafe here. `forbid`, not `deny`: it cannot be switched off locally
 # with an `#[allow]`. This crate clamps numbers and interpolates between
 # them; if that ever needs unsafe, the argument belongs in the commit

@@ -356,6 +356,8 @@ dependencies = [
 name = "arm"
 version = "0.1.0"
 dependencies = [
+ "belief-viz",
+ "rerun",
  "sim-core",
 ]
 
