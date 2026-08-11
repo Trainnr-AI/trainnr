@@ -72,10 +72,6 @@ const COMMAND_TIMEOUT_MS: u64 = 200;
 /// transport's business — see [`Link::recv`].
 const POLL: Duration = Duration::from_millis(50);
 
-/// Milliseconds since boot, the unit [`CommandWatchdog`] speaks.
-fn now_ms() -> u64 {
-    Instant::now().as_millis()
-}
 /// The robot this firmware is driving. `REAL_BOT` — not `SIM_BOT` —
 /// because this code runs on the physical machine: when the measured
 /// values land in `spec.rs`, they take effect here with no edit.
@@ -195,10 +191,10 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
                 link.send(out.as_bytes()).await;
             }
             if let Some(g) = found {
-                watchdog.feed(now_ms());
+                watchdog.feed(firmware_support::now_ms());
                 break g;
             }
-            if watchdog.is_stale(now_ms()) {
+            if watchdog.is_stale(firmware_support::now_ms()) {
                 // The planner is gone. Nothing is sent — the host is not
                 // waiting on us, and injecting an unrequested `M` line
                 // would be read as the answer to its *next* goal.
@@ -237,7 +233,7 @@ async fn control_loop<L: Link>(link: &mut L) -> ! {
         // this line. While the planner is fresh it is the identity; once it
         // goes quiet the duty is zero, whatever the controller computed.
         let (duty_l, duty_r) =
-            watchdog.gate(now_ms(), (SPEC.duty(wheels.left), SPEC.duty(wheels.right)));
+            watchdog.gate(firmware_support::now_ms(), (SPEC.duty(wheels.left), SPEC.duty(wheels.right)));
         let elapsed_us = started.elapsed().as_micros() as u32;
         out.clear();
         let _ = Message::Motor { duty_l, duty_r }.write_into(&mut out);
@@ -401,11 +397,9 @@ mod transport {
     use embassy_rp::bind_interrupts;
     use embassy_rp::peripherals::USB;
     use embassy_rp::usb::{Driver, InterruptHandler};
-    use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+    use embassy_usb::class::cdc_acm::CdcAcmClass;
     use embassy_time::with_timeout;
     use embassy_usb::driver::Driver as UsbDriver;
-    use embassy_usb::{Builder, Config};
-    use static_cell::StaticCell;
 
     bind_interrupts!(struct Irqs {
         USBCTRL_IRQ => InterruptHandler<USB>;
@@ -441,29 +435,7 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals) -> ! {
         let driver = Driver::new(p.USB, Irqs);
-        let mut config = Config::new(0x2e8a, 0x000a);
-        config.manufacturer = Some("robotiq");
-        config.product = Some("pico-robot");
-        config.serial_number = Some("1");
-        config.max_power = 100;
-        config.max_packet_size_0 = 64;
-
-        static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-        static STATE: StaticCell<State> = StaticCell::new();
-
-        let state = STATE.init(State::new());
-        let mut builder = Builder::new(
-            driver,
-            config,
-            CONFIG_DESC.init([0; 256]),
-            BOS_DESC.init([0; 256]),
-            &mut [],
-            CONTROL_BUF.init([0; 64]),
-        );
-        let class = CdcAcmClass::new(&mut builder, state, 64);
-        let mut usb = builder.build();
+        let (mut usb, class) = firmware_support::usb::cdc(driver, "pico-robot", 0x000a);
 
         let mut link = UsbLink(class);
         // The USB stack and the control loop must both run. `join` polls

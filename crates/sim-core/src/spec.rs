@@ -269,10 +269,65 @@ impl RobotSpec {
     ///     RobotSpec::from_measurements(diameter_mm, track_mm, ticks, rpm);
     /// ```
     ///
-    /// `changing_real_bot_is_a_single_edit` will then fail on purpose —
-    /// that is the signal to record the new HIL baseline in docs/07 and
-    /// delete the test.
-    pub const REAL_BOT: RobotSpec = RobotSpec::SIM_BOT;
+    /// # The two that ARE measured, written in 2026-08-10
+    ///
+    /// | field | value | provenance |
+    /// |---|---|---|
+    /// | `ticks_per_revolution` | **4290.0** | measured, two runs 4327/4253, +/-0.9% |
+    /// | `max_wheel_speed` | **7.77** | measured, motors 7.71 and 7.79 rad/s |
+    /// | `wheel_radius` | 0.03 | ⚠️ STILL A PLACEHOLDER — needs wheels |
+    /// | `track_width` | 0.15 | ⚠️ STILL A PLACEHOLDER — needs a chassis |
+    ///
+    /// **Written as an explicit literal, not `= SIM_BOT`, precisely so
+    /// the two halves are visible field by field.** A part-measured spec
+    /// is the trap described above, and the mitigation is to make it
+    /// impossible to read this constant without seeing which is which.
+    ///
+    /// # Why these two could not keep waiting
+    ///
+    /// The plan was to edit once, when all four existed, because each
+    /// edit costs a hardware re-record of `recordings/rp2350-utrap.wire`.
+    /// That reasoning assumed waiting was free. On 2026-08-10 the camera
+    /// loop measured the bill:
+    ///
+    /// ```text
+    ///     command path divides by max_wheel_speed      30.0 vs 7.77
+    ///     feedback path divides by ticks_per_revolution 1024 vs 4290
+    ///
+    ///     the two errors run OPPOSITE ways and nearly cancel, so at
+    ///     v = 0.27 the robot achieved 0.26 and looked perfectly
+    ///     calibrated while being 4x wrong in scale
+    /// ```
+    ///
+    /// **Commanded-vs-achieved could not detect it**, because both paths
+    /// read this same constant — the system's best instrument is blind to
+    /// a correlated error in its own reference. That is why these two are
+    /// written together: correcting either alone makes the robot appear
+    /// 4x broken, which is exactly the pressure that gets a correct
+    /// change reverted.
+    ///
+    /// # What is still not anchored
+    ///
+    /// ⚠️ **Distances are still not metres.** `wheel_radius` converts
+    /// wheel rotation into travel, and it has never been measured — so
+    /// every `x`, `y` and `forward_speed` in this system remains a claim
+    /// scaled by an unknown factor. What IS now correct is everything in
+    /// wheel space: tick counts, wheel angular velocity, and the ratio of
+    /// commanded to achieved.
+    ///
+    /// Measure `wheel_radius` **under load** when wheels arrive — a
+    /// squashed tyre has a smaller effective radius than a free one, and
+    /// the honest method is to drive a measured 2 m straight and
+    /// calibrate metres-per-tick end to end, which absorbs the tyre
+    /// effect no caliper can catch.
+    pub const REAL_BOT: RobotSpec = RobotSpec {
+        // ---- measured on the bench ----
+        ticks_per_revolution: 4290.0,
+        max_wheel_speed: 7.77,
+        // ---- still SIM_BOT placeholders ----
+        wheel_radius: 0.03,
+        track_width: 0.15,
+    };
 
     /// The kinematic model implied by this geometry.
     pub fn drive(&self) -> DiffDrive {
@@ -325,7 +380,7 @@ impl RobotSpec {
     /// ```
     ///
     /// For `SIM_BOT`: 2 × 0.03 × 30 / 0.15 = **12 rad/s**.
-    pub fn max_turn_rate(&self) -> f64 {
+    pub const fn max_turn_rate(&self) -> f64 {
         2.0 * self.wheel_radius * self.max_wheel_speed / self.track_width
     }
 
@@ -498,6 +553,46 @@ pub struct ControlGains {
 }
 
 impl ControlGains {
+    /// Move a profile tuned on one robot onto another, preserving the
+    /// property that actually matters: the **proportional band**, the
+    /// heading error below which steering stays proportional instead of
+    /// going bang-bang.
+    ///
+    /// `heading_proportional` maps a heading error onto a turn rate, so on
+    /// a robot whose turn ceiling is `k` times lower the same gain
+    /// saturates `k` times sooner. Scaling P, D and the speeds by the same
+    /// `k` holds the band exactly where it was.
+    ///
+    /// # Why this is a function and not four literals
+    ///
+    /// It was four literals — `1.554`, `0.155`, `3.108`, `0.117` — with a
+    /// comment saying they were `WAYPOINT × 7.77/30.0`. That comment was
+    /// the only thing connecting them to the measurement they came from,
+    /// so the next change to `max_wheel_speed` would have left four
+    /// plausible numbers describing a robot that no longer exists. This is
+    /// the same failure `RobotSpec::REAL_BOT` documents at length, one
+    /// layer up: **a derived value written down by hand stops being
+    /// derived.**
+    ///
+    /// `arrive_radius` is deliberately NOT scaled. It is a distance
+    /// tolerance set by how precisely the robot needs to stop, not by how
+    /// fast it can go.
+    pub const fn scaled_from(base: ControlGains, from: RobotSpec, to: RobotSpec) -> ControlGains {
+        let k = to.max_wheel_speed / from.max_wheel_speed;
+        ControlGains {
+            heading_proportional: base.heading_proportional * k,
+            heading_integral: base.heading_integral * k,
+            heading_derivative: base.heading_derivative * k,
+            heading_integral_limit: base.heading_integral_limit,
+            // Not `base × k` but the destination robot's actual ceiling —
+            // which is the same number, and says why.
+            heading_derivative_limit: to.max_turn_rate(),
+            distance_proportional: base.distance_proportional,
+            max_forward_speed: base.max_forward_speed * k,
+            arrive_radius: base.arrive_radius,
+        }
+    }
+
     /// Driving to a **known coordinate** — Stage 0's waypoint follower and
     /// the Pico's tour.
     ///
@@ -526,16 +621,35 @@ impl ControlGains {
     /// also slower: detection runs at ~20 fps against the sim's 50 Hz, so
     /// the loop has less authority per unit time and a stiff controller
     /// oscillates. See docs/11-perception-stack.md.
-    pub const VISUAL_SERVO: ControlGains = ControlGains {
-        heading_proportional: 3.0,
-        heading_integral: 0.0,
-        heading_derivative: 0.3,
-        heading_integral_limit: 1.0,
-        heading_derivative_limit: 12.0,
-        distance_proportional: 0.8,
-        max_forward_speed: 0.35,
-        arrive_radius: 0.15,
-    };
+    /// ⚠️ **Retuned 2026-08-10 for the real robot, which is 3.86x slower
+    /// than the simulated one.** Every gain below is the old one times
+    /// `7.77 / 30.0` — the ratio of measured `max_wheel_speed` to the
+    /// placeholder it replaced.
+    ///
+    /// That scaling is not arbitrary. `heading_proportional` maps a
+    /// heading error onto a turn rate, so on a robot whose turn ceiling
+    /// fell from 12 to 3.108 rad/s the same gain saturates 3.86x sooner.
+    /// Scaling by the same factor holds the **proportional band** at
+    /// 4.00 rad — the region where steering stays proportional rather than
+    /// bang-bang is exactly what it was, on a robot that is not.
+    ///
+    /// `chase` drives real motors through this profile, so it has to be
+    /// achievable on `REAL_BOT` and no longer was: 0.35 m/s against a
+    /// 0.233 m/s ceiling.
+    pub const VISUAL_SERVO: ControlGains = ControlGains::scaled_from(
+        ControlGains {
+            heading_proportional: 3.0,
+            heading_integral: 0.0,
+            heading_derivative: 0.3,
+            heading_integral_limit: 1.0,
+            heading_derivative_limit: 12.0,
+            distance_proportional: 0.8,
+            max_forward_speed: 0.35,
+            arrive_radius: 0.15,
+        },
+        RobotSpec::SIM_BOT,
+        RobotSpec::REAL_BOT,
+    );
 
     /// [`WAYPOINT`](Self::WAYPOINT) with a wider arrival radius, for the
     /// chip driving a robot over a serial link.
@@ -547,9 +661,28 @@ impl ControlGains {
     /// This lived inline in `firmware/pico-robot` and so could not be
     /// validated: `RobotSpec::check` never saw it, and neither did any
     /// test. Shipped profiles belong here, next to the others.
+    /// ⚠️ **No longer `..WAYPOINT`, and that is the point.** `pico-robot`
+    /// runs this profile against [`RobotSpec::REAL_BOT`], which on
+    /// 2026-08-10 stopped being a copy of `SIM_BOT` — so a profile tuned
+    /// for the simulated robot became one the real motors cannot execute.
+    /// `RobotSpec::check` said so immediately: `max_forward_speed` 0.45
+    /// against a 0.233 m/s ceiling.
+    ///
+    /// Scaled by `7.77 / 30.0` like [`Self::VISUAL_SERVO`], which holds
+    /// the proportional band at **2.00 rad** — precisely the value
+    /// `the_waypoint_band_covers_the_whole_driving_window` pins for
+    /// `WAYPOINT` on `SIM_BOT`. Same controller shape, slower robot.
     pub const HIL: ControlGains = ControlGains {
+        // A wider arrival radius: the serial round trip adds a tick of
+        // latency on top of the motor lag, so the robot overshoots a
+        // little further before it registers arrival. A tolerance, not a
+        // speed — which is why `scaled_from` leaves it alone.
         arrive_radius: 0.18,
-        ..Self::WAYPOINT
+        ..ControlGains::scaled_from(
+            ControlGains::WAYPOINT,
+            RobotSpec::SIM_BOT,
+            RobotSpec::REAL_BOT,
+        )
     };
 }
 
@@ -714,6 +847,8 @@ mod tests {
     fn every_shipped_profile_is_physically_achievable() {
         // Including HIL, which used to be defined inline in the firmware
         // where nothing could check it.
+        // Every profile must be achievable on SIM_BOT, which is the
+        // faster robot and therefore the easy direction.
         for (name, gains) in [
             ("WAYPOINT", ControlGains::WAYPOINT),
             ("VISUAL_SERVO", ControlGains::VISUAL_SERVO),
@@ -724,6 +859,26 @@ mod tests {
                 "SIM_BOT rejects {name}: {:?}",
                 RobotSpec::SIM_BOT.check(&gains)
             );
+        }
+
+        // ---- and the direction that actually bites ----
+        //
+        // Only the profiles that REACH REAL HARDWARE are checked against
+        // REAL_BOT. `WAYPOINT` is deliberately absent: it is `sim-run`'s
+        // tuning for `SIM_BOT`, frozen so the Stage 0 regression baseline
+        // keeps meaning something, and it is 3.86x too fast for the real
+        // motors.
+        //
+        // ⚠️ **Anything added here that a real robot will run belongs in
+        // this second list.** On 2026-08-10 all three were checked against
+        // both, which sounds stricter and was: it forced `WAYPOINT` to be
+        // achievable on hardware it never touches, and the only way to
+        // satisfy it would have been to detune the simulator to match a
+        // motor it does not have.
+        for (name, gains) in [
+            ("VISUAL_SERVO", ControlGains::VISUAL_SERVO), // chase --drive
+            ("HIL", ControlGains::HIL),                   // firmware/pico-robot
+        ] {
             assert!(
                 RobotSpec::REAL_BOT.check(&gains).is_ok(),
                 "REAL_BOT rejects {name}: {:?}",
@@ -744,18 +899,59 @@ mod tests {
         assert!(band > core::f64::consts::FRAC_PI_2, "2.0 rad > π/2 = 1.571");
     }
 
-    /// `heading_derivative_limit` is written as the literal `12.0` with a comment
+    /// `heading_derivative_limit` is written as a literal with a comment
     /// saying it *is* `2·r·ω_max/L`. Now that the formula has a function,
-    /// check the literal still matches it.
+    /// check each literal still matches it — **for the robot that profile
+    /// actually runs on.**
+    ///
+    /// Both numbers were `12.0` until 2026-08-10, because `REAL_BOT` was a
+    /// copy of `SIM_BOT` and the distinction cost nothing. Once the real
+    /// motor was measured at 7.77 rad/s the two ceilings split, and a
+    /// profile carrying the wrong one would ask its D term for four times
+    /// the turn rate the wheels can produce.
+    /// The property `scaled_from` exists to preserve, stated as a test
+    /// rather than trusted to a comment.
+    ///
+    /// The proportional band is the heading error below which steering
+    /// stays proportional instead of saturating. `WAYPOINT` on `SIM_BOT`
+    /// has 2.0 rad of it; the profiles derived for the real robot must
+    /// have the same, or the controller changes character rather than
+    /// merely slowing down.
+    #[test]
+    fn scaling_a_profile_preserves_its_proportional_band() {
+        let simulated = RobotSpec::SIM_BOT.turn_proportional_band(&ControlGains::WAYPOINT);
+        let real = RobotSpec::REAL_BOT.turn_proportional_band(&ControlGains::HIL);
+        assert!(
+            (simulated - real).abs() < 1e-9,
+            "HIL is WAYPOINT moved onto a slower robot, so the band must be \
+             identical: {simulated} vs {real}"
+        );
+
+        // And the numbers the hand-written literals used to carry, so
+        // replacing them with a computation is visibly the same profile.
+        assert!((ControlGains::HIL.heading_proportional - 1.554).abs() < 1e-3);
+        assert!((ControlGains::HIL.max_forward_speed - 0.1166).abs() < 1e-3);
+        assert!((ControlGains::VISUAL_SERVO.heading_proportional - 0.777).abs() < 1e-3);
+    }
+
     #[test]
     fn the_d_limit_literal_equals_the_formula_it_claims_to_be() {
-        let computed = RobotSpec::SIM_BOT.max_turn_rate();
+        let simulated = RobotSpec::SIM_BOT.max_turn_rate();
+        let real = RobotSpec::REAL_BOT.max_turn_rate();
         assert!(
-            (computed - 12.0).abs() < 1e-12,
-            "max_turn_rate = {computed}"
+            (simulated - 12.0).abs() < 1e-12,
+            "SIM_BOT max_turn_rate = {simulated}"
         );
-        assert!((ControlGains::WAYPOINT.heading_derivative_limit - computed).abs() < 1e-12);
-        assert!((ControlGains::VISUAL_SERVO.heading_derivative_limit - computed).abs() < 1e-12);
+        assert!(
+            (real - 3.108).abs() < 1e-9,
+            "REAL_BOT max_turn_rate = {real}"
+        );
+
+        // sim-run's profile, against the simulated robot.
+        assert!((ControlGains::WAYPOINT.heading_derivative_limit - simulated).abs() < 1e-12);
+        // The two that reach hardware, against the real one.
+        assert!((ControlGains::VISUAL_SERVO.heading_derivative_limit - real).abs() < 1e-9);
+        assert!((ControlGains::HIL.heading_derivative_limit - real).abs() < 1e-9);
     }
 
     #[test]
@@ -770,19 +966,42 @@ mod tests {
         );
     }
 
+    /// `changing_real_bot_is_a_single_edit` used to live here. It asserted
+    /// `REAL_BOT == SIM_BOT` so that measuring the robot would fail the
+    /// suite on purpose, and on 2026-08-10 it did exactly that. Deleted as
+    /// its own documentation instructed.
+    ///
+    /// What replaces it is the opposite assertion: the two specs must NOT
+    /// be the same object any more, because a silent revert to `= SIM_BOT`
+    /// would restore a robot that is 3.86x too fast and 4.2x too coarse
+    /// while every test went green.
     #[test]
-    fn changing_real_bot_is_a_single_edit() {
-        // `pico-robot` (the chip) and `hil-host` (the physics) both read
-        // REAL_BOT, and `sim-run` reads SIM_BOT. This test documents the
-        // split rather than enforcing it — its job is to make anyone
-        // editing REAL_BOT aware that both halves of the HIL rig move
-        // together, and the Stage 0 baseline deliberately does not.
-        assert_eq!(
+    fn real_bot_carries_its_measurements() {
+        assert_ne!(
             RobotSpec::REAL_BOT,
             RobotSpec::SIM_BOT,
-            "REAL_BOT has been measured — good. Expect the HIL numbers to \
-             change, and check docs/07 records the new baseline. sim-run \
-             stays on SIM_BOT so its regression test still means something."
+            "REAL_BOT is back to being a copy of SIM_BOT — the bench \
+             measurements of 2026-08-10 have been lost"
+        );
+        assert!(
+            (RobotSpec::REAL_BOT.ticks_per_revolution - 4290.0).abs() < 1e-12,
+            "measured over two runs, 4327 and 4253"
+        );
+        assert!(
+            (RobotSpec::REAL_BOT.max_wheel_speed - 7.77).abs() < 1e-12,
+            "measured on four AA cells: 7.71 and 7.79 rad/s"
+        );
+
+        // ⚠️ The two that are still placeholders, pinned so that measuring
+        // them fails here the way the old test failed for these two.
+        // `wheel_radius` is what makes distances metres, and until it is
+        // real every x and y in this system is scaled by an unknown factor.
+        assert!(
+            (RobotSpec::REAL_BOT.wheel_radius - RobotSpec::SIM_BOT.wheel_radius).abs() < 1e-12
+                && (RobotSpec::REAL_BOT.track_width - RobotSpec::SIM_BOT.track_width).abs() < 1e-12,
+            "wheel_radius or track_width has been measured — good. Re-record \
+             recordings/rp2350-utrap.wire, re-check every ControlGains \
+             profile that reaches hardware, and delete this assertion."
         );
     }
 

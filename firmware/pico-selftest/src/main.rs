@@ -54,10 +54,8 @@ use embassy_rp::bind_interrupts;
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_time::{Instant, Timer};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::{Builder, Config};
+use embassy_usb::class::cdc_acm::CdcAcmClass;
 use panic_halt as _;
-use static_cell::StaticCell;
 
 use sim_core::{
     BodyTwist, ControlGains, DiffDrive, Encoders, GotoController, Motor, Odometry, Pid,
@@ -79,32 +77,7 @@ async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let driver = Driver::new(p.USB, Irqs);
 
-    let mut config = Config::new(0x2e8a, 0x0009);
-    config.manufacturer = Some("robotiq");
-    config.product = Some("pico-selftest");
-    config.serial_number = Some("1");
-    config.max_power = 100;
-    config.max_packet_size_0 = 64;
-
-    // Descriptor buffers must outlive the Builder. StaticCell hands out a
-    // `&'static mut` exactly once, with no allocator involved.
-    static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-    static STATE: StaticCell<State> = StaticCell::new();
-
-    let state = STATE.init(State::new());
-    let mut builder = Builder::new(
-        driver,
-        config,
-        CONFIG_DESC.init([0; 256]),
-        BOS_DESC.init([0; 256]),
-        &mut [], // no Microsoft OS descriptors
-        CONTROL_BUF.init([0; 64]),
-    );
-
-    let mut class = CdcAcmClass::new(&mut builder, state, 64);
-    let mut usb = builder.build();
+    let (mut usb, mut class) = firmware_support::usb::cdc(driver, "pico-selftest", 0x0009);
 
     // Two jobs at once: the USB stack servicing the host, and our report
     // writing into it. `join` polls both on one stack — no second task.

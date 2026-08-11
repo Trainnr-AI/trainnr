@@ -104,6 +104,9 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
   the maths, the physics and the code connect
 - [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
 - [`docs/18-code-quality.md`](docs/18-code-quality.md) — an honest scorecard, and what would move it
+- [`docs/19-the-arm.md`](docs/19-the-arm.md) — **the arm: why its failsafe is the
+  opposite of the base's**, the four limits and why their order matters, one input
+  type that a VLA can drive unchanged, and what the viewer caught that the tests could not
 - [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
   (2026-08-08): what it would take to build, deploy and operate a small
   commercial fleet of mobile manipulators.** Nine documents on policies, data
@@ -127,6 +130,37 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/photos/`](docs/photos/README.md) — dated photo record of the build, so a
   claim about the hardware can be checked against what was on the desk
 
+## Verification
+
+`tools/verify.sh` is the single definition of "does this repo work" — one
+script rather than a workflow file restating the same checks, which would
+be one more pair of things that must agree and eventually will not.
+
+⚠️ **There is no CI.** No `.github/workflows` exists; the gate runs only
+when a human runs it. This README previously claimed CI called it, which
+was not true, and the cost of that gap is the next warning.
+
+| | steps | when |
+|---|---|---|
+| `tools/verify.sh` | 30 | before pushing |
+| `tools/verify.sh --fast` | 28 | while iterating |
+| `tools/verify.sh --serial <port>` | 32 | with a Pico on a cable |
+
+`--fast` drops exactly two, both named in the script with the reason: the
+emulator step, which takes ~9 minutes since the measured robot speed
+landed, and the RP2350 wire replay, which is **stale pending a hardware
+re-record**. Both still run in the full gate, so neither is hidden.
+
+⚠️ **`HIL on the emulator (RP2040)` is currently RED**, on `main` as well
+as on the branches merged into it. On `main` the mission finishes and
+misses the waypoint (0/1, 19.7 m drift); more recently the chip stops
+answering at ~14.6 s and the step hangs rather than failing. Full evidence
+and what has been ruled out is in
+[`docs/07-progress-log.md`](docs/07-progress-log.md) (2026-08-12). Until
+it is fixed, **"the full suite passes" is not a claim this repo can
+make** — `--fast` being green is not the same statement, and a step that
+can hang means a red gate and a slow one look identical.
+
 ## Repository layout
 
 ```
@@ -141,12 +175,18 @@ robotiq/
 │   │                        #   exercises.rs — YOUR code goes there
 │   ├── sim-run/             # the mission, and the Rerun viewer
 │   ├── vision/              # camera, detectors, target lock, the chase loop
+│   ├── arm/                 # joint-space arm control: limits, plans, safety.
+│   │                        #   No servo driver, no geometry — all of it
+│   │                        #   runs in `cargo test` with nothing plugged in
+│   ├── belief-viz/          # one definition of how a belief is drawn
+│   ├── teleop-web/          # drive the robot from a phone browser
 │   ├── hil-protocol/        # the host↔chip wire format, one definition
 │   ├── hil-host/            # simulated body for a real chip; record/replay
 │   ├── mpu6050-driver/      # IMU driver (host-tested against a mock bus)
 │   └── quad-encoder/        # quadrature decoding
 ├── firmware/                # no_std, ARM target — outside the workspace
 │   ├── build-support/       #   one copy of the linker scripts + build.rs
+│   ├── support/             #   USB CDC, heartbeat, Report — one copy each
 │   ├── pico-blink/          #   H0  async tasks
 │   ├── pico-button/         #   H1  input + PWM
 │   ├── pico-imu/            #   H2  I2C sensor
@@ -173,10 +213,25 @@ robotiq/
 [Rerun viewer](https://rerun.io) 0.35):
 
 ```sh
-tools/verify.sh             # everything: fmt, clippy, 333 tests, firmware,
+tools/verify.sh             # everything: fmt, clippy, 354 tests, firmware,
                             # both replay fixtures, and the emulator HIL run
+tools/verify.sh --fast      # the same, minus the emulator and the stale
+                            # wire replay — for iterating
 cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
 ```
+
+**Stage 5 — the arm, before owning one.** Joint-space control with no servo
+attached; the safety layer is the point, and it is the *opposite* of the base's
+(silence must make an arm hold, not stop). Four acts in Rerun — a plan followed,
+an absurd command turned into a ramp, a commander that dies, a joint that
+overheats:
+
+```sh
+cargo run -p arm --example watch
+```
+
+Watch the `authorised` panel fall to 0 at 6.48 s and stay there while the plan
+runs on without it. See [`docs/19-the-arm.md`](docs/19-the-arm.md).
 
 **Stage 2 — firmware** (needs Node ≥18 and `cargo install elf2uf2-rs`):
 
@@ -223,8 +278,67 @@ Measured on all three, one trajectory:
 | emulated RP2040 (M0+, no FPU) | 1139 | 1/1 | 0.052 m | 278 µs |
 | real RP2350 (M33, SP FPU) | 1139 | 1/1 | 0.052 m | 268 µs |
 
+⚠️ Those tick counts are from before `RobotSpec::REAL_BOT` carried its
+bench measurements. The measured robot is **3.86× slower**, so the same
+journey now takes ~4460 ticks — about 90 s on real hardware, and about
+nine minutes on the emulator, which is why the emulator step is one of
+two that CI skips.
+
+**Level 4 — a camera drives real motors.** The whole chain, on hardware:
+
+```sh
+tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
+cargo run --release -p vision --bin chase -- --drive /dev/cu.usbmodem11
+```
+
+```text
+  camera ─▶ detector ─▶ bearing ─▶ GotoController ─▶ BodyTwist
+                                                        │
+                                       T v w over USB ──┴─▶ pico-odom
+                                                             │
+                                             CommandWatchdog ┤ TB6612
+                                             StuckMonitor    ┘   │
+                                                              motors
+```
+
+`--drive` is a flag on the existing `chase` loop, not a second binary:
+the twist that drove a simulated robot is the twist that goes down the
+wire. Two loops that "do the same thing" drift.
+
+**Stopping the program stops the motors** — there is no shutdown handler,
+because a failsafe that needs the dying process to say goodbye does not
+cover the deaths that matter. The chip's watchdog does it after 200 ms of
+silence. Measured on the bench: 160 ms to zero duty, then 8 ticks of
+coast.
+
 Both physical Pico 2 W boards command **byte-identical** duty across all
 1139 ticks.
+
+**Level 5 — drive it from a phone.** The same command path, with a thumb
+on the other end instead of a camera:
+
+```sh
+tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
+cargo run --release -p teleop-web -- /dev/cu.usbmodem11
+```
+
+It prints a URL; open it on a phone on the same WiFi.
+
+```text
+  phone browser ──WebSocket──▶ teleop-web ──USB──▶ pico-odom ──▶ motors
+                        │                    │
+             500 ms phone timeout   200 ms CommandWatchdog, on the chip
+```
+
+**Two watchdogs, not one.** The laptop resends the current twist at 50 Hz
+regardless of what the phone is doing, and judges the phone's own liveness
+on a slacker 500 ms budget. Forwarding phone messages directly would let
+ordinary WiFi jitter trip the chip's 200 ms window and read as a fault.
+
+Both use `sim_core::CommandWatchdog` — the same tested type, on both hops.
+
+This doubles as a **manual override**: something to hold while
+`chase --drive` is running, for the first time it aims at a wall.
 
 **Recording and replay.** Every session can be captured and re-run with no
 hardware attached — and replay checks what the code *would now command*,

@@ -38,7 +38,7 @@ mod rig;
 mod wire;
 
 use rig::Rig;
-use sim_core::RobotSpec;
+use sim_core::{ControlGains, RobotSpec};
 use sim_run::{viz, MissionConfig};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -78,19 +78,17 @@ fn positional(args: &[String]) -> Option<String> {
     None
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let serial_port = flag(&args, "--serial");
-    let record = flag(&args, "--record").map(PathBuf::from);
-    let replay = flag(&args, "--replay").map(PathBuf::from);
-
-    let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
-    // Held so the child can be killed when the run ends.
-    let mut emulator: Option<Child> = None;
-
-    // The SAME mission sim-run runs. Not a copy — the same type, the same
-    // default config, the same world.
-    let config = MissionConfig {
+/// The mission this rig runs — **the single definition**, so nothing has
+/// to keep a second copy of it in step by hand.
+///
+/// It was inline in `main`, and a test in `sim-run` then reproduced it
+/// field by field with a comment saying "keep in step with hil-host".
+/// That is the same trap this function's own comments describe twice
+/// over: two things that must agree, agreeing by hand. `sim-run` cannot
+/// depend on `hil-host`, so the definition lives here and the test reaches
+/// for it.
+pub fn mission_config() -> MissionConfig {
+    MissionConfig {
         // The rig must simulate the SAME robot the firmware believes in.
         //
         // This used to be a `const SPEC = REAL_BOT` used only for the duty
@@ -99,6 +97,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // `REAL_BOT == SIM_BOT`, and a silent trap the moment the measured
         // values land in `spec.rs`, which is the documented plan.
         spec: RobotSpec::REAL_BOT,
+        // ⚠️ The SAME profile `firmware/pico-robot` runs, for the same
+        // reason the spec above is shared: this rig exists to model the
+        // robot the firmware believes in.
+        //
+        // This was never set, so the host silently ran `WAYPOINT` while
+        // the chip ran `HIL` — two different controllers in one loop.
+        // Undetectable until 2026-08-10, because `HIL` was `..WAYPOINT`
+        // differing only in `arrive_radius`, which the host does not use;
+        // the chip decides arrival. The moment `HIL` was retuned for the
+        // measured motor, `RobotSpec::check` refused the config outright.
+        //
+        // The exact shape of the `REAL_BOT`/`SIM_BOT` trap described
+        // below, one layer up: two things that must agree, agreeing by
+        // coincidence, in a rig whose whole purpose is that they agree.
+        gains: ControlGains::HIL,
+        // The measured motor, not the invented one. `MissionConfig`'s
+        // defaults describe sim-run's teaching robot; this rig is a twin
+        // of hardware, so it gets the bench numbers of 2026-08-09.
+        //
+        //   motor_tau   0.15 -> ~0.04 s   (eight step responses clustered)
+        //   deadband    none -> 4.3%      (0.0429 and 0.0391 per motor)
+        //
+        // The deadband is the one that changes behaviour visibly: below
+        // ~4.3% of full command the real robot does not move, so a twin
+        // without it lets the chip's controller creep at speeds the
+        // hardware cannot produce — and creeping is exactly what a
+        // waypoint follower does as it arrives.
+        // ⚠️ 60 s was the budget for a robot that could do 0.45 m/s. The
+        // measured one does 0.117, so the same journey across the same
+        // 8x6 m room takes about four times as long. Not a fudge factor —
+        // the identical trip at a quarter of the speed.
+        //
+        // **This makes the emulator gate step roughly 4x slower**, which
+        // is the honest cost of simulating the robot that exists rather
+        // than the one that was assumed. If that becomes intolerable the
+        // fix is a nearer waypoint for the emulator run, not a faster
+        // robot in the config.
+        duration: 300.0,
+        motor_tau: 0.04,
+        motor_deadband_fraction: 0.043,
         // THE one deliberate difference from sim-run, and it makes the rig
         // MORE realistic, not less.
         //
@@ -115,7 +153,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // so host and chip odometry stay in lockstep by construction.
         control_on_belief: true,
         ..MissionConfig::default()
-    };
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let serial_port = flag(&args, "--serial");
+    let record = flag(&args, "--record").map(PathBuf::from);
+    let replay = flag(&args, "--replay").map(PathBuf::from);
+
+    let rec = rerun::RecordingStreamBuilder::new("robotiq_hil").spawn()?;
+    // Held so the child can be killed when the run ends.
+    let mut emulator: Option<Child> = None;
+
+    // The SAME mission sim-run runs. Not a copy — the same type, the same
+    // default config, the same world.
+    let config = mission_config();
     let mut rig = Rig::new(
         config,
         wire_for(&args, &serial_port, &replay, &record, &mut emulator)?,
@@ -180,9 +233,7 @@ fn wire_for(
         (Some(path), _) => Wire::replay(path),
         (None, Some(port)) => {
             eprintln!("[host] opening {port}");
-            let sp = serialport::new(port, 115_200)
-                .timeout(std::time::Duration::from_secs(5))
-                .open()?;
+            let sp = hil_protocol::link::open(port, std::time::Duration::from_secs(5))?;
             // Two handles: the read side blocks, and we must be able to
             // write while it does.
             let reader = sp.try_clone()?;
@@ -218,6 +269,28 @@ fn wire_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// This rig's own config, solved natively in under a second.
+    ///
+    /// # Why it is worth a test of its own
+    ///
+    /// `control_on_belief: true` is strictly harder than the ground-truth
+    /// case every `sim-run` test uses — the chip steers on its odometry,
+    /// so drift feeds back into the steering. And the emulator step that
+    /// exercises this same config takes minutes, so a failure there is
+    /// slow to find and slower to iterate on. Here it costs 0.4 s.
+    ///
+    /// It also pins `duration`. That budget was 60 s for a robot that
+    /// could do 0.45 m/s; the measured one does 0.117, and this test is
+    /// what says the new number is enough rather than merely larger.
+    #[test]
+    fn the_rig_config_can_actually_be_solved() {
+        let outcome = sim_run::Mission::new(mission_config()).run();
+        assert_eq!(
+            outcome.waypoints_reached, outcome.waypoints_total,
+            "the rig's own mission is unsolvable: {outcome:?}"
+        );
+    }
 
     fn argv(s: &str) -> Vec<String> {
         s.split_whitespace().map(String::from).collect()

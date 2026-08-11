@@ -34,6 +34,14 @@ pub struct Args {
     /// the real footage instead of boxes on black. 150x the size — see
     /// [`crate::session`].
     pub video: bool,
+    /// Serial port of a `pico-odom --features teleop` board. `Some` sends
+    /// every commanded twist to REAL MOTORS instead of only a simulated
+    /// robot.
+    ///
+    /// Deliberately opt-in and deliberately verbose to type. Every other
+    /// flag here changes what you see; this one is the only one that
+    /// changes what MOVES.
+    pub drive: Option<String>,
 }
 
 impl Default for Args {
@@ -45,6 +53,7 @@ impl Default for Args {
             record: None,
             replay: None,
             video: false,
+            drive: None,
         }
     }
 }
@@ -110,6 +119,12 @@ impl Args {
                     parsed.replay = Some(path_value(&mut it, "--replay")?);
                 }
                 "--video" => parsed.video = true,
+                "--drive" => {
+                    let port = it
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("--drive needs a serial port"))?;
+                    parsed.drive = Some(port.as_ref().to_string());
+                }
                 other if other.starts_with('-') => {
                     anyhow::bail!("unknown flag {other:?}");
                 }

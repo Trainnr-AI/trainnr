@@ -144,6 +144,18 @@ regime.
 | Policy I/O (observation hashes, chunks, latencies) | ~0.1 Mbps | ~0.4 GB |
 | **Total, full fidelity** | | **~15–20 GB/robot/shift** |
 
+⚠️ **That total is this table's own arithmetic, not an industry figure**,
+and it is worth saying so because two independent research passes on
+2026-08-10 went looking for a primary source and found none — see
+`28-wifi-on-the-chip.md` §5. Inverting it gives 4.2–5.6 Mbit/s, which is
+consistent with one compressed camera plus lidar and odometry, so the
+decomposition holds together. But do not cite it as a measured
+industry-wide number, because nobody appears to have published one.
+
+It is also **essentially all camera**: the same pass calculated the
+scalar telemetry line here at ~6.5 MB/hour raw, which is roughly 500×
+cheaper than the video and rounds to nothing in this total.
+
 **Cloudflare R2** wins this workload decisively: **$0.015/GB-month** standard,
 $0.010 infrequent access, and **free egress**. Three robots × 20 GB/day × 30 days
 = 1.8 TB/month ≈ **$27/month**.

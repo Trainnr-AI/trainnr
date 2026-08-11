@@ -1,0 +1,21 @@
+[package]
+name = "belief-viz"
+version = "0.1.0"
+edition = "2021"
+
+# Drawing a robot's belief in Rerun, once.
+#
+# `sim-run`, `hil-host` and `vision` all did this, and all three had
+# independently rediscovered that a cumulative trail redrawn every frame
+# is quadratic. Their colour conventions agreed only by everyone
+# remembering them.
+
+[dependencies]
+rerun = "0.35"
+sim-core = { path = "../sim-core" }
+
+# No unsafe here. `forbid`, not `deny`: it cannot be switched off locally
+# with an `#[allow]`. Drawing is arithmetic and string formatting; if that
+# ever needs unsafe, the argument belongs in the commit that changes this.
+[lints.rust]
+unsafe_code = "forbid"

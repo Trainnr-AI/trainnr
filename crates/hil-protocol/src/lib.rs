@@ -57,7 +57,10 @@
 //! caller-supplied [`core::fmt::Write`] (a `heapless::String` on the chip,
 //! a `String` or socket on the host) so this crate never allocates.
 
-#![cfg_attr(not(test), no_std)]
+// `host` pulls in `serialport`, which is std-only. Firmware never
+// enables it, so the no_std discipline this crate exists under is
+// unchanged for the target that actually needs it.
+#![cfg_attr(not(any(test, feature = "host")), no_std)]
 #![forbid(unsafe_code)]
 
 use core::fmt::Write;
@@ -445,6 +448,131 @@ impl Message {
             // before the controller ever sees it.
             | Message::Start { .. } => None,
         }
+    }
+}
+
+/// The human-readable status line `firmware/pico-odom` emits, 50 times a
+/// second.
+///
+/// # Why this is a shared type and not a `write!` in the firmware
+///
+/// It was a `write!` in the firmware, and two hosts each grew their own
+/// parser for it. On 2026-08-09 the firmware split its error counter into
+/// `errL`/`errR`; `hil-host`'s viewer kept looking for `err`, dropped
+/// every line, and **drew an empty screen while `tools/verify.sh` stayed
+/// green at 25/25** — a parser that agrees with itself compiles fine.
+///
+/// That was fixed by pinning the viewer's parser to a captured line. Then,
+/// hours later, `crates/vision` needed the same data and got a *second*
+/// independent parser with its own copy of the same fixture. Three
+/// implementations of one format, two of them added in response to a bug
+/// caused by having two.
+///
+/// So it lives here, in the crate both ends already share, where
+/// [`tests::a_status_line_survives_the_round_trip`] makes drift a
+/// compile-and-test failure rather than a blank screen.
+///
+/// # Human-readable on purpose
+///
+/// Unlike [`Message`], which is byte-budgeted for a 32-byte UART FIFO,
+/// this is meant to be read by a person with `screen` open. That is why
+/// it spells out `errL=` rather than packing fields positionally — and
+/// why it is a separate type rather than a `Message` variant.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Status {
+    /// Report number, counted on the chip and never reset. **The only
+    /// field that makes loss measurable.**
+    ///
+    /// Without it, a status line that never arrived and a robot that did
+    /// not move are the same bytes: identical ticks, identical pose. That
+    /// was tolerable while the only transport was a cable, which does not
+    /// silently drop. It is not tolerable over UDP, where dropping is the
+    /// designed behaviour — so comparing the two transports means being
+    /// able to say *which* lines went missing, not just how many arrived.
+    ///
+    /// A gap in this sequence is a lost report. A repeat is a duplicate.
+    /// A decrease is the chip having rebooted.
+    pub seq: u64,
+    /// The chip's own dead reckoning.
+    pub x: f64,
+    pub y: f64,
+    pub heading: f64,
+    pub ticks_left: i64,
+    pub ticks_right: i64,
+    /// Per wheel, never summed. A decode error is a MISSED transition and
+    /// therefore an undercount, so a combined figure cannot say which
+    /// wheel reads low — which is exactly the confound that made the
+    /// left/right speed comparison untrustworthy until they were split.
+    pub errors_left: u64,
+    pub errors_right: u64,
+    /// Magnitude of the duty being applied, 0–100.
+    pub duty_percent: u64,
+    /// The chip commanded motion and the encoders disagreed.
+    pub stalled: bool,
+}
+
+impl Status {
+    /// The banner appended when [`Self::stalled`]. Prose, not a field:
+    /// it is aimed at whoever is watching the terminal.
+    pub const STALL_BANNER: &'static str =
+        "*** STALLED: commanded but not moving — check power ***";
+
+    /// Number of `name=value` fields a complete line carries.
+    const FIELDS: usize = 9;
+
+    pub fn write_into<W: Write>(&self, w: &mut W) -> core::fmt::Result {
+        write!(
+            w,
+            "n={} pose x={:+.3} y={:+.3} th={:+.3}  ticks L={} R={}  errL={} errR={}  duty={}%",
+            self.seq,
+            self.x,
+            self.y,
+            self.heading,
+            self.ticks_left,
+            self.ticks_right,
+            self.errors_left,
+            self.errors_right,
+            self.duty_percent
+        )?;
+        if self.stalled {
+            write!(w, "  {}", Self::STALL_BANNER)?;
+        }
+        write!(w, "\r\n")
+    }
+
+    /// Parse one line, or `None` if any field is missing or malformed.
+    ///
+    /// Keyed on the `name=value` tokens rather than on position, so adding
+    /// a field cannot silently shift what this reads. A line missing a key
+    /// is rejected whole — half a pose plotted as though it were complete
+    /// is worse than a dropped frame, and a cancelled USB write can
+    /// genuinely truncate one.
+    pub fn parse(line: &str) -> Option<Status> {
+        let mut status = Status::default();
+        let mut seen = 0;
+        for token in line.split_whitespace() {
+            // Tokens without an `=` are prose — the `pose` prefix, the
+            // `ticks` label, the stall banner. Skipped, not fatal.
+            let Some((key, value)) = token.split_once('=') else {
+                continue;
+            };
+            match key {
+                "n" => status.seq = value.parse().ok()?,
+                "x" => status.x = value.parse().ok()?,
+                "y" => status.y = value.parse().ok()?,
+                "th" => status.heading = value.parse().ok()?,
+                "L" => status.ticks_left = value.parse().ok()?,
+                "R" => status.ticks_right = value.parse().ok()?,
+                "errL" => status.errors_left = value.parse().ok()?,
+                "errR" => status.errors_right = value.parse().ok()?,
+                // The only field carrying a unit.
+                "duty" => status.duty_percent = value.trim_end_matches('%').parse().ok()?,
+                _ => continue,
+            }
+            seen += 1;
+        }
+        status.stalled = line.contains("STALLED");
+        (seen == Self::FIELDS).then_some(status)
     }
 }
 
@@ -984,5 +1112,146 @@ mod tests {
         assert_eq!(i, 3, "expected three complete lines");
         assert_eq!(received[1], Some(outgoing[1]));
         assert_eq!(received[2], Some(outgoing[2]));
+    }
+
+    // ---- Status ----
+
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10, from a
+    /// board flashed **before** status lines carried a sequence number.
+    /// Evidence, not an example.
+    const CAPTURED_BEFORE_SEQ: &str =
+        "pose x=-0.001 y=+0.003 th=-0.863  ticks L=-37793 R=38304  errL=235 errR=207  duty=0%";
+
+    /// A board flashed before sequence numbers existed must be REJECTED,
+    /// not read as `seq: 0`.
+    ///
+    /// This is the whole argument for `seq` being required rather than
+    /// optional. If a missing `n=` parsed as zero, a stale binary would
+    /// report every line as sequence 0 — which a loss detector reads as
+    /// "50 duplicates a second", i.e. a transport fault, on a board whose
+    /// only fault is needing a reflash. Tested against bytes a real board
+    /// really sent, so the rejection is not merely this file agreeing with
+    /// itself.
+    ///
+    #[test]
+    fn a_line_from_firmware_without_sequence_numbers_is_rejected() {
+        assert_eq!(Status::parse(CAPTURED_BEFORE_SEQ), None);
+    }
+
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-11, off
+    /// board #1 (chipid `0x12ea158439ef5cea`) running `pico-odom teleop`
+    /// **while a phone was driving the motors**. Evidence, not an example.
+    ///
+    /// The previous capture came off board #2, which has no encoders, so
+    /// every pose and tick field was zero — it proved the keys parse and
+    /// could not have caught `L` and `R` being swapped, because zero is
+    /// zero either way. This one has a distinct value in every field:
+    /// `L=6997` against `R=-1940`, `errL=47` against `errR=36`, opposite
+    /// signs on the wheels, and a heading well away from zero. A
+    /// transposition anywhere now fails.
+    const CAPTURED: &str = "n=8632 pose x=+0.470 y=-0.041 th=-2.618  \
+         ticks L=6997 R=-1940  errL=47 errR=36  duty=0%\r\n";
+
+    #[test]
+    fn a_line_the_board_actually_sent() {
+        let Some(s) = Status::parse(CAPTURED) else {
+            panic!("the firmware's real output no longer parses");
+        };
+        assert_eq!(s.seq, 8632);
+        assert_eq!(s.x, 0.470);
+        assert_eq!(s.y, -0.041);
+        assert_eq!(s.heading, -2.618);
+        assert_eq!(s.ticks_left, 6997);
+        assert_eq!(s.ticks_right, -1940);
+        assert_eq!(s.errors_left, 47);
+        assert_eq!(s.errors_right, 36);
+        assert_eq!(s.duty_percent, 0);
+        assert!(!s.stalled);
+    }
+
+    /// **The test that makes the 2026-08-09 bug impossible.** Writer and
+    /// parser are now one type, so a field renamed on one side fails here
+    /// rather than silently emptying a viewer.
+    #[test]
+    fn a_status_line_survives_the_round_trip() {
+        let sent = Status {
+            seq: 9_001,
+            x: -1.25,
+            y: 0.5,
+            heading: 3.0,
+            ticks_left: -37793,
+            ticks_right: 38304,
+            errors_left: 235,
+            errors_right: 207,
+            duty_percent: 42,
+            stalled: false,
+        };
+        let mut line = String::new();
+        assert!(sent.write_into(&mut line).is_ok());
+        assert_eq!(Status::parse(&line), Some(sent));
+    }
+
+    #[test]
+    fn the_stall_banner_survives_it_too() {
+        let sent = Status {
+            stalled: true,
+            ..Status::default()
+        };
+        let mut line = String::new();
+        assert!(sent.write_into(&mut line).is_ok());
+        assert_eq!(Status::parse(&line), Some(sent));
+    }
+
+    #[test]
+    fn a_truncated_line_is_dropped_not_guessed() {
+        assert!(Status::parse("pose x=-0.001 y=+0.003 th=-0.8").is_none());
+        assert!(Status::parse("").is_none());
+        // The superseded single-`err` format, which is what drifted.
+        assert!(
+            Status::parse("pose x=+0.0 y=+0.0 th=+0.0  ticks L=1 R=0  err=0  duty=0%").is_none()
+        );
+    }
+}
+
+/// Opening the serial link to a chip, with the facts that are the same
+/// every time.
+///
+/// Five call sites across two crates each spelled out the baud rate and
+/// called `.open()`. The baud is genuinely shared; the timeout genuinely
+/// is not — a viewer waiting on 50 Hz status lines, a prober expecting a
+/// reply, and a mission runner tolerating an emulator's startup all want
+/// different patience, and they ranged from 200 ms to 5 s.
+///
+/// So this fixes the one thing that must not vary and takes the one that
+/// must as an argument.
+#[cfg(feature = "host")]
+pub mod link {
+    use std::time::Duration;
+
+    /// Every firmware here runs its CDC/UART link at this rate.
+    ///
+    /// On USB CDC the number is ignored by the hardware — a CDC device
+    /// does not have a baud rate — but it must still be passed, and
+    /// passing the same one everywhere means a UART board and a USB board
+    /// are opened by identical code.
+    pub const BAUD: u32 = 115_200;
+
+    /// Open the port to a chip.
+    ///
+    /// # ⚠️ This can start the motors
+    ///
+    /// Opening a CDC port **raises DTR**, and DTR is what the firmware
+    /// waits on before it will drive anything — see `HOST_WATCHING` in
+    /// `firmware/pico-odom`. That gate exists so a board on a charger sits
+    /// still. From the moment this returns, a robot with power to its
+    /// H-bridge can move.
+    ///
+    /// That warning previously appeared at exactly one of the five call
+    /// sites, and it is true of all of them.
+    pub fn open(
+        port: &str,
+        timeout: Duration,
+    ) -> serialport::Result<Box<dyn serialport::SerialPort>> {
+        serialport::new(port, BAUD).timeout(timeout).open()
     }
 }

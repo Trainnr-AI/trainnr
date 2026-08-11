@@ -2,6 +2,11 @@
 //!
 //! Runs on the HOST at build time. Each crate's `build.rs` is one line:
 //!
+//! Gated like everything else even though **nothing here reaches the
+//! chip** — it emits linker flags on the laptop. A build script that
+//! could run arbitrary unsafe at compile time is still worth forbidding,
+//! and an exception here would be one more thing to remember.
+//!
 //! ```ignore
 //! fn main() { firmware_build_support::configure(); }
 //! ```
@@ -16,6 +21,8 @@
 //!
 //! `.unwrap()` is deliberate throughout: a build script SHOULD fail the
 //! build loudly rather than limp on with a broken linker configuration.
+
+#![forbid(unsafe_code)]
 
 use std::env;
 use std::fs::File;

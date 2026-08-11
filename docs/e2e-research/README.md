@@ -8,6 +8,7 @@ app layer, deployment and telemetry.
 **These are research notes, not a plan.** Nothing here has been built, bought or
 committed to. Every claim carries a date and a source so the next pass can see
 what has decayed, and [27-open-questions.md](27-open-questions.md) records what
+- [`28-wifi-on-the-chip.md`](28-wifi-on-the-chip.md) — **what the radio on the Pico 2 W can and cannot do, and why the chip should stay tethered.** Three fields against primary sources: cyw43 cannot join WPA2-Enterprise, secure boot is bypassable on our A2 silicon, `embedded-tls` fails open, and every reference architecture puts WiFi on a Linux node.
 this pass could *not* settle.
 
 Read [19-the-system.md](19-the-system.md) first; it is the map.

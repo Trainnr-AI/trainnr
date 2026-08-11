@@ -53,6 +53,7 @@ use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::peripherals::{PIN_16, PIN_17, PIN_25};
 use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
+use firmware_support::Report;
 use panic_halt as _;
 use quad_encoder::QuadratureDecoder;
 
@@ -64,32 +65,6 @@ const POLL_US: u64 = 100;
 /// hand — the rate below divides by the *measured* elapsed time, so
 /// changing this number cannot silently make the reported speed wrong.
 const REPORT_MS: u64 = 250;
-
-/// Where a status line goes. The sampling loop does not care.
-trait Report {
-    /// Send bytes, or give up quietly. **How long "quietly" takes is the
-    /// implementation's business** — only the USB transport can stall, so
-    /// only it carries a deadline.
-    ///
-    /// **Dropping output is deliberate, and the priority is the point.**
-    /// This loop's product is an accurate tick count; the status line is
-    /// disposable commentary on it. A transport that stalls — a USB host
-    /// that stops draining, a terminal nobody opened — must never hold up
-    /// sampling, because every microsecond spent blocked here is a
-    /// microsecond of missed transitions, and a missed transition
-    /// corrupts the very number we are here to measure.
-    ///
-    /// So: reports are best-effort, ticks are not.
-    async fn send(&mut self, bytes: &[u8]);
-}
-
-#[embassy_executor::task]
-async fn heartbeat(mut led: Output<'static>) {
-    loop {
-        led.toggle();
-        Timer::after_millis(500).await;
-    }
-}
 
 /// Samples the encoder pins forever, reporting periodically.
 ///
@@ -187,7 +162,7 @@ fn shared_setup(
     // Driving it is harmless, and it is a real heartbeat on a non-W board
     // and on the emulated RP2040. But do not read "no blink" as "dead
     // board": on a W, the sign of life is the USB port appearing.
-    spawner.spawn(heartbeat(Output::new(pin_led, Level::Low)).unwrap());
+    spawner.spawn(firmware_support::heartbeat(Output::new(pin_led, Level::Low), 500).unwrap());
 
     (a, b)
 }
@@ -233,10 +208,8 @@ mod transport {
     use embassy_rp::peripherals::USB;
     use embassy_rp::usb::{Driver, InterruptHandler};
     use embassy_time::{with_timeout, Duration};
-    use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+    use embassy_usb::class::cdc_acm::CdcAcmClass;
     use embassy_usb::driver::Driver as UsbDriver;
-    use embassy_usb::{Builder, Config};
-    use static_cell::StaticCell;
 
     bind_interrupts!(struct Irqs {
         USBCTRL_IRQ => InterruptHandler<USB>;
@@ -301,29 +274,7 @@ mod transport {
         // 0x2e8a is Raspberry Pi's vendor ID. The product ID differs from
         // `pico-robot`'s 0x000a so both can be plugged in at once and
         // still be told apart in `ioreg`/`lsusb`.
-        let mut config = Config::new(0x2e8a, 0x000b);
-        config.manufacturer = Some("robotiq");
-        config.product = Some("pico-encoder");
-        config.serial_number = Some("1");
-        config.max_power = 100;
-        config.max_packet_size_0 = MAX_PACKET as u8;
-
-        static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-        static STATE: StaticCell<State> = StaticCell::new();
-
-        let state = STATE.init(State::new());
-        let mut builder = Builder::new(
-            driver,
-            config,
-            CONFIG_DESC.init([0; 256]),
-            BOS_DESC.init([0; 256]),
-            &mut [],
-            CONTROL_BUF.init([0; 64]),
-        );
-        let class = CdcAcmClass::new(&mut builder, state, MAX_PACKET as u16);
-        let mut usb = builder.build();
+        let (mut usb, class) = firmware_support::usb::cdc(driver, "pico-encoder", 0x000b);
         let mut out = UsbReport(class);
 
         // The USB stack and the sampler must both run; `join` polls them

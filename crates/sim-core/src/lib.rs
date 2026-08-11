@@ -45,7 +45,7 @@ pub use odometry::Odometry;
 pub use pose::{wrap_angle, Point, Pose};
 pub use rng::Rng;
 pub use robot::{BodyTwist, DiffDrive, Robot, WheelSpeeds};
-pub use safety::{CommandWatchdog, Millis};
+pub use safety::{CommandWatchdog, Freshness, Millis, StuckMonitor};
 pub use sensors::Encoders;
 pub use spec::{ControlGains, RobotSpec, DUTY_FULL};
 pub use world::Segment;

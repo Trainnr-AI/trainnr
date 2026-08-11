@@ -30,7 +30,7 @@ REPLAY DIVERGED from the recorded session:
 
 | file | what it is |
 |---|---|
-| `rp2350-utrap.wire` | The Stage 0 U-trap solved by a real RP2350 over USB. 1139 ticks, 1/1 waypoints, drift 0.052 m, 0 wall bumps, worst compute 311 µs of a 20 000 µs budget. |
+| `rp2350-utrap.wire` | ⚠️ **STALE since 2026-08-10 — needs a hardware re-record.** `REAL_BOT` gained its measured values, so the host commands differently and replay diverges correctly. The Stage 0 U-trap solved by a real RP2350 over USB. 1139 ticks, 1/1 waypoints, drift 0.052 m, 0 wall bumps, worst compute 311 µs of a 20 000 µs budget. |
 | `chase-sweep.perc` | A **synthetic** perception session: an object enters from the right, is tracked to centre, grows as the robot closes, then vanishes. 225 frames, 20 KB. Exercises the bearing low-pass, the heading deadband, `approach_factor` and the shared PID. Synthetic on purpose — deterministic, and no footage of anyone's living room in the repo. |
 
 ```sh

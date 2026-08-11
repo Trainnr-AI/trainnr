@@ -81,8 +81,15 @@ bind_interrupts!(struct Irqs {
 static FW: Aligned<A4, [u8; 231_077]> = Aligned(*cyw43_firmware::CYW43_43439A0);
 /// Board-specific radio settings (MAC, board type, antenna trim). Not in
 /// the published `cyw43-firmware` crate, so vendored — 742 bytes.
+///
+/// Lives one level up in `firmware/cyw43-firmware/` because
+/// `pico-odom --features wifi` needs the identical bytes. Two copies of a
+/// blob is exactly the "two facts nobody compared" shape this repo keeps
+/// paying for: a board-settings file that drifted between firmwares would
+/// show up as one radio joining and the other not, with nothing in either
+/// source to explain why.
 static NVRAM: Aligned<A4, [u8; 742]> =
-    Aligned(*include_bytes!("../cyw43-firmware/nvram_rp2040.bin"));
+    Aligned(*include_bytes!("../../cyw43-firmware/nvram_rp2040.bin"));
 
 /// Services the radio. Must run forever, or the chip stops answering.
 #[embassy_executor::task]

@@ -26,6 +26,41 @@
 //! a crude proxy the research warned about — and nothing corrects it.
 //! Stage 3 closes that loop, when the camera physically rides the robot.
 //!
+//! # `--drive` — the same twists, sent to real motors
+//!
+//! ```sh
+//! tools/build-pico2.sh pico-odom teleop     # once, then BOOTSEL + picotool
+//! cargo run --release -p vision --bin chase -- --drive /dev/cu.usbmodem11
+//! ```
+//!
+//! ```text
+//!   camera → Detector → bearing → GotoController → BodyTwist
+//!                                                      ├─▶ simulated Robot
+//!                                                      └─▶ T v w → pico-odom
+//!                                                                     ↓
+//!                                                          TB6612 → motors
+//! ```
+//!
+//! **Nothing about the control law changes.** The twist that drove a
+//! simulated robot is the twist that goes down the wire — which is the
+//! point, and the reason this is a flag rather than a second binary. Two
+//! loops that "do the same thing" drift.
+//!
+//! Three things worth knowing before running it:
+//!
+//! - **Stopping this program stops the motors.** No shutdown handler; the
+//!   chip's watchdog does it after 200 ms of silence. Measured: 160 ms to
+//!   zero duty, then 8 ticks of coast. A failsafe that needs the dying
+//!   process to say goodbye does not cover the deaths that matter.
+//! - **Below ~11% duty the robot veers rather than creeps.** The two
+//!   wheels' deadbands differ (4.29% vs 3.91%), so near the floor they
+//!   disagree by 15% where at 50% duty they agree to 1.5%. Measured
+//!   2026-08-10, docs/07.
+//! - **The forward term is still open-loop.** The camera is on the laptop,
+//!   not the robot, so driving forward does not change the view. Real
+//!   wheels do not make it a closed loop — they make it a closed loop in
+//!   *rotation* and an open one in *approach*, exactly as above.
+//!
 //! Run from Terminal.app (not an editor terminal):
 //!
 //! ```sh
@@ -43,7 +78,9 @@
 //! or just yourself — and move it left and right.
 
 use anyhow::Result;
-use sim_core::{wrap_angle, BodyTwist, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec};
+use sim_core::{
+    wrap_angle, BodyTwist, ControlGains, GotoController, Pid, Pose, Robot, RobotSpec, StuckMonitor,
+};
 use std::collections::VecDeque;
 use std::time::Instant;
 use vision::session::Perceived;
@@ -55,6 +92,14 @@ use vision::{
 const DESIRED: (u32, u32) = (640, 480);
 const FPS: u32 = 30;
 const MIN_CONFIDENCE: f32 = 0.40;
+/// `pico-odom`'s `COMMAND_TIMEOUT_MS`, in seconds. Named here so the
+/// viewer can plot how close each frame comes to tripping it.
+const WATCHDOG_SECONDS: f64 = 0.200;
+
+/// This loop's measured rate — 410 frames on 2026-08-10 gave a median
+/// 65 ms per frame. Used to convert the shared recovery policy's seconds
+/// into this loop's ticks.
+const LOOP_HZ: f64 = 15.0;
 /// Acquisition threshold for the open-vocabulary pass — **lower than
 /// [`MIN_CONFIDENCE`] on purpose.**
 ///
@@ -342,14 +387,60 @@ fn main() -> Result<()> {
             ),
         }
     }
+    // ⚠️ Opening the port raises DTR, which un-gates the chip. Motors can
+    // move from this line on — so it happens AFTER the camera and the
+    // detector are up. A board sitting armed while a model loads for ten
+    // seconds is ten seconds of a robot waiting to be told anything.
+    let mut wheels = match &args.drive {
+        None => None,
+        Some(port) => {
+            println!("driving REAL MOTORS on {port}");
+            println!("  stop the loop and they stop themselves within 200 ms");
+            Some(vision::Wheels::open(port)?)
+        }
+    };
+
     println!("hold up a cup, bottle, phone, book — or yourself — and move it around\n");
 
     let mut last_tick = Instant::now();
+    let mut last_chip_print = Instant::now();
+    // Patience and escape length from `MissionConfig`'s swept defaults,
+    // converted from 50 Hz ticks to this loop's ~15 Hz: 0.5 s of trying
+    // and failing, then 2.4 s of backing out.
+    // The same policy `sim-run` runs, from the same constructor — only
+    // the loop rate differs. `REAL_BOT` and not `SPEC` because the CHIP
+    // converts this twist into duty, and `SPEC` above drives only the
+    // on-screen simulation.
+    //
+    // ⚠️ **A blind reverse, untested on hardware.** It backs the robot up
+    // roughly half a metre with nothing watching behind it, and on a bench
+    // that means cables.
+    let mut stuck = StuckMonitor::for_robot(&RobotSpec::REAL_BOT, LOOP_HZ);
+    let mut was_escaping = false;
     for frame in stream.frames {
         let dt = last_tick.elapsed().as_secs_f64().clamp(0.001, 0.2);
         last_tick = Instant::now();
 
+        let inference_started = Instant::now();
         let detections = detector.detect(&frame)?;
+        let inference_seconds = inference_started.elapsed().as_secs_f64();
+
+        // ---- the loop's own health ----
+        //
+        // Logged because this loop feeds a 200 ms watchdog. If a frame
+        // ever takes longer than that, the chip stops the motors mid-
+        // manoeuvre and the robot stutters — and nothing else on screen
+        // would say why. Measured 2026-08-10: median 65 ms, max 112 ms,
+        // so the margin is 1.8x and worth watching rather than assuming.
+        rec.log("loop/frame_ms", &rerun::Scalars::single(dt * 1000.0))?;
+        rec.log(
+            "loop/inference_ms",
+            &rerun::Scalars::single(inference_seconds * 1000.0),
+        )?;
+        rec.log(
+            "loop/watchdog_margin",
+            &rerun::Scalars::single(WATCHDOG_SECONDS / dt),
+        )?;
         // Locked: track that class (and colour). Otherwise: most confident.
         // Selection happens HERE, on the live frame, because the lock
         // matches on hue and needs pixels. Its *result* is recorded — see
@@ -370,7 +461,90 @@ fn main() -> Result<()> {
         };
         // Step FIRST: the command is part of the record, so there is
         // something for a replay to check against.
-        perceived.command = Some(chase.step(&perceived, Some(&frame), &rec)?);
+        let commanded = chase.step(&perceived, Some(&frame), &rec)?;
+        perceived.command = Some(commanded);
+
+        // ---- the last link: perception reaches real wheels ----
+        if let Some(w) = &mut wheels {
+            // Read BEFORE commanding, so the escape decision is made on
+            // what the wheels just did rather than on a reading taken
+            // after the next command was already sent.
+            let Some(feedback) = w.feedback() else {
+                // The board is gone. Stop rather than carry on computing
+                // twists for a chip that cannot hear them — a loop still
+                // drawing confident commands into a viewer after its robot
+                // unplugged is the most misleading thing on the screen.
+                anyhow::bail!("the board stopped reporting — cable or power?");
+            };
+            // ---- commanded, but not moving ----
+            //
+            // The same `StuckMonitor` the simulator runs, on the same
+            // signal: what was asked for against what the encoders
+            // measured. Recovery lives HERE rather than on the chip
+            // because reversing needs to know what is behind the robot,
+            // and the chip cannot see. The chip's job is to stop a stalled
+            // motor before it heats; deciding where to go instead is this
+            // loop's.
+            //
+            // ⚠️ **Untested on hardware.** In the simulator the "measured"
+            // signal comes from true displacement, so a wheel held by a
+            // wall reads zero. Here it comes from encoders, and a wheel
+            // that SLIPS reports motion while the robot goes nowhere —
+            // that is the hole in this, and only a real floor can show it.
+            let sent = match stuck.update(
+                commanded.forward_speed.abs(),
+                feedback.achieved.forward_speed.abs(),
+            ) {
+                Some(escape) => {
+                    if !was_escaping {
+                        println!("   stuck — backing out");
+                    }
+                    escape
+                }
+                None => commanded,
+            };
+            was_escaping = stuck.is_escaping();
+            w.command(sent)?;
+            vision::drive::log(&rec, &feedback, sent)?;
+
+            // The chip reports at 50 Hz against this loop's ~15, so two or
+            // three lines should arrive every frame. None means the link
+            // is degrading while the channel is still nominally open, and
+            // the controller is now acting on a stale measurement.
+            if feedback.fresh_reports == 0 {
+                eprintln!(
+                    "⚠️  no telemetry this frame — acting on a {:.0} ms old reading",
+                    feedback.age_seconds * 1000.0
+                );
+            }
+            if feedback.report.stalled {
+                eprintln!("⚠️  chip reports STALLED — commanded but not moving");
+            }
+
+            // The comparison, once a second, in the terminal — so it is
+            // visible without opening the viewer. Asked-for beside
+            // actually-did is the only pair that can say the robot is
+            // doing its job; either alone can look perfect while the
+            // wheels sit still.
+            if last_chip_print.elapsed().as_secs_f64() >= 1.0 {
+                last_chip_print = Instant::now();
+                let a = feedback.achieved;
+                println!(
+                    "   chip  v {:+.2}->{:+.2}  w {:+.2}->{:+.2} m/s,rad/s   \
+duty {:>3}%  ticks {:>7}/{:<7} err {}/{}",
+                    commanded.forward_speed,
+                    a.forward_speed,
+                    commanded.turn_rate,
+                    a.turn_rate,
+                    feedback.report.duty_percent,
+                    feedback.report.ticks_left,
+                    feedback.report.ticks_right,
+                    feedback.report.errors_left,
+                    feedback.report.errors_right,
+                );
+            }
+        }
+
         recorder.write(&perceived, Some(&frame))?;
     }
     Ok(())

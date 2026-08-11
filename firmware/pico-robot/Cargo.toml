@@ -1,7 +1,7 @@
 [package]
 name = "pico-robot"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 # H2b: read a real sensor over I2C, using OUR driver crate — the same
 # crate that is unit-tested on the Mac with a mocked bus.
@@ -13,31 +13,25 @@ pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
 # Talk to the host over USB CDC instead of UART pins — for a REAL board on
 # a USB cable. The emulator cannot do USB, so this is pico2-only in
 # practice.
-usb = ["dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
+usb = ["firmware-support/usb", "dep:embassy-usb", "dep:embassy-futures"]
 
 [dependencies]
-embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-rp = { version = "0.10", default-features = false, features = ["rt", "time-driver", "critical-section-impl"] }
-embassy-time = "0.5"
-cortex-m = "0.7"
-cortex-m-rt = "0.7"
-panic-halt = "1.0"
-heapless = "0.9"
-embassy-usb = { version = "0.6", optional = true }
-embassy-futures = { version = "0.1", optional = true }
-static_cell = { version = "2", optional = true }
+embassy-executor = { workspace = true }
+embassy-rp = { workspace = true }
+embassy-time = { workspace = true }
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+panic-halt = { workspace = true }
+heapless = { workspace = true }
+embassy-usb = { workspace = true, optional = true }
+firmware-support = { workspace = true }
+embassy-futures = { workspace = true, optional = true }
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
-quad-encoder = { path = "../../crates/quad-encoder" }
-sim-core = { path = "../../crates/sim-core", default-features = false }
-hil-protocol = { path = "../../crates/hil-protocol" }
+quad-encoder = { workspace = true }
+sim-core = { workspace = true }
+hil-protocol = { workspace = true }
 
 [build-dependencies]
-firmware-build-support = { path = "../build-support" }
+firmware-build-support = { workspace = true }
 
-[profile.release]
-debug = true
-lto = true
-opt-level = "z"
-
-[workspace]
