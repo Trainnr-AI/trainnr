@@ -35,7 +35,36 @@ cd "$(dirname "$0")/../firmware/$CRATE"
 
 cargo build --release --no-default-features --features "$FEATURES" --target "$TARGET"
 
-BIN="target/$TARGET/release/$CRATE"
+# ⚠️ ASK cargo where it put the binary. Do not assume.
+#
+# This was hardcoded to `target/…` relative to the crate directory, which
+# was right until `firmware/` became one workspace on 2026-08-11 — cargo
+# then started building into `firmware/target/` while this kept reading
+# the abandoned `firmware/<crate>/target/`. Every .uf2 after that point
+# was a conversion of a STALE elf from before the migration, so all five
+# feature variants came out byte-identical and several hours of hardware
+# debugging compared the same binary against itself.
+TARGET_DIR=$(cargo metadata --format-version 1 --no-deps --offline 2>/dev/null \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' 2>/dev/null)
+BIN="${TARGET_DIR:-target}/$TARGET/release/$CRATE"
+
+if [ ! -f "$BIN" ]; then
+  echo "no binary at $BIN — cargo metadata said target_directory=${TARGET_DIR:-<unset>}" >&2
+  exit 1
+fi
+
+# Check the CONTENT matches the features asked for, not the timestamp.
+#
+# An mtime check was the obvious guard and it is wrong: cargo hardlinks a
+# cached artifact and keeps its original timestamp, so a legitimate
+# rebuild looks stale. This asks a question only the right binary can
+# answer — a `wifi` build embeds 231 KB of CYW43 firmware and a build
+# without it does not, so their sizes cannot be close.
+SIZE=$(wc -c < "$BIN")
+case "$FEATURES" in
+  *wifi*) [ "$SIZE" -gt 2500000 ] || { echo "⚠️  $BIN is ${SIZE}B — too small to contain the radio firmware, so this is not a wifi build" >&2; exit 1; } ;;
+  *)      [ "$SIZE" -lt 2500000 ] || { echo "⚠️  $BIN is ${SIZE}B — large enough to contain the radio firmware, but wifi was not requested" >&2; exit 1; } ;;
+esac
 # `SKIP_UF2=1` builds and stops. `tools/verify.sh` uses it because the
 # gate only needs the COMPILE to succeed — writing a .uf2 there produced a
 # flashable artifact nobody asked for, and on 2026-08-10 that artifact

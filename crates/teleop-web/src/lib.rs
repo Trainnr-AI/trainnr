@@ -33,6 +33,8 @@
 //! source gone quiet" is exactly the duplication this repo keeps paying
 //! for. One definition, both hops.
 
+use std::time::Instant;
+
 use sim_core::{BodyTwist, CommandWatchdog, RobotSpec};
 
 /// How often the laptop repeats the current twist to the chip.
@@ -134,6 +136,17 @@ pub struct Pilot {
     requested: Stick,
     phone: CommandWatchdog,
     spec: RobotSpec,
+    /// When this pilot started, so that [`Pilot::now_ms`] is the ONE
+    /// answer to "what time is it".
+    ///
+    /// ⚠️ This exists because the socket handler and the serial writer
+    /// each created their own `Instant` and derived `now_ms` from it. The
+    /// handler fed the watchdog at ~5,000 ms (its socket was young) while
+    /// the writer asked `is_stale` at ~60,000 ms (its thread was old), so
+    /// every command looked 55 seconds stale against a 500 ms timeout and
+    /// the robot never moved. Two clocks that had to agree, with nothing
+    /// comparing them.
+    epoch: Instant,
 }
 
 impl Pilot {
@@ -145,7 +158,18 @@ impl Pilot {
             // in `requested`. `CommandWatchdog` is built this way already.
             phone: CommandWatchdog::new(PHONE_TIMEOUT_MS),
             spec,
+            epoch: Instant::now(),
         }
+    }
+
+    /// Milliseconds since this pilot started.
+    ///
+    /// Every caller of [`Pilot::steer`] and [`Pilot::command`] in the
+    /// server reads the clock through here, so they cannot disagree about
+    /// it. `steer` and `command` still TAKE `now_ms` rather than reading
+    /// it themselves, which is what keeps them testable without a clock.
+    pub fn now_ms(&self) -> u64 {
+        self.epoch.elapsed().as_millis() as u64
     }
 
     /// A message arrived from the browser.

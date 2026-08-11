@@ -1138,36 +1138,34 @@ mod tests {
         assert_eq!(Status::parse(CAPTURED_BEFORE_SEQ), None);
     }
 
-    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-10, off
-    /// board #2 (chipid `0xf1a2ad734cb687d4`) running `pico-odom` built
-    /// with `usb,wifi`. Evidence, not an example.
+    /// Captured verbatim from `/dev/cu.usbmodem11` on 2026-08-11, off
+    /// board #1 (chipid `0x12ea158439ef5cea`) running `pico-odom teleop`
+    /// **while a phone was driving the motors**. Evidence, not an example.
     ///
-    /// ⚠️ **A weak fixture, and worth knowing why.** Board #2 has no
-    /// encoders and no motors, so every pose and tick field is zero. That
-    /// proves the keys parse, but it could not catch `L` and `R` being
-    /// swapped, or `x` and `y`, because zero is zero either way. The
-    /// previous capture had rich values precisely because it came off the
-    /// bench rig. **Replace this with a board #1 capture under motion**
-    /// the next time that board is flashed — until then this is real
-    /// bytes with a known blind spot, which still beats an invented line
-    /// with an unknown one.
-    const CAPTURED: &str =
-        "n=2757 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%\r\n";
+    /// The previous capture came off board #2, which has no encoders, so
+    /// every pose and tick field was zero — it proved the keys parse and
+    /// could not have caught `L` and `R` being swapped, because zero is
+    /// zero either way. This one has a distinct value in every field:
+    /// `L=6997` against `R=-1940`, `errL=47` against `errR=36`, opposite
+    /// signs on the wheels, and a heading well away from zero. A
+    /// transposition anywhere now fails.
+    const CAPTURED: &str = "n=8632 pose x=+0.470 y=-0.041 th=-2.618  \
+         ticks L=6997 R=-1940  errL=47 errR=36  duty=0%\r\n";
 
     #[test]
     fn a_line_the_board_actually_sent() {
         let Some(s) = Status::parse(CAPTURED) else {
             panic!("the firmware's real output no longer parses");
         };
-        assert_eq!(s.seq, 2757);
-        assert_eq!(s.x, 0.0);
-        assert_eq!(s.y, 0.0);
-        assert_eq!(s.heading, 0.0);
-        assert_eq!(s.ticks_left, 0);
-        assert_eq!(s.ticks_right, 0);
-        assert_eq!(s.errors_left, 0);
-        assert_eq!(s.errors_right, 0);
-        assert_eq!(s.duty_percent, 25);
+        assert_eq!(s.seq, 8632);
+        assert_eq!(s.x, 0.470);
+        assert_eq!(s.y, -0.041);
+        assert_eq!(s.heading, -2.618);
+        assert_eq!(s.ticks_left, 6997);
+        assert_eq!(s.ticks_right, -1940);
+        assert_eq!(s.errors_left, 47);
+        assert_eq!(s.errors_right, 36);
+        assert_eq!(s.duty_percent, 0);
         assert!(!s.stalled);
     }
 

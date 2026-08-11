@@ -60,7 +60,15 @@ type Shared = Arc<Mutex<Pilot>>;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = std::env::args()
         .nth(1)
-        .ok_or("usage: teleop-web <serial-port>   (e.g. /dev/cu.usbmodem11)")?;
+        .ok_or("usage: teleop-web <serial-port> [http-port]   (e.g. /dev/cu.usbmodem11 8080)")?;
+    // Optional, because 8080 is a popular port and a previous run whose
+    // socket has not yet been released is otherwise indistinguishable from
+    // "this program is broken".
+    let http_port: u16 = std::env::args()
+        .nth(2)
+        .unwrap_or_default()
+        .parse()
+        .unwrap_or(8080);
 
     let pilot: Shared = Arc::new(Mutex::new(Pilot::new(RobotSpec::REAL_BOT)));
 
@@ -81,8 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive", get(upgrade))
         .with_state(pilot);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    announce();
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", http_port)).await?;
+    announce(http_port);
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -91,10 +99,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// Worth the dependency: the alternative is telling someone to go and
 /// find their laptop's IP while holding a robot.
-fn announce() {
+fn announce(http_port: u16) {
     match local_ip_address::local_ip() {
-        Ok(ip) => println!("open  http://{ip}:8080  on a phone on this WiFi"),
-        Err(_) => println!("open  http://<this-machine>:8080  on a phone on this WiFi"),
+        Ok(ip) => println!("open  http://{ip}:{http_port}  on a phone on this WiFi"),
+        Err(_) => println!("open  http://<this-machine>:{http_port}  on a phone on this WiFi"),
     }
     println!("⚠️  the motors can move as soon as the port opens");
 }
@@ -105,7 +113,13 @@ async fn upgrade(ws: WebSocketUpgrade, State(pilot): State<Shared>) -> impl Into
 
 /// One phone, for as long as it is connected.
 async fn handle(mut socket: WebSocket, pilot: Shared) {
-    let started = Instant::now();
+    println!("phone connected");
+    // What the PAGE claims, before any interpretation. Separate from the
+    // `sent:` line on purpose: that one reports the twist, and a twist of
+    // zero cannot distinguish "thumb centred" from "touch events never
+    // reached the joystick". Only the raw stick can.
+    let mut last_seen = (0.0f64, 0.0f64);
+    let mut frames: u64 = 0;
     while let Some(Ok(msg)) = socket.recv().await {
         let WsMessage::Text(text) = msg else { continue };
         // A malformed frame is ignored rather than fatal, and crucially it
@@ -114,8 +128,17 @@ async fn handle(mut socket: WebSocket, pilot: Shared) {
         let Ok(stick) = serde_json::from_str::<Incoming>(&text) else {
             continue;
         };
-        let now_ms = started.elapsed().as_millis() as u64;
+        frames += 1;
+        if (stick.forward - last_seen.0).abs() > 0.02 || (stick.turn - last_seen.1).abs() > 0.02 {
+            println!(
+                "phone: forward={:+.2} turn={:+.2}  (frame {frames})",
+                stick.forward, stick.turn
+            );
+            last_seen = (stick.forward, stick.turn);
+        }
         if let Ok(mut p) = pilot.lock() {
+            // The pilot's own clock — see `Pilot::epoch`.
+            let now_ms = p.now_ms();
             p.steer(
                 Stick {
                     forward: stick.forward,
@@ -163,7 +186,6 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
     let listening = serial.try_clone()?;
     std::thread::spawn(move || report_forever(listening));
 
-    let started = Instant::now();
     let period = Duration::from_micros(1_000_000 / SEND_HZ);
     let mut next = Instant::now();
     let mut line = String::new();
@@ -171,13 +193,20 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
     let mut unheard: u64 = 0;
     // The last twist announced, so a held stick prints once rather than
     // fifty times a second.
-    let mut announced = (f64::NAN, f64::NAN);
+    //
+    // ⚠️ `Option`, not a NaN sentinel. `(v - NaN).abs() > threshold` is
+    // FALSE — every comparison against NaN is — so a NaN seed silently
+    // suppressed every announcement forever. The same trap `clamp_unit`
+    // in `lib.rs` exists to guard against, made ten lines from it.
+    let mut announced: Option<(f64, f64)> = None;
 
     loop {
         next += period;
-        let now_ms = started.elapsed().as_millis() as u64;
         let twist = match pilot.lock() {
-            Ok(p) => p.command(now_ms),
+            Ok(p) => {
+                let now_ms = p.now_ms();
+                p.command(now_ms)
+            }
             // A poisoned mutex means a socket handler panicked. Command
             // zero rather than reusing a stale twist: the one thing worse
             // than stopping is continuing on state nobody trusts.
@@ -193,9 +222,13 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
         // do left and right. Verifying a direction mapping against it is
         // impossible; this is the only place the sign exists.
         let (v, w) = (twist.forward_speed, twist.turn_rate);
-        if (v - announced.0).abs() > 0.005 || (w - announced.1).abs() > 0.02 {
+        let changed = match announced {
+            None => true,
+            Some((was_v, was_w)) => (v - was_v).abs() > 0.005 || (w - was_w).abs() > 0.02,
+        };
+        if changed {
             println!("sent: v={v:+.3} m/s  w={w:+.3} rad/s   {}", describe(v, w));
-            announced = (v, w);
+            announced = Some((v, w));
         }
 
         line.clear();
