@@ -199,22 +199,39 @@ fn drive_forever(port: &str, pilot: Shared) -> Result<(), Box<dyn std::error::Er
     // suppressed every announcement forever. The same trap `clamp_unit`
     // in `lib.rs` exists to guard against, made ten lines from it.
     let mut announced: Option<(f64, f64)> = None;
+    let mut warned_about_clocks = false;
 
     loop {
         next += period;
-        let twist = match pilot.lock() {
-            Ok(p) => {
+        let (twist, freshness) = match pilot.lock() {
+            Ok(mut p) => {
                 let now_ms = p.now_ms();
                 p.command(now_ms)
             }
             // A poisoned mutex means a socket handler panicked. Command
             // zero rather than reusing a stale twist: the one thing worse
             // than stopping is continuing on state nobody trusts.
-            Err(_) => sim_core::BodyTwist {
-                forward_speed: 0.0,
-                turn_rate: 0.0,
-            },
+            Err(_) => (
+                sim_core::BodyTwist {
+                    forward_speed: 0.0,
+                    turn_rate: 0.0,
+                },
+                sim_core::Freshness::NeverFed,
+            ),
         };
+
+        // ⚠️ Said out loud, once. A clock fault and a quiet phone produce
+        // the SAME twist — zero — so without this line they are
+        // indistinguishable from the outside, which is exactly how the
+        // 2026-08-11 bug hid.
+        if let sim_core::Freshness::ClockMismatch { age_ms } = freshness {
+            if !warned_about_clocks {
+                eprintln!(
+                    "⚠️  watchdog aged {age_ms} ms in one step — the feed and the \n                         query are not using the same clock. Commanding zero, but the \n                         phone may be fine."
+                );
+                warned_about_clocks = true;
+            }
+        }
 
         // ⚠️ Printed from the LAPTOP side, because the chip cannot tell
         // you this. `Status::duty_percent` is documented as a MAGNITUDE,

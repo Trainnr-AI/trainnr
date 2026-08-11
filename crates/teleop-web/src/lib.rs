@@ -35,7 +35,7 @@
 
 use std::time::Instant;
 
-use sim_core::{BodyTwist, CommandWatchdog, RobotSpec};
+use sim_core::{BodyTwist, CommandWatchdog, Freshness, RobotSpec};
 
 /// How often the laptop repeats the current twist to the chip.
 ///
@@ -187,18 +187,28 @@ impl Pilot {
         self.requested = Stick::CENTRED;
     }
 
-    /// What to send this tick.
+    /// What to send this tick, and why.
     ///
     /// Always returns a twist — never `None`. The chip must be fed
     /// continuously, and "stop" is a command, not an absence of one.
-    pub fn command(&self, now_ms: u64) -> BodyTwist {
-        if self.phone.is_stale(now_ms) {
-            return BodyTwist {
+    ///
+    /// The [`Freshness`] comes back so the caller can SAY when the reason
+    /// is a clock fault rather than a quiet phone. Those were
+    /// indistinguishable here on 2026-08-11, and the silence cost an
+    /// evening: the answer "stale, command zero" was correct given its
+    /// inputs and completely wrong about the world.
+    pub fn command(&mut self, now_ms: u64) -> (BodyTwist, Freshness) {
+        let freshness = self.phone.observe(now_ms);
+        let twist = match freshness {
+            Freshness::Fresh { .. } => self.requested.to_twist(&self.spec),
+            // Every other verdict stops the robot. The distinction is for
+            // the log, never for the actuator.
+            _ => BodyTwist {
                 forward_speed: 0.0,
                 turn_rate: 0.0,
-            };
-        }
-        self.requested.to_twist(&self.spec)
+            },
+        };
+        (twist, freshness)
     }
 
     /// Whether the phone is currently considered present, for the status
@@ -307,10 +317,11 @@ mod tests {
     /// The property the whole two-watchdog design exists for.
     #[test]
     fn a_pilot_nobody_has_touched_commands_zero() {
-        let p = Pilot::new(bot());
-        let t = p.command(0);
+        let mut p = Pilot::new(bot());
+        let (t, freshness) = p.command(0);
         assert_eq!(t.forward_speed, 0.0);
         assert_eq!(t.turn_rate, 0.0);
+        assert_eq!(freshness, Freshness::NeverFed, "and it says WHY");
         assert!(!p.phone_present(0));
     }
 
@@ -324,13 +335,13 @@ mod tests {
             },
             1_000,
         );
-        assert!(p.command(1_000).forward_speed > 0.0, "should be driving");
+        assert!(p.command(1_000).0.forward_speed > 0.0, "should be driving");
         assert!(
-            p.command(1_000 + PHONE_TIMEOUT_MS - 1).forward_speed > 0.0,
+            p.command(1_000 + PHONE_TIMEOUT_MS - 1).0.forward_speed > 0.0,
             "still inside the window"
         );
         assert_eq!(
-            p.command(1_000 + PHONE_TIMEOUT_MS).forward_speed,
+            p.command(1_000 + PHONE_TIMEOUT_MS).0.forward_speed,
             0.0,
             "phone went quiet — must command zero"
         );
@@ -349,7 +360,7 @@ mod tests {
             1_000,
         );
         p.halt();
-        assert_eq!(p.command(1_000).forward_speed, 0.0);
+        assert_eq!(p.command(1_000).0.forward_speed, 0.0);
     }
 
     /// The laptop must feed the chip several times inside its window, or

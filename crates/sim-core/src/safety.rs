@@ -44,6 +44,9 @@ use crate::{BodyTwist, RobotSpec};
 pub struct CommandWatchdog {
     timeout_ms: Millis,
     last_fed_ms: Option<Millis>,
+    /// The age reported by the previous [`Self::observe`], so that a jump
+    /// can be told from a climb. Not used by [`Self::is_stale`].
+    last_age_ms: Option<Millis>,
 }
 
 impl CommandWatchdog {
@@ -51,12 +54,16 @@ impl CommandWatchdog {
         CommandWatchdog {
             timeout_ms,
             last_fed_ms: None,
+            last_age_ms: None,
         }
     }
 
     /// Record that a valid command arrived at `now_ms`.
     pub fn feed(&mut self, now_ms: Millis) {
         self.last_fed_ms = Some(now_ms);
+        // A fresh feed restarts the age history: the next `observe` is a
+        // first look, not a continuation of the previous silence.
+        self.last_age_ms = None;
     }
 
     /// Has the source gone quiet?
@@ -94,6 +101,75 @@ impl CommandWatchdog {
             command
         }
     }
+
+    /// Like [`Self::is_stale`], but able to say **why** it went stale.
+    ///
+    /// # The failure this exists for
+    ///
+    /// A watchdog reading `u64` milliseconds cannot see which clock they
+    /// came from, and two clocks that disagree look exactly like a source
+    /// that has gone quiet. On 2026-08-11 that cost an evening: a phone
+    /// was at full deflection, one part of the host fed this watchdog at
+    /// ~5,000 ms from a socket that had just opened, another asked
+    /// [`Self::is_stale`] at ~60,000 ms from a thread started a minute
+    /// earlier, and the answer — *stale, command zero* — was **correct
+    /// given its inputs and completely wrong about the world**.
+    ///
+    /// # How the two are told apart
+    ///
+    /// By how the age GROWS, which is the one thing a single reading
+    /// cannot show. A source that really has gone quiet ages smoothly:
+    /// queried at 50 Hz, the age climbs in ~20 ms steps. Two clocks that
+    /// disagree produce a huge age *in one step*, because nothing about
+    /// the age was ever real.
+    ///
+    /// So this remembers the previous age and reports a jump larger than
+    /// the whole timeout as [`Freshness::ClockMismatch`]. It is a
+    /// heuristic, not a proof — but a source cannot skip its own timeout
+    /// in a single tick, and a clock swap cannot avoid doing so.
+    ///
+    /// ⚠️ Takes `&mut self` because it must remember. [`Self::is_stale`]
+    /// stays `&self` and unchanged, so the firmware path is untouched.
+    pub fn observe(&mut self, now_ms: Millis) -> Freshness {
+        let Some(age) = self.age_ms(now_ms) else {
+            return Freshness::NeverFed;
+        };
+        let jumped = match self.last_age_ms.replace(age) {
+            // A first look cannot show a jump, so judge it on its own:
+            // already past the timeout the moment we look is itself
+            // impossible for a source that was just fed.
+            None => age >= self.timeout_ms,
+            Some(previous) => age.saturating_sub(previous) >= self.timeout_ms,
+        };
+        if age < self.timeout_ms {
+            Freshness::Fresh { age_ms: age }
+        } else if jumped {
+            Freshness::ClockMismatch { age_ms: age }
+        } else {
+            Freshness::Stale { age_ms: age }
+        }
+    }
+}
+
+/// What [`CommandWatchdog::observe`] concluded.
+///
+/// Every variant except [`Self::Fresh`] means **stop the actuator**. The
+/// distinction is for whoever is reading the log, not for the control
+/// path — a robot must not keep moving because its diagnosis was
+/// interesting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Freshness {
+    /// A command arrived recently enough to act on.
+    Fresh { age_ms: Millis },
+    /// Nothing has ever been fed. Starting here is deliberate — see
+    /// [`CommandWatchdog::is_stale`].
+    NeverFed,
+    /// The source has genuinely gone quiet.
+    Stale { age_ms: Millis },
+    /// The age crossed the entire timeout in a single step, which no real
+    /// source can do. Almost always two clocks being compared that never
+    /// shared an origin.
+    ClockMismatch { age_ms: Millis },
 }
 
 #[cfg(test)]
@@ -101,6 +177,65 @@ mod tests {
     use super::*;
 
     const TIMEOUT: Millis = 200;
+
+    /// A source that really stops ages SMOOTHLY, one query period at a
+    /// time, and must never be accused of a clock problem.
+    #[test]
+    fn a_genuinely_quiet_source_reads_as_stale_not_a_clock_fault() {
+        let mut w = CommandWatchdog::new(TIMEOUT);
+        w.feed(1_000);
+        // Queried at 50 Hz, exactly as the control loop does.
+        let mut last = Freshness::NeverFed;
+        for tick in 1..=20 {
+            last = w.observe(1_000 + tick * 20);
+        }
+        assert_eq!(
+            last,
+            Freshness::Stale { age_ms: 400 },
+            "a source that fell silent is Stale, never ClockMismatch"
+        );
+    }
+
+    /// The 2026-08-11 bug, with its real numbers: fed from a socket whose
+    /// clock had just started, queried from a thread a minute older.
+    #[test]
+    fn two_clocks_that_never_shared_an_origin_are_caught() {
+        let mut w = CommandWatchdog::new(500);
+        w.feed(5_000); // the socket's clock — it opened 5 s ago
+        let verdict = w.observe(60_000); // the writer's clock — 60 s old
+        assert_eq!(
+            verdict,
+            Freshness::ClockMismatch { age_ms: 55_000 },
+            "an age of 55 s one step after a feed is not a quiet phone"
+        );
+    }
+
+    /// Both still mean STOP. The diagnosis must never soften the action.
+    #[test]
+    fn a_clock_mismatch_is_still_stale_to_the_control_path() {
+        let mut w = CommandWatchdog::new(500);
+        w.feed(5_000);
+        assert!(matches!(w.observe(60_000), Freshness::ClockMismatch { .. }));
+        assert!(w.is_stale(60_000), "the actuator must still be stopped");
+        assert_eq!(w.gate(60_000, (7i32, 9i32)), (0, 0));
+    }
+
+    #[test]
+    fn a_watchdog_nobody_has_fed_says_so_rather_than_guessing() {
+        let mut w = CommandWatchdog::new(TIMEOUT);
+        assert_eq!(w.observe(10_000), Freshness::NeverFed);
+    }
+
+    /// Feeding restarts the history, so the silence that preceded it
+    /// cannot be mistaken for a jump afterwards.
+    #[test]
+    fn feeding_again_clears_the_age_history() {
+        let mut w = CommandWatchdog::new(TIMEOUT);
+        w.feed(0);
+        assert!(matches!(w.observe(1_000), Freshness::ClockMismatch { .. }));
+        w.feed(1_000);
+        assert_eq!(w.observe(1_010), Freshness::Fresh { age_ms: 10 });
+    }
 
     fn fed_at(t: Millis) -> CommandWatchdog {
         let mut w = CommandWatchdog::new(TIMEOUT);
