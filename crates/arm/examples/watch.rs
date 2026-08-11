@@ -12,15 +12,23 @@
 //! and not a collapse. This project has learned twice that a bug can be
 //! invisible in a passing test and obvious on a screen.
 //!
-//! # ⚠️ The link lengths here are INVENTED, and they live here on purpose
+//! # The link lengths are real now, and they still live here
 //!
-//! `crates/arm` holds no geometry: real link lengths must be measured off
-//! a real arm, and guessing them in the library would mean tests that
-//! encode a fiction. But a stick figure is the only thing that catches a
-//! joint bending the WRONG WAY, which no scalar plot will ever show.
+//! They come from the SO-ARM101 vendor outline drawing (2026-08-12) —
+//! see `LINK_METRES` — which beats the guesses that were here before.
+//! They stay in the example anyway, for two reasons that outlived the
+//! guessing:
 //!
-//! So the fiction lives here, in the thing whose job is drawing, and it
-//! is never read back into control. `LINK_METRES` is for pixels only.
+//! 1. The drawing says in red that its dimensions *"are for reference
+//!    only and may differ from the actual size."* Vendor CAD is fine for
+//!    pixels and not fine for kinematics.
+//! 2. Nothing in `crates/arm` does kinematics. Geometry moves into
+//!    `ArmSpec` when something needs it and it has been measured off the
+//!    arm in the room — not before, or the library ships a number its
+//!    tests will quietly start depending on.
+//!
+//! A stick figure earns its keep regardless: it is the only thing that
+//! catches a joint bending the WRONG WAY, which no scalar plot shows.
 //!
 //! # What the four acts show
 //!
@@ -40,9 +48,26 @@ const PERIOD_MS: u64 = 20;
 /// How long the arm may hear nothing before it stops accepting plans.
 const SOURCE_TIMEOUT_MS: u64 = 500;
 
-/// ⚠️ INVENTED. For drawing only — see the module note. When a real arm
-/// is measured these move into `ArmSpec` and this constant disappears.
-const LINK_METRES: [f32; 2] = [0.12, 0.10];
+/// Upper arm (shoulder axis → elbow axis) and forearm (elbow axis →
+/// gripper fingertip), metres, from the SO-ARM101 vendor outline drawing
+/// (retrieved 2026-08-12): **111.67 mm** and **316.62 mm**.
+///
+/// The second number swallows the wrist. This spec is four DOF — pan,
+/// lift, elbow, gripper — so `wrist_flex` and `wrist_roll` are not
+/// modelled, and everything past the elbow is one rigid segment. That is
+/// the honest drawing of what is being controlled, not a simplification
+/// of it.
+///
+/// ⚠️ Vendor CAD, not a measured arm. The drawing itself says *"the
+/// dimensions above are for reference only and may differ from the actual
+/// size."* Good enough for pixels; not good enough for kinematics, which
+/// is the other reason these stay out of `ArmSpec`.
+const LINK_METRES: [f32; 2] = [0.111_67, 0.316_62];
+
+/// Base plate to the shoulder-pitch axis: 74.80 + 44.20 mm. Drawn as a
+/// post so the arm stands on a table rather than floating, which is what
+/// makes a wrong-way bend read as wrong at a glance.
+const SHOULDER_HEIGHT_METRES: f32 = 0.119;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = ArmSpec::so101_four_dof();
@@ -53,6 +78,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_blueprint(layout())
         .spawn()?;
     println!("watching the arm — four acts, ~24 s of simulated time");
+
+    // The stand never moves, so it is logged once as static rather than
+    // re-sent 750 times saying the same thing.
+    rec.log_static(
+        "arm/stand",
+        &rerun::LineStrips2D::new([vec![[0.0, 0.0], [0.0, SHOULDER_HEIGHT_METRES]]])
+            .with_colors([rerun::Color::from_rgb(110, 110, 120)]),
+    )?;
 
     let mut tick: u64 = 0;
     let act = |rec: &rerun::RecordingStream,
@@ -274,9 +307,13 @@ fn draw(
     // Side view. shoulder_lift and elbow_flex are the joints that move
     // the arm in this plane; shoulder_pan rotates the plane itself and so
     // is honestly not drawable here — read it off its plot instead.
+    //
+    // Zero is arm-straight-out-to-the-right. The vendor drawing's pose is
+    // lift = +90°, elbow = −90°, which is a fact about the drawing, not
+    // about where the servos read zero.
     let lift = measured[spec.index_of("shoulder_lift").unwrap()] as f32;
     let elbow = measured[spec.index_of("elbow_flex").unwrap()] as f32;
-    let shoulder = [0.0f32, 0.0f32];
+    let shoulder = [0.0f32, SHOULDER_HEIGHT_METRES];
     let elbow_at = [
         shoulder[0] + LINK_METRES[0] * lift.cos(),
         shoulder[1] + LINK_METRES[0] * lift.sin(),
