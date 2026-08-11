@@ -69,6 +69,19 @@ const LINK_METRES: [f32; 2] = [0.111_67, 0.316_62];
 /// makes a wrong-way bend read as wrong at a glance.
 const SHOULDER_HEIGHT_METRES: f32 = 0.119;
 
+/// World coordinates (+Y up, the way an arm stands) into Rerun's 2D view
+/// (+Y **down**, the image convention it inherits from pixel rasters).
+///
+/// Without this the stand rises above the shoulder and the arm hangs off
+/// the ceiling — which is what it did, and which no test would have
+/// caught, because every length and angle was already correct.
+///
+/// Every point goes through this one function, so the flip cannot be
+/// applied to the links and forgotten on the stand.
+fn to_view(world: [f32; 2]) -> [f32; 2] {
+    [world[0], -world[1]]
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = ArmSpec::so101_four_dof();
     let mut guard = Guard::new(spec.clone(), PERIOD_SECONDS, SOURCE_TIMEOUT_MS);
@@ -77,18 +90,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rec = rerun::RecordingStreamBuilder::new("robotiq_arm")
         .with_blueprint(layout())
         .spawn()?;
-    println!("watching the arm — four acts, ~24 s of simulated time");
+    println!("watching the arm — scrub `wall_time` to these windows:\n");
 
     // The stand never moves, so it is logged once as static rather than
     // re-sent 750 times saying the same thing.
     rec.log_static(
         "arm/stand",
-        &rerun::LineStrips2D::new([vec![[0.0, 0.0], [0.0, SHOULDER_HEIGHT_METRES]]])
-            .with_colors([rerun::Color::from_rgb(110, 110, 120)]),
+        &rerun::LineStrips2D::new([vec![
+            to_view([0.0, 0.0]),
+            to_view([0.0, SHOULDER_HEIGHT_METRES]),
+        ]])
+        .with_colors([rerun::Color::from_rgb(110, 110, 120)]),
     )?;
 
     let mut tick: u64 = 0;
+    let mut last_reported: Option<(&'static str, &'static str)> = None;
     let act = |rec: &rerun::RecordingStream,
+               last_reported: &mut Option<(&'static str, &'static str)>,
                guard: &mut Guard,
                joints: &mut Vec<SimJoint>,
                tick: &mut u64,
@@ -99,6 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
      -> Result<(), Box<dyn std::error::Error>> {
         rec.set_duration_secs("wall_time", *tick as f64 * PERIOD_SECONDS);
         rec.log("events", &rerun::TextLog::new(format!("── {name} ──")))?;
+        let opened_at = *tick as f64 * PERIOD_SECONDS;
         let mut authorised_ticks = 0u64;
         for _ in 0..steps {
             let now_ms = *tick * PERIOD_MS;
@@ -127,16 +146,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joint.command(*angle)?;
                 }
             }
-            draw(rec, &spec, plan.current(), &measured, &verdict, joints)?;
+            draw(
+                rec,
+                &spec,
+                plan.current(),
+                &measured,
+                &verdict,
+                joints,
+                last_reported,
+            )?;
 
             joints.iter_mut().for_each(SimJoint::step);
             plan.advance();
             *tick += 1;
         }
-        // Say in the terminal what the `authorised` panel should show, so
-        // the two can be COMPARED. A screen you have to take on trust is
-        // the same failure as a log you have to take on trust.
-        println!("  {name}: motion authorised on {authorised_ticks}/{steps} ticks");
+        // Say in the terminal WHEN to look and WHAT the `authorised` panel
+        // should show there, so the two can be COMPARED. A screen you have
+        // to take on trust is the same failure as a log you have to take
+        // on trust — and both numbers here are derived, never asserted,
+        // so neither can drift away from what was actually logged.
+        let closed_at = *tick as f64 * PERIOD_SECONDS;
+        println!(
+            "  {opened_at:5.1}–{closed_at:4.1} s  authorised {authorised_ticks:3}/{steps:<3}  {name}"
+        );
         Ok(())
     };
 
@@ -144,6 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plan = Plan::interpolate(&vec![0.0; 4], &[0.9, 0.7, -0.6, 0.5], 100).unwrap();
     act(
         &rec,
+        &mut last_reported,
         &mut guard,
         &mut joints,
         &mut tick,
@@ -158,6 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plan = Plan::hold(vec![99.0; 4]);
     act(
         &rec,
+        &mut last_reported,
         &mut guard,
         &mut joints,
         &mut tick,
@@ -173,6 +207,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plan = Plan::interpolate(&here, &vec![0.0; 4], 400).unwrap();
     act(
         &rec,
+        &mut last_reported,
         &mut guard,
         &mut joints,
         &mut tick,
@@ -187,6 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plan = Plan::hold(vec![0.0; 4]);
     act(
         &rec,
+        &mut last_reported,
         &mut guard,
         &mut joints,
         &mut tick,
@@ -196,7 +232,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true,
     )?;
 
-    println!("done — scrub the timeline; watch `guard/authorised` fall to 0 in acts 3 and 4");
+    println!(
+        "\n{:.1} s logged. In the viewer pick the newest source, `robotiq_arm`.",
+        tick as f64 * PERIOD_SECONDS
+    );
     Ok(())
 }
 
@@ -229,14 +268,18 @@ fn layout() -> rerun::blueprint::Blueprint {
                 TimeSeriesView::new("authorised — 1 move, 0 HOLD")
                     .with_origin("/guard")
                     .into(),
+                // Quarantined on its own axis: act 2 asks for 99 rad.
+                TimeSeriesView::new("what the plan ASKED (rad)")
+                    .with_origin("/asked")
+                    .into(),
             ])
             .into(),
             Vertical::new([
-                TimeSeriesView::new("joint angles (rad) — wanted vs measured")
-                    .with_contents(["/joints/**/wanted", "/joints/**/measured"])
+                TimeSeriesView::new("joint angles (rad) — commanded vs measured")
+                    .with_origin("/angles")
                     .into(),
                 TimeSeriesView::new("temperature (°C)")
-                    .with_contents(["/joints/**/celsius"])
+                    .with_origin("/temperature")
                     .into(),
                 TextLogView::new("why the arm decided that")
                     .with_origin("/events")
@@ -253,6 +296,12 @@ fn layout() -> rerun::blueprint::Blueprint {
 
 /// One frame: the plots that show behaviour over time, and the stick
 /// figure that shows a joint bending the wrong way.
+///
+/// `last_reported` is the decision most recently announced to the event
+/// log, so the same one is not announced 150 times running. It belongs to
+/// the caller because it must survive **across** acts: a hold that runs
+/// from act 3 into act 4 for a *different* reason is a transition, and
+/// state reset per act would miss it.
 fn draw(
     rec: &rerun::RecordingStream,
     spec: &ArmSpec,
@@ -260,19 +309,39 @@ fn draw(
     measured: &[f64],
     verdict: &Verdict,
     joints: &mut [SimJoint],
+    last_reported: &mut Option<(&'static str, &'static str)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Grouped by UNIT, not by joint — radians under `angles/`, Celsius
+    // under `temperature/`. Not cosmetic: a view is selected by entity
+    // path prefix, and Rerun's `**` is a trailing wildcard only, so
+    // `angles/<joint>/measured` can be picked out by prefix while
+    // `joints/**/measured` matches nothing at all.
+    //
+    // What the plan ASKED for lives outside `angles/`, on its own panel,
+    // because a plan may ask for 99 rad and an axis stretched to 99 draws
+    // every real angle as a line at zero. Same reason radians and Celsius
+    // are not on one axis: one outlier erases the signal.
     for (index, joint) in spec.joints.iter().enumerate() {
         rec.log(
-            format!("joints/{}/wanted", joint.name),
+            format!("asked/{}", joint.name),
             &rerun::Scalars::single(wanted[index]),
         )?;
         rec.log(
-            format!("joints/{}/measured", joint.name),
+            format!("angles/{}/measured", joint.name),
             &rerun::Scalars::single(measured[index]),
         )?;
+        // Only when the guard actually authorised something. A gap in
+        // this series is not missing data — it is the arm being told
+        // nothing, which is what a hold IS.
+        if let Verdict::Move { radians } = verdict {
+            rec.log(
+                format!("angles/{}/commanded", joint.name),
+                &rerun::Scalars::single(radians[index]),
+            )?;
+        }
         if let Some(celsius) = joints[index].temperature_celsius()? {
             rec.log(
-                format!("joints/{}/celsius", joint.name),
+                format!("temperature/{}", joint.name),
                 &rerun::Scalars::single(celsius),
             )?;
         }
@@ -284,8 +353,24 @@ fn draw(
     let authorised = f64::from(u8::from(matches!(verdict, Verdict::Move { .. })));
     rec.log("guard/authorised", &rerun::Scalars::single(authorised))?;
 
-    // Say WHY, but only when it changes — a line per tick at 50 Hz is
-    // 3,000 a minute saying nothing happened.
+    // Say WHY, but only when the DECISION changes — at 50 Hz an
+    // unfiltered line per tick is 3,000 a minute saying nothing happened,
+    // and the one transition that matters scrolls off the top.
+    //
+    // Keyed on the kind of verdict, never on the message: `HoldStale`
+    // carries an age that climbs every tick, so deduplicating on the text
+    // would filter nothing at all. The joint rides along so a second
+    // joint overheating is a new line rather than a continuation.
+    let key: (&'static str, &'static str) = match verdict {
+        Verdict::Move { .. } => ("move", ""),
+        Verdict::HoldUncommanded => ("uncommanded", ""),
+        Verdict::HoldStale { .. } => ("stale", ""),
+        Verdict::HoldClockFault { .. } => ("clock", ""),
+        Verdict::HoldOverheated { joint, .. } => ("hot", joint),
+        Verdict::Refused { .. } => ("refused", ""),
+    };
+    let changed = *last_reported != Some(key);
+    *last_reported = Some(key);
     let reason = match verdict {
         Verdict::Move { .. } => None,
         Verdict::HoldUncommanded => Some("HOLD — nothing has commanded this arm yet".to_string()),
@@ -300,7 +385,7 @@ fn draw(
             Some(format!("REFUSED — {wanted} angles for {joints} joints"))
         }
     };
-    if let Some(reason) = reason {
+    if let (true, Some(reason)) = (changed, reason) {
         rec.log("events", &rerun::TextLog::new(reason))?;
     }
 
@@ -329,13 +414,14 @@ fn draw(
     } else {
         rerun::Color::from_rgb(255, 176, 60)
     };
+    let drawn = [to_view(shoulder), to_view(elbow_at), to_view(tip)];
     rec.log(
         "arm/links",
-        &rerun::LineStrips2D::new([vec![shoulder, elbow_at, tip]]).with_colors([colour]),
+        &rerun::LineStrips2D::new([drawn.to_vec()]).with_colors([colour]),
     )?;
     rec.log(
         "arm/joints",
-        &rerun::Points2D::new([shoulder, elbow_at, tip])
+        &rerun::Points2D::new(drawn)
             .with_radii([0.008])
             .with_colors([colour]),
     )?;
