@@ -353,6 +353,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "arm"
+version = "0.1.0"
+dependencies = [
+ "sim-core",
+]
+
+[[package]]
 name = "array-init"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

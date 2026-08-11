@@ -1,0 +1,25 @@
+[package]
+name = "arm"
+version = "0.1.0"
+edition = "2021"
+
+# Joint-space control for a serial-chain arm: limits, safety, and plans.
+#
+# Deliberately knows NOTHING about servos, buses, or geometry. Everything
+# here is arithmetic over joint angles, so all of it runs in `cargo test`
+# with no hardware — which is the same reason `sim-run` could solve the
+# U-trap before a motor existed.
+
+[dependencies]
+# `CommandWatchdog` is reused, never reimplemented. It takes `now_ms`
+# rather than reading a clock, so the type already running on the chip
+# works unchanged here — and "has the source gone quiet" keeps one
+# definition across the whole project.
+sim-core = { path = "../sim-core" }
+
+# No unsafe here. `forbid`, not `deny`: it cannot be switched off locally
+# with an `#[allow]`. This crate clamps numbers and interpolates between
+# them; if that ever needs unsafe, the argument belongs in the commit
+# that changes this line.
+[lints.rust]
+unsafe_code = "forbid"
