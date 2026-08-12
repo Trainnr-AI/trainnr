@@ -23,6 +23,8 @@ embassy-executor = { workspace = true }
 # unification and build the wrong chip's HAL.
 embassy-rp = { workspace = true }
 embassy-time = { workspace = true }
+# For DUTY_FULL: the signed-duty scale the wire and the simulator share.
+sim-core = { workspace = true }
 embassy-usb = { workspace = true, optional = true }
 static_cell = { workspace = true, optional = true }
 

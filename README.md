@@ -199,7 +199,8 @@ robotiq/
 │   └── quad-encoder/        # quadrature decoding
 ├── firmware/                # no_std, ARM target — outside the workspace
 │   ├── build-support/       #   one copy of the linker scripts + build.rs
-│   ├── support/             #   USB CDC, heartbeat, Report — one copy each
+│   ├── support/             #   USB CDC, heartbeat, Report, the TB6612
+│   │                        #   and its encoders — one copy each
 │   ├── pico-blink/          #   H0  async tasks
 │   ├── pico-button/         #   H1  input + PWM
 │   ├── pico-imu/            #   H2  I2C sensor

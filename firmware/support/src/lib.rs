@@ -15,6 +15,7 @@
 use embassy_rp::gpio::Output;
 use embassy_time::{Instant, Timer};
 
+pub mod motor;
 #[cfg(feature = "usb")]
 pub mod usb;
 
