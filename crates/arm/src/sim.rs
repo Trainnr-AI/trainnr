@@ -7,7 +7,18 @@
 //! shape `sim_core::Motor` uses for a wheel, because a servo closing its
 //! own position loop behaves the same way from outside.
 
+use crate::homing::Homing;
 use crate::{Joint, JointError, SensingJoint, Torque};
+
+/// Radians moved per control period at full [`Homing::creep`] effort.
+const CREEP_RADIANS_PER_STEP: f64 = 0.02;
+
+/// A wall, and which side of it the joint lives on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct HardStop {
+    radians: f64,
+    blocks_below: bool,
+}
 
 /// A joint that obeys instantly-ish and reports honestly.
 #[derive(Debug, Clone)]
@@ -24,6 +35,15 @@ pub struct SimJoint {
     /// target nor accepts one — the same refusal a real servo gives,
     /// which is what makes `engage`'s command-then-enable order testable.
     powered: bool,
+    /// Where this joint reports zero. Homing moves the ORIGIN; it never
+    /// moves the joint, which is why `raw_radians` ignores it.
+    zero: f64,
+    /// A wall the joint cannot pass, if it has one. `None` is a joint
+    /// free to turn forever — the case homing must refuse to home.
+    hard_stop: Option<HardStop>,
+    /// Open-loop effort from [`Homing::creep`]. Non-zero overrides target
+    /// tracking, because before a zero exists there is no target.
+    creep_effort: f64,
 }
 
 impl Default for SimJoint {
@@ -34,6 +54,9 @@ impl Default for SimJoint {
             responsiveness: 0.4,
             celsius: Some(25.0),
             powered: true,
+            zero: 0.0,
+            hard_stop: None,
+            creep_effort: 0.0,
         }
     }
 }
@@ -54,6 +77,22 @@ impl SimJoint {
         self
     }
 
+    /// A joint that cannot travel past `radians` — the hard stop homing
+    /// seeks.
+    ///
+    /// Which side it blocks is decided **here**, from where the joint
+    /// already is, and then remembered. Re-deriving it each tick from the
+    /// direction of travel is how the first version of this got the
+    /// positive direction wrong: one fact, inferred in two places, from
+    /// variables that did not agree.
+    pub fn with_hard_stop(mut self, radians: f64) -> Self {
+        self.hard_stop = Some(HardStop {
+            radians,
+            blocks_below: self.radians >= radians,
+        });
+        self
+    }
+
     pub fn heat_to(&mut self, celsius: f64) {
         self.celsius = Some(celsius);
     }
@@ -65,8 +104,20 @@ impl SimJoint {
     /// power, and a simulator that quietly relaxed to zero would hide
     /// exactly the failure this crate exists to get right.
     pub fn step(&mut self) {
-        if self.powered {
+        if !self.powered {
+            return;
+        }
+        if self.creep_effort != 0.0 {
+            self.radians += self.creep_effort * CREEP_RADIANS_PER_STEP;
+        } else {
             self.radians += (self.target - self.radians) * self.responsiveness;
+        }
+        if let Some(stop) = self.hard_stop {
+            self.radians = if stop.blocks_below {
+                self.radians.max(stop.radians)
+            } else {
+                self.radians.min(stop.radians)
+            };
         }
     }
 
@@ -89,18 +140,38 @@ impl Joint for SimJoint {
         if radians.is_nan() {
             return Err(JointError::Protocol("commanded angle was NaN"));
         }
-        self.target = radians;
+        // Commands arrive in CALIBRATED radians and `target` is compared
+        // against the raw count, so the zero has to be added back. Miss
+        // this and every command after homing is wrong by exactly the
+        // offset — invisible until something homes to a non-zero place.
+        self.target = radians + self.zero;
         Ok(())
     }
 }
 
 impl SensingJoint for SimJoint {
     fn measured(&mut self) -> Result<f64, JointError> {
-        Ok(self.radians)
+        Ok(self.radians - self.zero)
     }
 
     fn temperature_celsius(&mut self) -> Result<Option<f64>, JointError> {
         Ok(self.celsius)
+    }
+}
+
+impl Homing for SimJoint {
+    fn raw_radians(&mut self) -> Result<f64, JointError> {
+        Ok(self.radians)
+    }
+
+    fn adopt_zero(&mut self, raw_radians: f64) -> Result<(), JointError> {
+        self.zero = raw_radians;
+        Ok(())
+    }
+
+    fn creep(&mut self, effort: f64) -> Result<(), JointError> {
+        self.creep_effort = effort.clamp(-1.0, 1.0);
+        Ok(())
     }
 }
 

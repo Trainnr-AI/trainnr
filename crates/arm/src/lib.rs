@@ -59,10 +59,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // ---- Always available: fixed-size math, no allocation, no OS. ----
+pub mod homing;
 pub mod safety;
 pub mod sim;
 pub mod spec;
 
+pub use homing::{Homing, HomingRun, Seek};
 pub use safety::{Guard, Verdict};
 pub use spec::{ArmSpec, JointSpec};
 
