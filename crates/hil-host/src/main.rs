@@ -136,7 +136,7 @@ pub fn mission_config() -> MissionConfig {
         // robot in the config.
         duration: 300.0,
         motor_tau: 0.04,
-        motor_deadband_fraction: 0.043,
+        motor_deadband_fraction: sim_core::MEASURED_DUTY_DEADBAND,
         // THE one deliberate difference from sim-run, and it makes the rig
         // MORE realistic, not less.
         //

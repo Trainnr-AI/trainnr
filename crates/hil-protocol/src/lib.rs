@@ -92,8 +92,16 @@ pub enum JointPhase {
     /// Found the stop and adopted it. Reported once, on the tick it
     /// happened.
     Homed,
-    /// Under closed-loop control against a known zero.
+    /// Under closed-loop control against a known zero, with the guard
+    /// authorising motion.
     Holding,
+    /// The guard **refused** this tick, so no new target was written and
+    /// the joint is keeping the last one it was given. Distinct from
+    /// [`Self::NoZero`]: the calibration is fine, the *commander* is not.
+    ///
+    /// This is the arm's failsafe seen from outside — and it is the
+    /// opposite of the base's, where the same silence cuts the outputs.
+    Held,
     /// Homing gave up. **No zero was adopted**, so the angle field is
     /// meaningless and the outputs are off.
     NoZero,
@@ -105,6 +113,7 @@ impl core::fmt::Display for JointPhase {
             JointPhase::Homing => "homing",
             JointPhase::Homed => "homed",
             JointPhase::Holding => "holding",
+            JointPhase::Held => "held",
             JointPhase::NoZero => "nozero",
         })
     }
@@ -117,6 +126,7 @@ impl core::str::FromStr for JointPhase {
             "homing" => Ok(JointPhase::Homing),
             "homed" => Ok(JointPhase::Homed),
             "holding" => Ok(JointPhase::Holding),
+            "held" => Ok(JointPhase::Held),
             "nozero" => Ok(JointPhase::NoZero),
             _ => Err(()),
         }

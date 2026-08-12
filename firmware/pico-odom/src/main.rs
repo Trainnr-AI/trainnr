@@ -257,51 +257,6 @@ const COMMAND_TIMEOUT_MS: u64 = 200;
 const POLL: Duration = Duration::from_millis(50);
 
 
-/// Which way the LEFT encoder counts, relative to the right.
-///
-/// # ⚠️ This is a WIRING fact, measured — not a preference
-///
-/// Measured 2026-08-10 with a falsifiable prediction, which held:
-///
-/// ```text
-///   commanded FORWARD (both channels +duty)
-///        left  ticks  DOWN        right ticks  UP
-///
-///   commanded PURE SPIN (left -duty, right +duty)
-///        left  ticks  +2652       right ticks  +2885   <- SAME direction
-/// ```
-///
-/// A correctly built pair moves opposite ways on a spin. Moving the same
-/// way means one assembly is wired mirrored relative to the other —
-/// either its motor leads or its encoder leads are swapped.
-///
-/// # What this was breaking
-///
-/// `Odometry` averages the two wheels to get forward motion and
-/// differences them to get rotation. With one sign flipped those two swap
-/// over, so **the chip reported a spin whenever the robot drove straight,
-/// and straight motion whenever it spun.** Every pose this firmware has
-/// ever produced was wrong in exactly that way, including the `th=-0.863`
-/// in the first capture of 2026-08-10. Nothing caught it, because a
-/// heading that changes looks like a heading that works.
-///
-/// Found only by computing the twist the encoders imply and comparing it
-/// to the twist that was commanded — the two facts this system had always
-/// held and never compared.
-///
-/// # Why the fix is here and not on the motor
-///
-/// Flipping the ENCODER makes the reported motion agree with the
-/// commanded motion without changing which way any shaft physically
-/// turns, so every speed and deadband already measured stays valid.
-/// Flipping the MOTOR instead would reverse a shaft and invalidate them.
-///
-/// ⚠️ **Re-check when the chassis arrives.** Which absolute direction is
-/// "forward" depends on how the motors are mounted, and they are loose on
-/// a desk today. The test is one line: command forward, and see whether
-/// the robot goes forward. If it reverses, flip the motor leads — not
-/// this constant, which is about the encoder agreeing with the motor.
-const LEFT_ENCODER_SIGN: i32 = -1;
 
 /// Duty above which a commanded motor **must** be turning, in the
 /// `±DUTY_FULL` units the wire carries.
@@ -482,7 +437,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // decoder — so the odometry, the reported totals and anything
             // the host derives from them cannot disagree about which way
             // a wheel turned. See `LEFT_ENCODER_SIGN`.
-            let left_count = left.count * LEFT_ENCODER_SIGN;
+            let left_count = left.count * firmware_support::motor::LEFT_ENCODER_SIGN;
             let right_count = right.count;
             let dl = left_count - last_l;
             let dr = right_count - last_r;

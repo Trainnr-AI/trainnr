@@ -520,6 +520,20 @@ impl RobotSpec {
 /// `hil-protocol` re-exports it, so the protocol still names it.
 pub const DUTY_FULL: i32 = 1000;
 
+/// Fraction of full duty below which these motors produce **no torque**.
+///
+/// Measured on the bench, 2026-08-09: fitting the four calibration points
+/// puts it near 4.3% — about 43 of `DUTY_FULL`.
+///
+/// Here, in the crate both the simulator and the firmware read, because
+/// it was previously a literal in `sim-run`'s config and a firmware that
+/// needed it would have made a second copy. A command below this is not a
+/// small movement; it is no movement, and a control loop that does not
+/// know that deadlocks — which is exactly what the first two-joint run on
+/// real motors did, commanding 27 duty for five seconds while the shafts
+/// sat still.
+pub const MEASURED_DUTY_DEADBAND: f64 = 0.043;
+
 /// A tuned control profile: gains plus the speed policy they were tuned
 /// against.
 ///

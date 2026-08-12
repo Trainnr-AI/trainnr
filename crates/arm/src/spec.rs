@@ -150,6 +150,42 @@ impl ArmSpec {
         ArmSpec { joints }
     }
 
+    /// The two N20 gearmotors on the bench, as a 2-DOF arm.
+    ///
+    /// Names borrowed from SO-101 rather than invented, so a recording
+    /// made here describes the same joints a servo arm would. Bus ids are
+    /// meaningless — these are PWM channels, not a serial bus — and are
+    /// left at SO-101's so nothing downstream has to special-case them.
+    ///
+    /// ⚠️ `max_speed_radians_per_second` is a **policy cap, not a
+    /// measurement**. These motors reach 7.77 rad/s, which at a 20 ms tick
+    /// would let a single step cross 0.155 rad and make the step limiter
+    /// invisible. 1.5 rad/s is the speed this arm is *allowed*, which is
+    /// what the field has always meant.
+    ///
+    /// Travel is ±π because a gearmotor has no hard limit of its own —
+    /// unlike a servo, where travel is where the printed parts stop it.
+    pub fn bench_two_joint() -> Self {
+        let joints = collect_joints([
+            JointSpec {
+                name: "shoulder_lift",
+                bus_id: 2,
+                travel_radians: (-PI, PI),
+                max_speed_radians_per_second: 1.5,
+                encoder_counts: 4290,
+            },
+            JointSpec {
+                name: "elbow_flex",
+                bus_id: 3,
+                travel_radians: (-PI, PI),
+                max_speed_radians_per_second: 1.5,
+                encoder_counts: 4290,
+            },
+        ])
+        .expect("two joints fit in MAX_JOINTS");
+        ArmSpec { joints }
+    }
+
     pub fn joints(&self) -> usize {
         self.joints.len()
     }
@@ -201,6 +237,20 @@ mod tests {
 
     /// The shoulder holds up every joint above it, so it must never be
     /// the fastest thing on the arm.
+    /// The bench arm is real hardware, so its encoder count is the
+    /// measured 4290 — not the servo's 4096. Code that assumes either
+    /// silently rescales every angle on the other.
+    #[test]
+    fn the_bench_arm_carries_the_measured_encoder_count_not_a_servos() {
+        let bench = ArmSpec::bench_two_joint();
+        assert_eq!(bench.joints(), 2);
+        assert!(bench.joints.iter().all(|j| j.encoder_counts == 4290));
+        assert!(ArmSpec::so101_four_dof()
+            .joints
+            .iter()
+            .all(|j| j.encoder_counts == 4096));
+    }
+
     #[test]
     fn the_shoulder_is_the_slowest_joint() {
         let arm = ArmSpec::so101_four_dof();

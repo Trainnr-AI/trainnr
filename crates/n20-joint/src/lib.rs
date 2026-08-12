@@ -79,6 +79,14 @@ pub struct N20Joint<P: MotorPort> {
     /// which is why `measured()` refuses before then.
     zero_ticks: Option<i64>,
     position: Pid,
+    /// Duty below which this motor produces **no torque at all**.
+    ///
+    /// Measured at ~4.3% of full scale (43 of 1000) on these gearmotors.
+    /// Added back as feed-forward on any non-zero command, because
+    /// without it small corrections are silently discarded and the loop
+    /// deadlocks: the first hardware run commanded 27 duty every tick for
+    /// five seconds and the shaft never turned.
+    deadband_duty: i32,
     /// Where the joint has been told to go, in calibrated radians.
     target: Option<f64>,
     /// Open-loop effort during homing. `Some` overrides the position loop
@@ -89,12 +97,13 @@ pub struct N20Joint<P: MotorPort> {
 }
 
 impl<P: MotorPort> N20Joint<P> {
-    pub fn new(port: P, ticks_per_revolution: f64, position: Pid) -> Self {
+    pub fn new(port: P, ticks_per_revolution: f64, position: Pid, deadband_duty: i32) -> Self {
         N20Joint {
             port,
             ticks_per_revolution,
             zero_ticks: None,
             position,
+            deadband_duty,
             target: None,
             creeping: None,
             powered: true,
@@ -119,9 +128,32 @@ impl<P: MotorPort> N20Joint<P> {
         let (Some(target), Ok(here)) = (self.target, self.measured()) else {
             return self.port.set_duty(0);
         };
-        let duty = self.position.update(target - here, dt) * f64::from(DUTY_FULL);
-        self.port
-            .set_duty(duty.clamp(-f64::from(DUTY_FULL), f64::from(DUTY_FULL)) as i32)
+        // ⚠️ The PID's output IS a duty. It is not a normalised -1..1 to be
+        // scaled up afterwards, and multiplying by DUTY_FULL here made the
+        // effective gain 400,000 duty per radian: one encoder count of
+        // error (2*pi/4290 = 0.00146 rad) commanded ~580 duty and two
+        // counts saturated. That is bang-bang at full torque wearing a
+        // PID's clothes. Gains are therefore quoted in duty per radian,
+        // which is the unit the caller can reason about.
+        let duty = self.position.update(target - here, dt);
+        self.port.set_duty(self.past_deadband(duty))
+    }
+
+    /// A duty the motor can actually act on.
+    ///
+    /// Anything non-zero is pushed out past [`Self::deadband_duty`] and
+    /// then clamped to full scale. ⚠️ This makes the smallest possible
+    /// command a *jump* to the deadband rather than a gentle nudge — which
+    /// is honest: there is no gentler command this motor can obey, and
+    /// pretending otherwise is what produced five seconds of silent
+    /// nothing on the bench.
+    fn past_deadband(&self, duty: f64) -> i32 {
+        let full = f64::from(DUTY_FULL);
+        if duty == 0.0 {
+            return 0;
+        }
+        let pushed = duty.abs() + f64::from(self.deadband_duty);
+        (pushed.min(full) * duty.signum()) as i32
     }
 
     fn radians_per_tick(&self) -> f64 {
@@ -272,8 +304,12 @@ mod tests {
         }
     }
 
+    /// The gains `firmware/pico-arm` actually ships, in duty per radian.
+    /// Testing with different ones would leave the shipped scaling
+    /// unexercised — which is how the `* DUTY_FULL` bug survived until a
+    /// motor was in front of it.
     fn joint(port: MockPort) -> N20Joint<MockPort> {
-        N20Joint::new(port, TICKS_PER_REV, Pid::new(4.0, 0.0, 0.05, 1.0))
+        N20Joint::new(port, TICKS_PER_REV, Pid::new(900.0, 0.0, 25.0, 0.0), 0)
     }
 
     /// The whole reason `measured()` returns a Result.
@@ -304,9 +340,21 @@ mod tests {
         assert_eq!(j.port.duty, 0, "and it stopped creeping");
     }
 
-    /// Closing the loop is this crate's whole job.
+    /// Closing the loop is this crate's whole job — and it can only close
+    /// it as far as the deadband allows.
+    ///
+    /// ⚠️ A P-only loop stops when the commanded duty falls below the duty
+    /// that produces any torque at all. The mock's floor is 20, so with a
+    /// 900 duty/rad gain it settles about `20/900 = 0.022` rad out. The
+    /// real motors' measured **~4.3% deadband (43 duty)** puts the floor
+    /// near `0.048` rad — about **2.7°** of standing error.
+    ///
+    /// That is a property of the machine, not a tuning failure, and an
+    /// integrator is the wrong fix: on a joint that cannot reach its
+    /// target — held by a hand, or against a hard stop — it winds up and
+    /// then lunges when released.
     #[test]
-    fn a_homed_joint_drives_toward_its_target_and_settles_there() {
+    fn a_homed_joint_drives_toward_its_target_and_settles_within_the_deadband() {
         let mut j = joint(MockPort::new());
         j.adopt_zero(0.0).unwrap();
         j.command(0.5).unwrap();
@@ -314,10 +362,12 @@ mod tests {
             j.tick(DT).unwrap();
             j.port.spin();
         }
+        let error = (j.measured().unwrap() - 0.5).abs();
+        assert!(error < 0.03, "settled {error} rad out, expected < 0.03");
         assert!(
-            (j.measured().unwrap() - 0.5).abs() < 0.02,
-            "settled at {:?}",
-            j.measured()
+            error > 0.0,
+            "and it does NOT reach the target exactly — if this ever passes at \
+             zero the mock has stopped modelling the deadband"
         );
     }
 
@@ -354,6 +404,50 @@ mod tests {
             j.port.spin();
         }
         assert_eq!(j.port.ticks, 0, "an unpowered joint does not move");
+    }
+
+    /// The deadlock the first hardware run found: three individually
+    /// reasonable numbers that are jointly impossible.
+    ///
+    /// A step limit of 1.5 rad/s at a 20 ms tick offers the joint 0.03 rad
+    /// per tick. At 900 duty/rad that is 27 duty. The motor needs 43 to
+    /// produce any torque. So it never moved, `measured` never changed,
+    /// and the limiter kept offering the same 0.03 rad — for five seconds,
+    /// silently.
+    #[test]
+    fn a_command_too_small_for_the_motor_is_pushed_past_its_deadband() {
+        const DEADBAND: i32 = 43;
+        let mut j = N20Joint::new(
+            MockPort::new(),
+            TICKS_PER_REV,
+            Pid::new(900.0, 0.0, 0.0, 0.0),
+            DEADBAND,
+        );
+        j.adopt_zero(0.0).unwrap();
+
+        // 0.03 rad — one step-limited tick. Worth 27 duty on its own.
+        j.command(0.03).unwrap();
+        j.tick(DT).unwrap();
+        assert!(
+            j.port.duty.abs() >= DEADBAND,
+            "commanded {} duty, below the {DEADBAND} this motor needs to move at all",
+            j.port.duty
+        );
+    }
+
+    /// Feed-forward must not turn "stop" into a lurch.
+    #[test]
+    fn a_zero_command_stays_zero_rather_than_jumping_to_the_deadband() {
+        let mut j = N20Joint::new(
+            MockPort::new(),
+            TICKS_PER_REV,
+            Pid::new(900.0, 0.0, 0.0, 0.0),
+            43,
+        );
+        j.adopt_zero(0.0).unwrap();
+        j.command(0.0).unwrap();
+        j.tick(DT).unwrap();
+        assert_eq!(j.port.duty, 0);
     }
 
     /// The first hardware that actually exercises `Thermal`'s deliberately
