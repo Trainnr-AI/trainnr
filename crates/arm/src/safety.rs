@@ -17,6 +17,7 @@
 use sim_core::{CommandWatchdog, Freshness, Millis};
 
 use crate::spec::ArmSpec;
+use crate::Parked;
 
 /// How far a joint may be commanded from where it currently is, per tick.
 ///
@@ -106,6 +107,9 @@ pub struct Guard {
     steps: Vec<StepLimit>,
     source: CommandWatchdog,
     thermal: Thermal,
+    /// The pose seen at the previous `parked` check — the only way to
+    /// tell "at rest here" from "passing through here".
+    last_measured: Option<Vec<f64>>,
 }
 
 impl Guard {
@@ -122,6 +126,7 @@ impl Guard {
             steps,
             source: CommandWatchdog::new(source_timeout_ms),
             thermal: Thermal::default(),
+            last_measured: None,
         }
     }
 
@@ -178,6 +183,39 @@ impl Guard {
             .map(|((&goal, &now), step)| step.apply(now, goal))
             .collect();
         Verdict::Move { radians }
+    }
+
+    /// Proof that torque may be cut, or `None`.
+    ///
+    /// Both conditions are required, and each catches what the other
+    /// cannot:
+    ///
+    /// ```text
+    ///   at the park pose   the arm is somewhere going limp is harmless
+    ///   and not moving     it is not merely PASSING THROUGH that pose
+    /// ```
+    ///
+    /// The park pose is the caller's to nominate, deliberately. It is a
+    /// property of the bench — a hard stop, a cradle, a folded-down
+    /// rest — not of the servos, and this crate holds no geometry with
+    /// which to guess one.
+    ///
+    /// "Not moving" is measured against the previous call, so this must
+    /// be called on the control tick like everything else; called twice
+    /// in a row within one tick it would see stillness that is really
+    /// just a stale reading.
+    pub fn parked(&mut self, measured: &[f64], park: &[f64], tolerance: f64) -> Option<Parked<'_>> {
+        let still = self
+            .last_measured
+            .replace(measured.to_vec())
+            .is_some_and(|previous| Self::within(&previous, measured, tolerance));
+        (measured.len() == self.spec.joints() && still && Self::within(measured, park, tolerance))
+            .then_some(Parked::new())
+    }
+
+    /// Are two poses the same pose, to within `tolerance`?
+    fn within(a: &[f64], b: &[f64], tolerance: f64) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() <= tolerance)
     }
 
     /// Record a joint's reported temperature. See [`Thermal`].
@@ -411,6 +449,49 @@ mod tests {
             g.authorise(1_000, &at_rest(), &[0.01; 4]),
             Verdict::HoldOverheated { .. }
         ));
+    }
+
+    /// The condition that a pose check alone cannot see: an arm sweeping
+    /// *through* the park pose is momentarily at it, and switching off
+    /// there drops it mid-swing.
+    #[test]
+    fn passing_through_the_park_pose_is_not_being_parked_at_it() {
+        let mut g = guard();
+        let park = at_rest();
+        assert!(
+            g.parked(&[0.0, 0.0, 0.0, 0.0], &park, 1e-3).is_none(),
+            "the first check has no previous pose to compare against"
+        );
+        assert!(
+            g.parked(&[0.02, 0.0, 0.0, 0.0], &park, 1e-3).is_none(),
+            "still moving — at the pose, but not stopped there"
+        );
+        assert!(
+            g.parked(&park, &park, 1e-3).is_none(),
+            "arrived, but the previous sample was elsewhere"
+        );
+        assert!(
+            g.parked(&park, &park, 1e-3).is_some(),
+            "two identical samples at the park pose: now it is parked"
+        );
+    }
+
+    #[test]
+    fn a_still_arm_away_from_its_park_pose_is_not_parked() {
+        let mut g = guard();
+        let held = vec![0.9, 0.4, -0.2, 0.1];
+        g.parked(&held, &at_rest(), 1e-3);
+        assert!(
+            g.parked(&held, &at_rest(), 1e-3).is_none(),
+            "perfectly still, and switching off here would drop it"
+        );
+    }
+
+    #[test]
+    fn a_pose_of_the_wrong_width_is_never_parked() {
+        let mut g = guard();
+        g.parked(&[0.0; 3], &[0.0; 3], 1e-3);
+        assert!(g.parked(&[0.0; 3], &[0.0; 3], 1e-3).is_none());
     }
 
     /// A joint with no thermometer is trusted by default — and that

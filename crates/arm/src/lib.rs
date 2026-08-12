@@ -110,6 +110,111 @@ pub trait SensingJoint: Joint {
     }
 }
 
+/// Proof that the arm is somewhere it may be switched off.
+///
+/// # Why cutting torque needs a witness and holding does not
+///
+/// Torque-off is simultaneously the **best** thing we can do for these
+/// servos and the **worst** thing we can do to a raised arm.
+/// `docs/e2e-research/24` rates it *"probably the single biggest win"*
+/// for duty cycle — nothing published says how long an STS3215 may hold a
+/// load, and a joint that is off makes no heat at all. The same call, one
+/// pose earlier, drops the arm on the table.
+///
+/// So the two are separated by making one of them **unspeakable**:
+///
+/// ```text
+///   something failed   ─▶  hold          (Verdict, every tick, free)
+///   idle and parked    ─▶  release       (needs a Parked, issued once)
+/// ```
+///
+/// This type has a private field, so the only way to obtain one is
+/// [`safety::Guard::parked`], which checks the arm is at rest at a pose
+/// the caller nominated. "Torque off because it is idle" stays easy;
+/// "torque off because something went wrong" will not compile.
+///
+/// # And it cannot be kept
+///
+/// The lifetime borrows the guard that issued it, so a proof is only
+/// usable before that guard is touched again — which in a control loop
+/// means *this tick*. Without it a caller could stash a `Parked` and cut
+/// torque minutes later, with the arm somewhere else entirely: a proof
+/// that was true when written and a lie when used. That is the same
+/// staleness bug this repo has hit with clocks and with recordings, and
+/// here the borrow checker refuses it outright.
+///
+/// Stashing the proof and using it after the guard has moved on does not
+/// compile, and this is a test rather than a claim:
+///
+/// ```compile_fail
+/// use arm::{sim::SimJoint, ArmSpec, Guard, Torque};
+/// let mut guard = Guard::new(ArmSpec::so101_four_dof(), 0.02, 500);
+/// let park = vec![0.0; 4];
+/// guard.parked(&park, &park, 1e-3);
+/// let proof = guard.parked(&park, &park, 1e-3).unwrap();
+/// guard.fed(0); // the guard moves on — the proof is now historical
+/// SimJoint::at(0.0).release(proof).unwrap();
+/// ```
+///
+/// Releasing within the tick that issued the proof compiles and runs:
+///
+/// ```
+/// use arm::{sim::SimJoint, ArmSpec, Guard, Torque};
+/// let mut guard = Guard::new(ArmSpec::so101_four_dof(), 0.02, 500);
+/// let park = vec![0.0; 4];
+/// guard.parked(&park, &park, 1e-3);
+/// let mut joints = [SimJoint::at(0.0), SimJoint::at(0.0)];
+/// if let Some(proof) = guard.parked(&park, &park, 1e-3) {
+///     for joint in &mut joints {
+///         joint.release(proof).unwrap();
+///     }
+/// }
+/// assert!(joints.iter().all(|joint| !joint.is_powered()));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Parked<'guard>(core::marker::PhantomData<&'guard ()>);
+
+impl Parked<'_> {
+    /// Crate-private: `safety::Guard::parked` is the only issuer.
+    pub(crate) fn new() -> Self {
+        Parked(core::marker::PhantomData)
+    }
+}
+
+/// A joint whose holding torque can be switched.
+///
+/// Separate from [`Joint`] because it is a capability, not an
+/// implementation detail — the same reason [`SensingJoint`] is separate.
+/// It requires `SensingJoint` because [`Torque::engage`] cannot be made
+/// safe without reading where the joint actually is.
+///
+/// A driver implements one method. The two safe operations are derived
+/// from it here, once, rather than in every driver.
+pub trait Torque: SensingJoint {
+    /// Write the torque-enable register. **The driver's job, not the
+    /// controller's** — callers want [`Self::release`] or
+    /// [`Self::engage`], which are these semantics done safely.
+    fn write_torque(&mut self, on: bool) -> Result<(), JointError>;
+
+    /// Switch the joint off. Only callable with proof of a parked arm.
+    fn release(&mut self, _parked: Parked<'_>) -> Result<(), JointError> {
+        self.write_torque(false)
+    }
+
+    /// Switch the joint back on, without a lurch.
+    ///
+    /// ⚠️ Commands the present position **first**. A servo remembers its
+    /// goal register across a torque-off, so enabling torque on a joint
+    /// that has since been moved by hand — or by gravity — snaps it back
+    /// to a goal nobody asked for, at whatever speed it can manage. The
+    /// step limiter cannot help: that motion never passes through it.
+    fn engage(&mut self) -> Result<(), JointError> {
+        let here = self.measured()?;
+        self.command(here)?;
+        self.write_torque(true)
+    }
+}
+
 /// Why a joint could not be commanded or read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JointError {

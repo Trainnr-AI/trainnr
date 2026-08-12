@@ -7,7 +7,7 @@
 //! shape `sim_core::Motor` uses for a wheel, because a servo closing its
 //! own position loop behaves the same way from outside.
 
-use crate::{Joint, JointError, SensingJoint};
+use crate::{Joint, JointError, Parked, SensingJoint, Torque};
 
 /// A joint that obeys instantly-ish and reports honestly.
 #[derive(Debug, Clone)]
@@ -20,6 +20,10 @@ pub struct SimJoint {
     /// on the bench instead of in a test.
     responsiveness: f64,
     celsius: Option<f64>,
+    /// Whether holding torque is on. A released joint neither tracks a
+    /// target nor accepts one — the same refusal a real servo gives,
+    /// which is what makes `engage`'s command-then-enable order testable.
+    powered: bool,
 }
 
 impl Default for SimJoint {
@@ -29,6 +33,7 @@ impl Default for SimJoint {
             target: 0.0,
             responsiveness: 0.4,
             celsius: Some(25.0),
+            powered: true,
         }
     }
 }
@@ -60,7 +65,22 @@ impl SimJoint {
     /// power, and a simulator that quietly relaxed to zero would hide
     /// exactly the failure this crate exists to get right.
     pub fn step(&mut self) {
-        self.radians += (self.target - self.radians) * self.responsiveness;
+        if self.powered {
+            self.radians += (self.target - self.radians) * self.responsiveness;
+        }
+    }
+
+    /// Is holding torque on? For tests and for the viewer.
+    pub fn is_powered(&self) -> bool {
+        self.powered
+    }
+
+    /// Move the joint from outside the control loop — a hand, or gravity
+    /// on a released arm. Leaves `target` alone on purpose: that gap
+    /// between where a limp joint IS and where it was last TOLD to go is
+    /// exactly what makes re-enabling torque dangerous.
+    pub fn nudge_to(&mut self, radians: f64) {
+        self.radians = radians;
     }
 }
 
@@ -81,6 +101,13 @@ impl SensingJoint for SimJoint {
 
     fn temperature_celsius(&mut self) -> Result<Option<f64>, JointError> {
         Ok(self.celsius)
+    }
+}
+
+impl Torque for SimJoint {
+    fn write_torque(&mut self, on: bool) -> Result<(), JointError> {
+        self.powered = on;
+        Ok(())
     }
 }
 
@@ -115,6 +142,42 @@ mod tests {
         let mut joint = SimJoint::at(0.0);
         assert!(joint.command(f64::NAN).is_err());
         assert_eq!(joint.measured().unwrap(), 0.0, "and it did not move");
+    }
+
+    /// The order inside `engage` is the whole point: a servo remembers
+    /// its goal across a torque-off, so enabling torque before writing a
+    /// fresh goal snaps the joint to wherever it was last told to go.
+    #[test]
+    fn engaging_torque_adopts_the_present_position_before_switching_on() {
+        let mut joint = SimJoint::at(0.0);
+        joint.command(1.0).unwrap();
+        for _ in 0..100 {
+            joint.step();
+        }
+
+        // Released, then moved by hand (or by gravity) while limp.
+        joint.write_torque(false).unwrap();
+        joint.nudge_to(0.2);
+
+        joint.engage().unwrap();
+        for _ in 0..100 {
+            joint.step();
+        }
+        assert!(
+            (joint.measured().unwrap() - 0.2).abs() < 1e-9,
+            "engage must hold where the joint IS, not snap back to the stale 1.0 goal"
+        );
+    }
+
+    #[test]
+    fn a_released_joint_stops_tracking_its_target() {
+        let mut joint = SimJoint::at(0.5);
+        joint.write_torque(false).unwrap();
+        joint.command(1.5).unwrap();
+        for _ in 0..1_000 {
+            joint.step();
+        }
+        assert_eq!(joint.measured().unwrap(), 0.5, "no torque, no motion");
     }
 
     /// "Cannot measure" and "is cold" are different answers, and the
