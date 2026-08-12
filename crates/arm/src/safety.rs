@@ -17,7 +17,7 @@
 use sim_core::{CommandWatchdog, Freshness, Millis};
 
 use crate::spec::ArmSpec;
-use crate::Parked;
+use crate::{collect_joints, Joints, Parked, MAX_JOINTS};
 
 /// How far a joint may be commanded from where it currently is, per tick.
 ///
@@ -75,7 +75,7 @@ impl StepLimit {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Verdict {
     /// Send these angles.
-    Move { radians: Vec<f64> },
+    Move { radians: Joints<f64> },
     /// Hold. Nobody has commanded anything yet.
     HoldUncommanded,
     /// Hold. The source went quiet.
@@ -104,23 +104,23 @@ pub enum Verdict {
 #[derive(Debug, Clone)]
 pub struct Guard {
     spec: ArmSpec,
-    steps: Vec<StepLimit>,
+    steps: Joints<StepLimit>,
     source: CommandWatchdog,
     thermal: Thermal,
     /// The pose seen at the previous `parked` check — the only way to
     /// tell "at rest here" from "passing through here".
-    last_measured: Option<Vec<f64>>,
+    last_measured: Option<Joints<f64>>,
 }
 
 impl Guard {
     /// `period_seconds` is the control period the caller actually runs
     /// at; step limits are derived from it and each joint's top speed.
     pub fn new(spec: ArmSpec, period_seconds: f64, source_timeout_ms: Millis) -> Self {
-        let steps = spec
-            .joints
-            .iter()
-            .map(|joint| StepLimit::for_speed(joint.max_speed_radians_per_second, period_seconds))
-            .collect();
+        let steps =
+            collect_joints(spec.joints.iter().map(|joint| {
+                StepLimit::for_speed(joint.max_speed_radians_per_second, period_seconds)
+            }))
+            .expect("an ArmSpec never exceeds MAX_JOINTS");
         Guard {
             spec,
             steps,
@@ -176,12 +176,18 @@ impl Guard {
                 joints,
             };
         };
-        let radians = reachable
-            .iter()
-            .zip(measured)
-            .zip(&self.steps)
-            .map(|((&goal, &now), step)| step.apply(now, goal))
-            .collect();
+        let Some(radians) = collect_joints(
+            reachable
+                .iter()
+                .zip(measured)
+                .zip(&self.steps)
+                .map(|((&goal, &now), step)| step.apply(now, goal)),
+        ) else {
+            return Verdict::Refused {
+                wanted: wanted.len(),
+                joints,
+            };
+        };
         Verdict::Move { radians }
     }
 
@@ -207,7 +213,7 @@ impl Guard {
     pub fn parked(&mut self, measured: &[f64], park: &[f64], tolerance: f64) -> Option<Parked<'_>> {
         let still = self
             .last_measured
-            .replace(measured.to_vec())
+            .replace(collect_joints(measured.iter().copied())?)
             .is_some_and(|previous| Self::within(&previous, measured, tolerance));
         (measured.len() == self.spec.joints() && still && Self::within(measured, park, tolerance))
             .then_some(Parked::new())
@@ -256,7 +262,7 @@ pub struct Thermal {
     /// the operator must know that. The honest thing is that neither is
     /// safe, so it is named rather than buried.
     pub trust_joints_without_a_thermometer: bool,
-    reported: Vec<Option<f64>>,
+    reported: [Option<f64>; MAX_JOINTS],
 }
 
 impl Default for Thermal {
@@ -264,17 +270,19 @@ impl Default for Thermal {
         Thermal {
             ceiling_celsius: 55.0,
             trust_joints_without_a_thermometer: true,
-            reported: Vec::new(),
+            reported: [None; MAX_JOINTS],
         }
     }
 }
 
 impl Thermal {
+    /// Record what a joint says about itself. Out-of-range indices are
+    /// dropped rather than growing anything: the array is already the
+    /// widest arm this crate builds.
     pub fn observe(&mut self, joint: usize, celsius: Option<f64>) {
-        if self.reported.len() <= joint {
-            self.reported.resize(joint + 1, None);
+        if let Some(slot) = self.reported.get_mut(joint) {
+            *slot = celsius;
         }
-        self.reported[joint] = celsius;
     }
 
     /// The first joint that is a reason not to keep holding, if any.

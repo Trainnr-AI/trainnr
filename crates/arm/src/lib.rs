@@ -56,15 +56,51 @@
 //! ```
 
 #![forbid(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod plan;
+// ---- Always available: fixed-size math, no allocation, no OS. ----
 pub mod safety;
 pub mod sim;
 pub mod spec;
 
-pub use plan::Plan;
 pub use safety::{Guard, Verdict};
 pub use spec::{ArmSpec, JointSpec};
+
+// ---- std only: `Plan` holds a chunk of arbitrary length. ----
+#[cfg(feature = "std")]
+pub mod plan;
+#[cfg(feature = "std")]
+pub use plan::Plan;
+
+/// The most joints this crate carries.
+///
+/// Six, because that is a full SO-101 — pan, lift, elbow, wrist flex,
+/// wrist roll, gripper. `ArmSpec::so101_four_dof()` uses four of them and
+/// the two spare slots are what "adding the wrist is two more servos and
+/// no code change here" actually means.
+pub const MAX_JOINTS: usize = 6;
+
+/// One value per joint, sized at compile time.
+///
+/// A `Vec` would need an allocator, and the chip has no heap and will not
+/// be given one: a control loop that can fail to allocate mid-tick has a
+/// failure mode nobody tests and everybody discovers at 3 a.m.
+pub type Joints<T> = heapless::Vec<T, MAX_JOINTS>;
+
+/// Collect into a [`Joints`], refusing to truncate.
+///
+/// ⚠️ `heapless`'s own `FromIterator` **silently drops** anything past
+/// capacity. For a list of joint angles that is the worst available
+/// failure: the arm would move the joints that fit and leave the rest —
+/// exactly the "act on the overlap" mistake that [`ArmSpec::clamp_all`]
+/// and `Plan::chunk` already refuse by returning `None`.
+pub fn collect_joints<T>(items: impl IntoIterator<Item = T>) -> Option<Joints<T>> {
+    let mut collected = Joints::new();
+    for item in items {
+        collected.push(item).ok()?;
+    }
+    Some(collected)
+}
 
 /// Something that can be told to hold an angle.
 ///
@@ -219,9 +255,9 @@ pub trait Torque: SensingJoint {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JointError {
     /// The transport failed — cable out, bus silent, checksum bad.
-    Link(String),
+    Link(&'static str),
     /// The joint answered, but with something the caller cannot use.
-    Protocol(String),
+    Protocol(&'static str),
     /// No joint with this index exists on this arm.
     NoSuchJoint { index: usize, joints: usize },
 }
@@ -238,4 +274,5 @@ impl core::fmt::Display for JointError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for JointError {}

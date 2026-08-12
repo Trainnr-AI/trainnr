@@ -47,6 +47,19 @@ step "unsafe forbidden everywhere" "python3 tools/check-unsafe-gates.py"
 step "simulator solves the U-trap" \
      "cargo run -q -p sim-run | grep -q 'Waypoints reached: 1/1'"
 
+# The two crates that must compile for the chip as well as the laptop.
+# `cargo test` proves neither: it builds the std shape only, so an
+# accidental `Vec`, `String` or `std::` in either would pass every test
+# here and fail the moment the firmware tried to link it — the crate's
+# whole reason for existing (a guard that outlives the host) lost to a
+# convenience import nobody noticed.
+for target in thumbv6m-none-eabi thumbv8m.main-none-eabihf; do
+  step "sim-core is still no_std ($target)" \
+       "cargo build -q -p sim-core --no-default-features --target $target"
+  step "arm is still no_std ($target)" \
+       "cargo build -q -p arm --no-default-features --target $target"
+done
+
 # Firmware. pico-led and pico-selftest are RP2350-only by design.
 for c in pico-blink pico-button pico-encoder pico-imu pico-odom pico-robot; do
   step "firmware $c (RP2040)" "(cd firmware/$c && cargo build -q --release --target thumbv6m-none-eabi)"

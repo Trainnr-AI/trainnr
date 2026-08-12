@@ -7,7 +7,7 @@
 //! shape `sim_core::Motor` uses for a wheel, because a servo closing its
 //! own position loop behaves the same way from outside.
 
-use crate::{Joint, JointError, Parked, SensingJoint, Torque};
+use crate::{Joint, JointError, SensingJoint, Torque};
 
 /// A joint that obeys instantly-ish and reports honestly.
 #[derive(Debug, Clone)]
@@ -87,7 +87,7 @@ impl SimJoint {
 impl Joint for SimJoint {
     fn command(&mut self, radians: f64) -> Result<(), JointError> {
         if radians.is_nan() {
-            return Err(JointError::Protocol("commanded angle was NaN".into()));
+            return Err(JointError::Protocol("commanded angle was NaN"));
         }
         self.target = radians;
         Ok(())

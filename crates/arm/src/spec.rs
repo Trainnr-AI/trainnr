@@ -8,6 +8,8 @@
 
 use core::f64::consts::PI;
 
+use crate::{collect_joints, Joints};
+
 /// One joint's identity and limits.
 ///
 /// # Why `name` is here and not just an index
@@ -80,7 +82,7 @@ impl JointSpec {
 /// A whole arm: its joints, in order from the base outward.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArmSpec {
-    pub joints: Vec<JointSpec>,
+    pub joints: Joints<JointSpec>,
 }
 
 impl ArmSpec {
@@ -98,52 +100,54 @@ impl ArmSpec {
     /// `wrist_roll`(5) later is two more servos on the same bus and no
     /// code change here.
     pub fn so101_four_dof() -> Self {
-        ArmSpec {
-            joints: vec![
-                JointSpec {
-                    name: "shoulder_pan",
-                    bus_id: 1,
-                    // Rotation about the base carries no gravity load, so
-                    // it gets the widest travel and the highest speed.
-                    travel_radians: (-PI, PI),
-                    max_speed_radians_per_second: 2.0,
-                    encoder_counts: 4096,
-                },
-                JointSpec {
-                    name: "shoulder_lift",
-                    bus_id: 2,
-                    // ⚠️ The joint that holds up everything above it, and
-                    // therefore the one that gets hot first. Slowest on
-                    // purpose. SO-101 counterweights this joint on the
-                    // leader arm for the same reason.
-                    travel_radians: (-PI / 2.0, PI / 2.0),
-                    max_speed_radians_per_second: 1.0,
-                    encoder_counts: 4096,
-                },
-                JointSpec {
-                    name: "elbow_flex",
-                    bus_id: 3,
-                    travel_radians: (-PI / 2.0, PI / 2.0),
-                    max_speed_radians_per_second: 1.5,
-                    encoder_counts: 4096,
-                },
-                JointSpec {
-                    name: "gripper",
-                    bus_id: 6,
-                    // ⚠️ Keeps SO-101's id 6 even though joints 4 and 5
-                    // are absent. The gripper is the gripper; renumbering
-                    // it to 4 would make this arm's calibration file
-                    // silently incompatible with a six-joint one.
-                    //
-                    // Travel is one-sided because a gripper has no
-                    // meaningful negative — LeRobot normalises it 0..100
-                    // where the arm joints are -100..100.
-                    travel_radians: (0.0, PI / 2.0),
-                    max_speed_radians_per_second: 2.0,
-                    encoder_counts: 4096,
-                },
-            ],
-        }
+        // Four into a capacity of six cannot fail; `expect` here is a
+        // statement about MAX_JOINTS, not about runtime input.
+        let joints = collect_joints([
+            JointSpec {
+                name: "shoulder_pan",
+                bus_id: 1,
+                // Rotation about the base carries no gravity load, so
+                // it gets the widest travel and the highest speed.
+                travel_radians: (-PI, PI),
+                max_speed_radians_per_second: 2.0,
+                encoder_counts: 4096,
+            },
+            JointSpec {
+                name: "shoulder_lift",
+                bus_id: 2,
+                // ⚠️ The joint that holds up everything above it, and
+                // therefore the one that gets hot first. Slowest on
+                // purpose. SO-101 counterweights this joint on the
+                // leader arm for the same reason.
+                travel_radians: (-PI / 2.0, PI / 2.0),
+                max_speed_radians_per_second: 1.0,
+                encoder_counts: 4096,
+            },
+            JointSpec {
+                name: "elbow_flex",
+                bus_id: 3,
+                travel_radians: (-PI / 2.0, PI / 2.0),
+                max_speed_radians_per_second: 1.5,
+                encoder_counts: 4096,
+            },
+            JointSpec {
+                name: "gripper",
+                bus_id: 6,
+                // ⚠️ Keeps SO-101's id 6 even though joints 4 and 5
+                // are absent. The gripper is the gripper; renumbering
+                // it to 4 would make this arm's calibration file
+                // silently incompatible with a six-joint one.
+                //
+                // Travel is one-sided because a gripper has no
+                // meaningful negative — LeRobot normalises it 0..100
+                // where the arm joints are -100..100.
+                travel_radians: (0.0, PI / 2.0),
+                max_speed_radians_per_second: 2.0,
+                encoder_counts: 4096,
+            },
+        ])
+        .expect("four joints fit in MAX_JOINTS");
+        ArmSpec { joints }
     }
 
     pub fn joints(&self) -> usize {
@@ -162,16 +166,15 @@ impl ArmSpec {
     /// mismatched length means the caller and the spec disagree about
     /// what machine this is, and acting on the overlap would move the
     /// wrong joints.
-    pub fn clamp_all(&self, radians: &[f64]) -> Option<Vec<f64>> {
+    pub fn clamp_all(&self, radians: &[f64]) -> Option<Joints<f64>> {
         if radians.len() != self.joints.len() {
             return None;
         }
-        Some(
+        collect_joints(
             self.joints
                 .iter()
                 .zip(radians)
-                .map(|(joint, &wanted)| joint.clamp(wanted))
-                .collect(),
+                .map(|(joint, &wanted)| joint.clamp(wanted)),
         )
     }
 }
@@ -183,7 +186,7 @@ mod tests {
     #[test]
     fn the_four_dof_arm_keeps_so101_names_and_bus_ids() {
         let arm = ArmSpec::so101_four_dof();
-        let named: Vec<_> = arm.joints.iter().map(|j| (j.name, j.bus_id)).collect();
+        let named: std::vec::Vec<_> = arm.joints.iter().map(|j| (j.name, j.bus_id)).collect();
         assert_eq!(
             named,
             vec![
