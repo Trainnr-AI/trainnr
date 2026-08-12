@@ -142,9 +142,9 @@ was not true, and the cost of that gap is the next warning.
 
 | | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 36 | before pushing |
-| `tools/verify.sh --fast` | 34 | while iterating |
-| `tools/verify.sh --serial <port>` | 38 | with a Pico on a cable |
+| `tools/verify.sh` | 38 | before pushing |
+| `tools/verify.sh --fast` | 36 | while iterating |
+| `tools/verify.sh --serial <port>` | 40 | with a Pico on a cable |
 
 `--fast` drops exactly two, both named in the script with the reason: the
 emulator step, which takes ~9 minutes since the measured robot speed
@@ -201,6 +201,8 @@ robotiq/
 │   ├── build-support/       #   one copy of the linker scripts + build.rs
 │   ├── support/             #   USB CDC, heartbeat, Report, the TB6612
 │   │                        #   and its encoders — one copy each
+│   ├── pico-arm/            #   one arm joint on a real N20 —
+│   │                        #     the first firmware that HOLDS on failure
 │   ├── pico-blink/          #   H0  async tasks
 │   ├── pico-button/         #   H1  input + PWM
 │   ├── pico-imu/            #   H2  I2C sensor

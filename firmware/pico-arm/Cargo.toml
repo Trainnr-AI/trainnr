@@ -1,0 +1,32 @@
+[package]
+name = "pico-arm"
+version.workspace = true
+edition.workspace = true
+
+# One arm joint on a real motor: `crates/arm` and `crates/n20-joint`
+# running on the chip, against the N20 + TB6612 already on the bench.
+#
+# The first firmware whose failsafe is HOLD rather than STOP.
+
+[features]
+default = ["rp2040"]
+rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
+pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
+
+[dependencies]
+cortex-m-rt = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-rp = { workspace = true }
+embassy-time = { workspace = true }
+panic-halt = { workspace = true }
+firmware-support = { workspace = true }
+quad-encoder = { workspace = true }
+sim-core = { workspace = true }
+arm = { path = "../../crates/arm", default-features = false }
+n20-joint = { path = "../../crates/n20-joint", default-features = false }
+
+[build-dependencies]
+firmware-build-support = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

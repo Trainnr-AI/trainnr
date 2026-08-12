@@ -132,6 +132,14 @@ impl<P: MotorPort> N20Joint<P> {
     pub fn release_port(self) -> P {
         self.port
     }
+
+    /// The port, borrowed. Firmware needs this to service the encoder
+    /// between ticks: on a polled quadrature input somebody has to read
+    /// the pins, and that somebody cannot be this crate, which has no
+    /// notion of a pin.
+    pub fn port_mut(&mut self) -> &mut P {
+        &mut self.port
+    }
 }
 
 impl<P: MotorPort> Joint for N20Joint<P> {

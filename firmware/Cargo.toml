@@ -27,6 +27,7 @@ members = [
     "pico-encoder",
     "pico-imu",
     "pico-led",
+    "pico-arm",
     "pico-odom",
     "pico-robot",
     "pico-selftest",

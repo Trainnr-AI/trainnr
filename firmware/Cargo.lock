@@ -21,6 +21,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "arm"
+version = "0.1.0"
+dependencies = [
+ "heapless 0.9.3",
+ "sim-core",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1050,6 +1058,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "n20-joint"
+version = "0.1.0"
+dependencies = [
+ "arm",
+ "sim-core",
+]
+
+[[package]]
 name = "nb"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1175,6 +1191,23 @@ name = "pico-args"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
+
+[[package]]
+name = "pico-arm"
+version = "0.1.0"
+dependencies = [
+ "arm",
+ "cortex-m-rt",
+ "embassy-executor",
+ "embassy-rp",
+ "embassy-time",
+ "firmware-build-support",
+ "firmware-support",
+ "n20-joint",
+ "panic-halt",
+ "quad-encoder",
+ "sim-core",
+]
 
 [[package]]
 name = "pico-blink"

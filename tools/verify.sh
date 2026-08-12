@@ -63,7 +63,7 @@ for target in thumbv6m-none-eabi thumbv8m.main-none-eabihf; do
 done
 
 # Firmware. pico-led and pico-selftest are RP2350-only by design.
-for c in pico-blink pico-button pico-encoder pico-imu pico-odom pico-robot; do
+for c in pico-arm pico-blink pico-button pico-encoder pico-imu pico-odom pico-robot; do
   step "firmware $c (RP2040)" "(cd firmware/$c && cargo build -q --release --target thumbv6m-none-eabi)"
 done
 for c in $(ls firmware | grep pico-); do
