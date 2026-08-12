@@ -58,6 +58,8 @@ for target in thumbv6m-none-eabi thumbv8m.main-none-eabihf; do
        "cargo build -q -p sim-core --no-default-features --target $target"
   step "arm is still no_std ($target)" \
        "cargo build -q -p arm --no-default-features --target $target"
+  step "n20-joint is still no_std ($target)" \
+       "cargo build -q -p n20-joint --no-default-features --target $target"
 done
 
 # Firmware. pico-led and pico-selftest are RP2350-only by design.

@@ -142,9 +142,9 @@ was not true, and the cost of that gap is the next warning.
 
 | | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 34 | before pushing |
-| `tools/verify.sh --fast` | 32 | while iterating |
-| `tools/verify.sh --serial <port>` | 36 | with a Pico on a cable |
+| `tools/verify.sh` | 36 | before pushing |
+| `tools/verify.sh --fast` | 34 | while iterating |
+| `tools/verify.sh --serial <port>` | 38 | with a Pico on a cable |
 
 `--fast` drops exactly two, both named in the script with the reason: the
 emulator step, which takes ~9 minutes since the measured robot speed
@@ -189,6 +189,8 @@ robotiq/
 │   ├── arm/                 # joint-space arm control: limits, plans, safety.
 │   │                        #   No servo driver, no geometry — all of it
 │   │                        #   runs in `cargo test` with nothing plugged in
+│   ├── n20-joint/           # a DC gearmotor pretending to be a servo,
+│   │                        #   so the arm stack runs on motors we own
 │   ├── belief-viz/          # one definition of how a belief is drawn
 │   ├── teleop-web/          # drive the robot from a phone browser
 │   ├── hil-protocol/        # the host↔chip wire format, one definition

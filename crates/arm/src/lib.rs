@@ -262,6 +262,11 @@ pub enum JointError {
     Protocol(&'static str),
     /// No joint with this index exists on this arm.
     NoSuchJoint { index: usize, joints: usize },
+    /// The joint has no zero yet, so nothing it could report would mean
+    /// anything. See [`homing`] — an incremental encoder reads zero
+    /// wherever it powered up, and passing that off as a calibrated angle
+    /// is a measurement that is confidently, silently wrong.
+    NotHomed,
 }
 
 impl core::fmt::Display for JointError {
@@ -272,6 +277,7 @@ impl core::fmt::Display for JointError {
             JointError::NoSuchJoint { index, joints } => {
                 write!(f, "joint {index} does not exist — this arm has {joints}")
             }
+            JointError::NotHomed => write!(f, "joint has not been homed — it has no zero"),
         }
     }
 }

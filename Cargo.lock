@@ -5819,6 +5819,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "n20-joint"
+version = "0.1.0"
+dependencies = [
+ "arm",
+ "sim-core",
+]
+
+[[package]]
 name = "naga"
 version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

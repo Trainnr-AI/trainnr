@@ -11,6 +11,7 @@ members = [
     "crates/belief-viz",
     "crates/teleop-web",
     "crates/arm",
+    "crates/n20-joint",
 ]
 # Firmware builds for a different CPU (ARM Cortex-M) with no_std — it lives
 # outside this workspace so `cargo test` here never tries to build it for

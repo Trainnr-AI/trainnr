@@ -1,0 +1,20 @@
+[package]
+name = "n20-joint"
+version = "0.1.0"
+edition.workspace = true
+
+# An arm joint made from a DC gearmotor, so the arm stack can be tested on
+# hardware that is already on the bench instead of waiting 4-8 weeks for
+# servos. Generic over its port, like `mpu6050-driver` is over its bus, so
+# all of it is host-testable and none of it needs a motor to compile.
+
+[features]
+default = ["std"]
+std = ["arm/std", "sim-core/std"]
+
+[dependencies]
+arm = { path = "../arm", default-features = false }
+sim-core = { path = "../sim-core", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
