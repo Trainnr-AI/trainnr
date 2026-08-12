@@ -135,6 +135,13 @@ pub struct Blob {
     pub area: u32,
     /// Tightest box containing every match: `(min_x, min_y, max_x, max_y)`.
     pub bounds: (u16, u16, u16, u16),
+    /// The frame this was found in, `(width, height)`.
+    ///
+    /// Carried here rather than asked for again, because
+    /// [`Self::error_from_centre`] used to take them as arguments — which
+    /// is the same fact in two places, and a caller passing a different
+    /// size than `find` saw would get a confidently wrong steering error.
+    pub frame: (u16, u16),
 }
 
 impl Blob {
@@ -144,7 +151,8 @@ impl Blob {
     /// to the right, `y` positive means it is *below* centre — image
     /// convention, since that is what the camera hands us. Whoever drives
     /// an arm upward from this is responsible for the sign, once.
-    pub fn error_from_centre(&self, width: u16, height: u16) -> (f32, f32) {
+    pub fn error_from_centre(&self) -> (f32, f32) {
+        let (width, height) = self.frame;
         let half_w = f32::from(width) / 2.0;
         let half_h = f32::from(height) / 2.0;
         (
@@ -186,11 +194,19 @@ impl Blob {
 /// One pass, four accumulators, no allocation: it costs the same on a
 /// microcontroller as on a laptop.
 pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) -> Option<Blob> {
+    // ⚠️ A zero-width frame has no pixels and would divide by zero on the
+    // very first one. Refused here rather than trusted, because this crate
+    // compiles into firmware and a panic is a stopped robot.
+    if width == 0 {
+        return None;
+    }
     let (mut count, mut sum_x, mut sum_y) = (0u32, 0u64, 0u64);
+    let mut total = 0u32;
     let (mut min_x, mut min_y) = (u16::MAX, u16::MAX);
     let (mut max_x, mut max_y) = (0u16, 0u16);
 
     for (index, pixel) in pixels.into_iter().enumerate() {
+        total += 1;
         if !target.matches(pixel) {
             continue;
         }
@@ -205,11 +221,23 @@ pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) 
         max_y = max_y.max(y);
     }
 
-    (count >= target.min_pixels).then(|| Blob {
+    // ⚠️ `count > 0` is NOT implied by `count >= min_pixels`: a caller may
+    // set `min_pixels: 0`, and then an empty frame produced a blob whose
+    // centroid was NaN and whose bounds were still the sentinels
+    // `(u16::MAX, u16::MAX, 0, 0)` — so `looks_like_one_object` panicked
+    // subtracting 65535 from 0. Measured, not theorised.
+    if count == 0 || count < target.min_pixels {
+        return None;
+    }
+    // Ceiling division, so a frame shorter than one row still has height 1
+    // and the centre is never a division by zero.
+    let height = ((total + u32::from(width) - 1) / u32::from(width)).min(u32::from(u16::MAX));
+    Some(Blob {
         centroid_x: sum_x as f32 / count as f32,
         centroid_y: sum_y as f32 / count as f32,
         area: count,
         bounds: (min_x, min_y, max_x, max_y),
+        frame: (width, height as u16),
     })
 }
 
@@ -354,17 +382,49 @@ mod tests {
         assert!(blob.looks_like_one_object(0.25));
     }
 
+    /// ⚠️ Both found by probing rather than by reasoning, and both were
+    /// real: a caller-set `min_pixels: 0` produced a blob of nothing with
+    /// NaN coordinates, and `looks_like_one_object` then panicked
+    /// subtracting the untouched sentinel bounds.
+    #[test]
+    fn no_matching_pixels_is_never_a_blob_however_low_the_floor_is_set() {
+        let target = Target {
+            min_pixels: 0,
+            ..Target::hue(0.0)
+        };
+        let frame = frame_with_rect(rgb565(20, 20, 20), rgb565(20, 20, 20), (0, 0, 0, 0));
+        assert_eq!(
+            find(frame, W, &target),
+            None,
+            "a blob of zero pixels is not a blob"
+        );
+    }
+
+    #[test]
+    fn a_zero_width_frame_is_refused_rather_than_dividing_by_zero() {
+        assert_eq!(find([0u16; 16], 0, &Target::hue(0.0)), None);
+    }
+
+    /// The frame size travels WITH the blob, so a caller cannot supply a
+    /// different one than `find` saw.
+    #[test]
+    fn the_blob_remembers_the_frame_it_was_found_in() {
+        let frame = frame_with_rect(rgb565(20, 20, 20), rgb565(255, 0, 0), (10, 6, 15, 11));
+        let blob = find(frame, W, &Target::hue(0.0)).unwrap();
+        assert_eq!(blob.frame, (W, H));
+    }
+
     /// What a controller actually consumes.
     #[test]
     fn the_error_is_zero_at_the_centre_and_saturates_at_the_edges() {
         let middle = frame_with_rect(rgb565(20, 20, 20), rgb565(255, 0, 0), (13, 9, 18, 14));
         let blob = find(middle, W, &Target::hue(0.0)).unwrap();
-        let (x, y) = blob.error_from_centre(W, H);
+        let (x, y) = blob.error_from_centre();
         assert!(x.abs() < 0.1 && y.abs() < 0.1, "centred: {x} {y}");
 
         let corner = frame_with_rect(rgb565(20, 20, 20), rgb565(255, 0, 0), (0, 0, 5, 5));
         let blob = find(corner, W, &Target::hue(0.0)).unwrap();
-        let (x, y) = blob.error_from_centre(W, H);
+        let (x, y) = blob.error_from_centre();
         assert!(x < -0.7 && y < -0.7, "top-left corner: {x} {y}");
     }
 }

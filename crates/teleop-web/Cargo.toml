@@ -27,5 +27,9 @@ local-ip-address = "0.6"
 # with an `#[allow]`. This crate maps a joystick to a twist and copies
 # bytes to a serial port; if that ever needs unsafe, the argument belongs
 # in the commit that changes this line.
-[lints.rust]
-unsafe_code = "forbid"
+# `workspace = true` carries BOTH the unsafe forbid and the panic
+# discipline. Spelling out only `[lints.rust]` inherits neither clippy lint
+# — which is how this crate, and three others, ran with no panic discipline
+# at all until a review noticed.
+[lints]
+workspace = true

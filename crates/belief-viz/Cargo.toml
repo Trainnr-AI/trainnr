@@ -17,5 +17,5 @@ sim-core = { path = "../sim-core" }
 # No unsafe here. `forbid`, not `deny`: it cannot be switched off locally
 # with an `#[allow]`. Drawing is arithmetic and string formatting; if that
 # ever needs unsafe, the argument belongs in the commit that changes this.
-[lints.rust]
-unsafe_code = "forbid"
+[lints]
+workspace = true

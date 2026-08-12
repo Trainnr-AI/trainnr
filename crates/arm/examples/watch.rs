@@ -39,6 +39,12 @@
 //!   4  overheat    a joint gets hot and outranks a perfectly fresh plan
 //! ```
 
+// Binaries and tests may panic — see the workspace lint block: "these are
+// `warn` rather than `deny` because the BINARIES legitimately panic at
+// startup". The LIBRARY denies both; an example that cannot find a joint
+// by name should stop loudly rather than carry on with a wrong index.
+#![allow(clippy::unwrap_used)]
+
 use arm::sim::SimJoint;
 use arm::{ArmSpec, Guard, Joint, Plan, SensingJoint, Verdict};
 

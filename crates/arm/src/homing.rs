@@ -89,10 +89,25 @@ impl HomingRun {
     /// `still_radians` is the movement below which a tick counts as no
     /// progress — a detection floor for encoder noise and nothing more,
     /// the same role `still_speed` plays in `sim_core::StuckMonitor`.
+    /// ⚠️ Non-finite inputs fail **closed**, toward timing out rather than
+    /// toward homing.
+    ///
+    /// A NaN `still_radians` makes `(raw - previous).abs() > NaN` false,
+    /// which counts as *no progress* — so a joint that never moved would
+    /// stall-detect immediately and adopt whatever position it powered up
+    /// in as zero. A negative threshold instead makes every tick count as
+    /// movement, so the run times out and adopts nothing. Given the module
+    /// note — *an arm with a wrong zero drives itself into its own hard
+    /// stops at full commanded speed* — that is the only acceptable
+    /// direction to fail in.
     pub fn new(effort: f64, still_radians: f64, stall_ticks: u32, limit_ticks: u32) -> Self {
         HomingRun {
-            effort,
-            still_radians,
+            effort: if effort.is_finite() { effort } else { 0.0 },
+            still_radians: if still_radians.is_finite() {
+                still_radians
+            } else {
+                -1.0
+            },
             stall_ticks,
             limit_ticks,
             no_progress: 0,
@@ -103,7 +118,7 @@ impl HomingRun {
 
     /// One control period of the search.
     pub fn step<J: Homing>(&mut self, joint: &mut J) -> Result<Seek, JointError> {
-        self.elapsed += 1;
+        self.elapsed = self.elapsed.saturating_add(1);
         if self.elapsed > self.limit_ticks {
             joint.creep(0.0)?;
             return Ok(Seek::TimedOut);
@@ -117,7 +132,11 @@ impl HomingRun {
             .last_raw
             .replace(raw)
             .is_none_or(|previous| (raw - previous).abs() > self.still_radians);
-        self.no_progress = if moved { 0 } else { self.no_progress + 1 };
+        self.no_progress = if moved {
+            0
+        } else {
+            self.no_progress.saturating_add(1)
+        };
 
         if self.no_progress >= self.stall_ticks {
             joint.creep(0.0)?;
@@ -183,6 +202,31 @@ mod tests {
         assert!(
             joint.measured().unwrap() < -1.0,
             "it kept moving, and nothing was adopted as zero"
+        );
+    }
+
+    /// The failure direction that matters. A NaN threshold must not make
+    /// a motionless joint look stalled and hand it a zero.
+    #[test]
+    fn a_nonsense_stillness_threshold_times_out_rather_than_inventing_a_zero() {
+        let mut joint = SimJoint::at(0.3).with_hard_stop(-0.4);
+        let mut homing = HomingRun::new(-0.3, f64::NAN, 25, 200);
+        let mut state = Seek::Creeping;
+        for _ in 0..300 {
+            state = homing.step(&mut joint).unwrap();
+            joint.step();
+            if state != Seek::Creeping {
+                break;
+            }
+        }
+        assert_eq!(
+            state,
+            Seek::TimedOut,
+            "NaN must fail toward adopting nothing"
+        );
+        assert!(
+            joint.measured().unwrap() != 0.0,
+            "and no zero was adopted, so the reading is still the raw one"
         );
     }
 

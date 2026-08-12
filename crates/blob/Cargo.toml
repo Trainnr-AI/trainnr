@@ -16,3 +16,15 @@ std = []
 
 [lints.rust]
 unsafe_code = "forbid"
+
+# `deny`, not `warn`: this crate runs inside the control loop AND compiles
+# into firmware, so a panic here is a stopped robot. Spelled out rather
+# than `[lints] workspace = true` because cargo does not allow inheriting
+# and overriding in the same block — which means a crate that spells out
+# only `unsafe_code` silently inherits NO panic discipline at all. All
+# three of these did, until this was noticed.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "warn"
+panic_in_result_fn = "deny"
+indexing_slicing = "warn"
