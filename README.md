@@ -107,6 +107,9 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/19-the-arm.md`](docs/19-the-arm.md) — **the arm: why its failsafe is the
   opposite of the base's**, the four limits and why their order matters, one input
   type that a VLA can drive unchanged, and what the viewer caught that the tests could not
+- [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — **what has to be
+  true before a recording becomes VLA/WAM training data**, and why a video of a
+  human doing the task is not training data on its own
 - [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
   (2026-08-08): what it would take to build, deploy and operate a small
   commercial fleet of mobile manipulators.** Nine documents on policies, data
