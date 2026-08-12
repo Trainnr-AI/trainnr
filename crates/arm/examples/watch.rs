@@ -48,40 +48,6 @@ const PERIOD_MS: u64 = 20;
 /// How long the arm may hear nothing before it stops accepting plans.
 const SOURCE_TIMEOUT_MS: u64 = 500;
 
-/// Upper arm (shoulder axis → elbow axis) and forearm (elbow axis →
-/// gripper fingertip), metres, from the SO-ARM101 vendor outline drawing
-/// (retrieved 2026-08-12): **111.67 mm** and **316.62 mm**.
-///
-/// The second number swallows the wrist. This spec is four DOF — pan,
-/// lift, elbow, gripper — so `wrist_flex` and `wrist_roll` are not
-/// modelled, and everything past the elbow is one rigid segment. That is
-/// the honest drawing of what is being controlled, not a simplification
-/// of it.
-///
-/// ⚠️ Vendor CAD, not a measured arm. The drawing itself says *"the
-/// dimensions above are for reference only and may differ from the actual
-/// size."* Good enough for pixels; not good enough for kinematics, which
-/// is the other reason these stay out of `ArmSpec`.
-const LINK_METRES: [f32; 2] = [0.111_67, 0.316_62];
-
-/// Base plate to the shoulder-pitch axis: 74.80 + 44.20 mm. Drawn as a
-/// post so the arm stands on a table rather than floating, which is what
-/// makes a wrong-way bend read as wrong at a glance.
-const SHOULDER_HEIGHT_METRES: f32 = 0.119;
-
-/// World coordinates (+Y up, the way an arm stands) into Rerun's 2D view
-/// (+Y **down**, the image convention it inherits from pixel rasters).
-///
-/// Without this the stand rises above the shoulder and the arm hangs off
-/// the ceiling — which is what it did, and which no test would have
-/// caught, because every length and angle was already correct.
-///
-/// Every point goes through this one function, so the flip cannot be
-/// applied to the links and forgotten on the stand.
-fn to_view(world: [f32; 2]) -> [f32; 2] {
-    [world[0], -world[1]]
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bench = Bench::new(ArmSpec::so101_four_dof());
 
@@ -92,14 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The stand never moves, so it is logged once as static rather than
     // re-sent 750 times saying the same thing.
-    rec.log_static(
-        "arm/stand",
-        &rerun::LineStrips2D::new([vec![
-            to_view([0.0, 0.0]),
-            to_view([0.0, SHOULDER_HEIGHT_METRES]),
-        ]])
-        .with_colors([rerun::Color::from_rgb(110, 110, 120)]),
-    )?;
+    belief_viz::arm::draw_stand(&rec, "arm")?;
 
     // 1 — a plan is followed, and the servo's lag is visible behind it.
     let mut plan = Plan::interpolate(&vec![0.0; 4], &[0.9, 0.7, -0.6, 0.5], 100).unwrap();
@@ -404,42 +363,19 @@ impl Bench {
             rec.log("events", &rerun::TextLog::new(reason))?;
         }
 
-        // Side view. shoulder_lift and elbow_flex are the joints that move
-        // the arm in this plane; shoulder_pan rotates the plane itself and so
-        // is honestly not drawable here — read it off its plot instead.
-        //
-        // Zero is arm-straight-out-to-the-right. The vendor drawing's pose is
-        // lift = +90°, elbow = −90°, which is a fact about the drawing, not
-        // about where the servos read zero.
+        // Side view — drawn by `belief_viz::arm`, the same routine the
+        // hardware viewer uses, so a simulated angle and a measured one
+        // make the SAME picture. Two copies would disagree first about
+        // which way a joint bends, which is the one thing the picture is
+        // here to catch.
         let lift = measured[self.spec.index_of("shoulder_lift").unwrap()] as f32;
         let elbow = measured[self.spec.index_of("elbow_flex").unwrap()] as f32;
-        let shoulder = [0.0f32, SHOULDER_HEIGHT_METRES];
-        let elbow_at = [
-            shoulder[0] + LINK_METRES[0] * lift.cos(),
-            shoulder[1] + LINK_METRES[0] * lift.sin(),
-        ];
-        let tip = [
-            elbow_at[0] + LINK_METRES[1] * (lift + elbow).cos(),
-            elbow_at[1] + LINK_METRES[1] * (lift + elbow).sin(),
-        ];
-        // Amber while holding, blue while moving — the same "belief" blue the
-        // rest of the repo uses for a robot acting on what it believes.
         let colour = if authorised > 0.5 {
             belief_viz::belief()
         } else {
-            rerun::Color::from_rgb(255, 176, 60)
+            belief_viz::arm::holding()
         };
-        let drawn = [to_view(shoulder), to_view(elbow_at), to_view(tip)];
-        rec.log(
-            "arm/links",
-            &rerun::LineStrips2D::new([drawn.to_vec()]).with_colors([colour]),
-        )?;
-        rec.log(
-            "arm/joints",
-            &rerun::Points2D::new(drawn)
-                .with_radii([0.008])
-                .with_colors([colour]),
-        )?;
+        belief_viz::arm::draw(rec, "arm", lift, elbow, colour)?;
         Ok(())
     }
 }

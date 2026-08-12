@@ -123,6 +123,19 @@ step "replay: RP2350 wire recording" \
 step "teleop page still has its touch handlers" \
      "grep -q 'touch-action: none' crates/teleop-web/src/index.html && \
       grep -q touchcancel crates/teleop-web/src/index.html"
+# A real two-joint session on real motors, 2026-08-12. Guards the whole
+# chain in one line: the firmware's `J` encoder, the shared parser, and
+# the phases the guard actually produced — including the `held` that only
+# happens when a commander goes quiet.
+#
+# ⚠️ Re-making it needs the board:
+#
+#   tools/build-pico2.sh pico-arm usb   # then copy the .uf2 after BOOTSEL
+#   cargo run -p hil-host --example joint_viz -- /dev/cu.usbmodem11 \
+#       --record recordings/bench-two-joint.wire
+step "replay: two-joint bench recording" \
+     "cargo run -q -p hil-host --example joint -- --replay recordings/bench-two-joint.wire \
+      | grep -q '0 unparsable'"
 step "replay: perception fixture" \
      "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"
 

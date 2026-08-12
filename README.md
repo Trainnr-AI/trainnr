@@ -142,9 +142,9 @@ was not true, and the cost of that gap is the next warning.
 
 | | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 39 | before pushing |
-| `tools/verify.sh --fast` | 37 | while iterating |
-| `tools/verify.sh --serial <port>` | 41 | with a Pico on a cable |
+| `tools/verify.sh` | 40 | before pushing |
+| `tools/verify.sh --fast` | 38 | while iterating |
+| `tools/verify.sh --serial <port>` | 42 | with a Pico on a cable |
 
 `--fast` drops exactly two, both named in the script with the reason: the
 emulator step, which takes ~9 minutes since the measured robot speed
@@ -248,6 +248,19 @@ cargo run -p arm --example watch
 
 Watch the `authorised` panel fall to 0 at 6.48 s and stay there while the plan
 runs on without it. See [`docs/19-the-arm.md`](docs/19-the-arm.md).
+
+The same picture, from **real motors** rather than a simulator — live off a
+board, or replayed from a committed session with no hardware at all:
+
+```sh
+cargo run -p hil-host --example joint_viz -- /dev/cu.usbmodem11
+cargo run -p hil-host --example joint_viz -- --replay recordings/bench-two-joint.wire
+```
+
+Both draw through `belief_viz::arm`, one routine, so a simulated angle and a
+measured one make the same figure. ⚠️ That figure is SO-ARM101 geometry driven
+by whatever angles arrive: on the bench there are no links on those shafts, so
+it is the arm those angles *would* command, not a picture of the bench.
 
 **Stage 2 — firmware** (needs Node ≥18 and `cargo install elf2uf2-rs`):
 

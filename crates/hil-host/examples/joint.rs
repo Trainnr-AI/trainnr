@@ -42,22 +42,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(20);
 
-    // ⚠️ Opening raises DTR, which is what un-gates the firmware's
-    // reports. See `hil_protocol::link::open`.
-    let link = hil_protocol::link::open(&port, Duration::from_millis(500))?;
-    let mut lines = BufReader::new(link).lines();
-    println!("watching {port} for {seconds}s");
+    // `--replay <file>` reads a capture instead of a port, so this doubles
+    // as a gate step: no hardware, no viewer, and a hardware session that
+    // stops parsing becomes a build failure rather than a surprise.
+    let replay = port == "--replay";
+    let source = if replay {
+        std::env::args().nth(2).unwrap_or_default()
+    } else {
+        port.clone()
+    };
+    let reader: Box<dyn BufRead> = if replay {
+        Box::new(BufReader::new(std::fs::File::open(&source)?))
+    } else {
+        // ⚠️ Opening raises DTR, which is what un-gates the firmware's
+        // reports. See `hil_protocol::link::open`.
+        Box::new(BufReader::new(hil_protocol::link::open(
+            &source,
+            Duration::from_millis(500),
+        )?))
+    };
+    let mut lines = reader.lines();
+    println!("watching {source}");
 
-    let deadline = Instant::now() + Duration::from_secs(seconds);
+    let deadline = Instant::now() + Duration::from_secs(if replay { 3600 } else { seconds });
     let (mut seen, mut unparsed) = (0u32, 0u32);
     let mut phase_now: Option<JointPhase> = None;
     let mut first_ticks: [Option<i64>; SLOTS] = [None; SLOTS];
     let mut last_ticks = [0i64; SLOTS];
 
     while Instant::now() < deadline {
-        let Some(Ok(line)) = lines.next() else {
-            continue;
-        };
+        // ⚠️ `continue` here spun for the whole deadline at end of file:
+        // on a serial port a read that yields nothing means "wait", and on
+        // a file it means "finished". The same expression, two meanings,
+        // and only one of them was written down.
+        let Some(next) = lines.next() else { break };
+        let Ok(line) = next else { continue };
         let line = line.trim();
         if line.is_empty() {
             continue;

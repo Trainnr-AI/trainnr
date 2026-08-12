@@ -22,6 +22,8 @@ use sim_core::Pose;
 // `Color::from_rgb` is not a `const fn` in rerun 0.35, so these are
 // functions rather than constants. Same call sites either way.
 /// Where the robot thinks it is.
+pub mod arm;
+
 pub fn belief() -> Color {
     Color::from_rgb(90, 200, 255)
 }
