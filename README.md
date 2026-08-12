@@ -151,15 +151,26 @@ emulator step, which takes ~9 minutes since the measured robot speed
 landed, and the RP2350 wire replay, which is **stale pending a hardware
 re-record**. Both still run in the full gate, so neither is hidden.
 
-⚠️ **`HIL on the emulator (RP2040)` is currently RED**, on `main` as well
-as on the branches merged into it. On `main` the mission finishes and
-misses the waypoint (0/1, 19.7 m drift); more recently the chip stops
-answering at ~14.6 s and the step hangs rather than failing. Full evidence
-and what has been ruled out is in
-[`docs/07-progress-log.md`](docs/07-progress-log.md) (2026-08-12). Until
-it is fixed, **"the full suite passes" is not a claim this repo can
-make** — `--fast` being green is not the same statement, and a step that
-can hang means a red gate and a slow one look identical.
+⚠️ **`HIL on the emulator (RP2040)` is RED — and it is the only one.**
+With a board on a cable, **31 of 32 steps pass**; the emulator step stalls
+at ~14.6 s of simulated time, deterministically, across six runs.
+
+The rig settles where the fault is *not*. On real RP2350 silicon the same
+mission completes — **4256 ticks, 1/1 waypoints, 0 wall bumps, 62×
+timing headroom** — reproducing the committed recording tick-for-tick to
+three decimals, and all four `chip_probe` conformance checks pass. So the
+control code and the wire protocol are sound; what stalls is the RP2040
+build running under `rp2040js`, which this repo already patches.
+
+⚠️ Not yet separated: an rp2040js limitation from an RP2040-specific
+firmware bug. The emulator runs a *different binary* on a different core
+(Cortex-M0+ vs M33), so "RP2350 is fine" does not by itself acquit the
+RP2040 firmware. Evidence in
+[`docs/07-progress-log.md`](docs/07-progress-log.md) (2026-08-12).
+
+Until it is fixed, **"the full suite passes" is not a claim this repo can
+make** — and note that a step which can hang makes a red gate and a slow
+one look identical, which is how this went unseen.
 
 ## Repository layout
 
