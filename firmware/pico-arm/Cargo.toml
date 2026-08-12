@@ -10,6 +10,9 @@ edition.workspace = true
 
 [features]
 default = ["rp2040"]
+# Report over USB CDC — for a real board on a cable:
+#   tools/build-pico2.sh pico-arm usb
+usb = ["firmware-support/usb", "dep:embassy-usb", "dep:embassy-futures", "dep:static_cell"]
 rp2040 = ["embassy-rp/rp2040", "embassy-rp/boot2-w25q080"]
 pico2 = ["embassy-rp/rp235xa", "embassy-rp/imagedef-secure-exe"]
 
@@ -20,10 +23,16 @@ embassy-rp = { workspace = true }
 embassy-time = { workspace = true }
 panic-halt = { workspace = true }
 firmware-support = { workspace = true }
+heapless = { workspace = true }
+hil-protocol = { workspace = true }
 quad-encoder = { workspace = true }
 sim-core = { workspace = true }
 arm = { path = "../../crates/arm", default-features = false }
 n20-joint = { path = "../../crates/n20-joint", default-features = false }
+
+embassy-usb = { workspace = true, optional = true }
+embassy-futures = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
 
 [build-dependencies]
 firmware-build-support = { workspace = true }

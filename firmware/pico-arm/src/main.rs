@@ -49,7 +49,9 @@
 #![forbid(unsafe_code)]
 
 use arm::homing::{HomingRun, Seek};
-use arm::{Joint, JointError, Torque};
+use arm::{Joint, JointError, SensingJoint, Torque};
+use firmware_support::Report;
+use hil_protocol::{JointPhase, Message};
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
@@ -86,6 +88,11 @@ struct Port {
     encoder_b: Input<'static>,
     decoder: QuadratureDecoder,
     ticks: i64,
+    /// The last duty written. Kept so telemetry can report what the loop
+    /// actually did rather than a placeholder — a reported zero that is
+    /// really "not filled in" is a sentinel, and this repo has been bitten
+    /// by one of those already.
+    last_duty: i32,
 }
 
 impl Port {
@@ -107,6 +114,7 @@ impl Port {
 impl MotorPort for Port {
     fn set_duty(&mut self, duty: i32) -> Result<(), JointError> {
         self.channel.set_signed(&mut self.pwm_config, duty);
+        self.last_duty = duty;
         Ok(())
     }
 
@@ -121,6 +129,86 @@ impl MotorPort for Port {
 
     fn ticks(&mut self) -> Result<i64, JointError> {
         Ok(self.ticks)
+    }
+}
+
+/// Home, then hold — narrating both.
+///
+/// Generic over [`Report`] for the same reason `pico-encoder`'s sampler
+/// is: the behaviour is written once and the transport is chosen at the
+/// edge. Without this the first hardware run would be a blinking LED and
+/// a guess, which is how this project previously lost an evening to a
+/// dark board.
+async fn home_then_hold(mut joint: N20Joint<Port>, out: &mut impl Report) -> ! {
+    let mut line: heapless::String<160> = heapless::String::new();
+
+    joint.write_torque(true).ok();
+
+    // ---- Act 1: find zero. Nothing above can run until this succeeds.
+    let mut homing = HomingRun::new(CREEP_EFFORT, STILL_RADIANS, STALL_TICKS, LIMIT_TICKS);
+    let mut ticks: u32 = 0;
+    let homed = loop {
+        joint.port_mut().poll_encoder();
+        let raw = joint.port_mut().ticks;
+        let duty = joint.port_mut().last_duty;
+        let Ok(state) = homing.step(&mut joint) else {
+            break false;
+        };
+        joint.tick(DT).ok();
+        ticks += 1;
+
+        // Every 10th tick: often enough to watch a creep, rare enough not
+        // to flood a 115200 terminal at 50 Hz.
+        // Every 10th tick: often enough to watch a creep, rare enough not
+        // to flood the link at 50 Hz. The transitions are never skipped.
+        if ticks % 10 == 0 || state != Seek::Creeping {
+            report(
+                out,
+                &mut line,
+                raw,
+                0,
+                duty,
+                match state {
+                    Seek::Creeping => JointPhase::Homing,
+                    Seek::Homed => JointPhase::Homed,
+                    Seek::TimedOut => JointPhase::NoZero,
+                },
+            )
+            .await;
+        }
+        if state != Seek::Creeping {
+            break state == Seek::Homed;
+        }
+        Timer::after_micros(TICK_US).await;
+    };
+
+    if !homed {
+        // No zero, so no angle means anything. Cut the outputs and say so
+        // — on a joint this is the ONE case where going limp is right,
+        // because nothing here knows where the joint is to hold it.
+        joint.write_torque(false).ok();
+        loop {
+            let raw = joint.port_mut().ticks;
+            report(out, &mut line, raw, 0, 0, JointPhase::NoZero).await;
+            Timer::after_millis(1_000).await;
+        }
+    }
+
+    // ---- Act 2: hold, and keep holding.
+    joint.command(0.0).ok();
+    let mut ticks: u32 = 0;
+    loop {
+        joint.port_mut().poll_encoder();
+        joint.tick(DT).ok();
+        ticks += 1;
+
+        if ticks % 10 == 0 {
+            let milliradians = (joint.measured().unwrap_or(0.0) * 1000.0) as i32;
+            let raw = joint.port_mut().ticks;
+            let duty = joint.port_mut().last_duty;
+            report(out, &mut line, raw, milliradians, duty, JointPhase::Holding).await;
+        }
+        Timer::after_micros(TICK_US).await;
     }
 }
 
@@ -153,6 +241,7 @@ async fn main(spawner: Spawner) {
         encoder_b: Input::new(p.PIN_17, Pull::Up),
         decoder: QuadratureDecoder::new(false, false),
         ticks: 0,
+        last_duty: 0,
     };
     port.decoder = QuadratureDecoder::new(port.encoder_a.is_high(), port.encoder_b.is_high());
 
@@ -161,47 +250,102 @@ async fn main(spawner: Spawner) {
     // Gains are a starting guess and will be wrong. Tuning them against a
     // real motor is the point of this firmware, and the numbers that come
     // out belong in one place afterwards, not scattered per call site.
-    let mut joint = N20Joint::new(port, ticks_per_revolution(), Pid::new(400.0, 0.0, 8.0, 200.0));
-    joint.write_torque(true).ok();
+    let joint = N20Joint::new(port, ticks_per_revolution(), Pid::new(400.0, 0.0, 8.0, 200.0));
 
-    // ---- Act 1: find zero. Nothing above can run until this succeeds.
-    //
-    // A joint that never stalls times out and adopts NOTHING, which is why
-    // the outcome is checked rather than assumed: an arm with a wrong zero
-    // drives itself into its own hard stops at full commanded speed.
-    let mut homing = HomingRun::new(-0.25, 1e-4, 25, 750);
-    let homed = loop {
-        joint.port_mut().poll_encoder();
-        let state = match homing.step(&mut joint) {
-            Ok(state) => state,
-            Err(_) => break false,
-        };
-        joint.tick(DT).ok();
-        if state != Seek::Creeping {
-            break state == Seek::Homed;
-        }
-        Timer::after_micros(TICK_US).await;
-    };
-
-    if !homed {
-        // No zero, so no angle means anything. Cut the outputs and stop —
-        // on a joint this is the ONE case where going limp is right,
-        // because nothing here knows where the joint is to hold it.
-        joint.write_torque(false).ok();
-        loop {
-            Timer::after_millis(1_000).await;
-        }
+    #[cfg(feature = "usb")]
+    {
+        let driver = embassy_rp::usb::Driver::new(p.USB, link::Irqs);
+        // 0x000c: distinct from pico-robot's 0x000a and pico-encoder's
+        // 0x000b, so three boards can be plugged in and still be told
+        // apart in `ioreg`.
+        let (mut usb, class) = firmware_support::usb::cdc(driver, "pico-arm", 0x000c);
+        let mut out = link::UsbReport(class);
+        embassy_futures::join::join(usb.run(), home_then_hold(joint, &mut out)).await;
     }
+    #[cfg(not(feature = "usb"))]
+    home_then_hold(joint, &mut Silent).await;
+}
 
-    // ---- Act 2: hold, and keep holding.
-    //
-    // No host, no plan, no `Guard` yet — one joint told to stay at zero,
-    // so that "does it hold?" is answered before anything more interesting
-    // is layered on top. The next commit is the guard and a cable to pull.
-    joint.command(0.0).ok();
-    loop {
-        joint.port_mut().poll_encoder();
-        joint.tick(DT).ok();
-        Timer::after_micros(TICK_US).await;
+/// Emit one `J` line — the shared wire format, not a `write!` of this
+/// firmware's own devising.
+///
+/// `hil-protocol`'s own doc records what the alternative costs: a status
+/// line that WAS a `write!` here grew two independent host parsers, one
+/// of them drew an empty screen for hours while the gate stayed green,
+/// and the fix was a third parser. One definition, both ends, round-trip
+/// tested — and `--record`/`--replay` then work on arm sessions for free.
+async fn report(
+    out: &mut impl Report,
+    line: &mut heapless::String<160>,
+    raw_ticks: i64,
+    milliradians: i32,
+    duty: i32,
+    phase: JointPhase,
+) {
+    line.clear();
+    let _ = Message::Joint {
+        index: 0,
+        raw_ticks,
+        milliradians,
+        duty,
+        phase,
+    }
+    .write_into(line);
+    out.send(line.as_bytes()).await;
+}
+
+/// Homing parameters. Gentle, because a creep that is too fast stalls on
+/// friction partway and calls THAT the hard stop.
+const CREEP_EFFORT: f64 = 0.25;
+const STILL_RADIANS: f64 = 1e-4;
+const STALL_TICKS: u32 = 25;
+const LIMIT_TICKS: u32 = 750;
+
+/// A [`Report`] that discards everything, for builds with no host link.
+struct Silent;
+impl Report for Silent {
+    async fn send(&mut self, _bytes: &[u8]) {}
+}
+
+/// USB CDC, for a board on a cable. Same shape as `pico-encoder`'s — the
+/// timeout exists so a terminal that stops reading cannot stall the
+/// control loop. Reports are best-effort; ticks are not.
+#[cfg(feature = "usb")]
+mod link {
+    use embassy_rp::bind_interrupts;
+    use embassy_rp::peripherals::USB;
+    use embassy_rp::usb::InterruptHandler;
+    use embassy_time::{with_timeout, Duration};
+    use embassy_usb::class::cdc_acm::CdcAcmClass;
+    use embassy_usb::driver::Driver as UsbDriver;
+    use firmware_support::usb::MAX_PACKET;
+    use firmware_support::Report;
+
+    bind_interrupts!(pub struct Irqs {
+        USBCTRL_IRQ => InterruptHandler<USB>;
+    });
+
+    /// Long enough that a busy host is tolerated, short enough that a
+    /// terminal nobody is reading costs one tick rather than the run.
+    const REPORT_TIMEOUT_MS: u64 = 5;
+
+    pub struct UsbReport<'d, D: UsbDriver<'d>>(pub CdcAcmClass<'d, D>);
+
+    impl<'d, D: UsbDriver<'d>> Report for UsbReport<'d, D> {
+        async fn send(&mut self, bytes: &[u8]) {
+            // `dtr()` is raised when something opens the port. Checking it
+            // first means a board on a charger costs nothing at all.
+            if !self.0.dtr() {
+                return;
+            }
+            let write_all = async {
+                for chunk in bytes.chunks(MAX_PACKET) {
+                    if self.0.write_packet(chunk).await.is_err() {
+                        return;
+                    }
+                }
+            };
+            let _ = with_timeout(Duration::from_millis(REPORT_TIMEOUT_MS), write_all).await;
+        }
     }
 }

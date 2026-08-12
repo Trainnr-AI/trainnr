@@ -1199,14 +1199,19 @@ dependencies = [
  "arm",
  "cortex-m-rt",
  "embassy-executor",
+ "embassy-futures",
  "embassy-rp",
  "embassy-time",
+ "embassy-usb",
  "firmware-build-support",
  "firmware-support",
+ "heapless 0.9.3",
+ "hil-protocol",
  "n20-joint",
  "panic-halt",
  "quad-encoder",
  "sim-core",
+ "static_cell",
 ]
 
 [[package]]

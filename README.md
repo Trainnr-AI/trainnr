@@ -142,9 +142,9 @@ was not true, and the cost of that gap is the next warning.
 
 | | steps | when |
 |---|---|---|
-| `tools/verify.sh` | 38 | before pushing |
-| `tools/verify.sh --fast` | 36 | while iterating |
-| `tools/verify.sh --serial <port>` | 40 | with a Pico on a cable |
+| `tools/verify.sh` | 39 | before pushing |
+| `tools/verify.sh --fast` | 37 | while iterating |
+| `tools/verify.sh --serial <port>` | 41 | with a Pico on a cable |
 
 `--fast` drops exactly two, both named in the script with the reason: the
 emulator step, which takes ~9 minutes since the measured robot speed

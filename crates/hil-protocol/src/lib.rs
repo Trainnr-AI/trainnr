@@ -11,6 +11,7 @@
 //!   host -> chip   S <dl> <dr>           encoder tick deltas
 //!   host -> chip   I <x> <y> <heading>     begin a session here (once, first)
 //!   chip -> host   H <worst_us>         new worst-case compute time
+//!   chip -> host   J <i> <ticks> <mrad> <duty> <phase>   one joint's tick
 //! ```
 //!
 //! # Why the host sends the goal
@@ -74,6 +75,53 @@ use sim_core::{Directive, Point};
 /// unable to reference its own limit, so the literal `1000` ended up
 /// written three times across two crates.
 pub use sim_core::DUTY_FULL;
+
+/// What a joint was doing when it reported.
+///
+/// On the wire as a **word**, not a number. A `2` would need a table
+/// somewhere to read, and that table is the kind of thing that lives in
+/// one place and rots in another — the shape of most bugs in this repo.
+/// Six extra bytes buys a line anybody can read without a decoder ring.
+///
+/// This is the same argument `Verdict` makes one layer up: a hold that
+/// says *why* sends you to the right connector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JointPhase {
+    /// Creeping toward a hard stop, looking for a zero.
+    Homing,
+    /// Found the stop and adopted it. Reported once, on the tick it
+    /// happened.
+    Homed,
+    /// Under closed-loop control against a known zero.
+    Holding,
+    /// Homing gave up. **No zero was adopted**, so the angle field is
+    /// meaningless and the outputs are off.
+    NoZero,
+}
+
+impl core::fmt::Display for JointPhase {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            JointPhase::Homing => "homing",
+            JointPhase::Homed => "homed",
+            JointPhase::Holding => "holding",
+            JointPhase::NoZero => "nozero",
+        })
+    }
+}
+
+impl core::str::FromStr for JointPhase {
+    type Err = ();
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        match word {
+            "homing" => Ok(JointPhase::Homing),
+            "homed" => Ok(JointPhase::Homed),
+            "holding" => Ok(JointPhase::Holding),
+            "nozero" => Ok(JointPhase::NoZero),
+            _ => Err(()),
+        }
+    }
+}
 
 /// One message in either direction.
 ///
@@ -163,6 +211,36 @@ pub enum Message {
     /// tuning. Reporting it makes the headroom a continuously checked
     /// property instead of a remembered number.
     Health { worst_us: u32 },
+
+    /// `J <index> <raw_ticks> <milliradians> <duty> <phase>` — one arm
+    /// joint's state for one tick.
+    ///
+    /// # Why this lives on the SAME wire as the base's messages
+    ///
+    /// One vocabulary means one parser, one set of round-trip tests, and —
+    /// the part that matters — record and replay for free. A hardware
+    /// session with an arm becomes a committed fixture the way
+    /// `rp2350-utrap.wire` did, rather than scrollback somebody described
+    /// afterwards from memory.
+    ///
+    /// # Why milliradians and not radians
+    ///
+    /// The chip formats this, and `f64` formatting drags a float
+    /// formatter into a binary that otherwise has none. Integer
+    /// milliradians costs nothing and is exact — 1 mrad is ~0.057°, far
+    /// finer than a 4290-count encoder resolves.
+    ///
+    /// `raw_ticks` rides along beside the angle deliberately: they are the
+    /// same fact through two conversions, and when they disagree the fault
+    /// is the zero, the tick count, or the gear ratio — which is exactly
+    /// what a homing bug looks like.
+    Joint {
+        index: u8,
+        raw_ticks: i64,
+        milliradians: i32,
+        duty: i32,
+        phase: JointPhase,
+    },
 }
 
 /// Why a line could not be parsed.
@@ -209,6 +287,13 @@ impl Message {
             Message::Sensors { dl, dr } => writeln!(w, "S {dl} {dr}"),
             Message::Start { x, y, heading } => writeln!(w, "I {x:.4} {y:.4} {heading:.4}"),
             Message::Health { worst_us } => writeln!(w, "H {worst_us}"),
+            Message::Joint {
+                index,
+                raw_ticks,
+                milliradians,
+                duty,
+                phase,
+            } => writeln!(w, "J {index} {raw_ticks} {milliradians} {duty} {phase}"),
         }
     }
 
@@ -253,6 +338,24 @@ impl Message {
                 let heading = next_f64(&mut parts)?;
                 Ok(Message::Start { x, y, heading })
             }
+            "J" => {
+                let index = next_i64(&mut parts)?;
+                let raw_ticks = next_i64(&mut parts)?;
+                let milliradians = next_i32(&mut parts)?;
+                let duty = next_i32(&mut parts)?;
+                let phase = parts
+                    .next()
+                    .ok_or(ParseError::MissingField)?
+                    .parse()
+                    .map_err(|_| ParseError::BadNumber)?;
+                Ok(Message::Joint {
+                    index: index.clamp(0, 255) as u8,
+                    raw_ticks,
+                    milliradians,
+                    duty,
+                    phase,
+                })
+            }
             "H" => {
                 let worst_us = next_i64(&mut parts)?;
                 Ok(Message::Health {
@@ -271,6 +374,7 @@ impl Message {
     /// The single-character tag this message serialises with.
     pub fn tag(&self) -> char {
         match self {
+            Message::Joint { .. } => 'J',
             Message::Goal { fresh: false, .. } => 'G',
             Message::Goal { fresh: true, .. } => 'R',
             Message::Twist { .. } => 'T',
@@ -423,9 +527,10 @@ impl Message {
     /// The directive this message carries, or `None` if it is telemetry
     /// rather than a command.
     ///
-    /// `Pose`, `Motor` and `Sensors` flow the other way (chip → host) and
-    /// are deliberately not directives: a robot that could be commanded by
-    /// its own status report is a robot with a feedback loop nobody drew.
+    /// `Pose`, `Motor`, `Sensors` and `Joint` flow the other way (chip →
+    /// host) and are deliberately not directives: a robot that could be
+    /// commanded by its own status report is a robot with a feedback loop
+    /// nobody drew.
     pub fn directive(&self) -> Option<Directive> {
         match *self {
             Message::Goal {
@@ -443,6 +548,7 @@ impl Message {
             | Message::Motor { .. }
             | Message::Sensors { .. }
             | Message::Health { .. }
+            | Message::Joint { .. }
             // A session start is a command, but not a *steering* one: it
             // resets state rather than producing motion, so it is handled
             // before the controller ever sees it.
@@ -629,6 +735,20 @@ mod tests {
             Message::Motor {
                 duty_l: 1000,
                 duty_r: -1000,
+            },
+            Message::Joint {
+                index: 0,
+                raw_ticks: -4290,
+                milliradians: -1571,
+                duty: 250,
+                phase: JointPhase::Homing,
+            },
+            Message::Joint {
+                index: 5,
+                raw_ticks: 0,
+                milliradians: 0,
+                duty: 0,
+                phase: JointPhase::NoZero,
             },
             Message::Motor {
                 duty_l: -7,

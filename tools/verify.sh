@@ -76,6 +76,9 @@ done
 # below runs tools/build-robot.sh, which builds it.)
 step "firmware pico-encoder (RP2350, USB)" "SKIP_UF2=1 tools/build-pico2.sh pico-encoder usb"
 step "firmware pico-odom (RP2350, USB)" "SKIP_UF2=1 tools/build-pico2.sh pico-odom usb"
+# The arm joint's only telemetry path. Nothing else compiles its `link`
+# module or the `J` messages it emits.
+step "firmware pico-arm (RP2350, USB)" "SKIP_UF2=1 tools/build-pico2.sh pico-arm usb"
 # `teleop` replaces the calibration sweep with a host command channel, so
 # it compiles a different half of the file — the watchdog, the signed duty
 # path and the H-bridge failsafe. Nothing above reaches any of it.
