@@ -1,0 +1,18 @@
+[package]
+name = "blob"
+version = "0.1.0"
+edition.workspace = true
+
+# Find a coloured object in a frame — on the chip.
+#
+# Everything else in the vision path runs on the laptop, because a Pico
+# has no NPU. This is the part that fits: one pass over 19,200 pixels,
+# four accumulators, no allocation. Enough for visual servoing, which
+# never asks where anything IS — only for the sign of the error.
+
+[features]
+default = ["std"]
+std = []
+
+[lints.rust]
+unsafe_code = "forbid"
