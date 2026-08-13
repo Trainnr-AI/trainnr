@@ -122,8 +122,24 @@ it holds.**
 servo, and how much closer that gets the simulator.
 
 **Why it matters:** [23 §2](23-simulation-and-real2sim.md) argues this is the
-open technical position — Menagerie's SO-101 model has invented actuator gains,
-and `lerobot-calibrate` does no dynamics at all.
+open technical position — Menagerie's own README says model grading *"will be
+applied to each model once a proper system identification toolbox is created"*,
+so **no Menagerie model is dynamically validated**, and `lerobot-calibrate` does
+no dynamics at all.
+
+⚠️ **Sharpened 2026-08-14 by re-reading the sources.** The engine is not the
+gap: MuJoCo's sysid toolbox is free and shipping, and
+`iit-DLSLab/sim2real-robot-identification` already wraps it with a published
+excitation recipe — **chirp trajectories between two named keyframes**, base
+fixed in air for quadrupeds or bolted to a table for manipulators. It reports
+**five of six robots identified: A2, Aliengo, GO2, Piper and Z1, with HyQReal2
+unfinished.**
+
+**Every one of those is a quadruped or an industrial-grade arm** — real
+encoders, torque sensing, thousands of dollars. **Nothing has been published
+for a hobby-servo arm.** So the question is not "can this be done" but
+specifically: *does it converge on a machine with backlash, no torque feedback
+and a plastic gearbox?*
 
 **Specific sub-questions:**
 - Is **backlash** capturable as a combination of joint damping, `armature` and

@@ -9,8 +9,10 @@ simulator good enough that using it improves real-world performance?
 > the **scene** (geometry, appearance, mass, friction), and the **behaviour**
 > (demonstrations). Channel A is the cheapest, the highest-value, and the one
 > nobody has done for an SO-101 — **MuJoCo shipped a first-party system
-> identification toolbox in 3.5.0 (2026-02-12)** and Menagerie's SO-101 model
-> still has invented actuator gains. **Splatting buys appearance, never
+> identification toolbox in 3.5.0 (2026-02-12)** and Menagerie's own README
+> says its grading *"will be applied to each model once a proper system
+> identification toolbox is created"* — so **no Menagerie model is dynamically
+> validated**, SO-101 included. **Splatting buys appearance, never
 > physics.** Precise digital twins of objects are *worse* than approximate ones.
 > And the strongest argument for building a simulator at all is that
 > **simulated evaluation predicts real performance better than a small real
@@ -80,8 +82,19 @@ set that dominates a cheap servo arm.
 - **MuJoCo Menagerie's `trs_so_arm100`** README describes it as a
   **"simplified"** MJCF derived from the public URDF, with position actuators
   added in a manual conversion. **No system identification, no experimental
-  validation.** Its actuator gains are invented and its inertias are inherited
-  from CAD.
+  validation.**
+
+  ⚠️ **Corrected 2026-08-14.** This bullet previously read *"its actuator gains
+  are invented and its inertias are inherited from CAD."* Re-fetching the README
+  does not support that: it says **nothing whatsoever about where any parameter
+  came from.** "Invented" was an inference stated as a quote.
+
+  The accurate claim is weaker to write and stronger to hold: **the README is
+  silent on parameter provenance, so the numbers are unattributable.** You
+  cannot tell whether a gain was measured, guessed or inherited — and an
+  unattributable number is not usable as a prior, because you do not know which
+  direction it is wrong in. The sourced evidence for the same conclusion is the
+  next bullet, which is a direct quote and covers every model in the repository.
 - Menagerie's top-level README states its model-quality grading system
   *"will be applied to each model once a proper system identification toolbox is
   created"* — i.e. as written, **essentially no Menagerie model is dynamically

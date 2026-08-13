@@ -110,6 +110,11 @@ Detailed, dated research on the current (mid-2026) state of each layer lives in
 - [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — **what has to be
   true before a recording becomes VLA/WAM training data**, and why a video of a
   human doing the task is not training data on its own
+- [`docs/21-the-data-company.md`](docs/21-the-data-company.md) — **the same pipeline
+  read as a market**: which stages are commoditised, which are contested (curation
+  and evaluation both already have companies in them), and the one square that is
+  empty — **nobody sells system identification.** Also why "splat for appearance,
+  simulate for physics" is a solved paper rather than a gap
 - [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
   (2026-08-08): what it would take to build, deploy and operate a small
   commercial fleet of mobile manipulators.** Nine documents on policies, data
