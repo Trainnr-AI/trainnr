@@ -437,8 +437,14 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // decoder — so the odometry, the reported totals and anything
             // the host derives from them cannot disagree about which way
             // a wheel turned. See `LEFT_ENCODER_SIGN`.
-            let left_count = left.count * firmware_support::motor::LEFT_ENCODER_SIGN;
-            let right_count = right.count;
+            // Two independent facts: `LEFT_ENCODER_SIGN` is the mirrored
+            // assembly, `DRIVETRAIN_SIGN` is the whole pair facing
+            // backwards on the chassis. Both are documented where they are
+            // defined; neither is a preference.
+            let left_count = left.count
+                * firmware_support::motor::LEFT_ENCODER_SIGN
+                * firmware_support::motor::DRIVETRAIN_SIGN;
+            let right_count = right.count * firmware_support::motor::DRIVETRAIN_SIGN;
             let dl = left_count - last_l;
             let dr = right_count - last_r;
             last_l = left_count;
@@ -616,8 +622,11 @@ async fn follow_host_forever(
             enabled = should_run;
             STALLED.store(false, Ordering::Relaxed);
         }
-        motors.left.set_signed(&mut cfg, left);
-        motors.right.set_signed(&mut cfg, right);
+        // The same mounting fact, on the way out. Without this a forward
+        // command drives the chassis backward — measured 2026-08-13.
+        let facing = firmware_support::motor::DRIVETRAIN_SIGN;
+        motors.left.set_signed(&mut cfg, left * facing);
+        motors.right.set_signed(&mut cfg, right * facing);
 
         // Reported as a magnitude percentage, which is all the existing
         // status line has room to say. The sign is visible in the encoder

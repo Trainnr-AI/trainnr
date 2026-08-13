@@ -68,6 +68,44 @@ pub const PWM_TOP: u16 = 5000;
 /// meeting.
 pub const LEFT_ENCODER_SIGN: i32 = -1;
 
+/// Which way the drivetrain faces, relative to the chassis front.
+///
+/// # ⚠️ A MOUNTING fact, measured on the built robot 2026-08-13
+///
+/// `LEFT_ENCODER_SIGN` is about the two assemblies agreeing with *each
+/// other*. This is different: both agree, and **both are backwards
+/// relative to the chassis**. Measured by driving the assembled car:
+///
+/// ```text
+///   commanded forward  ->  the chassis drove BACKWARD
+///   commanded left     ->  the chassis turned RIGHT
+/// ```
+///
+/// Those look like two faults and are one. Reversing both wheels reverses
+/// the rotation as well, so a single mounting flip produces both symptoms.
+/// The encoders confirmed the pair is self-consistent: during a commanded
+/// right turn they moved **+2575 and −2608** — equal and opposite, exactly
+/// as a spinning robot should read.
+///
+/// # Why this is one constant used twice, not two negations
+///
+/// It is one physical fact, so it gets one name. It must be applied to the
+/// duty **on the way out** (so a forward command drives the chassis
+/// forward) *and* to the counts **on the way in** (so driving forward
+/// reads positive). Applying only the first gives a robot that drives
+/// forward while reporting that it reverses.
+///
+/// ⚠️ **The honest fix is to rewire, not to keep this.** Swapping both
+/// motors' power leads and both encoders' A/B wires makes this `+1` and
+/// deletes a constant that has to agree with a screwdriver. It is `-1`
+/// today only because the encoder looms were already cable-tied when the
+/// robot was first driven.
+///
+/// ⚠️ Deliberately NOT applied inside [`Channel::set_signed`], which
+/// `pico-arm` shares to drive arm joints — those are not a drivetrain and
+/// must not be flipped.
+pub const DRIVETRAIN_SIGN: i32 = -1;
+
 /// The four encoder pins, named so left and right cannot be swapped by
 /// argument order. They were four positional `Input`s in a row, which is
 /// exactly the shape that lets `ra` and `lb` trade places silently.
