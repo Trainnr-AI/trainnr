@@ -19,7 +19,7 @@ use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Pull};
-use embassy_rp::i2c::{Blocking, I2c};
+use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::peripherals::{
     DMA_CH0, I2C0, PIN_0, PIN_1, PIN_13, PIN_14, PIN_15, PIN_16, PIN_17, PIN_18, PIN_19, PIN_20,
     PIN_21, PIN_22, PIO0, PWM_SLICE2,
@@ -130,17 +130,21 @@ pub struct CameraPins {
     /// looked like a wiring fault. They must also be consecutive, since
     /// `in pins` reads a contiguous group; that is the whole reason the
     /// encoders moved off GP16–GP19.
-    pub data: (
-        Peri<'static, PIN_13>,
-        Peri<'static, PIN_14>,
-        Peri<'static, PIN_15>,
-        Peri<'static, PIN_16>,
-        Peri<'static, PIN_17>,
-        Peri<'static, PIN_18>,
-        Peri<'static, PIN_19>,
-        Peri<'static, PIN_20>,
-    ),
+    pub data: DataPins,
 }
+
+/// The camera's eight data pins, named as distinct peripheral types so a
+/// swap cannot typecheck — the tuple's whole worth, given one alias.
+pub type DataPins = (
+    Peri<'static, PIN_13>,
+    Peri<'static, PIN_14>,
+    Peri<'static, PIN_15>,
+    Peri<'static, PIN_16>,
+    Peri<'static, PIN_17>,
+    Peri<'static, PIN_18>,
+    Peri<'static, PIN_19>,
+    Peri<'static, PIN_20>,
+);
 
 /// QQVGA-shaped RGB565 — the format `crates/blob` consumes.
 ///
@@ -216,9 +220,9 @@ const BRIGHT_MIN_PIXELS: u32 = 40;
 #[must_use = "dropping this stops XCLK and the camera goes deaf"]
 pub async fn start(
     spawner: Spawner,
-    bus: I2c<'static, I2C0, Blocking>,
+    bus: I2c<'static, I2C0, Async>,
     pins: CameraPins,
-) -> (Pwm<'static>, I2c<'static, I2C0, Blocking>) {
+) -> (Pwm<'static>, I2c<'static, I2C0, Async>) {
     // ⚠️ XCLK first, before anything touches the bus. The OV7670 has no
     // oscillator of its own; a transaction issued before the clock runs
     // fails in a way that looks exactly like bad wiring.
@@ -400,7 +404,7 @@ pub async fn start(
 /// through here, so they cannot disagree about what a pixel is.
 fn pixel(buffer: &[u32], index: usize) -> u16 {
     let [a, b, c, d] = buffer[index / 2].to_le_bytes();
-    if index % 2 == 0 {
+    if index.is_multiple_of(2) {
         u16::from_be_bytes([a, b])
     } else {
         u16::from_be_bytes([c, d])
@@ -466,7 +470,7 @@ async fn watch(
             None => BLOB_AREA.store(0, Ordering::Relaxed),
         }
 
-        if FRAMES.load(Ordering::Relaxed) % THUMBNAIL_EVERY == 0 {
+        if FRAMES.load(Ordering::Relaxed).is_multiple_of(THUMBNAIL_EVERY) {
             send_thumbnail(buffer).await;
         }
     }

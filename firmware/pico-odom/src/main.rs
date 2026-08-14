@@ -503,7 +503,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // ⚠️ The interval and the rate divisor are the same fact, so
             // they come from one constant. 50 Hz reporting x 10 s.
             #[cfg(feature = "camera")]
-            if seq % u64::from(50 * camera::ANNOUNCE_SECONDS) == 0 {
+            if seq.is_multiple_of(u64::from(50 * camera::ANNOUNCE_SECONDS)) {
                 camera::announce();
             }
             drain_notes!(out);
@@ -845,6 +845,14 @@ compile_error!(
      its SPI, the camera for parallel capture. Pick one. Refused here rather \
      than discovered as a silently corrupt frame or a radio that will not join."
 );
+
+// The shared I2C bus interrupt: async mode hands the bus wait back to
+// the executor instead of blinding it — see `servo.rs` for the measured
+// reason. Bound here because the bus is a board resource built here.
+#[cfg(feature = "camera")]
+embassy_rp::bind_interrupts!(struct I2cIrqs {
+    I2C0_IRQ => embassy_rp::i2c::InterruptHandler<embassy_rp::peripherals::I2C0>;
+});
 
 #[cfg(feature = "camera")]
 mod camera;
@@ -1194,11 +1202,17 @@ mod transport {
         // One bus, three tenants: the camera's SCCB, the PCA9685, and
         // whatever joins GP4/GP5 next. Built HERE because a bus is a
         // board resource — each module borrows it and hands it back.
+        // ⚠️ ASYNC mode, deliberately, even though the camera only ever
+        // uses it blocking at boot: async-mode hardware still serves the
+        // blocking trait, and the servo task's writes become await
+        // points the 10 kHz sampler can preempt instead of ~0.5 ms
+        // blind spots per transaction.
         #[cfg(feature = "camera")]
-        let shared_bus = embassy_rp::i2c::I2c::new_blocking(
+        let shared_bus = embassy_rp::i2c::I2c::new_async(
             p.I2C0,
             p.PIN_5,
             p.PIN_4,
+            I2cIrqs,
             embassy_rp::i2c::Config::default(),
         );
         #[cfg(feature = "camera")]

@@ -252,6 +252,44 @@ pub fn counts_for(pulse_microseconds: u32, frame_hz: u32) -> u32 {
     (counts as u32).min(COUNTS_PER_FRAME - 1)
 }
 
+/// The four register writes that wake the chip, in the only order it
+/// accepts — the prescaler is writable only while asleep. Pure data, so
+/// the blocking and async drivers cannot drift on the one sequence that
+/// has already produced a "everything ACKs, nothing moves" night.
+fn start_sequence(frame_hz: u32) -> Result<[(u8, u8); 4], ServoError> {
+    let prescale = prescale_for(frame_hz)?;
+    Ok([
+        (REG_MODE1, MODE1_SLEEP | MODE1_AUTO_INCREMENT),
+        (REG_PRESCALE, prescale),
+        (REG_MODE1, MODE1_AUTO_INCREMENT),
+        (REG_MODE1, MODE1_AUTO_INCREMENT | MODE1_RESTART),
+    ])
+}
+
+/// Build the one-transaction frame for a contiguous run of channels into
+/// `frame`, returning how many bytes to send. Shared by both drivers —
+/// the byte layout is chip knowledge, not transport knowledge.
+fn pulses_frame(
+    first: Channel,
+    pulses: &[u32],
+    frame_hz: u32,
+    frame: &mut [u8; 1 + 4 * 16],
+) -> Result<usize, ServoError> {
+    let last = usize::from(first.index()) + pulses.len();
+    if pulses.is_empty() || last > usize::from(Channel::LAST) + 1 {
+        return Err(ServoError::NoSuchChannel(last as u8));
+    }
+    frame[0] = first.register();
+    for (slot, pulse) in pulses.iter().enumerate() {
+        let off = counts_for(*pulse, frame_hz);
+        frame[1 + 4 * slot] = 0;
+        frame[2 + 4 * slot] = 0;
+        frame[3 + 4 * slot] = (off & 0xFF) as u8;
+        frame[4 + 4 * slot] = (off >> 8) as u8;
+    }
+    Ok(1 + 4 * pulses.len())
+}
+
 /// The driver. Generic over any `embedded-hal` I2C bus, so the same code
 /// runs against embassy on the chip and against a mock in these tests.
 pub struct Pca9685<I2C> {
@@ -286,16 +324,14 @@ impl<I2C: I2c> Pca9685<I2C> {
     /// and leaves the outputs running at the power-on 200 Hz, which makes
     /// every servo sit at an angle nobody asked for.
     pub fn start(&mut self, frame_hz: u32) -> Result<(), Error<I2C::Error>> {
-        let prescale = prescale_for(frame_hz).map_err(Error::Servo)?;
-        self.frame_hz = frame_hz;
-        // Auto-increment on, and explicitly asleep so the next write lands.
-        self.write(REG_MODE1, MODE1_SLEEP | MODE1_AUTO_INCREMENT)?;
-        self.write(REG_PRESCALE, prescale)?;
-        self.write(REG_MODE1, MODE1_AUTO_INCREMENT)?;
         // ⚠️ The datasheet requires 500 µs for the oscillator to settle
         // before RESTART. This driver does not sleep — it has no clock —
         // so the caller must delay. `pico-odom`'s servo module does.
-        self.write(REG_MODE1, MODE1_AUTO_INCREMENT | MODE1_RESTART)
+        self.frame_hz = frame_hz;
+        for (register, value) in start_sequence(frame_hz).map_err(Error::Servo)? {
+            self.write(register, value)?;
+        }
+        Ok(())
     }
 
     /// Drive a run of CONSECUTIVE channels in one bus transaction.
@@ -310,23 +346,11 @@ impl<I2C: I2c> Pca9685<I2C> {
     /// registers are contiguous (four per channel from [`REG_LED0`]),
     /// which is what makes the single write possible.
     pub fn set_pulses(&mut self, first: Channel, pulses: &[u32]) -> Result<(), Error<I2C::Error>> {
-        let last = usize::from(first.index()) + pulses.len();
-        if pulses.is_empty() || last > usize::from(Channel::LAST) + 1 {
-            return Err(Error::Servo(ServoError::NoSuchChannel(last as u8)));
-        }
-        // Register address, then four bytes per channel — sized for the
-        // largest possible run so no length ever indexes past it.
         let mut frame = [0u8; 1 + 4 * 16];
-        frame[0] = first.register();
-        for (slot, pulse) in pulses.iter().enumerate() {
-            let off = counts_for(*pulse, self.frame_hz);
-            frame[1 + 4 * slot] = 0;
-            frame[2 + 4 * slot] = 0;
-            frame[3 + 4 * slot] = (off & 0xFF) as u8;
-            frame[4 + 4 * slot] = (off >> 8) as u8;
-        }
+        let length =
+            pulses_frame(first, pulses, self.frame_hz, &mut frame).map_err(Error::Servo)?;
         self.i2c
-            .write(self.address, &frame[..1 + 4 * pulses.len()])
+            .write(self.address, &frame[..length])
             .map_err(Error::Bus)
     }
 
@@ -400,6 +424,88 @@ impl<I2C: I2c> Pca9685<I2C> {
         self.i2c
             .write(self.address, &[register, value])
             .map_err(Error::Bus)
+    }
+}
+
+/// The async driver — same chip knowledge, `await`-shaped transport.
+///
+/// # ⚠️ Why this exists at all
+///
+/// A blocking I2C write inside a cooperative executor blinds every other
+/// task for its duration. On the rig that includes the 10 kHz encoder
+/// sampler, and the blindness was *measured*: decode errors climbing
+/// whenever the servo task ran (progress log, 2026-08-15). Awaiting the
+/// bus instead hands those microseconds back to whoever needs them.
+///
+/// Every register value, sequence and frame layout comes from the same
+/// pure functions the blocking driver uses — the two cannot disagree
+/// about what the chip needs, only about how the bytes travel.
+#[cfg(feature = "async")]
+pub mod asynch {
+    use embedded_hal_async::i2c::I2c;
+
+    use crate::{pulses_frame, start_sequence, Channel, Error, SERVO_FRAME_HZ};
+
+    /// The PCA9685 over an async bus. See [`crate::Pca9685`] for the
+    /// chip's story; this type only changes how the bytes get there.
+    pub struct Pca9685<I2C> {
+        i2c: I2C,
+        address: u8,
+        frame_hz: u32,
+    }
+
+    impl<I2C: I2c> Pca9685<I2C> {
+        /// Wrap a bus. Does not talk to the chip — [`Self::start`] does.
+        pub fn new(i2c: I2C) -> Self {
+            Pca9685 {
+                i2c,
+                address: crate::DEFAULT_ADDRESS,
+                frame_hz: SERVO_FRAME_HZ,
+            }
+        }
+
+        /// Wake the chip and set its frame rate — the caller still owes
+        /// the 500 µs oscillator settle before trusting outputs.
+        pub async fn start(&mut self, frame_hz: u32) -> Result<(), Error<I2C::Error>> {
+            self.frame_hz = frame_hz;
+            for (register, value) in start_sequence(frame_hz).map_err(Error::Servo)? {
+                self.i2c
+                    .write(self.address, &[register, value])
+                    .await
+                    .map_err(Error::Bus)?;
+            }
+            Ok(())
+        }
+
+        /// Drive a run of consecutive channels in one bus transaction.
+        pub async fn set_pulses(
+            &mut self,
+            first: Channel,
+            pulses: &[u32],
+        ) -> Result<(), Error<I2C::Error>> {
+            let mut frame = [0u8; 1 + 4 * 16];
+            let length =
+                pulses_frame(first, pulses, self.frame_hz, &mut frame).map_err(Error::Servo)?;
+            self.i2c
+                .write(self.address, &frame[..length])
+                .await
+                .map_err(Error::Bus)
+        }
+
+        /// Read one register back — real I2C, one `write_read`.
+        pub async fn read_register(&mut self, register: u8) -> Result<u8, Error<I2C::Error>> {
+            let mut value = [0u8; 1];
+            self.i2c
+                .write_read(self.address, &[register], &mut value)
+                .await
+                .map_err(Error::Bus)?;
+            Ok(value[0])
+        }
+
+        /// Hand the bus back.
+        pub fn free(self) -> I2C {
+            self.i2c
+        }
     }
 }
 
@@ -618,6 +724,48 @@ mod tests {
         assert!(driver
             .set_pulses(Channel::new(15).unwrap(), &[1500, 1500])
             .is_err());
+        driver.free().done();
+    }
+
+    /// A minimal executor for the async tests: the mock's futures are
+    /// always immediately ready, so one poll with a no-op waker is the
+    /// whole runtime. No dev-dependency earns its keep against ten lines.
+    #[cfg(feature = "async")]
+    fn block_on<F: core::future::Future>(future: F) -> F::Output {
+        let mut future = core::pin::pin!(future);
+        let waker = std::task::Waker::noop();
+        let mut context = core::task::Context::from_waker(waker);
+        loop {
+            if let core::task::Poll::Ready(output) = future.as_mut().poll(&mut context) {
+                return output;
+            }
+        }
+    }
+
+    #[cfg(feature = "async")]
+    #[test]
+    fn async_driver_sends_the_same_bytes_as_the_blocking_one() {
+        // The property the shared core guarantees, pinned: identical
+        // start sequence, identical batched frame. If the two drivers
+        // ever drift on chip knowledge, one of these expectations breaks.
+        let expectations = [
+            I2cTransaction::write(DEFAULT_ADDRESS, vec![REG_MODE1, 0x30]),
+            I2cTransaction::write(DEFAULT_ADDRESS, vec![REG_PRESCALE, 121]),
+            I2cTransaction::write(DEFAULT_ADDRESS, vec![REG_MODE1, 0x20]),
+            I2cTransaction::write(DEFAULT_ADDRESS, vec![REG_MODE1, 0xA0]),
+            I2cTransaction::write(
+                DEFAULT_ADDRESS,
+                vec![0x06, 0, 0, 0x33, 0x01, 0, 0, 0xE1, 0x00, 0, 0, 0x85, 0x01],
+            ),
+        ];
+        let mut driver = crate::asynch::Pca9685::new(I2cMock::new(&expectations));
+        block_on(async {
+            driver.start(SERVO_FRAME_HZ).await.unwrap();
+            driver
+                .set_pulses(Channel::new(0).unwrap(), &[1500, 1100, 1900])
+                .await
+                .unwrap();
+        });
         driver.free().done();
     }
 }

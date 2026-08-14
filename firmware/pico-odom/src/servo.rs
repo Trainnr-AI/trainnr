@@ -31,10 +31,11 @@
 
 use core::fmt::Write as _;
 
-use embassy_rp::i2c::{Blocking, I2c};
+use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::peripherals::I2C0;
 use embassy_time::Timer;
-use pca9685_driver::{Channel, Pca9685, SERVO_FRAME_HZ};
+use pca9685_driver::asynch::Pca9685;
+use pca9685_driver::{Channel, SERVO_FRAME_HZ};
 
 /// Bring-up lever: `true` restores the blind lockstep sweep that proved
 /// the servos on 2026-08-15. Kept for the same reason the camera keeps
@@ -86,8 +87,11 @@ const CHANNELS: [Channel; SERVO_COUNT] = {
 };
 
 /// Ask the PCA9685 who it is; say so on the report stream.
-pub fn probe(mut bus: I2c<'static, I2C0, Blocking>) -> I2c<'static, I2C0, Blocking> {
-    let mut driver = Pca9685::new(bus);
+/// (Blocking driver over the async-mode bus — legal, since async-mode
+/// hardware serves both traits, and boot-time blocking hurts nothing:
+/// the sampler load this crate cares about starts later.)
+pub fn probe(mut bus: I2c<'static, I2C0, Async>) -> I2c<'static, I2C0, Async> {
+    let mut driver = pca9685_driver::Pca9685::new(bus);
     let mut text: heapless::String<96> = heapless::String::new();
     match driver.read_register(pca9685_driver::REG_MODE1) {
         Ok(mode1) => {
@@ -119,15 +123,15 @@ pub fn probe(mut bus: I2c<'static, I2C0, Blocking>) -> I2c<'static, I2C0, Blocki
 /// ⚠️ The read-back is the test, not the ACK: at the power-on 200 Hz
 /// default every pulse computed for 50 Hz goes out 4x too narrow, under
 /// the floor a servo even acknowledges — everything ACKs, nothing moves.
-async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) -> bool {
-    if driver.start(SERVO_FRAME_HZ).is_err() {
+async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) -> bool {
+    if driver.start(SERVO_FRAME_HZ).await.is_err() {
         crate::diag::note("# servo start FAILED — bus error waking the PCA9685");
         return false;
     }
     // Oscillator settle the driver cannot wait out itself.
     Timer::after_millis(1).await;
     let mut text: heapless::String<96> = heapless::String::new();
-    match driver.read_register(pca9685_driver::REG_PRESCALE) {
+    match driver.read_register(pca9685_driver::REG_PRESCALE).await {
         Ok(121) => {
             let _ = text.push_str("# servo prescale=121 — 50 Hz confirmed by read-back");
         }
@@ -148,7 +152,7 @@ async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) -> bool {
 /// Drive the three arm channels forever — from the camera, or (with
 /// [`BRINGUP_SWEEP`]) the blind sweep that first proved them.
 #[embassy_executor::task]
-pub async fn run(bus: I2c<'static, I2C0, Blocking>) {
+pub async fn run(bus: I2c<'static, I2C0, Async>) {
     let mut driver = Pca9685::new(bus);
     if !wake(&mut driver).await {
         return;
@@ -161,7 +165,7 @@ pub async fn run(bus: I2c<'static, I2C0, Blocking>) {
 }
 
 /// Camera-driven tracking: three errors in, three positions out.
-async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
+async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     crate::diag::note("# servo TRACKING the camera: x->ch0 y->ch1 area->ch2");
     let mut current = [CENTRE_US as u32; SERVO_COUNT];
     // ⚠️ Forced first write. The skip-when-converged rule below would
@@ -220,7 +224,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
         // for the decode-error climb logged on 2026-08-15. One batched
         // write when something did change, three separate ones never.
         if moved || dirty {
-            if driver.set_pulses(CHANNELS[0], &current).is_err() {
+            if driver.set_pulses(CHANNELS[0], &current).await.is_err() {
                 crate::diag::note("# servo bus error mid-track — stopping");
                 return;
             }
@@ -228,7 +232,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
         }
 
         tick += 1;
-        if tick % 25 == 0 {
+        if tick.is_multiple_of(25) {
             let mut text: heapless::String<64> = heapless::String::new();
             let _ = hil_protocol::arm_pulses::write_note(&mut text, &current);
             crate::diag::note(&text);
@@ -237,7 +241,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
 }
 
 /// The blind lockstep sweep — the bring-up instrument of 2026-08-15.
-async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
+async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     crate::diag::note("# servo ch0-2 sweeping TOGETHER 1100-1900us");
     let centre = (SWEEP_LOW_US + SWEEP_HIGH_US) / 2;
     let mut pulse = centre;
@@ -245,7 +249,7 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
     let mut tick = 0u32;
     loop {
         // One transaction for all three — see `Pca9685::set_pulses`.
-        if driver.set_pulses(CHANNELS[0], &[pulse; SERVO_COUNT]).is_err() {
+        if driver.set_pulses(CHANNELS[0], &[pulse; SERVO_COUNT]).await.is_err() {
             crate::diag::note("# servo bus error mid-sweep — stopping");
             return;
         }
@@ -258,7 +262,7 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
             rising = !rising;
         }
         tick += 1;
-        if tick % 25 == 0 {
+        if tick.is_multiple_of(25) {
             let mut text: heapless::String<64> = heapless::String::new();
             let _ = hil_protocol::arm_pulses::write_note(&mut text, &[pulse; SERVO_COUNT]);
             crate::diag::note(&text);
