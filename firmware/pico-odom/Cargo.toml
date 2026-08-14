@@ -26,18 +26,18 @@ teleop = ["usb"]
 # it is, once, at boot. Costs two I2C pins and one PWM slice, none of
 # which the drivetrain uses:
 #   tools/build-pico2.sh pico-odom usb,camera
-camera = ["dep:ov7670-driver"]
+camera = ["dep:ov7670-driver", "dep:static_cell"]
 # Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
 # no tether. RP2350-only, because RP2040 Picos in this project have no
 # radio, and telemetry-only by design (see the compile_error! below):
 #   WIFI_SSID=... WIFI_PASSWORD=... tools/build-pico2.sh pico-odom wifi
 wifi = [
+    "dep:static_cell",
     "dep:cyw43",
     "dep:cyw43-firmware",
     "dep:cyw43-pio",
     "dep:embassy-net",
     "dep:embassy-futures",
-    "dep:static_cell",
 ]
 
 [dependencies]
@@ -51,6 +51,14 @@ heapless = { workspace = true }
 embassy-usb = { workspace = true, optional = true }
 firmware-support = { workspace = true }
 embassy-futures = { workspace = true, optional = true }
+# The camera's frame buffer and the USB/radio stacks all need a static
+# with a runtime-initialised value, and `unsafe_code` is forbidden
+# repo-wide so a `static mut` is not an alternative.
+#
+# ⚠️ Optional, and it must stay that way. `StaticCell` needs atomic
+# compare-exchange, which **Cortex-M0+ does not have** — making this
+# unconditional builds fine for RP2350 and breaks the RP2040/UART target
+# that the emulator uses.
 static_cell = { workspace = true, optional = true }
 # The radio, and the TCP/IP stack that rides on it. Versions match
 # `firmware/pico-led`, which is the build proven to bring the radio up on

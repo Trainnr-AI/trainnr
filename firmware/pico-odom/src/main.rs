@@ -772,11 +772,25 @@ mod diag {
 // slice 2 (GP21). I2C0 and GP4/GP5 are unused by the motor firmware. So
 // the two subsystems share nothing but the report stream — which is the
 // point of running them together.
+#[cfg(all(feature = "camera", feature = "wifi"))]
+compile_error!(
+    "`camera` and `wifi` both claim PIO0 and DMA_CH0 — the radio uses them for \
+     its SPI, the camera for parallel capture. Pick one. Refused here rather \
+     than discovered as a silently corrupt frame or a radio that will not join."
+);
+
 #[cfg(feature = "camera")]
 mod camera {
     use embassy_rp::i2c::{Config as I2cConfig, I2c};
     use embassy_rp::gpio::{Input, Pull};
-    use embassy_rp::peripherals::{I2C0, PIN_1, PIN_21, PIN_4, PIN_5, PWM_SLICE2};
+    use embassy_rp::peripherals::{
+        DMA_CH0, I2C0, PIN_0, PIN_1, PIN_13, PIN_14, PIN_15, PIN_16, PIN_17, PIN_18,
+        PIN_19, PIN_20, PIN_21, PIN_22, PIN_4, PIN_5, PIO0, PWM_SLICE2,
+    };
+    use embassy_rp::pio::{
+        Config as PioConfig, Direction, InterruptHandler, Pio, ShiftConfig, ShiftDirection,
+    };
+    use embassy_rp::bind_interrupts;
     use embassy_rp::pwm::{Config as PwmConfig, Pwm};
     use embassy_rp::Peri;
     use core::fmt::Write as _;
@@ -804,6 +818,32 @@ mod camera {
     /// by argument order — the same reason [`super::MotorPins`] exists.
     pub struct CameraPins {
         pub i2c: Peri<'static, I2C0>,
+        /// The state machine that clocks eight parallel bits, and the DMA
+        /// channel that lands them in memory.
+        ///
+        /// ⚠️ `PIO0` and `DMA_CH0` are the radio's on a `wifi` build —
+        /// see the `compile_error!` beside this module. Two owners of one
+        /// peripheral is the shape this repo keeps finding bugs in, so it
+        /// is refused at compile time rather than discovered at runtime.
+        pub pio: Peri<'static, PIO0>,
+        pub dma: Peri<'static, DMA_CH0>,
+        /// `D0`..`D7`, which MUST be consecutive: PIO's `in pins` reads a
+        /// contiguous group from a base pin. This is the whole reason the
+        /// encoders moved.
+        ///
+        /// ⚠️ **All eight, not just the base.** Every pin PIO reads has to
+        /// have its function switched to PIO; claiming only `D0` leaves the
+        /// other seven on their default function and they read as nothing.
+        pub data: (
+            Peri<'static, PIN_13>,
+            Peri<'static, PIN_14>,
+            Peri<'static, PIN_15>,
+            Peri<'static, PIN_16>,
+            Peri<'static, PIN_17>,
+            Peri<'static, PIN_18>,
+            Peri<'static, PIN_19>,
+            Peri<'static, PIN_20>,
+        ),
         pub sda: Peri<'static, PIN_4>,
         pub scl: Peri<'static, PIN_5>,
         pub xclk_slice: Peri<'static, PWM_SLICE2>,
@@ -811,6 +851,12 @@ mod camera {
         /// Frame sync — one pulse per frame. Counted, because it is the
         /// cheapest possible proof that the sensor is actually streaming.
         pub vsync: Peri<'static, PIN_1>,
+        /// Line valid. Probed directly, because if this never rises the
+        /// PIO program blocks forever and every downstream symptom is a
+        /// timeout wearing a different mask.
+        pub href: Peri<'static, PIN_22>,
+        /// Pixel clock. Too fast to count; only checked for movement.
+        pub pclk: Peri<'static, PIN_0>,
     }
 
     /// Start XCLK, ask the sensor who it is, and queue the answer.
@@ -913,8 +959,43 @@ mod camera {
         // second, and a second is fifty missed reports.
         let mut vsync = Input::new(pins.vsync, Pull::None);
         FRAMES_PER_SECOND.store(count_frames(&mut vsync).await, Ordering::Relaxed);
+
+        // ⚠️ Probe the sync lines BEFORE PIO claims any pins. A dead
+        // HREF and a wrong PIO program produce the same silence, and
+        // only one of them is worth debugging first.
+        let mut href = Input::new(pins.href, Pull::None);
+        let mut pclk = Input::new(pins.pclk, Pull::None);
+        let href_alive = is_moving(&mut href, 200).await;
+        let pclk_alive = is_moving(&mut pclk, 200).await;
+        SYNC_ALIVE.store(
+            u32::from(href_alive) | (u32::from(pclk_alive) << 1),
+            Ordering::Relaxed,
+        );
+        // ⚠️ NOT dropped. Embassy restores the pad on `Drop`, which can
+        // leave the input buffer disabled — and PIO's `wait gpio` then
+        // reads a pin that never changes, forever. The probe would have
+        // broken the thing it was probing.
+        core::mem::forget(href);
+        core::mem::forget(pclk);
+
+        // bit 24 marks "a transfer completed at all", so a timeout can
+        // never be mistaken for data.
+        PIXEL_STATS.store(
+            match capture_stats(pins.pio, pins.dma, pins.data).await {
+                Some((low, high, mean)) => {
+                    (1 << 24) | u32::from(low) | (u32::from(high) << 8) | (u32::from(mean) << 16)
+                }
+                None => 0,
+            },
+            Ordering::Relaxed,
+        );
         xclk
     }
+
+    /// `low | high << 8 | mean << 16` from the boot frame.
+    static PIXEL_STATS: AtomicU32 = AtomicU32::new(0);
+    /// bit0 = HREF moved, bit1 = PCLK moved.
+    static SYNC_ALIVE: AtomicU32 = AtomicU32::new(0);
 
     /// Frames seen in the one-second sample at boot.
     static FRAMES_PER_SECOND: AtomicU32 = AtomicU32::new(0);
@@ -958,6 +1039,171 @@ mod camera {
         (0x73, 0xF2), // SCALING_PCLK_DIV  — /4
         (0xA2, 0x02), // SCALING_PCLK_DELAY
     ];
+
+
+    bind_interrupts!(struct CameraIrqs {
+        PIO0_IRQ_0 => InterruptHandler<PIO0>;
+    });
+
+    // DMA completion has its own interrupt, separate from PIO's.
+    bind_interrupts!(struct DmaIrqs {
+        DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>;
+    });
+
+    /// How much is actually captured for the wiring check.
+    ///
+    /// ⚠️ **Deliberately far smaller than a frame.** Pulling a full
+    /// 38,400 bytes makes the transfer complete only if the sensor emits
+    /// exactly the frame size assumed here — so a wrong `COM7`, a scaling
+    /// register that did not take, or a YUV-vs-RGB mixup all present as
+    /// "DMA timed out", which reads as a wiring fault and is not one.
+    ///
+    /// 4 KB fills from any format the sensor could plausibly be in. It
+    /// answers one question — **do the data pins carry changing bytes?**
+    /// — and leaves frame geometry to be settled separately.
+    const CAPTURE_WORDS: usize = 1024;
+
+    /// The frame buffer. 38,400 bytes of the RP2350's 520 KB.
+    ///
+    /// Static because DMA writes into it directly and it must outlive
+    /// every borrow; `StaticCell` rather than a `static mut` because
+    /// `unsafe_code` is forbidden repo-wide and this needs no exception.
+    static FRAME: static_cell::StaticCell<[u32; CAPTURE_WORDS]> = static_cell::StaticCell::new();
+
+    /// Grab one frame, and say whether the pixels are plausible.
+    ///
+    /// # The PIO program, three instructions and one idea
+    ///
+    /// ```text
+    ///   wait 1 gpio 22   ; HREF high  -- this line carries real pixels
+    ///   wait 0 gpio 0    ; PCLK low   -- so the next wait sees a genuine edge
+    ///   wait 1 gpio 0    ; PCLK high  -- data is valid on the rising edge
+    ///   in pins, 8       ; sample D0-D7 (GP13..GP20) into the shift register
+    /// ```
+    ///
+    /// Autopush at 32 bits packs four pixels' worth of bytes per FIFO
+    /// word, and DMA drains the FIFO into [`FRAME`]. When `HREF` falls the
+    /// first `wait` blocks until the next line starts, so horizontal
+    /// blanking costs nothing and needs no code.
+    ///
+    /// ⚠️ **Both `PCLK` waits are needed.** With only `wait 1`, a state
+    /// machine arriving while `PCLK` is already high samples immediately
+    /// and then again on the next rising edge — one duplicated byte per
+    /// line, which shifts every subsequent pixel and produces a picture
+    /// that looks like a wiring fault.
+    ///
+    /// # What is deliberately NOT done here
+    ///
+    /// Frame sync. This starts mid-frame, so the first capture is torn.
+    /// Byte statistics do not care, and they are the only question being
+    /// asked right now: **are D0-D7 wired correctly?** All-zero, all-0xFF
+    /// or a stuck-bit pattern answers that without needing a picture.
+    pub async fn capture_stats(
+        pio: Peri<'static, PIO0>,
+        dma: Peri<'static, DMA_CH0>,
+        data: (
+            Peri<'static, PIN_13>,
+            Peri<'static, PIN_14>,
+            Peri<'static, PIN_15>,
+            Peri<'static, PIN_16>,
+            Peri<'static, PIN_17>,
+            Peri<'static, PIN_18>,
+            Peri<'static, PIN_19>,
+            Peri<'static, PIN_20>,
+        ),
+    ) -> Option<(u8, u8, u8)> {
+        let mut pio = Pio::new(pio, CameraIrqs);
+        // Every one of the eight, switched to PIO function.
+        let d0 = pio.common.make_pio_pin(data.0);
+        let d1 = pio.common.make_pio_pin(data.1);
+        let d2 = pio.common.make_pio_pin(data.2);
+        let d3 = pio.common.make_pio_pin(data.3);
+        let d4 = pio.common.make_pio_pin(data.4);
+        let d5 = pio.common.make_pio_pin(data.5);
+        let d6 = pio.common.make_pio_pin(data.6);
+        let d7 = pio.common.make_pio_pin(data.7);
+        let all_data = [&d0, &d1, &d2, &d3, &d4, &d5, &d6, &d7];
+
+        let program = embassy_rp::pio::program::pio_asm!(
+            ".wrap_target",
+            "wait 1 gpio 22",
+            "wait 0 gpio 0",
+            "wait 1 gpio 0",
+            "in pins, 8",
+            ".wrap",
+        );
+
+        let mut config = PioConfig::default();
+        config.use_program(&pio.common.load_program(&program.program), &[]);
+        config.set_in_pins(&all_data);
+        // ⚠️ Shift LEFT, so the first byte sampled ends up in the LOW
+        // byte of the word. Right-shifting reverses byte order within
+        // every word — an image that is subtly, periodically scrambled
+        // rather than obviously broken.
+        config.shift_in = ShiftConfig {
+            threshold: 32,
+            direction: ShiftDirection::Left,
+            auto_fill: true,
+        };
+        pio.sm0.set_config(&config);
+        // The eight data pins are inputs. `make_pio_pin` claims only the
+        // base; the rest follow from `in pins, 8` reading a contiguous
+        // group, which is why they had to be consecutive.
+        pio.sm0.set_pin_dirs(Direction::In, &all_data);
+        pio.sm0.set_enable(true);
+
+        let buffer = FRAME.init([0u32; CAPTURE_WORDS]);
+        // `dma_pull` wants a bound DMA channel, not the raw peripheral.
+        let mut dma = embassy_rp::dma::Channel::new(dma, DmaIrqs);
+        // ⚠️ Bounded. A frame that never arrives — HREF stuck low, PCLK
+        // dead — would otherwise hang the whole firmware here, reporting
+        // nothing, which reads exactly like a crash.
+        let filled = embassy_time::with_timeout(
+            embassy_time::Duration::from_millis(500),
+            pio.sm0.rx().dma_pull(&mut dma, buffer, false),
+        )
+        .await
+        .is_ok();
+        pio.sm0.set_enable(false);
+
+        if !filled {
+            // ⚠️ `None`, not a sentinel value. The first attempt returned
+            // (0,0,0) — indistinguishable from a frame of real zeroes.
+            // The second returned (255, 0, u32::MAX), which TRUNCATED
+            // when packed into 16 bits, so the timeout check never fired
+            // and an underflowing `high - low` reported "spread looks
+            // real" about a transfer that never happened.
+            //
+            // Two sentinels, two lies. The type system will hold this one.
+            return None;
+        }
+
+        // Byte statistics, not pixels. A correctly wired bus produces a
+        // spread; a miswired one produces a constant or a stuck bit.
+        let (mut low, mut high, mut total) = (u8::MAX, u8::MIN, 0u32);
+        for word in buffer.iter() {
+            for byte in word.to_le_bytes() {
+                low = low.min(byte);
+                high = high.max(byte);
+                total += u32::from(byte);
+            }
+        }
+        Some((low, high, (total / (CAPTURE_WORDS * 4) as u32) as u8))
+    }
+
+    /// Does this line move at all within `window`?
+    ///
+    /// `PCLK` runs at over a megahertz — far too fast to count from
+    /// async code — but "does it ever change" is both answerable and
+    /// exactly the question when nothing is arriving.
+    pub async fn is_moving(pin: &mut Input<'static>, window_ms: u64) -> bool {
+        embassy_time::with_timeout(
+            embassy_time::Duration::from_millis(window_ms),
+            pin.wait_for_any_edge(),
+        )
+        .await
+        .is_ok()
+    }
 
     /// Count frames for one second, straight off the `VSYNC` pin.
     ///
@@ -1048,6 +1294,30 @@ mod camera {
             } else {
                 "-- streaming"
             },
+        );
+        let packed = PIXEL_STATS.load(Ordering::Relaxed);
+        let (low, high, mean) = (packed & 0xFF, (packed >> 8) & 0xFF, (packed >> 16) & 0xFF);
+        let sync = SYNC_ALIVE.load(Ordering::Relaxed);
+        let (href_alive, pclk_alive) = (sync & 1 != 0, sync & 2 != 0);
+        let verdict = if packed & (1 << 24) == 0 {
+            "⚠️ DMA TIMED OUT — nothing arrived from PIO"
+        } else if !href_alive {
+            "⚠️ HREF never moved — GP22 not connected"
+        } else if !pclk_alive {
+            "⚠️ PCLK never moved — GP0 not connected"
+        } else if low == high {
+            // Every byte identical: the bus is not being read at all.
+            "⚠️ CONSTANT — D0-D7 not reaching the pins"
+        } else if high.saturating_sub(low) < 16 {
+            "⚠️ nearly constant — very dark, or only one bit moving"
+        } else {
+            "spread looks real"
+        };
+        let _ = write!(
+            text,
+            " | href={} pclk={} px {low}..{high} mean {mean} {verdict}",
+            if href_alive { "y" } else { "N" },
+            if pclk_alive { "y" } else { "N" },
         );
         crate::diag::note(&text);
     }
@@ -1297,6 +1567,20 @@ mod transport {
             xclk_slice: p.PWM_SLICE2,
             xclk: p.PIN_21,
             vsync: p.PIN_1,
+            href: p.PIN_22,
+            pclk: p.PIN_0,
+            pio: p.PIO0,
+            dma: p.DMA_CH0,
+            data: (
+                p.PIN_13,
+                p.PIN_14,
+                p.PIN_15,
+                p.PIN_16,
+                p.PIN_17,
+                p.PIN_18,
+                p.PIN_19,
+                p.PIN_20,
+            ),
         })
         .await;
 
