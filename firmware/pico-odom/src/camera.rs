@@ -19,10 +19,10 @@ use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Input, Pull};
-use embassy_rp::i2c::{Config as I2cConfig, I2c};
+use embassy_rp::i2c::{Blocking, I2c};
 use embassy_rp::peripherals::{
     DMA_CH0, I2C0, PIN_0, PIN_1, PIN_13, PIN_14, PIN_15, PIN_16, PIN_17, PIN_18, PIN_19, PIN_20,
-    PIN_21, PIN_22, PIN_4, PIN_5, PIO0, PWM_SLICE2,
+    PIN_21, PIN_22, PIO0, PWM_SLICE2,
 };
 use embassy_rp::pio::{
     Config as PioConfig, Direction, InterruptHandler, Pio, ShiftConfig, ShiftDirection,
@@ -117,9 +117,6 @@ static BLOB_AREA: AtomicU32 = AtomicU32::new(0);
 /// Every pin the camera needs, named so two cannot be swapped by
 /// argument order — the same reason [`crate::MotorPins`] exists.
 pub struct CameraPins {
-    pub i2c: Peri<'static, I2C0>,
-    pub sda: Peri<'static, PIN_4>,
-    pub scl: Peri<'static, PIN_5>,
     pub xclk_slice: Peri<'static, PWM_SLICE2>,
     pub xclk: Peri<'static, PIN_21>,
     pub vsync: Peri<'static, PIN_1>,
@@ -212,8 +209,16 @@ const BRIGHT_MIN_PIXELS: u32 = 40;
 /// Returns the PWM guard: **XCLK must keep running** afterwards, and
 /// dropping it stops the clock — the camera works once, then never
 /// again. Binding it to a name at the call site is what keeps it alive.
+/// The bus is TAKEN and GIVEN BACK: GP4/GP5 carry the camera's SCCB and
+/// the PCA9685 side by side, so the bus is a board resource the caller
+/// owns — the first version buried its construction in here, and the
+/// servo module then had no way to reach it.
 #[must_use = "dropping this stops XCLK and the camera goes deaf"]
-pub async fn start(spawner: Spawner, pins: CameraPins) -> Pwm<'static> {
+pub async fn start(
+    spawner: Spawner,
+    bus: I2c<'static, I2C0, Blocking>,
+    pins: CameraPins,
+) -> (Pwm<'static>, I2c<'static, I2C0, Blocking>) {
     // ⚠️ XCLK first, before anything touches the bus. The OV7670 has no
     // oscillator of its own; a transaction issued before the clock runs
     // fails in a way that looks exactly like bad wiring.
@@ -226,8 +231,7 @@ pub async fn start(spawner: Spawner, pins: CameraPins) -> Pwm<'static> {
     let xclk = Pwm::new_output_b(pins.xclk_slice, pins.xclk, clock_config);
 
     Timer::after_millis(SETTLE_MS).await;
-    let i2c = I2c::new_blocking(pins.i2c, pins.scl, pins.sda, I2cConfig::default());
-    let mut sensor = ov7670_driver::Ov7670::new(i2c);
+    let mut sensor = ov7670_driver::Ov7670::new(bus);
 
     // Spaced attempts, because this verdict is cached for the life of
     // the program.
@@ -378,7 +382,9 @@ pub async fn start(spawner: Spawner, pins: CameraPins) -> Pwm<'static> {
     // must never sit inside the 10 kHz encoder sampler. Same rule as
     // `diag`: nothing may block the thing being measured.
     spawner.spawn(watch(pio, dma, vsync, buffer).unwrap());
-    xclk
+    // The watch task never touches I2C — capture is PIO and DMA — so the
+    // bus leaves with the caller rather than dying in scope here.
+    (xclk, sensor.free())
 }
 
 /// The pixel at `index`, out of the word-packed frame buffer.

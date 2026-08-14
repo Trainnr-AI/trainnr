@@ -848,6 +848,8 @@ compile_error!(
 
 #[cfg(feature = "camera")]
 mod camera;
+#[cfg(feature = "arm")]
+mod servo;
 
 /// Drive the motors from the camera's blob, and **stop when the image
 /// stops**.
@@ -1189,10 +1191,18 @@ mod transport {
         // the host whenever the host turns up, rather than being written
         // into a port nobody has opened yet.
         #[cfg(feature = "camera")]
-        let _camera_clock = camera::start(spawner, camera::CameraPins {
-            i2c: p.I2C0,
-            sda: p.PIN_4,
-            scl: p.PIN_5,
+        // One bus, three tenants: the camera's SCCB, the PCA9685, and
+        // whatever joins GP4/GP5 next. Built HERE because a bus is a
+        // board resource — each module borrows it and hands it back.
+        #[cfg(feature = "camera")]
+        let shared_bus = embassy_rp::i2c::I2c::new_blocking(
+            p.I2C0,
+            p.PIN_5,
+            p.PIN_4,
+            embassy_rp::i2c::Config::default(),
+        );
+        #[cfg(feature = "camera")]
+        let (_camera_clock, _shared_bus) = camera::start(spawner, shared_bus, camera::CameraPins {
             xclk_slice: p.PWM_SLICE2,
             xclk: p.PIN_21,
             vsync: p.PIN_1,
@@ -1212,6 +1222,8 @@ mod transport {
             ),
         })
         .await;
+        #[cfg(feature = "arm")]
+        let _shared_bus = servo::probe(_shared_bus);
 
         // One report stream, two wires. Both carry the same `Status::seq`,
         // which is what turns "the radio feels laggy" into a number.

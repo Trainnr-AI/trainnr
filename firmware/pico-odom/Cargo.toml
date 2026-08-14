@@ -31,6 +31,11 @@ camera = ["dep:ov7670-driver", "dep:blob", "dep:static_cell"]
 # creep forward. Mutually exclusive with `teleop` (two commanders of one
 # drivetrain) and with `wifi` (PIO0/DMA_CH0).
 chase = ["usb", "camera"]
+# The PCA9685 and the arm servos. Requires `camera` for now: the shared
+# I2C bus is threaded through the camera bring-up, and an arm build
+# without eyes has nothing to reach the bus with yet:
+#   tools/build-pico2.sh pico-odom teleop,camera,arm
+arm = ["camera", "dep:pca9685-driver"]
 # Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
 # no tether. RP2350-only, because RP2040 Picos in this project have no
 # radio, and telemetry-only by design (see the compile_error! below):
@@ -93,6 +98,7 @@ quad-encoder = { workspace = true }
 # Same source, two worlds: mocked bus in `cargo test` on the Mac, real
 # I2C peripheral here.
 ov7670-driver = { workspace = true, optional = true }
+pca9685-driver = { workspace = true, optional = true }
 # On-chip blob detection. Runs HERE rather than on the host because
 # streaming 38,400 bytes a frame over USB CDC caps at a few fps, while a
 # centroid is six bytes.

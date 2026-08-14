@@ -62,6 +62,7 @@ firmware-support = { path = "support" }
 quad-encoder = { path = "../crates/quad-encoder" }
 mpu6050-driver = { path = "../crates/mpu6050-driver" }
 ov7670-driver = { path = "../crates/ov7670-driver" }
+pca9685-driver = { path = "../crates/pca9685-driver" }
 blob = { path = "../crates/blob", default-features = false }
 sim-core = { path = "../crates/sim-core", default-features = false }
 hil-protocol = { path = "../crates/hil-protocol" }

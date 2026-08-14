@@ -343,6 +343,22 @@ impl<I2C: I2c> Pca9685<I2C> {
             .map_err(Error::Bus)
     }
 
+    /// Read one register back.
+    ///
+    /// ⚠️ The PCA9685 is real I2C — repeated-START works — so this is one
+    /// `write_read`, unlike the OV7670's two-transaction SCCB dance. The
+    /// house rule stands regardless of bus dialect: **a write that ACKs
+    /// is not evidence, only a read-back is** — MODE1 after power-on
+    /// reads `0x11` (SLEEP | ALLCALL), which is how a probe tells "the
+    /// chip is there" from "something ACKed".
+    pub fn read_register(&mut self, register: u8) -> Result<u8, Error<I2C::Error>> {
+        let mut value = [0u8; 1];
+        self.i2c
+            .write_read(self.address, &[register], &mut value)
+            .map_err(Error::Bus)?;
+        Ok(value[0])
+    }
+
     /// Hand the bus back — for tests, and for sharing it with the camera.
     pub fn free(self) -> I2C {
         self.i2c
@@ -526,6 +542,20 @@ mod tests {
         assert!(driver
             .set_angle(Channel::new(0).unwrap(), past, &PulseSpan::SG90_NOMINAL)
             .is_err());
+        driver.free().done();
+    }
+
+    #[test]
+    fn read_register_uses_one_write_read() {
+        // Real I2C: repeated-START is legal, so one transaction — the
+        // opposite decision from ov7670-driver, deliberately.
+        let expectations = [I2cTransaction::write_read(
+            DEFAULT_ADDRESS,
+            vec![REG_MODE1],
+            vec![0x11],
+        )];
+        let mut driver = Pca9685::new(I2cMock::new(&expectations));
+        assert_eq!(driver.read_register(REG_MODE1).unwrap(), 0x11);
         driver.free().done();
     }
 }

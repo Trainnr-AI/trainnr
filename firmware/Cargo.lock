@@ -1179,6 +1179,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pca9685-driver"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "petgraph"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1344,6 +1351,7 @@ dependencies = [
  "hil-protocol",
  "ov7670-driver",
  "panic-halt",
+ "pca9685-driver",
  "quad-encoder",
  "sim-core",
  "static_cell",
