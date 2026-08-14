@@ -194,6 +194,40 @@ impl Blob {
 /// One pass, four accumulators, no allocation: it costs the same on a
 /// microcontroller as on a laptop.
 pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) -> Option<Blob> {
+    find_matching(pixels, width, target.min_pixels, |pixel| {
+        target.matches(pixel)
+    })
+}
+
+/// Perceived brightness of an RGB565 pixel, 0..=255.
+///
+/// Green weighted double because the eye — and RGB565 itself, which gives
+/// green the extra bit — weights it double. Integer throughout: this runs
+/// on every pixel of every frame on a chip with no FPU worth spending.
+pub fn luma(pixel: u16) -> u8 {
+    let red = ((pixel >> 11) & 0x1F) as u16;
+    let green = ((pixel >> 5) & 0x3F) as u16;
+    let blue = (pixel & 0x1F) as u16;
+    // Widen each channel to 8 bits, then (R + 2G + B) / 4.
+    let r8 = (red << 3) | (red >> 2);
+    let g8 = (green << 2) | (green >> 4);
+    let b8 = (blue << 3) | (blue >> 2);
+    ((r8 + 2 * g8 + b8) / 4) as u8
+}
+
+/// Where the pixels satisfying `matches` were.
+///
+/// The engine under [`find`], public because hue is not the only useful
+/// predicate: brightness survives a colour cast that makes hue useless —
+/// measured on 2026-08-14, when a green-skewed white balance made the
+/// floor outscore a genuinely green target — and a predicate is exactly
+/// as testable on the host as a [`Target`] is.
+pub fn find_matching(
+    pixels: impl IntoIterator<Item = u16>,
+    width: u16,
+    min_pixels: u32,
+    matches: impl Fn(u16) -> bool,
+) -> Option<Blob> {
     // ⚠️ A zero-width frame has no pixels and would divide by zero on the
     // very first one. Refused here rather than trusted, because this crate
     // compiles into firmware and a panic is a stopped robot.
@@ -207,7 +241,7 @@ pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) 
 
     for (index, pixel) in pixels.into_iter().enumerate() {
         total += 1;
-        if !target.matches(pixel) {
+        if !matches(pixel) {
             continue;
         }
         let x = (index % usize::from(width)) as u16;
@@ -226,7 +260,7 @@ pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) 
     // centroid was NaN and whose bounds were still the sentinels
     // `(u16::MAX, u16::MAX, 0, 0)` — so `looks_like_one_object` panicked
     // subtracting 65535 from 0. Measured, not theorised.
-    if count == 0 || count < target.min_pixels {
+    if count == 0 || count < min_pixels {
         return None;
     }
     // Ceiling division, so a frame shorter than one row still has height 1
@@ -426,5 +460,31 @@ mod tests {
         let blob = find(corner, W, &Target::hue(0.0)).unwrap();
         let (x, y) = blob.error_from_centre();
         assert!(x < -0.7 && y < -0.7, "top-left corner: {x} {y}");
+    }
+
+    #[test]
+    fn luma_orders_black_grey_white() {
+        assert_eq!(luma(0x0000), 0);
+        assert_eq!(luma(0xFFFF), 255);
+        let grey = rgb565(128, 128, 128);
+        assert!(luma(grey) > 100 && luma(grey) < 160);
+        // Green outweighs red and blue at equal channel drive — the 6-bit
+        // channel and the eye agree on that.
+        assert!(luma(rgb565(0, 200, 0)) > luma(rgb565(200, 0, 0)));
+        assert!(luma(rgb565(0, 200, 0)) > luma(rgb565(0, 0, 200)));
+    }
+
+    #[test]
+    fn find_matching_hunts_brightness_where_hue_cannot() {
+        // The 2026-08-14 scene in miniature: a green-tinted background —
+        // hue-indistinguishable from a green target — with one bright
+        // patch. Hue-based find() cannot separate these; luma can.
+        let tint = rgb565(150, 180, 140);
+        let bright = rgb565(250, 255, 245);
+        let pixels = frame_with_rect(tint, bright, (10, 5, 15, 9));
+        let found =
+            find_matching(pixels, W, 10, |p| luma(p) > luma(tint) + 40).expect("bright patch");
+        assert_eq!(found.area, 6 * 5); // a 6x5 rectangle of bright pixels
+        assert!((found.centroid_x - 12.5).abs() < 0.01);
     }
 }

@@ -26,7 +26,11 @@ teleop = ["usb"]
 # it is, once, at boot. Costs two I2C pins and one PWM slice, none of
 # which the drivetrain uses:
 #   tools/build-pico2.sh pico-odom usb,camera
-camera = ["dep:ov7670-driver", "dep:static_cell"]
+camera = ["dep:ov7670-driver", "dep:blob", "dep:static_cell"]
+# The camera commands the wheels: blob left -> turn left, blob small ->
+# creep forward. Mutually exclusive with `teleop` (two commanders of one
+# drivetrain) and with `wifi` (PIO0/DMA_CH0).
+chase = ["usb", "camera"]
 # Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
 # no tether. RP2350-only, because RP2040 Picos in this project have no
 # radio, and telemetry-only by design (see the compile_error! below):
@@ -89,6 +93,10 @@ quad-encoder = { workspace = true }
 # Same source, two worlds: mocked bus in `cargo test` on the Mac, real
 # I2C peripheral here.
 ov7670-driver = { workspace = true, optional = true }
+# On-chip blob detection. Runs HERE rather than on the host because
+# streaming 38,400 bytes a frame over USB CDC caps at a few fps, while a
+# centroid is six bytes.
+blob = { workspace = true, optional = true }
 sim-core = { workspace = true }
 # The host<->chip vocabulary, shared rather than reinvented. `pico-odom`'s
 # STATUS line is still ad-hoc text (see the note in examples/odom_view.rs
