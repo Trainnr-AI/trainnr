@@ -123,45 +123,38 @@ pub async fn sweep(bus: I2c<'static, I2C0, Blocking>) {
     // on an assembled arm it would be the wrong call (a released joint
     // falls — crates/arm/src/safety.rs), and this loop must be replaced
     // before any linkage is attached.
-    let mut active = 0u8;
+    // ⚠️ Simultaneous, deliberately — the one-at-a-time rule was for the
+    // unproven rig. With motion proven on every channel, a fresh pack,
+    // the board's 1000 uF, and the feed DOUBLED through two channels'
+    // pins (ch14 + ch15), three unloaded servos are inside the budget:
+    // ~0.9 A sustained, ~2 A surges. The tell that the budget is blown
+    // is JITTER — servos twitching instead of sweeping means the rail is
+    // sagging through their controllers' resets. Unplug USB to stop.
+    crate::diag::note("# servo ch0-2 sweeping TOGETHER 1100-1900us");
+    let centre = (SWEEP_LOW_US + SWEEP_HIGH_US) / 2;
+    let mut pulse = centre;
+    let mut rising = true;
     loop {
-        let Ok(channel) = Channel::new(active) else {
-            return;
-        };
-        let mut text: heapless::String<64> = heapless::String::new();
-        let _ = write!(text, "# servo ch{active} sweeping {SWEEP_LOW_US}-{SWEEP_HIGH_US}us");
-        crate::diag::note(&text);
-
-        // Centre -> high -> low -> centre: one full excursion, ~16 s,
-        // ending where it began so the release leaves the horn centred.
-        let centre = (SWEEP_LOW_US + SWEEP_HIGH_US) / 2;
-        let mut pulse = centre;
-        let mut rising = true;
-        let mut turnarounds = 0u8;
-        while turnarounds < 2 || pulse != centre {
+        for index in 0..SERVO_COUNT {
+            let Ok(channel) = Channel::new(index) else {
+                return;
+            };
             if driver.set_pulse(channel, pulse).is_err() {
                 crate::diag::note("# servo bus error mid-sweep — stopping");
                 return;
             }
-            pulse = if rising {
-                pulse + SWEEP_STEP_US
-            } else {
-                pulse - SWEEP_STEP_US
-            };
-            if pulse >= SWEEP_HIGH_US || pulse <= SWEEP_LOW_US {
-                rising = !rising;
-                turnarounds += 1;
-            }
-            Timer::after_millis(20).await;
         }
-        // Park the horn loose before the next channel takes the stage.
-        let _ = driver.release(channel);
-        active = (active + 1) % SERVO_COUNT;
+        pulse = if rising {
+            pulse + SWEEP_STEP_US
+        } else {
+            pulse - SWEEP_STEP_US
+        };
+        if pulse >= SWEEP_HIGH_US || pulse <= SWEEP_LOW_US {
+            rising = !rising;
+        }
+        Timer::after_millis(20).await;
     }
 }
 
-/// How many channels the cycle visits — the three SG90s on hand.
-///
-/// (Held at 1 during bring-up so the debug had no quiet phases; motion
-/// was proven on ch0 2026-08-15, and the cycle returned to 3.)
+/// How many channels sweep — the three SG90s on hand.
 const SERVO_COUNT: u8 = 3;
