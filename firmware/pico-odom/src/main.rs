@@ -814,11 +814,14 @@ mod diag {
 //
 // # ⚠️ Identified ONCE, at boot, and never touched again
 //
-// `embassy_rp::i2c::I2c::new_blocking` is exactly what it says. A blocking
-// transaction inside `odometry_forever` would stall the 10 kHz sampler for
-// however long the bus took, and this repo has already paid for that
-// lesson once: polling encoders at 50 Hz counted 404 ticks where ~17,000
-// were expected.
+// A blocking bus transaction inside `odometry_forever` would stall the
+// 10 kHz sampler for however long it took — a lesson this repo has paid
+// for twice: 50 Hz encoder polling counted 404 ticks where ~17,000 were
+// expected, and the servo task's blocking writes were measured raising
+// decode errors. The bus is therefore built in ASYNC mode (the camera's
+// boot-time calls use its blocking face, which is harmless before the
+// loops start), and nothing touches it from the sampler's executor
+// without an `await`.
 //
 // The camera's identity is a boot-time fact — it cannot change while the
 // robot drives — so it is read once, announced as a note, and the bus is
@@ -1238,7 +1241,7 @@ mod transport {
         .await;
         #[cfg(feature = "arm")]
         {
-            let bus = servo::probe(_shared_bus);
+            let bus = servo::probe(_shared_bus).await;
             // The sweep task owns the bus from here; see `servo::sweep`.
             spawner.spawn(servo::run(bus).unwrap());
         }

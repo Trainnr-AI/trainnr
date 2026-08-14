@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut statuses, mut stalled) = (0u64, 0u64);
     let (mut images, mut torn) = (0u64, 0u64);
     let (mut servo_lines, mut notes, mut unparsable) = (0u64, 0u64, 0u64);
-    let mut expecting: Option<(u32, u32, u64)> = None; // width, height, pixels so far
+    let mut assembling: Option<thumbnail::Assembly> = None;
 
     for line in reader.lines() {
         let line = line?;
@@ -45,24 +45,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        if let Some((width, height)) = thumbnail::parse_header(line) {
+        if let Some(dims) = thumbnail::parse_header(line) {
             // A new header while a picture is open means the old one
             // never finished.
-            if expecting.is_some() {
+            if assembling.is_some() {
                 torn += 1;
             }
-            expecting = Some((width, height, 0));
+            assembling = Some(thumbnail::Assembly::start(dims));
             continue;
         }
-        if let Some((width, height, pixels)) = expecting {
-            if let Some(row) = thumbnail::parse_row(line, width) {
-                let pixels = pixels + row.count() as u64;
-                expecting = if pixels >= u64::from(width) * u64::from(height) {
+        if let Some(assembly) = &mut assembling {
+            if let Some(row) = thumbnail::parse_row(line, assembly.width) {
+                // The row's pixels are validated by the parse; only the
+                // count of rows decides completion — one definition, in
+                // the format's own module.
+                row.for_each(drop);
+                if assembly.row_done() {
                     images += 1;
-                    None
-                } else {
-                    Some((width, height, pixels))
-                };
+                    assembling = None;
+                }
                 continue;
             }
         }
@@ -86,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => unparsable += 1,
         }
     }
-    if expecting.is_some() {
+    if assembling.is_some() {
         torn += 1;
     }
 

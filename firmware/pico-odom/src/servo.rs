@@ -87,13 +87,10 @@ const CHANNELS: [Channel; SERVO_COUNT] = {
 };
 
 /// Ask the PCA9685 who it is; say so on the report stream.
-/// (Blocking driver over the async-mode bus — legal, since async-mode
-/// hardware serves both traits, and boot-time blocking hurts nothing:
-/// the sampler load this crate cares about starts later.)
-pub fn probe(mut bus: I2c<'static, I2C0, Async>) -> I2c<'static, I2C0, Async> {
-    let mut driver = pca9685_driver::Pca9685::new(bus);
+pub async fn probe(bus: I2c<'static, I2C0, Async>) -> I2c<'static, I2C0, Async> {
+    let mut driver = Pca9685::new(bus);
     let mut text: heapless::String<96> = heapless::String::new();
-    match driver.read_register(pca9685_driver::REG_MODE1) {
+    match driver.read_register(pca9685_driver::REG_MODE1).await {
         Ok(mode1) => {
             let _ = write!(
                 text,
@@ -114,8 +111,7 @@ pub fn probe(mut bus: I2c<'static, I2C0, Async>) -> I2c<'static, I2C0, Async> {
         }
     }
     crate::diag::note(&text);
-    bus = driver.free();
-    bus
+    driver.free()
 }
 
 /// Wake the chip, verify the frame rate by read-back, report.

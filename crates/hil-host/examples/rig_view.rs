@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         REPORTS_PER_SECOND,
     );
     belief_viz::arm::draw_stand(&rec, "arm_sim")?;
-    let mut expecting: Option<(u32, u32)> = None;
+    let mut assembling: Option<thumbnail::Assembly> = None;
     let mut pixels: Vec<u8> = Vec::new();
     let mut frames = 0u64;
     let mut reports = 0u64;
@@ -121,20 +121,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // ---- the picture ----
         if let Some(dims) = thumbnail::parse_header(line) {
-            expecting = Some(dims);
+            assembling = Some(thumbnail::Assembly::start(dims));
             pixels.clear();
             continue;
         }
-        if let Some((width, height)) = expecting {
-            if let Some(row) = thumbnail::parse_row(line, width) {
+        if let Some(assembly) = &mut assembling {
+            if let Some(row) = thumbnail::parse_row(line, assembly.width) {
                 pixels.extend(row.flat_map(blob::rgb565_to_rgb888));
-                if pixels.len() >= (width * height * 3) as usize {
+                // Completion belongs to the wire format, not to this
+                // viewer's byte arithmetic — see `thumbnail::Assembly`.
+                if assembly.row_done() {
                     frames += 1;
                     rec.log(
                         "camera/image",
-                        &rerun::Image::from_rgb24(std::mem::take(&mut pixels), [width, height]),
+                        &rerun::Image::from_rgb24(
+                            std::mem::take(&mut pixels),
+                            [assembly.width, assembly.height],
+                        ),
                     )?;
-                    expecting = None;
+                    assembling = None;
                 }
                 continue;
             }

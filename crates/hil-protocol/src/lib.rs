@@ -1435,6 +1435,41 @@ pub mod thumbnail {
         (width > 0 && height > 0).then_some((width, height))
     }
 
+    /// One in-flight picture: dimensions from the header, rows counted.
+    ///
+    /// # ⚠️ Why completion lives here and not in the consumers
+    ///
+    /// Two readers grew two completion formulas within a day — one
+    /// counted RGB bytes against `width * height * 3`, the other pixels
+    /// against `width * height`. Same invariant, different unit systems,
+    /// nothing comparing them. Completion is a property of the wire
+    /// format, so the format's module owns it: a row either parsed at
+    /// full width (which [`parse_row`] enforces) or it did not, and a
+    /// picture is complete after exactly `height` such rows.
+    pub struct Assembly {
+        pub width: u32,
+        pub height: u32,
+        rows_seen: u32,
+    }
+
+    impl Assembly {
+        /// Begin assembling a picture with the header's dimensions.
+        pub fn start((width, height): (u32, u32)) -> Self {
+            Assembly {
+                width,
+                height,
+                rows_seen: 0,
+            }
+        }
+
+        /// Record one successfully parsed row; `true` when the picture
+        /// is complete.
+        pub fn row_done(&mut self) -> bool {
+            self.rows_seen += 1;
+            self.rows_seen >= self.height
+        }
+    }
+
     /// The pixels of one row, if `line` is a row of exactly `width` pixels.
     ///
     /// `None` for anything else — including ordinary prose notes that
@@ -1480,6 +1515,14 @@ mod thumbnail_tests {
         // Zero-sized pictures are refused at the header.
         assert_eq!(parse_header("# IMG 0 30 rgb565"), None);
         assert_eq!(parse_header("# camera pid=0x76"), None);
+    }
+
+    #[test]
+    fn assembly_completes_after_exactly_height_rows() {
+        let mut assembly = crate::thumbnail::Assembly::start((30, 3));
+        assert!(!assembly.row_done());
+        assert!(!assembly.row_done());
+        assert!(assembly.row_done());
     }
 }
 
