@@ -544,10 +544,9 @@ async fn send_thumbnail(buffer: &[u32]) {
     }
 }
 
-/// Total frames captured since boot. The chase loop watches this to tell
-/// a live image from a wedged one; no other build has a reader, so no
-/// other build compiles it.
-#[cfg(feature = "chase")]
+/// Total frames captured since boot. The chase loop and the servo
+/// tracker both watch this to tell a live image from a wedged one.
+#[cfg(any(feature = "chase", feature = "arm"))]
 pub fn frame_total() -> u32 {
     FRAMES.load(Ordering::Relaxed)
 }

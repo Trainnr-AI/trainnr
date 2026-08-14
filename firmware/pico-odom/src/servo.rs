@@ -1,18 +1,33 @@
-//! The PCA9685 and the arm servos behind it — bring-up order enforced.
+//! The PCA9685 and the arm servos behind it — from bus probe to
+//! camera-driven motion.
 //!
-//! # Step one is a read-back, with the servo rail UNPOWERED
+//! ```text
+//!   blob x    ─▶  ch0   pan toward the target
+//!   blob y    ─▶  ch1   tilt toward it
+//!   blob area ─▶  ch2   "gripper" closes as it nears
+//!   no blob / stale frames  ─▶  HOLD
+//! ```
 //!
-//! The chip's logic side runs from the Pico's 3.3 V; `V+` — the servo
-//! power — can stay disconnected while every register is exercised. So
-//! the bus proof costs nothing that can move: [`probe`] asks MODE1 for
-//! its power-on value and reports what came back, next to the camera's
-//! identity on the same two wires.
+//! This is `crates/blob`'s founding promise made physical: *one blob
+//! yields three independent errors, which is exactly the three motions
+//! the rig has*. The wheels consume `x` and `area` in the chase build;
+//! the arm consumes all three its own way.
 //!
-//! ⚠️ `MODE1` after power-on reads **0x11** (`SLEEP | ALLCALL`) — the
-//! chip boots asleep, exactly like the MPU6050 and for the same reason.
-//! Any ACK is not the test; *that value* is. A stuck bus, a wrong
-//! address strap or a solder bridge each fail it differently, and the
-//! note says which byte arrived rather than only that one did.
+//! # ⚠️ Hold, not release, on target loss
+//!
+//! The wheels stop when the image dies — a stopped base is safe. A
+//! released servo is back-driveable, and on an assembled arm that means
+//! falling (`crates/arm/src/safety.rs`). Nothing hangs on these horns
+//! yet, but the habit is set now: **losing the target freezes the arm
+//! where it is.** Slew limiting does the rest: no target, no motion; a
+//! new target, gentle motion toward it.
+//!
+//! # ⚠️ Signs are bench-arbitrary until a linkage exists
+//!
+//! "Pan toward" assumes a mounting nobody has built. The signs below are
+//! placeholders chosen to be *consistent*, and the day a real arm holds
+//! the camera they get measured against it — the same promotion
+//! `LEFT_ENCODER_SIGN` went through.
 
 use core::fmt::Write as _;
 
@@ -21,18 +36,40 @@ use embassy_rp::peripherals::I2C0;
 use embassy_time::Timer;
 use pca9685_driver::{Channel, Pca9685, SERVO_FRAME_HZ};
 
+/// Bring-up lever: `true` restores the blind lockstep sweep that proved
+/// the servos on 2026-08-15. Kept for the same reason the camera keeps
+/// `TEST_PATTERN` — comparing against a known motion is the move that
+/// ends guessing sessions, and the next person deserves the lever.
+const BRINGUP_SWEEP: bool = false;
+
+/// Sweep bounds, 100 µs inside even the conservative nominal span. A
+/// servo commanded past its stop buzzes at stall current, and nothing on
+/// this rail can see the shaft.
+const SWEEP_LOW_US: u32 = 1100;
+const SWEEP_HIGH_US: u32 = 1900;
+/// Sweep step per 20 ms tick — ~8 s per half-sweep.
+const SWEEP_STEP_US: u32 = 2;
+
+/// Tracking centre and swing: full blob error deflects ±400 µs, staying
+/// inside the sweep bounds by construction.
+const CENTRE_US: f32 = 1500.0;
+const SWING_US: f32 = 400.0;
+/// Slew per 20 ms tick — 400 µs/s, two seconds lock-to-lock. The blob
+/// updates at ~4 Hz; slew is what turns those steps into motion.
+const TRACK_SLEW_US: u32 = 8;
+/// Blob area at which the "gripper" is fully closed.
+const AREA_NEAR: u32 = 1500;
+/// No new frame for this long → the image has stopped → the arm holds.
+const FRESH_MS: u64 = 1000;
+
+/// How many channels the tracker drives — the three SG90s on hand.
+const SERVO_COUNT: usize = 3;
+
 /// Ask the PCA9685 who it is; say so on the report stream.
-///
-/// Takes the shared bus after the camera is done with it and gives it
-/// back for whatever comes next — the same handoff discipline as
-/// [`crate::camera::start`], because GP4/GP5 are one wire pair with
-/// three owners' worth of traffic.
 pub fn probe(mut bus: I2c<'static, I2C0, Blocking>) -> I2c<'static, I2C0, Blocking> {
-    let mut driver = pca9685_driver::Pca9685::new(bus);
+    let mut driver = Pca9685::new(bus);
     let mut text: heapless::String<96> = heapless::String::new();
     match driver.read_register(pca9685_driver::REG_MODE1) {
-        // Bit 4 is SLEEP: set on a chip that has power-cycled, clear on
-        // one already started. Both are "present"; the byte says which.
         Ok(mode1) => {
             let _ = write!(
                 text,
@@ -57,46 +94,18 @@ pub fn probe(mut bus: I2c<'static, I2C0, Blocking>) -> I2c<'static, I2C0, Blocki
     bus
 }
 
-/// The bring-up sweep: one channel, slow, and INSIDE the nominal span.
+/// Wake the chip, verify the frame rate by read-back, report.
 ///
-/// # ⚠️ Why the sweep never touches the span's ends
-///
-/// [`PulseSpan::SG90_NOMINAL`] is already conservative, and this stays
-/// 100 µs inside even that. A servo commanded past its mechanical stop
-/// buzzes at stall current until something gives, and nothing on this
-/// rail can see the shaft — the real endpoints get MEASURED per servo,
-/// widening from safe, never guessed wide and walked back.
-const SWEEP_LOW_US: u32 = 1100;
-const SWEEP_HIGH_US: u32 = 1900;
-/// One microsecond-step per tick at 50 Hz ≈ 8 s per half-sweep — slow
-/// enough to watch, gentle enough that the horn never snaps.
-const SWEEP_STEP_US: u32 = 2;
-
-/// Wake the chip and sweep channel 0 forever.
-///
-/// Owns the bus from here on: the camera finished with it in
-/// [`crate::camera::start`], and nothing else asks until the AS5600s
-/// arrive — at which point this task becomes the bus's steward rather
-/// than its terminus.
-#[embassy_executor::task]
-pub async fn sweep(bus: I2c<'static, I2C0, Blocking>) {
-    let mut driver = Pca9685::new(bus);
-    // Sleep → prescale → wake → restart, in the only order the chip
-    // accepts: the prescaler register is writable ONLY while asleep.
+/// ⚠️ The read-back is the test, not the ACK: at the power-on 200 Hz
+/// default every pulse computed for 50 Hz goes out 4x too narrow, under
+/// the floor a servo even acknowledges — everything ACKs, nothing moves.
+async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) -> bool {
     if driver.start(SERVO_FRAME_HZ).is_err() {
         crate::diag::note("# servo start FAILED — bus error waking the PCA9685");
-        return;
+        return false;
     }
-    // The datasheet wants 500 µs of oscillator settle after wake; the
-    // driver cannot wait (it has no clock), so its caller does.
+    // Oscillator settle the driver cannot wait out itself.
     Timer::after_millis(1).await;
-
-    // ⚠️ Read the prescaler BACK. It accepts writes only while the chip
-    // sleeps — if the sleep sequence silently failed, the chip stays at
-    // its power-on 200 Hz frame and every pulse computed for 50 Hz goes
-    // out 4x too narrow, under the ~500 µs floor a servo even
-    // acknowledges. The symptom is a servo that sits perfectly still
-    // while every write ACKs: no error anywhere, nothing moving.
     let mut text: heapless::String<96> = heapless::String::new();
     match driver.read_register(pca9685_driver::REG_PRESCALE) {
         Ok(121) => {
@@ -105,8 +114,7 @@ pub async fn sweep(bus: I2c<'static, I2C0, Blocking>) {
         Ok(other) => {
             let _ = write!(
                 text,
-                "# servo ⚠️ PRESCALE={other} not 121 — frame rate wrong, pulses too narrow, \
-                 servos will NOT move"
+                "# servo ⚠️ PRESCALE={other} not 121 — pulses too narrow, servos will NOT move"
             );
         }
         Err(_) => {
@@ -114,29 +122,97 @@ pub async fn sweep(bus: I2c<'static, I2C0, Blocking>) {
         }
     }
     crate::diag::note(&text);
+    true
+}
 
-    // ⚠️ One servo in motion at any moment. The 3xAA servo pack is at
-    // the SG90's voltage floor already; three starting together is a
-    // surge the single pack cannot hold, and the sweep needs no
-    // simultaneity — each channel gets the stage alone, then releases.
-    // `release` is safe here precisely because nothing hangs on a horn:
-    // on an assembled arm it would be the wrong call (a released joint
-    // falls — crates/arm/src/safety.rs), and this loop must be replaced
-    // before any linkage is attached.
-    // ⚠️ Simultaneous, deliberately — the one-at-a-time rule was for the
-    // unproven rig. With motion proven on every channel, a fresh pack,
-    // the board's 1000 uF, and the feed DOUBLED through two channels'
-    // pins (ch14 + ch15), three unloaded servos are inside the budget:
-    // ~0.9 A sustained, ~2 A surges. The tell that the budget is blown
-    // is JITTER — servos twitching instead of sweeping means the rail is
-    // sagging through their controllers' resets. Unplug USB to stop.
+/// Drive the three arm channels forever — from the camera, or (with
+/// [`BRINGUP_SWEEP`]) the blind sweep that first proved them.
+#[embassy_executor::task]
+pub async fn run(bus: I2c<'static, I2C0, Blocking>) {
+    let mut driver = Pca9685::new(bus);
+    if !wake(&mut driver).await {
+        return;
+    }
+    if BRINGUP_SWEEP {
+        sweep(&mut driver).await;
+    } else {
+        track(&mut driver).await;
+    }
+}
+
+/// Camera-driven tracking: three errors in, three positions out.
+async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
+    crate::diag::note("# servo TRACKING the camera: x->ch0 y->ch1 area->ch2");
+    let mut current = [CENTRE_US as u32; SERVO_COUNT];
+    let mut last_frame_total = crate::camera::frame_total();
+    let mut last_frame_at = firmware_support::now_ms();
+    let mut tick = 0u32;
+
+    loop {
+        Timer::after_millis(20).await;
+        let now = firmware_support::now_ms();
+        let frames = crate::camera::frame_total();
+        if frames != last_frame_total {
+            last_frame_total = frames;
+            last_frame_at = now;
+        }
+        let image_alive = now.saturating_sub(last_frame_at) < FRESH_MS;
+
+        // No blob, or no image: targets = where we already are. HOLD.
+        let target = match crate::camera::blob_error() {
+            Some((x, y, area)) if image_alive => [
+                // Pan and tilt deflect from centre with the error; the
+                // gripper maps distance-proxy to closure. All bounded
+                // inside the sweep span by construction.
+                (CENTRE_US - x * SWING_US) as u32,
+                (CENTRE_US + y * SWING_US) as u32,
+                SWEEP_LOW_US + area.min(AREA_NEAR) * (SWEEP_HIGH_US - SWEEP_LOW_US) / AREA_NEAR,
+            ],
+            _ => current,
+        };
+
+        for index in 0..SERVO_COUNT {
+            // Slew toward the target rather than jumping: the blob steps
+            // at ~4 Hz and a servo snapped 800 µs per step is a rattle,
+            // not a motion.
+            let position = &mut current[index];
+            *position = if target[index] > *position {
+                (*position + TRACK_SLEW_US).min(target[index])
+            } else {
+                (*position).saturating_sub(TRACK_SLEW_US).max(target[index])
+            };
+            let Ok(channel) = Channel::new(index as u8) else {
+                return;
+            };
+            if driver.set_pulse(channel, *position).is_err() {
+                crate::diag::note("# servo bus error mid-track — stopping");
+                return;
+            }
+        }
+
+        tick += 1;
+        if tick % 25 == 0 {
+            let mut text: heapless::String<64> = heapless::String::new();
+            let _ = write!(
+                text,
+                "# servo us {} {} {}",
+                current[0], current[1], current[2]
+            );
+            crate::diag::note(&text);
+        }
+    }
+}
+
+/// The blind lockstep sweep — the bring-up instrument of 2026-08-15.
+async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
     crate::diag::note("# servo ch0-2 sweeping TOGETHER 1100-1900us");
     let centre = (SWEEP_LOW_US + SWEEP_HIGH_US) / 2;
     let mut pulse = centre;
     let mut rising = true;
+    let mut tick = 0u32;
     loop {
         for index in 0..SERVO_COUNT {
-            let Ok(channel) = Channel::new(index) else {
+            let Ok(channel) = Channel::new(index as u8) else {
                 return;
             };
             if driver.set_pulse(channel, pulse).is_err() {
@@ -152,9 +228,12 @@ pub async fn sweep(bus: I2c<'static, I2C0, Blocking>) {
         if pulse >= SWEEP_HIGH_US || pulse <= SWEEP_LOW_US {
             rising = !rising;
         }
+        tick += 1;
+        if tick % 25 == 0 {
+            let mut text: heapless::String<64> = heapless::String::new();
+            let _ = write!(text, "# servo us {pulse} {pulse} {pulse}");
+            crate::diag::note(&text);
+        }
         Timer::after_millis(20).await;
     }
 }
-
-/// How many channels sweep — the three SG90s on hand.
-const SERVO_COUNT: u8 = 3;

@@ -95,11 +95,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         belief_viz::Size::BENCH,
         REPORTS_PER_SECOND,
     );
+    belief_viz::arm::draw_stand(&rec, "arm_sim")?;
     let mut expecting: Option<(u32, u32)> = None;
     let mut pixels: Vec<u8> = Vec::new();
     let mut frames = 0u64;
     let mut reports = 0u64;
     let (mut last_errors, mut announced_stall) = ((0u64, 0u64), false);
+    let mut last_error_announce = Instant::now();
 
     for line in lines.lines() {
         let Ok(line) = line else { break };
@@ -147,6 +149,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if note.len() >= 8 && note.bytes().all(|b| b.is_ascii_hexdigit()) {
                 continue;
             }
+            // The arm's voice: `# servo us 1500 1620 1100` — three
+            // COMMANDED pulses, pan/tilt/grip. Plotted as commands and
+            // titled so: these servos measure nothing, and a viewer that
+            // presented this as a measured pose would be lying about the
+            // one thing the arm cannot do.
+            if let Some(rest) = note.strip_prefix("servo us ") {
+                let mut pulses = rest
+                    .split_whitespace()
+                    .filter_map(|p| p.parse::<f64>().ok());
+                if let (Some(pan), Some(tilt), Some(grip)) =
+                    (pulses.next(), pulses.next(), pulses.next())
+                {
+                    rec.log("arm/pan_us", &rerun::Scalars::single(pan))?;
+                    rec.log("arm/tilt_us", &rerun::Scalars::single(tilt))?;
+                    rec.log("arm/grip_us", &rerun::Scalars::single(grip))?;
+                    // The tilt channel is the one that maps onto the
+                    // stick figure's drawable plane — pan turns the
+                    // plane itself (belief_viz::arm's own caveat), so
+                    // the figure swings its lift joint with tilt and
+                    // leaves the rest honest by omission.
+                    let angle = ((tilt - 1500.0) * std::f64::consts::PI / 1000.0) as f32;
+                    belief_viz::arm::draw(&rec, "arm_sim", angle, 0.0, belief_viz::arm::holding())?;
+                }
+                continue;
+            }
             rec.log("events", &rerun::TextLog::new(note.to_string()))?;
             continue;
         }
@@ -189,7 +216,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &rerun::Scalars::single(report.errors_right as f64),
         )?;
         let errors_now = (report.errors_left, report.errors_right);
-        if errors_now > last_errors {
+        // Announced at most once a second: during the chase+servo run of
+        // 2026-08-15 the count climbed EVERY report and the event log
+        // became unreadable — an alarm that fires fifty times a second
+        // is silence with extra steps. The plot carries the shape; the
+        // event carries the fact.
+        if errors_now > last_errors && last_error_announce.elapsed() > Duration::from_secs(1) {
+            last_error_announce = Instant::now();
             rec.log(
                 "events",
                 &rerun::TextLog::new(format!(
@@ -226,12 +259,18 @@ fn layout() -> rerun::blueprint::Blueprint {
                 Spatial2DView::new("what the camera sees")
                     .with_origin("/camera")
                     .into(),
+                Spatial2DView::new("the arm those commands would make (simulated)")
+                    .with_origin("/arm_sim")
+                    .into(),
                 Spatial2DView::new("where the robot believes it is")
                     .with_origin("/belief")
                     .into(),
             ])
             .into(),
             Vertical::new([
+                TimeSeriesView::new("arm — COMMANDED pulse (µs), not measured")
+                    .with_origin("/arm")
+                    .into(),
                 TimeSeriesView::new("duty (%)").with_origin("/motor").into(),
                 TimeSeriesView::new("encoder ticks")
                     .with_origin("/ticks")

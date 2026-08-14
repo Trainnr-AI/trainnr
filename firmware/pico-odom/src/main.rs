@@ -1226,7 +1226,7 @@ mod transport {
         {
             let bus = servo::probe(_shared_bus);
             // The sweep task owns the bus from here; see `servo::sweep`.
-            spawner.spawn(servo::sweep(bus).unwrap());
+            spawner.spawn(servo::run(bus).unwrap());
         }
 
         // One report stream, two wires. Both carry the same `Status::seq`,
