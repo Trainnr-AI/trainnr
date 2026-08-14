@@ -149,29 +149,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if note.len() >= 8 && note.bytes().all(|b| b.is_ascii_hexdigit()) {
                 continue;
             }
-            // The arm's voice: `# servo us 1500 1620 1100` — three
-            // COMMANDED pulses, pan/tilt/grip. Plotted as commands and
-            // titled so: these servos measure nothing, and a viewer that
-            // presented this as a measured pose would be lying about the
-            // one thing the arm cannot do.
-            if let Some(rest) = note.strip_prefix("servo us ") {
-                let mut pulses = rest
-                    .split_whitespace()
-                    .filter_map(|p| p.parse::<f64>().ok());
-                if let (Some(pan), Some(tilt), Some(grip)) =
-                    (pulses.next(), pulses.next(), pulses.next())
-                {
-                    rec.log("arm/pan_us", &rerun::Scalars::single(pan))?;
-                    rec.log("arm/tilt_us", &rerun::Scalars::single(tilt))?;
-                    rec.log("arm/grip_us", &rerun::Scalars::single(grip))?;
-                    // The tilt channel is the one that maps onto the
-                    // stick figure's drawable plane — pan turns the
-                    // plane itself (belief_viz::arm's own caveat), so
-                    // the figure swings its lift joint with tilt and
-                    // leaves the rest honest by omission.
-                    let angle = ((tilt - 1500.0) * std::f64::consts::PI / 1000.0) as f32;
-                    belief_viz::arm::draw(&rec, "arm_sim", angle, 0.0, belief_viz::arm::holding())?;
-                }
+            // The arm's voice — `hil_protocol::arm_pulses`, the same
+            // contract the firmware writes with, so the two ends cannot
+            // drift. COMMANDED pulses, titled so: these servos measure
+            // nothing, and a viewer that presented this as a measured
+            // pose would be lying about the one thing the arm cannot do.
+            if let Some([pan, tilt, grip]) = hil_protocol::arm_pulses::parse_note(note) {
+                rec.log("arm/pan_us", &rerun::Scalars::single(pan as f64))?;
+                rec.log("arm/tilt_us", &rerun::Scalars::single(tilt as f64))?;
+                rec.log("arm/grip_us", &rerun::Scalars::single(grip as f64))?;
+                // Tilt is the one channel that maps onto the stick
+                // figure's drawable plane — pan turns the plane itself
+                // (belief_viz::arm's own caveat). Angle via the NOMINAL
+                // span (1000–2000 µs over 180°, pca9685-driver's
+                // SG90_NOMINAL): commanded under an assumed calibration,
+                // one more reason the panel title says "simulated".
+                let angle = ((tilt as f64 - 1500.0) * std::f64::consts::PI / 1000.0) as f32;
+                belief_viz::arm::draw(&rec, "arm_sim", angle, 0.0, belief_viz::arm::holding())?;
                 continue;
             }
             rec.log("events", &rerun::TextLog::new(note.to_string()))?;

@@ -65,6 +65,26 @@ const FRESH_MS: u64 = 1000;
 /// How many channels the tracker drives — the three SG90s on hand.
 const SERVO_COUNT: usize = 3;
 
+/// The channels themselves, proven at COMPILE time. `Channel::new` is
+/// `const`, so a `SERVO_COUNT` beyond the chip's sixteen fails the build
+/// here instead of surfacing as a runtime `else return` buried in a
+/// control loop — the error path deleted rather than handled.
+const CHANNELS: [Channel; SERVO_COUNT] = {
+    let mut channels = [match Channel::new(0) {
+        Ok(channel) => channel,
+        Err(_) => panic!("channel 0 always exists"),
+    }; SERVO_COUNT];
+    let mut index = 0;
+    while index < SERVO_COUNT {
+        channels[index] = match Channel::new(index as u8) {
+            Ok(channel) => channel,
+            Err(_) => panic!("SERVO_COUNT exceeds the PCA9685's sixteen channels"),
+        };
+        index += 1;
+    }
+    channels
+};
+
 /// Ask the PCA9685 who it is; say so on the report stream.
 pub fn probe(mut bus: I2c<'static, I2C0, Blocking>) -> I2c<'static, I2C0, Blocking> {
     let mut driver = Pca9685::new(bus);
@@ -144,6 +164,11 @@ pub async fn run(bus: I2c<'static, I2C0, Blocking>) {
 async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
     crate::diag::note("# servo TRACKING the camera: x->ch0 y->ch1 area->ch2");
     let mut current = [CENTRE_US as u32; SERVO_COUNT];
+    // ⚠️ Forced first write. The skip-when-converged rule below would
+    // otherwise mean a bootup with no blob never commands the servos at
+    // all — outputs off, horns limp, looking exactly like the power
+    // faults this rig spent a night chasing.
+    let mut dirty = true;
     let mut last_frame_total = crate::camera::frame_total();
     let mut last_frame_at = firmware_support::now_ms();
     let mut tick = 0u32;
@@ -161,43 +186,51 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
         // No blob, or no image: targets = where we already are. HOLD.
         let target = match crate::camera::blob_error() {
             Some((x, y, area)) if image_alive => [
-                // Pan and tilt deflect from centre with the error; the
-                // gripper maps distance-proxy to closure. All bounded
-                // inside the sweep span by construction.
-                (CENTRE_US - x * SWING_US) as u32,
-                (CENTRE_US + y * SWING_US) as u32,
+                // ⚠️ Clamped at the point of production, Tier-0 style:
+                // the blob's errors are bounded by construction TODAY,
+                // but the envelope must not depend on that staying true
+                // through every future edit to the law above it. A servo
+                // commanded past its stop buzzes at stall current, and
+                // nothing on this rail can see the shaft.
+                ((CENTRE_US - x * SWING_US) as u32).clamp(SWEEP_LOW_US, SWEEP_HIGH_US),
+                ((CENTRE_US + y * SWING_US) as u32).clamp(SWEEP_LOW_US, SWEEP_HIGH_US),
                 SWEEP_LOW_US + area.min(AREA_NEAR) * (SWEEP_HIGH_US - SWEEP_LOW_US) / AREA_NEAR,
             ],
             _ => current,
         };
 
-        for index in 0..SERVO_COUNT {
-            // Slew toward the target rather than jumping: the blob steps
-            // at ~4 Hz and a servo snapped 800 µs per step is a rattle,
-            // not a motion.
-            let position = &mut current[index];
-            *position = if target[index] > *position {
-                (*position + TRACK_SLEW_US).min(target[index])
+        // Slew toward the target rather than jumping: the blob steps at
+        // ~4 Hz and a servo snapped 800 µs per step is a rattle, not a
+        // motion.
+        let mut moved = false;
+        for (position, goal) in current.iter_mut().zip(target) {
+            let next = if goal > *position {
+                (*position + TRACK_SLEW_US).min(goal)
             } else {
-                (*position).saturating_sub(TRACK_SLEW_US).max(target[index])
+                (*position).saturating_sub(TRACK_SLEW_US).max(goal)
             };
-            let Ok(channel) = Channel::new(index as u8) else {
-                return;
-            };
-            if driver.set_pulse(channel, *position).is_err() {
+            moved |= next != *position;
+            *position = next;
+        }
+
+        // ⚠️ The bus stays SILENT while nothing changes. The PCA holds
+        // its outputs in hardware, so a converged tracker needs no
+        // traffic — and every skipped transaction is ~0.5 ms the 10 kHz
+        // encoder sampler is not blinded, which is the leading suspect
+        // for the decode-error climb logged on 2026-08-15. One batched
+        // write when something did change, three separate ones never.
+        if moved || dirty {
+            if driver.set_pulses(CHANNELS[0], &current).is_err() {
                 crate::diag::note("# servo bus error mid-track — stopping");
                 return;
             }
+            dirty = false;
         }
 
         tick += 1;
         if tick % 25 == 0 {
             let mut text: heapless::String<64> = heapless::String::new();
-            let _ = write!(
-                text,
-                "# servo us {} {} {}",
-                current[0], current[1], current[2]
-            );
+            let _ = hil_protocol::arm_pulses::write_note(&mut text, &current);
             crate::diag::note(&text);
         }
     }
@@ -211,14 +244,10 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
     let mut rising = true;
     let mut tick = 0u32;
     loop {
-        for index in 0..SERVO_COUNT {
-            let Ok(channel) = Channel::new(index as u8) else {
-                return;
-            };
-            if driver.set_pulse(channel, pulse).is_err() {
-                crate::diag::note("# servo bus error mid-sweep — stopping");
-                return;
-            }
+        // One transaction for all three — see `Pca9685::set_pulses`.
+        if driver.set_pulses(CHANNELS[0], &[pulse; SERVO_COUNT]).is_err() {
+            crate::diag::note("# servo bus error mid-sweep — stopping");
+            return;
         }
         pulse = if rising {
             pulse + SWEEP_STEP_US
@@ -231,7 +260,7 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Blocking>>) {
         tick += 1;
         if tick % 25 == 0 {
             let mut text: heapless::String<64> = heapless::String::new();
-            let _ = write!(text, "# servo us {pulse} {pulse} {pulse}");
+            let _ = hil_protocol::arm_pulses::write_note(&mut text, &[pulse; SERVO_COUNT]);
             crate::diag::note(&text);
         }
         Timer::after_millis(20).await;

@@ -1343,6 +1343,63 @@ mod tests {
     }
 }
 
+/// The arm's commanded pulses, as they ride the `#` notes channel.
+///
+/// Wire form: `# servo us 1500 1620 1100` — pan, tilt, grip, in
+/// microseconds, COMMANDED (these servos measure nothing). Two firmware
+/// paths emit it and one viewer parses it; three parties to one format
+/// is exactly the agreement this crate exists to hold in one place.
+///
+/// ⚠️ The `# ` prefix is the notes channel's framing: producers write it
+/// (a note is finished text) and the viewer strips it before dispatch —
+/// so [`write_note`] emits the full line and [`parse_note`] expects the
+/// stripped payload. The round-trip test crosses that seam on purpose.
+pub mod arm_pulses {
+    /// Payload prefix, after the notes channel's `# ` framing is gone.
+    pub const PAYLOAD_PREFIX: &str = "servo us ";
+
+    /// Write the full note line for three commanded pulses.
+    pub fn write_note(out: &mut impl core::fmt::Write, pulses: &[u32; 3]) -> core::fmt::Result {
+        write!(
+            out,
+            "# {PAYLOAD_PREFIX}{} {} {}",
+            pulses[0], pulses[1], pulses[2]
+        )
+    }
+
+    /// Parse a stripped note payload back into the three pulses.
+    pub fn parse_note(payload: &str) -> Option<[u32; 3]> {
+        let mut parts = payload
+            .strip_prefix(PAYLOAD_PREFIX)?
+            .split_whitespace()
+            .filter_map(|part| part.parse().ok());
+        Some([parts.next()?, parts.next()?, parts.next()?])
+    }
+}
+
+#[cfg(test)]
+mod arm_pulses_tests {
+    #[test]
+    fn round_trips_across_the_framing_seam() {
+        let mut line = String::new();
+        crate::arm_pulses::write_note(&mut line, &[1500, 1620, 1100]).unwrap();
+        assert_eq!(line, "# servo us 1500 1620 1100");
+        let stripped = line.strip_prefix("# ").unwrap();
+        assert_eq!(
+            crate::arm_pulses::parse_note(stripped),
+            Some([1500, 1620, 1100])
+        );
+    }
+
+    #[test]
+    fn rejects_prose_and_short_lines() {
+        use crate::arm_pulses::parse_note;
+        assert_eq!(parse_note("servo prescale=121 — confirmed"), None);
+        assert_eq!(parse_note("servo us 1500 1620"), None);
+        assert_eq!(parse_note("camera pid=0x76"), None);
+    }
+}
+
 /// The thumbnail image a camera firmware streams inside `#` notes.
 ///
 /// # Why this lives here and not in the two places that use it

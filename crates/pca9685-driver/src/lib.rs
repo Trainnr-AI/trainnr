@@ -294,8 +294,40 @@ impl<I2C: I2c> Pca9685<I2C> {
         self.write(REG_MODE1, MODE1_AUTO_INCREMENT)?;
         // ⚠️ The datasheet requires 500 µs for the oscillator to settle
         // before RESTART. This driver does not sleep — it has no clock —
-        // so the caller must delay. `firmware/pico-servo` does.
+        // so the caller must delay. `pico-odom`'s servo module does.
         self.write(REG_MODE1, MODE1_AUTO_INCREMENT | MODE1_RESTART)
+    }
+
+    /// Drive a run of CONSECUTIVE channels in one bus transaction.
+    ///
+    /// # ⚠️ Why this exists: the sampler-starvation budget
+    ///
+    /// Every blocking I2C transaction blinds the whole executor — and on
+    /// the rig that includes the 10 kHz encoder sampler, whose decode
+    /// errors were measured climbing whenever the servo task ran. Three
+    /// channels as three transactions is ~1.5 ms of blindness per tick;
+    /// as ONE auto-increment write it is a third of that. The channel
+    /// registers are contiguous (four per channel from [`REG_LED0`]),
+    /// which is what makes the single write possible.
+    pub fn set_pulses(&mut self, first: Channel, pulses: &[u32]) -> Result<(), Error<I2C::Error>> {
+        let last = usize::from(first.index()) + pulses.len();
+        if pulses.is_empty() || last > usize::from(Channel::LAST) + 1 {
+            return Err(Error::Servo(ServoError::NoSuchChannel(last as u8)));
+        }
+        // Register address, then four bytes per channel — sized for the
+        // largest possible run so no length ever indexes past it.
+        let mut frame = [0u8; 1 + 4 * 16];
+        frame[0] = first.register();
+        for (slot, pulse) in pulses.iter().enumerate() {
+            let off = counts_for(*pulse, self.frame_hz);
+            frame[1 + 4 * slot] = 0;
+            frame[2 + 4 * slot] = 0;
+            frame[3 + 4 * slot] = (off & 0xFF) as u8;
+            frame[4 + 4 * slot] = (off >> 8) as u8;
+        }
+        self.i2c
+            .write(self.address, &frame[..1 + 4 * pulses.len()])
+            .map_err(Error::Bus)
     }
 
     /// Drive one channel to a pulse width, in microseconds.
@@ -556,6 +588,36 @@ mod tests {
         )];
         let mut driver = Pca9685::new(I2cMock::new(&expectations));
         assert_eq!(driver.read_register(REG_MODE1).unwrap(), 0x11);
+        driver.free().done();
+    }
+
+    #[test]
+    fn set_pulses_is_one_transaction_for_a_contiguous_run() {
+        // Three channels, ONE write: register 0x06 then 4 bytes each.
+        // 1500 us @ 50 Hz = 307 = 0x0133; 1100 -> 225 = 0xE1; 1900 -> 389 = 0x0185.
+        let expectations = [I2cTransaction::write(
+            DEFAULT_ADDRESS,
+            vec![
+                0x06, 0, 0, 0x33, 0x01, // ch0: 1500
+                0, 0, 0xE1, 0x00, // ch1: 1100
+                0, 0, 0x85, 0x01, // ch2: 1900
+            ],
+        )];
+        let mut driver = Pca9685::new(I2cMock::new(&expectations));
+        driver
+            .set_pulses(Channel::new(0).unwrap(), &[1500, 1100, 1900])
+            .unwrap();
+        driver.free().done();
+    }
+
+    #[test]
+    fn set_pulses_refuses_a_run_past_the_last_channel() {
+        // 15 + 2 channels would reach 16; the chip stops at 15. Refused
+        // before the bus, like every impossible request in this driver.
+        let mut driver = Pca9685::new(I2cMock::new(&[]));
+        assert!(driver
+            .set_pulses(Channel::new(15).unwrap(), &[1500, 1500])
+            .is_err());
         driver.free().done();
     }
 }
