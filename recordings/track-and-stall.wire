@@ -1,0 +1,1399 @@
+# servo us 1487 1566 1900
+# IMG 30 30 rgb565
+# 000074EA740A746B630A742A6C0A6C2A6C0A11274AA1216518C15BE663A963A963885B685B68950B85EEA6D2A654AE54AE54AE54212810C108A108A1
+# 00007CEB744A746B744A744A742A742A6C2A6C2A6C2A6309534763A963A963E963A863A8638895CD8D2EAE13AE74AE54AE549553114310E108A108A1
+# 000074EB7C6B746B744B746B742A744A6C4A6C2A742A6C0A5B886CE96B096BEA6BEA6BE963C9954F9550AE53B6B5B694AE94644F110210C108C10881
+# 00007C0B7CAC7C8B746B746B746B746B6C4A6C2A6C2A6BE95B886CE9742A6C0A6C096C2A6BE995709570AE33BEB5B694AE942149110210E208C108A1
+# 0000840B84AC7CAC7C8B746B7C8B746B744B6C2A6BEA63C95BC9740A742A742A742A6C2A742A9D6F9D90AE53BED6B6959D741983110210E208A108A1
+# 00007C0C84CC7CCC7CAC7C8B7C8B950D742A748B746B742A6C09742A744A7C4B744A744A742A9D8F9DD1AE33BEF6B6B56CB11943190210E210E20061
+# 0000842C84CC84CC7CAC7CCC7CAC7C8B748B7C6B744A746B6B09744A7C6B7C6B7C6B7C4A744A9D709DD1B633BEF6B695296919431902110208020020
+# 0000842C84EC84ED84ED84ED7CCC748B7C8B746B7C6B7C6B6C2A7C4A7C8B7C8B7C6B7C4B744B9D4FA6F2B674C616A67521A319221922192200600020
+# 0000842C85ED85ED8C0D8C0D84ED7CAC7C8C84AC84AC7CAB744A7C6B74AB84AC7CAC7C6B7C8B9D4FA612B674B6F66CF1196319421922104300200020
+# 0000842C850D8D0D8D0D8D0D8D0D84ED7CAC7CAC84AC7CAC746B7C6B7C8B7CAB848B7C8B7C6B9D4EA633B694B6D621081942196329A4006000200040
+# 00008C4C8D0D954E8D2E954E954E8C0D84EC84AC84CC7CAB7C8B7C6B84AC84CC84AC7C8B7C8B9D2EAE54B694AEB521A3194321830863002000400881
+# 00008C4D8D0D952E8D2E952E954E8C0D84CC84AC84AC84AC7C8B7C8B84CC84AC84AC7CAB84AC9D0DAE54B6745BD11963192232450040004008812183
+# 00008C4D8D0D8D2E8D4E954E952E952E9D2E7C8B84CC84AB7C8B846B84CC84CC84AC7CAC84CC9DEDAE74B69421661943296308220040086021634BE7
+# 00008C4D8D0D8D2D8D2D952E952E8D2E8C0D84CC848B84AC748B7C6B84CC84CC84AC84AC84CC95EDAE549533218319223A6600600881214243C74B48
+# 00008C4D8D0D850D8D2E8D2E8D2D8D2E84ED7CAC84AB84CC7C8B7C4A84AC848C7C8B84CC84AC95CCAE335B0A32E71122638808A12AA43A864B285369
+# 00008C4D8D2E850D8D0D8D2E8D0D8D0D84CC7C8B7C6B84EC7CAC7C4B84AC84AC84CC84AC84AC8DACA63353482183526373A9322543284B0753694B68
+# 00008C4D8D2E850D8CED8D0D8D0E84CC7CAC746B742A7C8B7C8B744A848B84AC84AB848B84AC84AB95B1218319029DED63C942654B273AC64BE74307
+# 00008C4D8D2E8D0D8D0D8D0D8C0D84ED848B746B6B0A7C6B7CAB742A7CAC84AC7CAB848C7CAB848B328C19427B87316510A142434B0742E742C743E7
+# 00008C4D8D2E8D0E8D0D8D2E8C0D8D0D7CAC7C8B7C6B7C8B7C8C744B7CAB84AB7C8B7C8B7C8B7C4A196318C2102219A163C963E9430742E642C742E7
+# 00008C4D8D2E840D8D0E840D8CED84ED84CC7CAC7C6B7C8B746B740A7C6B7C8B7C6B7C6A744A5B0A114210A1084008600861088142A642E742C74BE7
+# 0000842C84ED84ED84ED84CC84CD84AC7C6B746B6C4A6C0A6C0A63A86BE96BE96BE96BE96BE9196508604AC653075B275B685B884B684B084B0742E7
+# 00007C0B7C8C7CAC7CAC7C8B746B744A744A6C2A630A5BA863A8638863A863A9638863A8738808A110602163100210C110E110C13A224B485BCA5BCA
+# 00007C0C84CD84ED7CCD746B744B6C2A63E963E963A863A85B885B685B48536753475327632708800040086000600060088108810881742B8D0F7C2F
+# 0000944D954F8D4F8D0E7CED746B6C2A6C0A6BE963C95BA95B8853685347532753074B075B48086000600881088108800881088008819D0EB634B6D6
+# 0000AEF0AE74AE739DD08D2E7CAC746B744B6C0A63C963C963C95B885B68536853074AE65B0A086000600860008108600881086008A1D7CEEFBBEFDB
+# 0000FFB5FFFFFFFFFFFFEFFCDF98C636AE7374EE53A929253A4542E7190221C4112210C252D1086008400840006008600860086008609DE5FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFDE7DAC637AE739DB0840E748C740A19243A4542A632255BF6086008600060084008600040006008603242FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEEFFBCF77B674A5F18D2E7C8C6B2A422742C442E63A8652D90860086000800860004008400040086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7DAC637B6739DB07CCD634B53074A474AE742C63A654270006008400060004008400040004008600881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFB9BED5A512956F74CD5BC95B8853484AE742C63A65426C0040086008600860084000600860006008608463E7FB
+n=377 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+n=378 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+n=379 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+# servo us 1483 1561 1900
+n=380 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+n=381 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=382 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=383 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=384 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=385 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=386 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=387 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=25%
+n=388 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+n=389 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+n=390 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=391 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=392 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=393 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=394 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=395 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=396 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=397 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=398 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=399 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=400 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=401 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=402 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=403 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=404 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1571 1900
+n=405 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=406 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=407 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=408 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=409 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=410 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=411 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=412 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=413 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=414 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=415 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=416 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=417 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=418 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=419 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=420 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=421 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=422 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=423 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=424 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=425 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=426 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=427 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=428 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=429 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=430 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=431 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=432 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=433 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=434 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=435 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=436 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=437 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=438 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=439 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=440 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=441 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=442 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=443 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=444 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=445 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=446 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=447 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=448 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=449 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=450 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=451 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=452 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=453 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=454 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1487 1571 1900
+n=455 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=456 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=457 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=458 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=459 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=460 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=461 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=462 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=463 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=464 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=465 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=466 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=467 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=468 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=469 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=470 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=471 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=472 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=473 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=474 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=475 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=476 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=477 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=478 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=479 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=480 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=481 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=482 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=483 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=484 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=485 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=486 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=487 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=488 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=489 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=490 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=491 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=492 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=493 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=494 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=495 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=496 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=497 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=498 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=499 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=500 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 2 fps | com7=0x04 com15=0xD0 format confirmed | blob x+0.03 y+0.18 area 2120
+n=501 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=502 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=503 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=504 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1571 1900
+n=505 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=506 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=507 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=508 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=509 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=510 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=511 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=512 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=513 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=514 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=515 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=516 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=517 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=518 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=519 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=520 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=521 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=522 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=523 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=524 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=525 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=526 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=527 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=528 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=529 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=530 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=531 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=532 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=533 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=534 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=535 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=536 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=537 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=538 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=539 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=540 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=541 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=542 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=543 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=544 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=545 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=546 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=547 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=548 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=549 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=550 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=551 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=552 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=553 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=554 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=555 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1571 1900
+n=556 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=557 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=558 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 000074EB742A744B630A742A6B096C2A6BE919274A81214511C153E663A963A85B885B885B68950B85EEA6D1A654AE53AE53A674296910E210C108A1
+# 00007CEB744A746B742A742A742A6C2A6C0A6C0A6C0A63EA534763C963A963E963A863A85BA895CD8D0EAE13AE94AE54AE749553196310E210C108A1
+# 000074EB748B746B746B744B744A744A6C2A740A742A6C095B886CE96BE96BE96BE963E963C99D50954FAE54B6B5AE94AE9464701922100210C108A1
+# 00007CEB7C8B7C6B746B746B746B744B742A6C2A6C0A6BE95B886C096C096C0A6C096C0A630995709570AE34B6D5B694B6742949112210E210C108C1
+# 0000840B84AC7CAC7C8B748B7C6B746B744B6C2A6BEA63C963C9740A742A744A744A6C2A742A9D709D90AE53BEF6B6959D7419A31122100210C108C1
+# 00007C2C7CCC7CAC7CAC7C8B7C8B950D740A748B744A742A6309742A744A744B744B744A6C2A9D709DB1AE33BEF6B6B56CB119631922100210E20081
+# 0000842C84AC84CC7CAC84AC7CAC7C8B748B746B744A744A6B09744A7C6B746B746A744A742A9D4F9DB1B653BEF6B6B52A8919631922110208020020
+# 0000842C84CC84ED84ED84EC7CCC748B7C8B746B7C6B746B6C2A742A7CAB7C8B7C6B746B744A9D4FA6F2B674C6F7A69521A419431942194300810020
+# 00008C2C8CCC84ED84ED8C0D84ED7CAC7CAB7C8C7CAC7C8B744A7C4A748B84AC7C8B7C6B7C6B9D4EA512B674B6F664F1198319631963104300200020
+# 00008C2C8CED8D0D850D8D0D8D0D84ED7CAC84AC84AC7CAC746B7C6A848C7CAC7C8C7C8B7C8B9D4EA633B694B6D529281963216329C4006000200040
+# 00008C4C8DED8D2E8D2E8D4E952E840D84EC84CC84CC7CAB7C8B7C6B84AC84CC7C8B7C8B848B9D2EA653B674AED521A3194329A30843002000400881
+# 00008C4D8D0D952E8D2E952E952E8D0D84CC7CAC84AC7CAC7C6B7C8B84CC84AC7CAC84AC7CAC9D0DAE74B6745BD11963214232460040004008812183
+# 00008C4D8D0D952E8D4E954E954E954E9D4E7CAB84CC84AC7CAB846B84CC84CC84AC7CAC84AC9D0DAE74BE94298619432A6308220040086121634B07
+# 00008C4D8D0D8D2D952E952E8D4E952E8D0D84CC7C8B84AC7C6B7C4A7CCC84CC84AC84AC84CC95ECAE53951221A419423A6608600881214343C74B48
+# 00008C4D8D2E8D0D8D2E8D2E8D2D8D2E84ED848C848C84CC7C8B7C4A84CC84AB848B84CC84AC8DCCAE535B2B320711226B8808812AC442864B485389
+# 00008C4D8D2E8CED8D0D8D2E8D0D8D0D84EC7CAB7C6B84CC7CAC7C4A84CC84AC84AC84AC84AC8DCCA633536819834A6373A932254B284B0753685369
+# 00008C4D950E850D8DED8D0D8D0D84CD7CAC746B742A7C8B7C8B742A7CAB84AC84AC848B84AC84AC95B1218319229DED5AC942854B2842C643E74307
+# 00008C4D8D2E8D0E8D0D8D2D850D840D848C748B6B0A7C6B7CAB742A84AC84AC7CAC848C7CAC848B32AC19427B87316510A142434B2742E742E643E7
+# 00008C4D8D2E8D0E8D0E8D0D8D0D8C0D7CCC746B7C6B7C8B7C8C742A7CAB84AB7C8C7C8B7C8B7C4B198310E2102219A16BE96BE94A0742C642A642C7
+# 00008C4D8D2E840D8D2D8C0D8D0D84ED84ED84AC7C6B7C8B746B740A7C8B7C8B7C6B746B744A5B2A196210A1086008600860088142C642E742E74BE7
+# 0000842C8CED84ED84ED84ED84ED7CAC746B7C6B6C4A6C2A6C2A63A86BE96C096BE96BE96B0A198508604AC6530753275B685B684B684B074B074BE7
+# 00007C0B7CAC7CAC7CAC7C8C746B744A742A6C2A6B0A63A863A963A863A863A963885BA86B8808A110612142110210C110E110C13A0253685BCA5BEA
+# 00007C0B84CD7CED7CED746C744B6C4B6C0963E963A963A95B885B6853685B6853475327632808810040088108400040088108810881744B8D0F842F
+# 00008C6D8D4F8D4F8C0E84CD748B6C2B6B2A630963E963C85B8853885348532753074B065B48086008400881088108810880088108819D0EB654B6D6
+# 0000AE10AE94AE949DD18D4F7CCC748C746B6C2A63C963C963C95B895B885B48532753075B0A08600060086000810860088108601081D7CEEFDBEFDC
+# 0000FFB5FFFFFFFFFFFFFFFDE7FACF57AE739DD18C0E746B63EA53684AE742863A4532045B11086008600860006000600840086008609DE5FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7DACF57B694A5F1956F84ED7C6C6C2A63C95B885B485B17086008600060086008600040004008603242FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFFEFFBD798BEB4AE529D908C0D7CAC746B740A6BC963A952B90860086008600060004008400040086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7DACF57B6B4A5F28D4F74CD73A9740A6BC963A95B684290084008600060084000400060004008400881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFD9C616B673A5D1844E746B744B6C0A63EA63C95B884AAE0840086008600860084000600860086008608463E7FC
+n=559 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=560 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=561 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=562 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=563 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=564 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=565 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=566 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=567 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=568 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=569 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=570 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=571 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=572 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=573 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=574 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=575 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=576 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=577 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=578 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=579 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=580 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=581 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=582 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=583 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=584 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=585 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=586 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=587 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=588 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=589 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=590 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=591 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=592 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=593 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=594 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=595 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=596 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=597 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=598 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=599 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=600 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=601 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=602 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=603 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=604 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=605 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1571 1900
+n=606 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=607 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=608 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=609 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=610 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=611 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=612 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=613 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=614 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=615 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=616 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=617 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=618 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=619 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=620 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=621 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=622 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=623 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=624 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=625 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=626 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=627 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=628 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=629 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=630 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=631 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=632 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=633 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=634 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=635 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=636 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=637 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=638 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=639 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=640 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=641 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=642 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=643 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=644 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=645 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=646 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=647 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=648 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=649 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=650 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=651 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=652 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=653 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=654 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=655 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=656 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=657 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=658 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=659 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=660 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=661 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=662 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=663 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=664 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=665 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=666 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=667 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=668 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=669 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=670 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=671 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=672 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=673 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=674 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=675 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=676 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=677 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=678 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=679 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=680 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=681 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=682 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1569 1900
+n=683 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=684 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=685 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=686 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=687 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=688 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=689 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=690 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=691 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=692 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=693 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=694 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=695 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=696 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=697 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=698 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=699 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=700 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=701 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=702 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=703 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=704 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=705 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=706 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=707 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=708 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=709 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=710 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=711 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=712 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=713 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=714 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=715 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=716 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=717 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=718 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=719 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=720 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=721 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=722 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=723 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=724 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=725 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=726 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=727 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=728 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=729 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=730 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=731 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=732 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1569 1900
+n=733 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=734 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=735 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=736 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=737 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=738 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=739 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=740 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=741 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=742 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=743 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=744 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 000074EB742A744A630A744B6C096C2A6B0A11274A81214518C25BE663A963A85BA85B885B68950B85EEA6D2A654AE54AE53AE54294910E208C108A1
+# 00007CEB744A746B744A742A742A742A6C2A6C0A6C2A63E9534863C963A963E963A963A863A995CD8D0EAE13AE74AE74AE549553196310E210C108A1
+# 000074EB7C6B748B744B744A744A742A742A6C0A742A6BE95B886CE964096BEA63C963E963C99D4F954FAE54AEB5B695AE746C50192210E210C108A1
+# 00007C0B7C8B7C8B746B746B746B744B744A6C2A6C0A6BE95B886CE96C2A6C0A6B0A6C0A6BE9954F9570A653B6D5B694AE9429481922100210C108A1
+# 00007C0C7CAC7CAC7C8B7C6B7C8B746B744B6C2A6C0A63C963A9740A740A742A744A6C0A6C2A9D709D90AE53BEF6B6959D7419A41922100208C108C1
+# 00007C0C84AC7CAC7CAC7C8B7C8B950D7409746B746A740A63E9742A742A744A744A744B6C2A9D709DB1AE33BEF6B6B56CB119631922100210E20081
+# 0000842C7CCC84CC84AC84AC848C7C8B748B7C6B744A746B6BE9742A7C6B7C6B7C6B744A742A9D6F9DD1AE53BEF6B695296919431922110208020020
+# 0000842C84CC84ED84ED84EC7CCC748B7CAB7C6B7C6B746B6C4A744A7C8B7C8B7C8B746B744B9D6FA6F2B674C6F6AE9521C421631943194200600020
+# 0000842C84ED8DED84ED8C0D84ED7CCC7C8C7CCC7C8B7C8B744A7C4A748B7C8C7C8B7C6B7C6B9D4FA612B674B6F66CD1216319631943104300200020
+# 00008C2C8D0D8D0D8D0E8D0D8D2E84ED7CCC84AC84AC7CAC746B7C6B7CAB848C84AC7C8B7C8B9D4EA633B674B6B529281963216329C4006000200040
+# 00008C4D8DED8D2E8D2E8D4E952E840D84CC84AC84CC848B7C8B7C6B84AC84AC7CAC7C6B7C8B9D2EAE53B674AED521A3194221A30843002000400881
+# 00008C4D8DED954E8D2E952E8D4E8C0D84CC7CAC84AC7CAC7C8B7C6B84CC84CC7CAC7CAC7C8C9D0EAE54B6745BD21963194232660040004008812983
+# 00008C4C8D0D8D2E954E954E952E8D4E9D4E7C8B84AC84AC7C8B848B84CC84CC84CC84AC84CC9DEDAE74BE94296619432A8308020040088121634BE7
+# 00008C4D8D2D8D2D8D2E952E952E8D2E8C0D7CCC846B7CAC7C6B7C4B84CC84CC84AC84AB84AC95ECAE74951221A319423A660060086121434BC74B48
+# 00008C4D8D2D8D0D8D2E8D2E8D2D952E84ED848C7CAC84CC7CAB7C4B84CC848C84AB84EC84AC95CCAE535B2B3207112263A808A12AC43AA64B485389
+# 0000944D8D2E850D8D0D8D2E8D0D8D0D84CC7C8C7C6B84CC7CAC7C4B84AC84AC84AC84AC84AC8DCCA5125368218352636BA9320443284B0753684B68
+# 0000944D8D2E8CED8DED8D0D8D0D84ED7CAC748B742A7C8B7CAC742A848C84AC84AC84AC84AC8CAB95B0218311029DED62C942654B283AC64AE74307
+# 00008C4D8D4E8D0D8D0D8D0D8D0D84ED848B746B6B0A7C8B7C8C742A84AC84AC84AC848B848B848B328C19437BA7316508C142634B27420742E74307
+# 00008C4D8D2E8D0D8D0D850D8DED8D0D7CCC746B7C6B7C8B7C8B742A84AB848B7CAB7C8B7C8B7C4A198318C1102221A16BC96BC94AE742C642C742E7
+# 00008C4D8D2E840E8D0D8D0D8D0D84ED84CC7CCC7C8B7C8B748B742A7C8B7C8B7C6B7C4A744A532A196210A1086008600881088142C642E742E74AE7
+# 0000842C84ED84CD84ED85CD84CC84AC7C6B7C6B744B6B0A6C0A6BC96BE96BE96BE96BE96B0A196508604AC64B075B275B675B684B6843074B074307
+# 00007C0B7C8C7CAC84AC748C746B744B744A6C2A6B2A63A963C9638863A863A8638863A86B88088110602163180210C118E210C13A0253485BCA5BEA
+# 00007C0C84CD84ED7CCD748C744B6C2A6BEA63E963A95BA85B885B6853685B6753475347634708810060088100600860086008810881742B8D0F852F
+# 00008D4D956F8D4F8D2E84ED748C6C4B6C0A6BE963E963A95B885B6853475327530753066348086008600880088108600880088008A19D0FB654B6D6
+# 0000B610AE74AE949DD18D2F7CCC748C746B6C4B63E963E963C95B885B685B68532753075B0A08600860088100810881088108601081D7CFEFDBEFDC
+# 0000FFB5FFFFFFFFFFFFFFFDE7DACF37B6739DB1840E746B63EA53684AE73A863A453204531108600060086000600860086008600860A5E5FFFEFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFDE7DACF57B693A511956F84ED7C8C6C2A63C95B885B285BF7086008600060086008600040004008603242FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFFEFFBD798BEB5AD3295908CED7CAC744B6B0A63C963A852D90860086000600860004008400060086011E1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7DACF57BEB4A5F18C4E74CD73A9740A6BEA63C95B684290086008600860084008400060004000600881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFD9C616B673A5D1842E746B744B6C2A6BE963A95B6842CD0840086008600860006000400860086008608563E7FC
+n=745 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=746 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=747 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=748 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=749 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=750 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=751 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=752 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=753 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=754 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=755 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=756 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=757 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1571 1900
+n=758 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=759 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=760 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=761 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=762 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=763 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=764 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=765 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=766 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=767 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=768 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=769 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=770 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=771 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=772 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=773 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=774 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=775 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=776 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=777 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=778 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=779 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=780 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=781 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=782 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=783 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=784 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=785 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=786 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=787 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=788 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=789 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=790 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=791 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=792 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=793 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=794 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=795 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=796 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=797 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=798 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=799 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=800 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=801 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=802 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=803 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=804 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=805 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=806 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=807 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1487 1570 1900
+n=808 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=809 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=810 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=811 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=812 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=813 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=814 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=815 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=816 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=817 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=818 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=819 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=820 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=821 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=822 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=823 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=824 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=825 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=826 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=827 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=828 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=829 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=830 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=831 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=832 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=833 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=834 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=835 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=836 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=837 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=838 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=839 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=840 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=841 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=842 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=843 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=844 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=845 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=846 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=847 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=848 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=849 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=850 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=851 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=852 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=853 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=854 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=855 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=856 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=857 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=858 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=859 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=860 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=861 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=862 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=863 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=864 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=865 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=866 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=867 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=868 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=869 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=870 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=871 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=872 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=873 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=874 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=875 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=876 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=877 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=878 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=879 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=880 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=881 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=882 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1487 1569 1900
+n=883 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=884 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=885 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=886 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=887 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=888 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=889 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=890 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=891 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=892 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=893 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=894 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=895 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=896 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=897 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=898 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=899 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=900 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=901 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=902 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=903 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=904 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=905 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=906 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=907 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=908 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=909 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=910 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=911 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=912 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=913 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=914 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=915 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=916 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=917 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=918 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=919 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=920 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=921 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=922 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=923 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=924 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=925 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=926 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=927 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=928 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 000074EB742A744A630A6C4A6B096C2A6C0A19274AA1214518C15BE663A863A863885B685B688D0B85CEA6D2AE54AE73AE53A654214910C108A108A1
+# 00007CEB744A746B744A742A6C4A6C2A6C0A6C0A6C0A63E9534763A963A963C963A863A85BA895CD8D2FAE13AE74AE54AE749553116310E108C108A1
+# 000074EB746B746B746B744A744A742A6C2A6C2A742A6BE953886CE96B096BEA63E96BE963C99D70954FA653B695B694B6746470112210E210C108A1
+# 00007C0B748C7C6B748B746B744B746B742A6C2A6C0A6BE95B886CE96C096C0A6C2A6C0A63E9956F9570AE53B6B5B694B6742949110210E210C108A1
+# 0000840C7CCC7CAC7C8B7C6B7C6B746B746B6C2A6B096BE963A8740A742A742A744A6C2A742A9D909DB1AE53BEF6B6959D7419A31122100210C108A1
+# 0000840C84AC7CAC7CAC7C8B7C8B950D740A746B744B742A6BE9742A744B744A744A744A742A9D6F9DB1AE33BEF6B6B56CB11943190210E210C10060
+# 0000842C84CC84CC7CAC84AC7CAC7C8B7C6B7C6B746B746A6C09742A746B7C6B7C6A744A742A9D6FA5D1B633BEF6B6B5298919431922110208020020
+# 0000842C84ED84ED84EC84ED7CCC748B7C8B748B7C6B7C6B6C2A7C4A7C8B7C8B7C6B744B744A9D4FA6F2B674BF16AE9521A319431942194300610020
+# 00008C4C84ED850D84ED8D0D84ED7CAC7CAB7CAC7C8C7C8B744A7C2A748B7C8C7C8B7C4B7C6B9D4FA612B674B6D664F1196319432143104300200020
+# 0000842C850D8D0D8D2D8D0D8D0D84ED84AC7CCC84AC7CAC746B7C6B7CAC84AC7CAC7C8B7C8B9D4EA653B674B6D529281963216329A4006000200040
+# 00008C4D8D0D8D2E8D2E8D4E8D2E8C0D84CC84AC84AC7C8B7C8B7C6B7CAC84AC848B7C6B848B9D0EA653B674AED521A3194321A30843002000400881
+# 00008C4D8D0D952E8D2E954E954E8D0D84CC7CAC7CAC84AC7C8B7C6B84AC84CC84AC84AC7CAC9D0DAE74B6745BD11963194232650040004008812983
+# 00008C4D8D0D952E952E954E952E954E9D2E84AB84CC84AC7C8B848B84CC8CCC84CC84AC84CC9D0DAE74BE9529661943326308220040086021634BE7
+# 00008C4D8D0D8D0D8D2E952E8D2E954E8DED84CC848B84AC7C8B7C4A84CC84CC84AC84AC84AC95EDAE74951221A319223A6600600881214343C74B48
+# 00008C4D8D2E8D0D8D2E8D2D8D0D8D4E8CED7C8C848B84CC7C8B7C4A84CC84AC84AC84CC84AC95CCAE335B2B32071122638808A132C43A8653485369
+# 00008C4D8D2E850D8D0D8D2D8D0D8D0D84CC7C8C7C6B84EC7CAC7C4A84AC84AC84AC84AC84AC8DCCA51253681983536373A932054B284B0753694B68
+# 00008C4D8D2E8D0D8D0D8D0D8D2E84ED7CCC746B742A7C8B7CAB744A84AB84AC84AC84AC84AC8CAB95B1218311229DED5AC942654B283AC643E74327
+# 00008C6D8D2E8D2D8D0D8D0D8D0D84ED848C746B6B2A7C8B7CAC742A84AC84AC7CAB7CAC84AB848B328C19427BA7318510A142434B07430742E74307
+# 00008C4D8D2E8D0D8D0D8C0D8D0D8C0D7CAC7C6B7C6B7C8B7C8B742A7C8B848B7CAC7C6B7C8B7C4A198318C1102219A16BC96BE94B073AE742C642E7
+# 00008C4D8D2E8D2E8D0E840D8DED84ED84EC7CAC7C8B7C8B748B742A7C8B7C8B7C8B7C4A744A532A196310A108600860088108814AC642E742E74207
+# 0000840C840D84ED84ED84CD84CD7CAC7C8B746B744B6C2A6C0A6BA86BE96BE96BE96BE96B0A196508604AC6530653275B685B884B684B074B074207
+# 00007C0B7C8C7CAC7CAC748B746B744B742A6C2A6B0A63A963A85B8863A863C963A863A8738808A110602162112210C110E110E13A02534863EA5BCA
+# 00007C0B84CD84ED7CED746B744B6C2A6BEA63EA63A863A85B885B685B685B675B475327632708810040086000600060088108810881744B8D0E842F
+# 00008C4D954F8D4F8D2E7CED746B742B6C0A63E963C963C95B685B885B4753274B2753076328086008600881088108600880088108819D0FB633B6F6
+# 0000B610AE94AE949DD18D4F7CAC746B746B6C2B63E963E963C9638863885B6853274B075B0A08600060086000800860086008601081D7CEF7DBEFDC
+# 0000FFB5FFFFFFFFFFFFFFFDE7DAC736B6739DB08C0E746B63CA53684A073AA63A45322453F1086008600860006008600860086008609DC4FFFEFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFDEFDACF77B674A5F1956F8CED7C8C742A63E963895B685BF7086008600860006008600040004008603242FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFFEFFBD798BEB4AE3295908C0D7CAC744B6B0A63A963A952B90860086000600860004008400040086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7DACF57BE94A5F18C2F7CCD6BA9740A6BEA63A95B6842B0086008400060086000600040004008600881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFD9C636B673A5D18C2E744B742B742A6BEA63C95B8842CD0860086008600860006000400860086008608463EFFC
+n=929 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=930 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=931 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=932 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=933 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=934 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=935 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=936 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=937 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=938 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=939 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=940 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=941 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=942 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=943 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=944 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=945 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=946 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=947 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=948 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=949 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=950 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=951 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=952 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=953 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=954 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=955 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=956 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=957 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=958 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=959 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=960 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=961 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=962 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=963 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=964 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=965 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=966 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=967 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=968 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=969 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=970 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=971 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=972 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=973 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=974 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=975 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=976 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=977 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=978 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=979 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=980 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=981 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=982 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1568 1900
+n=983 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=984 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=985 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=986 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=987 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=988 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=989 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=990 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=991 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=992 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=993 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=994 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=995 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=996 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=997 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=998 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=999 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1000 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 4 fps | com7=0x04 com15=0xD0 format confirmed | blob x+0.03 y+0.17 area 2126
+n=1001 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1002 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1003 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1004 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1005 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1006 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1007 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1569 1900
+n=1008 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1009 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1010 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1011 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1012 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1013 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1014 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1015 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1016 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1017 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1018 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1019 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1020 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1021 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1022 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1023 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1024 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1025 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1026 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1027 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1028 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1029 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1030 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1031 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1032 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1033 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1034 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1035 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1036 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1037 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1038 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1039 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1040 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1041 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1042 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1043 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1044 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1045 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1046 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1047 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1048 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1049 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1050 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1051 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1052 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1053 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1054 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1055 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1056 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1057 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1058 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1059 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1060 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1061 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1062 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1063 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1064 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1065 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1066 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1067 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1068 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1069 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1070 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1071 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1072 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1073 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1074 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1075 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1076 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1077 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1078 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1079 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1080 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1081 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1082 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1083 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1084 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1085 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1086 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1087 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1088 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1089 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1090 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1091 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1092 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1093 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1094 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1095 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1096 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1097 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1098 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1099 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1100 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1101 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1102 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1103 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1104 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1105 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1106 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1107 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1108 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1109 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1110 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1111 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1112 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1113 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 000074EB740A744B630A6C4A6BEA6C2A6CEA19074A81214519C15BE663A863A95BA85B885B68950B85EEA6D2A654AE54AE54AE54296910E210C108A1
+# 00007CEB744A746B742A744A742A742A6C2A6C0A6C0A630A536863C963A963E963C963A863A995CD8D2EA613AE95AE54AE7495531983110210C108A1
+# 000074EB7C8B748B746B744A742A744A742A6C0A742A6BE95B886CE96C0A6BE963E96BE963C9954F954FAE54B6B5B674AE946C701942110210C108A1
+# 00007C0B7C8C7C8B7C6B746B746B744A742A6C2A6C2A6BE95B886CE96C0A6C096C0A6C0A6BE9956F9570AE53BEB5B694AE9529691922110210C108A1
+# 0000840C7CAC7CAC7C8C748B7C8B746B744B6C2A6B0963E963A9740A742A744A742A6C2A740A9D709D90AE54BEF6B6B5A57421A31942110210C108A1
+# 00007C0C7CCC7C8C7CAC7C8B7C8B8D0D740A748B746A742A6BC9744A744A744B744B746B742A9D6F9DB1AE33BEF6B6B574B119631922110210E20060
+# 0000842C84CC84CC7CAC7CCC7CAC7C8B7C8B746B744A746A6C09744A7C6B7C6B7C6B744A744A9D6FA5D1AE53C6F6B6952A8919631942110210020020
+# 0000842C84ED84ED84EC84CC7CCC748B7C8B7C6B7C6B746B6C2A7C4A7C8B7C8B7C8B7C6B744A9D4FA6F2B674C6F7AE9421C421631943194200610020
+# 0000844C8CED8DED84ED84ED840D7CAC7CAC7CAC7CAB7C8B744A7C4B748B84AC7C8B7C6B7C6B9D4FA513B674B6F66CF2198321631962104300200020
+# 00008C2C850D8D0D8D0D8D2D8D2E84ED84AC84AC84AC84AC746B7C8B84AC7CAC7CAC7C8B7C8B9D4EAE33B694B6D529281983216329C4006000200040
+# 00008C4C8D0D8D2E8D2E954E952E840D84CC7CAC84CC7C8C7C8B7C6B7CAC84CC84AC7C6B7C8B9D0EAE54B694AEB521A3214321A30843002000400881
+# 00008C4D8D0D954E8D2E954E954E8D2E84CC84CC84AC7CAC7C8B7C6B84AC84AC7CAC7CAC84AC9D0DAE74B6745BD21983214232660040004008812163
+# 00008C4C8D0D8D2E954E954E954E954E9D4E7C8B84AC84AC7C8B846B84CC84CC84CC84AC84AC9DEDAE74BE94218619633283080200400880218343E7
+# 00008C4C8D0D8D0D952E952E952E8D4E8C0D84CC848B848C7C8B7C4B7CCC84CC84AC84AC84CC95EDAE53951221A319423A6600600881214343C74B48
+# 00008C4D8D2E8D0D8D2E8D2E8D2D952E84ED7C8C84AB84CC7C8C7C4B84CC848C84AC84CC84CC95CCAE535B2B32271922638808A12AC43AA64B485B89
+# 00008C4D8D2E850D8D0D8D2E8D0D8D0D84CC7CAC7C6B84EC7CAC7C4A84AC84AC84AC84AC84AC8DCCA512536821834B6373A932254B284B0753685368
+# 00008C4D8D2E8D0D8D0D8D0D8D0D84CD7CAC746B742A7C8B7C8B742A848C84AC84AC84AC84AC8CAC95B1218319229DEE5AE942854B2842C64B074B07
+# 00008C4D8D4E8D0E8D0D8D0D8D0D84ED848C746B6C0A7C8B848B744A7CAB84AC7CAC848C7CAB84AB328C19427BA6326510A13A434B0742E742C74B07
+# 00008C4D8D2E8D2E8D0D840E8DED8C0D7CAC748B7C6B7C8B7C8C744A7C8B84AB848B7C8B7C8B7C4B196318E2102221A16BE963C94B0742E742C742E7
+# 00008C4D8D2E8D2E8D2E8D0D8DED84ED8CCD84AC7C8B7C8B748B7C0A7C8B7C8B7C6B7C6A7C6A5B2A116310A1086008600881088143C642E743E74BE7
+# 0000842C84ED84CD84ED84ED84CD7CAC7C8B746B6C4B6C0A6C2A6BA96CE96BE96BE96BE96BEA196508604AC6530753475B485B684B684B074B0742E7
+# 00007C0B7C8C7CAC7CAC7C8B746B744B744B6C2A6B0A63C963C963A863A863C963A86388738808A110812163190210C110E110C13A22534863EA5BEA
+# 00007C0B84CD84ED7CCD748C744B6C2A6B0A63E963A95BA85B885B885B685B485B4753476B4708800040086108600040088108810881742B8D0F840F
+# 00008C4D954F954F8D2E84CD746C6C4B6C2A6BE963C963A95B885B8853475327530753075B4808600860088108A108610881088008819D0FB654B6D6
+# 0000B610AE94AE949DD18D4F7CCC7C8C746B6C4A63E963C963E963A85B885B6853274B075B2A086000600860088108600880086008A1D7CFEFDBEFDC
+# 0000FFB5FFFFFFFFFFFFFFFDE7DACF37B6739DB1840E746B63EA5B684AE742863A4532255B11086008600860006008600840086008819D05FFFEFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFDE7DACF77BE94A5F19D6F8C0E7C8C6C2A6BEA63A95B685B17086008600060006008600040006008813243FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFFEFFBD798BEB4AE329D708CED7CAC744B6C0A63C9638852D90860084000800860004008600040086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7FACF57BEB4A5F28D4F7CCD6BC9740A6BEA63C95B884290086008600860084000400040004008600881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCE7D9CE36B673A5D1844F746B7C4B742A6BEA6BA95B884AAD0860086008600860084000600860084008608563EFFC
+n=1114 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1115 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1116 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1117 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1118 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1119 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1120 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1121 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1122 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1123 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1124 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1125 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1126 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1127 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1128 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1129 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1130 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1131 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1132 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1133 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1134 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1135 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1136 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1137 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1138 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1139 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1140 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1141 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1142 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1143 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1144 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1145 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1146 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1147 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1148 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1149 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1150 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1151 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1152 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1153 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1154 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1155 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1156 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1157 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1158 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1487 1570 1900
+n=1159 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1160 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1161 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1162 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1163 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1164 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1165 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1166 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1167 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1168 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1169 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1170 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1171 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1172 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1173 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1174 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1175 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1176 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1177 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1178 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1179 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1180 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1181 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1182 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1183 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1184 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1185 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1186 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1187 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1188 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1189 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1190 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1191 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1192 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1193 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1194 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1195 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1196 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1197 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1198 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1199 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1200 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1201 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1202 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1203 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1204 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1205 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1206 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1207 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1208 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1209 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1210 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1211 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1212 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1213 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1214 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1215 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1216 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1217 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1218 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1219 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1220 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1221 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1222 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1223 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1224 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1225 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1226 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1227 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1228 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1229 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1230 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1231 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1232 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1233 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1487 1569 1900
+n=1234 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1235 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1236 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1237 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1238 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1239 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1240 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1241 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1242 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1243 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1244 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1245 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1246 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1247 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1248 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1249 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1250 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1251 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1252 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1253 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1254 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1255 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1256 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1257 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1258 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=1259 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1260 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1261 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1262 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1263 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1264 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1265 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1266 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1267 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1268 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1269 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1270 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1271 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1272 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1273 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1274 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1275 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1276 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1277 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1278 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1279 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1280 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1281 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1282 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1283 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=1284 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1285 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1286 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1287 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1288 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1289 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1290 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1291 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1292 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1293 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1294 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1295 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1296 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1297 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 00007CEB740A744A630A742A6C0A6C0A6C0A11074AA1214518C25BC663A963A85BA85B885B68950B85EEA6D1A654AE54AE33AE542969100210C108C1
+# 00007C0B744A746B744A742A744A6C2A6C2A6C2A6C2A6309536863C963C963E963A863C95BA895CE8D2FAE13AE94AE74AE7495541983110210C108A1
+# 000074EB7C6B748B746B744A742A744A6C2A6C0A742A6B0A5B886C096BE96BE96BE96BC963C99550954FAE53B6B5B695B67464701942110210C108A1
+# 00007C0B7C8B7C8B748B746B744B746B742A6C2A6C0A6BE95B886CE9740A6C096C096C0A63E995709570AE53B6B5B695AE9429691922110210E108A1
+# 0000840C7CCC7CAC7C8B7C6B748B748B744B6C2A6C0A63E963C9742A742A742A744A6C2A742A9D709D91AE54BEF6B6B59D9421A41942110210C108C1
+# 00007C0B84AC7CAC7CAC7C8B7C8B950D740A746B744B742A63E9744A744B744A744B744A6C0A9D4F9DB1AE33BEF6B6B56CB119831922110210E20081
+# 0000842C84CC84ED7CAC7CCC84AC7C8B7C8B746B744A746B6C0A744A7C6B7C6B746B744A744A9D6FA5D1B653BEF6B6B52AA919831942190210020020
+# 0000842C84CC840D84CC84ED7CCC748B7C8B746B7C6B7C6B6C0A742A7C8B7C8B7C6B7C4B7C4B9D6FA6F2B674BEF6AE7421C421631943194300600020
+# 0000842C84ED8DED840D850D84ED7CAC7C8B7CAC7CAB7CAB744A7C4B748B7C8C7C8B746B7C6B9D4EA613B674BED66CF1218321431963104300200040
+# 00008C2C8D0D8D0D8D0E8D2D8D2D840D84CC84AC84AC7CCC7C6B7C6B84AC84AC84AB7C8B7C6B9D4EA653B694B6D629281983216329E4006000400040
+# 00008C2C8D0D952E8D2E8D4E954E840D84CC84AC84CC848B7C8B7C6B848C84AC7CAB7C6B7C8B9D2EA653B674AEB521A4214321A30843002000400881
+# 00008C4D8D0D952E8D2E952E954E8D0E8CCC84CC84AC7CAC7CAB7C6B84CC84CC84AC84AC84AC9D0DAE74BE745BF22163214332660040004008812983
+# 00008C4C8D0D952E8D4E954E952E954E9D2E7C8B84CC84AC7C8B7C6B84CC84CC84AC84AC84AC9DEDAE74BE9429661963326308220040088121634BE7
+# 00008C4C8D0D8D0D8D2E952E952E952E8D0D84EC846B7CAC748B7C6B84CC84CC84AC84CC84CC95EDAE74951321A319423A6608600881214343C75348
+# 00008C4D8D2E8DED952E8D2E950D8D2E84ED7CAC84AB84CC7C8C7C4B84CC848C848B84EC84CC95CCAE335B0B322711226BA808A132C43AA653485389
+# 00008C4D8D2E850D8DED8D2D8D0D8D0D84CC7CAC7C6B7CEC7CAC7C4A84CC84AC84AC84AC84AB8DCCA5125368198352636BA932254B284B0753684B68
+# 00008C4D8D2E8D0D8D0D8D0D8D0E84ED7CCC746B742A7CAB848C7C4A848B84AC84AC84AC7CAC8CAC95B1218319029DED63C942854B2842C74BE74308
+# 00008C6D8D2E8D0E8D0D8D2D8D0D840D848C746B6B0A7C8B7CAC742A84AC84AC84AB7CAC848B848B328C19427BA7316510A142434B28430742C743E7
+# 00008C4D8D2E8D0E8D0D8D2D8D0D8D0D7CAC7C6B7C4B848B7C8B744B848B7CAB848C7C8B7C8B844A196319E1102219A16BC963E94B0742E742C642E7
+# 00008C4D8D2E842E8D2E8D0E8D0D84ED8CCD7CCC7C8B7C8C7C6B740A7C8B848B748B7C4B744B5B2A116310A108600860086008814AC642E742074B07
+# 0000842C84ED84ED84ED84ED84CC7CAC7C6B746B6C6B6B2A6C096BA86BE96B0A6BE96BE96B09196508604BC653075B475B675B684B6843074B0842E7
+# 00007CEC7CAC84AC7CAC7C8C746B744B744B6C4A6B0A63C963C963A863C963C9638863A8738808A110812163180210C118E210E13222536963EA5BCA
+# 00007C0C84CD84ED7CCD746B744B6C2A63EA63E963A963A85B885B685B685B685B475347634708800040088108600060088108800881742B8D0E7C2F
+# 00008C4D8D4F954F8D0E84CD748B6C4B6C0A63E963E963A95B885B6853675327530753075B48086008600881088108600880088008A19D0EB654B6D6
+# 0000B610AE94B6949DD18D4F7CCD748C746B6C4A6BEA63C963E963A95B885B68532753075B0A08600061086008810880088108601081D7CEEFDBF7DC
+# 0000FFB5FFFFFFFFFFFFFFFDE7DACF37B6739DB1840E746B63CA53684AE742A63A4532255BF1086008600860006008600860084008819DE4FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7FAD777BE94A5F19D708C0D7C8C6C2A63EA63895B685B17086008600860006008600040006008613243FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFFEFFBD798BEB4AD32958F8CED7CAC744B6B0A63A95B8852D90860086008600860004008400060086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7FACF57BE94A5128D4E74CD6CA9740A6BEA63A95B684290086008600860084000400060004008400881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFD9C616B673A5D0844F746B744B742A6BEA63C95B884AAE0860086008600860086000600860086008608463EFFC
+n=1298 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1299 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1300 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1301 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1302 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1303 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1304 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1305 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1306 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1307 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1308 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1309 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1310 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1311 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1312 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1313 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1314 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1315 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1316 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1317 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1318 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1319 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1320 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1321 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1322 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1323 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1324 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1325 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1326 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1327 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1328 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1329 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1330 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1331 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1332 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1333 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=1334 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1335 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1336 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1337 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1338 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1339 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1340 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1341 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1342 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1343 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1344 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1345 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1346 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1347 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1348 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1349 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1350 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1351 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1352 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1353 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1354 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1355 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1356 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1357 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1358 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=1359 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1360 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1361 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1362 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1363 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1364 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1365 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1366 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1367 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1368 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1369 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1370 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1371 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1372 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1373 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1374 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1375 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1376 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1377 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1378 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1379 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1380 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1381 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1382 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1383 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1570 1900
+n=1384 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1385 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1386 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1387 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1388 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1389 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1390 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1391 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1392 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1393 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1394 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1395 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1396 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1397 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1398 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1399 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1400 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1401 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1402 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1403 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1404 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1405 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1406 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1407 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1408 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1490 1570 1900
+n=1409 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1410 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1411 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1412 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1413 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1414 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1415 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1416 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1417 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1418 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1419 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1420 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1421 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1422 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1423 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1424 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1425 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1426 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1427 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1428 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1429 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1430 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1431 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1432 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1433 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1490 1570 1900
+n=1434 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1435 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1436 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1437 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1438 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1439 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1440 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1441 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1442 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1443 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1444 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1445 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1446 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1447 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1448 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1449 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1450 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1451 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1452 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1453 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1454 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1455 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1456 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1457 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1458 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1488 1570 1900
+n=1459 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1460 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1461 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1462 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1463 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1464 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1465 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1466 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1467 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1468 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1469 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1470 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1471 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1472 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1473 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1474 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1475 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1476 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1477 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1478 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1479 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1480 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1481 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# IMG 30 30 rgb565
+# 000074CA6C09744A630A6C4A63E96C0A63E919074A81214511C15BC65BA85B885B885368534895EB84CE9ED2A654AE54AE53A6542948100210C108A1
+# 00007C0B744A744B742A742A742A6C2A6C2A6C0A6C0A63EA534763A963A963C963A863A85B8895AD8D2FAE13AE74AE74AE7495541983100210C108A1
+# 000074EB7C6B746B744A6C4A6C4A6C2A6C2A6C096C2A6BE95B886BC963E963E963C96BC95BA9954F8D4FAE53B695B694AE746C501922110210C108A1
+# 00007C0C7C8B7C8B746B746B746B744B742A6C0A6CE96BC95B886C096C0A6B0963096BEA63E995709570AE53B6B5B695AE9429691922110210C108A1
+# 00007C0B7CAC7CAC7C8B746B7C6B746B744B6C2A6BEA6BC963A974E9742A744A742A6C2A740A9D709D90AE53BED6B695A57421A41942110208E108C1
+# 00007C0C84AC7CAC7C8C7C8C7C8B950D740A746B744A6C0A6BE9742A744A744A744A744A6C2A9D4F9DB1AE33BEF6B6B56CD119831922100210E20081
+# 0000842C84CC84CC7CAC7CCC7CAC7C8B748B7C6B744A746A6C09744A7C6B746B7C6B742A744A9D6F9DD1B653BEF7B6B52AAA19631922110210020020
+# 0000842C84CC84ED84CC84EC7CCC748B7C8B746B7C6B7C6B6C0A742A7C6B7C8B746B744B744B9D4FA6F2B654C617A67421C421831942194300600020
+# 00008C2C84ED84ED84ED84ED84ED7CAC7C8B7C8C7C8B7C8B6C2A7C4B748B848C7C8B7C6B746B9D4FA633B674B6F66CF2218321631963104300400040
+# 00008C2C8CED8D0D8DED8D0D8D2E84ED7CAC7CAC84AC7CAC746B7C6B7CAC7CAC7C8C7C8B7C6B9D4EA653B694B6D629482183218329C4006000400040
+# 0000844D8DED8D2E8D0D8D4E952E840D84AC84AC84AC7C8B748B7C4B84AB84AC7C8B7C6B7C8B9D2EA653B694AEB521A4214321A30843004000400881
+# 00008C4D8CED952E8D2E954E954E8D0D84CC84AC84AC84AC7C8B7C6B7CCC84AC84AC84AC7CAB9D0DAE74B6945BF22183214332660040004008812183
+# 0000844C8D0D8D2E952E952E952E8D4E9D2E7C8C84AC84AB7CAB7C6B84CC84CC84AC848C84AC9DEDAE54BE9429861963316308020040086121634BE7
+# 00008C4D8D0E8D0D8D2E952E952E8D2E8C0D84CC7C6B848C7C8B7C4B7CAC84AC84AC84AC84AC95EDAE53951221A419433A6600600881214343C74B48
+# 00008C4D8D2E8D0D8D2E8D2E8D2E8D2E84ED7C8C848B84CC7C8B7C4B84CC848B848B84CC84AC8DCCAE535B2B320711226B8808A132C43A8653485389
+# 00008C4D8D2E85ED8D0D8D2D8D0D8D0D84CC7C8B7C6B84CC7CAC7C4A84AC84AB84AC84AB7CAB8DCCA512534819834A636BA932044B284B0753684B48
+# 00008C4D8D2E850D8DED8D0D8C0E84ED7CAC746B742A7C8B7CAC742A7CAB84AC84AC848C7CAC84AB95B1218319029DED5BC942654B2842C64B074B27
+# 00008C4D8D2D8D0D8DED8D0D8C0D840D848B746B6CE97C6B7C8B740A848B84AC7C8B7C8B7C8B7C8B328C19427B86316510A13A434307430742C64307
+# 00008C4D8D2E8D2E8D0D840D8DED8D0D7CCC7C6B7C4B7C8B7C8B744A848B848C7C8B7C6B7C8B7C6B198318E2102221A163C96BC94B0742E73AC642E7
+# 00008C4D8D2E840D8D0D8C0D8DED84ED84ED7CAC7C8B7C8B7C6B742A7C6B7C8B7C6B746B7C4A532A194210A108600860086008814AA64AE742E74307
+# 0000842C84ED84CC84ED8CCD84EC7CAC7C6B746B6C4B6B0A6C0A63A86BE96CE96BE963C96BEA196508604AA6530753275B685B684B6843074B074AE7
+# 00007C0C7CAC7CAC7CAC7C8C746B744B744A6C2A6B2A63A863C863A963A963A9638863A86B8808A110612163100210E110E110C13A22534863EA5BEA
+# 00007CEB7CCD7CED7CCD746B744B6C2A63E963E963A863A85B885B685B485B6853475327634708600040088100600060088008810881742B8D0E842F
+# 00008D4D954F8D4F8D2E7CED746C6C4B6C2A63E963C963A95B885B68536753274B0753075B48086000600881088108600881088108A19D0FB654B6F6
+# 0000AE10AE94AE949DD18D4F7CCD748B746B6C4B630A63E96BC963885B885B48530753075B2A086000600860008108800881086008A1D7CEEFDBEFDC
+# 0000FFB5FFFFFFFFFFFFFFFDE7DACF37B6739DB0840E746B63EA53684AE642A63A45322453F1086008600860006008600060086008609DE4FFFEFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEEFFACF77BE94A5129D8F8C0D7CAC742A6BEA63A95B685B17086008400060006000600040006008603243FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEEFFBD798BE94AD12956F84ED7CAC742A6BEA63C95B8852D90860086000800860004008400040086019C1FFFFFFFF
+# 0000FFB5FFFFFFFFFFFFFFFFFFFEE7FACF57BEB4A5F28D4F74CD6CC9742A6BEA63C95B6842B0086008600860086000400060004008400881FF55FFFF
+# 0000FFB5FFFFFFFFFFFFFFFFF7FCDFD9C616B673A5F1844F746B742B740A6BEA63C95B8842AD0860086008600860086000600860086008608463E7FC
+n=1482 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1483 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1571 1900
+n=1484 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1485 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1486 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1487 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1488 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1489 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1490 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1491 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1492 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1493 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1494 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1495 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1496 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1497 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1498 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1499 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1500 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 4 fps | com7=0x04 com15=0xD0 format confirmed | blob x+0.03 y+0.18 area 2123
+n=1501 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1502 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1503 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1504 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1505 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1506 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1507 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+n=1508 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%  *** STALLED: commanded but not moving — check power ***
+# servo us 1489 1572 1900

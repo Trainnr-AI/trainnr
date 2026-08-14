@@ -93,7 +93,27 @@ cargo run -p hil-host --example rig_view -- --replay recordings/chase-brightness
 # -> 5 camera frames, 1034 status reports drawn
 ```
 
-⚠️ Not yet a gate step: `rig_view` spawns the Rerun viewer, and the gate
-must run headless. A viewer-less reader over this file would pin the
-Status and thumbnail parsers against a real session — worth doing when
-one exists; the counts above are the expected values.
+**A gate step since 2026-08-15**: `rig_replay` is the viewer-less reader
+this note used to ask for. `tools/verify.sh` pins the exact counts —
+`1034 status (0 stalled), 5 images (0 torn), 0 servo, 2 notes,
+0 unparsable`.
+
+## `track-and-stall.wire` — the arm tracking, and the stall latch (2026-08-15)
+
+The first ~28 seconds of the camera-driven servo run: 47 `# servo us`
+lines (the arm's commanded pulses), 7 thumbnails — and **1,119 of its
+1,132 status reports carry `stalled:true`**, because this is the very
+recording in which a marginal breadboard contact left the wheels
+commanded-but-motionless and the stall guard latched in 200 ms. Kept
+for exactly that: it pins the parsing of all three note formats *and*
+the stalled flag against a session where the guard genuinely fired.
+
+```sh
+cargo run -p hil-host --example rig_replay -- recordings/track-and-stall.wire
+# -> 1132 status (1119 stalled), 7 images (0 torn), 47 servo, 3 notes, 0 unparsable
+```
+
+⚠️ Curated by one line: the raw capture began with `1900` — the tail of
+an in-flight servo note, cut at the instant DTR opened the port. A
+mid-stream attach always risks a leading fragment; the fixture drops it
+so `rig_replay` can stay strict instead of growing a special case.

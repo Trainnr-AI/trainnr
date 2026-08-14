@@ -140,6 +140,15 @@ step "replay: two-joint bench recording" \
       | grep -q '0 unparsable'"
 step "replay: perception fixture" \
      "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"
+# The rig recordings, read headless. Counts pinned exactly: a parser
+# change that breaks Status, thumbnail or arm_pulses stops being a
+# surprise in the viewer and becomes a red build here.
+step "replay: chase session (camera wire format)" \
+     "cargo run -q -p hil-host --example rig_replay -- recordings/chase-brightness.wire \
+      | grep -q '1034 status (0 stalled), 5 images (0 torn), 0 servo, 2 notes, 0 unparsable'"
+step "replay: servo tracking and the stall latch" \
+     "cargo run -q -p hil-host --example rig_replay -- recordings/track-and-stall.wire \
+      | grep -q '1132 status (1119 stalled), 7 images (0 torn), 47 servo, 3 notes, 0 unparsable'"
 
 # Slowest, and needs npx + the emulator checkout.
 [ -z "$CI" ] && \
