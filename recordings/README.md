@@ -79,3 +79,21 @@ believing it was wherever it last stopped. Fixed by the `I` message: the
 host now tells the chip where a session starts, and the chip acknowledges.
 
 Diagnosis took one `head -4`.
+
+## `chase-brightness.wire` — the camera driving the wheels (2026-08-14)
+
+Twenty-five seconds of the closed loop on the bench: 1,034 status
+reports and **5 embedded camera thumbnails**, captured with
+`rig_view --record` while the robot hunted the brightest patch it could
+see, wheels on a stand. Replay draws the whole rig — image, belief
+trail, duty, ticks — with no hardware:
+
+```sh
+cargo run -p hil-host --example rig_view -- --replay recordings/chase-brightness.wire
+# -> 5 camera frames, 1034 status reports drawn
+```
+
+⚠️ Not yet a gate step: `rig_view` spawns the Rerun viewer, and the gate
+must run headless. A viewer-less reader over this file would pin the
+Status and thumbnail parsers against a real session — worth doing when
+one exists; the counts above are the expected values.

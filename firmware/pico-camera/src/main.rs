@@ -76,6 +76,12 @@ use panic_halt as _;
 /// ~10.4 MHz on an RP2040's 125 MHz. **Both are inside the window**,
 /// which is why one constant serves two chips — the frequency only has to
 /// be in range, not exact, because it is a reference and not a data rate.
+///
+/// ⚠️ Deliberately DIFFERENT from `pico-odom`'s camera module, which runs
+/// 25 MHz (top = 5) because frame rate — and through it, exposure — was
+/// measured to matter there. This firmware only identifies the sensor,
+/// any in-window clock does that, and the two values are separate
+/// decisions. Do not "fix" one to match the other.
 const XCLK_TOP: u16 = 11;
 
 /// Square wave: high for half the period. The camera clocks on an edge,
