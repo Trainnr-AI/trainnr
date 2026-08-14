@@ -514,6 +514,114 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
     }
 }
 
+/// The shared back half of every motor commander: stall guard, standby
+/// gating, the mounting sign, and the duty telemetry.
+///
+/// `teleop` and `chase` differ only in **who computes the twist** — a
+/// host on a cable, or the camera. Everything that touches hardware is
+/// here, once. `firmware/support/motor.rs` already warned that direction
+/// pins and deadband notes "diverge silently once there are two of them",
+/// and chase's first draft proved it by copying forty-five lines of this
+/// verbatim.
+#[cfg(any(feature = "teleop", feature = "chase"))]
+struct Drivetrain {
+    motors: Motors,
+    cfg: PwmConfig,
+    enabled: bool,
+    ticks_at_last_check: u32,
+    stalled_polls: u32,
+}
+
+#[cfg(any(feature = "teleop", feature = "chase"))]
+impl Drivetrain {
+    /// Take the motors, stopped.
+    fn new(mut motors: Motors) -> Self {
+        let mut cfg = PwmConfig::default();
+        cfg.top = PWM_TOP;
+        motors.left.set_signed(&mut cfg, 0);
+        motors.right.set_signed(&mut cfg, 0);
+        Drivetrain {
+            motors,
+            cfg,
+            enabled: false,
+            ticks_at_last_check: TOTAL_TICKS.load(Ordering::Relaxed),
+            stalled_polls: 0,
+        }
+    }
+
+    /// A body twist to per-wheel duty, in the ±`DUTY_FULL` wire units.
+    fn duty_for(spec: &RobotSpec, forward_speed: f64, turn_rate: f64) -> (i32, i32) {
+        let wheels = spec.fit_wheels(spec.drive().inverse(BodyTwist {
+            forward_speed,
+            turn_rate,
+        }));
+        (spec.duty(wheels.left), spec.duty(wheels.right))
+    }
+
+    /// Drive at `(left, right)` duty — through the stall guard.
+    ///
+    /// # Commanded, but not moving
+    ///
+    /// The sweep has had this check since a dead battery produced a
+    /// textbook-looking run with zero motion in it, and `teleop` once
+    /// shipped without it — a host could hold a stalled motor at full
+    /// duty indefinitely, drawing near its ~500 mA stall current, and
+    /// nothing would say so. The chip STOPS rather than escaping:
+    /// reversing is recovery, recovery needs to know what is behind the
+    /// robot, and only the commander knows that. `STALLED` appears in
+    /// the report line for the commander to act on, and clears itself
+    /// once the wheels turn again so a single scuff does not latch the
+    /// robot off for the session.
+    ///
+    /// # Two layers of stop
+    ///
+    /// Zero duty is a *software* stop — the bridge still obeys the next
+    /// write. `STBY` low is a *hardware* stop, disabling all four
+    /// switches of both bridges. It is touched only on a transition,
+    /// because reporting it every 50 ms would bury the one event that
+    /// matters in a thousand that do not.
+    fn apply(&mut self, mut left: i32, mut right: i32) {
+        let ticks_now = TOTAL_TICKS.load(Ordering::Relaxed);
+        let commanded_hard =
+            left.unsigned_abs().max(right.unsigned_abs()) > STALL_DUTY_FLOOR.unsigned_abs();
+        if commanded_hard && ticks_now == self.ticks_at_last_check {
+            self.stalled_polls += 1;
+            if self.stalled_polls >= STALL_POLLS {
+                STALLED.store(true, Ordering::Relaxed);
+            }
+        } else {
+            self.stalled_polls = 0;
+            if ticks_now != self.ticks_at_last_check {
+                STALLED.store(false, Ordering::Relaxed);
+            }
+        }
+        self.ticks_at_last_check = ticks_now;
+        if STALLED.load(Ordering::Relaxed) {
+            left = 0;
+            right = 0;
+        }
+
+        let should_run = left != 0 || right != 0;
+        if should_run != self.enabled {
+            self.motors.standby.set_level(Level::from(should_run));
+            self.enabled = should_run;
+            STALLED.store(false, Ordering::Relaxed);
+        }
+        // The same mounting fact as everywhere else, applied on the way
+        // out — see `firmware_support::motor::DRIVETRAIN_SIGN`.
+        let facing = firmware_support::motor::DRIVETRAIN_SIGN;
+        self.motors.left.set_signed(&mut self.cfg, left * facing);
+        self.motors.right.set_signed(&mut self.cfg, right * facing);
+
+        // A magnitude percentage — all the status line has room to say.
+        // The sign is visible in the encoder counts either way.
+        DUTY_PERCENT.store(
+            (left.unsigned_abs().max(right.unsigned_abs()) * 100 / DUTY_FULL.unsigned_abs()) as u16,
+            Ordering::Relaxed,
+        );
+    }
+}
+
 /// Drive the motors from `T v w` twists sent by the host, and **stop them
 /// when the host goes quiet**.
 ///
@@ -553,24 +661,17 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
 #[cfg(feature = "teleop")]
 async fn follow_host_forever(
     rx: &mut impl CommandSource,
-    mut motors: Motors,
+    motors: Motors,
     spec: RobotSpec,
 ) -> ! {
     use hil_protocol::{LineReader, Message};
 
-    let mut cfg = PwmConfig::default();
-    cfg.top = PWM_TOP;
-    motors.left.set_signed(&mut cfg, 0);
-    motors.right.set_signed(&mut cfg, 0);
-
+    let mut drivetrain = Drivetrain::new(motors);
     let mut watchdog = CommandWatchdog::new(COMMAND_TIMEOUT_MS);
     let mut reader: LineReader<64> = LineReader::new();
     let mut rx_bytes = [0u8; 64];
     // What the host last asked for, before the watchdog has its say.
     let mut wanted = (0i32, 0i32);
-    let mut enabled = false;
-    let mut ticks_at_last_check = TOTAL_TICKS.load(Ordering::Relaxed);
-    let mut stalled_polls: u32 = 0;
 
     loop {
         // Bounded, so staleness is noticed within one poll of becoming
@@ -586,11 +687,7 @@ async fn follow_host_forever(
             // rejected — including this firmware's OWN status lines, so
             // looping the port back on itself cannot command the motors.
             if let Ok(Message::Twist { v, w }) = Message::parse(line) {
-                let wheels = spec.fit_wheels(spec.drive().inverse(BodyTwist {
-                    forward_speed: v,
-                    turn_rate: w,
-                }));
-                wanted = (spec.duty(wheels.left), spec.duty(wheels.right));
+                wanted = Drivetrain::duty_for(&spec, v, w);
                 // Fed on a VALID twist only. A host dribbling malformed
                 // bytes is a host that has lost its mind, and must not
                 // count as one that is still in control.
@@ -598,67 +695,8 @@ async fn follow_host_forever(
             }
         }
 
-        let (mut left, mut right) = watchdog.gate(firmware_support::now_ms(), wanted);
-
-        // ---- commanded, but not moving ----
-        //
-        // The sweep has had this check since a dead battery produced a
-        // textbook-looking run with zero motion in it. **`teleop` shipped
-        // without it**, because `STALLED` and `MUST_MOVE_ABOVE` were gated
-        // out with the sweep — so the host could hold a stalled motor at
-        // full duty indefinitely, drawing near its ~500 mA stall current
-        // and heating, and nothing would say so.
-        //
-        // The chip STOPS rather than escaping. Reversing is recovery, and
-        // recovery needs to know what is behind the robot — which the host
-        // knows and the chip does not. Tier 0 protects the hardware; Tier
-        // 2 decides where to go. The host sees `STALLED` in the report
-        // line and can act on it.
-        let ticks_now = TOTAL_TICKS.load(Ordering::Relaxed);
-        let commanded_hard = left.unsigned_abs().max(right.unsigned_abs())
-            > STALL_DUTY_FLOOR.unsigned_abs();
-        if commanded_hard && ticks_now == ticks_at_last_check {
-            stalled_polls += 1;
-            if stalled_polls >= STALL_POLLS {
-                STALLED.store(true, Ordering::Relaxed);
-            }
-        } else {
-            stalled_polls = 0;
-            // Clears itself once the wheels turn again, so a single
-            // scuff does not latch the robot off for the session.
-            if ticks_now != ticks_at_last_check {
-                STALLED.store(false, Ordering::Relaxed);
-            }
-        }
-        ticks_at_last_check = ticks_now;
-        if STALLED.load(Ordering::Relaxed) {
-            left = 0;
-            right = 0;
-        }
-
-        let should_run = left != 0 || right != 0;
-
-        // `STBY` is touched only on a transition. It is a GPIO write
-        // either way, but reporting it every 50 ms would bury the one
-        // event that matters in a thousand that do not.
-        if should_run != enabled {
-            motors.standby.set_level(Level::from(should_run));
-            enabled = should_run;
-            STALLED.store(false, Ordering::Relaxed);
-        }
-        // The same mounting fact, on the way out. Without this a forward
-        // command drives the chassis backward — measured 2026-08-13.
-        let facing = firmware_support::motor::DRIVETRAIN_SIGN;
-        motors.left.set_signed(&mut cfg, left * facing);
-        motors.right.set_signed(&mut cfg, right * facing);
-
-        // Reported as a magnitude percentage, which is all the existing
-        // status line has room to say. The sign is visible in the encoder
-        // counts either way.
-        DUTY_PERCENT.store(
-            (left.unsigned_abs().max(right.unsigned_abs()) * 100 / DUTY_FULL.unsigned_abs()) as u16,
-            Ordering::Relaxed,
-        );
+        let (left, right) = watchdog.gate(firmware_support::now_ms(), wanted);
+        drivetrain.apply(left, right);
     }
 }
 
@@ -809,774 +847,7 @@ compile_error!(
 );
 
 #[cfg(feature = "camera")]
-mod camera {
-    use core::fmt::Write as _;
-    use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-
-    use embassy_executor::Spawner;
-    use embassy_rp::bind_interrupts;
-    use embassy_rp::gpio::{Input, Pull};
-    use embassy_rp::i2c::{Config as I2cConfig, I2c};
-    use embassy_rp::peripherals::{
-        DMA_CH0, I2C0, PIN_0, PIN_1, PIN_13, PIN_14, PIN_15, PIN_16, PIN_17, PIN_18, PIN_19,
-        PIN_20, PIN_21, PIN_22, PIN_4, PIN_5, PIO0, PWM_SLICE2,
-    };
-    use embassy_rp::pio::{
-        Config as PioConfig, Direction, InterruptHandler, Pio, ShiftConfig, ShiftDirection,
-    };
-    use embassy_rp::pwm::{Config as PwmConfig, Pwm};
-    use embassy_rp::Peri;
-    use embassy_time::{Duration, Timer};
-
-    bind_interrupts!(struct CameraIrqs {
-        PIO0_IRQ_0 => InterruptHandler<PIO0>;
-    });
-    bind_interrupts!(struct DmaIrqs {
-        DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>;
-    });
-
-    /// XCLK divider.
-    ///
-    /// ⚠️ A top of 5 gives 25 MHz on an RP2350 — the value every OV7670
-    /// reference design uses, and inside the sensor's 10–24 MHz window at
-    /// the RP2040's 125 MHz too.
-    const XCLK_TOP: u16 = 5;
-    const XCLK_COMPARE: u16 = 3;
-
-    /// How long XCLK runs before the first transaction, and between
-    /// identification retries.
-    const SETTLE_MS: u64 = 100;
-    /// Identification attempts before giving up for good.
-    const ATTEMPTS: usize = 5;
-
-    /// One thumbnail every this many frames.
-    const THUMBNAIL_EVERY: u32 = 16;
-
-    /// How often [`announce`] runs, in seconds. Used to turn a frame
-    /// delta into a rate, so the two cannot drift apart.
-    pub const ANNOUNCE_SECONDS: u32 = 10;
-
-    /// Frame geometry.
-    ///
-    /// # ⚠️ 140 wide, not the 160 that QQVGA implies — and it was MEASURED
-    ///
-    /// The sensor's own colour-bar pattern came back correct in colour and
-    /// order but sheared: every row offset from the one above. That shear
-    /// is a measurement. With a row stride of `S` and a true line width of
-    /// `W`, our row `r` column `c` reads stream pixel `(S*r + c) mod W`,
-    /// so the offset of row `r` is `S*r mod W`. Observed, with `S` = 160:
-    ///
-    /// ```text
-    ///   row  1  offset +20 px   ->   160 mod W = 20
-    ///   row  7  offset   0      ->   1120 mod W = 0     (1120 = 8 x 140)
-    ///   row 14  offset   0      ->   2240 mod W = 0     (2240 = 16 x 140)
-    /// ```
-    ///
-    /// **W = 140**, and it predicts something it was not fitted to: a bar
-    /// width of 140/8 = 17.5 px, which is why the captured runs alternate
-    /// between four and five thumbnail pixels instead of being a clean
-    /// five. That is the check that makes this a measurement rather than a
-    /// curve fit.
-    ///
-    /// ⚠️ **Why the sensor does this is NOT understood.** The scaling
-    /// registers ask for 640/4 = 160. The likely cause is the default
-    /// `HSTART`/`HSTOP` window, which is a known OV7670 quirk — but that
-    /// is a hypothesis, and 140 is the number the hardware actually
-    /// produced. Tuning the window to yield a rounder figure is worth
-    /// doing and is not the same job as making the picture correct.
-    /// ⚠️ **120, and deliberately narrower than the sensor's line.**
-    ///
-    /// The true line width is not known — measured attempts gave 140 and
-    /// then contradicted themselves, because the earlier PIO program lost
-    /// a varying number of bytes per line and the shear it produced was
-    /// therefore not a clean stride mismatch to solve for.
-    ///
-    /// So the width is no longer *inferred*. PIO counts out exactly this
-    /// many pixels per line and then waits for the next `HREF`, which
-    /// means any line at least this wide produces aligned rows. 120 is
-    /// comfortably inside the ~160 the bar pattern implies, and the cost
-    /// is cropped field of view rather than a corrupt picture.
-    ///
-    /// ⚠️ Widening this is only safe once the real line width is measured
-    /// — by counting `PCLK` edges between `HREF` edges, which is a
-    /// question the sensor can be asked directly rather than solved for.
-    pub const FRAME_WIDTH: u16 = 120;
-    pub const FRAME_HEIGHT: u16 = 120;
-    const FRAME_BYTES: usize = FRAME_WIDTH as usize * FRAME_HEIGHT as usize * 2;
-    /// The same frame as PIO delivers it — four bytes per pushed word.
-    const FRAME_WORDS: usize = FRAME_BYTES / 4;
-
-    /// The frame buffer. 38,400 bytes of the RP2350's 520 KB.
-    ///
-    /// `StaticCell` rather than a `static mut` because `unsafe_code` is
-    /// forbidden repo-wide and this needs no exception.
-    static PICTURE: static_cell::StaticCell<[u32; FRAME_WORDS]> = static_cell::StaticCell::new();
-
-    /// Identity, packed, so it can be restated without touching the bus.
-    static CACHED: AtomicU32 = AtomicU32::new(0);
-    static SEEN: AtomicBool = AtomicBool::new(false);
-    /// `applied | com7 << 8 | com15 << 16` — what the sensor says its
-    /// own format registers hold, after being told.
-    static CONFIG_READBACK: AtomicU32 = AtomicU32::new(0);
-    /// Darkest and brightest byte of the most recent frame, `low | high << 8`.
-    static PIXEL_RANGE: AtomicU32 = AtomicU32::new(0);
-    /// Frames captured since boot. A rate, and a liveness signal.
-    static FRAMES: AtomicU32 = AtomicU32::new(0);
-    /// `centroid_x << 16 | centroid_y`, valid only when [`BLOB_AREA`] is
-    /// non-zero.
-    static BLOB_POS: AtomicU32 = AtomicU32::new(0);
-    /// Matching pixel count. **Zero means nothing was found** — which is
-    /// a real answer, not a missing one.
-    static BLOB_AREA: AtomicU32 = AtomicU32::new(0);
-
-    /// Every pin the camera needs, named so two cannot be swapped by
-    /// argument order — the same reason [`super::MotorPins`] exists.
-    pub struct CameraPins {
-        pub i2c: Peri<'static, I2C0>,
-        pub sda: Peri<'static, PIN_4>,
-        pub scl: Peri<'static, PIN_5>,
-        pub xclk_slice: Peri<'static, PWM_SLICE2>,
-        pub xclk: Peri<'static, PIN_21>,
-        pub vsync: Peri<'static, PIN_1>,
-        pub href: Peri<'static, PIN_22>,
-        pub pclk: Peri<'static, PIN_0>,
-        /// ⚠️ `PIO0` and `DMA_CH0` are the radio's on a `wifi` build — see
-        /// the `compile_error!` above. Two owners of one peripheral is the
-        /// shape this repo keeps finding bugs in, so it is refused at
-        /// compile time rather than discovered as a corrupt frame.
-        pub pio: Peri<'static, PIO0>,
-        pub dma: Peri<'static, DMA_CH0>,
-        /// `D0`..`D7`. **All eight**, not just the base: every pin PIO
-        /// reads must have its function switched to PIO, and claiming only
-        /// `D0` leaves the other seven reading as nothing. They must also
-        /// be consecutive — `in pins` reads a contiguous group, which is
-        /// the whole reason the encoders moved.
-        pub data: (
-            Peri<'static, PIN_13>,
-            Peri<'static, PIN_14>,
-            Peri<'static, PIN_15>,
-            Peri<'static, PIN_16>,
-            Peri<'static, PIN_17>,
-            Peri<'static, PIN_18>,
-            Peri<'static, PIN_19>,
-            Peri<'static, PIN_20>,
-        ),
-    }
-
-    /// QQVGA (160x120) in RGB565 — the format `crates/blob` consumes.
-    ///
-    /// ⚠️ **A starting point, not a tuned table.** Camera register sets are
-    /// order-dependent and vendor-specific. Written as data rather than
-    /// code so that adjusting it is editing a table, not editing logic.
-    const QQVGA_RGB565: &[(u8, u8)] = &[
-        (0x12, 0x04), // COM7   — RGB output
-        // ⚠️ Measured, and two of the readings were taken with a broken
-        // counter. `/8` puts the internal clock near 3 MHz, under the
-        // sensor's ~10 MHz floor, and the frame rate collapses by ~100x
-        // rather than the 8x a divider implies.
-        //
-        // ⚠️ **Not tuned, and cannot be until an image is looked at.**
-        // Frame rate matters here only through exposure — exposure cannot
-        // exceed the frame period — and brightness is not judgeable from
-        // a number. Picking this by arithmetic is the same error as
-        // trusting a counter with a silent floor.
-        (0x11, 0x01), // CLKRC  — internal clock / 2
-        (0x0C, 0x04), // COM3   — enable downsampling (DCW)
-        (0x3E, 0x1A), // COM14  — DCW on, PCLK divided by 4
-        (0x40, 0xD0), // COM15  — RGB565, full 0-255 range
-        // ⚠️ Bit 7 of these two selects the sensor's internal TEST
-        // PATTERN, and [`TEST_PATTERN`] flips it.
-        //
-        //   XSC.7  YSC.7   output
-        //     0      0     the lens
-        //     0      1     eight-bar colour bars
-        //     1      0     fade-to-grey bars
-        //     1      1     a shifting "1"
-        //
-        // Colour bars are generated INSIDE the sensor, after the pixel
-        // array and before the output pins. So they travel the whole path
-        // being debugged — format, PCLK, HREF, the eight data lines, PIO,
-        // DMA — while depending on no lens, no light and no exposure.
-        // Bars mean the capture is sound and the problem is optical;
-        // noise means the capture is not, and no amount of tuning hue or
-        // exposure was ever going to help.
-        (0x70, 0x3A), // SCALING_XSC
-        (0x71, 0x35), // SCALING_YSC
-        (0x72, 0x22), // SCALING_DCWCTR    — /4 horizontally and vertically
-        (0x73, 0xF2), // SCALING_PCLK_DIV  — /4
-        (0xA2, 0x02), // SCALING_PCLK_DELAY
-        // ⚠️ Undocumented, and load-bearing. Without it the OV7670's
-        // RGB565 output carries a strong magenta cast — whites render
-        // lavender-pink, seen on this very sensor in Rerun (2026-08-14).
-        // 0xB0 does not appear in the datasheet at all; 0x84 is the value
-        // every working init sequence in the wild converged on, and no
-        // more is known about it than that. The cast is upstream of the
-        // capture: the bars decoded byte-perfect while the lens image
-        // stayed pink, which is what points the finger at the sensor's
-        // own colour matrix rather than at anything this repo does.
-        (0xB0, 0x84), // undocumented "colour mode" — kills the magenta cast
-    ];
-
-    /// Ask the sensor for colour bars instead of the lens.
-    ///
-    /// ⚠️ A debugging switch, and it should be `false` in anything that
-    /// matters. Left in the source rather than deleted because "compare
-    /// against something you know" is the move that ended a long guessing
-    /// session on 2026-08-14, and the next person deserves the same lever
-    /// without having to find the register.
-    const TEST_PATTERN: bool = false;
-
-    /// What colour the robot is hunting.
-    ///
-    /// ⚠️ Green rather than red: red shares a hue neighbourhood with skin,
-    /// wood and terracotta, which is most of a room. Tuning belongs here,
-    /// in one place, rather than at the call site.
-    // ⚠️ Hunting BRIGHTNESS, not hue — third discriminant, and the first
-    // with a measurement behind it in both directions.
-    //
-    // Hue failed twice on this bench (2026-08-14). Green: the post-0xB0
-    // white balance tints the whole scene green, so the FLOOR outscored a
-    // genuinely green wire — noise ~160, signal ~0. Blue: clean noise
-    // floor, but the only blue thing on the bench is a thin wire that
-    // must be hand-held in frame, which is a prop-dependent robot.
-    //
-    // Brightness is immune to the cast — a bright patch is bright
-    // whatever colour the sensor believes it is — and it needs no prop:
-    // the robot chases the brightest thing it can see, and a phone torch
-    // steers it. The threshold is RELATIVE (frame mean + margin), so a
-    // dim room and a lit one both have a "brightest patch" rather than a
-    // fixed number that works in one room only.
-    /// How far above the frame's mean luma a pixel must be to count.
-    const BRIGHT_MARGIN: u8 = 50;
-    /// Fewer matching pixels than this and nothing is reported.
-    const BRIGHT_MIN_PIXELS: u32 = 40;
-
-    /// Bring the camera up and leave it running.
-    ///
-    /// Returns the PWM guard: **XCLK must keep running** afterwards, and
-    /// dropping it would stop the clock. Binding it to a name at the call
-    /// site is what keeps it alive.
-    #[must_use = "dropping this stops XCLK and the camera goes deaf"]
-    pub async fn start(spawner: Spawner, pins: CameraPins) -> Pwm<'static> {
-        // ⚠️ XCLK first, before anything touches the bus. The OV7670 has
-        // no oscillator of its own, so a transaction issued before this
-        // runs fails in a way that looks exactly like bad wiring.
-        let mut clock_config = PwmConfig::default();
-        clock_config.top = XCLK_TOP;
-        // Channel **B**, because GP21 is odd: `slice = (n/2) % 8`,
-        // `channel = n % 2`. Embassy encodes that in its types, so
-        // `new_output_a` here does not compile rather than silently
-        // driving the wrong pin.
-        clock_config.compare_b = XCLK_COMPARE;
-        let xclk = Pwm::new_output_b(pins.xclk_slice, pins.xclk, clock_config);
-
-        // ⚠️ Async, because the sensor needs the clock to have been
-        // running before it answers. A synchronous version identified it
-        // microseconds after starting XCLK and reported `BUS ERROR` on a
-        // camera that was provably fine.
-        Timer::after_millis(SETTLE_MS).await;
-
-        let i2c = I2c::new_blocking(pins.i2c, pins.scl, pins.sda, I2cConfig::default());
-        let mut sensor = ov7670_driver::Ov7670::new(i2c);
-
-        // Spaced attempts. One try turns settling-still-in-progress into a
-        // permanent verdict, and this verdict is cached for the life of
-        // the program.
-        let mut result = sensor.identify();
-        for _ in 0..ATTEMPTS - 1 {
-            if result.as_ref().is_ok_and(ov7670_driver::Identity::is_ov7670) {
-                break;
-            }
-            Timer::after_millis(SETTLE_MS).await;
-            result = sensor.identify();
-        }
-
-        let mut text: heapless::String<160> = heapless::String::new();
-        let mut identity_bytes = (0u8, 0u8, 0u8, 0u8);
-        match result {
-            Ok(identity) => {
-                identity_bytes = (
-                    identity.product,
-                    identity.version,
-                    identity.manufacturer_high,
-                    identity.manufacturer_low,
-                );
-                let _ = write!(
-                    text,
-                    "# camera pid=0x{:02X} ver=0x{:02X} mid=0x{:02X}{:02X} {}",
-                    identity.product,
-                    identity.version,
-                    identity.manufacturer_high,
-                    identity.manufacturer_low,
-                    identity.complaint().unwrap_or("OK — this is an OV7670"),
-                );
-            }
-            Err(_) => {
-                let _ = text.push_str(
-                    "# camera BUS ERROR — nobody acknowledged 0x21; check SIOD/SIOC and RESET",
-                );
-            }
-        }
-
-        // ⚠️ Only attempted once identification succeeded. Writing a
-        // register table into silence would look like configuration and be
-        // nothing of the kind.
-        if identity_bytes.0 == ov7670_driver::EXPECTED_PRODUCT_ID {
-            let _ = sensor.reset();
-            Timer::after_millis(SETTLE_MS).await;
-            // ⚠️ The result is CHECKED, and then the registers are read
-            // BACK. Discarding it — `let _ = apply(..)` — is what the
-            // first version did, and a sensor left in its power-on
-            // default (VGA, YUV) while the host decodes RGB565 produces
-            // exactly the full-entropy noise this was debugged from.
-            //
-            // A write that returns Ok is not proof either: SCCB has no
-            // read-after-write guarantee, and a register the sensor
-            // refuses still ACKs. Only the read-back is evidence.
-            let mut applied = sensor.apply(QQVGA_RGB565).is_ok();
-            if TEST_PATTERN {
-                // YSC bit 7 on, XSC bit 7 off: the eight-bar pattern.
-                applied &= sensor.write_register(0x71, 0x35 | 0x80).is_ok();
-            }
-            Timer::after_millis(SETTLE_MS).await;
-            let com7 = sensor.read_register(0x12).unwrap_or(0xEE);
-            let com15 = sensor.read_register(0x40).unwrap_or(0xEE);
-            CONFIG_READBACK.store(
-                u32::from(applied)
-                    | (u32::from(com7) << 8)
-                    | (u32::from(com15) << 16),
-                Ordering::Relaxed,
-            );
-        }
-
-        crate::diag::note(&text);
-        let packed = [
-            identity_bytes.0,
-            identity_bytes.1,
-            identity_bytes.2,
-            identity_bytes.3,
-        ];
-        CACHED.store(u32::from_be_bytes(packed), Ordering::Relaxed);
-        // ⚠️ Only on a real answer. Setting this unconditionally made
-        // `announce` restate a cached all-zeroes identity every ten
-        // seconds — a failure reported in the voice of a measurement.
-        SEEN.store(identity_bytes.0 != 0, Ordering::Relaxed);
-
-        let mut pio = Pio::new(pins.pio, CameraIrqs);
-        // ⚠️ HREF and PCLK are PIO pins, not `Input`s.
-        //
-        // An earlier version made them `Input`s to probe for edges, then
-        // `mem::forget` them so the pads survived — because *dropping*
-        // them restored the pad and left `wait gpio` reading a dead line
-        // forever. `make_pio_pin` is the honest version: PIO configures
-        // the pad and owns it, and no diagnostic can leave it in a state
-        // the capture then depends on.
-        //
-        // The probe itself is gone. It asked "is this wired?", and the
-        // sensor's own colour bars answer that far better — they travel
-        // the whole path and depend on no lens, no light and no exposure.
-        let href_pin = pio.common.make_pio_pin(pins.href);
-        let _pclk_pin = pio.common.make_pio_pin(pins.pclk);
-        // Every one of the eight, switched to PIO function.
-        let d0 = pio.common.make_pio_pin(pins.data.0);
-        let d1 = pio.common.make_pio_pin(pins.data.1);
-        let d2 = pio.common.make_pio_pin(pins.data.2);
-        let d3 = pio.common.make_pio_pin(pins.data.3);
-        let d4 = pio.common.make_pio_pin(pins.data.4);
-        let d5 = pio.common.make_pio_pin(pins.data.5);
-        let d6 = pio.common.make_pio_pin(pins.data.6);
-        let d7 = pio.common.make_pio_pin(pins.data.7);
-        let all_data = [&d0, &d1, &d2, &d3, &d4, &d5, &d6, &d7];
-
-        // ```text
-        //   wait 1 gpio 22   ; HREF high  -- this line carries real pixels
-        //   wait 0 gpio 0    ; PCLK low   -- so the next wait sees a real edge
-        //   wait 1 gpio 0    ; PCLK high  -- data valid on the rising edge
-        //   in pins, 8       ; sample D0-D7 (GP13..GP20)
-        // ```
-        //
-        // ⚠️ **Both `PCLK` waits are needed.** With only `wait 1`, a state
-        // machine arriving while PCLK is already high samples immediately
-        // AND on the next rising edge — one duplicated byte per line,
-        // which shifts every subsequent pixel and produces a picture that
-        // looks like a wiring fault.
-        //
-        // When HREF falls the first `wait` blocks until the next line, so
-        // horizontal blanking costs nothing and needs no code.
-        // ⚠️ A FIXED number of words per line, re-armed at every HREF.
-        //
-        // Three programs were tried on hardware and the difference is
-        // worth keeping:
-        //
-        //   1. free-running (`wait href` / `wait pclk` / `in`)
-        //      -> correct bar ORDER within a row, rows sheared. Lines
-        //         were intact; only the stride was wrong.
-        //   2. `jmp pin` line loop with `mov isr, null`
-        //      -> WORSE. Bar order within a row scrambled, because the
-        //         number of words a line yields depends on the line's
-        //         length, and that varies.
-        //   3. this: count out exactly `WORDS_PER_ROW` words, then block
-        //      until the next line. Row alignment cannot drift, because
-        //      it is no longer inferred from anything.
-        //
-        // `Y` holds the count, loaded once at startup; `X` is the working
-        // copy, refreshed per line. Four `in`s per iteration because
-        // autopush fires at 32 bits and the loop should push whole words.
-        // ⚠️ A FIXED word count per line, re-armed at every HREF.
-        //
-        // Three programs were tried on hardware, and the comparison is
-        // worth keeping:
-        //
-        //   1. free-running (`wait href` / `wait pclk` / `in`)
-        //      -> bar ORDER correct within a row, rows sheared. Lines
-        //         were intact; only the stride was wrong.
-        //   2. `jmp pin` line loop with `mov isr, null`
-        //      -> WORSE: order scrambled *within* rows, because the words
-        //         a line yields then depend on the line's length.
-        //   3. this: count out exactly 6 x 10 = 60 words, then block
-        //      until the next line. Alignment is asserted, not inferred.
-        //
-        // ⚠️ Nested `set` loops rather than a count from the TX FIFO.
-        // `capture_frame` calls `clear_fifos()` before every frame to drop
-        // stale pixels, and that clears TX as well as RX — so a count
-        // pushed once at startup is deleted before the program reads it,
-        // and `pull` then blocks forever. That produced a board which
-        // captured nothing at all. `set` takes a literal 0..31, so 60 is
-        // reached as two loops rather than one.
-        //
-        // Four `in`s per iteration because autopush fires at 32 bits, and
-        // the loop should deal in whole words.
-        let program = embassy_rp::pio::program::pio_asm!(
-            ".wrap_target",
-            "wait 0 gpio 22",       // blanking — the previous line ended
-            "mov isr, null",        // drop any partial word it left
-            "wait 1 gpio 22",       // this line starts HERE
-            "set y, 5",             // outer: 6 passes
-            "outer:",
-            "set x, 9",             // inner: 10 words each
-            "inner:",
-            "wait 0 gpio 0",
-            "wait 1 gpio 0",
-            "in pins, 8",
-            "wait 0 gpio 0",
-            "wait 1 gpio 0",
-            "in pins, 8",
-            "wait 0 gpio 0",
-            "wait 1 gpio 0",
-            "in pins, 8",
-            "wait 0 gpio 0",
-            "wait 1 gpio 0",
-            "in pins, 8",
-            "jmp x-- inner",
-            "jmp y-- outer",
-            ".wrap",
-        );
-
-        let mut config = PioConfig::default();
-        config.use_program(&pio.common.load_program(&program.program), &[]);
-        config.set_in_pins(&all_data);
-        // `jmp pin` tests this one. It is what turns "sample forever" into
-        // "sample exactly this line".
-        config.set_jmp_pin(&href_pin);
-        // ⚠️ Shift LEFT, so the first byte sampled lands in the LOW byte of
-        // the word. Right-shifting reverses byte order within every word —
-        // an image that is subtly, periodically scrambled rather than
-        // obviously broken.
-        config.shift_in = ShiftConfig {
-            threshold: 32,
-            direction: ShiftDirection::Left,
-            auto_fill: true,
-        };
-        pio.sm0.set_config(&config);
-        pio.sm0.set_pin_dirs(Direction::In, &all_data);
-
-        let dma = embassy_rp::dma::Channel::new(pins.dma, DmaIrqs);
-        let vsync = Input::new(pins.vsync, Pull::None);
-        let buffer = PICTURE.init([0u32; FRAME_WORDS]);
-
-        // The capture loop gets its own task so that a frame — tens of
-        // milliseconds — never sits inside the 10 kHz encoder sampler.
-        // Same rule as `diag`: nothing may block the thing being measured.
-        spawner.spawn(watch(pio, dma, vsync, buffer).unwrap());
-        xclk
-    }
-
-    /// Capture frames forever, and look for the target colour in each.
-    #[embassy_executor::task]
-    async fn watch(
-        mut pio: Pio<'static, PIO0>,
-        mut dma: embassy_rp::dma::Channel<'static>,
-        mut vsync: Input<'static>,
-        buffer: &'static mut [u32; FRAME_WORDS],
-    ) -> ! {
-        loop {
-            if !capture_frame(&mut pio, &mut dma, &mut vsync, buffer).await {
-                // A frame that never arrived. Say nothing rather than
-                // publish a stale blob as though it were current.
-                BLOB_AREA.store(0, Ordering::Relaxed);
-                Timer::after_millis(100).await;
-                continue;
-            }
-            FRAMES.fetch_add(1, Ordering::Relaxed);
-
-            let (mut low, mut high) = (u8::MAX, u8::MIN);
-            for word in buffer.iter() {
-                for byte in word.to_le_bytes() {
-                    low = low.min(byte);
-                    high = high.max(byte);
-                }
-            }
-            PIXEL_RANGE.store(u32::from(low) | (u32::from(high) << 8), Ordering::Relaxed);
-
-            // RGB565 is two bytes per pixel, little-endian within the word
-            // as PIO packed them.
-            // ⚠️ Big-endian pairing — same measured fact as `pixel_at`,
-            // and it must match, or the blob hunts pixels the thumbnail
-            // does not show.
-            let pixels = || {
-                buffer.iter().flat_map(|word| {
-                    let [a, b, c, d] = word.to_le_bytes();
-                    [u16::from_be_bytes([a, b]), u16::from_be_bytes([c, d])]
-                })
-            };
-            // Pass one: the frame's mean brightness. Pass two: the blob
-            // of pixels well above it. Two passes over 19,200 pixels is
-            // cheap next to the frame that took milliseconds to arrive —
-            // and a relative threshold is what makes this work in any
-            // light rather than the light it was tuned in.
-            let mean_luma = (pixels().map(|p| u32::from(blob::luma(p))).sum::<u32>()
-                / (FRAME_WIDTH as u32 * FRAME_HEIGHT as u32)) as u8;
-            let floor = mean_luma.saturating_add(BRIGHT_MARGIN);
-            match blob::find_matching(pixels(), FRAME_WIDTH, BRIGHT_MIN_PIXELS, |p| {
-                blob::luma(p) > floor
-            }) {
-                Some(found) => {
-                    BLOB_POS.store(
-                        ((found.centroid_x as u32) << 16) | (found.centroid_y as u32),
-                        Ordering::Relaxed,
-                    );
-                    BLOB_AREA.store(found.area.max(1), Ordering::Relaxed);
-                }
-                // ⚠️ Zero is a real answer — "looked, found nothing" —
-                // and must not be confused with "did not look".
-                None => BLOB_AREA.store(0, Ordering::Relaxed),
-            }
-
-            // A picture, periodically. Rare enough not to crowd out the
-            // pose stream, often enough to watch a scene change.
-            if FRAMES.load(Ordering::Relaxed) % THUMBNAIL_EVERY == 0 {
-                send_thumbnail(buffer).await;
-            }
-        }
-    }
-
-
-    /// Thumbnail geometry — a quarter of the frame in each axis.
-    ///
-    /// ⚠️ Small on purpose. The full frame is 38,400 bytes; as hex over a
-    /// line-based protocol that is 600 lines, twelve seconds at 50 Hz.
-    /// 40x30 is 2,400 bytes, thirty lines, well under a second — and it
-    /// is *enough to look at*, which is the entire point. Every remaining
-    /// uncertainty here (byte order, RGB565-vs-YUV, exposure, and what
-    /// the sensor is actually pointed at) is settled by seeing a picture,
-    /// and none of them is settled by another statistic.
-    const THUMB_WIDTH: usize = FRAME_WIDTH as usize / 4;
-    const THUMB_HEIGHT: usize = 30;
-    /// Pixels per thumbnail pixel, per axis.
-    const THUMB_STEP: usize = FRAME_WIDTH as usize / THUMB_WIDTH;
-
-    /// Send a downsampled copy of `buffer` to the host, as hex.
-    ///
-    /// Nearest-neighbour rather than averaging: averaging RGB565 needs
-    /// unpacking every channel, and a thumbnail exists to be *looked at*,
-    /// not measured. Sampling is also honest about aliasing in a way an
-    /// average is not — a smooth wrong picture is harder to distrust.
-    async fn send_thumbnail(buffer: &[u32]) {
-        let mut header: heapless::String<32> = heapless::String::new();
-        let _ = write!(header, "# IMG {THUMB_WIDTH} {THUMB_HEIGHT} rgb565");
-        crate::diag::note_blocking(&header).await;
-        let pixel_at = |x: usize, y: usize| -> u16 {
-            let index = y * FRAME_WIDTH as usize + x;
-            let word = buffer[index / 2];
-            let [a, b, c, d] = word.to_le_bytes();
-            // ⚠️ BIG-endian pairing: the OV7670 sends the HIGH byte of each
-            // RGB565 pixel first. Measured 2026-08-14 against the sensor's
-            // own colour bars: the little-endian pairing produced `6CF7`
-            // where the known-good yellow is `F76C` — every value byte-
-            // swapped, positions all correct.
-            //
-            // The earlier free-running capture decoded "correctly" with
-            // the wrong pairing because its DMA started at an arbitrary
-            // byte offset, and an odd offset re-pairs every pixel — two
-            // errors cancelling. Aligning the capture surfaced this one.
-            if index % 2 == 0 {
-                u16::from_be_bytes([a, b])
-            } else {
-                u16::from_be_bytes([c, d])
-            }
-        };
-        for row in 0..THUMB_HEIGHT {
-            let mut line: heapless::String<192> = heapless::String::new();
-            let _ = line.push_str("# ");
-            for column in 0..THUMB_WIDTH {
-                let pixel = pixel_at(column * THUMB_STEP, row * THUMB_STEP);
-                let _ = write!(line, "{pixel:04X}");
-            }
-            crate::diag::note_blocking(&line).await;
-        }
-    }
-
-    /// Capture one whole frame, starting at a real frame boundary.
-    ///
-    /// ```text
-    ///   wait for VSYNC high   -- frame ending, blanking begins
-    ///   wait for VSYNC low    -- THIS is the start of a new frame
-    ///   enable the state machine
-    /// ```
-    ///
-    /// ⚠️ The state machine is **enabled** at the boundary rather than
-    /// merely unblocked. A PIO program that waits internally still holds
-    /// whatever was in its FIFO from the previous frame, and that stale
-    /// word becomes the first pixel of this one — a picture shifted by a
-    /// few bytes, which looks like a scaling bug rather than a
-    /// synchronisation one.
-    async fn capture_frame(
-        pio: &mut Pio<'static, PIO0>,
-        dma: &mut embassy_rp::dma::Channel<'static>,
-        vsync: &mut Input<'static>,
-        buffer: &mut [u32],
-    ) -> bool {
-        pio.sm0.set_enable(false);
-        pio.sm0.clear_fifos();
-
-        let synced = embassy_time::with_timeout(Duration::from_millis(200), async {
-            vsync.wait_for_high().await;
-            vsync.wait_for_low().await;
-        })
-        .await
-        .is_ok();
-        if !synced {
-            return false;
-        }
-
-        pio.sm0.set_enable(true);
-        // ⚠️ Bounded. A frame that never completes — HREF stuck low, PCLK
-        // dead — would otherwise hang this task forever, reporting
-        // nothing, which reads exactly like a crash.
-        let filled = embassy_time::with_timeout(
-            Duration::from_millis(500),
-            pio.sm0.rx().dma_pull(dma, buffer, false),
-        )
-        .await
-        .is_ok();
-        pio.sm0.set_enable(false);
-        filled
-    }
-
-
-    /// Frames captured since the previous call.
-    ///
-    /// ⚠️ A **rate**, not a total. A running total that stops climbing is
-    /// indistinguishable at a glance from a report that stopped arriving,
-    /// and this session has already lost hours to counters that could not
-    /// say "nothing happened".
-    fn frames_since_last_announce() -> u32 {
-        let now = FRAMES.load(Ordering::Relaxed);
-        let previous = LAST_ANNOUNCED_FRAMES.swap(now, Ordering::Relaxed);
-        now.wrapping_sub(previous)
-    }
-
-    /// Frame count at the previous announce.
-    static LAST_ANNOUNCED_FRAMES: AtomicU32 = AtomicU32::new(0);
-
-    /// Total frames captured since boot. The chase loop watches this to
-    /// tell a live image from a wedged one — a count that stops advancing
-    /// is the camera's equivalent of a host gone silent.
-    pub fn frame_total() -> u32 {
-        FRAMES.load(Ordering::Relaxed)
-    }
-
-    /// Where the target colour is, as offsets from frame centre in
-    /// **−1..+1**, plus how many pixels matched.
-    ///
-    /// `None` means the last frame contained no match — a real answer.
-    pub fn blob_error() -> Option<(f32, f32, u32)> {
-        let area = BLOB_AREA.load(Ordering::Relaxed);
-        if area == 0 {
-            return None;
-        }
-        let packed = BLOB_POS.load(Ordering::Relaxed);
-        let found = blob::Blob {
-            centroid_x: (packed >> 16) as f32,
-            centroid_y: (packed & 0xFFFF) as f32,
-            area,
-            bounds: (0, 0, 0, 0),
-            frame: (FRAME_WIDTH, FRAME_HEIGHT),
-        };
-        let (x, y) = found.error_from_centre();
-        Some((x, y, area))
-    }
-
-    /// Say what the camera is, again.
-    ///
-    /// # ⚠️ Why a boot-time fact gets repeated
-    ///
-    /// A note said once is a note nobody hears: `diag::NOTES` is drained
-    /// only while a host is attached, and the camera is identified
-    /// milliseconds after power-up. Worse, *opening* a port is enough to
-    /// drain the queue, so a tool that probes and closes (`stty` does
-    /// exactly this) consumes the line on the way past. Two flashes and
-    /// two reads went by with the line never once seen, while the camera
-    /// itself was provably fine.
-    pub fn announce() {
-        if !SEEN.load(Ordering::Relaxed) {
-            return;
-        }
-        let [product, version, mid_high, mid_low] = CACHED.load(Ordering::Relaxed).to_be_bytes();
-        let identity = ov7670_driver::Identity {
-            product,
-            version,
-            manufacturer_high: mid_high,
-            manufacturer_low: mid_low,
-        };
-        let range = PIXEL_RANGE.load(Ordering::Relaxed);
-        let (low, high) = (range & 0xFF, (range >> 8) & 0xFF);
-
-        let mut text: heapless::String<160> = heapless::String::new();
-        let _ = write!(
-            text,
-            "# camera pid=0x{product:02X} mid=0x{mid_high:02X}{mid_low:02X} {} | px {low}..{high}",
-            identity.complaint().unwrap_or("OK"),
-        );
-        // Frames per second, from the delta over the announce interval.
-        let captured = frames_since_last_announce();
-        let _ = write!(text, " | {} fps", captured / ANNOUNCE_SECONDS);
-
-        // What the sensor says its format actually is. COM7 bit 2 and
-        // COM15 bits 4-5 are the RGB565 selection; if these read back as
-        // anything else, every pixel above is being decoded as a format
-        // the sensor is not producing.
-        let config = CONFIG_READBACK.load(Ordering::Relaxed);
-        let (com7, com15) = ((config >> 8) & 0xFF, (config >> 16) & 0xFF);
-        let _ = write!(
-            text,
-            " | com7=0x{com7:02X} com15=0x{com15:02X} {}",
-            if config & 1 == 0 {
-                "⚠️ WRITES FAILED"
-            } else if com7 == 0x04 && com15 == 0xD0 {
-                "format confirmed"
-            } else {
-                "⚠️ FORMAT NOT SET — sensor ignored the table"
-            }
-        );
-        let _ = match blob_error() {
-            Some((x, y, area)) => write!(text, " | blob x{x:+.2} y{y:+.2} area {area}"),
-            None => write!(text, " | no blob"),
-        };
-        crate::diag::note(&text);
-    }
-}
-
+mod camera;
 
 /// Drive the motors from the camera's blob, and **stop when the image
 /// stops**.
@@ -1612,7 +883,7 @@ mod camera {
 /// counter land in the same branch, because "looked and found nothing"
 /// and "stopped looking" must both park the robot.
 #[cfg(feature = "chase")]
-async fn chase_forever(mut motors: Motors, spec: RobotSpec) -> ! {
+async fn chase_forever(motors: Motors, spec: RobotSpec) -> ! {
     /// Forward/backward creep, metres per second. "Slightly" made a number.
     const CREEP_M_PER_S: f64 = 0.06;
     /// Turn nudge, radians per second.
@@ -1634,14 +905,7 @@ async fn chase_forever(mut motors: Motors, spec: RobotSpec) -> ! {
         Timer::after_millis(50).await;
     }
 
-    let mut cfg = PwmConfig::default();
-    cfg.top = PWM_TOP;
-    motors.left.set_signed(&mut cfg, 0);
-    motors.right.set_signed(&mut cfg, 0);
-
-    let mut enabled = false;
-    let mut ticks_at_last_check = TOTAL_TICKS.load(Ordering::Relaxed);
-    let mut stalled_polls: u32 = 0;
+    let mut drivetrain = Drivetrain::new(motors);
     let mut last_frame_total = camera::frame_total();
     let mut last_frame_at = firmware_support::now_ms();
 
@@ -1683,49 +947,8 @@ async fn chase_forever(mut motors: Motors, spec: RobotSpec) -> ! {
             _ => (0.0, 0.0),
         };
 
-        let wheels = spec.fit_wheels(spec.drive().inverse(BodyTwist {
-            forward_speed: v,
-            turn_rate: w,
-        }));
-        let (mut left, mut right) = (spec.duty(wheels.left), spec.duty(wheels.right));
-
-        // ---- commanded, but not moving — same guard as teleop ----
-        let ticks_now = TOTAL_TICKS.load(Ordering::Relaxed);
-        let commanded_hard =
-            left.unsigned_abs().max(right.unsigned_abs()) > STALL_DUTY_FLOOR.unsigned_abs();
-        if commanded_hard && ticks_now == ticks_at_last_check {
-            stalled_polls += 1;
-            if stalled_polls >= STALL_POLLS {
-                STALLED.store(true, Ordering::Relaxed);
-            }
-        } else {
-            stalled_polls = 0;
-            if ticks_now != ticks_at_last_check {
-                STALLED.store(false, Ordering::Relaxed);
-            }
-        }
-        ticks_at_last_check = ticks_now;
-        if STALLED.load(Ordering::Relaxed) {
-            left = 0;
-            right = 0;
-        }
-
-        let should_run = left != 0 || right != 0;
-        if should_run != enabled {
-            motors.standby.set_level(Level::from(should_run));
-            enabled = should_run;
-            STALLED.store(false, Ordering::Relaxed);
-        }
-        // The same mounting fact as everywhere else, applied on the way
-        // out — see `firmware_support::motor::DRIVETRAIN_SIGN`.
-        let facing = firmware_support::motor::DRIVETRAIN_SIGN;
-        motors.left.set_signed(&mut cfg, left * facing);
-        motors.right.set_signed(&mut cfg, right * facing);
-
-        DUTY_PERCENT.store(
-            (left.unsigned_abs().max(right.unsigned_abs()) * 100 / DUTY_FULL.unsigned_abs()) as u16,
-            Ordering::Relaxed,
-        );
+        let (left, right) = Drivetrain::duty_for(&spec, v, w);
+        drivetrain.apply(left, right);
     }
 }
 

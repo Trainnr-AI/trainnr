@@ -1343,6 +1343,89 @@ mod tests {
     }
 }
 
+/// The thumbnail image a camera firmware streams inside `#` notes.
+///
+/// # Why this lives here and not in the two places that use it
+///
+/// The chip writes `# IMG 30 30 rgb565` and thirty hex rows; the host
+/// parses them back into a picture. Until this module existed, the header
+/// string and the row shape were defined **independently at both ends** —
+/// two things that must agree, held in two places, with nothing comparing
+/// them, in the crate whose entire purpose is preventing exactly that.
+///
+/// The chip side keeps writing with `core::fmt` (no alloc); the host side
+/// parses with the functions here. One vocabulary, tested once.
+pub mod thumbnail {
+    /// What a picture announces itself with: `# IMG <width> <height> rgb565`.
+    pub const HEADER: &str = "# IMG";
+    /// Every row is `# ` then `width` pixels of four hex digits each.
+    pub const ROW_PREFIX: &str = "# ";
+
+    /// Write the header line for a `width` x `height` RGB565 thumbnail.
+    pub fn write_header(
+        out: &mut impl core::fmt::Write,
+        width: usize,
+        height: usize,
+    ) -> core::fmt::Result {
+        write!(out, "{HEADER} {width} {height} rgb565")
+    }
+
+    /// Read a header line back: `Some((width, height))` if `line` is one.
+    pub fn parse_header(line: &str) -> Option<(u32, u32)> {
+        let mut parts = line.strip_prefix(HEADER)?.split_whitespace();
+        let width = parts.next()?.parse().ok()?;
+        let height = parts.next()?.parse().ok()?;
+        (width > 0 && height > 0).then_some((width, height))
+    }
+
+    /// The pixels of one row, if `line` is a row of exactly `width` pixels.
+    ///
+    /// `None` for anything else — including ordinary prose notes that
+    /// happen to arrive mid-picture, which is why the length is checked
+    /// before anything is parsed.
+    pub fn parse_row(line: &str, width: u32) -> Option<impl Iterator<Item = u16> + '_> {
+        let hex = line.strip_prefix(ROW_PREFIX)?;
+        let expected = width as usize * 4;
+        if hex.len() != expected || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        Some(
+            hex.as_bytes().chunks(4).filter_map(|chunk| {
+                u16::from_str_radix(core::str::from_utf8(chunk).ok()?, 16).ok()
+            }),
+        )
+    }
+}
+
+#[cfg(test)]
+mod thumbnail_tests {
+    #[test]
+    fn round_trips_through_its_own_parser() {
+        // The property the module exists for: what `write_header` says,
+        // `parse_header` understands. If either end drifts, this fails.
+        let mut header = String::new();
+        crate::thumbnail::write_header(&mut header, 30, 20).unwrap();
+        assert_eq!(crate::thumbnail::parse_header(&header), Some((30, 20)));
+
+        let pixels: Vec<u16> = crate::thumbnail::parse_row("# FFFF0000F800", 3)
+            .unwrap()
+            .collect();
+        assert_eq!(pixels, [0xFFFF, 0x0000, 0xF800]);
+    }
+
+    #[test]
+    fn rejects_prose_and_wrong_widths() {
+        use crate::thumbnail::{parse_header, parse_row};
+        // A note that begins "# " but is words is not a pixel row.
+        assert!(parse_row("# camera pid=0x76 OK", 3).is_none());
+        // A row of the wrong width is somebody else's picture.
+        assert!(parse_row("# FFFF0000", 3).is_none());
+        // Zero-sized pictures are refused at the header.
+        assert_eq!(parse_header("# IMG 0 30 rgb565"), None);
+        assert_eq!(parse_header("# camera pid=0x76"), None);
+    }
+}
+
 /// Opening the serial link to a chip, with the facts that are the same
 /// every time.
 ///

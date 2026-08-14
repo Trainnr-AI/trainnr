@@ -126,6 +126,27 @@ impl Identity {
     }
 }
 
+/// One canonical way to print an identity, shared by every firmware that
+/// reports one.
+///
+/// Three call sites grew three hand-rolled formats within a day of each
+/// other — and two had already drifted (one printed `ver=`, one did not).
+/// The format that appears on a serial console at 2 a.m. is part of this
+/// driver's interface, so it lives here, once.
+impl core::fmt::Display for Identity {
+    fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            out,
+            "pid=0x{:02X} ver=0x{:02X} mid=0x{:02X}{:02X} {}",
+            self.product,
+            self.version,
+            self.manufacturer_high,
+            self.manufacturer_low,
+            self.complaint().unwrap_or("OK — this is an OV7670"),
+        )
+    }
+}
+
 /// The control-plane driver. Generic over any `embedded-hal` I2C bus.
 pub struct Ov7670<I2C> {
     i2c: I2C,
@@ -314,5 +335,27 @@ mod tests {
         let mut camera = Ov7670::new(I2cMock::new(&expectations));
         camera.apply(&[(0x11, 0x01), (0x12, 0x14)]).unwrap();
         camera.free().done();
+    }
+
+    #[test]
+    fn display_is_the_console_line() {
+        let good = Identity {
+            product: 0x76,
+            version: 0x73,
+            manufacturer_high: 0x7F,
+            manufacturer_low: 0xA2,
+        };
+        assert_eq!(
+            format!("{good}"),
+            "pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670"
+        );
+        let dead = Identity {
+            product: 0,
+            version: 0,
+            manufacturer_high: 0,
+            manufacturer_low: 0,
+        };
+        // The complaint rides along, so a failure prints its diagnosis.
+        assert!(format!("{dead}").contains("XCLK"));
     }
 }

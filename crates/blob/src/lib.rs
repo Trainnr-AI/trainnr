@@ -205,14 +205,26 @@ pub fn find(pixels: impl IntoIterator<Item = u16>, width: u16, target: &Target) 
 /// green the extra bit — weights it double. Integer throughout: this runs
 /// on every pixel of every frame on a chip with no FPU worth spending.
 pub fn luma(pixel: u16) -> u8 {
-    let red = ((pixel >> 11) & 0x1F) as u16;
-    let green = ((pixel >> 5) & 0x3F) as u16;
-    let blue = (pixel & 0x1F) as u16;
-    // Widen each channel to 8 bits, then (R + 2G + B) / 4.
-    let r8 = (red << 3) | (red >> 2);
-    let g8 = (green << 2) | (green >> 4);
-    let b8 = (blue << 3) | (blue >> 2);
-    ((r8 + 2 * g8 + b8) / 4) as u8
+    let [red, green, blue] = rgb565_to_rgb888(pixel);
+    ((u16::from(red) + 2 * u16::from(green) + u16::from(blue)) / 4) as u8
+}
+
+/// RGB565 to three full-range bytes.
+///
+/// ⚠️ The channel widths are **5, 6, 5** — green gets the extra bit — and
+/// the low bits are **replicated**, not zero-filled, so full-scale input
+/// reaches full-scale output: `0b11111` becomes 255, not 248. This
+/// bit-replication trick existed in two crates within a day of being
+/// written once; now it is here, once, under test.
+pub fn rgb565_to_rgb888(pixel: u16) -> [u8; 3] {
+    let red = ((pixel >> 11) & 0x1F) as u8;
+    let green = ((pixel >> 5) & 0x3F) as u8;
+    let blue = (pixel & 0x1F) as u8;
+    [
+        (red << 3) | (red >> 2),
+        (green << 2) | (green >> 4),
+        (blue << 3) | (blue >> 2),
+    ]
 }
 
 /// Where the pixels satisfying `matches` were.
@@ -486,5 +498,15 @@ mod tests {
             find_matching(pixels, W, 10, |p| luma(p) > luma(tint) + 40).expect("bright patch");
         assert_eq!(found.area, 6 * 5); // a 6x5 rectangle of bright pixels
         assert!((found.centroid_x - 12.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn rgb888_reaches_full_scale() {
+        assert_eq!(rgb565_to_rgb888(0xFFFF), [255, 255, 255]);
+        assert_eq!(rgb565_to_rgb888(0x0000), [0, 0, 0]);
+        // Zero-filling would give 248/252/248 — the replication is the point.
+        assert_eq!(rgb565_to_rgb888(0xF800), [255, 0, 0]);
+        assert_eq!(rgb565_to_rgb888(0x07E0), [0, 255, 0]);
+        assert_eq!(rgb565_to_rgb888(0x001F), [0, 0, 255]);
     }
 }

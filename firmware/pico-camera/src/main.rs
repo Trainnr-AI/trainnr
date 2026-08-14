@@ -94,22 +94,14 @@ async fn main(spawner: Spawner) {
     transport::run(p, spawner).await
 }
 
-/// One line of the report, formatted where both transports can use it.
+/// One line of the report — the driver's own `Display`, so this firmware
+/// and `pico-odom`'s camera module cannot drift into different formats.
+/// (`write!` into a fixed buffer truncates rather than panics — the
+/// discipline the whole firmware tree follows.)
 fn describe(identity: &ov7670_driver::Identity) -> heapless::String<160> {
     use core::fmt::Write as _;
     let mut line = heapless::String::new();
-    // `write!` into a fixed buffer cannot allocate, so a full buffer
-    // truncates rather than panics — the discipline the whole firmware
-    // tree follows.
-    let _ = write!(
-        line,
-        "pid=0x{:02X} ver=0x{:02X} mid=0x{:02X}{:02X} ",
-        identity.product, identity.version, identity.manufacturer_high, identity.manufacturer_low
-    );
-    let _ = match identity.complaint() {
-        None => write!(line, "OK — this is an OV7670"),
-        Some(complaint) => write!(line, "NOT RECOGNISED: {complaint}"),
-    };
+    let _ = write!(line, "{identity}");
     line
 }
 

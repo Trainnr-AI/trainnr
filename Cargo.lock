@@ -4416,6 +4416,7 @@ name = "hil-host"
 version = "0.1.0"
 dependencies = [
  "belief-viz",
+ "blob",
  "hil-protocol",
  "rerun",
  "serialport",
