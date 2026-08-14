@@ -120,7 +120,7 @@ use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::peripherals::{
-    PIN_10, PIN_11, PIN_12, PIN_16, PIN_17, PIN_18, PIN_19, PIN_6, PIN_7, PIN_8, PIN_9,
+    PIN_10, PIN_11, PIN_12, PIN_2, PIN_26, PIN_27, PIN_3, PIN_6, PIN_7, PIN_8, PIN_9,
 };
 #[cfg(feature = "wifi")]
 use embassy_rp::peripherals::{PIN_23, PIN_24, PIN_25, PIN_29};
@@ -399,19 +399,31 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
     // the one place that already owns `out` — and because a diagnostic
     // channel with its own transport is a second thing that can be broken
     // while the first looks fine.
-    #[cfg(feature = "wifi")]
+    // ⚠️ Unconditional now. It used to be a no-op without `wifi`, which
+    // meant a note queued by anything else vanished silently — and the
+    // camera queues one at boot.
+    //
+    // ⚠️ And gated on `HOST_WATCHING`, which is not decoration.
+    //
+    // `try_receive` REMOVES the note from the queue; `Report::send` then
+    // silently declines while `dtr()` is low. Ungated, those two compose
+    // into a shredder: every note queued before a terminal opens is
+    // consumed and dropped, and the camera queues its identity at boot —
+    // ~34 seconds before a human gets to `screen` on a good day. Measured
+    // exactly that way on 2026-08-14: telemetry at `n=1698`, camera line
+    // nowhere, because it had been drained into a closed port at `n=0`.
+    //
+    // Waiting costs nothing. `NOTES` is a drop queue, so a board nobody
+    // ever attaches to fills eight slots and discards the rest, which is
+    // the same outcome as before minus the pretence of having reported.
     macro_rules! drain_notes {
         ($out:expr) => {
-            while let Ok(note) = wifi_link::DIAG.try_receive() {
-                $out.send(&note).await;
+            if HOST_WATCHING.load(Ordering::Relaxed) {
+                while let Ok(note) = crate::diag::NOTES.try_receive() {
+                    $out.send(&note).await;
+                }
             }
         };
-    }
-    #[cfg(not(feature = "wifi"))]
-    macro_rules! drain_notes {
-        ($out:expr) => {{
-            let _ = &$out;
-        }};
     }
 
     let mut line: heapless::String<192> = heapless::String::new();
@@ -482,6 +494,13 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             .write_into(&mut line);
             out.send(line.as_bytes()).await;
             line.clear();
+            // Restate the camera every ~10 s at 50 Hz. A boot-time note
+            // is drained the first time ANY host touches the port, so
+            // without this the line is unobservable in practice.
+            #[cfg(feature = "camera")]
+            if seq % 500 == 0 {
+                camera::announce();
+            }
             drain_notes!(out);
             last_report = now;
         }
@@ -684,11 +703,361 @@ struct MotorPins {
 ///
 /// So the heartbeat belongs to the transport, which is the thing that
 /// knows what a sign of life looks like on its board.
+// ---------------------------------------------------------------------
+// Notes — prose the chip wants the host to read, on the wire the poses
+// already use.
+// ---------------------------------------------------------------------
+//
+// # Why this is not inside `wifi_link` any more
+//
+// It was, and it was right to be: the radio invented it on 2026-08-10
+// because an untethered board's only output was **one LED**, and "is it
+// blinking fast or slow" was load-bearing evidence.
+//
+// The camera is the second subsystem that needs exactly the same thing —
+// say one sentence, never block the loop that is counting encoder ticks,
+// and drop it on the floor if nobody is listening. Two users is when a
+// thing stops being the radio's private business.
+//
+// ⚠️ The drop-if-full rule is the whole design. Diagnostics must never be
+// able to block the thing they diagnose, which on this board means the
+// 10 kHz sampler: a note that waits for a reader costs encoder ticks, and
+// ticks are the measurement.
+mod diag {
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
+
+    /// One line waiting to go out.
+    pub type Line = heapless::Vec<u8, 192>;
+
+    /// Prose queued for the host, drained by the report loop and sent
+    /// down whatever transports exist.
+    ///
+    /// Lines start with `#` so a host can tell prose from a pose without
+    /// parsing it, and so `Status::parse` rejects them — which it does
+    /// anyway, having no keys to find.
+    pub static NOTES: Channel<CriticalSectionRawMutex, Line, 8> = Channel::new();
+
+    /// Queue a note, dropping it if nobody is draining.
+    pub fn note(text: &str) {
+        let mut line = Line::new();
+        if line.extend_from_slice(text.as_bytes()).is_ok()
+            && line.extend_from_slice(b"\r\n").is_ok()
+        {
+            let _ = NOTES.try_send(line);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// The camera, on the same board as the motors.
+// ---------------------------------------------------------------------
+//
+// # ⚠️ Identified ONCE, at boot, and never touched again
+//
+// `embassy_rp::i2c::I2c::new_blocking` is exactly what it says. A blocking
+// transaction inside `odometry_forever` would stall the 10 kHz sampler for
+// however long the bus took, and this repo has already paid for that
+// lesson once: polling encoders at 50 Hz counted 404 ticks where ~17,000
+// were expected.
+//
+// The camera's identity is a boot-time fact — it cannot change while the
+// robot drives — so it is read once, announced as a note, and the bus is
+// then left alone. Anything that wants live camera data later needs DMA or
+// PIO, not a blocking read wedged into the control loop.
+//
+// # What it does not conflict with
+//
+// `pico-odom` drives motors from PWM slices 3 (GP6) and 5 (GP10); XCLK is
+// slice 2 (GP21). I2C0 and GP4/GP5 are unused by the motor firmware. So
+// the two subsystems share nothing but the report stream — which is the
+// point of running them together.
+#[cfg(feature = "camera")]
+mod camera {
+    use embassy_rp::i2c::{Config as I2cConfig, I2c};
+    use embassy_rp::gpio::{Input, Pull};
+    use embassy_rp::peripherals::{I2C0, PIN_1, PIN_21, PIN_4, PIN_5, PWM_SLICE2};
+    use embassy_rp::pwm::{Config as PwmConfig, Pwm};
+    use embassy_rp::Peri;
+    use core::fmt::Write as _;
+    use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+    /// XCLK divider — see `firmware/pico-camera`, which is the same clock
+    /// for the same reason. ~12.5 MHz on RP2350, ~10.4 MHz on RP2040,
+    /// both inside the OV7670's 10–24 MHz window.
+    /// ⚠️ **Raised from 11 to 5 on 2026-08-14, measured.** A top of 11
+    /// gives 12.5 MHz on an RP2350 and produced **1 fps** — legal for the
+    /// sensor (10-24 MHz) but starved once the internal dividers were
+    /// applied on top. A top of 5 gives **25 MHz**, which is the value
+    /// every OV7670 reference design uses.
+    const XCLK_TOP: u16 = 5;
+    const XCLK_COMPARE: u16 = 3;
+
+    /// How long XCLK runs before the first transaction, and between
+    /// retries.
+    const SETTLE_MS: u64 = 100;
+
+    /// Total identification attempts before giving up for good.
+    const ATTEMPTS: usize = 5;
+
+    /// Every pin the camera needs, named so two of them cannot be swapped
+    /// by argument order — the same reason [`super::MotorPins`] exists.
+    pub struct CameraPins {
+        pub i2c: Peri<'static, I2C0>,
+        pub sda: Peri<'static, PIN_4>,
+        pub scl: Peri<'static, PIN_5>,
+        pub xclk_slice: Peri<'static, PWM_SLICE2>,
+        pub xclk: Peri<'static, PIN_21>,
+        /// Frame sync — one pulse per frame. Counted, because it is the
+        /// cheapest possible proof that the sensor is actually streaming.
+        pub vsync: Peri<'static, PIN_1>,
+    }
+
+    /// Start XCLK, ask the sensor who it is, and queue the answer.
+    ///
+    /// Returns the PWM guard: **XCLK must keep running** after this
+    /// returns, and dropping it would stop the clock. Naming the binding
+    /// at the call site is what keeps it alive.
+    /// ⚠️ **Async, because the sensor needs the clock to have been
+    /// running before it will answer.** The first version of this was
+    /// synchronous and identified the camera microseconds after starting
+    /// XCLK: it reported `BUS ERROR` on a camera that `firmware/pico-camera`
+    /// had just proved good, because that firmware happened to wait for a
+    /// USB terminal — seconds — before its first transaction. The delay
+    /// was accidental there and is deliberate here.
+    #[must_use = "dropping this stops XCLK and the camera goes deaf"]
+    pub async fn identify_once(pins: CameraPins) -> Pwm<'static> {
+        // ⚠️ Clock first. The OV7670 has no oscillator of its own, so a
+        // transaction issued before this runs fails in a way that looks
+        // exactly like bad wiring.
+        let mut clock = PwmConfig::default();
+        clock.top = XCLK_TOP;
+        // Channel B: GP21 is odd, and embassy encodes the pin/slice/channel
+        // mapping in its types, so the wrong choice does not compile.
+        clock.compare_b = XCLK_COMPARE;
+        let xclk = Pwm::new_output_b(pins.xclk_slice, pins.xclk, clock);
+
+        // Let XCLK run before asking anything. The datasheet wants 1 ms
+        // after reset; this is far more, because it happens once at boot
+        // and the cost of being early is a false "camera missing".
+        embassy_time::Timer::after_millis(SETTLE_MS).await;
+
+        let i2c = I2c::new_blocking(pins.i2c, pins.scl, pins.sda, I2cConfig::default());
+        let mut sensor = ov7670_driver::Ov7670::new(i2c);
+
+        // A few attempts, spaced. A single try turns any settling still in
+        // progress into a permanent verdict, and this verdict is cached
+        // for the life of the program.
+        let mut result = sensor.identify();
+        for _ in 0..ATTEMPTS - 1 {
+            if result.as_ref().is_ok_and(ov7670_driver::Identity::is_ov7670) {
+                break;
+            }
+            embassy_time::Timer::after_millis(SETTLE_MS).await;
+            result = sensor.identify();
+        }
+
+        let mut text: heapless::String<160> = heapless::String::new();
+        let mut identity_bytes = (0u8, 0u8, 0u8, 0u8);
+        match result {
+            Ok(identity) => {
+                identity_bytes = (
+                    identity.product,
+                    identity.version,
+                    identity.manufacturer_high,
+                    identity.manufacturer_low,
+                );
+                let _ = write!(
+                    text,
+                    "# camera pid=0x{:02X} ver=0x{:02X} mid=0x{:02X}{:02X} {}",
+                    identity.product,
+                    identity.version,
+                    identity.manufacturer_high,
+                    identity.manufacturer_low,
+                    identity.complaint().unwrap_or("OK — this is an OV7670"),
+                );
+            }
+            Err(_) => {
+                let _ = text.push_str(
+                    "# camera BUS ERROR — nobody acknowledged 0x21; check SIOD/SIOC and RESET",
+                );
+            }
+        }
+        // Put the sensor into the format the rest of the stack expects.
+        // ⚠️ Only attempted once identification succeeded — writing a
+        // register table into silence would look like configuration and
+        // be nothing of the kind.
+        if identity_bytes.0 == ov7670_driver::EXPECTED_PRODUCT_ID {
+            let _ = sensor.reset();
+            embassy_time::Timer::after_millis(SETTLE_MS).await;
+            let _ = sensor.apply(QQVGA_RGB565);
+        }
+
+        crate::diag::note(&text);
+        // Cache it so it can be said again. See `announce`.
+        let mut packed = [0u8; 4];
+        packed.copy_from_slice(&[
+            identity_bytes.0,
+            identity_bytes.1,
+            identity_bytes.2,
+            identity_bytes.3,
+        ]);
+        CACHED.store(u32::from_be_bytes(packed), Ordering::Relaxed);
+        // ⚠️ Only on a real answer. Setting this unconditionally made
+        // `announce` restate a cached all-zeroes identity every ten
+        // seconds — a failure reported in the voice of a measurement.
+        SEEN.store(identity_bytes.0 != 0, Ordering::Relaxed);
+
+        // Count one second of frames while nothing else is running. Done
+        // here rather than in the report loop because it BLOCKS for a
+        // second, and a second is fifty missed reports.
+        let mut vsync = Input::new(pins.vsync, Pull::None);
+        FRAMES_PER_SECOND.store(count_frames(&mut vsync).await, Ordering::Relaxed);
+        xclk
+    }
+
+    /// Frames seen in the one-second sample at boot.
+    static FRAMES_PER_SECOND: AtomicU32 = AtomicU32::new(0);
+
+    /// QQVGA (160x120) in RGB565 — the format `crates/blob` consumes and
+    /// the largest a Pico can plausibly catch from a FIFO-less sensor.
+    ///
+    /// ⚠️ **A starting point, not a tuned table.** Camera register sets
+    /// are famously order-dependent and vendor-specific; this is the
+    /// common subset and it may well need adjusting against a real image.
+    /// It is written down as data rather than code precisely so that
+    /// adjusting it is editing a table, not editing logic.
+    const QQVGA_RGB565: &[(u8, u8)] = &[
+        (0x12, 0x04), // COM7   — RGB output
+        // ⚠️ Measured. The table matters more than the value, because
+        // two of the three readings were taken with a broken counter and
+        // the reasoning built on them was wrong twice.
+        //
+        //   XCLK  CLKRC   measured    counter
+        //   ----  -----   --------    -------
+        //   12.5    /2       1 fps    ⚠️ BROKEN — floored at 1 below 5 fps
+        //   25      /1     206 fps    broken, but accurate at this rate
+        //   25      /8       2 fps    fixed
+        //
+        // 206 -> 2 for an 8x divider is a 103x drop, which is not
+        // division: /8 puts the internal clock at ~3.1 MHz, below the
+        // sensor's ~10 MHz minimum. /2 keeps it at 12.5 MHz, in spec.
+        //
+        // ⚠️ **This value is not tuned, and cannot be until there is an
+        // image.** Frame rate matters here only through exposure, and
+        // exposure can only be judged by looking. Picking it by number is
+        // the same error as trusting the broken counter: optimising a
+        // proxy for the thing that actually matters.
+        (0x11, 0x01), // CLKRC  — internal clock / 2
+        (0x0C, 0x04), // COM3   — enable downsampling (DCW)
+        (0x3E, 0x1A), // COM14  — DCW on, PCLK divided by 4
+        (0x40, 0xD0), // COM15  — RGB565, full 0-255 range
+        (0x70, 0x3A), // SCALING_XSC
+        (0x71, 0x35), // SCALING_YSC
+        (0x72, 0x22), // SCALING_DCWCTR    — /4 horizontally and vertically
+        (0x73, 0xF2), // SCALING_PCLK_DIV  — /4
+        (0xA2, 0x02), // SCALING_PCLK_DELAY
+    ];
+
+    /// Count frames for one second, straight off the `VSYNC` pin.
+    ///
+    /// # Why this exists before any PIO is written
+    ///
+    /// Capturing pixels needs a PIO program clocking eight parallel bits
+    /// on every `PCLK` edge. When that produces garbage — and a first
+    /// attempt will — the cause is either the PIO program or the wiring,
+    /// and those are indistinguishable from the garbage itself.
+    ///
+    /// `VSYNC` is one wire, pulses once per frame, and needs no PIO at
+    /// all. If it ticks ~30 times a second the sensor is genuinely
+    /// streaming and the sync wiring is right, which removes half the
+    /// search space before the hard part is written.
+    pub async fn count_frames(vsync: &mut Input<'static>) -> u32 {
+        // ⚠️ The window is the ONLY thing that ends this loop.
+        //
+        // The first version gave each edge its own 200 ms timeout and
+        // broke on the first miss — so **every rate below 5 fps reported
+        // exactly `1`**, indistinguishable from "one frame then dead".
+        // Two readings were taken with it and reasoned about before the
+        // floor was noticed. A counter with a silent floor is worse than
+        // no counter, because it answers.
+        let deadline = embassy_time::Instant::now() + embassy_time::Duration::from_secs(1);
+        let mut frames = 0u32;
+        loop {
+            let now = embassy_time::Instant::now();
+            if now >= deadline {
+                break;
+            }
+            // Wait only as long as the window has left, so a dead line
+            // costs one second total rather than hanging, and a slow line
+            // is counted rather than truncated.
+            match embassy_time::with_timeout(deadline - now, vsync.wait_for_rising_edge()).await {
+                Ok(()) => frames += 1,
+                Err(_) => break,
+            }
+        }
+        frames
+    }
+
+    // ⚠️ `Pull::None`, never `Pull::Down`. RP2350-E9 latches pulled-down
+    // inputs high on this stepping — which here would invent frames that
+    // never happened, and a fabricated frame rate is worse than none.
+
+    /// The identity, packed, so it can be restated without touching the
+    /// bus again.
+    static CACHED: AtomicU32 = AtomicU32::new(0);
+    static SEEN: AtomicBool = AtomicBool::new(false);
+
+    /// Say what the camera is, again.
+    ///
+    /// # ⚠️ Why a boot-time fact gets repeated
+    ///
+    /// Because a note said once is a note nobody hears. `diag::NOTES` is
+    /// drained only while a host is attached, and the camera is
+    /// identified milliseconds after power-up — long before anyone opens
+    /// a terminal. Worse, *opening* a port is enough to drain the queue,
+    /// so a tool that probes the port and closes it (`stty` does exactly
+    /// this) consumes the line on the way past.
+    ///
+    /// Measured on 2026-08-14: two flashes, two reads, camera line never
+    /// once seen, while the camera itself was provably fine.
+    ///
+    /// Restating it costs one line every ten seconds and makes the fact
+    /// *observable*, which is the only property that matters in
+    /// telemetry. It reads a cached value — the bus is still touched
+    /// exactly once, at boot.
+    pub fn announce() {
+        if !SEEN.load(Ordering::Relaxed) {
+            return;
+        }
+        let [product, version, mid_high, mid_low] = CACHED.load(Ordering::Relaxed).to_be_bytes();
+        let identity = ov7670_driver::Identity {
+            product,
+            version,
+            manufacturer_high: mid_high,
+            manufacturer_low: mid_low,
+        };
+        let mut text: heapless::String<160> = heapless::String::new();
+        let frames = FRAMES_PER_SECOND.load(Ordering::Relaxed);
+        let _ = write!(
+            text,
+            "# camera pid=0x{product:02X} mid=0x{mid_high:02X}{mid_low:02X} {} | {frames} fps {}",
+            identity.complaint().unwrap_or("OK"),
+            if frames == 0 {
+                "-- ⚠️ NO VSYNC: sensor not streaming, or GP1 not connected"
+            } else {
+                "-- streaming"
+            },
+        );
+        crate::diag::note(&text);
+    }
+}
+
 fn shared_setup(
-    la: Peri<'static, PIN_16>,
-    lb: Peri<'static, PIN_17>,
-    ra: Peri<'static, PIN_18>,
-    rb: Peri<'static, PIN_19>,
+    la: Peri<'static, PIN_2>,
+    lb: Peri<'static, PIN_3>,
+    ra: Peri<'static, PIN_26>,
+    rb: Peri<'static, PIN_27>,
     motor: MotorPins,
 ) -> (Encoders, Motors) {
     // ⚠️ `Pull::Up` is a MEASURED result, not a preference. Do not "tidy"
@@ -759,10 +1128,10 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
         let (encoders, motors) = shared_setup(
-            p.PIN_16,
-            p.PIN_17,
-            p.PIN_18,
-            p.PIN_19,
+            p.PIN_2,
+            p.PIN_3,
+            p.PIN_26,
+            p.PIN_27,
             MotorPins {
                 slice_a: p.PWM_SLICE3,
                 pwma: p.PIN_6,
@@ -876,10 +1245,10 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
         let (encoders, motors) = shared_setup(
-            p.PIN_16,
-            p.PIN_17,
-            p.PIN_18,
-            p.PIN_19,
+            p.PIN_2,
+            p.PIN_3,
+            p.PIN_26,
+            p.PIN_27,
             MotorPins {
                 slice_a: p.PWM_SLICE3,
                 pwma: p.PIN_6,
@@ -909,6 +1278,27 @@ mod transport {
         // boards can be plugged in and still told apart.
         let (mut usb, class) = firmware_support::usb::cdc(driver, "pico-odom", 0x000c);
         let (tx, _rx) = class.split();
+
+        // ⚠️ Bound to a name, not `_`. `_camera_clock` keeps XCLK running
+        // for the life of the program; `let _ = ...` would drop the PWM
+        // immediately and the camera would go deaf the moment it was
+        // identified — working once, then never again, which is the most
+        // expensive kind of working.
+        //
+        // Done before the loops start because it is a blocking bus read.
+        // The note it queues is drained by the report loop, so it reaches
+        // the host whenever the host turns up, rather than being written
+        // into a port nobody has opened yet.
+        #[cfg(feature = "camera")]
+        let _camera_clock = camera::identify_once(camera::CameraPins {
+            i2c: p.I2C0,
+            sda: p.PIN_4,
+            scl: p.PIN_5,
+            xclk_slice: p.PWM_SLICE2,
+            xclk: p.PIN_21,
+            vsync: p.PIN_1,
+        })
+        .await;
 
         // One report stream, two wires. Both carry the same `Status::seq`,
         // which is what turns "the radio feels laggy" into a number.
@@ -1396,8 +1786,9 @@ mod wifi_link {
         }
     }
 
-    /// One status line waiting to go out.
-    type Line = heapless::Vec<u8, 192>;
+    /// One status line waiting to go out. Shared with the rest of the
+    /// firmware — see the top-level `diag` module for why it moved.
+    use crate::diag::{note, Line};
 
     /// Lines handed to the radio but not yet transmitted.
     ///
@@ -1407,22 +1798,6 @@ mod wifi_link {
     /// describes a robot that has since moved.
     static OUTBOX: Channel<CriticalSectionRawMutex, Line, 2> = Channel::new();
 
-    /// Prose the radio wants the host to see, drained by the report loop
-    /// and sent down whatever transports exist.
-    ///
-    /// # Why this exists
-    ///
-    /// Because on 2026-08-10 the only output an untethered radio had was
-    /// **one LED**, and every diagnosis cost a round trip to a human
-    /// squinting at it: dark meant three unrelated faults, and "is it
-    /// blinking fast or slow" was load-bearing evidence. Meanwhile a
-    /// perfectly good USB cable was attached and carrying 50 reports a
-    /// second.
-    ///
-    /// Lines here start with `#` so a host can tell prose from a pose
-    /// without parsing it, and so `Status::parse` rejects them — which it
-    /// does anyway, having no keys to find.
-    pub static DIAG: Channel<CriticalSectionRawMutex, Line, 8> = Channel::new();
 
     /// What network the robot is hosting, and where it is.
     fn announce_ap() {
@@ -1433,17 +1808,6 @@ mod wifi_link {
             SSID, AP_CHANNEL, AP_ADDRESS
         );
         note(&text);
-    }
-
-    /// Queue a note for the host, dropping it if nobody is draining.
-    /// Diagnostics must never be able to block the thing they diagnose.
-    fn note(text: &str) {
-        let mut line = Line::new();
-        if line.extend_from_slice(text.as_bytes()).is_ok()
-            && line.extend_from_slice(b"\r\n").is_ok()
-        {
-            let _ = DIAG.try_send(line);
-        }
     }
 
     /// A handle, not a socket.
@@ -1615,10 +1979,10 @@ mod transport {
 
     pub async fn run(p: embassy_rp::Peripherals, spawner: Spawner) -> ! {
         let (encoders, motors) = shared_setup(
-            p.PIN_16,
-            p.PIN_17,
-            p.PIN_18,
-            p.PIN_19,
+            p.PIN_2,
+            p.PIN_3,
+            p.PIN_26,
+            p.PIN_27,
             MotorPins {
                 slice_a: p.PWM_SLICE3,
                 pwma: p.PIN_6,

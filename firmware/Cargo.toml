@@ -31,6 +31,7 @@ members = [
     "pico-odom",
     "pico-robot",
     "pico-selftest",
+    "pico-camera",
 ]
 
 [workspace.package]
@@ -60,6 +61,7 @@ firmware-build-support = { path = "build-support" }
 firmware-support = { path = "support" }
 quad-encoder = { path = "../crates/quad-encoder" }
 mpu6050-driver = { path = "../crates/mpu6050-driver" }
+ov7670-driver = { path = "../crates/ov7670-driver" }
 sim-core = { path = "../crates/sim-core", default-features = false }
 hil-protocol = { path = "../crates/hil-protocol" }
 

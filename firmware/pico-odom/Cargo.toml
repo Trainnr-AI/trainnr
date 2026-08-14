@@ -22,6 +22,11 @@ usb = ["firmware-support/usb", "dep:embassy-usb", "dep:embassy-futures", "dep:st
 # The sweep is not deleted — it is still how `max_wheel_speed` and
 # `motor_tau` get measured, and `wheel_radius` is not measured yet.
 teleop = ["usb"]
+# Bring the OV7670 up on the same board as the motors and announce what
+# it is, once, at boot. Costs two I2C pins and one PWM slice, none of
+# which the drivetrain uses:
+#   tools/build-pico2.sh pico-odom usb,camera
+camera = ["dep:ov7670-driver"]
 # Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
 # no tether. RP2350-only, because RP2040 Picos in this project have no
 # radio, and telemetry-only by design (see the compile_error! below):
@@ -32,7 +37,6 @@ wifi = [
     "dep:cyw43-pio",
     "dep:embassy-net",
     "dep:embassy-futures",
-    "dep:embassy-sync",
     "dep:static_cell",
 ]
 
@@ -57,7 +61,11 @@ cyw43-pio = { workspace = true, optional = true }
 # The drop queue between the report loop and the radio. Already a
 # transitive dependency of embassy-net; named here because `OUTBOX` is
 # what keeps a hung radio from reaching the odometry loop.
-embassy-sync = { workspace = true, optional = true }
+# The drop queue behind `diag::NOTES`. No longer optional: it used to
+# arrive with `wifi` because the radio invented the notes channel, but
+# the camera is the second user and a build without a radio still needs
+# somewhere to put a sentence.
+embassy-sync = { workspace = true }
 # `medium-ethernet` because the CYW43 presents as an Ethernet device;
 # `dhcpv4` because a bench AP hands out addresses and a hardcoded one is a
 # thing that breaks when the robot moves rooms.
@@ -70,6 +78,9 @@ embassy-net = { version = "0.9", optional = true, features = [
 # The driver Prakhar wrote. Same source, two worlds: mocked bus in
 # `cargo test` on the Mac, real I2C peripheral here.
 quad-encoder = { workspace = true }
+# Same source, two worlds: mocked bus in `cargo test` on the Mac, real
+# I2C peripheral here.
+ov7670-driver = { workspace = true, optional = true }
 sim-core = { workspace = true }
 # The host<->chip vocabulary, shared rather than reinvented. `pico-odom`'s
 # STATUS line is still ad-hoc text (see the note in examples/odom_view.rs
