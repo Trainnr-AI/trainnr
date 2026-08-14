@@ -40,6 +40,15 @@ use std::time::{Duration, Instant};
 
 use hil_protocol::{thumbnail, Status};
 
+/// The SG90's nominal span, for drawing only: 1000–2000 µs over 180°,
+/// centred at 1500 — `pca9685-driver`'s `SG90_NOMINAL` in two numbers.
+/// Commanded-under-assumed-calibration, which is why the panel that
+/// consumes this says "simulated".
+const NOMINAL_CENTRE_US: f64 = 1500.0;
+const NOMINAL_US_PER_HALF_TURN: f64 = 1000.0;
+/// Decode-error events at most this often; the plot carries the shape.
+const ERROR_EVENT_EVERY: Duration = Duration::from_secs(1);
+
 /// Status lines per second — `1000 / REPORT_MS` in `firmware/pico-odom`.
 /// Live runs use the wall clock; a replayed file carries no timestamps,
 /// so its clock is reconstructed from this instead. Saying which is
@@ -220,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // became unreadable — an alarm that fires fifty times a second
         // is silence with extra steps. The plot carries the shape; the
         // event carries the fact.
-        if errors_now > last_errors && last_error_announce.elapsed() > Duration::from_secs(1) {
+        if errors_now > last_errors && last_error_announce.elapsed() > ERROR_EVENT_EVERY {
             last_error_announce = Instant::now();
             rec.log(
                 "events",

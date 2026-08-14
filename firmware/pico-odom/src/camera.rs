@@ -56,6 +56,9 @@ const ATTEMPTS: usize = 5;
 
 /// One thumbnail every this many frames.
 const THUMBNAIL_EVERY: u32 = 16;
+/// Pause after a failed capture before trying again — a dead camera
+/// retried hot would spin the task for nothing.
+const CAPTURE_RETRY_MS: u64 = 100;
 
 /// How often [`announce`] runs, in seconds. Also the divisor that turns a
 /// frame delta into a rate, so the two cannot drift apart.
@@ -146,13 +149,24 @@ pub type DataPins = (
     Peri<'static, PIN_20>,
 );
 
+/// COM7 value selecting RGB output, and COM15 selecting RGB565 at full
+/// range. Named once because they appear TWICE with different jobs: the
+/// config table writes them, and [`announce`]'s verdict compares the
+/// read-back against them. As two sets of literals, a table edit would
+/// silently turn "format confirmed" into a lie.
+const COM7_RGB: u8 = 0x04;
+const COM15_RGB565_FULL: u8 = 0xD0;
+/// SCALING_YSC's base value — shared by the table and the test-pattern
+/// write, whose bit 7 is OR'd onto exactly this.
+const SCALING_YSC: u8 = 0x35;
+
 /// QQVGA-shaped RGB565 — the format `crates/blob` consumes.
 ///
 /// ⚠️ **A starting point, not a tuned table.** Camera register sets are
 /// order-dependent and vendor-specific. Written as data rather than code
 /// so that adjusting it is editing a table, not editing logic.
 const QQVGA_RGB565: &[(u8, u8)] = &[
-    (0x12, 0x04), // COM7   — RGB output
+    (ov7670_driver::REG_COM7, COM7_RGB), // COM7 — RGB output
     // ⚠️ Divider measured at both extremes, both wrong: /1 gave 206 fps —
     // exposure cannot exceed the frame period, so that is a ~5 ms shutter
     // and a black image indoors — and /8 put the internal clock near
@@ -162,7 +176,7 @@ const QQVGA_RGB565: &[(u8, u8)] = &[
     (0x11, 0x01), // CLKRC  — internal clock / 2
     (0x0C, 0x04), // COM3   — enable downsampling (DCW)
     (0x3E, 0x1A), // COM14  — DCW on, PCLK divided by 4
-    (0x40, 0xD0), // COM15  — RGB565, full 0-255 range
+    (ov7670_driver::REG_COM15, COM15_RGB565_FULL), // RGB565, full 0-255 range
     // ⚠️ Bit 7 of XSC/YSC selects the sensor's internal TEST PATTERN —
     // [`TEST_PATTERN`] flips YSC's. Colour bars are generated inside the
     // sensor, after the pixel array: they travel the entire path under
@@ -171,7 +185,7 @@ const QQVGA_RGB565: &[(u8, u8)] = &[
     // problem optical. Bars wrong = no amount of hue or exposure tuning
     // was ever going to help. This lever ended a long guessing session.
     (0x70, 0x3A), // SCALING_XSC
-    (0x71, 0x35), // SCALING_YSC
+    (0x71, SCALING_YSC),
     (0x72, 0x22), // SCALING_DCWCTR    — /4 horizontally and vertically
     (0x73, 0xF2), // SCALING_PCLK_DIV  — /4
     (0xA2, 0x02), // SCALING_PCLK_DELAY
@@ -278,11 +292,11 @@ pub async fn start(
         let mut applied = sensor.apply(QQVGA_RGB565).is_ok();
         if TEST_PATTERN {
             // YSC bit 7 on: the eight-bar pattern.
-            applied &= sensor.write_register(0x71, 0x35 | 0x80).is_ok();
+            applied &= sensor.write_register(0x71, SCALING_YSC | 0x80).is_ok();
         }
         Timer::after_millis(SETTLE_MS).await;
-        let com7 = sensor.read_register(0x12).unwrap_or(0xEE);
-        let com15 = sensor.read_register(0x40).unwrap_or(0xEE);
+        let com7 = sensor.read_register(ov7670_driver::REG_COM7).unwrap_or(0xEE);
+        let com15 = sensor.read_register(ov7670_driver::REG_COM15).unwrap_or(0xEE);
         CONFIG_READBACK.store(
             u32::from(applied) | (u32::from(com7) << 8) | (u32::from(com15) << 16),
             Ordering::Relaxed,
@@ -429,7 +443,7 @@ async fn watch(
             // A frame that never arrived. Say nothing rather than publish
             // a stale blob as though it were current.
             BLOB_AREA.store(0, Ordering::Relaxed);
-            Timer::after_millis(100).await;
+            Timer::after_millis(CAPTURE_RETRY_MS).await;
             continue;
         }
         FRAMES.fetch_add(1, Ordering::Relaxed);
@@ -607,7 +621,7 @@ pub fn announce() {
         " | com7=0x{com7:02X} com15=0x{com15:02X} {}",
         if config & 1 == 0 {
             "⚠️ WRITES FAILED"
-        } else if com7 == 0x04 && com15 == 0xD0 {
+        } else if com7 == u32::from(COM7_RGB) && com15 == u32::from(COM15_RGB565_FULL) {
             "format confirmed"
         } else {
             "⚠️ FORMAT NOT SET — sensor ignored the table"

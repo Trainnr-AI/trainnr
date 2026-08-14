@@ -62,6 +62,8 @@ pub const REG_MANUFACTURER_HIGH: u8 = 0x1C;
 pub const REG_MANUFACTURER_LOW: u8 = 0x1D;
 /// Common control 7: output format, and the software-reset bit.
 pub const REG_COM7: u8 = 0x12;
+/// Common control 15: RGB565 selection and output range.
+pub const REG_COM15: u8 = 0x40;
 
 /// What [`Identity::is_ov7670`] expects to see.
 pub const EXPECTED_PRODUCT_ID: u8 = 0x76;

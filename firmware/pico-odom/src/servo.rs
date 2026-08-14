@@ -66,6 +66,17 @@ const FRESH_MS: u64 = 1000;
 /// How many channels the tracker drives — the three SG90s on hand.
 const SERVO_COUNT: usize = 3;
 
+/// The control tick, one servo frame at 50 Hz. Every per-tick rate in
+/// this file (slew, sweep step) is calibrated against this number, so
+/// it exists exactly once.
+const TICK_MS: u64 = 20;
+/// Announce the commanded pulses every this many ticks — twice a second
+/// at the 20 ms tick, enough for the viewer, cheap on the notes queue.
+const NOTE_EVERY_TICKS: u32 = 25;
+/// The datasheet's ≥500 µs oscillator settle after wake, rounded up to
+/// the timer's comfortable resolution.
+const OSCILLATOR_SETTLE_MS: u64 = 1;
+
 /// The channels themselves, proven at COMPILE time. `Channel::new` is
 /// `const`, so a `SERVO_COUNT` beyond the chip's sixteen fails the build
 /// here instead of surfacing as a runtime `else return` buried in a
@@ -125,7 +136,7 @@ async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) -> bool {
         return false;
     }
     // Oscillator settle the driver cannot wait out itself.
-    Timer::after_millis(1).await;
+    Timer::after_millis(OSCILLATOR_SETTLE_MS).await;
     let mut text: heapless::String<96> = heapless::String::new();
     match driver.read_register(pca9685_driver::REG_PRESCALE).await {
         Ok(121) => {
@@ -174,7 +185,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     let mut tick = 0u32;
 
     loop {
-        Timer::after_millis(20).await;
+        Timer::after_millis(TICK_MS).await;
         let now = firmware_support::now_ms();
         let frames = crate::camera::frame_total();
         if frames != last_frame_total {
@@ -228,7 +239,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
         }
 
         tick += 1;
-        if tick.is_multiple_of(25) {
+        if tick.is_multiple_of(NOTE_EVERY_TICKS) {
             let mut text: heapless::String<64> = heapless::String::new();
             let _ = hil_protocol::arm_pulses::write_note(&mut text, &current);
             crate::diag::note(&text);
@@ -258,11 +269,11 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
             rising = !rising;
         }
         tick += 1;
-        if tick.is_multiple_of(25) {
+        if tick.is_multiple_of(NOTE_EVERY_TICKS) {
             let mut text: heapless::String<64> = heapless::String::new();
             let _ = hil_protocol::arm_pulses::write_note(&mut text, &[pulse; SERVO_COUNT]);
             crate::diag::note(&text);
         }
-        Timer::after_millis(20).await;
+        Timer::after_millis(TICK_MS).await;
     }
 }

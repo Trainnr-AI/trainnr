@@ -219,6 +219,11 @@ fn round_to_nearest(value: f32) -> f32 {
     }
 }
 
+/// The largest possible batched frame: one register address plus four
+/// bytes for each of the sixteen channels. Sized once, used at every
+/// call site, so no buffer can quietly disagree with the layout.
+const PULSES_FRAME_CAPACITY: usize = 1 + 4 * 16;
+
 /// The prescaler value that produces `frame_hz`.
 ///
 /// Datasheet: `prescale = round(osc / (4096 × rate)) − 1`, valid for
@@ -273,7 +278,7 @@ fn pulses_frame(
     first: Channel,
     pulses: &[u32],
     frame_hz: u32,
-    frame: &mut [u8; 1 + 4 * 16],
+    frame: &mut [u8; PULSES_FRAME_CAPACITY],
 ) -> Result<usize, ServoError> {
     let last = usize::from(first.index()) + pulses.len();
     if pulses.is_empty() || last > usize::from(Channel::LAST) + 1 {
@@ -346,7 +351,7 @@ impl<I2C: I2c> Pca9685<I2C> {
     /// registers are contiguous (four per channel from [`REG_LED0`]),
     /// which is what makes the single write possible.
     pub fn set_pulses(&mut self, first: Channel, pulses: &[u32]) -> Result<(), Error<I2C::Error>> {
-        let mut frame = [0u8; 1 + 4 * 16];
+        let mut frame = [0u8; PULSES_FRAME_CAPACITY];
         let length =
             pulses_frame(first, pulses, self.frame_hz, &mut frame).map_err(Error::Servo)?;
         self.i2c
@@ -444,7 +449,9 @@ impl<I2C: I2c> Pca9685<I2C> {
 pub mod asynch {
     use embedded_hal_async::i2c::I2c;
 
-    use crate::{pulses_frame, start_sequence, Channel, Error, SERVO_FRAME_HZ};
+    use crate::{
+        pulses_frame, start_sequence, Channel, Error, PULSES_FRAME_CAPACITY, SERVO_FRAME_HZ,
+    };
 
     /// The PCA9685 over an async bus. See [`crate::Pca9685`] for the
     /// chip's story; this type only changes how the bytes get there.
@@ -483,7 +490,7 @@ pub mod asynch {
             first: Channel,
             pulses: &[u32],
         ) -> Result<(), Error<I2C::Error>> {
-            let mut frame = [0u8; 1 + 4 * 16];
+            let mut frame = [0u8; PULSES_FRAME_CAPACITY];
             let length =
                 pulses_frame(first, pulses, self.frame_hz, &mut frame).map_err(Error::Servo)?;
             self.i2c
