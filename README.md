@@ -379,6 +379,23 @@ Both use `sim_core::CommandWatchdog` — the same tested type, on both hops.
 This doubles as a **manual override**: something to hold while
 `chase --drive` is running, for the first time it aims at a wall.
 
+**Level 6 — the chip does it all alone (2026-08-15).** No laptop in the
+loop: an OV7670 streams through hand-written PIO+DMA into an on-chip
+brightness blob, and its three errors drive everything the rig owns —
+wheels chase (`x`, `area`), three arm servos track (`x`→pan, `y`→tilt,
+`area`→grip), all failsafed (watchdog, stall guard, hold-on-loss,
+image-freshness):
+
+```sh
+tools/build-pico2.sh pico-odom chase,arm     # BOOTSEL + picotool load
+cargo run --release -p hil-host --example rig_view -- /dev/cu.usbmodem11
+```
+
+`rig_view` shows the whole causal chain on one clock — what the camera
+sees, the arm those commands would make, the belief trail, duty, ticks —
+and `--record` turns the session into a replayable fixture that
+`rig_replay` pins in the gate. A phone torch steers the entire robot.
+
 **Recording and replay.** Every session can be captured and re-run with no
 hardware attached — and replay checks what the code *would now command*,
 so a behaviour change fails loudly:
