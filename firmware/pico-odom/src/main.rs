@@ -1223,7 +1223,11 @@ mod transport {
         })
         .await;
         #[cfg(feature = "arm")]
-        let _shared_bus = servo::probe(_shared_bus);
+        {
+            let bus = servo::probe(_shared_bus);
+            // The sweep task owns the bus from here; see `servo::sweep`.
+            spawner.spawn(servo::sweep(bus).unwrap());
+        }
 
         // One report stream, two wires. Both carry the same `Status::seq`,
         // which is what turns "the radio feels laggy" into a number.
