@@ -900,13 +900,32 @@ async fn chase_forever(motors: Motors, spec: RobotSpec) -> ! {
     /// Forward/backward creep, metres per second. "Slightly" made a number.
     const CREEP_M_PER_S: f64 = 0.06;
     /// Turn nudge, radians per second.
-    const TURN_RAD_PER_S: f64 = 0.5;
+    ///
+    /// ⚠️ MEASURED UP from 0.5 on 2026-08-15, the day the robot left the
+    /// stand: 0.5 rad/s is a 16% wheel duty, which spins free wheels and
+    /// does not move a chassis on the ground — the guard then reads
+    /// commanded-but-motionless (161 is just over its 150 floor) and
+    /// latches, leaving a robot that "flinched once and died" while the
+    /// servos dance on. 0.9 rad/s commands ~29%, above the observed
+    /// breakaway; the 25% retreat creep was seen moving the chassis, so
+    /// forward/backward stays as it is.
+    const TURN_RAD_PER_S: f64 = 0.9;
     /// How far off-centre (−1..+1) the blob may sit before turning.
     const CENTRE_DEADBAND: f32 = 0.20;
     /// Blob smaller than this (pixels) → it is far → creep forward.
-    const AREA_FAR: u32 = 250;
+    ///
+    /// ⚠️ MEASURED 2026-08-15, replacing guesses that drove the robot
+    /// backwards around the room: a live session's blob ran 431–1,889
+    /// pixels (mean 932), straddling the old NEAR=1500 — so "too close,
+    /// retreat" fired on the ordinary ambient patch, and retreating from
+    /// a room's brightness does not shrink it. The band now BRACKETS the
+    /// observed range: approach below it, hold inside it, retreat only
+    /// when something genuinely fills the view. Scene-tuned bench
+    /// numbers — an area→distance calibration replaces them when a lens
+    /// model exists.
+    const AREA_FAR: u32 = 400;
     /// Blob bigger than this → too close → back away.
-    const AREA_NEAR: u32 = 1500;
+    const AREA_NEAR: u32 = 2500;
     /// No new frame for this long → the image has stopped → so do we.
     const FRESH_MS: u64 = 1000;
 
