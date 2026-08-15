@@ -37,6 +37,23 @@ use embassy_time::Timer;
 use pca9685_driver::asynch::Pca9685;
 use pca9685_driver::{Channel, SERVO_FRAME_HZ};
 
+/// Assembly jig: `true` holds EVERY channel at the 1500 µs centre and
+/// does nothing else — the pose you attach horns in.
+///
+/// ⚠️ A servo has no centre marking because centre is not a place on the
+/// case: it is where the shaft GOES when commanded 1500 µs, defined by
+/// the internal potentiometer. The kit workflow is therefore: hold the
+/// channel centred, plug the BARE servo in (the snap-to-centre twitch is
+/// the centring), then attach the link in the manual's assembly pose and
+/// screw it down. From then on 1500 = that pose, permanently. The spline
+/// seats in ~18° steps; the remainder becomes a per-joint trim constant,
+/// which is software's job, not a reason to lever a powered horn.
+const ASSEMBLY_CENTRE: bool = false;
+
+/// Channels held during assembly — the full five-joint arm, not just the
+/// three servos currently on hand, so the MG90S get the same jig.
+const ASSEMBLY_CHANNELS: usize = 5;
+
 /// Bring-up lever: `true` restores the blind lockstep sweep that proved
 /// the servos on 2026-08-15. Kept for the same reason the camera keeps
 /// `TEST_PATTERN` — comparing against a known motion is the move that
@@ -164,10 +181,26 @@ pub async fn run(bus: I2c<'static, I2C0, Async>) {
     if !wake(&mut driver).await {
         return;
     }
-    if BRINGUP_SWEEP {
+    if ASSEMBLY_CENTRE {
+        centre_hold(&mut driver).await;
+    } else if BRINGUP_SWEEP {
         sweep(&mut driver).await;
     } else {
         track(&mut driver).await;
+    }
+}
+
+/// Hold every assembly channel at centre, forever. The horns go on here.
+async fn centre_hold(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
+    let pulses = [CENTRE_US as u32; ASSEMBLY_CHANNELS];
+    let Ok(first) = Channel::new(0) else { return };
+    if driver.set_pulses(first, &pulses).await.is_err() {
+        crate::diag::note("# servo bus error — centre hold failed");
+        return;
+    }
+    loop {
+        crate::diag::note("# servo ASSEMBLY MODE — ch0-4 held at 1500us, attach horns now");
+        Timer::after_millis(5000).await;
     }
 }
 
