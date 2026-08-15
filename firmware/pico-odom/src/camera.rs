@@ -219,6 +219,17 @@ const TEST_PATTERN: bool = false;
 /// patch, rather than a fixed number that works in one room only. A
 /// phone torch steers it.
 const BRIGHT_MARGIN: u8 = 50;
+
+/// Rows skipped from the TOP of the frame before hunting brightness.
+///
+/// ⚠️ A physical fact wearing a constant: the castor pitches the chassis
+/// nose-up, so the lens looks above the horizon — and a brightness
+/// chaser aimed at desk height locks onto monitors and windows instead
+/// of anything on the floor (2026-08-15: session areas of 2,000–4,000
+/// were the operator's own screens). The top third is sky; the target
+/// world lives in the lower rows. A mechanical shim helps too, but the
+/// mask holds whatever the castor does.
+const SKY_ROWS: usize = FRAME_HEIGHT as usize / 3;
 /// Fewer matching pixels than this and nothing is reported.
 const BRIGHT_MIN_PIXELS: u32 = 40;
 
@@ -457,14 +468,17 @@ async fn watch(
         }
         PIXEL_RANGE.store(u32::from(low) | (u32::from(high) << 8), Ordering::Relaxed);
 
-        // Pass one: the frame's mean brightness. Pass two: the blob of
-        // pixels well above it. Two passes over 14,400 pixels is cheap
-        // next to the frame that took milliseconds to arrive, and the
-        // relative threshold is what makes this work in any light.
-        let mean_luma = (pixels(buffer).map(|p| u32::from(blob::luma(p))).sum::<u32>()
-            / (FRAME_WIDTH as u32 * FRAME_HEIGHT as u32)) as u8;
+        // Pass one: mean brightness. Pass two: the blob well above it.
+        // Both passes run over the SAME masked window, below [`SKY_ROWS`]
+        // — a threshold computed on the whole frame but applied below the
+        // sky line would drift with however bright the ignored monitors
+        // happen to be.
+        let ground = || pixels(buffer).skip(SKY_ROWS * FRAME_WIDTH as usize);
+        let ground_rows = FRAME_HEIGHT as u32 - SKY_ROWS as u32;
+        let mean_luma = (ground().map(|p| u32::from(blob::luma(p))).sum::<u32>()
+            / (FRAME_WIDTH as u32 * ground_rows)) as u8;
         let floor = mean_luma.saturating_add(BRIGHT_MARGIN);
-        match blob::find_matching(pixels(buffer), FRAME_WIDTH, BRIGHT_MIN_PIXELS, |p| {
+        match blob::find_matching(ground(), FRAME_WIDTH, BRIGHT_MIN_PIXELS, |p| {
             blob::luma(p) > floor
         }) {
             Some(found) => {

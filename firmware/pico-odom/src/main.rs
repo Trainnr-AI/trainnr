@@ -530,7 +530,19 @@ struct Drivetrain {
     enabled: bool,
     ticks_at_last_check: u32,
     stalled_polls: u32,
+    /// Polls left in the post-stall cooldown; motors are held at zero
+    /// while it runs down. See the retry note on [`Self::apply`].
+    stall_cooldown: u32,
 }
+
+/// How long a stall cuts the motors before ONE retry is allowed:
+/// 40 polls × 50 ms = 2 s. ⚠️ Chosen so a genuinely blocked motor sees
+/// at most 200 ms of stall current every 2 s — a 10% duty cycle on a
+/// brief ~500 mA draw, thermally trivial — while a transient snag (a
+/// carpet edge, a cable, one wheel late to break away) costs 2 s
+/// instead of the rest of the run.
+#[cfg(any(feature = "teleop", feature = "chase"))]
+const STALL_COOLDOWN_POLLS: u32 = 40;
 
 #[cfg(any(feature = "teleop", feature = "chase"))]
 impl Drivetrain {
@@ -546,6 +558,7 @@ impl Drivetrain {
             enabled: false,
             ticks_at_last_check: TOTAL_TICKS.load(Ordering::Relaxed),
             stalled_polls: 0,
+            stall_cooldown: 0,
         }
     }
 
@@ -569,9 +582,19 @@ impl Drivetrain {
     /// nothing would say so. The chip STOPS rather than escaping:
     /// reversing is recovery, recovery needs to know what is behind the
     /// robot, and only the commander knows that. `STALLED` appears in
-    /// the report line for the commander to act on, and clears itself
-    /// once the wheels turn again so a single scuff does not latch the
-    /// robot off for the session.
+    /// the report line for the commander to act on.
+    ///
+    /// # ⚠️ Cooldown-and-retry, added the day the robot met the floor
+    ///
+    /// The original latch held until the wheels moved — which, with the
+    /// duty cut to zero, meant until reboot. That philosophy assumed a
+    /// host with hands. The camera-commander has none, and on the ground
+    /// a 200 ms friction hiccup (one wheel late to break away in a turn)
+    /// bricked three autonomous runs in one afternoon. Now a stall cuts
+    /// the motors for [`STALL_COOLDOWN_POLLS`] (2 s), then clears for
+    /// ONE retry. A truly blocked motor re-stalls 200 ms into each retry
+    /// — thermally nothing — and the `STALLED` flag pulses in the report
+    /// line so a watching host still sees the truth.
     ///
     /// # Two layers of stop
     ///
@@ -586,19 +609,28 @@ impl Drivetrain {
             left.unsigned_abs().max(right.unsigned_abs()) > STALL_DUTY_FLOOR.unsigned_abs();
         if commanded_hard && ticks_now == self.ticks_at_last_check {
             self.stalled_polls += 1;
-            if self.stalled_polls >= STALL_POLLS {
+            if self.stalled_polls >= STALL_POLLS && !STALLED.load(Ordering::Relaxed) {
                 STALLED.store(true, Ordering::Relaxed);
+                self.stall_cooldown = STALL_COOLDOWN_POLLS;
             }
         } else {
             self.stalled_polls = 0;
             if ticks_now != self.ticks_at_last_check {
                 STALLED.store(false, Ordering::Relaxed);
+                self.stall_cooldown = 0;
             }
         }
         self.ticks_at_last_check = ticks_now;
         if STALLED.load(Ordering::Relaxed) {
             left = 0;
             right = 0;
+            // The cooldown runs down with the motors safe at zero; when
+            // it expires the latch opens for one retry.
+            self.stall_cooldown = self.stall_cooldown.saturating_sub(1);
+            if self.stall_cooldown == 0 {
+                STALLED.store(false, Ordering::Relaxed);
+                self.stalled_polls = 0;
+            }
         }
 
         let should_run = left != 0 || right != 0;
