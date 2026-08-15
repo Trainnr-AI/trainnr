@@ -583,9 +583,11 @@ pub fn frame_total() -> u32 {
     FRAMES.load(Ordering::Relaxed)
 }
 
-/// Where the brightest patch is, as offsets from frame centre in
-/// **−1..+1** (image convention: `y` positive is below centre), plus how
-/// many pixels matched. `None` means the last frame had no match — a
+/// Where the brightest patch is, as offsets from the centre of the
+/// GROUND WINDOW (the frame below [`SKY_ROWS`]) in **−1..+1** — image
+/// convention, `y` positive below centre — plus how many pixels
+/// matched. Window-relative is what a tracker wants: the servos centre
+/// on the world the mask lets them see. `None` means the last frame had no match — a
 /// real answer, distinct from a wedged camera, which [`frame_total`]
 /// exposes instead.
 pub fn blob_error() -> Option<(f32, f32, u32)> {
