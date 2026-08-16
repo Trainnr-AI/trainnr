@@ -4,6 +4,11 @@ Research date: **2026-08-08**. Prices verified on that date — they moved a lot
 in 2025–26, so **verify at checkout rather than trusting this page**.
 Context: one 24 GB RTX 3090 Ti already owned, in a Windows/WSL machine.
 
+Re-verified **2026-08-15** where a primary source was reachable (WebSearch was
+exhausted; several store fetches were denied — those rows say so instead of
+silently keeping stale dates). One error in this doc's Jetson table was caught
+against its own cited source and corrected in place.
+
 > **TL;DR.** The owned 24 GB card removes the largest line item, **but
 > ManiSkill3's GPU simulation and rendering do not work under WSL** — dual-boot
 > Ubuntu before this bites in month four. **Do not buy a Jetson**: prices roughly
@@ -26,7 +31,8 @@ Context: one 24 GB RTX 3090 Ti already owned, in a Windows/WSL machine.
 | **ManiSkill3 GPU simulation** | ❌ |
 | **ManiSkill3 rendering** | ❌ |
 
-ManiSkill3's own installation documentation publishes a platform matrix. WSL
+ManiSkill3's own installation documentation publishes a platform matrix
+(re-verified 2026-08-15, unchanged). WSL
 reads: **"CPU Sim ✅ | GPU Sim ❌ | Rendering ❌"**. Windows is
 **"CPU Sim ✅ | GPU Sim ❌ | Rendering ✅"**. The constraint comes from SAPIEN,
 the underlying engine, and requires a Vulkan driver they say is best supported
@@ -58,8 +64,21 @@ with AdamW:
 
 **π0.5 LoRA needs >22.5 GB** (openpi's own README: inference >8 GB, LoRA
 >22.5 GB, full fine-tune >70 GB) — right at the edge of a 24 GB card.
+Re-checked 2026-08-15: the figure is unchanged, and the field evidence tilts
+worse — openpi issue #677 is a live OOM **on a 4090 running the LoRA
+variants**, the maintainers' standard remedy is `gradient_checkpointing=True`,
+and no published user config confirming a comfortable 24 GB π0.5 LoRA fit was
+found. Plan on gradient checkpointing and luck.
+
 **MolmoAct2's LoRA-VLM at 20.2 GiB @ bs8** has genuine headroom, and its
-inference is 12.1 GiB. Full table in
+inference is 12.1 GiB — numbers now carried in **official LeRobot
+documentation** (integrated 2026-05-28), a stronger citation than the allenai
+repo. Two additions strengthen it as the default rather than the fallback: an
+even cheaper **action-expert-only fine-tune at 16.5 GiB @ bs8**, and a
+ready-made **zero-shot SO-100/101 checkpoint**
+(`lerobot/MolmoAct2-SO100_101-LeRobot`, runnable via `lerobot-rollout`, with a
+documented joint-sign/offset correction for LeRobot ≥ 0.5.0 calibration).
+bf16 serving fits well under 24 GB. Full table in
 [20-policies-and-models.md](20-policies-and-models.md) §2.
 
 Training wall-clock on a 24 GB card, 5 epochs on ~50 episodes: **ACT 30–60
@@ -84,10 +103,18 @@ NVIDIA raised Jetson prices on **2026-07-22**:
 | Product | Was | Now | Change |
 |---|---:|---:|---:|
 | Jetson Nano module (1KU) | $99 | **$199** | +101% |
-| **Orin Nano Super DevKit** | $249 | **$399** (street $409.99, 2026-08-06) | +60% |
-| Orin NX 16 GB module | $599 | **$999** | +67% |
+| **Orin Nano Super DevKit** | $249 | **$399** (street $450.30 at Seeed, 2026-08-15, **limit 1/customer**) | +60% |
+| Orin NX 16 GB module (1KU) | $499 | **$899** | +80% |
 | AGX Orin DevKit | $1,999 | **$3,499** | +75% |
 | AGX Thor DevKit | $3,499 | **$5,499** | +57% |
+
+⚠️ **Corrected 2026-08-15.** The Orin NX 16 GB row previously read
+"$599 → $999, +67%" — re-fetching this table's own cited source (CNX-Software,
+2026-07-22) shows **$499 → $899, +80%** (and Orin NX 8 GB $399 → $649, +63%).
+Every other row matches the source. No rollback or second hike was found; the
+street price drifting *above* MSRP and the one-per-customer cap both point at
+continued supply constraint. (AGX-class street prices could not be re-verified —
+retailer fetches failed.)
 
 The DRAM shortage hit single-board computers too: Raspberry Pi 5 8 GB went
 $80 → **$95** (2025-12-01), and secondary sources describe two further hikes in
@@ -107,7 +134,13 @@ $95–130, and check the cart.**
 
 **A $3,499 device running a 450M-parameter model at 1.35 Hz.** Expect maybe
 2–4× from TensorRT and FP16, so call it 3–5 Hz optimised. The 275-TOPS figure
-on the box is meaningless for transformer inference.
+on the box is meaningless for transformer inference. (Re-checked 2026-08-15:
+the benchmark repo is unrevised since 2026-04-30 and no newer Jetson-class VLA
+measurement was found; π0-class on Jetson remains rough — openpi issue #386 is
+still open and active. The 2–4× TensorRT guess now has one supporting
+datapoint from ACT-class models: arXiv 2608.03938 measured **9.0×** from INT8
+TensorRT on an 8 GB Orin Nano Super, 114 ms → 12.65 ms, bimanual SO-101 at
+19/20 success — see [20-policies-and-models.md](20-policies-and-models.md).)
 
 ⚠️ Similarly, **Hailo-8's "26 TOPS at 2.5 W" is real for convolutional
 networks**, and no evidence was found of transformer or VLA support in its
@@ -147,13 +180,16 @@ Official BOM, `TheRobotStudio/SO-ARM100`:
 Servos are **Feetech STS3215 7.4 V** at $13.89 each — follower is 6× at 1/345
 gearing; the leader mixes 1/191, 1/345 and 1/147 so it can hold its own weight
 while staying backdrivable. Excludes 3D printing. Sourced from Alibaba/Taobao,
-so **4–8 week lead times**.
+so **4–8 week lead times**. (BOM re-verified to the cent 2026-08-15, repo
+actively maintained; it has grown a **Japan column** — Akizuki Denshi,
+¥2,980/servo — a domestic-stock alternative when the Alibaba lead time bites.
+The 4–8-week figure itself could not be independently re-verified.)
 
 Retail kits that skip the printing:
 
 | Vendor | Product | Price | Stock (as fetched) |
 |---|---|---:|---|
-| Seeed | SO-ARM101 Pro Kit, **assembled** | **$299** ($293 @10+) | in stock ⚠️ confirm whether leader+follower or follower only |
+| Seeed | SO-ARM101 Pro Kit, **assembled** | **$299** ($293 @10+) | in stock ⚠️ page copy says "six STS3215 servos" — six servos = one arm, so this reads **follower-only** (2026-08-15); comparing it against the $229.88 *pair* BOM flips meaning |
 | Seeed | SO-ARM101 Pro servo motor kit | $260 | in stock |
 | WowRobo | SO-ARM101, 1 leader + 1 follower + camera | **$199–239** | ⚠️ collection page says in stock; **product page showed every variant unavailable** |
 
@@ -167,8 +203,16 @@ This is a hobby servo with a magnetic encoder bolted on, not an industrial
 actuator. Supporting evidence, all weak individually and consistent in direction:
 
 - **LeRobot issue #1319** — a user asks how to read servo temperature, load and
-  internal error. **Closed as "not planned", with no maintainer response.** There
-  is no first-class servo health telemetry in LeRobot.
+  internal error. **Closed as "not planned"** — though re-reading it 2026-08-15
+  softens the story: the close was mechanical (**stale bot**, 2026-02-25), not
+  a maintainer decision, and a *user* did reply with debugging-tool pointers.
+  "LeRobot won't do this" is really "nobody championed it." There is still no
+  first-class servo health telemetry in a LeRobot release — but **PR #3456**
+  (open since 2026-04-24, unmerged ~3.5 months) adds an opt-in
+  `record_telemetry` flag reading **velocity (reg 58), load (reg 60) and
+  temperature (reg 63)** per motor, opt-in because the 3 extra sync_reads cost
+  **~15–30 ms on a 6-motor bus**. Those register numbers and that latency cost
+  are exactly what our own Tier 0 watchdog needs.
 - LeRobot issue #2819 — SO-101 follower servo trouble.
 - A public build log titled *"AI Robot Arm — LeRobot SO-101 — First Try and
   Burned It"*; another reporting two days debugging a dead servo board.
@@ -205,9 +249,12 @@ outlast the winding.
 ### The honest conclusion
 
 The cheapest arm with a genuinely industrial duty cycle is the **AgileX PiPER at
-$3,999** (1.5 kg payload, ±0.1 mm repeatability, 626 mm reach) — **above the
-entire budget for one arm**, and not natively supported by LeRobot (request
-open as issue #1335).
+$3,999** (1.5 kg payload, ±0.1 mm repeatability, 626 mm reach — price as of
+2026-08-08, **not re-verified 2026-08-15**, store fetch denied) — **above the
+entire budget for one arm**, and still not natively supported by LeRobot:
+issue #1335 was closed 2025-07-27 without implementation, and
+`src/lerobot/robots/` contains no `piper` as of 2026-08-15 — cite the robots
+directory, not the issue.
 
 > **Do not try to buy 8 h/day reliability. Buy SO-101s with 12 V servos,
 > engineer the thermal mitigations, stock spares, and scope the pilot to 2–4 h
@@ -223,7 +270,7 @@ open as issue #1335).
 | LeKiwi (arm + base) | $482–499 BOM | 6 + 3 wheels | — | — | ✅ |
 | myCobot 280 | $203–599 | 6 | 250 g | ±0.5 mm | ❌ |
 | Unitree D1 | not published | 6 | 500 g | ±0.1 N force control | ❌ |
-| **AgileX PiPER** | **$3,999** | 6 | **1.5 kg** | **±0.1 mm** | ❌ (issue #1335) |
+| **AgileX PiPER** | **$3,999** | 6 | **1.5 kg** | **±0.1 mm** | ❌ (no `piper` in `src/lerobot/robots/`, 2026-08-15) |
 | Trossen WidowX AI | from $2,995 | 6 | — | — | ✅ (ALOHA family) |
 | Trossen Solo / Stationary / Mobile AI | $7,995 / $15,995 / $22,995 | — | — | — | ✅ |
 
@@ -284,11 +331,14 @@ imitation learning.** Buy depth only for base navigation and obstacle avoidance.
 stale: Intel **spun RealSense out as an independent company in July 2025** and it
 **raised $50M**. The D400 line is actively sold — D405/D415 $272, D435 $314,
 D435i $334, D455 $419 — with a **tariff surcharge added 2026-02-03**, so the cart
-will exceed those numbers.
+will exceed those numbers. (Status and prices as of 2026-08-08; **not
+re-verified 2026-08-15** — store fetch denied. Unrefuted, but re-check before
+quoting.)
 
 **Orbbec Gemini 335 at $264** is the best value found: stereo, 0.1–20 m,
 1280×800 @30 fps, ≤1.5% error at 2 m, IP5X, 97 g. Luxonis OAK-D Lite is $269,
-OAK-D $329; the OAK-4 generation ($949–1,049) has priced itself out.
+OAK-D $329; the OAK-4 generation ($949–1,049) has priced itself out. (Orbbec
+price also **not re-verified 2026-08-15** — fetch denied.)
 
 ### The rest
 
@@ -348,7 +398,7 @@ sensors, and a UMI rig.
 | Counterfeit STS3215 clones | 🔴 | Buy through Seeed, not random marketplace sellers |
 | Vendor stock claims contradicting their own product pages | 🟠 | Keep Seeed as the fallback at ~$100/arm more |
 | DRAM crisis still active — Pi hiked 3× in 4 months, Jetson +101% | 🔴 | **Verify every compute price at checkout** |
-| No servo health telemetry in LeRobot (#1319, closed) | 🔴 | Write the watchdog. Required, not optional |
+| No servo health telemetry in any LeRobot release (#1319 stale-bot-closed; PR #3456 unmerged) | 🔴 | Write the watchdog. Required, not optional — steal the register map from the PR |
 | RealSense tariff surcharge since 2026-02-03 | 🟠 | Orbbec Gemini 335 at $264 instead |
 
 ---

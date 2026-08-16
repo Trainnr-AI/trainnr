@@ -7,10 +7,19 @@ supervised pilot require, and what does it cost?
 > **TL;DR.** One architectural decision dominates everything else: **the machine
 > learning policy must never perform a safety function.** Get that right and you
 > self-certify for **€1.5–5k**; get it wrong and the EU Machinery Regulation
-> forces a **Notified Body — €5–15k+ and 3–6 months** — *and* pulls you into the
-> AI Act's high-risk regime, because Article 6(1)'s two conditions are
-> cumulative. **The same decision resolves both.** It is also a description of
-> the Tier 0 architecture this repository already has.
+> forces a **Notified Body — €5–15k+ and 3–6 months** — and, since Regulation
+> (EU) 2026/1744, the AI requirements arrive *through the Machinery Regulation
+> itself* rather than as a parallel AI Act assessment. **One decision, one
+> regulation, one assessment.** It is also a description of the Tier 0
+> architecture this repository already has.
+
+> **Re-verified 2026-08-15.** The EU mechanism changed between the research
+> date and the re-check: the Digital Omnibus (Regulation (EU) 2026/1744, in
+> force **2026-07-27**) moved the Machinery Regulation from Section A to
+> Section B of the AI Act's Annex I — see the dated update in §1 and the
+> settled timeline in §8. The engineering advice survives unchanged; the
+> description of *how the two laws interact* did not. Regulatory claims decay
+> fastest of anything in this doc set.
 
 ⚠️ **This document is engineering research, not legal advice.** Several cost
 figures come from compliance-consultancy marketing pages rather than Notified
@@ -23,7 +32,10 @@ Bodies, and are labelled where that is so. Get real quotes and a lawyer.
 **EU Machinery Regulation (EU) 2023/1230** was adopted 2023-06-14 and
 **applies from 2027-01-20 with no transition period** — it replaces the
 Machinery Directive 2006/42/EC outright on that date. That is roughly 17 months
-from this research date.
+from this research date. (Re-verified at EUR-Lex 2026-08-15: the date stands; a
+corrigendum fixed a clerical error without moving it, and the regulation has
+been amended by (EU) 2024/2748 — internal-market emergency procedures — and by
+(EU) 2026/1744, on which see below.)
 
 Recital 12 explicitly brings *"artificial intelligence, the Internet of things
 and robotics"* into scope. Article 3(3) makes safety components expressly
@@ -39,20 +51,50 @@ And then **Recital 54 / Annex I Part A**:
 > self-evolving behaviour using machine learning"** — justified by *"data
 > dependency, opacity, autonomy and connectivity."*
 
-**EU AI Act Article 6(1)** then has **two cumulative conditions** for an AI
-system in machinery to be high-risk:
+**EU AI Act Article 6(1)**, as the regime stood at this doc's research date,
+had **two cumulative conditions** for an AI system in machinery to be
+high-risk: (1) the AI is used as a **safety component** of a product covered by
+Annex I Union harmonisation legislation, **AND** (2) that product is
+**required to undergo third-party conformity assessment**. Because condition
+(2) referred back to the Machinery Regulation, staying out of Annex I Part A
+also dropped you out of AI Act high-risk classification — two regimes, one
+escape hatch.
 
-1. the AI is used as a **safety component** of a product covered by Annex I
-   Union harmonisation legislation, **AND**
-2. that product is **required to undergo third-party conformity assessment**.
-
-The European Commission's own worked example of a safety component is
+The European Commission's worked example of a safety component was
 **"vision systems detecting human presence in robot cells to trigger safe
 stops."** That is exactly the thing not to build with a vision-language-action
-model.
+model. (⚠️ Not re-verified 2026-08-15, and any Art. 6(1) guidance should now be
+re-read against the update below.)
 
-Because condition (2) refers back to the Machinery Regulation, **staying out of
-Annex I Part A also drops you out of AI Act high-risk classification.**
+### Updated 2026-08-15: the Omnibus restructured the mechanism
+
+**Regulation (EU) 2026/1744** (the Digital Omnibus, CELEX 32026R1744, in force
+**2026-07-27** — enacted law, not a proposal) **moved the Machinery Regulation
+from Section A to Section B of the AI Act's Annex I**, its recital calling this
+"a sectoral approach." The mechanics that follow, from the enacted text:
+
+- For Section B products, amended AI Act Art. 2(2): **"only Article 6(1),
+  Article 60a and Articles 102 to 112 shall apply"** — the AI Act's full
+  Chapter III high-risk regime no longer applies directly to AI in machinery.
+- Instead, a new third paragraph of **Machinery Regulation Art. 8** requires
+  the Commission to adopt **delegated acts amending MR Annex III** to add
+  health-and-safety requirements for high-risk AI systems (reflecting AI Act
+  Ch. III §2 and Arts. 17, 19, 72, 73). **Those delegated acts apply by
+  2028-08-02.**
+- New **MR Art. 20(10)**: until MR-side harmonised standards or common
+  specifications exist, compliance with standards harmonised under AI Act
+  Arts. 40/41 gives **presumption of conformity** with the MR's AI
+  requirements.
+
+What this changes and what it does not: the old "two cumulative conditions"
+escape-hatch description above is **superseded** — the consequence of putting
+ML in a safety function is now delivered *through the Machinery Regulation
+itself* (delegated-act requirements assessed by the machinery Notified Body),
+not through a parallel AI Act Chapter III conformity assessment. The
+engineering decision is unchanged and its payoff is **cleaner than before**:
+keep the policy out of safety functions, stay out of MR Annex I Part A, and
+there is one regulation and one (self-)assessment to face rather than two
+regimes to reason about.
 
 ### What that means concretely
 
@@ -87,7 +129,7 @@ someone who will read it.
 | **ANSI/A3 R15.06-2025** | Parts 1 & 2 approved 2025-08-21, published Sept 2025, 403 pages | US adoption of ISO 10218:2025 |
 | **ISO 3691-4:2023** | current; **ISO/DIS 3691-4 in draft** | Driverless industrial trucks — AGVs, **AMRs**, automated guided carts. ⚠️ **Does not clearly address AMRs with manipulators.** |
 | **ANSI/A3 R15.08** | Part 1 (2020), Part 2 (2023), **Part 3 (2026)** | Industrial mobile robots. **Part 3 targets users and operators** — which is what your customer will be asked about |
-| **ISO 25785-1** | **still under development** | Dynamically stable industrial mobile robots |
+| **ISO 25785-1** | **still under development** (unrefuted but ⚠️ unverifiable 2026-08-15 — iso.org refused automated access; re-check by hand) | Dynamically stable industrial mobile robots |
 | **ISO 13482** | under revision; **ISO/FDIS** described as *"nearing finalization after twelve years"* (2026-05-20) | Personal care / service robots. Wrong standard for a warehouse or lab; **becomes relevant for a clinic** — and its unsettled state is a reason to prefer warehouse or lab for a first pilot |
 | **ANSI/CAN/UL 3300:2024** | first published 2023 | Service, communication, information, education and entertainment robots. **Now on OSHA's NRTL list of appropriate test standards**, which is what makes it commercially necessary in the US. ⚠️ Its scope says "does not require instructed or skilled person intervention during operation" — a supervised pilot arguably is not that, so the fit is imperfect |
 | **ISO 13849-1:2023** | current | Performance levels for safety-related control systems |
@@ -100,6 +142,35 @@ The most important conceptual change in ISO 10218:2025:
 There is no such thing as buying a collaborative robot and being done. *Your*
 deployment — this arm, this end-effector, this payload, this workspace, these
 people — is what gets assessed.
+
+### What officialdom has actually published for ML safety components (2026-08-15)
+
+The first official Notified-Body-side guidance now exists. **RfU
+CNB/M/00.514 Rev 02** (Recommendation for Use, dated 2025-11-28, endorsed by
+the Machinery Expert Group 2025-11-07), from the European Co-ordination of
+Notified Bodies for Machinery's ad-hoc working group on **exactly the ML
+categories of MR Annex I Part A items 5 and 6**, resolves the who-assesses-what
+question: a machinery Notified Body **"shall be entitled to control the
+conformity of the high-risk AI systems"** (wording from AI Act Art. 43(3)),
+must itself comply with AI Act Art. 31(4), (5), (10) and (11), and **need not
+be a full AI Act Notified Body**. ⚠️ The RfU predates Regulation 2026/1744 and
+reflects the old Section-A mechanics — its procedure may be superseded by the
+sectoral approach in §1; watch for a Rev 03. Same pack: **RfU CNB/M/00.518** —
+EU type-examination certificates issued under 2023/1230 before 2027-01-20 are
+valid five years from issue.
+
+The rest of the official scaffolding, as of 2026-08-15, is scaffolding only:
+
+- A **standardisation request** supporting MR 2023/1230 exists (Commission
+  Implementing Decision **C(2025)129**), but **no harmonised-standards listing
+  under 2023/1230 has appeared in the Official Journal** — the Commission's
+  standardisation page still points only at Directive 2006/42/EC standards.
+- **No official application guide for the MR exists** — only the Machinery
+  *Directive* guide, edition 2.3 (April 2024).
+- NANDO has moved into the Single Market Compliance Space; MR Notified-Body
+  designations are implied but were not enumerable by automated access, and
+  **whether any body is designated for the Part A ML items specifically is
+  unverified**.
 
 ### The mobile-manipulator gap is real, and you should name it first
 
@@ -314,15 +385,28 @@ Original timeline: in force 2024-08-01; prohibitions and AI literacy
 penalties 2025-08-02; high-risk (except Art. 6(1)) 2026-08-02; **Art. 6(1)
 embedded high-risk 2027-08-02**.
 
-The **Digital Omnibus** changed this in 2026 (Council approval 2026-06-29):
+The **Digital Omnibus** changed this in 2026, and is now settled, citable law:
+**Regulation (EU) 2026/1744** (CELEX 32026R1744), signed at Strasbourg
+2026-07-08, **in force 2026-07-27** — confirmed both by the amended AI Act
+Art. 113 text and by the Commission's AI policy page. (This resolves the
+warning the 2026-08-08 edition of this doc carried here, which found the
+in-force date unsettled: it settled within the week. Regulatory claims decay
+fastest.)
+
+Confirmed dates from the enacted Art. 113:
 
 - Annex III standalone high-risk pushed **2026-08-02 → 2027-12-02**
 - **Annex I embedded high-risk — AI inside machinery, which is this case —
-  pushed to 2028-08-02**
+  pushed to 2028-08-02** (the same date the MR Art. 8 delegated acts of §1
+  apply by — the two regimes now land together, by design)
 
-⚠️ **The exact in-force date of the Omnibus is unsettled in the sources
-consulted** — one states 2026-07-27, another says formal publication was
-"expected in the coming weeks." Verify before relying on it.
+The Omnibus also obliges the Commission to publish burden-minimisation
+guidelines (Arts. 8(2)/9(10)/17(3)) by **2027-08-01** and post-market-monitoring
+guidance with template by **2027-09-02**. As of 2026-08-15 the AI Office has
+published guidelines on prohibited practices, the AI-system definition, GPAI
+scope, transparency (2026-07-20), high-risk providers/deployers, and an
+MDR/IVDR interplay paper — but **no machinery–AI-Act interplay guidance yet**;
+"interplay with other EU legislation" sits on its in-progress list.
 
 Either way, the Machinery Regulation's **2027-01-20** date arrives first, and §1
 is what matters.
@@ -331,9 +415,16 @@ is what matters.
 
 ## 9. Sources
 
-EU Machinery Regulation (EU) 2023/1230, OJ L 165, 2023-06-29 ·
-EU AI Act and Digital Omnibus (Council approval 2026-06-29) ·
+EU Machinery Regulation (EU) 2023/1230, OJ L 165, 2023-06-29
+<https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=CELEX:32023R1230> ·
+Regulation (EU) 2026/1744 (Digital Omnibus, in force 2026-07-27)
+<https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32026R1744> ·
 European Commission AI Act Service Desk, Art. 6(1) guidance ·
+Commission AI policy page
+<https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai> ·
+"Horizontal RfUs in force MR — Status May 2026" (RfU CNB/M/00.514 Rev 02 and
+00.518), linked from
+<https://single-market-economy.ec.europa.eu/sectors/mechanical-engineering/machinery_en> ·
 ISO 10218-1:2025 / -2:2025 · ANSI/A3 R15.06-2025 · ANSI/A3 R15.08 Parts 1–3 ·
 ISO 3691-4:2023 · ISO 13482 / ISO/FDIS 13482 · ISO 25785-1 (in development) ·
 ANSI/CAN/UL 3300:2024 · ISO 13849-1:2023 · IEC 60204-1 · ISO 12100 ·

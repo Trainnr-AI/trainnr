@@ -4,6 +4,11 @@ Research date: **2026-08-08**. Question: what is the fastest and cheapest way
 to collect enough real-world manipulation data to train a state-of-the-art
 policy for an SO-101-class arm on a mobile base at a commercial site?
 
+Re-swept **2026-08-15**. Search quota was again exhausted, so discovery ran on
+the arXiv API, citation graphs and direct repo/doc fetches. Declared blind
+spot: **commercial vendor news** (kit launches, price moves outside known
+repos) was unreachable and needs a re-run when search is available.
+
 > **TL;DR.** Use the **SO-101 leader arm**. A joint-space leader beats VR
 > controllers by **5× on success rate** and — the number that actually matters —
 > produces trajectories with **78% fewer near-singular configurations**, because
@@ -11,7 +16,9 @@ policy for an SO-101-class arm on a mobile base at a commercial site?
 > then stop**, switching to corrections, which are reported at **10× the data
 > efficiency**. Buy **diversity, not repetition**: 32 environment×object
 > combinations at 50 demos each reaches ~90% on novel objects; more repetitions
-> per combination saturate. **Skip UMI** despite its 3× raw throughput.
+> per combination saturate. **Skip original-pipeline UMI** despite its 3× raw
+> throughput — but see §2: a successor that sidesteps its fragile SLAM stack
+> appeared 2026-07.
 
 ---
 
@@ -34,6 +41,13 @@ arms — architecturally the same problem as an SO-101 on a base.
 | Cost | **< $500** |
 
 All 10 participants rated it most user-friendly.
+
+Re-checked **2026-08-15** across JoyLo's full 2026 citation list: **no
+replication and no contradiction** — the citers are policy papers, not
+comparative user studies, so the 5× and 78% numbers stand unchallenged.
+Worth noting honestly: several post-JoyLo whole-body pipelines still choose VR
+anyway (Panorama-Aware VLA, MiMoCo), so the quality argument is uncontested
+but not universally adopted.
 
 **The singularity ratio is the finding.** A *singularity* is an arm
 configuration where the joint angles lose the ability to produce motion in some
@@ -64,9 +78,9 @@ near.
 | AirExo-2 exoskeleton | "low-cost" | high | **No** | ❌ |
 | **UMI handheld** | **$371** | **48** | **No** | ❌ |
 
-LeRobot's full teleoperator list as of **2026-08-08**: `so_leader`,
-`bi_so_leader`, `koch_leader`, `openarm_leader`, `openarm_mini`,
-`bi_openarm_leader`, `bi_openarm_mini`, `rebot_102_leader`,
+LeRobot's full teleoperator list as of **2026-08-08** (re-verified unchanged
+**2026-08-15**): `so_leader`, `bi_so_leader`, `koch_leader`, `openarm_leader`,
+`openarm_mini`, `bi_openarm_leader`, `bi_openarm_mini`, `rebot_102_leader`,
 `bi_rebot_102_leader`, `omx_leader`, `gamepad`, `keyboard`, `phone`,
 `homunculus`, `reachy2_teleoperator`, `unitree_g1`.
 
@@ -75,6 +89,20 @@ LeRobot's full teleoperator list as of **2026-08-08**: `so_leader`,
 gravity-compensated arm, **17.2× more successful demos than AnyTeleop**;
 **AutoDex** (arXiv 2606.23689) — 500 trajectories in 10.3 h vs 49.4 h teleop;
 **Human-as-Humanoid** (arXiv 2606.32009) — 4.8–7.2× raw throughput.
+
+From the 2026-08-15 sweep (none has LeRobot support; none reports a
+JoyLo-style comparative user study): **SuperSuit** (arXiv 2603.06280,
+2026-03-06) — a strictly isomorphic wearable arm usable both as a
+robot-in-the-loop teleoperator and robot-free, reporting **2.6× higher
+throughput in robot-free "active" mode** with comparable policy performance —
+the closest thing yet to a JoyLo follow-on concept; **UME** (arXiv 2606.14218,
+2026-06-12) — a low-cost exoskeleton with real-time haptic *torque* feedback,
+recording joint torques alongside configurations; **TWINS** (arXiv
+2608.01733, 2026-08-03) — wearable dual-arm capture with distributed tactile
+sensors. And one collection *channel* rather than hardware: **AXIS** (arXiv
+2607.21588, 2026-07-23), a browser-based community teleoperation engine that
+has released **207 tasks / 50,000+ trajectories under CC-BY-4.0** — a
+licence-clean corpus, unlike AgiBot World (§6).
 
 ---
 
@@ -92,7 +120,9 @@ results are real — cup arrangement 100% (20/20), dynamic tossing 87.5%
 (105/120), bimanual cloth folding 70%, dish washing 70%, cross-embodiment
 UR5→Franka 90%.
 
-The case *against*, and it is decisive, from the authors' own README:
+The case *against*, and it is decisive, from the authors' own README
+(re-verified verbatim **2026-08-15**; the repo is effectively dormant — last
+real content change Dec 2024):
 
 > **"ORB_SLAM3 is still the most fragile part of the UMI pipeline."**
 
@@ -111,6 +141,21 @@ sun.
 **And the value proposition does not apply here.** Robot-free collection exists
 so you can gather data where you cannot bring the robot. We can bring the robot.
 
+**The qualifier, added 2026-08-15: the rejection is of the original pipeline,
+not the idea.** **HiFi-UMI** (arXiv 2607.25895, 2026-07-28) replaces ORB-SLAM3
+with head-mounted offline stereo-inertial SLAM, claims **3 mm workspace-local
+end-effector accuracy** with no external tracking, reports 85% on a precision
+insertion task, and open-sources **HiFi-UMI-2K, a 2,000-hour synchronized demo
+corpus** on Hugging Face. Its boldest claim — that high-fidelity robot-free
+capture removes the need for any real-robot "anchor" at post-training
+("zero-robot post-training") — would, if it replicates, out-claim XRZero-G0's
+10:1 exchange rate below. Evidence grade: **abstract-verified only**; hardware
+availability outside the authors unverified. The UMI *family* is otherwise
+active while the original repo sleeps: UMI-Bench 1.0 (arXiv 2606.10382, a
+reproducible tabletop benchmark on UMI data), RealDexUMI (2606.06033, dexterous
+hands), VISTA (2606.04708, physics-validated adaptation of UMI data for VLA
+training).
+
 ### What robot-free is genuinely for, later
 
 The strongest 2026 results come from **robot-isomorphic exoskeletons**, which
@@ -126,7 +171,9 @@ action labels with zero calibration:
 - **XRZero-G0** (arXiv 2604.13001, 2026-04-14) publishes the only exchange rate
   found anywhere: **10:1 robot-free to real-robot data matches real-only
   performance at 1/20 the acquisition cost**, from a 2,000-hour corpus at 85%
-  data validity.
+  data validity. Re-checked 2026-08-15: **still unreplicated** — its six citing
+  papers include no replication; the strongest competitor claim is HiFi-UMI's
+  "zero-robot post-training" (§2 above), which is itself abstract-grade.
 
 That is the scaling answer for a later stage, not the pilot answer.
 
@@ -204,7 +251,8 @@ of the labels.
 ## 5. What the data must look like
 
 All of the following are **verbatim from official LeRobot documentation**, and
-all of them are cheap and commonly violated.
+all of them are cheap and commonly violated. Every quoted rule below was
+re-fetched and confirmed verbatim-unchanged on **2026-08-15**.
 
 From *"What makes a good dataset"*:
 
@@ -304,6 +352,8 @@ official figure*): **1,000 episodes at 30 s ≈ 6.5 GB**; 1,600 episodes ≈ 16 
 | **AgiBot World Beta** | >1M trajectories, 2,976 h, 48.1 TB | ⚠️ **CC BY-NC-SA 4.0 — non-commercial. Do not pretrain a deployed policy on it.** |
 | RH20T | >110,000 contact-rich sequences | — |
 | ArmnetBench v0.1 | **3,118 labelled SO-101 episodes** | — |
+| AXIS (2026-07-23) | 207 tasks, 50,000+ community-teleop trajectories | ✅ **CC-BY-4.0 — commercially clean** |
+| HiFi-UMI-2K (2026-07-28) | 2,000 h robot-free demos | licence unverified — check before use |
 
 And a warning that belongs here rather than in
 [22-data-generation.md](22-data-generation.md), because it is about *collection*
@@ -337,4 +387,8 @@ UniIntervene arXiv 2606.12372 · EvoHIL arXiv 2608.03872 ·
 GVL arXiv 2411.04549 · NILS arXiv 2410.17772 · Xiaomi-Robotics-1 arXiv 2607.15330 ·
 Data Scaling Laws <https://data-scaling-laws.github.io/>, arXiv 2410.18647 ·
 Curse of Precision arXiv 2607.23108 · MimicLabs arXiv 2506.13536 ·
-SO-ARM100 BOM <https://github.com/TheRobotStudio/SO-ARM100>
+SO-ARM100 BOM <https://github.com/TheRobotStudio/SO-ARM100> ·
+HiFi-UMI arXiv 2607.25895 · UMI-Bench arXiv 2606.10382 ·
+RealDexUMI arXiv 2606.06033 · VISTA arXiv 2606.04708 ·
+SuperSuit arXiv 2603.06280 · UME arXiv 2606.14218 · TWINS arXiv 2608.01733 ·
+AXIS arXiv 2607.21588

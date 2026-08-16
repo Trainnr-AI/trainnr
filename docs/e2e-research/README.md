@@ -8,8 +8,13 @@ app layer, deployment and telemetry.
 **These are research notes, not a plan.** Nothing here has been built, bought or
 committed to. Every claim carries a date and a source so the next pass can see
 what has decayed, and [27-open-questions.md](27-open-questions.md) records what
-- [`28-wifi-on-the-chip.md`](28-wifi-on-the-chip.md) — **what the radio on the Pico 2 W can and cannot do, and why the chip should stay tethered.** Three fields against primary sources: cyw43 cannot join WPA2-Enterprise, secure boot is bypassable on our A2 silicon, `embedded-tls` fails open, and every reference architecture puts WiFi on a Linux node.
 this pass could *not* settle.
+
+**Second pass: 2026-08-15.** Docs 20–27 re-swept field by field against primary
+sources (search quota was again exhausted, so discovery ran on the arXiv/HF/
+GitHub APIs — blog-only vendor news remains under-sampled). Each doc carries a
+dated re-verification note; [29-the-company.md](29-the-company.md) records the
+business thesis that pass was tested against.
 
 Read [19-the-system.md](19-the-system.md) first; it is the map.
 
@@ -24,6 +29,9 @@ Read [19-the-system.md](19-the-system.md) first; it is the map.
 | [25](25-deployment-and-fleet-ops.md) | Deployment and fleet ops | MCAP, signed release manifests, and **calibration is device state** |
 | [26](26-safety-and-regulation.md) | Safety and regulation | **Keep the ML out of the safety path** — it resolves two regimes at once |
 | [27](27-open-questions.md) | Open questions | What the next pass should start with |
+| [28](28-wifi-on-the-chip.md) | WiFi on the chip | cyw43 can't join WPA2-Enterprise, secure boot bypassable on A2 silicon — **the chip stays tethered; WiFi belongs on a Linux node** |
+| [29](29-the-company.md) | The company thesis | Scene and engine are commodities; **the unclaimed layer is the customer's robot's own dynamics** |
+| [30](30-the-pipeline.md) | The pipeline design | Eleven stages, two gates — **a number from an unvalidated simulator is not evidence** |
 
 ## The five findings that changed the picture
 

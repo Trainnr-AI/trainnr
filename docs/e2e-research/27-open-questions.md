@@ -1,7 +1,9 @@
 # Open questions: where this research stops
 
-Research date: **2026-08-08**. This is the agenda for the next pass, so it
-starts where this one stopped rather than re-treading it.
+Research date: **2026-08-08**; **second pass 2026-08-15** (six field agents,
+one per doc). Entries below carry their post-second-pass state. This is the
+agenda for the next pass, so it starts where the last one stopped rather than
+re-treading it.
 
 Each entry says what is unknown, why it matters, and what would settle it.
 
@@ -16,17 +18,25 @@ Each entry says what is unknown, why it matters, and what would settle it.
 > vendor pages, standards bodies — plus a plain-HTML search proxy for discovery.
 
 That is *good* source quality. It is *poor* discovery coverage: broad sweeps
-were not possible, so **mid-2026 releases may simply be missing**. Anything
-below dated after roughly June 2026 was found by guessing a URL, not by
-searching.
+were not possible, so **mid-2026 releases may simply be missing**.
 
-**First action next pass: re-run discovery with search available**, specifically
-for policies, teleoperation hardware, and anything named in
-[20 §5](20-policies-and-models.md) as "not yet."
+**Second pass, 2026-08-15: the quota was exhausted *again* (200/200) before any
+agent queried.** The workaround this time was systematic rather than
+URL-guessing — date-sorted arXiv API listings, the Hugging Face and GitHub REST
+APIs, Semantic Scholar citation graphs (partially blocked), plus direct
+primary-source fetches. That covers **arXiv-indexed and HF/GitHub-hosted work
+well** — the biggest gap of the first pass is closed — but leaves one standing
+blind spot: **announcements that exist only as vendor blogs or trade press**
+(commercial teleop kits, price moves, non-arXiv product launches).
+
+**First action next pass: a vendor/commercial-news sweep with search actually
+available** — teleop kit vendors, Jetson street prices, RealSense/Orbbec/PiPER
+stores (fetches to those were denied this pass), and anything in
+[20 §5](20-policies-and-models.md) still marked "not yet."
 
 ---
 
-## 1. Nobody runs the comparison that decides everything
+## 1. Almost nobody runs the comparison that decides everything
 
 **Unknown:** how does synthetic data generation compare against *the same effort
 spent collecting real demonstrations*?
@@ -41,10 +51,21 @@ demonstration**. DreamGen explicitly does not compare against collecting more
 real trajectories. A generative method beating a 1-demo baseline tells you
 nothing about whether it beats 50 more demos.
 
-**What would settle it:** our own A/B — fix a task, spend N hours on
-augmentation versus N hours collecting, evaluate both on the same held-out
-suite with ≥50 rollouts per arm. **This is cheap to run once the evaluation
-harness exists, and nobody has published it.**
+**Updated 2026-08-15 — one datapoint now exists, and synthetic won.** LEGS
+(arXiv 2606.01458, 2026-05-31) runs the comparison count-matched: 50 generated
+episodes (3DGS re-rendering + parametrized motion primitives — splats and
+primitives, *not* a video model) versus 50 teleoperated episodes, across 3
+tasks × 3 VLA backbones on a Unitree G1. Synthetic **matched or beat teleop in
+all 9 cells**, at ~0.5 GPU-hours versus 1.5 operator-hours, and held under
+appearance shift where the teleop-trained policy "fails entirely." Caveat by
+this doc set's own standard: 10 rollouts per cell is below the noise floor for
+any single cell — the signal is the 9-for-9 direction.
+
+**What remains open:** nobody has run it for a *video-model* generation
+pipeline (the expensive kind), and nobody has run it dollar-matched on a cheap
+arm. **Our own A/B — fix a task, N hours of augmentation versus N hours of
+collecting, ≥50 rollouts per arm — is still worth running, now with LEGS as the
+published precedent to compare against.**
 
 ---
 
@@ -58,15 +79,24 @@ justified at all.
 **State of the evidence:** searched across the robot data-scaling-law
 literature — Data Scaling Laws (arXiv 2410.18647), Curse of Precision
 (arXiv 2607.23108), and the co-training papers — and **no paper publishes a
-conversion.** The nearest anchors:
+conversion.** Re-verified 2026-08-15: two fresh arXiv sweeps surfaced nothing
+quantifying N sim ≈ 1 real (nearest: SimWeaver, arXiv 2606.15338, uses 200 sim
+demos/task zero-shot with no conversion stated). The nearest anchors:
 
 - arXiv 2503.24361 used **50 real + 10,000 simulated per task** at a sampling
   ratio of 0.99 — a *volume* ratio of 1:200 and a *sampling* ratio of 1:99, both
-  purely empirical, and removing the real data collapses it.
+  purely empirical, and removing the real data collapses it. (Still v2,
+  unchanged, re-checked 2026-08-15.)
 - **XRZero-G0** (arXiv 2604.13001, 2026-04-14) publishes the only exchange rate
   found anywhere: **10:1 robot-free human data to real-robot data matches
   real-only performance at 1/20 the acquisition cost** — and that is *human*
-  data, not simulation.
+  data, not simulation. Still unreplicated as of 2026-08-15 (full citation
+  sweep: six citers, none a replication).
+- New claim to track (2026-08-15): **HiFi-UMI** (arXiv 2607.25895) goes
+  further than XRZero-G0 — it claims sufficiently high-fidelity robot-free
+  capture removes the need for **any** real-robot anchor at post-training
+  ("zero-robot post-training"). Abstract-grade evidence; if it replicates, the
+  exchange-rate question changes shape entirely.
 
 ---
 
@@ -86,6 +116,13 @@ mixing ratios are described as *"fixed based on ablation experiments"*. Two
 2026 follow-ups work *around* the problem — optimal-transport domain adaptation
 (arXiv 2509.18631) and RL-based co-training (arXiv 2602.12628) — rather than
 solving it.
+
+Re-verified 2026-08-15: all four papers checked for new versions (TRI's is
+still v1, abstract silent on ratio; 2602.12628 v4 adds an RL stage, no ratio
+guidance), and an arXiv query for co-training + mixing ratio in cs.RO returned
+**zero results**. ⚠️ Coverage caveat: the Semantic Scholar citation sweep was
+blocked this pass, so a paper not matching those query terms could exist
+unseen.
 
 **Practical stance until it is solved:** treat a sweep over
 {0.9, 0.95, 0.98, 0.99, 0.995} as a **mandatory, budgeted cost** of any
@@ -109,10 +146,27 @@ reality — labour, not automation; and the comparison against RoboArena's
 r ≈ 0.60 for conventional real evaluation juxtaposes **two different papers with
 different setups**, so it is suggestive rather than proven.
 
+**Updated 2026-08-15 — the one-family/hand-tuned doubt is retired; the
+cheap-arm doubt stands.** **SimFoundry** (arXiv 2606.28276) reports mean
+Pearson **0.911** and mean maximum ranking violation 0.018 across **7
+manipulation tasks and 5 policy architectures**, from *automated* zero-shot
+real-to-sim scene construction — no hand-tuning. Robot platform unnamed in the
+abstract, so whether it is a cheap compliant arm is unverified. Simulated
+evaluation is visibly becoming a subfield (also PolaRiS, arXiv 2512.16881;
+soft-body splat evaluation, arXiv 2511.04665; ManipArena; RoboSnap). Watch
+item, vendor-grade: NVIDIA's livestream claim that policy rankings are
+preserved *across simulator types* (NuRec reconstruction vs the OmniDreams
+world model) appears in **no paper** as of 2026-08-15 — if it ever lands in
+print it is the first cross-simulator-type ranking-stability datapoint.
+
 **What would settle it:** rank 4–5 policies in simulation and on the real arm
 with ≥50 rollouts each, and compute the rank correlation ourselves. **This is
 directly downstream of the evaluation harness and is genuinely publishable if
-it holds.**
+it holds.** And it got cheaper on 2026-08-15: **both halves now exist
+separately in the SO-101 ecosystem** — ArmnetBench (arXiv 2607.24481) is the
+real-arm evaluation farm with data released in LeRobot format, and Squint
+(arXiv 2602.21203) ships a ManiSkill3 SO-101 task set. Joining them is mostly
+assembly.
 
 ---
 
@@ -137,9 +191,25 @@ unfinished.**
 
 **Every one of those is a quadruped or an industrial-grade arm** — real
 encoders, torque sensing, thousands of dollars. **Nothing has been published
-for a hobby-servo arm.** So the question is not "can this be done" but
-specifically: *does it converge on a machine with backlash, no torque feedback
-and a plastic gearbox?*
+for a hobby-servo arm** — narrowed 2026-08-15 to: nothing *parametric*. Two
+flanking results now exist. **NeuralActuator** (arXiv 2607.11734, 2026-07-13)
+models actuator dynamics **on the SO-101 itself** — but as a learned
+transformer surrogate, not a parameter vector ("actuator dynamics remain
+underexplored and can be a major source of sim-to-real error, particularly on
+low-cost platforms" — their words, this doc's thesis). And **Squint** (arXiv
+2602.21203) achieves zero-shot sim-to-real manipulation on a real SO-101 by
+**heavy domain randomization with no identification at all** (6–15 min
+training on one RTX 3090). Identify-first-randomise-second remains unclaimed —
+but the gap is being approached from both flanks, so the head start is months,
+not years. Re-verified the same day: seven MuJoCo releases past 3.5.0
+(→ 3.11.0), none touching sysid; `trs_so_arm100` in Menagerie unchanged; the
+IIT roster unchanged (HyQReal2 still unfinished). One useful addition in
+MuJoCo's unreleased changelog: a **PID actuator with integral action and
+setpoint rate limiting** — directly relevant to servo modelling.
+
+So the question is not "can this be done" but specifically: *does parametric
+identification converge on a machine with backlash, no torque feedback and a
+plastic gearbox?*
 
 **Specific sub-questions:**
 - Is **backlash** capturable as a combination of joint damping, `armature` and
@@ -186,6 +256,13 @@ duty cycle and safety case.
 cannot be aimed without an object set, and [26](26-safety-and-regulation.md)'s
 risk assessment cannot be written without a workspace.
 
+*Context, 2026-08-15:* the strategy conversation of this date sketched the
+company shape the wedge must serve — customer scan → sim-first training →
+on-site teleop calibration, hardware-agnostic via a per-robot identification
+onboarding step. The wedge question is unchanged by it, but any candidate
+wedge should now also be scored on how well it fits that loop (scan-able site,
+demo-able task, intervention-tolerant workflow).
+
 **Two disqualifiers already established by the research, which usefully narrow
 the search:**
 
@@ -205,10 +282,18 @@ time per day**, or it is the wrong wedge for this hardware generation.
 
 ## 8. Smaller open items
 
-**Is π0.5 LoRA actually trainable on a 24 GB card?** openpi says LoRA needs
->22.5 GB. That is a margin of about 1.5 GB. Settled by trying it with bf16 and
-gradient checkpointing. If not, MolmoAct2 at 20.2 GiB is the fallback — see
-[20 §6](20-policies-and-models.md).
+**Is π0.5 LoRA actually trainable on a 24 GB card?** **Updated 2026-08-15:**
+still unresolved, and the evidence tilts worse. openpi's README is unchanged
+(LoRA >22.5 GB), and openpi issue #677 is a live OOM report **on a 4090
+running the LoRA variants**, with `gradient_checkpointing=True` as the
+maintainers' standard remedy — no published user config confirms a
+comfortable fit. **MolmoAct2 has strengthened from fallback toward default**:
+its numbers now live in official LeRobot docs, an even cheaper
+action-expert-only fine-tune exists at 16.5 GiB @ bs8, and a ready-made
+zero-shot SO-100/101 checkpoint (`lerobot/MolmoAct2-SO100_101-LeRobot`) runs
+via `lerobot-rollout` — see [20 §6](20-policies-and-models.md) and
+[24](24-compute-and-hardware.md). Still settled only by trying π0.5 LoRA
+directly; budget for it to fail.
 
 **What is the real WiFi behaviour at the actual site?** Every design target in
 [25 §1](25-deployment-and-fleet-ops.md) is generic. A site survey with the
@@ -221,13 +306,23 @@ air-gap. Worth asking early.
 
 **What does a Notified Body actually quote for an ML-driven mobile
 manipulator?** The €5–15k figure is from consultancy marketing pages. Nobody in
-the sources had precedent for this product class. One real quote would be worth
-more than all of [26 §7](26-safety-and-regulation.md).
+the sources had precedent for this product class. **Updated 2026-08-15:** the
+first official procedure-level guidance now exists — RfU CNB/M/00.514 Rev 02
+([26 §2](26-safety-and-regulation.md)) settles *who* assesses ML safety
+components (a machinery Notified Body, not a full AI Act one) — but no actual
+quote or assessment example for this product class has been found anywhere.
+One real quote would still be worth more than all of the marketing-page
+estimates in [26 §7](26-safety-and-regulation.md).
 
-**Is there servo health telemetry worth standardising?** LeRobot issue #1319 was
-closed "not planned." The Feetech protocol exposes temperature and load
-registers. If we write that watchdog anyway — and
-[24 §4](24-compute-and-hardware.md) says we must — it may be worth upstreaming.
+**Is there servo health telemetry worth standardising?** **Updated 2026-08-15:**
+the upstreaming calculus improved. LeRobot issue #1319 was closed by a
+**stale bot**, not a maintainer decision — nobody championed it, rather than
+LeRobot rejecting it — and an **open, unmerged PR (#3456, since 2026-04-24)**
+already implements it: opt-in `record_telemetry` reading Feetech velocity
+(register 58), load (register 60) and temperature (register 63), costing
+~15–30 ms per 6-motor bus. If we write our own watchdog against those exact
+registers — [24 §4](24-compute-and-hardware.md) says we must — reviving #3456
+with our measurements attached is now a real option, not a cold pitch.
 
 ---
 
@@ -253,3 +348,18 @@ Recorded because they are the entries most likely to be wrong again.
   certification and a Notified Body, and it resolves the AI Act at the same
   time. That was built for engineering reasons and turns out to be the most
   commercially valuable thing in the repository.
+- **Regulatory claims decay fastest of anything measured in this doc set.**
+  Doc 26's own in-force-date warning ("unsettled… verify before relying on
+  it") settled within a week, and the underlying mechanism it described
+  changed structurally within the month (Regulation (EU) 2026/1744 moved the
+  Machinery Regulation to Annex I Section B — [26 §1](26-safety-and-regulation.md)).
+  The engineering conclusion survived; the legal mechanics did not. Treat
+  every regulatory citation here as the most perishable claim in the doc set.
+- **"Splatting buys appearance, never physics" needed a product-reality
+  update within the same week it was written.** Niantic's Scaniverse now ships
+  a splat with a co-registered collision mesh in one file
+  ([23 §3](23-simulation-and-real2sim.md)). The underlying physics claim still
+  holds — the splat itself is not the physics — but a practical objection this
+  doc treated as settled turned out to be a shipping-product away from
+  obsolete. Re-verify "impossible" claims before repeating them, not just
+  "unlikely" ones.

@@ -4,6 +4,12 @@ Research date: **2026-08-08**. Question: what does it take to run 2–3 robots a
 a customer site — serving policies, logging, updating, and knowing whether it is
 working?
 
+> **Re-verified 2026-08-15** against the primary sources (a discovery sweep;
+> web search was quota-exhausted, so vendor *news* was out of reach — prices
+> and versions below were checked directly). Everything load-bearing held;
+> the only version bump is Rerun 0.35.0 → 0.36.0. Deltas are marked inline
+> with the date.
+
 > **TL;DR.** Serve from a **LAN GPU over gRPC with real-time chunking**;
 > **quantization is not the lever** at batch size 1. Log to **MCAP**, which has
 > a mature Rust crate and would replace this repo's two bespoke formats.
@@ -17,8 +23,9 @@ working?
 
 ## 1. Serving
 
-**LeRobot 0.6.1** (PyPI, **2026-08-03**; requires Python ≥3.12). Install with
-`pip install -e ".[async]"`, which pulls `grpcio`.
+**LeRobot 0.6.1** (PyPI, **2026-08-03**; still the latest release as of
+2026-08-15; requires Python ≥3.12). Install with `pip install -e ".[async]"`,
+which pulls `grpcio`.
 
 Two processes over gRPC:
 
@@ -121,9 +128,11 @@ failed**, and **RTC hides latency, not loss**.
 - SDKs: C++, Go, Python, **Rust**, Swift, TypeScript. The default log format in
   ROS 2.
 
-**Rust crate `mcap` v0.25.0** (2026-06-11), **8,708,760 total downloads**, MIT,
-feature flags for zstd/lz4 and async via tokio. Version cadence 0.23.3 (Aug
-2025) → 0.24.0 (Dec 2025) → 0.25.0. **That is a mature, widely-used crate — a
+**Rust crate `mcap` v0.25.0** (2026-06-11), **~8.88M total downloads**
+(re-verified 2026-08-15; +170k since 2026-08-08), MIT, feature flags for
+zstd/lz4 and async via tokio. Version cadence 0.23.3 (Aug 2025) → 0.24.0 (Dec
+2025) → 0.25.0, still current. The spec is likewise still major version 0 with
+the same compatibility promise. **That is a mature, widely-used crate — a
 legitimate foundation, not a science project.**
 
 For this repo specifically: MCAP is the obvious eventual replacement for the two
@@ -173,8 +182,8 @@ training, and on a provider that charges egress that line would dwarf storage.
 
 | Option | Reality, 2026-08-08 |
 |---|---|
-| **Foxglove** | Free: $0, 10 GB, 5 devices, 3 users. **Pro: $20/mo** + usage, 1 TB, then $20/device/mo and $42/user/mo. Remote access 300 min/device included then $0.05/min. ⚠️ **Open-source Foxglove Studio was discontinued 2024-03-11**, and **self-hosted data is Enterprise-only.** Excellent for *your* engineers; a vendor lock for a customer console. Their agent docs advise avoiding files >50 GB. |
-| **Rerun 0.35.0** (2026-07-23) | SDK Apache-2.0/MIT, "open source forever". 0.35 added **MCAP time-windowed conversion and corrupted-file recovery**, a local catalog, HDF5 import. **Nothing about alerting, device health or ops dashboards.** Best-in-class for debugging and training-data curation; **not a fleet telemetry system.** Rerun Hub is a commercial data platform with no public pricing. |
+| **Foxglove** | Free: $0, 10 GB, 5 devices, 3 users. **Pro: $20/mo** + usage, 1 TB, then $20/device/mo and $42/user/mo. Remote access 300 min/device included then $0.05/min. ⚠️ **Open-source Foxglove Studio was discontinued 2024-03-11**, and **self-hosted data is Enterprise-only.** Excellent for *your* engineers; a vendor lock for a customer console. Their agent docs advise avoiding files >50 GB. Re-verified 2026-08-15: pricing and the Enterprise-only self-hosting unchanged; Pro now also includes unlimited view-only "Basic seats" and AI/MCP features at $5/user/mo included usage. |
+| **Rerun 0.36.0** (2026-08-10) | SDK Apache-2.0/MIT, "open source forever". 0.35 added **MCAP time-windowed conversion and corrupted-file recovery**, a local catalog, HDF5 import; 0.36 adds **experimental 3D Gaussian-splat rendering**, `mcap info`/`mcap check` CLI tools, multi-sink gRPC, and a PyTorch dataloader manifest builder. **Still nothing about alerting, device health or ops dashboards** — re-confirmed in the 0.36 notes. Best-in-class for debugging and training-data curation; **not a fleet telemetry system.** Rerun Hub is a commercial data platform with no public pricing. |
 | **InOrbit** | **Free Edition: unlimited robots, free forever.** Paid tiers on request. |
 | Formant / Freedom Robotics | Freemium tiers exist; no public pricing. ⚠️ A third-party aggregator quotes "$50–150/vehicle/month" — **unverified hearsay, not a vendor price.** |
 
@@ -209,13 +218,19 @@ MCAP-schema'd messages over WebSocket is a coherent fit.
 | | Developer | $249/mo or $2,500/yr | 50 |
 | **RAUC + hawkBit** | self-hosted | $0 | unlimited |
 
+Mender Basic $34/mo and Professional $291/mo re-verified 2026-08-15 (the ≤50-
+device cap was not re-verifiable — the pricing page now uses a device-count
+slider).
+
 **For three robots: Mender Basic at $34/mo**, or Mender OSS self-hosted. balena
 is the nicest developer experience and the worst value here ($159/mo for 30
 devices when you have 3). Torizon is tightly coupled to Toradex modules, and
 ⚠️ its *"as low as $0.30/month per device"* claim does not reconcile with
 $2,500/yr ÷ 50 devices = **$50/device/year**.
 
-🚨 **RAUC must be ≥ 1.15.2** (released **2026-03-27**), which fixes
+🚨 **RAUC must be ≥ 1.15.2** (released **2026-03-27**; still the latest as of
+2026-08-15, and CVE-2026-34155 is still the project's only security advisory),
+which fixes
 **CVE-2026-34155**: plain-format bundles exceeding a 2 GiB payload hit an integer
 overflow where **the signature covered only the initial portion of the payload**.
 That is a signature-bypass class bug, and robot OTA images are easily over 2 GiB.

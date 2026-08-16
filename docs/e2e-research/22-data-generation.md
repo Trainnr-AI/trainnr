@@ -4,13 +4,18 @@ Research date: **2026-08-08**. Question: is synthetic or generated robot data
 worth using in 2026, and if so which methods produce measurable real-world gains
 per dollar?
 
+Re-swept **2026-08-15** via the arXiv API and citation graphs (search quota
+exhausted; one GreenAug citation pull failed and is noted where it matters).
+Two claims moved: the "missing baseline" now has a first run (§1), and the
+contact negative narrowed to *vision-only* world models (§3).
+
 > **TL;DR.** The measured wins come almost entirely from **curating the data you
 > already have** and **cheap geometric and visual augmentation of your own
 > demonstrations** — not from video world models, which have the best videos and
 > the worst evidence. A **$50 green screen** beat diffusion-based generative
 > augmentation, 91% to 75%. Removing bad demonstrations is worth **+15–35
 > points** and costs nothing. And the field's most important negative result is
-> that **world models cannot generate contact**.
+> that **vision-only world models cannot generate contact**.
 
 ---
 
@@ -30,6 +35,21 @@ demonstration**. So the rankings here are *inference about value per dollar*,
 not measurement of it. This is the largest hole in the field and it is recorded
 in [27-open-questions.md](27-open-questions.md).
 
+**First crack in that hole, 2026-08-15: the comparison has now been run once,
+and synthetic won.** **LEGS** (arXiv 2606.01458, 2026-05-31) — 3DGS
+re-rendering plus parametrized motion primitives, no video model — runs a
+**count-matched** LEGS(50 episodes) vs Teleop(50 episodes) comparison across
+3 tasks × 3 VLA backbones on a Unitree G1, and matches or beats teleop in
+**all 9 cells** (e.g. 9/10 vs 4/10; 3/10 vs 0/10). Effort is accounted too:
+~0.5 GPU-hours vs 1.5 operator-hours per 50 episodes, and under combined
+appearance shift the teleop-trained policy "fails entirely" while LEGS holds.
+Apply this doc's own filter honestly: **10 rollouts per cell is below the
+noise threshold for any single cell** — the signal is the consistent 9-for-9
+direction, and the stated limits are one platform, static scenes,
+lighting-sensitive, small similar-geometry objects. One run, not a settled
+question — but "nobody runs it" is no longer true, and no *video-model*
+pipeline has run it yet.
+
 ---
 
 ## 2. The ranking, by measured real gain ÷ cost
@@ -44,11 +64,13 @@ in [27-open-questions.md](27-open-questions.md).
 | **CUPID** (arXiv 2506.19121, CoRL 2025) | influence functions on closed-loop performance → SOTA diffusion policies on **<33% of the data** |
 | **ATHENA** (arXiv 2606.16208, 2026-06-15) | scales influence functions to billion-parameter VLAs (**313× speedup**) → matches or exceeds full-data fine-tuning on **50% of sim and 66.7% of real data**, across 6 real tasks |
 | **PSD metric** (arXiv 2605.01544, 2026-05-02) | ranks demonstration smoothness by power spectral density — **no policy learning, no environment interaction, no expert labels**. Pure signal processing on the trajectory. Reports higher success than uncurated baselines; ⚠️ no percentages in the abstract |
+| **WARP-RM** (arXiv 2606.28320, 2026-06-26, Goldberg lab) | self-supervised progress reward from time-warp augmentations of the demos themselves — no rollouts, no environment interaction — used to weight demos in BC. Real bimanual T-shirt folding with increasingly polluted demo mixes: **WARP-BC 19/20 vs vanilla BC collapsing to 2/20**. A fourth independent curation mechanism; sits between PSD (needs nothing) and Demo-SCORE (needs rollouts) |
 
 Several independent methods — online-rollout classifiers, influence functions,
-spectral smoothness — converge on the same conclusion. **In 2026 the
-quality-versus-quantity question is settled in favour of quality**, and there is
-no comparably-sized result showing "just add more demos" wins.
+spectral smoothness, progress consistency — converge on the same conclusion.
+**In 2026 the quality-versus-quantity question is settled in favour of
+quality**, and there is no comparably-sized result showing "just add more
+demos" wins.
 
 Start with the PSD ranker, since it needs nothing. Graduate to Demo-SCORE once
 you have rollouts.
@@ -101,6 +123,16 @@ Texture ablation: solid colour 65%, Perlin noise 66%, **MIL textures 87%**, none
 **Note what happened: the expensive diffusion method (75%) lost to $50 of
 fabric (91%).**
 
+Re-checked 2026-08-15: **no replication and no contradiction found** — an
+arXiv full-text sweep returned nothing 2026-dated on green-screen
+augmentation, though the Semantic Scholar citation pull failed (HTTP 429),
+so a citing replication could exist unseen. Watch item: the GreenAug lab
+itself (Edward Johns) now publishes **SynthICL** (arXiv 2606.08154,
+2026-06-06) — in-context imitation trained *entirely* on synthetic RGB,
+claiming **79% average on 16 unseen real tasks** from one test-time demo.
+Baselines and rollout counts are not in the abstract; verify before it moves
+any ranking. The $50-of-fabric author going fully synthetic is a signal.
+
 ### Tier 2 — high value, real setup cost
 
 **5. DemoGen — spatial demonstration replay.** (arXiv 2502.16932, 2025-02-24).
@@ -130,6 +162,16 @@ reaches **87.8%** across six generalisation axes versus **57.2%** for baselines
 trained on *hundreds* of real demos plus 2D augmentation. One of very few
 results where synthetic data beat a genuinely well-fed real baseline.
 
+The splat-editing line kept moving through mid-2026, evidence grades noted:
+**LEGS** (§1) is its strongest result — the count-matched win over teleop.
+**WANDA** (arXiv 2607.13154, 2026-07-14) extends the DemoGen/RoboSplat recipe
+to *mobile* manipulation — one real demo, background splats, whole-body
+trajectory rearrangement — claiming long-horizon robustness with **no numbers
+in the abstract**. **PRISM** (arXiv 2607.04880, 2026-07-06) generates
+digital-cousin scenes plus executable demos from a single image, "up to 100%"
+on three real tasks — a weak claim form, rollout counts unknown. Neither
+enters the ranking until full-paper numbers are read.
+
 **7. Sim co-training.** Covered in
 [23-simulation-and-real2sim.md](23-simulation-and-real2sim.md) §D, including
 the mixing-ratio landmine. Headline: **45.3% → 83.2%** average, and an
@@ -150,6 +192,10 @@ Generation success rate: Stack 82.3% of attempts, Coffee 52.1% — so half the
 compute is discarded on Coffee, for a 14% real policy. **MimicGen on a real
 robot converts "impossible" into "occasionally works."** Worth it as the
 generator feeding sim co-training; not as a direct real-robot pipeline.
+(2026-08-15: the line is incremental and sim-only — MinInter, arXiv
+2606.24078, curates trajectories *during* generation and beats SkillGen on the
+MimicGen benchmark; no MimicGen 2 or DemoGen 2 exists, and no real-robot
+numbers since.)
 
 **9. RoVi-Aug** (arXiv 2409.03403, CoRL 2024 oral) — robot and viewpoint
 augmentation. **+30 points** in the specific cross-robot / cross-viewpoint
@@ -180,6 +226,35 @@ it should worry you:
   > They do not generate contact.** Every system that works uses them for
   > high-level planning or appearance diversity and gets low-level actions from
   > somewhere else.
+
+  **Re-verified and sharpened, 2026-08-15.** No rebuttal of Veo-Act exists —
+  a full citation sweep found two citers, both accepting its premise rather
+  than refuting it. The negative got a stronger, *instrumented* citation:
+  **GAUGE** (arXiv 2608.05948, 2026-08-06) benchmarks 6 image-to-video models
+  and 3 physics engines against real measured trajectories across 22 task
+  families, and finds video world models "produce trajectories with the
+  expected equation form while recovering incorrect accelerations, momentum
+  transfer, and oscillation timing" — worst at **impulsive contact**. This
+  upgrades the claim from "downstream tasks fail" to "the recovered dynamics
+  are measurably wrong." **H2R-Bench** (arXiv 2608.13049, 2026-08-13)
+  corroborates for human→robot video transfer specifically ("functional
+  contact transfer" fails). The field is repositioning rather than fixing it:
+  **ImageWAM** (arXiv 2606.19531, 2026-06-17) asks whether world-action
+  models need video generation at all, and answers with target-frame image
+  editing instead of video rollout — 1/6 the FLOPs, 1/4 the latency.
+
+  **The one qualifier the claim needs narrowing to: vision-only.** A
+  visuo-tactile line adds a channel that video alone lacks. **TACO**
+  (arXiv 2607.02840, 2026-07-03) closes the loop with a tactile-grounded
+  "Recognize-Imagine-Label" correction cycle and claims **+44 points
+  absolute** over the base policy on real contact-rich manipulation — its own
+  motivation concedes the point, that vision-only world models "produce
+  visually plausible yet contact-inconsistent trajectories." **ViTacWorld**
+  (arXiv 2607.22530) and **FeelWorld** (arXiv 2607.24267) are the same trend,
+  earlier-stage. All three are abstract-grade evidence — no rollout counts,
+  no task lists confirmed — so treat this as a narrowing to watch, not a
+  reversal: **vision-only world models do not generate contact; whether a
+  tactile channel changes that is an open, thinly-evidenced claim.**
 
 - **DreamGen / GR00T-Dreams** (arXiv 2505.12705, NVIDIA) — the one honest
   real-robot data point, and it is small: GR1 humanoid **37% → 46.4%**, Franka

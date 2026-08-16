@@ -4,6 +4,12 @@ Research date: **2026-08-08**. Question: what is the fastest, cheapest path
 from a real commercial site and a real low-cost mobile manipulator to a
 simulator good enough that using it improves real-world performance?
 
+Re-verified and extended **2026-08-15** (second discovery pass). ⚠️ WebSearch
+quota was exhausted again before the sweep started; discovery ran on the arXiv
+API, GitHub/HF APIs and direct primary-source fetches, and Semantic Scholar was
+blocked — so citation-graph coverage is incomplete and blog-only announcements
+are under-sampled. Changes are folded in place, dated.
+
 > **TL;DR.** Reality reaches a simulator through **three separate channels**
 > that get conflated and shouldn't be: the **robot** (system identification),
 > the **scene** (geometry, appearance, mass, friction), and the **behaviour**
@@ -12,8 +18,13 @@ simulator good enough that using it improves real-world performance?
 > identification toolbox in 3.5.0 (2026-02-12)** and Menagerie's own README
 > says its grading *"will be applied to each model once a proper system
 > identification toolbox is created"* — so **no Menagerie model is dynamically
-> validated**, SO-101 included. **Splatting buys appearance, never
-> physics.** Precise digital twins of objects are *worse* than approximate ones.
+> validated**, SO-101 included. (Re-checked 2026-08-15: still true for
+> *parametric* sysid — but the gap is now being approached from the
+> learned-surrogate and domain-randomisation sides; see §2.) **Splatting buys
+> appearance, never physics** — though as of mid-2026 Niantic ships a splat
+> *plus* an auto-derived collision mesh in one file, so the practical objection
+> has narrowed (see §3). Precise digital twins of objects are *worse* than
+> approximate ones.
 > And the strongest argument for building a simulator at all is that
 > **simulated evaluation predicts real performance better than a small real
 > evaluation does.**
@@ -108,6 +119,31 @@ So everyone in the SO-101 ecosystem is running an unvalidated dynamics model.
 That is the open, unclaimed technical position, and it is the one this repository
 is already shaped for.
 
+### Re-checked 2026-08-15: still unclaimed, but no longer untouched
+
+- **MuJoCo shipped seven releases past 3.5.0 (3.6.0 → 3.11.0, 2026-07-27) and
+  none of them touch sysid** — the toolbox commits since March 2026 are
+  stabilisation only. One unreleased changelog item matters for servo modelling:
+  a **PID actuator with integral action and setpoint rate limiting**.
+- Still **no published `mujoco.sysid` application to any hobby servo**
+  (STS3215, SO-100/101, SG90-class); Menagerie's `trs_so_arm100` has seen XML
+  formatting commits only; the IIT sim2real-identification roster is unchanged
+  (five quadrupeds/industrial arms, HyQReal2 still unfinished).
+- But two 2026 papers now approach the same gap from other directions.
+  **NeuralActuator** (arXiv 2607.11734, 2026-07-13) publishes a *learned*
+  actuator-dynamics model validated on the SO-101 — its own framing is ours:
+  *"actuator dynamics… can be a major source of sim-to-real error, particularly
+  on low-cost platforms."* A transformer surrogate, not a parametric fit — no
+  interpretable friction/damping/gain numbers to carry into a simulator.
+  **Squint** (arXiv 2602.21203, 2026-02-24) gets zero-shot sim-to-real
+  manipulation onto a real SO-101 via **heavy domain randomisation with no
+  identification at all**, training visual SAC in 6–15 min on one RTX 3090.
+
+**The narrow claim that survives: nobody has run parametric system
+identification on a hobby-servo arm.** The identify-first-randomise-second
+position is still open — but the ecosystem is circling it, so it is a head
+start measured in months, not years.
+
 ### What `robotiq` already has, and the one thing that blocks it
 
 The audit finding: **the repo already logs the exact input/output pair system
@@ -190,6 +226,36 @@ have a working policy.** For collision, hand-author primitives from a floorplan
 and a tape measure. A warehouse aisle *is* boxes; thirty minutes of measuring
 beats an hour of mesh cleanup and produces something a solver can actually use.
 
+#### Mid-2026 update: the collision-mesh objection has been productised away
+
+The headline above survives in letter — the splat itself is still never the
+physics — but the table's practical objection ("no collision geometry") is now
+answered by a shipping product. Verified at nianticspatial.com/robotics,
+2026-08-15:
+
+> *"The USDZ export in Scaniverse turns a five-minute 360 capture into a
+> simulation-ready environment for NVIDIA Isaac Sim and Isaac Lab; a Gaussian
+> splat and an aligned mesh in a single file."*
+
+**Niantic's Scaniverse export co-packages the splat (RGB layer) with a
+co-registered collision mesh** derived from the same capture via
+**MVSAnywhere**, a zero-shot multi-view-stereo model — one gravity-aligned,
+metric-scale USDZ, from an off-the-shelf 360° camera and a few-minute
+walkthrough, no LiDAR. Because both layers come from the same geometry there is
+no registration error for a policy to learn as false signal. ⚠️ The
+city-block-scale tiling claimed on the 2026-08 NVIDIA livestream appears on
+**no public Niantic page** — livestream-only until written down.
+
+The first policy result inside such a twin is **Flexion's** (vendor post,
+flexion.ai, 2026-07-20 — **no paper**): massively parallel RL on rendered RGB
+inside the office reconstruction, zero-shot to the real robot. Grade the
+evidence carefully: the quantitative numbers are **in-sim** (RGB 97.8% vs
+depth 93.8% in their office; 75.0% vs 70.9% in Niantic's), the post itself says
+real-world performance is *"on par with a depth-based policy"*, and the
+glass-door / thin-structure / semantic-hazard wins are **demo-video grade**.
+The direction — reconstruct realism instead of randomising toward it — is
+notable; the margins are not yet measured anywhere citable.
+
 ### The two numbers nobody automates
 
 **Mass** and **friction** dominate manipulation-sim fidelity, and there is no
@@ -222,6 +288,40 @@ numbers that matter most.
   sim2real transfer results reported.** An *asset library* to mine, not a method
   to adopt.
 
+### What the AV domain shipped (labelled: AV, not manipulation)
+
+Autonomous driving runs the same Channel-B pipeline at industrial scale, and
+its mid-2026 state previews where robotics tooling goes. NVIDIA's own framing
+is a useful taxonomy: **sim 1.0** artist-built scenes → **sim 2.0** neural
+reconstruction (NeRF, splats) → **sim 3.0** generative world models — with the
+caveat that manipulation *contact* is still stuck between 2.0 and 3.0
+([22-data-generation.md](22-data-generation.md) §3).
+
+- **The cost collapse has a first-party number — but it is livestream-grade.**
+  M City (Univ. of Michigan) rebuilt its 30-acre test-track twin with NuRec for
+  **~$2,300 in 2 days** against **$150k and 6 months** for the hand-built
+  original ($90M extrapolated to the city of Ann Arbor). ⚠️ Stated on an NVIDIA
+  livestream by the M City team, 2026-08; their repo
+  (`mcity/mcity-digital-twin`, MIT) contains **no NuRec writeup** — no citable
+  source exists yet.
+- **Splat degradation off the capture trajectory has a productised repair
+  stack**, verified on Hugging Face 2026-08-15: `nvidia/difix` (DiFix3D+,
+  arXiv 2503.01774; **~720k combined downloads**), `nvidia/asset-harvester`
+  (3D asset from one image; licence "other"), `nvidia/Harmonizer` (relighting
+  inserted assets; licence "other"), `nvidia/instant-nurec` (feed-forward splat,
+  PLY in <2 min, **NVIDIA Open Model License — commercial use allowed**). The
+  reconstruct-the-backdrop-inject-synthetic-actors workflow is assembled and
+  shipping in AV; robotics gets it second-hand.
+- **"Cosmos Streams" is publicly OmniDreams** (`nv-tlabs/omni-dreams`,
+  Apache-2.0; arXiv 2606.03159): a real-time action-conditioned autoregressive
+  video world model for closed-loop AV simulation. ⚠️ The livestream claims
+  that matter most here — 30 fps on an RTX 6000 Pro, and **policy stack
+  ranking preserved between the NuRec simulator and the world-model
+  simulator** — are in **neither the paper abstract nor the README**. The
+  ranking claim would be the first cross-simulator-type ranking-stability
+  datapoint if it ever appears in print; until then it is a vendor slide.
+  Watch-item for §5.
+
 ---
 
 ## 4. Does sim training actually work? Split the answer
@@ -246,9 +346,16 @@ Also from Playground:
 
 Note the pattern: **every successful zero-shot manipulation result is a rigid,
 geometrically simple object handled by a rigid, well-characterised arm.**
-Nothing here is deformable, cluttered, or on a cheap compliant servo arm. Note
-also the third row's framing — "consecutive rotations", not success rate — which
-is a weak result presented well.
+Nothing here is deformable or cluttered. Note also the third row's framing —
+"consecutive rotations", not success rate — which is a weak result presented
+well.
+
+⚠️ **Corrected 2026-08-15.** This paragraph previously added "or on a cheap
+compliant servo arm." That is no longer true: **Squint** (arXiv 2602.21203)
+transfers zero-shot sim-to-real manipulation onto a **real SO-101** — eight
+ManiSkill3 tasks, heavy domain randomisation, visual SAC in 6–15 min on one
+RTX 3090. No identification, no sim-real correlation reported; but the
+cheap-arm barrier itself has been crossed, via DR rather than sysid.
 
 Encouraging for a solo builder: LeapCubeReorient takes **~2,080 s on 1× RTX 4090
 versus ~670 s on 8× H100**. One consumer card gets you ~35 minutes for a
@@ -310,6 +417,13 @@ Research Institute's 89-policy study (arXiv 2602.01067) reports real
 language-following **47.7% → 69.4%** but **does not report ratio sensitivity**,
 so the α problem is neither replicated nor refuted at scale.
 
+Re-checked 2026-08-15: **still no principled α setter and no knife-edge
+replication anywhere reachable.** All four papers above show no relevant new
+versions; an arXiv query for co-training mixing ratios in cs.RO returned zero
+results. (Semantic Scholar was blocked this pass, so a paper not matching those
+terms could have been missed.) The mandatory-sweep advice stands. The published
+sim↔real exchange rate (N sim demos ≈ 1 real) also still does not exist.
+
 **Honest bottom line: for a cheap servo arm at a commercial site, simulation's
 highest-value role is co-training augmentation and evaluation — not standalone
 zero-shot policy training.**
@@ -351,6 +465,34 @@ suggestive, not proven.** SIMPLER used 6 policies from one family on one rigid
 robot, and "Visual Matching" means the scene was hand-tuned to match reality —
 labour, not automation. RoboArena does not compare itself to SIMPLER.
 
+### 2026-08-15: the correlation replicated, and sim-eval is becoming a subfield
+
+**SimFoundry** (arXiv 2606.28276, v1 2026-06-26) is the second
+SIMPLER-magnitude datapoint, and it removes the two biggest doubts above:
+**mean Pearson 0.911 and mean maximum ranking violation 0.018 across 7
+manipulation tasks and 5 policy architectures**, with scenes built by
+**automated zero-shot real-to-sim construction from video** — five
+architectures, not one family; automation, not hand-tuning. (It also reports
+17/21/40% real gains from object/scene/task cousins, independently
+corroborating ACDC's digital-cousins direction.) ⚠️ The robot platform is not
+named in the abstract — **the cheap-arm question stays open.**
+
+Around it, simulated evaluation is visibly turning into a subfield: **PolaRiS**
+(arXiv 2512.16881 — neural-reconstruction eval for generalist policies, claims
+stronger real correlation than existing sim benchmarks, no coefficient in the
+abstract), a Gaussian-splat **soft-body** evaluation paper (arXiv 2511.04665 —
+plush packing, rope routing; splats render, physics is separate, consistent
+with §3), **ManipArena** (arXiv 2603.28545, paired real-to-sim environments)
+and **RoboSnap** (arXiv 2607.06699, one-shot real-to-sim with sim-real
+correlation).
+
+And the cheap-arm experiment this doc keeps asking for now has **both halves
+sitting unjoined in the SO-101 ecosystem**: ArmnetBench (arXiv 2607.24481) is
+the real half — 2,518 human-scored rollouts across 7 policies, data released —
+and Squint's ManiSkill3 SO-101 task set is the sim half. Nobody has computed
+the correlation between them. That is mostly assembly now, and still
+publishable.
+
 But the direction is clear enough to act on: **the simulator's first job is to
 be an instrument.** ManiSkill3 ships the SIMPLER-derived environments and claims
 *"100× faster real-world policy evaluation via GPU simulation"* — though its own
@@ -372,7 +514,7 @@ them out of the box, which is convenient and is not evidence about your robot.
 | MuJoCo Warp | active | Apache-2.0 | **NVIDIA required** | ❌ | Not yet feature-complete (no IMPLICITFAST, PGS, PLUGIN actuators) |
 | **ManiSkill3** | v3.0.0+, RSS 2025 | Apache-2.0 code, **assets CC BY-NC 4.0** | Linux + NVIDIA | ❌ | **Best evaluation harness.** 30,000+ FPS RGBD on a 4090 |
 | NVIDIA Newton | **v1.0.0 2026-04-13, v1.4.0 2026-07-16** | **Apache-2.0** | NVIDIA | ❌ | Released, out of beta — but a *backend*, not a workflow |
-| Isaac Sim / Isaac Lab | Sim 6.0 (Jun 2026); Lab 3.0-beta pins Sim 5.1 | proprietary / BSD-3 | NVIDIA | ❌ | **Skip.** ≥16 GB VRAM plus rendering headroom, Ubuntu 22.04 or Win 11 only |
+| Isaac Sim / Isaac Lab | **Sim 6.0.1 GA; Lab stable 2.3.2, Lab 3.0 is Beta** (2026-08-15) | source-available "Other" / BSD-3 | NVIDIA | ❌ | **Skip.** ≥16 GB VRAM plus rendering headroom, Ubuntu 22.04 or Win 11 only |
 | Genesis | **v1.3.2, 2026-08-07** | Apache-2.0 | CUDA/ROCm/**Metal** | ✅ | Materially stabilising (determinism, differentiable rigid body, elliptic friction cone) — but **no public reconciliation of the original benchmark claims**. Revisit in 6 months |
 | Drake | v1.55.0, 2026-07-15 | BSD-3 | CPU | ✅ | Best *physical* contact model (hydroelastic), wrong tool for RL throughput |
 | PyBullet | citation stops 2021, tracker closed | Zlib | — | ✅ | **Legacy** |
@@ -383,9 +525,20 @@ specifically: `geom/surfacevel` (conveyors, turntables), `geom/adhesion` and
 `implicitfast`, and Union-Find replacing quadratic flood-fill for contact
 islands.
 
-⚠️ **ManiSkill3's GPU simulation does not work under WSL** — see
-[24-compute-and-hardware.md](24-compute-and-hardware.md). This is the single
-most actionable infrastructure finding in the whole research pass.
+On the Isaac row's licence: Isaac Sim's source has been on GitHub since
+May 2025 and NVIDIA calls it "open-source", but GitHub classifies the licence
+as **"Other"** (a custom NVIDIA licence), and the application runs on
+**proprietary prebuilt binaries** — the Omniverse Kit SDK and the RTX renderer.
+Isaac Lab is genuinely BSD-3; **Newton is Apache-2.0** (NVIDIA + Google
+DeepMind + Disney). So even NVIDIA's open physics future converges toward the
+MuJoCo lineage, while the rendering stays theirs. Build *on* MuJoCo; *use*
+Isaac/NuRec rendering where photorealism pays, without making it load-bearing.
+
+⚠️ **ManiSkill3's GPU simulation does not work under WSL** (re-verified
+2026-08-15, install-matrix unchanged: "WSL | ✅ CPU | ❌ GPU Sim | ❌
+Rendering") — see [24-compute-and-hardware.md](24-compute-and-hardware.md).
+This is the single most actionable infrastructure finding in the whole research
+pass.
 
 This supersedes nothing in [../05-simulation-ros2-wasm.md](../05-simulation-ros2-wasm.md);
 it extends it. That document's conclusions — MuJoCo adopted, Isaac skipped for
@@ -398,6 +551,10 @@ lack of macOS support, Genesis "watch, don't build on" — have all held up.
 1. **Isaac Sim / Isaac Lab.** You would spend week one on installation.
 2. **Splat→physics as the real2sim path.** None of SplatSim, PhysGaussian,
    Splat-MOVER, gsplat, SuGaR, 2DGS or GOF produce collision geometry.
+   (2026-08-15: Niantic's Scaniverse USDZ now co-packages an auto-derived
+   collision mesh — §3. The objection has narrowed from "impossible" to "one
+   vendor pipeline, backdrops only, Isaac-targeted"; hand-authored primitives
+   remain the right call for *our* MuJoCo-based stack.)
 3. **Precise digital twins of manipulable objects.** ACDC: **90% cousins vs 25%
    twins.** Precision is worse *and* slower.
 4. **Drake as the trainer.** Excellent physics, CPU-bound, built for
@@ -438,4 +595,15 @@ Splat-MOVER <https://splatmover.github.io/> · gsplat <https://github.com/nerfst
 PhysTwin <https://jianghanxiao.github.io/phystwin-web/> ·
 Articulate-Anything <https://articulate-anything.github.io/> ·
 EmbodiedGen arXiv 2506.10600 · RoboCasa <https://robocasa.ai/> ·
-LeRobot SO-101 docs <https://huggingface.co/docs/lerobot/so101>
+LeRobot SO-101 docs <https://huggingface.co/docs/lerobot/so101> ·
+NeuralActuator arXiv 2607.11734 · Squint arXiv 2602.21203 ·
+SimFoundry arXiv 2606.28276 · PolaRiS arXiv 2512.16881 ·
+splat soft-body eval arXiv 2511.04665 · ManipArena arXiv 2603.28545 ·
+RoboSnap arXiv 2607.06699 · ArmnetBench arXiv 2607.24481 ·
+Niantic Spatial robotics <https://www.nianticspatial.com/robotics> ·
+Flexion post <https://www.flexion.ai/news/niantic-spatial-flexion-and-nvidia-closing-the-sim2real-gap-for-humanoids> ·
+Isaac Sim source <https://github.com/isaac-sim/IsaacSim> ·
+DiFix3D+ arXiv 2503.01774, <https://huggingface.co/nvidia/difix> ·
+instant-nurec <https://huggingface.co/nvidia/instant-nurec> ·
+OmniDreams arXiv 2606.03159, <https://github.com/nv-tlabs/omni-dreams> ·
+Mcity twin <https://github.com/mcity/mcity-digital-twin>
