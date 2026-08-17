@@ -586,8 +586,8 @@ them out of the box, which is convenient and is not evidence about your robot.
 | **MuJoCo** | **3.11.0, 2026-07-27** | Apache-2.0 | CPU-native | ✅ | **Primary.** Best contact model for a compliant arm; **only stack with first-party sysid** |
 | **MuJoCo Playground** | active; RSS 2025 outstanding demo | Apache-2.0 | CUDA 12 | ❌ | **Best solo-builder on-ramp** for RL |
 | MJX | ships with MuJoCo | Apache-2.0 | JAX/XLA | marginal | via Playground |
-| MuJoCo Warp | active | Apache-2.0 | **NVIDIA required** | ❌ | Not yet feature-complete (no IMPLICITFAST, PGS, PLUGIN actuators) |
-| **ManiSkill3** | v3.0.0+, RSS 2025 | Apache-2.0 code, **assets CC BY-NC 4.0** | Linux + NVIDIA | ❌ | **Best evaluation harness.** 30,000+ FPS RGBD on a 4090 |
+| MuJoCo Warp | **3.6.0+ (2026-03-10)** | Apache-2.0 | **NVIDIA required** | ❌ | ⚠️ **Row corrected 2026-08-17: it now ships a first-party GPU batch renderer** (`mjwarp-render`, exposed as `mjx.render`) — RGB/depth/segmentation, textures, shadows, heterogeneous multi-camera, per-world domain randomisation. Still no IMPLICITFAST/PGS/PLUGIN actuators |
+| **ManiSkill3** | v3.0.0+, RSS 2025 | Apache-2.0 code, **assets CC BY-NC 4.0** | Linux + NVIDIA | ❌ | ⚠️ **"Best evaluation harness" is stale (2026-08-17)** — MuJoCo's own batch renderer now does 186k FPS at 64×64 / 48k at 128×128 on a robot-arm scene, first-party and in-stack. ManiSkill3's 30,000+ FPS RGBD figure no longer leads |
 | NVIDIA Newton | **v1.0.0 2026-04-13, v1.4.0 2026-07-16** | **Apache-2.0** | NVIDIA | ❌ | Released, out of beta — but a *backend*, not a workflow |
 | Isaac Sim / Isaac Lab | **Sim 6.0.1 GA; Lab stable 2.3.2, Lab 3.0 is Beta** (2026-08-15) | **Apache-2.0 code** (corrected 2026-08-17) + proprietary Kit/RTX binaries / BSD-3 | NVIDIA | ❌ | **Skip.** ≥16 GB VRAM plus rendering headroom, Ubuntu 22.04 or Win 11 only |
 | Genesis | **v1.3.2, 2026-08-07** | Apache-2.0 | CUDA/ROCm/**Metal** | ✅ | Materially stabilising (determinism, differentiable rigid body, elliptic friction cone) — but **no public reconciliation of the original benchmark claims**. Revisit in 6 months |
