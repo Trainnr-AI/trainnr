@@ -657,6 +657,78 @@ Four things this settles or adds:
 be aspirational. Treat the *architecture* as confirmed and any individual
 component as unverified until fetched.
 
+### What USD actually costs us, read from both halves of the pipe (2026-08-17)
+
+A follow-up sweep read the writer (`mujoco-usd-converter`) and the reader
+(`plugin/usd_decoder/usd_decoder.cc`, 2,798 lines) rather than the marketing.
+**The answer splits cleanly, and the split should become our architecture.**
+
+**USD is description-only, by its authors' explicit choice.** UsdPhysics'
+own overview calls itself *"a baseline initial extension to USD that enables
+the minimum set of common concepts required to represent rigid body physics"*,
+and on solver behaviour it says the quiet part out loud: *"the precise
+deactivation rules are an implementation detail… we prefer to keep this as a
+hidden implementation detail."* **USD cannot make two engines agree; it can
+only make them read the same file.** That is the whole layer boundary.
+
+**More survives an MJCF→USD trip than expected.** MuJoCo's `mjcPhysics` schema
+family carries solver contact parameters (`solref`, `solimp`, `solmix`,
+`margin`, `gap`, `condim`), the full actuator gain/bias/dyn parameterisation,
+tendons with wrap paths, joint armature/springref/frictionloss, equality
+connect/weld/joint, and the whole `<option>`/`<compiler>` block. Roughly 80%
+is there, and somebody thought hard about it.
+
+**But four things are lost, each for a different reason:**
+
+| Lost | Why |
+|---|---|
+| **All sensors** | No `MjcSensor` schema exists — not in mjcPhysics, not in UsdPhysics. The importer reads only the global on/off flag. The `<sensor>` block evaporates. |
+| **All cameras and lights** | Zero references in the importer; the converter's own changelog says camera and light conversion *"is not implemented."* **For a vision pipeline this is the worst item on the list — camera extrinsics *are* the calibration.** |
+| **`<default>` / `class` / `childclass` structure** | *"baked down"* by the converter. Values survive; authorial intent does not. A one-line edit becomes an N-line diff — and it is gratuitous, because USD's `inherits` over `class` prims is the exact native equivalent, simply unused. |
+| **Keyframes, `contype`/`conaffinity` filtering, contact pairs, ellipsoids, heightfields, SDFs, plugins** | Read by the importer, **never written** by the only converter that exists. They die at the write step. |
+
+> ⚠️ **The failure mode to design against — and it is this repository's
+> recurring bug shape exactly.** The importer has **zero** references to
+> `UsdPhysicsDriveAPI`, `LimitAPI`, `DistanceJoint`, or
+> `UsdPhysicsArticulationRootAPI`. So a well-formed *generic* USD robot —
+> authored in Isaac, Blender or Houdini, with its motors expressed as
+> `UsdPhysicsDriveAPI` — imports into MuJoCo **with no actuators and no
+> error.** A plausible file and a silently inert robot: two things that must
+> agree, with nothing comparing them. **Any USD robot we ingest must be
+> checked for actuator count after import, not assumed.**
+
+**So USD buys file portability, not semantic portability** — the surviving 80%
+travels inside `mjcPhysics`, a plugin schema only MuJoCo reads. And it is not
+even a round trip: **no USD→MJCF converter exists**; the only return path is
+MuJoCo's importer, which the converter itself warns *"may alter Prim names,
+mesh topology, and other properties."* You do not get your MJCF back — you get
+*a* MJCF back.
+
+**Composition arcs are the genuinely valuable part, and they answer our
+versioning needs natively:** variant sets express "same scene, three robot
+models"; **payloads defer a heavy splat** so a bundle can ship it without every
+consumer paying to load it; and sublayers give base-scene + per-site +
+per-calibration overrides as independently hashable, independently diffable
+units — which is the shape our bundle store already wants. ⚠️ But the importer
+opens the *composed* stage (zero `Payload` or `Variant` references), so
+**composition is a build-time authoring convenience, never a runtime
+capability.** MuJoCo receives a flattened result either way.
+
+**Governance is thinner than the adoption implies.** The AOUSD Physics working
+group was chartered 2024-12-16 and **has ratified nothing** in the 20 months
+since; deformables remain an unmerged PR; physics is explicitly out of scope
+for the ratified Core Specification. And the splat schema — the most
+consequential recent addition for our domain — is credited to an *"AOUSD
+Emerging Geometry IG"* that has **no public charter, no public page, and no
+published proposal**. The physics and splat layers are de-facto standards, not
+de-jure ones.
+
+**Adoption outside NVIDIA is thin:** Google DeepMind's MuJoCo is the only real
+independent centre of gravity; Open Robotics' `gz-usd` has been dormant since
+October 2024 and supports only USD v24.08; robot vendors ship USD as a third
+format whose target is Isaac. No robotics company sits in AOUSD's founding
+tier.
+
 On the Isaac row's licence: Isaac Sim's source has been on GitHub since
 May 2025 and NVIDIA calls it "open-source", but GitHub classifies the licence
 as **"Other"** (a custom NVIDIA licence), and the application runs on
