@@ -600,6 +600,63 @@ specifically: `geom/surfacevel` (conveyors, turntables), `geom/adhesion` and
 `implicitfast`, and Union-Find replacing quadratic flood-fill for contact
 islands.
 
+### NVIDIA's own architecture slide, and what it settles (2026-08-17)
+
+An **NVIDIA SIGGRAPH 2026 "Architecture Overview" slide** (shared by the
+operator; a photographed slide, not a fetched URL — grade accordingly) draws
+the whole stack, and it is the clearest confirmation yet of the conclusions
+above. Reading it top-down:
+
+```
+                        ┌───────────── OpenUSD ─────────────┐
+                        │   (interchange for everything)     │
+                        └──┬────────┬──────────┬─────────┬──┘
+                           ▼        ▼          ▼         ▼
+                       ┌──────┐ ┌────────┐ ┌────────┐ ┌──────┐
+                       │Isaac │ │ Newton │ │ MuJoCo │ │ Warp │
+                       │      │◀│        │◀│        │ │      │
+                       │Sim   │ │geometry│ │Playgrd │ │Warp  │
+                       │Lab   │ │sensors │ │MJX     │ │CUDA  │
+                       │      │ │ik      │ │MuJoCo  │ │      │
+                       │      │ │solvers:│ │  Warp  │ │      │
+                       │      │ │ MuJoCo │ │        │ │      │
+                       │      │ │ Kamino │ │        │ │      │
+                       │      │ │ canon. │ │        │ │      │
+                       │      │ │ custom │ │        │ │      │
+                       │NVIDIA│ │DeepMind│ │DeepMind│ │NVIDIA│
+                       │      │ │ Disney │ │        │ │      │
+                       │      │ │ NVIDIA │ │        │ │      │
+                       │Apache│ │ Apache │ │ Apache │ │Apache│
+                       │2.0/  │ │  2.0   │ │  2.0   │ │ 2.0  │
+                       │BSD   │ │        │ │        │ │      │
+                       └──────┘ └────────┘ └────────┘ └──────┘
+        Arrows: Warp → Newton, MuJoCo → Newton, Newton → Isaac.
+```
+
+Four things this settles or adds:
+
+1. **OpenUSD is the interchange layer for the entire stack** — drawn above all
+   four pillars, feeding each. Our decision to make USD the sole interchange
+   format is the same one the industry's largest vendor has drawn.
+2. **Everything below Isaac is Apache-2.0**, on NVIDIA's own slide — Newton,
+   MuJoCo and Warp all labelled Apache 2.0, Isaac labelled "Apache 2.0 / BSD".
+   This independently corroborates the licence correction above; the lock-in
+   was never the licences, only the Kit/RTX binaries.
+3. **MuJoCo is becoming a solver inside Newton.** "MuJoCo Solver" sits in
+   Newton's solver column beside a **Kamino Solver**, canonical solvers, and a
+   custom-solver slot, with the dependency arrows running Warp → Newton and
+   MuJoCo → Newton → Isaac. That is the same direction of travel as MuJoCo
+   deprecating its `mjc:` USD attributes in favour of `newton:` ones — and it
+   means **staying MuJoCo-native does not strand us**: our solver is a
+   first-class component of the stack everyone else is assembling.
+4. New names not previously recorded here: **Kamino Solver**, and the
+   `newton.geometry` / `newton.sensors` / `newton.ik` module split. **Disney
+   Research** appears as a third Newton partner alongside DeepMind and NVIDIA.
+
+⚠️ Slide-grade evidence: no version numbers, no dates, and the module list may
+be aspirational. Treat the *architecture* as confirmed and any individual
+component as unverified until fetched.
+
 On the Isaac row's licence: Isaac Sim's source has been on GitHub since
 May 2025 and NVIDIA calls it "open-source", but GitHub classifies the licence
 as **"Other"** (a custom NVIDIA licence), and the application runs on
