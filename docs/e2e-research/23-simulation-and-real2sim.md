@@ -213,7 +213,7 @@ This needs saying because the opposite is widely assumed.
 | Tool | What it produces | Collision geometry? |
 |---|---|---|
 | **gsplat** v1.5.3 (Apache-2.0) | CUDA rasterisation of Gaussians; recent work is HiGS, MCMC, LiDAR rasterisation, 3DGUT | **No. Mesh extraction is not documented in the repo at all.** |
-| **SplatSim** (arXiv 2409.09016) | replaces mesh *rendering* with splats **inside an existing simulator** — physics still comes from conventional meshes | No (inherits the simulator's) |
+| **SplatSim** (arXiv 2409.10161) | replaces mesh *rendering* with splats **inside an existing simulator** — physics still comes from conventional meshes | No (inherits the simulator's) |
 | **PhysGaussian** (arXiv 2311.12198) | custom material-point-method on Gaussian kernels, "what you see is what you simulate" | A *graphics* result; no robotics collision story |
 | **Splat-MOVER** | semantics + grasp affordance + scene editing; 95–100% grasp success on specific objects | **No physics** |
 
@@ -238,13 +238,16 @@ answered by a shipping product. Verified at nianticspatial.com/robotics,
 > splat and an aligned mesh in a single file."*
 
 **Niantic's Scaniverse export co-packages the splat (RGB layer) with a
-co-registered collision mesh** derived from the same capture via
-**MVSAnywhere**, a zero-shot multi-view-stereo model — one gravity-aligned,
-metric-scale USDZ, from an off-the-shelf 360° camera and a few-minute
-walkthrough, no LiDAR. Because both layers come from the same geometry there is
-no registration error for a policy to learn as false signal. ⚠️ The
-city-block-scale tiling claimed on the 2026-08 NVIDIA livestream appears on
-**no public Niantic page** — livestream-only until written down.
+co-registered collision mesh** — *"The mesh, derived from the same capture,
+supplies the collision geometry it navigates"* (nianticspatial.com/robotics,
+re-verified 2026-08-17). Because both layers come from the same geometry there
+is no registration error for a policy to learn as false signal.
+
+⚠️ **Attribution corrected 2026-08-17.** The **MVSAnywhere** mechanism and the
+"gravity-aligned, metric-scale, collider-ready" phrasing come from **Flexion's
+vendor post, not from Niantic** — a re-fetch of the Niantic robotics page finds
+none of those four terms on it. City-block-scale tiling remains livestream-only
+and appears on no public page.
 
 The first policy result inside such a twin is **Flexion's** (vendor post,
 flexion.ai, 2026-07-20 — **no paper**): massively parallel RL on rendered RGB
@@ -255,6 +258,77 @@ real-world performance is *"on par with a depth-based policy"*, and the
 glass-door / thin-structure / semantic-hazard wins are **demo-video grade**.
 The direction — reconstruct realism instead of randomising toward it — is
 notable; the margins are not yet measured anywhere citable.
+
+#### 2026-08-17: splats standardised, and the licence trap is the opposite way round
+
+A dedicated sweep of OpenUSD ↔ MuJoCo ↔ 3DGS found the interoperability story
+had changed under us, in our favour, and found the risk sitting somewhere other
+than where this doc had been pointing.
+
+**Gaussian splats are now a core OpenUSD schema, not a vendor extension.**
+OpenUSD **v26.03 (2026-02-24)** added the `UsdVolParticleField` family
+including **`ParticleField3DGaussianSplat`** — verified present in
+`pxr/usd/usdVol/schema.usda` at v26.03 through v26.08 and **absent at v25.11**.
+The same release shipped an open-source reference splat renderer
+(`extras/imaging/examples/hdParticleField`) plus PLY→USD and SPZ→USD
+converters; v26.05 added a scene-index filter that **degrades particle fields
+to plain points** for any renderer that cannot splat. OpenUSD's licence is the
+Tomorrow Open Source Technology License 1.0 — Apache-2.0 verbatim except the
+trademark clause. **And NVIDIA is deprecating its own format in favour of it**:
+the `3dgrut` export README states *"NuRec is going to be deprecated and
+replaced by `ParticleField`. Prefer `ParticleField` for new assets."*
+
+**The permissive rendering column is real.** `gsplat` (Apache-2.0, actively
+maintained) ships a full robot-sensor stack — OpenCV pinhole, f-theta and
+fisheye projections, **five rolling-shutter modes**, and spinning-LiDAR
+projection, in differentiable CUDA kernels. NVIDIA's own `3dgrut` (3DGRT +
+3DGUT) is Apache-2.0; `brush` is Apache-2.0 and needs no CUDA; Niantic's `spz`
+container is MIT.
+
+> ⚠️ **The licence trap is the mesh path, not the appearance path.** This doc
+> has been warning about NVIDIA lock-in for *rendering*. But rendering has
+> permissive options, while **SuGaR, 2DGS and GOF — the entire splat→mesh
+> state of the art — all ship the INRIA research-only licence**: *"THE USER
+> CANNOT USE, EXPLOIT OR DISTRIBUTE THE SOFTWARE FOR COMMERCIAL PURPOSES."*
+> The path that *sounds* physics-respecting is the one that is commercially
+> unusable.
+
+**And their output is not simulation-grade anyway, by their authors' own
+words.** SuGaR runs Poisson reconstruction over a sampled level set and
+concedes *"splatted depth maps are not exact"* — Poisson output is watertight
+*by construction*, so watertightness there is an artifact of the algorithm, not
+evidence about the scene. 2DGS concedes failure on *"semi-transparent surfaces,
+such as glass"* and *"fine geometric structures"* — precisely the two classes
+Flexion's demo videos claim as wins. The 2026 successor (Manifold-GS,
+arXiv 2608.00214) exists specifically to name the failure mode: **watertight
+mesh hallucination**, inventing surface in unobserved regions.
+
+**The finding that matters most for evaluation: off-trajectory decay.** A
+policy under evaluation moves the camera to novel poses *by definition*, and
+that is exactly where a splat is weakest. Measured: on genuinely
+out-of-distribution splits, 3DGS scores **PSNR 17.66 / FID 113.84** (Difix3D+,
+arXiv 2503.01774), repairable to FID ~42 — still not photorealistic. EVPGS
+quantifies the deviation as **~25° of pitch** off the training views, which is
+a trivially small move for a wrist camera. **An evaluation harness whose
+fidelity is worst exactly where the policy is most interesting will produce
+ranking noise and call it a result** — the failure §5 exists to prevent.
+
+**Two working MuJoCo+3DGS precedents exist, both permissive**, which adds a
+third option to the fork in [30 §①](30-the-pipeline.md): **DISCOVERSE**
+(MIT, IROS 2025, MuJoCo physics + 3DGS rendering, no INRIA or NVIDIA code in
+its dependency chain) and **MuGS** (Apache-2.0; MuJoCo renders robot and
+objects, gsplat renders background, alpha-composited; **515 Hz** end-to-end at
+160×120 on one RTX 4090). Both are 3–5 months stale, so budget maintenance.
+
+**What MuJoCo itself does and does not have.** It gained a real **USD importer**
+(`plugin/usd_decoder`, ~2,800 lines) promoted out of experimental in **3.5.0**,
+so a `.usdz` can be dropped straight into `simulate`. It has **zero** splat
+code — a code search for "gaussian" and "splat" across the repository returns
+nothing, with no PR and no roadmap item. Consequence, from reading the importer
+source: it gates geometry on `UsdGeomGprim`, and `ParticleField` is not one —
+so **dropping a Niantic USDZ into MuJoCo today should yield the collision mesh
+and silently skip the splat**, which is arguably exactly what we want. ⚠️
+Inferred from the source gate, not observed at runtime — worth one test.
 
 ### The two numbers nobody automates
 
@@ -306,9 +380,10 @@ caveat that manipulation *contact* is still stuck between 2.0 and 3.0
   source exists yet.
 - **Splat degradation off the capture trajectory has a productised repair
   stack**, verified on Hugging Face 2026-08-15: `nvidia/difix` (DiFix3D+,
-  arXiv 2503.01774; **~720k combined downloads**), `nvidia/asset-harvester`
+  arXiv 2503.01774; **~720k combined downloads**; ⚠️ that figure is difix's, not
+  instant-nurec's — see below), `nvidia/asset-harvester`
   (3D asset from one image; licence "other"), `nvidia/Harmonizer` (relighting
-  inserted assets; licence "other"), `nvidia/instant-nurec` (feed-forward splat,
+  inserted assets; licence "other"), `nvidia/instant-nurec` (**335 downloads**, licence "other"; feed-forward splat,
   PLY in <2 min, **NVIDIA Open Model License — commercial use allowed**). The
   reconstruct-the-backdrop-inject-synthetic-actors workflow is assembled and
   shipping in AV; robotics gets it second-hand.
@@ -514,7 +589,7 @@ them out of the box, which is convenient and is not evidence about your robot.
 | MuJoCo Warp | active | Apache-2.0 | **NVIDIA required** | ❌ | Not yet feature-complete (no IMPLICITFAST, PGS, PLUGIN actuators) |
 | **ManiSkill3** | v3.0.0+, RSS 2025 | Apache-2.0 code, **assets CC BY-NC 4.0** | Linux + NVIDIA | ❌ | **Best evaluation harness.** 30,000+ FPS RGBD on a 4090 |
 | NVIDIA Newton | **v1.0.0 2026-04-13, v1.4.0 2026-07-16** | **Apache-2.0** | NVIDIA | ❌ | Released, out of beta — but a *backend*, not a workflow |
-| Isaac Sim / Isaac Lab | **Sim 6.0.1 GA; Lab stable 2.3.2, Lab 3.0 is Beta** (2026-08-15) | source-available "Other" / BSD-3 | NVIDIA | ❌ | **Skip.** ≥16 GB VRAM plus rendering headroom, Ubuntu 22.04 or Win 11 only |
+| Isaac Sim / Isaac Lab | **Sim 6.0.1 GA; Lab stable 2.3.2, Lab 3.0 is Beta** (2026-08-15) | **Apache-2.0 code** (corrected 2026-08-17) + proprietary Kit/RTX binaries / BSD-3 | NVIDIA | ❌ | **Skip.** ≥16 GB VRAM plus rendering headroom, Ubuntu 22.04 or Win 11 only |
 | Genesis | **v1.3.2, 2026-08-07** | Apache-2.0 | CUDA/ROCm/**Metal** | ✅ | Materially stabilising (determinism, differentiable rigid body, elliptic friction cone) — but **no public reconciliation of the original benchmark claims**. Revisit in 6 months |
 | Drake | v1.55.0, 2026-07-15 | BSD-3 | CPU | ✅ | Best *physical* contact model (hydroelastic), wrong tool for RL throughput |
 | PyBullet | citation stops 2021, tracker closed | Zlib | — | ✅ | **Legacy** |
@@ -590,7 +665,7 @@ ACDC <https://digital-cousins.github.io/>, arXiv 2410.07408 ·
 RialTo <https://real-to-sim-to-real.github.io/RialTo/>, arXiv 2403.03949 ·
 Sim-and-real co-training arXiv 2503.24361 · domain adaptation arXiv 2509.18631 ·
 RL co-training arXiv 2602.12628 · TRI study arXiv 2602.01067 ·
-SplatSim arXiv 2409.09016 · PhysGaussian arXiv 2311.12198 ·
+SplatSim arXiv 2409.10161 · PhysGaussian arXiv 2311.12198 ·
 Splat-MOVER <https://splatmover.github.io/> · gsplat <https://github.com/nerfstudio-project/gsplat> ·
 PhysTwin <https://jianghanxiao.github.io/phystwin-web/> ·
 Articulate-Anything <https://articulate-anything.github.io/> ·
