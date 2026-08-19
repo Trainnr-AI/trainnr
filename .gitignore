@@ -13,3 +13,8 @@ node_modules/
 
 # macOS
 .DS_Store
+
+# uv-managed virtualenvs (pipeline/)
+.venv/
+__pycache__/
+*.egg-info/

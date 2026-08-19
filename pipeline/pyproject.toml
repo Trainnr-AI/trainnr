@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rq-pipeline"
+version = "0.1.0"
+description = "Train, validate and serve robot policies with numbers you can sign: identified dynamics, gated simulation, confidence intervals on everything."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "FSL-1.1-ALv2" }
+
+# The core is dependency-free on purpose: the statistics and bundle layers
+# must be recomputable anywhere a report is audited — any Python >= 3.10,
+# no scipy, no GPU (uv provisions the interpreter). Heavy stages are
+# opt-in extras with their own floors:
+[project.optional-dependencies]
+sim = ["mujoco>=3.5"]
+train = ["lerobot>=0.6.1; python_version >= '3.12'"]
+gpu = ["mujoco-warp"]  # NVIDIA GPU required
+
+[tool.setuptools.packages.find]
+include = ["rq_pipeline*"]
+
+# Ruff is the whole lint/format story — same role clippy+rustfmt play for
+# the crates, and the pre-commit gate runs it the same way. Rules mirror
+# docs/18-code-quality.md: no unused anything, no shadowed builtins,
+# modern syntax for the real floor, complexity kept visible.
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # import order
+    "N",   # naming
+    "UP",  # pyupgrade (respects py39 floor)
+    "B",   # bugbear
+    "SIM", # simplification
+    "RUF", # ruff-native checks
+    "PL",  # pylint subset: complexity + magic values stay visible
+]
+# PLR2004 (magic values) stays ON: dangling literals get names, as in the
+# Rust crates.

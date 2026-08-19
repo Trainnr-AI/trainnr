@@ -34,6 +34,16 @@ gate "clippy (no errors)"    "! cargo clippy -q --workspace --all-targets 2>&1 |
 gate "unsafe still forbidden everywhere" "python3 tools/check-unsafe-gates.py"
 gate "docs describe real code" "python3 tools/check-docs.py"
 
+# Python gets the same treatment as Rust — ruff is its clippy+rustfmt and
+# the unit suite is fast enough to run on every commit. Gated on uv being
+# present so a Rust-only contributor is not blocked by tooling they never
+# touch; CI must not use that escape hatch.
+if [ -d pipeline ] && command -v uv >/dev/null 2>&1; then
+  gate "ruff format (pipeline)" "cd pipeline && uvx ruff format --check ."
+  gate "ruff lint (pipeline)"   "cd pipeline && uvx ruff check ."
+  gate "python tests (pipeline)" "cd pipeline && uv run python -m unittest discover -s tests"
+fi
+
 [ "$fail" -eq 0 ] || {
   echo
   echo "Commit blocked. Fix the above, or --no-verify if you mean it."
