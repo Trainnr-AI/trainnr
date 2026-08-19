@@ -738,6 +738,25 @@ DeepMind + Disney). So even NVIDIA's open physics future converges toward the
 MuJoCo lineage, while the rendering stays theirs. Build *on* MuJoCo; *use*
 Isaac/NuRec rendering where photorealism pays, without making it load-bearing.
 
+**Updated 2026-08-19 — the binaries escaped Kit, and the lock-in got easier to
+adopt, not looser.** NVIDIA unbundled Omniverse into pip-installable
+agent-callable libraries ("Omniverse Libraries", part of NVIDIA Agent Toolkit).
+Licence files read, not marketing labels: **`ovrtx`, `ovstage`, `ovstream`,
+`ovui`, `ovstorage` all carry the NVIDIA enterprise Software License
+Agreement** (*"non-exclusive, non-transferable, non-sublicensable… subject to
+payment of applicable fees"*; PyPI: `LicenseRef-NvidiaProprietary`), and the
+GitHub repos are **open shells around binary cores** — headers, bindings and
+examples with no renderer source. The page's *"ovphysx — open source"* claim is
+**false as of today**: no `ovphysx` repo exists in any NVIDIA org; it ships
+only as a proprietary-licence PyPI wheel (the *old* PhysX SDK is BSD-3; the new
+agent-era runtime is closed). Two practical details: **ovphysx runs on CPU
+(AVX), no NVIDIA GPU needed**; ovrtx rendering still requires one. The
+genuinely Apache-2.0 column is real and useful — `usd-search`, `usd-exchange`,
+`usd-optimize`, `usd-validation-nvidia`, `usd-convert-asset`, and the
+`mujoco-usd-converter`/`urdf-usd-converter` already in this doc. The verdict
+above survives verbatim: the RTX renderer is now `pip install`-able into any
+app — same binaries, same licence, friendlier packaging.
+
 ⚠️ **ManiSkill3's GPU simulation does not work under WSL** (re-verified
 2026-08-15, install-matrix unchanged: "WSL | ✅ CPU | ❌ GPU Sim | ❌
 Rendering") — see [24-compute-and-hardware.md](24-compute-and-hardware.md).
