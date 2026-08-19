@@ -210,6 +210,15 @@ This is where the field's best-evidenced real-robot result lives.
 | RIPT-VLA (arXiv 2505.17016) | 2025-05 | ❌ **LIBERO sim only** | 1 demo: 4% → 97% in 15 iterations |
 | Q-chunking (arXiv 2507.07969) | 2025-07 | ❌ sim benchmarks | no real numbers |
 | EvoHIL (arXiv 2608.03872) | 2026-08-04 | ✅ real — Franka FR3 + **SO-101**, six tasks under lighting shifts | self-evolving reward + flow-matched HIL RL; claims better success/smoothness than HIL and imitation baselines, **no quantitative numbers in the abstract**; code status unconfirmed |
+| **RLT — "RL Token"** (Physical Intelligence, pi.website/research/rlt) | 2026 (read 2026-08-20, operator-supplied full text; no arXiv ID sighted) | ✅ real — 4 sub-millimetre tasks on **π0.6** (screw, zip tie, Ethernet, charger) | Frozen VLA exposes a compact **"RL token"** readout (encoder-decoder bottleneck over the VLA's final-layer embeddings); a small TD3-style actor-critic learns over **action chunks (C=10)**, BC-regularised toward the VLA's own reference chunk with reference-dropout, human interventions + sparse binary human success labels, update-to-data ratio 5. **Screw success 20% → 65%; up to 3× critical-phase speedup; on Ethernet the RL policy's median (66 steps) beats every expert teleop demo (median 146)** — in 15 min–5 h of robot data. Ablations are the mechanism evidence: single-step baselines (HIL-SERL, PLD) fail outright at 50 Hz sparse reward — **chunk-level credit assignment is why corrections work at VLA control rates**. Author-reported, PI's own model, no third party |
+
+The RLT row updates two standing claims (2026-08-20). The "beyond the
+demonstrator ceiling" argument now has its cleanest exhibit — half the RL
+episodes are faster than **all** of the teleoperated demonstrations, via an
+emergent press-and-wiggle insertion strategy present nowhere in the demo
+data. And §5's "π*0.6/π0.7 — no paper, no N" complaint narrows again: π0.6
+now carries a model card, RECAP, and RLT with real Ns; **the weights remain
+closed**, which is the half that matters for anyone else's pipeline.
 
 **Honest summary of what RL adds over imitation:**
 
