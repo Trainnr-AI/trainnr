@@ -28,11 +28,20 @@ MINIMUM_POLICIES = 4
 # (Caruso & Cliff) relative to Pearson's 1.0.
 _SPEARMAN_Z_INFLATION = 1.03
 
-# atanh diverges at |r| = 1. A perfectly monotone observed ranking is a
-# real outcome at small n (5 policies have only 120 orderings), and the
-# honest statement there is that permutation count, not a divergent
-# interval — so rho is clamped just inside the pole.
-_RHO_LIMIT = 0.9999
+# atanh diverges at |r| = 1, and any fixed clamp would let the clamp
+# constant, not the data, set the bound at perfect observed agreement.
+# The honest cap is the DISCRETENESS of rankings: n policies cannot
+# resolve a correlation finer than one adjacent rank swap, so observed
+# rho is capped at the second-most-extreme achievable value,
+# 1 - 12/(n(n^2-1)) — 0.9 at n=5, 0.993 at n=12. The pole guard below
+# only matters once n is large enough that the discreteness cap
+# approaches it.
+_RHO_POLE_GUARD = 0.9999
+
+
+def _max_resolvable_rho(policy_count: int) -> float:
+    one_swap = 1.0 - 12.0 / (policy_count * (policy_count**2 - 1))
+    return min(one_swap, _RHO_POLE_GUARD)
 
 
 def _average_ranks(values: Sequence[float]) -> list[float]:
@@ -99,7 +108,8 @@ def fisher_rank_ci(
         raise ValueError(
             f"need at least {MINIMUM_POLICIES} policies, got {policy_count}"
         )
-    clamped = max(-_RHO_LIMIT, min(_RHO_LIMIT, correlation))
+    resolvable = _max_resolvable_rho(policy_count)
+    clamped = max(-resolvable, min(resolvable, correlation))
     z_score = atanh(clamped)
     half_width = (
         normal_quantile(1.0 - (1.0 - confidence) / 2.0)

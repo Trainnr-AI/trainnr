@@ -36,7 +36,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | ⑤ curate | planned `rq_pipeline/curate` | PSD ranker first (needs nothing), rollout scoring later |
 | ⑥ expand | planned `rq_pipeline/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage |
 | ⑦ train | planned `rq_pipeline/train` | thin LeRobot wrappers, ACT first |
-| ③/⑧ evaluate | planned `rq_pipeline/evaluate` | `mujoco.rollout`-based harness emitting certificates via `stats` |
+| ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals); the `mujoco.rollout` harness that feeds it is next |
 | ⑨ envelope | stays in `firmware/` | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
 ## 3. Decisions, with the reasoning attached

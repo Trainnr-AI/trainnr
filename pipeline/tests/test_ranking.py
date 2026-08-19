@@ -57,6 +57,17 @@ class FisherInterval(unittest.TestCase):
         with self.assertRaises(ValueError):
             fisher_rank_ci([1, 2, 3], [1, 2, 3])
 
+    def test_perfect_agreement_capped_by_discreteness(self) -> None:
+        # Second bug this suite caught: a fixed atanh clamp let the CLAMP
+        # CONSTANT set the bound at perfect observed agreement (lower
+        # bound 0.998 at n = 5). The cap is now the resolution of ranking
+        # itself — one adjacent swap, r = 0.9 at n = 5 — so five perfectly
+        # agreeing policies still report an honest, wide interval.
+        perfect = [0.1, 0.2, 0.3, 0.4, 0.5]
+        lower, _, n = fisher_rank_ci(perfect, list(perfect))
+        self.assertEqual(n, 5)
+        self.assertLess(lower, 0.3)
+
 
 class BootstrapInterval(unittest.TestCase):
     def test_percentile_bootstrap_is_blind_past_observed_data(self) -> None:
