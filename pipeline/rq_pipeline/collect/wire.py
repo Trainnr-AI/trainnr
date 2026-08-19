@@ -73,6 +73,10 @@ class Recording:
     plain_notes: list[str] = field(default_factory=list)
     torn_images: int = 0
     unparsable: int = 0
+    # Interleave order, as (kind, index-into-that-kind's-list). Alignment
+    # into training frames needs to know what followed what; the wire
+    # format has no timestamps, so line order is the only sequencing.
+    events: list[tuple[str, int]] = field(default_factory=list)
 
     @property
     def stalled_count(self) -> int:
@@ -178,10 +182,12 @@ def _record_note(recording: Recording, payload: str) -> None:
     """Classify a `# `-note: servo command, camera report, or prose."""
     pulses = parse_servo_note(payload)
     if pulses is not None:
+        recording.events.append(("servo", len(recording.servo_pulses)))
         recording.servo_pulses.append(pulses)
         return
     camera = parse_camera_note(payload)
     if camera is not None:
+        recording.events.append(("camera", len(recording.camera_notes)))
         recording.camera_notes.append(camera)
     else:
         recording.plain_notes.append(payload)
@@ -209,6 +215,7 @@ def parse_recording(path: Path) -> Recording:
             if row is not None:
                 open_image[2].append(row)
                 if len(open_image[2]) >= open_image[1]:
+                    recording.events.append(("image", len(recording.images)))
                     recording.images.append(
                         Image(
                             width=open_image[0],
@@ -225,6 +232,7 @@ def parse_recording(path: Path) -> Recording:
 
         status = parse_status(line)
         if status is not None:
+            recording.events.append(("status", len(recording.statuses)))
             recording.statuses.append(status)
         else:
             recording.unparsable += 1

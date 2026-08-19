@@ -32,7 +32,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |
 | ② onboard: identification | `rq_pipeline/robot` (grows) | next — excitation + `mujoco.sysid` wrapper + identifiability report |
 | ① scene ingestion | planned `rq_pipeline/scene` | scan QA gate, USD scene bundle, cousin substitution |
-| ④ collect | `pipeline/rq_pipeline/collect/` | **built (parser layer)** — the `.wire` reader, conformance-tested to reproduce the Rust gate's exact census on the committed chase recording; the LeRobot export sits on top, next |
+| ④ collect | `pipeline/rq_pipeline/collect/` | **built (parser + alignment)** — the `.wire` reader (conformance-tested against the Rust gate's exact census) and frame alignment: 27 (observation, action) frames from the chase recording, timestamps from the 50 Hz status counter, provenance-stamped. The LeRobot export sits on top, next |
 | ⑤ curate | planned `rq_pipeline/curate` | PSD ranker first (needs nothing), rollout scoring later |
 | ⑥ expand | planned `rq_pipeline/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage |
 | ⑦ train | planned `rq_pipeline/train` | thin LeRobot wrappers, ACT first |
