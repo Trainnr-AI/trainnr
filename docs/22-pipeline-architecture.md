@@ -28,7 +28,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 |---|---|---|
 | statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, 20 tests |
 | artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps |
-| physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — `PhysicsBackend` protocol; MuJoCo adapter next |
+| physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — protocol + **MuJoCo adapter** (`mujoco.rollout` batched, census wired to the fail-loudly gate, gravity-verified; MuJoCo 3.11 with the sysid toolbox importable in-venv) |
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |
 | ② onboard: identification | `rq_pipeline/robot` (grows) | next — excitation + `mujoco.sysid` wrapper + identifiability report |
 | ① scene ingestion | planned `rq_pipeline/scene` | scan QA gate, USD scene bundle, cousin substitution |

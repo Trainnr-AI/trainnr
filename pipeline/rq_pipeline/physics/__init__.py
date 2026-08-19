@@ -8,6 +8,7 @@ ecosystem is converging on it, so nothing here may depend on which
 backend is underneath.
 """
 
-from rq_pipeline.physics.backend import PhysicsBackend
+from rq_pipeline.physics.backend import ModelCounts, PhysicsBackend
+from rq_pipeline.physics.mujoco_backend import MuJoCoBackend
 
-__all__ = ["PhysicsBackend"]
+__all__ = ["ModelCounts", "MuJoCoBackend", "PhysicsBackend"]
