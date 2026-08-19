@@ -21,7 +21,10 @@ contact negative narrowed to *vision-only* world models (§3).
 
 ## 1. Two warnings that apply to every number below
 
-**Nobody reports confidence intervals.** MimicGen evaluates 50 rollouts per
+**Almost nobody reports confidence intervals** (narrowed 2026-08-19: the
+methodology now exists in one vendor post and one arXiv paper — see
+[30 §3.3](30-the-pipeline.md) — but in none of the papers ranked below, and in
+no shipping framework). MimicGen evaluates 50 rollouts per
 cell; MimicLabs 20; the co-training paper ~20 per task. At N = 20 and a true
 success rate near 0.5, one standard error is roughly **11 percentage points**.
 **Any reported gain under about 15 points on a single task is not

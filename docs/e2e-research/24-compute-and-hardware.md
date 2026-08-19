@@ -73,7 +73,10 @@ found. Plan on gradient checkpointing and luck.
 **MolmoAct2's LoRA-VLM at 20.2 GiB @ bs8** has genuine headroom, and its
 inference is 12.1 GiB — numbers now carried in **official LeRobot
 documentation** (integrated 2026-05-28), a stronger citation than the allenai
-repo. Two additions strengthen it as the default rather than the fallback: an
+repo. Two additions strengthen it **as the fallback** (⚠️ not "the default" —
+an earlier phrasing here promoted it on VRAM alone; on ArmnetBench it scores
+**18.9% against π0.5's 47.6%**, sixth of seven, so the comfortable fit costs
+roughly 60% of the measured success — see doc 20's ladder): an
 even cheaper **action-expert-only fine-tune at 16.5 GiB @ bs8**, and a
 ready-made **zero-shot SO-100/101 checkpoint**
 (`lerobot/MolmoAct2-SO100_101-LeRobot`, runnable via `lerobot-rollout`, with a

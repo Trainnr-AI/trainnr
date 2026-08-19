@@ -65,8 +65,12 @@ in ArmnetBench. Same model family, same class of hardware.
 | arXiv 2606.08881 (third-party, 100 demos) | 32.5% | 33.75% |
 | ArmnetBench v0.1 (third-party, 50 demos) | **15.0%** | 19.2% |
 
-Neither third-party benchmark reports confidence intervals. **Nobody in this
-field does.** At N = 20 rollouts and a true success rate near 0.5, one standard
+Neither third-party benchmark reports confidence intervals. (⚠️ Narrowed
+2026-08-19 — "nobody in this field does" was falsified: NVIDIA RoboLab
+publishes Clopper-Pearson intervals with worked numbers, and PhAIL's paper
+does Kaplan-Meier with clustered bootstrap. What survives: **no leaderboard
+publishes them, and they are in no shipping framework** — zero hits for
+`clopper`/`binom`/`confidence_interval` in Isaac Lab-Arena's `main`.) At N = 20 rollouts and a true success rate near 0.5, one standard
 error is roughly **11 percentage points** — so any single-task difference under
 about 15 points is indistinguishable from noise, including your own.
 

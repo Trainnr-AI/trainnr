@@ -42,7 +42,9 @@ Read [19-the-system.md](19-the-system.md) first; it is the map.
    small real evaluation does** (r ≈ 0.92 versus r ≈ 0.60). That inverts the
    usual intuition about what a simulator is for.
 3. **The published numbers disagree with each other by 5×** for the same model
-   on the same class of hardware, and nobody reports confidence intervals.
+   on the same class of hardware, and confidence intervals live in exactly one
+   vendor post and one arXiv paper — in no leaderboard and no shipping
+   framework (narrowed 2026-08-19).
 4. **Curation and cheap augmentation beat everything generative.** World models
    generate plausible approach motion and cannot generate contact.
 5. **Keeping the ML out of the safety path is worth €5–15k and 3–6 months**, and
