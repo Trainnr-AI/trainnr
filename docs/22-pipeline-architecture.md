@@ -39,6 +39,40 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals); the `mujoco.rollout` harness that feeds it is next |
 | ⑨ envelope | stays in `firmware/` | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
+## 2.1 The two entry maps: where the ML enters, where the physics enters
+
+The two questions every newcomer asks, answered against the stage map above.
+
+**ML enters at exactly three points.** ⑦ TRAIN is the VLA (LeRobot wrappers,
+ACT → π0.5/MolmoAct2 per doc 20's ladder), consuming a `demo-set@hash` and
+emitting a `policy@hash`. ⑥ carries the world-action model in its only
+sanctioned role — an auxiliary training signal, never a data generator. ⑩
+OPERATE is the RL: on-site refinement of a **frozen** generalist by a small
+chunk-level learner fed sparse human success labels — the RLT reference
+design ([30 §⑩](e2e-research/30-the-pipeline.md)). Evaluation (③/⑧) contains
+no ML at all: there the models are the *subject*, and the certificate that
+judges them must not share their failure modes.
+
+**Physics enters at five points, in a strict promotion order** — dynamics is
+measured before the simulator runs, the simulator is validated before it is
+trusted, trusted before used:
+
+| Stage | Physics' role |
+|---|---|
+| ② onboard | **Dynamics becomes data**: excitation + `mujoco.sysid` fit → parameters with intervals. CPU MuJoCo as fitting substrate |
+| ① scan | Scene physics, minimally: collision geometry + cousin mass/friction. The splat is never the physics |
+| ③ validate | **First end-to-end rollouts, on probation** — their purpose is to test the simulator itself (Gate A) |
+| ⑥/⑦ expand + train | Sim as data factory, only after the gate — synthetic episodes and DR **centred on identified values** (randomising around a guess trains robustness to the wrong distribution) |
+| ⑧ evaluate | Sim as certified instrument: batch rollouts rank policies under ③'s certificate |
+
+And one loop: ⑪ telemetry watches parameter drift back into ② —
+re-identification is scheduled maintenance, because a drifting fit is a
+wearing gearbox. Dynamics is a subscription, not a measurement.
+
+In build order both precede the ML: the MuJoCo adapter (§5 item 2) brings
+physics into the codebase, and Paper 0 (docs/23-research-agenda.md) brings
+dynamics-as-measurement onto owned hardware, before anything trains.
+
 ## 3. Decisions, with the reasoning attached
 
 **MuJoCo is the simulation loop; Newton is a backend, not a foundation.**
