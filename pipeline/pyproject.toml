@@ -16,7 +16,7 @@ license = { text = "FSL-1.1-ALv2" }
 # opt-in extras with their own floors:
 [project.optional-dependencies]
 sim = ["mujoco>=3.5"]
-train = ["lerobot>=0.6.1; python_version >= '3.12'"]
+train = ["lerobot[dataset]>=0.6.1; python_version >= '3.12'"]
 gpu = ["mujoco-warp"]  # NVIDIA GPU required
 
 [tool.setuptools.packages.find]
