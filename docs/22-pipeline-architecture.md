@@ -30,7 +30,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps |
 | physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — protocol + **MuJoCo adapter** (`mujoco.rollout` batched, census wired to the fail-loudly gate, gravity-verified; MuJoCo 3.11 with the sysid toolbox importable in-venv) |
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |
-| ② onboard: identification | `rq_pipeline/robot` (grows) | next — excitation + `mujoco.sysid` wrapper + identifiability report |
+| ② onboard: identification | `pipeline/rq_pipeline/robot/` | **built** — staged excitation, `mujoco.sysid` fit wrapper, and the identifiability report: recovered a known damping from noisy synthetic data with the truth inside the interval, and reported an unidentifiable-by-construction parameter as **NOT PINNED** instead of pretending. The wedge module exists |
 | ① scene ingestion | planned `rq_pipeline/scene` | scan QA gate, USD scene bundle, cousin substitution |
 | ④ collect | `pipeline/rq_pipeline/collect/` | **built end to end** — `.wire` reader (Rust-census conformance) → frame alignment (27 frames, 50 Hz-counter clock) → **LeRobot export** behind the `train` extra, roundtrip-tested: export, reload, shapes and the real wire clock all verified. The rig's own data can now feed a training run |
 | ⑤ curate | planned `rq_pipeline/curate` | PSD ranker first (needs nothing), rollout scoring later |

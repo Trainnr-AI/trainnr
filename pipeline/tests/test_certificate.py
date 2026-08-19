@@ -36,8 +36,10 @@ class CertifyEndToEnd(unittest.TestCase):
                 scene_bundle=scene,
                 outcomes=OUTCOMES,
                 gate_threshold=GATE_THRESHOLD,
+                physics_backend="mujoco-3.11.0",
             )
         self.assertTrue(certificate.gate_passed)
+        self.assertEqual(certificate.physics_backend, "mujoco-3.11.0")
         self.assertEqual(certificate.policy_count, 12)
         self.assertGreaterEqual(certificate.rank_lower, GATE_THRESHOLD)
         self.assertGreater(certificate.top_pick, 0.5)

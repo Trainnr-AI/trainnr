@@ -52,6 +52,10 @@ class Certificate:
 
     robot_bundle: str
     scene_bundle: str
+    # The simulator IS part of the instrument: a certificate produced by a
+    # different backend (or version) is a different instrument and needs
+    # its own Gate A run.
+    physics_backend: str
     confidence: float
     policies: tuple[PolicyResult, ...]
     rank_lower: float
@@ -77,12 +81,13 @@ class Certificate:
         )
 
 
-def certify(
+def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's identity
     robot_bundle: str,
     scene_bundle: str,
     outcomes: Sequence[PolicyOutcome],
     *,
     gate_threshold: float,
+    physics_backend: str = "real-only",
     confidence: float = 0.95,
 ) -> Certificate:
     """Assemble a certificate from paired sim and real outcomes.
@@ -133,6 +138,7 @@ def certify(
     return Certificate(
         robot_bundle=robot_bundle,
         scene_bundle=scene_bundle,
+        physics_backend=physics_backend,
         confidence=confidence,
         policies=policies,
         rank_lower=rank_lower,
