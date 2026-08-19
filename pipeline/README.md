@@ -29,7 +29,7 @@ interpreter too, so the only prerequisite is uv itself.
 
 ```sh
 cd pipeline
-uv run python -m unittest discover -s tests   # 29 tests, < 1 s
+uv run python -m unittest discover -s tests   # fast suite, < 5 s; heavy roundtrips run under --extra sim/train
 uvx ruff format --check . && uvx ruff check . # the same gate pre-commit runs
 ```
 
