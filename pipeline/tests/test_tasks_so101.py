@@ -56,5 +56,49 @@ class ReachTask(unittest.TestCase):
         self.assertEqual(by_name["limp"], 0.0)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class LiftTask(unittest.TestCase):
+    def test_graded_pick_ladder(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.tasks.so101 import (  # noqa: PLC0415
+            CUBE_Z_STATE_INDEX,
+            build_lift,
+            scripted_no_close,
+            scripted_pick,
+        )
+
+        task = build_lift()
+        backend = MuJoCoBackend()
+        backend.load_spec(task.spec)
+        # Pin the privileged-state layout the success predicate reads:
+        # cube freejoint first, so its height is state index 3 and the
+        # home state has it resting at half-height on the table.
+        home = backend.default_initial_state()
+        self.assertAlmostEqual(float(np.asarray(home)[CUBE_Z_STATE_INDEX]), 0.015)
+
+        scores = evaluate_policies(
+            backend,
+            [
+                SimPolicy("pick", scripted_pick),
+                SimPolicy("no-close", scripted_no_close),
+                SimPolicy("limp", lambda step, sense: [0.0] * 6),
+            ],
+            task.protocol,
+            source="so101-lift@000000000000",
+        )
+        by_name = {score.name: score.score for score in scores}
+        # The measured jitter sweep says the pick succeeds from every
+        # perturbed pocket position; without the squeeze, nothing lifts.
+        self.assertEqual(by_name["pick"], 1.0)
+        self.assertEqual(by_name["no-close"], 0.0)
+        self.assertEqual(by_name["limp"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
