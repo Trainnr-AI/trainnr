@@ -23,8 +23,17 @@ jobs:
   fast-gates:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    # The clippy gate greps for lines STARTING with "error". The cache
+    # action exports CARGO_TERM_COLOR=always, whose ANSI prefix defeated
+    # that grep on CI's second run — a build failure sailed through the
+    # clippy gate and only surfaced at `cargo test`. Colors off, grep
+    # honest.
+    env:
+      CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
+      - name: system libraries (hil-host's serialport needs libudev)
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
