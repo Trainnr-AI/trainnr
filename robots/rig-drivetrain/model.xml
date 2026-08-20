@@ -1,0 +1,38 @@
+<!-- The rig's drivetrain as a fittable model: two free-spinning wheels,
+     each a hinge with motor gain, viscous damping, Coulomb friction and
+     rotor inertia (armature).
+
+     ⚠️ Every dynamics number below is a NOMINAL PLACEHOLDER, not a
+     measurement — this file exists so Paper 0 has a parameter vector to
+     fit into (docs/23-research-agenda.md). The bench sweep spins the
+     wheels FREE (on the stand, off the ground), which is exactly what
+     this model describes; ground contact is deliberately out of scope.
+
+     Units: control is duty in PERCENT (the wire format's unit); `gear`
+     converts %-duty to joint torque. Sensor order (left, right) is a
+     contract with rq_pipeline.collect.excitation — reorder nothing.
+
+     Timestep 0.02 s = the firmware's 50 Hz status clock. -->
+<mujoco model="rig-drivetrain">
+  <option timestep="0.02"/>
+  <worldbody>
+    <body name="left_wheel">
+      <joint name="left" type="hinge" axis="0 0 1"
+             damping="0.0005" frictionloss="0.0005" armature="0.0004"/>
+      <geom name="left_disc" type="cylinder" size="0.033 0.013" mass="0.03"/>
+    </body>
+    <body name="right_wheel" pos="0.12 0 0">
+      <joint name="right" type="hinge" axis="0 0 1"
+             damping="0.0005" frictionloss="0.0005" armature="0.0004"/>
+      <geom name="right_disc" type="cylinder" size="0.033 0.013" mass="0.03"/>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="left_motor" joint="left" gear="0.0001"/>
+    <motor name="right_motor" joint="right" gear="0.0001"/>
+  </actuator>
+  <sensor>
+    <jointpos name="left_angle" joint="left"/>
+    <jointpos name="right_angle" joint="right"/>
+  </sensor>
+</mujoco>
