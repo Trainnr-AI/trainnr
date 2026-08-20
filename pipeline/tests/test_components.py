@@ -122,5 +122,45 @@ class CargoPick(unittest.TestCase):
             compose(car=True, arm=False, cargo=True)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class GroundPick(unittest.TestCase):
+    def test_pick_from_floor_and_place_back(self) -> None:
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.components import (  # noqa: PLC0415
+            GROUND_GRASP_POINT,
+            GROUND_PICK_SEQUENCE,
+            GROUND_PLACE_SEQUENCE,
+            add_floor_cube,
+            compose,
+        )
+
+        scene = compose(car=True, arm=True)
+        add_floor_cube(scene, GROUND_GRASP_POINT)
+        model = scene.compile()
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        cube_z = 17
+
+        def ramp(pose, seconds, previous):
+            for step in range(int(seconds * 500)):
+                alpha = min(1.0, step / 600)
+                if step % 10 == 0:
+                    blend = (1 - alpha) * np.array(previous) + alpha * np.array(pose)
+                    data.ctrl[:] = [0.0, 0.0, *blend]
+                mujoco.mj_step(model, data)
+            return pose
+
+        previous = ramp(CROUCH, 2.0, list(data.qpos[9:15]))
+        for pose, seconds in GROUND_PICK_SEQUENCE:
+            previous = ramp(pose, seconds, previous)
+        self.assertGreater(float(data.qpos[cube_z]), 0.10)  # genuinely aloft
+        for pose, seconds in GROUND_PLACE_SEQUENCE:
+            previous = ramp(pose, seconds, previous)
+        ramp(CROUCH, 1.5, previous)
+        self.assertAlmostEqual(float(data.qpos[cube_z]), 0.015, delta=0.005)
+
+
 if __name__ == "__main__":
     unittest.main()

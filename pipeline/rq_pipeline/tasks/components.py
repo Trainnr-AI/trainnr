@@ -252,6 +252,50 @@ def add_cargo(scene: Any) -> None:
     )
 
 
+# Ground pick: the cube sits on the FLOOR ahead of the car, and the car
+# must park so the cube lands at GROUND_GRASP_POINT in the chassis frame
+# (measured closed-pad pocket; the pick tolerates +-4 mm, 9/9 jitter
+# sweep). Longer reach than the deck pick buys 6 mm of descent
+# clearance; the same base-swing approach aligns only at depth.
+GROUND_GRASP_POINT = (0.203, 0.005)
+GROUND_HOVER = [0.06, -1.5, 2.45, 0.55, -1.571, 1.0]
+GROUND_DESCEND = [0.06, -1.16, 2.247, 0.2, -1.571, 1.0]
+GROUND_ALIGN = [0.0, -1.16, 2.247, 0.2, -1.571, 1.0]
+GROUND_GRIP = [0.0, -1.16, 2.247, 0.2, -1.571, -0.15]
+GROUND_CARRY = [0.0, -1.6, 2.45, 0.55, -1.571, -0.15]
+GROUND_HOLDUP = [0.0, -1.9, 2.2, 0.9, -1.571, -0.15]
+
+GROUND_PICK_SEQUENCE = (
+    (GROUND_HOVER, 1.5),
+    (GROUND_DESCEND, 1.5),
+    (GROUND_ALIGN, 0.8),
+    (GROUND_GRIP, 1.5),
+    (GROUND_CARRY, 2.0),
+    (GROUND_HOLDUP, 2.0),
+)
+GROUND_PLACE_SEQUENCE = (
+    (GROUND_CARRY, 1.5),
+    (GROUND_ALIGN, 2.0),
+    (GROUND_HOVER, 1.2),
+)
+
+
+def add_floor_cube(scene: Any, pos: tuple[float, float]) -> None:
+    """A graspable cube on the floor — the ground-pick target."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    cube = scene.worldbody.add_body(name="cargo_cube", pos=[pos[0], pos[1], 0.015])
+    cube.add_freejoint()
+    cube.add_geom(
+        name="cargo_cube_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=[CUBE_HALF, CUBE_HALF, 0.015],
+        mass=0.02,
+        friction=[2.0, 0.02, 0.001],
+        rgba=[0.85, 0.15, 0.15, 1.0],
+    )
+
+
 def compose(
     *,
     car: bool,
