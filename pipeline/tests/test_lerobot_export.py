@@ -11,12 +11,14 @@ import unittest
 from pathlib import Path
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.profile import load_profile
 from rq_pipeline.collect.frames import AlignedEpisode, align
 from rq_pipeline.collect.lerobot_export import PROVENANCE_FILE, export_episode
 from rq_pipeline.collect.wire import parse_recording
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHASE_RECORDING = REPO_ROOT / "recordings" / "chase-arm-2026-08-17.wire"
+RIG = load_profile(REPO_ROOT / "robots" / "rig-drivetrain")
 
 LEROBOT_PRESENT = importlib.util.find_spec("lerobot") is not None
 EXPECTED_FRAMES = 27
@@ -39,10 +41,11 @@ class ExportRoundtrip(unittest.TestCase):
         episode = align(recording, stamp("chase", CHASE_RECORDING))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "dataset"
-            export_episode(episode, root)
+            export_episode(episode, root, RIG)
 
             provenance = json.loads((root / PROVENANCE_FILE).read_text())
             self.assertEqual(provenance["source"], episode.source)
+            self.assertEqual(provenance["robot_profile"], RIG.name)
             self.assertEqual(provenance["frames"], EXPECTED_FRAMES)
 
             reloaded = LeRobotDataset("rq-pipeline/rig", root=root)
@@ -63,7 +66,7 @@ class ExportRoundtrip(unittest.TestCase):
             tempfile.TemporaryDirectory() as directory,
             self.assertRaises(ValueError),
         ):
-            export_episode(empty, Path(directory) / "dataset")
+            export_episode(empty, Path(directory) / "dataset", RIG)
 
 
 if __name__ == "__main__":

@@ -17,10 +17,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from rq_pipeline.bundles.profile import RobotProfile
 from rq_pipeline.collect.frames import AlignedEpisode
-
-# Nominal camera burst rate on the rig; the grid is synthetic (see above).
-EXPORT_FPS = 4
 
 STATE_NAMES = ["x", "y", "heading", "ticks_left", "ticks_right"]
 ACTION_NAMES = ["pan_us", "tilt_us", "grip_us", "duty_percent"]
@@ -30,15 +28,17 @@ PROVENANCE_FILE = "provenance.json"
 def export_episode(
     episode: AlignedEpisode,
     root: Path,
+    profile: RobotProfile,
     repo_id: str = "rq-pipeline/rig",
     task: str = "chase the blob",
 ) -> Path:
     """Write one episode as a fresh LeRobot dataset rooted at `root`.
 
-    A `provenance.json` sidecar records the source recording's
-    `name@hash` stamp and the dropped-frame count — the dataset must be
-    traceable to the exact bytes it came from, same rule as the
-    certificate.
+    The fps grid comes from `profile.camera_fps` — the robot's number,
+    from the robot's bundle. A `provenance.json` sidecar records the
+    source recording's `name@hash` stamp, which robot profile shaped the
+    dataset, and the dropped-frame count — the dataset must be traceable
+    to the exact bytes it came from, same rule as the certificate.
     """
     try:
         # Lazy by design: these are the 'train' extra, and the module must
@@ -80,7 +80,7 @@ def export_episode(
     }
     dataset = LeRobotDataset.create(
         repo_id=repo_id,
-        fps=EXPORT_FPS,
+        fps=profile.camera_fps,
         root=root,
         features=features,
         use_videos=False,
@@ -111,11 +111,12 @@ def export_episode(
 
     provenance = {
         "source": episode.source,
+        "robot_profile": profile.name,
         "frames": len(episode.frames),
         "dropped_incomplete": episode.dropped_incomplete,
         "timestamp_note": (
             "dataset timestamps are a synthetic uniform grid at "
-            f"{EXPORT_FPS} fps; real seq-clock time is wire_timestamp_s"
+            f"{profile.camera_fps} fps; real seq-clock time is wire_timestamp_s"
         ),
     }
     (Path(root) / PROVENANCE_FILE).write_text(json.dumps(provenance, indent=2))

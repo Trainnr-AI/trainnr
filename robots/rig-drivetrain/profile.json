@@ -1,0 +1,16 @@
+{
+  "name": "rig-drivetrain",
+  "ticks_per_revolution": 960.0,
+  "camera_fps": 4,
+  "servo_pulse_floor_us": 1100.0,
+  "servo_pulse_ceiling_us": 1900.0,
+  "duty_ceiling_percent": 100.0,
+  "model_file": "model.xml",
+  "provenance": {
+    "ticks_per_revolution": "UNVERIFIED - nominal 48 CPR x 20:1 gearbox; hand-count or datasheet check required before any fit against this value is trusted",
+    "camera_fps": "measured: chase recordings report '4 fps' in camera notes (2026-08-17)",
+    "servo_pulse_floor_us": "firmware clamp: SWEEP_LOW_US in firmware/pico-odom/src/servo.rs",
+    "servo_pulse_ceiling_us": "firmware clamp: SWEEP_HIGH_US in firmware/pico-odom/src/servo.rs",
+    "duty_ceiling_percent": "definition of duty; the wire reports integer percent"
+  }
+}

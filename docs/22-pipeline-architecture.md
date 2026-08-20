@@ -27,7 +27,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | Stage | Package | Status |
 |---|---|---|
 | statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, 20 tests |
-| artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps |
+| artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps, and the **typed `RobotProfile`**: every robot constant (tick scale, camera fps, servo band) lives once in the bundle's `profile.json` with per-value provenance strings, loaded through a validating frozen dataclass — code and tests read named fields, never literals |
 | physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — protocol + **MuJoCo adapter** (`mujoco.rollout` batched, census wired to the fail-loudly gate, gravity-verified; MuJoCo 3.11 with the sysid toolbox importable in-venv) |
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |
 | ② onboard: identification | `pipeline/rq_pipeline/robot/` | **built, and rehearsed end-to-end** — staged excitation, `mujoco.sysid` fit wrapper, identifiability report (NOT PINNED verdicts for unconstrainable parameters), plus the full Paper 0 rehearsal: true drivetrain → synthetic sweep → integer-tick wire degradation → `identify()` recovers gear ~2%/damping ~5% single-run. The first robot bundle skeleton lives at `robots/rig-drivetrain/` |

@@ -7,5 +7,6 @@ silently poisons every later fine-tune.
 """
 
 from rq_pipeline.bundles.hashing import bundle_hash, stamp
+from rq_pipeline.bundles.profile import PROFILE_FILE, RobotProfile, load_profile
 
-__all__ = ["bundle_hash", "stamp"]
+__all__ = ["PROFILE_FILE", "RobotProfile", "bundle_hash", "load_profile", "stamp"]

@@ -21,9 +21,11 @@ here must name the exact recording (`name@hash`) it was fitted from.
    teleop, not chase) and record it: `rig_view /dev/tty.usbmodemXX
    --record recordings/sweep-<date>.wire`.
 2. `rq_pipeline.collect.excitation.drivetrain_excitation(recording,
-   ticks_per_revolution=...)` turns the recording into `ExcitationData`
-   (times from the 50 Hz status counter; both wheels' commanded duty;
-   encoder ticks converted to radians).
+   profile)` turns the recording into `ExcitationData` (times from the
+   50 Hz status counter; both wheels' commanded duty; encoder ticks
+   converted to radians). The `profile` is
+   `rq_pipeline.bundles.load_profile(<this directory>)` — this bundle's
+   `profile.json` is the one place the robot's numbers live.
 3. `rq_pipeline.robot.identify` fits the eight parameters and reports
    which are pinned.
 
@@ -32,10 +34,11 @@ carries one scalar duty, so the per-wheel split during turns is
 unobserved. The sweep drives both wheels with the same known duty, which
 makes the two encoder streams two independent single-wheel experiments.
 
-⚠️ `ticks_per_revolution` is a required input, not a fitted parameter —
-it is degenerate with `gear` (both scale the output), so it must come
-from the encoder datasheet or a hand-count, and the fit record must say
-which.
+⚠️ `ticks_per_revolution` lives in `profile.json`, not in code, and is
+never fitted — it is degenerate with `gear` (both scale the output), so
+it must come from the encoder datasheet or a hand-count. The profile's
+`provenance` entry says which; right now it says **UNVERIFIED**, and the
+fit cannot be trusted until that word is replaced by a source.
 
 ⚠️ **The torque scale is structurally unobservable from duty→angle data
 alone** — scaling `gear`, `damping`, `frictionloss` and `armature` by a

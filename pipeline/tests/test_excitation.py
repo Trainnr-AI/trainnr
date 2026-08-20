@@ -11,17 +11,19 @@ import unittest
 from math import tau
 from pathlib import Path
 
+from rq_pipeline.bundles.profile import load_profile
 from rq_pipeline.collect.excitation import drivetrain_excitation
+from rq_pipeline.collect.frames import STATUS_HZ
 from rq_pipeline.collect.wire import Recording, StatusFrame, parse_recording
 
 MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DRIVETRAIN_XML = REPO_ROOT / "robots" / "rig-drivetrain" / "model.xml"
+RIG_BUNDLE = REPO_ROOT / "robots" / "rig-drivetrain"
 CHASE_RECORDING = REPO_ROOT / "recordings" / "chase-arm-2026-08-17.wire"
 
-TICKS_PER_REVOLUTION = 960.0
-STATUS_HZ = 50.0
+RIG = load_profile(RIG_BUNDLE)
+DRIVETRAIN_XML = RIG_BUNDLE / RIG.model_file
 
 # Ground truth for the LEFT wheel, distinct from the XML nominals. The
 # RIGHT wheel keeps the XML nominals exactly, so its sensor contributes
@@ -49,7 +51,7 @@ class AdapterOnTheChaseFixture(unittest.TestCase):
         # scalar duty, per-wheel split unobserved during turns), which is
         # why Paper 0 uses the sweep. The adapter itself must still work.
         recording = parse_recording(CHASE_RECORDING)
-        data = drivetrain_excitation(recording, TICKS_PER_REVOLUTION)
+        data = drivetrain_excitation(recording, RIG)
         count = len(recording.statuses)
         self.assertEqual(data.controls.shape, (count, 2))
         self.assertEqual(data.measurements.shape, (count, 2))
@@ -62,12 +64,11 @@ class AdapterOnTheChaseFixture(unittest.TestCase):
             (recording.statuses[-1].seq - recording.statuses[0].seq) / STATUS_HZ,
         )
 
-    def test_rejects_nonsense(self) -> None:
-        recording = parse_recording(CHASE_RECORDING)
+    def test_rejects_empty_recording(self) -> None:
+        # A nonsense tick scale can no longer reach this function at all:
+        # RobotProfile refuses it at construction (see test_profile).
         with self.assertRaises(ValueError):
-            drivetrain_excitation(recording, 0.0)
-        with self.assertRaises(ValueError):
-            drivetrain_excitation(Recording(), TICKS_PER_REVOLUTION)
+            drivetrain_excitation(Recording(), RIG)
 
 
 @unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
@@ -101,7 +102,7 @@ class PaperZeroRehearsal(unittest.TestCase):
         _state, sensordata = rollout.rollout(model, data, initial, controls)
         radians = sensordata[0]  # (n, 2): left, right
 
-        radians_per_tick = tau / TICKS_PER_REVOLUTION
+        radians_per_tick = tau / RIG.ticks_per_revolution
         ticks = np.rint(radians / radians_per_tick).astype(int)
         statuses = [
             StatusFrame(
@@ -119,7 +120,7 @@ class PaperZeroRehearsal(unittest.TestCase):
             for step in range(radians.shape[0])
         ]
         recording = Recording(statuses=statuses)
-        return drivetrain_excitation(recording, TICKS_PER_REVOLUTION)
+        return drivetrain_excitation(recording, RIG)
 
     def test_recovers_left_wheel_from_quantized_ticks(self) -> None:
         from rq_pipeline.robot.identify import (  # noqa: PLC0415

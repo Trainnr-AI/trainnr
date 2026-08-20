@@ -6,15 +6,15 @@ from itertools import pairwise
 from pathlib import Path
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.profile import load_profile
 from rq_pipeline.collect.frames import align, rgb565_to_rgb888
 from rq_pipeline.collect.wire import parse_recording
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHASE_RECORDING = REPO_ROOT / "recordings" / "chase-arm-2026-08-17.wire"
 
-# The physical band the firmware clamps servo pulses to, and the duty range.
-PULSE_FLOOR_US, PULSE_CEIL_US = 1000.0, 2000.0
-DUTY_CEIL_PERCENT = 100.0
+# The robot's numbers come from the robot's bundle, even in tests.
+RIG = load_profile(REPO_ROOT / "robots" / "rig-drivetrain")
 
 
 class Rgb565Expansion(unittest.TestCase):
@@ -42,11 +42,13 @@ class AlignChaseRecording(unittest.TestCase):
         for frame in episode.frames:
             self.assertEqual(len(frame.rgb888), frame.width * frame.height * 3)
             pan, tilt, grip, duty = frame.action
-            # Servo pulses live in the physical 1100-1900 us band the
-            # firmware clamps to; duty is a percentage.
+            # Servo pulses live inside the firmware's clamp band, which
+            # the bundle profile carries; duty is a percentage.
             for pulse in (pan, tilt, grip):
-                self.assertTrue(PULSE_FLOOR_US <= pulse <= PULSE_CEIL_US)
-            self.assertTrue(0.0 <= duty <= DUTY_CEIL_PERCENT)
+                self.assertTrue(
+                    RIG.servo_pulse_floor_us <= pulse <= RIG.servo_pulse_ceiling_us
+                )
+            self.assertTrue(0.0 <= duty <= RIG.duty_ceiling_percent)
 
     def test_unstamped_source_refused(self) -> None:
         recording = parse_recording(CHASE_RECORDING)

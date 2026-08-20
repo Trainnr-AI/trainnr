@@ -18,16 +18,17 @@ Assumptions, stated because they are load-bearing:
   trimmed first.
 - **Column order is (left, right)** — a contract with
   `robots/rig-drivetrain/model.xml`'s sensor order.
-- `ticks_per_revolution` is supplied, never fitted: it is degenerate
-  with the motor gain (both scale the output), so it must come from the
-  encoder datasheet or a hand-count.
+- The tick scale comes from the bundle's `RobotProfile`, never fitted:
+  `ticks_per_revolution` is degenerate with the motor gain (both scale
+  the output), so the profile carries it with a provenance string —
+  encoder datasheet or hand-count — and the fit record inherits that.
 """
 
 from __future__ import annotations
 
 from math import tau
-from typing import TYPE_CHECKING
 
+from rq_pipeline.bundles.profile import RobotProfile
 from rq_pipeline.collect.frames import STATUS_HZ
 from rq_pipeline.collect.wire import Recording
 from rq_pipeline.robot.identify import ExcitationData
@@ -35,21 +36,14 @@ from rq_pipeline.robot.identify import ExcitationData
 # Two frames is the bare minimum for any dynamics to be visible at all.
 _MINIMUM_STATUS_FRAMES = 2
 
-if TYPE_CHECKING:  # pragma: no cover
-    pass
-
 
 def drivetrain_excitation(
     recording: Recording,
-    ticks_per_revolution: float,
+    profile: RobotProfile,
 ) -> ExcitationData:
     """Statuses to (times, duty commands x2, wheel angles in radians x2)."""
     import numpy as np  # noqa: PLC0415 - keeps the fast import path light
 
-    if ticks_per_revolution <= 0:
-        raise ValueError(
-            f"ticks_per_revolution must be positive, got {ticks_per_revolution}"
-        )
     statuses = recording.statuses
     if len(statuses) < _MINIMUM_STATUS_FRAMES:
         raise ValueError(
@@ -62,7 +56,7 @@ def drivetrain_excitation(
     # Same commanded duty on both wheels — the sweep assumption above.
     controls = np.column_stack([duty, duty])
 
-    radians_per_tick = tau / ticks_per_revolution
+    radians_per_tick = tau / profile.ticks_per_revolution
     left = np.array([status.ticks_left for status in statuses], dtype=float)
     right = np.array([status.ticks_right for status in statuses], dtype=float)
     measurements = np.column_stack(
