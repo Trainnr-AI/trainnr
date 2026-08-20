@@ -92,6 +92,11 @@ def evaluate_policies(
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"duplicate policy names: {sorted(names)}")
+    if "@" not in source:
+        raise ValueError(
+            f"source must be a name@hash stamp, got {source!r} — the same "
+            "rule certify() enforces, applied before episodes are spent"
+        )
     counts = backend.counts()
     assert_model_alive(counts.actuators, counts.sensors, counts.geoms, source=source)
     home = backend.default_initial_state()

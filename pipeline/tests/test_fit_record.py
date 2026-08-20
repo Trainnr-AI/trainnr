@@ -99,6 +99,19 @@ class Refusals(unittest.TestCase):
                 anchor=ANCHOR,
             )
 
+    def test_path_separator_in_recording_refused(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(ValueError),
+        ):
+            write_fit_record(
+                Path(directory),
+                _result(0.00023, 0.0009),
+                robot="rig-drivetrain",
+                recording="../escape@aaaaaaaaaaaa",
+                anchor=ANCHOR,
+            )
+
     def test_missing_anchor_refused(self) -> None:
         # The torque-scale finding as an artifact rule: no anchor
         # statement, no record.

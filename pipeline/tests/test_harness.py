@@ -169,6 +169,31 @@ class GateAInSimulation(unittest.TestCase):
                 source="inert@000000000000",
             )
 
+    def test_unstamped_source_refused_before_any_episode(self) -> None:
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            EpisodeProtocol,
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        protocol = EpisodeProtocol(
+            trials=1,
+            steps=10,
+            control_interval=1,
+            perturb=lambda _trial, home: home,
+            success=lambda _states, _sensors: True,
+        )
+        with self.assertRaises(ValueError):
+            evaluate_policies(
+                backend,
+                [SimPolicy("any", lambda _step, _sense: [0.0])],
+                protocol,
+                source="pendulum-unstamped",
+            )
+
     def test_mismatched_policy_sets_are_refused(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
             SimScore,

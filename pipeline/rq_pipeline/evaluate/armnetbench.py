@@ -70,6 +70,9 @@ def load_benchmark(path: Path) -> RealBenchmark:
     into someone's idea of success.
     """
     raw = json.loads(Path(path).read_text())
+    missing = {"provenance", "counts"} - set(raw)
+    if missing:
+        raise ValueError(f"{path} is missing top-level keys: {sorted(missing)}")
     tasks: dict[str, Mapping[str, LabelCounts]] = {}
     for task, policies in raw["counts"].items():
         per_policy: dict[str, LabelCounts] = {}

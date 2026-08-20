@@ -65,6 +65,20 @@ class Validation(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self._load(raw)
 
+    def test_wrong_json_types_refused(self) -> None:
+        # JSON happily delivers "4" where 4 was meant; the profile must
+        # not let a string number survive to a consumer (R12).
+        for field_name, bad in (
+            ("camera_fps", "4"),
+            ("camera_fps", 4.5),
+            ("ticks_per_revolution", "4290"),
+            ("name", 7),
+        ):
+            raw = _valid_raw()
+            raw[field_name] = bad
+            with self.assertRaises(ValueError):
+                self._load(raw)
+
     def test_empty_servo_band_refused(self) -> None:
         raw = _valid_raw()
         raw["servo_pulse_floor_us"] = 1900.0

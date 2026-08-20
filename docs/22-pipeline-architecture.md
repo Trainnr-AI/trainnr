@@ -26,7 +26,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 
 | Stage | Package | Status |
 |---|---|---|
-| statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, including the **exact permutation test** for n ≤ 8 policies (all n! pairings enumerated, no approximation — R2's fix) |
+| statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, including the **exact permutation test** for n ≤ 8 policies (all n! pairings enumerated — R2's fix) and **cross-task pooling** (`pooling.py`, R9's fix): Fisher-z inverse-variance combine, Cochran's Q heterogeneity policing, Fisher's-method combination of exact p's; chi-squared machinery stdlib-only in `intervals.py`, verified against closed forms |
 | artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps, and the **typed `RobotProfile`**: every robot constant (tick scale, camera fps, servo band) lives once in the bundle's `profile.json` with per-value provenance strings, loaded through a validating frozen dataclass — code and tests read named fields, never literals |
 | physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — protocol + **MuJoCo adapter** (`mujoco.rollout` batched, census wired to the fail-loudly gate, gravity-verified; MuJoCo 3.11 with the sysid toolbox importable in-venv) |
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |

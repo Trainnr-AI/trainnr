@@ -44,6 +44,23 @@ class RobotProfile:
     provenance: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # Types before ranges: JSON will happily deliver "4" where 4 was
+        # meant, and a string survives every `<=` check only to blow up
+        # deep inside a consumer (R12).
+        for field_name in ("name", "model_file"):
+            if not isinstance(getattr(self, field_name), str):
+                raise ValueError(f"{field_name} must be a string")
+        if isinstance(self.camera_fps, bool) or not isinstance(self.camera_fps, int):
+            raise ValueError(f"camera_fps must be an integer, got {self.camera_fps!r}")
+        for field_name in (
+            "ticks_per_revolution",
+            "servo_pulse_floor_us",
+            "servo_pulse_ceiling_us",
+            "duty_ceiling_percent",
+        ):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{field_name} must be a number, got {value!r}")
         positives = {
             "ticks_per_revolution": self.ticks_per_revolution,
             "camera_fps": self.camera_fps,

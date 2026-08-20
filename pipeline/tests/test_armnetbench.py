@@ -75,7 +75,48 @@ class CommittedArtifact(unittest.TestCase):
             real_outcomes(benchmark, "block_stack_v2")
 
 
+class ReconciliationWithThePaper(unittest.TestCase):
+    def test_pooled_rates_agree_in_magnitude_with_the_paper_table(self) -> None:
+        """R10: our aggregate versus ArmnetBench's own headline numbers.
+
+        Exact agreement is NOT expected and would be suspicious: the
+        paper's table spans all 12 tasks (4 bimanual, absent here), and
+        its suboptimal handling is unstated. What must hold is magnitude
+        agreement on the single-arm-dominant picture — if our pooled
+        strict rates drifted far from the paper's, the aggregation
+        (dedupe, demo exclusion, run pooling) would be suspect. The
+        release's run names include `eval_debug`, so the release may
+        pool runs the paper's core table does not; that residual risk is
+        why the tolerance is 4 points and not 1.
+        """
+        benchmark = load_benchmark(COUNTS)
+        pooled = {}
+        for policies in benchmark.tasks.values():
+            for policy, counts in policies.items():
+                s_, t_ = pooled.get(policy, (0, 0))
+                pooled[policy] = (s_ + counts.successful, t_ + counts.trials)
+        paper_reported = {"pi0.5": 0.476, "act": 0.192}
+        for policy, reported in paper_reported.items():
+            successes, trials = pooled[policy]
+            ours = successes / trials
+            self.assertLess(
+                abs(ours - reported),
+                0.04,
+                f"{policy}: ours {ours:.3f} vs paper {reported:.3f}",
+            )
+
+
 class Validation(unittest.TestCase):
+    def test_malformed_top_level_refused(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            handle.write(json.dumps({"counts": {}}))
+            path = Path(handle.name)
+        try:
+            with self.assertRaises(ValueError):
+                load_benchmark(path)
+        finally:
+            path.unlink()
+
     def test_unknown_label_refused(self) -> None:
         raw = {
             "provenance": {"dataset": "x", "revision": "r"},

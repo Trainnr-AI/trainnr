@@ -141,3 +141,61 @@ def normal_quantile(probability: float) -> float:
         else:
             high = mid
     return (low + high) / 2.0
+
+
+def regularized_lower_gamma(shape: float, x: float) -> float:
+    """P(s, x) — the CDF of a Gamma(shape, 1) at x, stdlib only.
+
+    Series expansion below the bulk (x < s + 1), Lentz continued fraction
+    above it — the same split every reference implementation uses,
+    because each converges fast only on its own side.
+    """
+    if shape <= 0.0:
+        raise ValueError(f"shape must be positive, got {shape}")
+    if x < 0.0:
+        raise ValueError(f"x must be non-negative, got {x}")
+    if x == 0.0:
+        return 0.0
+    log_prefactor = shape * log(x) - x - lgamma(shape)
+    if x < shape + 1.0:
+        term = 1.0 / shape
+        total = term
+        numerator = shape
+        for _ in range(_MAX_ITERATIONS):
+            numerator += 1.0
+            term *= x / numerator
+            total += term
+            if abs(term) < abs(total) * _EPSILON:
+                break
+        return min(1.0, exp(log_prefactor) * total)
+    # Continued fraction for Q(s, x); P = 1 - Q.
+    b = x + 1.0 - shape
+    c = 1.0 / _TINY
+    d = 1.0 / (b if abs(b) >= _TINY else _TINY)
+    fraction = d
+    for iteration in range(1, _MAX_ITERATIONS + 1):
+        coefficient = -iteration * (iteration - shape)
+        b += 2.0
+        d = coefficient * d + b
+        d = 1.0 / (d if abs(d) >= _TINY else _TINY)
+        c = b + coefficient / (c if abs(c) >= _TINY else _TINY)
+        delta = d * c
+        fraction *= delta
+        if abs(delta - 1.0) < _EPSILON:
+            break
+    return max(0.0, 1.0 - exp(log_prefactor) * fraction)
+
+
+def chi_squared_survival(statistic: float, degrees_of_freedom: int) -> float:
+    """P(X >= statistic) for a chi-squared distribution.
+
+    Used by the pooling layer twice: Cochran's Q heterogeneity test and
+    Fisher's method for combining per-task exact p-values.
+    """
+    if degrees_of_freedom <= 0:
+        raise ValueError(
+            f"degrees of freedom must be positive, got {degrees_of_freedom}"
+        )
+    if statistic < 0.0:
+        raise ValueError(f"statistic must be non-negative, got {statistic}")
+    return 1.0 - regularized_lower_gamma(degrees_of_freedom / 2.0, statistic / 2.0)

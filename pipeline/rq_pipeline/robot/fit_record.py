@@ -62,6 +62,11 @@ def write_fit_record(
             f"recording identity must be name@hash, got {recording!r} — "
             "stamp it with rq_pipeline.bundles.stamp first"
         )
+    if "/" in recording or "\\" in recording:
+        raise ValueError(
+            f"recording identity must not contain path separators, got "
+            f"{recording!r} — the record's filename is derived from it"
+        )
     if not anchor.strip():
         raise ValueError(
             "a fit without an anchor statement is not auditable: the torque "
