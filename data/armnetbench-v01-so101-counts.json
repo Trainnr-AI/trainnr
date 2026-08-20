@@ -1,0 +1,309 @@
+{
+ "provenance": {
+  "dataset": "armnet/armnetbench_v01_robometer",
+  "config": "so101",
+  "revision": "v1.0",
+  "license": "Apache-2.0",
+  "paper": "arXiv:2607.24481 (ArmnetBench v0.1)",
+  "fetched": "2026-08-23",
+  "aggregation": "streamed all rows; one row per camera, deduplicated to episodes by id-without-camera (7497 rows -> 2499 episodes); 'teleoperated' (human demos, 400 episodes) excluded; counts are episodes per (task, policy, quality_label). Labels are the release's discrete three: successful / suboptimal / failure."
+ },
+ "counts": {
+  "block_stack": {
+   "act": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "diffusion": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "grootn1.7": {
+    "successful": 8,
+    "suboptimal": 0,
+    "failure": 22
+   },
+   "molmoact2": {
+    "successful": 3,
+    "suboptimal": 0,
+    "failure": 57
+   },
+   "pi0": {
+    "successful": 10,
+    "suboptimal": 0,
+    "failure": 20
+   },
+   "pi0.5": {
+    "successful": 13,
+    "suboptimal": 0,
+    "failure": 17
+   },
+   "smolvla": {
+    "successful": 3,
+    "suboptimal": 0,
+    "failure": 42
+   }
+  },
+  "cable_clip": {
+   "act": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 60
+   },
+   "diffusion": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "grootn1.7": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "molmoact2": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 60
+   },
+   "pi0": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "pi0.5": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   },
+   "smolvla": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 30
+   }
+  },
+  "cable_unclip": {
+   "act": {
+    "successful": 18,
+    "suboptimal": 0,
+    "failure": 12
+   },
+   "diffusion": {
+    "successful": 2,
+    "suboptimal": 0,
+    "failure": 28
+   },
+   "grootn1.7": {
+    "successful": 10,
+    "suboptimal": 0,
+    "failure": 20
+   },
+   "molmoact2": {
+    "successful": 17,
+    "suboptimal": 0,
+    "failure": 43
+   },
+   "pi0": {
+    "successful": 14,
+    "suboptimal": 0,
+    "failure": 16
+   },
+   "pi0.5": {
+    "successful": 21,
+    "suboptimal": 0,
+    "failure": 9
+   },
+   "smolvla": {
+    "successful": 11,
+    "suboptimal": 0,
+    "failure": 19
+   }
+  },
+  "eye_drops_to_basket": {
+   "act": {
+    "successful": 19,
+    "suboptimal": 0,
+    "failure": 11
+   },
+   "diffusion": {
+    "successful": 13,
+    "suboptimal": 0,
+    "failure": 17
+   },
+   "grootn1.7": {
+    "successful": 20,
+    "suboptimal": 0,
+    "failure": 10
+   },
+   "molmoact2": {
+    "successful": 20,
+    "suboptimal": 0,
+    "failure": 40
+   },
+   "pi0": {
+    "successful": 21,
+    "suboptimal": 0,
+    "failure": 9
+   },
+   "pi0.5": {
+    "successful": 20,
+    "suboptimal": 0,
+    "failure": 10
+   },
+   "smolvla": {
+    "successful": 7,
+    "suboptimal": 0,
+    "failure": 23
+   }
+  },
+  "eye_drops_to_shelf": {
+   "act": {
+    "successful": 0,
+    "suboptimal": 0,
+    "failure": 60
+   },
+   "diffusion": {
+    "successful": 5,
+    "suboptimal": 0,
+    "failure": 25
+   },
+   "grootn1.7": {
+    "successful": 13,
+    "suboptimal": 0,
+    "failure": 17
+   },
+   "molmoact2": {
+    "successful": 14,
+    "suboptimal": 0,
+    "failure": 46
+   },
+   "pi0": {
+    "successful": 22,
+    "suboptimal": 0,
+    "failure": 7
+   },
+   "pi0.5": {
+    "successful": 21,
+    "suboptimal": 0,
+    "failure": 9
+   },
+   "smolvla": {
+    "successful": 4,
+    "suboptimal": 0,
+    "failure": 56
+   }
+  },
+  "ring_insert": {
+   "act": {
+    "successful": 15,
+    "suboptimal": 0,
+    "failure": 15
+   },
+   "diffusion": {
+    "successful": 7,
+    "suboptimal": 0,
+    "failure": 23
+   },
+   "grootn1.7": {
+    "successful": 18,
+    "suboptimal": 0,
+    "failure": 12
+   },
+   "molmoact2": {
+    "successful": 6,
+    "suboptimal": 0,
+    "failure": 54
+   },
+   "pi0": {
+    "successful": 5,
+    "suboptimal": 0,
+    "failure": 25
+   },
+   "pi0.5": {
+    "successful": 14,
+    "suboptimal": 0,
+    "failure": 16
+   },
+   "smolvla": {
+    "successful": 17,
+    "suboptimal": 0,
+    "failure": 28
+   }
+  },
+  "tool_insert": {
+   "act": {
+    "successful": 7,
+    "suboptimal": 9,
+    "failure": 44
+   },
+   "diffusion": {
+    "successful": 7,
+    "suboptimal": 3,
+    "failure": 20
+   },
+   "grootn1.7": {
+    "successful": 5,
+    "suboptimal": 10,
+    "failure": 15
+   },
+   "molmoact2": {
+    "successful": 5,
+    "suboptimal": 4,
+    "failure": 51
+   },
+   "pi0": {
+    "successful": 12,
+    "suboptimal": 4,
+    "failure": 14
+   },
+   "pi0.5": {
+    "successful": 16,
+    "suboptimal": 3,
+    "failure": 11
+   },
+   "smolvla": {
+    "successful": 2,
+    "suboptimal": 10,
+    "failure": 48
+   }
+  },
+  "tool_removal": {
+   "act": {
+    "successful": 8,
+    "suboptimal": 0,
+    "failure": 22
+   },
+   "diffusion": {
+    "successful": 19,
+    "suboptimal": 0,
+    "failure": 11
+   },
+   "grootn1.7": {
+    "successful": 9,
+    "suboptimal": 2,
+    "failure": 19
+   },
+   "molmoact2": {
+    "successful": 6,
+    "suboptimal": 3,
+    "failure": 51
+   },
+   "pi0": {
+    "successful": 3,
+    "suboptimal": 1,
+    "failure": 26
+   },
+   "pi0.5": {
+    "successful": 4,
+    "suboptimal": 2,
+    "failure": 24
+   },
+   "smolvla": {
+    "successful": 1,
+    "suboptimal": 1,
+    "failure": 28
+   }
+  }
+ }
+}
