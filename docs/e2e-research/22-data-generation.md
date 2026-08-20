@@ -176,7 +176,7 @@ on three real tasks — a weak claim form, rollout counts unknown. Neither
 enters the ranking until full-paper numbers are read.
 
 **7. Sim co-training.** Covered in
-[23-simulation-and-real2sim.md](23-simulation-and-real2sim.md) §D, including
+[23-simulation-and-real2sim.md](23-simulation-and-real2sim.md) §4, including
 the mixing-ratio landmine. Headline: **45.3% → 83.2%** average, and an
 off-the-shelf task-agnostic asset library gives **+31.5%** against **+35.8%**
 for hand-built scenes — so you do not have to build the assets.
@@ -338,7 +338,7 @@ In order, and the order is the point:
 6. **Only then, spatial augmentation** — DemoGen if you have depth, RoboSplat if
    you can build a multi-view rig. Both fit in 24 GB.
 7. **Sim co-training later**, and only with the mandatory ratio sweep from
-   [23](23-simulation-and-real2sim.md) §D.
+   [23](23-simulation-and-real2sim.md) §4.
 8. **Skip world-model generation entirely at this scale.**
 
 ---

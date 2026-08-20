@@ -13,7 +13,7 @@ where `robotiq` fits in it.
 > compute costs more than the robot. And the Tier 0 boundary turns out to be
 > worth far more than it looked — see [26-safety-and-regulation.md](26-safety-and-regulation.md).
 
-This document is the map. The eight that follow it are the territory:
+This document is the map. The twelve that follow it are the territory:
 
 | Doc | Field |
 |---|---|
@@ -25,6 +25,10 @@ This document is the map. The eight that follow it are the territory:
 | [25-deployment-and-fleet-ops.md](25-deployment-and-fleet-ops.md) | serving, logging, OTA, metrics |
 | [26-safety-and-regulation.md](26-safety-and-regulation.md) | what the law requires |
 | [27-open-questions.md](27-open-questions.md) | what we still do not know |
+| [28-wifi-on-the-chip.md](28-wifi-on-the-chip.md) | why the MCU stays tethered |
+| [29-the-company.md](29-the-company.md) | the business thesis and the value chain |
+| [30-the-pipeline.md](30-the-pipeline.md) | the product: twelve stages, three gates |
+| [31-defects.md](31-defects.md) | what review found wrong in all of the above |
 
 ---
 
@@ -141,10 +145,10 @@ Data does not flow one way. The thing that compounds is the loop.
 
 ```
    ┌──────────── real robot ──── system identification ────────┐
-   │            (see 23 §A: fit the simulator to THIS robot)   │
+   │            (see 23 §2: fit the simulator to THIS robot)   │
    │                                                            ▼
    │  real site ── scan + photograph ──────────────────► SIMULATOR
-   │            (23 §B: appearance from splats,           │
+   │            (23 §3: appearance from splats,           │
    │             collision hand-authored, mass                  │
    │             from a scale, friction from a tilt test)       │
    │                                                            │
@@ -178,7 +182,7 @@ Three things in that diagram are the difference between a system and a demo:
    reported at **10× the data efficiency**. See [21](21-data-collection.md).
 2. **Sim evaluation as the gate, real evaluation as the truth.** Sim eval
    correlates with reality better than a small sloppy real eval does — a genuinely
-   surprising result, with numbers in [23](23-simulation-and-real2sim.md) §E.
+   surprising result, with numbers in [23](23-simulation-and-real2sim.md) §5.
 3. **The sim/real gap is a live fleet metric, not a one-time calibration.** If
    the fitted model starts diverging from the robot, the robot has changed — a
    worn gearbox announces itself as a drifting fit.
@@ -202,15 +206,18 @@ the entire six months to arrive at a worse version of something free. The
 | Asset in the repo | Its role in the product |
 |---|---|
 | `CommandWatchdog`, `no_std`, `#![forbid(unsafe_code)]`, zero panics in the robot path | **L1 in the failover table**, and the deterministic safety layer that keeps the ML out of Notified Body assessment — see [26](26-safety-and-regulation.md) |
-| Record/replay with divergence checking (`crates/hil-host/src/wire.rs`) | **Two products**: the system-identification harness ([23](23-simulation-and-real2sim.md) §A) and the policy evaluation harness ([21](21-data-collection.md)) |
+| Record/replay with divergence checking (`crates/hil-host/src/wire.rs`) | **Two products**: the system-identification harness ([23](23-simulation-and-real2sim.md) §2) and the policy evaluation harness ([21](21-data-collection.md)) |
 | `RobotSpec` and its written provenance table (`crates/sim-core/src/spec.rs`) | **The parameter vector system identification writes into** — today four geometry numbers, eventually dynamics |
 | `tools/verify.sh`, `tools/check-docs.py`, `crates/hil-host/examples/chip_probe.rs`, the host-vs-silicon diff | **The technical file.** This is literally what a safety assessor or a customer's EHS lead asks to see |
 | The habit of shipping known mismatches as *failing tests* rather than TODOs | The reason the above is trustworthy |
 
 The missing piece that this research surfaced: **a servo temperature and current
-watchdog**. LeRobot does not have one — issue **#1319**, asking how to read
-servo temperature and load, was **closed "not planned" with no maintainer
-response**. It is required work for continuous operation, and it belongs exactly
+watchdog**. LeRobot does not have one — issue **#1319** (how to read servo
+temperature and load) was closed by a **stale-bot, not a maintainer decision**
+(the user did reply; see doc 24's correction), and an open **PR #3456**
+implements the reading. So the gap is real but narrower than "not planned":
+the primitives may land upstream, while the *watchdog policy* — what to do
+when the servo runs hot — remains unbuilt anywhere, and it belongs exactly
 where `CommandWatchdog` already lives. Details in
 [24-compute-and-hardware.md](24-compute-and-hardware.md).
 
@@ -240,4 +247,4 @@ rather than believe.
 - Real-Time Chunking: Physical Intelligence, **2026-06-09** — <https://www.pi.website/research/real_time_chunking>
 - LeRobot async inference: <https://huggingface.co/docs/lerobot/async>
 - Formant heartbeat pattern: Formant developer documentation
-- LeRobot issue #1319 (servo health telemetry, closed "not planned"): <https://github.com/huggingface/lerobot/issues/1319>
+- LeRobot issue #1319 (servo health telemetry; stale-bot closed, PR #3456 open): <https://github.com/huggingface/lerobot/issues/1319>

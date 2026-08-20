@@ -201,7 +201,7 @@ low-cost platforms" — their words, this doc's thesis). And **Squint** (arXiv
 **heavy domain randomization with no identification at all** (6–15 min
 training on one RTX 3090). Identify-first-randomise-second remains unclaimed —
 but the gap is being approached from both flanks, so the head start is months,
-not years. Re-verified the same day: seven MuJoCo releases past 3.5.0
+not years. Re-verified the same day: six MuJoCo releases past 3.5.0
 (→ 3.11.0), none touching sysid; `trs_so_arm100` in Menagerie unchanged; the
 IIT roster unchanged (HyQReal2 still unfinished). One useful addition in
 MuJoCo's unreleased changelog: a **PID actuator with integral action and
@@ -281,6 +281,17 @@ time per day**, or it is the wrong wedge for this hardware generation.
 ---
 
 ## 8. Smaller open items
+
+**Does MuJoCo Warp (and `mjwarp-render`) run under WSL2?** (filed 2026-08-23)
+Now the load-bearing infrastructure question, replacing the ManiSkill3-WSL
+finding whose force decayed when Gate A moved to MuJoCo
+([24 §1](24-compute-and-hardware.md)): the owned 3090 Ti lives under WSL, the
+corpus records ✅ only for CPU MuJoCo and MJX, and Warp's Vulkan/CUDA
+requirements under WSL are unrecorded anywhere in it. One afternoon on the
+owned machine settles it and decides whether dual-booting Ubuntu matters at
+all. Related and also unrecorded: whether a fitted model from ② runs under
+Warp's supported actuator subset, or falls back to CPU rollouts
+([30 §③](30-the-pipeline.md)).
 
 **Is π0.5 LoRA actually trainable on a 24 GB card?** **Updated 2026-08-15:**
 still unresolved, and the evidence tilts worse. openpi's README is unchanged

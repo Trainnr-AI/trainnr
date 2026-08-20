@@ -121,7 +121,7 @@ is already shaped for.
 
 ### Re-checked 2026-08-15: still unclaimed, but no longer untouched
 
-- **MuJoCo shipped seven releases past 3.5.0 (3.6.0 → 3.11.0, 2026-07-27) and
+- **MuJoCo shipped six releases past 3.5.0 (3.6.0 → 3.11.0, 2026-07-27) and
   none of them touch sysid** — the toolbox commits since March 2026 are
   stabilisation only. One unreleased changelog item matters for servo modelling:
   a **PID actuator with integral action and setpoint rate limiting**.
@@ -439,8 +439,9 @@ genuinely hard dexterous task. **A 24 GB card is sufficient.**
 ### Domain randomisation has been reframed, not retired
 
 Three independent lines say the same thing. ACDC: cousins beat twins **90% vs
-25%**, and the authors call cousin distributions *"implicit domain
-randomisation."* SplatSim: photorealistic rendering closes most of the visual
+25%** (the one-task IKEA cabinet result from §3, corroborated by SimFoundry's
+cousin gains in §5), and the authors call cousin distributions *"implicit
+domain randomisation."* SplatSim: photorealistic rendering closes most of the visual
 gap without visual randomisation. And co-training beats both.
 
 ### Co-training real + sim: the numbers, and the landmine
@@ -635,9 +636,15 @@ above. Reading it top-down:
 
 Four things this settles or adds:
 
-1. **OpenUSD is the interchange layer for the entire stack** — drawn above all
-   four pillars, feeding each. Our decision to make USD the sole interchange
-   format is the same one the industry's largest vendor has drawn.
+1. **OpenUSD is the interchange layer for NVIDIA's entire stack** — drawn
+   above all four pillars, feeding each. ⚠️ Our format decision is NOT that
+   one, and this line once claimed it was: the slide is a photograph of a
+   vendor's architecture, while reading both halves of the converter pipe
+   (the section below, with its four-item loss table) retracted "USD as the
+   sole interchange format" the same day it was written. The standing
+   decision is the **split**: **MJCF is canonical for the robot** (sensors,
+   cameras, defaults and actuators survive nowhere else), **USD for the
+   scene**, where composition arcs earn their keep.
 2. **Everything below Isaac is Apache-2.0**, on NVIDIA's own slide — Newton,
    MuJoCo and Warp all labelled Apache 2.0, Isaac labelled "Apache 2.0 / BSD".
    This independently corroborates the licence correction above; the lock-in
@@ -698,11 +705,15 @@ is there, and somebody thought hard about it.
 > checked for actuator count after import, not assumed.**
 
 **So USD buys file portability, not semantic portability** — the surviving 80%
-travels inside `mjcPhysics`, a plugin schema only MuJoCo reads. And it is not
-even a round trip: **no USD→MJCF converter exists**; the only return path is
-MuJoCo's importer, which the converter itself warns *"may alter Prim names,
-mesh topology, and other properties."* You do not get your MJCF back — you get
-*a* MJCF back.
+travels inside `mjcPhysics`, a plugin schema only MuJoCo reads. And the return
+trip is worse than lossy: the one third-party USD→MJCF converter that exists
+(`usd2mjcf`, Apache-2.0) emits `inertiafromgeom=True` with a literal
+`#TODO: Add Inertia` in its source — it **fabricates mass properties from
+geometry** instead of translating the authored ones, which for a pipeline
+whose product *is* measured dynamics is disqualifying. The only other return
+path is MuJoCo's own importer, which the converter itself warns *"may alter
+Prim names, mesh topology, and other properties."* You do not get your MJCF
+back — you get *a* MJCF back.
 
 **Composition arcs are the genuinely valuable part, and they answer our
 versioning needs natively:** variant sets express "same scene, three robot

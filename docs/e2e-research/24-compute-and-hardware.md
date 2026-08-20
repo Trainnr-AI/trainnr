@@ -9,9 +9,12 @@ exhausted; several store fetches were denied — those rows say so instead of
 silently keeping stale dates). One error in this doc's Jetson table was caught
 against its own cited source and corrected in place.
 
-> **TL;DR.** The owned 24 GB card removes the largest line item, **but
-> ManiSkill3's GPU simulation and rendering do not work under WSL** — dual-boot
-> Ubuntu before this bites in month four. **Do not buy a Jetson**: prices roughly
+> **TL;DR.** The owned 24 GB card removes the largest line item. The WSL
+> finding below has **narrowed** (2026-08-23): Gate A is now designed on
+> MuJoCo/MuJoCo Warp, not ManiSkill3, so what WSL provably blocks is only
+> reusing Squint's ManiSkill3 SO-101 task set — and **whether MuJoCo Warp
+> runs under WSL is now the load-bearing unrecorded question** (see §1).
+> **Do not buy a Jetson**: prices roughly
 > doubled on 2026-07-22, and a measured benchmark has SmolVLA running at
 > **1.35 Hz on a $3,499 AGX Orin**. Run the policy off-robot, which is what a
 > LeKiwi-class base is designed for. **Do not buy a depth camera** — every
@@ -20,7 +23,7 @@ against its own cited source and corrected in place.
 
 ---
 
-## 1. The WSL finding — actionable today
+## 1. The WSL finding — narrowed since it was written
 
 | Workload | Under WSL2? |
 |---|---|
@@ -38,14 +41,23 @@ reads: **"CPU Sim ✅ | GPU Sim ❌ | Rendering ❌"**. Windows is
 the underlying engine, and requires a Vulkan driver they say is best supported
 on *"linux machines with NVIDIA GPUs, with limited support on other systems."*
 
-Training and serving are unaffected. What is blocked is the **simulated
-evaluation** path — and
-[23-simulation-and-real2sim.md](23-simulation-and-real2sim.md) §5 argues that
-evaluation is worth more than sim training, because a good simulated benchmark
-predicts real performance better than a small real evaluation does.
+Training and serving are unaffected. When first written this was called "the
+single most actionable infrastructure finding," because ManiSkill3 was the
+presumed evaluation harness. **That premise is stale (2026-08-23): Gate A is
+built on MuJoCo, with MuJoCo Warp as the GPU path** — so what WSL provably
+blocks is now specifically **reusing Squint's ManiSkill3 SO-101 task set**,
+one candidate asset, not the evaluation path itself.
 
-**Recommendation: dual-boot native Ubuntu on that machine.** It is a few hours
-now. Discovering it in month four is weeks.
+⚠️ **The load-bearing question this table does not answer: does MuJoCo Warp
+(and `mjwarp-render`) run under WSL2?** Nothing in this corpus records it —
+the ✅ above covers CPU MuJoCo and MJX only. It is a one-afternoon experiment
+on the owned machine and it decides whether dual-boot matters at all. Filed
+in [27-open-questions.md](27-open-questions.md).
+
+**Recommendation, downgraded accordingly: dual-boot native Ubuntu remains the
+zero-risk position** (everything in the stack is Linux-first), but run the
+Warp-under-WSL experiment before spending the hours — if Warp works, WSL may
+be enough for everything this pipeline actually runs.
 
 ---
 
