@@ -54,6 +54,15 @@ class MuJoCoBackend:
         """For tests and generated models; same census rules apply."""
         self._model = self._mujoco.MjModel.from_xml_string(xml)
 
+    def load_spec(self, spec: Any) -> None:
+        """For MjSpec-composed scenes (task builders); same census rules.
+
+        Compiling here rather than accepting a compiled model keeps the
+        backend the single place models come alive — and the census gate
+        the single door they enter through.
+        """
+        self._model = spec.compile()
+
     def _require_model(self) -> Any:
         if self._model is None:
             raise RuntimeError("no model loaded — call load_mjcf first")
