@@ -141,17 +141,122 @@ def attach_arm(scene: Any, mount: Any, arm_xml: Path = DEFAULT_ARM_XML) -> None:
     # The arm's workspace lies along its OWN -y; rotate the mount so it
     # reaches along the car's +x (forward) — unrotated, it reaches
     # sideways, exits the support polygon, and the car rolls over.
+    # quat, not euler: add_frame accepted euler=... and silently applied
+    # no rotation at all (measured — the arm reached sideways while every
+    # probe assumed forward). Rz(+90 deg) as an explicit quaternion.
     frame = mount.add_frame(
         pos=[-0.05, 0, CHASSIS_SIZE[2]] if on_chassis else [0, 0, 0],
-        euler=[0, 0, 1.5708] if on_chassis else [0, 0, 0],
+        quat=[0.7071068, 0, 0, 0.7071068] if on_chassis else [1, 0, 0, 0],
     )
     frame.attach_body(arm.worldbody.first_body(), ARM_PREFIX, "")
+
+
+# The cargo tray: measured grasp pocket of the mounted arm, mapped by
+# probe (closed pads 2-3 centre on chassis-frame (0.090, 0.000) at cube
+# height). Low 6 mm walls confine the cube during driving; the jaw
+# grips the cube's upper half well above them.
+TRAY_CENTRE_X = 0.09
+# 4 mm to -y: the OPEN fixed-jaw pad descends at y +0.009..0.013, which
+# grazes a centred cube's +y edge (half-width 0.012) and nudges it out
+# of the pocket before the grip closes (measured — the first cargo probe
+# lost 7 mm of cube position during descent). Offset, the pad clears.
+TRAY_CENTRE_Y = -0.004
+TRAY_INNER_HALF = 0.0145
+TRAY_WALL_HALF = 0.003
+CUBE_HALF = 0.012
+# Deck-grasp waypoints, droop-compensated against the ACHIEVED pose
+# (same discipline as the table pick in so101.py).
+# The pick approaches with the base swung +0.06 rad so the fixed jaw
+# descends clear of the cube, then swings back at depth to straddle it
+# before the squeeze — a straight vertical descent cannot work here:
+# the open fixed pad and the cube's +y face are 1 mm apart at best
+# (measured across three probe rounds; -4 mm tray offset grazes,
+# -7 mm cannot pinch).
+DECK_HOVER = [0.06, -2.45, 2.6, 1.4, -1.571, 1.0]
+DECK_DESCEND = [0.06, -2.613, 3.14, 1.166, -1.571, 1.0]
+DECK_ALIGN = [0.0, -2.613, 3.14, 1.166, -1.571, 1.0]
+DECK_GRIP = [0.0, -2.613, 3.14, 1.166, -1.571, -0.15]
+# Carry lifts back ALONG the approach arc (the closed hover pose), then
+# presents modestly — the original wide swing to a far pose sheared the
+# cube out of the pinch.
+DECK_CARRY = [0.06, -2.45, 2.6, 1.4, -1.571, -0.15]
+DECK_PRESENT = [0.06, -2.1, 2.2, 1.35, -1.571, -0.15]
+
+# The probed pick-present-stow cycle: ramp between waypoints in order.
+# Measured end-to-end 2026-08-24: cube lifts to z 0.135, returns to
+# within 3 mm of tray centre. The jaw opens DURING the return ramp
+# (DECK_ALIGN carries jaw=1.0), which lowers the cube guided rather
+# than dropping it.
+DECK_PICK_SEQUENCE = (
+    (DECK_HOVER, 1.5),
+    (DECK_DESCEND, 1.5),
+    (DECK_ALIGN, 0.8),
+    (DECK_GRIP, 1.5),
+    (DECK_CARRY, 2.0),
+    (DECK_PRESENT, 2.0),
+    (DECK_CARRY, 1.5),
+    (DECK_ALIGN, 2.0),
+    (DECK_HOVER, 1.2),
+)
+
+
+def add_cargo(scene: Any) -> None:
+    """A walled tray on the front deck, with a cube resting in it."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    chassis = scene.body(f"{CAR_PREFIX}chassis")
+    wall = TRAY_INNER_HALF + TRAY_WALL_HALF
+    # The -y ("right") wall is HALF height: the moving jaw's closing
+    # sweep passes through that side, and a full wall blocks it — the
+    # grip then squeezes the cube against the wall instead of pinching
+    # it (measured: 5 N into the wall, zero moving-pad contact).
+    # Back wall is half-height too: the jaw's descent arc passes over
+    # its position and a full wall interrupts the descent 15 mm short of
+    # the cube (measured: 28-42 N of pad force pressing DOWN on the wall
+    # top, pads parked at x 0.074 against a cube at 0.089).
+    for label, dx, dy, sx, sy, sz in (
+        ("front", wall, 0.0, TRAY_WALL_HALF, wall, 0.003),
+        ("back", -wall, 0.0, TRAY_WALL_HALF, wall, 0.0015),
+        ("left", 0.0, wall, wall, TRAY_WALL_HALF, 0.003),
+        ("right", 0.0, -wall, wall, TRAY_WALL_HALF, 0.0015),
+    ):
+        chassis.add_geom(
+            name=f"{CAR_PREFIX}tray_{label}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[sx, sy, sz],
+            pos=[TRAY_CENTRE_X + dx, TRAY_CENTRE_Y + dy, CHASSIS_SIZE[2] + sz],
+            mass=0.005,
+            rgba=[0.25, 0.4, 0.7, 1.0],
+        )
+    cube = scene.worldbody.add_body(
+        name="cargo_cube",
+        pos=[
+            TRAY_CENTRE_X,
+            TRAY_CENTRE_Y,
+            CHASSIS_CLEARANCE + 2 * CHASSIS_SIZE[2] + CUBE_HALF,
+        ],
+    )
+    cube.add_freejoint()
+    # Grippy on purpose (foam-wrapped in spirit): contact friction
+    # combines by max, so the cube's own coefficients govern both the
+    # pad pinch and the tray floor. The torsional term matters — with
+    # the default 0.005 the pinched cube pivoted out of the narrow pad
+    # contact during the carry swing.
+    cube.add_geom(
+        name="cargo_cube_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=[CUBE_HALF, CUBE_HALF, 0.015],
+        mass=0.02,
+        friction=[2.0, 0.02, 0.001],
+        rgba=[0.85, 0.15, 0.15, 1.0],
+    )
 
 
 def compose(
     *,
     car: bool,
     arm: bool,
+    cargo: bool = False,
     arm_xml: Path = DEFAULT_ARM_XML,
 ) -> Any:
     """The assembly menu: car, arm, or the mobile manipulator.
@@ -167,6 +272,8 @@ def compose(
         (True, False): "rig-car",
         (False, True): "so101-standalone",
     }[(car, arm)]
+    if cargo and not (car and arm):
+        raise ValueError("cargo needs the mobile manipulator: car AND arm")
     scene = _base_scene(name)
     if car:
         chassis = add_car(scene)
@@ -174,4 +281,6 @@ def compose(
             attach_arm(scene, chassis, arm_xml)
     else:
         attach_arm(scene, scene.worldbody, arm_xml)
+    if cargo:
+        add_cargo(scene)
     return scene

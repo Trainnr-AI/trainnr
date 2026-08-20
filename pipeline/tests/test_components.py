@@ -76,5 +76,51 @@ class MobileManipulatorDrives(unittest.TestCase):
         self.assertLess(abs(2 * (w * y - z * x)), 0.05)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class CargoPick(unittest.TestCase):
+    def test_pick_present_stow_cycle(self) -> None:
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.components import (  # noqa: PLC0415
+            DECK_PICK_SEQUENCE,
+            TRAY_CENTRE_X,
+            TRAY_CENTRE_Y,
+            compose,
+        )
+
+        model = compose(car=True, arm=True, cargo=True).compile()
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        cube_z = 17  # qpos: chassis 7, wheels 2, arm 6, then cube xyz
+
+        def ramp(pose, seconds, previous):
+            for step in range(int(seconds * 500)):
+                alpha = min(1.0, step / 600)
+                if step % 10 == 0:
+                    blend = (1 - alpha) * np.array(previous) + alpha * np.array(pose)
+                    data.ctrl[:] = [0.0, 0.0, *blend]
+                mujoco.mj_step(model, data)
+            return pose
+
+        previous = ramp(CROUCH, 2.0, list(data.qpos[9:15]))
+        peak = 0.0
+        for pose, seconds in DECK_PICK_SEQUENCE:
+            previous = ramp(pose, seconds, previous)
+            peak = max(peak, float(data.qpos[cube_z]))
+        # The cube was genuinely airborne mid-cycle...
+        self.assertGreater(peak, 0.12)
+        # ...and came home to the tray, not the floor.
+        self.assertGreater(float(data.qpos[cube_z]), 0.08)
+        self.assertLess(abs(float(data.qpos[15]) - TRAY_CENTRE_X), 0.01)
+        self.assertLess(abs(float(data.qpos[16]) - TRAY_CENTRE_Y), 0.01)
+
+    def test_cargo_requires_the_mobile_manipulator(self) -> None:
+        from rq_pipeline.tasks.components import compose  # noqa: PLC0415
+
+        with self.assertRaises(ValueError):
+            compose(car=True, arm=False, cargo=True)
+
+
 if __name__ == "__main__":
     unittest.main()
