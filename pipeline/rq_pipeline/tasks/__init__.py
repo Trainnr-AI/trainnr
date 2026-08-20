@@ -7,6 +7,7 @@ the spec and the `EpisodeProtocol` together, because a success predicate
 divorced from the scene it judges is a bug waiting for a rename.
 """
 
+from rq_pipeline.tasks.components import add_car, attach_arm, compose
 from rq_pipeline.tasks.so101 import (
     SO101Task,
     build_lift,
@@ -17,8 +18,11 @@ from rq_pipeline.tasks.so101 import (
 
 __all__ = [
     "SO101Task",
+    "add_car",
+    "attach_arm",
     "build_lift",
     "build_reach",
+    "compose",
     "scripted_no_close",
     "scripted_pick",
 ]
