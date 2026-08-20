@@ -26,17 +26,17 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 
 | Stage | Package | Status |
 |---|---|---|
-| statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, 20 tests |
+| statistics under everything | `pipeline/rq_pipeline/stats/` | **built** — intervals + ranking, including the **exact permutation test** for n ≤ 8 policies (all n! pairings enumerated, no approximation — R2's fix) |
 | artifact identity | `pipeline/rq_pipeline/bundles/` | **built** — content hashing, `name@hash` stamps, and the **typed `RobotProfile`**: every robot constant (tick scale, camera fps, servo band) lives once in the bundle's `profile.json` with per-value provenance strings, loaded through a validating frozen dataclass — code and tests read named fields, never literals |
 | physics abstraction | `pipeline/rq_pipeline/physics/` | **built** — protocol + **MuJoCo adapter** (`mujoco.rollout` batched, census wired to the fail-loudly gate, gravity-verified; MuJoCo 3.11 with the sysid toolbox importable in-venv) |
 | ② onboard: model gates | `pipeline/rq_pipeline/robot/` | **built** — fail-loudly import census |
-| ② onboard: identification | `pipeline/rq_pipeline/robot/` | **built, and rehearsed end-to-end** — staged excitation, `mujoco.sysid` fit wrapper, identifiability report (NOT PINNED verdicts for unconstrainable parameters), plus the full Paper 0 rehearsal: true drivetrain → synthetic sweep → integer-tick wire degradation → `identify()` recovers gear ~2%/damping ~5% single-run. The first robot bundle skeleton lives at `robots/rig-drivetrain/` |
+| ② onboard: identification | `pipeline/rq_pipeline/robot/` | **built, and rehearsed end-to-end** — staged excitation, `mujoco.sysid` fit wrapper, identifiability report (NOT PINNED verdicts for unconstrainable parameters), plus the full Paper 0 rehearsal: true drivetrain → synthetic sweep → integer-tick wire degradation → `identify()` recovers gear ~2%/damping ~5% single-run. The first robot bundle skeleton lives at `robots/rig-drivetrain/`, and **fit records** (`robot/fit_record.py`) write each run's fit into the bundle's `fits/` — recording stamp and anchor statement required, cross-run spread reported beside per-run intervals |
 | ① scene ingestion | planned `rq_pipeline/scene` | scan QA gate, USD scene bundle, cousin substitution |
 | ④ collect | `pipeline/rq_pipeline/collect/` | **built end to end** — `.wire` reader (Rust-census conformance) → frame alignment (27 frames, 50 Hz-counter clock) → **LeRobot export** behind the `train` extra, roundtrip-tested: export, reload, shapes and the real wire clock all verified. The rig's own data can now feed a training run |
 | ⑤ curate | planned `rq_pipeline/curate` | PSD ranker first (needs nothing), rollout scoring later |
 | ⑥ expand | planned `rq_pipeline/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage |
 | ⑦ train | planned `rq_pipeline/train` | thin LeRobot wrappers, ACT first |
-| ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals); the `mujoco.rollout` harness that feeds it is next |
+| ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals, exact permutation p whenever n ≤ 8); the `mujoco.rollout` harness that feeds it is next |
 | ⑨ envelope | stays in `firmware/` | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
 ## 2.1 The two entry maps: where the ML enters, where the physics enters

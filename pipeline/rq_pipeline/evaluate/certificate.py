@@ -17,7 +17,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 from rq_pipeline.stats.intervals import clopper_pearson
-from rq_pipeline.stats.ranking import fisher_rank_ci, top_pick_probability
+from rq_pipeline.stats.ranking import (
+    EXACT_ENUMERATION_LIMIT,
+    exact_spearman_p,
+    fisher_rank_ci,
+    top_pick_probability,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,11 @@ class Certificate:
     rank_lower: float
     rank_upper: float
     policy_count: int
+    # Exact permutation p-value for the observed rank agreement, present
+    # whenever n is small enough to enumerate (n <= 8) — exactly the
+    # regime where asymptotic statements deserve the least trust. None
+    # means n was large enough that Fisher-z carries the claim alone.
+    exact_p_value: float | None
     top_pick: float
     gate_threshold: float
     gate_passed: bool
@@ -73,10 +83,15 @@ class Certificate:
 
     def summary(self) -> str:
         verdict = "PASS" if self.gate_passed else "FAIL"
+        significance = (
+            f", exact p={self.exact_p_value:.4f}"
+            if self.exact_p_value is not None
+            else ""
+        )
         return (
             f"{verdict}: rank lower bound {self.rank_lower:.3f} "
             f"(threshold {self.gate_threshold:.2f}, n={self.policy_count} "
-            f"policies), top-pick {self.top_pick:.2f} — "
+            f"policies{significance}), top-pick {self.top_pick:.2f} — "
             f"{self.robot_bundle} in {self.scene_bundle}"
         )
 
@@ -114,6 +129,11 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     rank_lower, rank_upper, policy_count = fisher_rank_ci(
         sim_scores, real_rates, confidence
     )
+    exact_p_value = (
+        exact_spearman_p(sim_scores, real_rates)[0]
+        if policy_count <= EXACT_ENUMERATION_LIMIT
+        else None
+    )
     top_pick = top_pick_probability(sim_scores, real_successes, real_trials)
 
     policies = tuple(
@@ -144,6 +164,7 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
         rank_lower=rank_lower,
         rank_upper=rank_upper,
         policy_count=policy_count,
+        exact_p_value=exact_p_value,
         top_pick=top_pick,
         gate_threshold=gate_threshold,
         gate_passed=rank_lower >= gate_threshold,

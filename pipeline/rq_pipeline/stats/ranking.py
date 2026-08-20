@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
+from itertools import permutations
 from math import atanh, sqrt, tanh
 
 from rq_pipeline.stats.intervals import normal_quantile
@@ -27,6 +28,15 @@ MINIMUM_POLICIES = 4
 # Spearman's Fisher-z standard error carries a 1.03 adjustment
 # (Caruso & Cliff) relative to Pearson's 1.0.
 _SPEARMAN_Z_INFLATION = 1.03
+
+# Up to 8 policies the full permutation distribution (8! = 40,320
+# orderings) is enumerable, so small-n significance needs no
+# approximation at all. Beyond that, Fisher-z carries the certificate.
+EXACT_ENUMERATION_LIMIT = 8
+
+# Guards float round-off when comparing a permuted rho against the
+# observed one — never a statistical fudge, only arithmetic slack.
+_RHO_COMPARISON_SLACK = 1e-12
 
 # atanh diverges at |r| = 1, and any fixed clamp would let the clamp
 # constant, not the data, set the bound at perfect observed agreement.
@@ -121,6 +131,56 @@ def fisher_rank_ci(
         tanh(z_score + half_width),
         policy_count,
     )
+
+
+def _rank_correlation(sim_ranks: Sequence[float], real_ranks: Sequence[float]) -> float:
+    """Pearson over already-computed ranks; variances known non-zero."""
+    count = len(sim_ranks)
+    sim_mean = sum(sim_ranks) / count
+    real_mean = sum(real_ranks) / count
+    covariance = sum(
+        (s - sim_mean) * (r - real_mean)
+        for s, r in zip(sim_ranks, real_ranks, strict=True)
+    )
+    sim_variance = sum((s - sim_mean) ** 2 for s in sim_ranks)
+    real_variance = sum((r - real_mean) ** 2 for r in real_ranks)
+    return covariance / sqrt(sim_variance * real_variance)
+
+
+def exact_spearman_p(
+    sim_scores: Sequence[float],
+    real_scores: Sequence[float],
+) -> tuple[float, int]:
+    """One-sided exact permutation p-value for positive rank association.
+
+    Under the null of no association, every pairing of the two observed
+    rank vectors is equally likely; enumerating all n! of them (n <= 8)
+    gives P(rho >= observed) with no approximation, no Fisher transform,
+    no discreteness cap. Ties are handled by conditioning on the observed
+    average-rank vectors. The smallest attainable p is 1/n! — at n = 5 a
+    perfect ranking earns exactly 1/120, which is the honest version of
+    what the bootstrap mis-reported as certainty.
+
+    Returns (p_value, policy_count). This answers "could the agreement
+    be luck?"; `fisher_rank_ci`'s lower bound answers "how strong is it
+    at worst?" — the gate needs the second, the certificate carries both.
+    """
+    observed = spearman(sim_scores, real_scores)  # validates lengths and n >= 3
+    policy_count = len(sim_scores)
+    if policy_count > EXACT_ENUMERATION_LIMIT:
+        raise ValueError(
+            f"exact enumeration is for n <= {EXACT_ENUMERATION_LIMIT} policies, "
+            f"got {policy_count} — use fisher_rank_ci there"
+        )
+    sim_ranks = _average_ranks(sim_scores)
+    real_ranks = _average_ranks(real_scores)
+    at_least_as_extreme = 0
+    total = 0
+    for permuted in permutations(sim_ranks):
+        total += 1
+        if _rank_correlation(permuted, real_ranks) >= observed - _RHO_COMPARISON_SLACK:
+            at_least_as_extreme += 1
+    return at_least_as_extreme / total, policy_count
 
 
 def bootstrap_rank_ci(

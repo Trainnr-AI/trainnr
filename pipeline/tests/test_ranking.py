@@ -1,9 +1,11 @@
 """Gate A statistics, including the lesson that created this module."""
 
 import unittest
+from math import factorial
 
 from rq_pipeline.stats.ranking import (
     bootstrap_rank_ci,
+    exact_spearman_p,
     fisher_rank_ci,
     spearman,
     top_pick_probability,
@@ -13,6 +15,36 @@ from rq_pipeline.stats.ranking import (
 # exactly (sum of squared rank differences = 2).
 SIM_FIVE = [0.1, 0.2, 0.3, 0.4, 0.5]
 REAL_FIVE_ONE_SWAP = [0.1, 0.2, 0.3, 0.5, 0.4]
+
+
+class ExactPermutation(unittest.TestCase):
+    def test_perfect_agreement_earns_exactly_one_over_n_factorial(self) -> None:
+        # The honest version of what the bootstrap once mis-reported as
+        # certainty: at n=5 a perfect ranking is evidence at p = 1/120,
+        # no more — exactly one of 120 pairings ties the observed rho.
+        p_value, count = exact_spearman_p(SIM_FIVE, [1.0, 2.0, 3.0, 4.0, 5.0])
+        self.assertEqual(count, 5)
+        self.assertAlmostEqual(p_value, 1.0 / factorial(5))
+
+    def test_one_swap_at_five_policies_hand_enumerable(self) -> None:
+        # rho = 0.9; permutations reaching rho >= 0.9 are the identity
+        # (1.0) and the four single adjacent swaps (0.9 each): 5/120.
+        p_value, _ = exact_spearman_p(SIM_FIVE, REAL_FIVE_ONE_SWAP)
+        self.assertAlmostEqual(p_value, 5.0 / factorial(5))
+
+    def test_reversal_is_no_evidence_of_positive_association(self) -> None:
+        p_value, _ = exact_spearman_p([1, 2, 3, 4], [40, 30, 20, 10])
+        self.assertEqual(p_value, 1.0)
+
+    def test_ties_are_conditioned_on_not_refused(self) -> None:
+        p_value, _ = exact_spearman_p([1, 2, 3, 4, 5], [1, 1, 2, 3, 4])
+        self.assertGreater(p_value, 0.0)
+        self.assertLessEqual(p_value, 1.0)
+
+    def test_beyond_enumeration_limit_refused(self) -> None:
+        nine = list(range(9))
+        with self.assertRaises(ValueError):
+            exact_spearman_p(nine, nine)
 
 
 class Spearman(unittest.TestCase):

@@ -1,0 +1,71 @@
+# R5's fix: the 7 gates used to run on exactly one laptop — the hook
+# itself warned about hooks that exist on one machine, then had the same
+# property. This mirrors tools/hooks/pre-commit (plus `cargo test`, which
+# the hook leaves to tools/verify.sh) on every push and PR, and runs the
+# heavier sim/train-extra suites weekly, where the multi-gigabyte torch
+# download is a schedule's problem instead of every contributor's.
+#
+# Deliberately NOT here: the emulator run, firmware cross-builds and wire
+# replays from tools/verify.sh — those stay pre-push, where the hardware
+# recordings and ~9-minute emulator belong.
+name: gates
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly extras run, Monday 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  fast-gates:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v5
+
+      - name: formatting
+        run: cargo fmt --all --check
+      - name: clippy (no errors)
+        # Same bar as the hook: errors block, warnings do not (yet).
+        run: "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
+      - name: unsafe still forbidden everywhere
+        run: python3 tools/check-unsafe-gates.py
+      - name: docs describe real code
+        run: python3 tools/check-docs.py
+      - name: cargo test
+        run: cargo test -q --workspace
+
+      - name: ruff format (pipeline)
+        run: uvx ruff format --check .
+        working-directory: pipeline
+      - name: ruff lint (pipeline)
+        run: uvx ruff check .
+        working-directory: pipeline
+      - name: python tests (pipeline, dependency-free core)
+        run: uv run python -m unittest discover -s tests
+        working-directory: pipeline
+
+  extras-weekly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: python tests with sim + train extras
+        # The full suite: mujoco.sysid rehearsal, physics census, the
+        # LeRobot export roundtrip. uv provisions Python 3.12 so the
+        # train extra's marker is satisfied.
+        run: |
+          uv python install 3.12
+          uv sync --python 3.12 --extra sim --extra train
+          uv run --python 3.12 python -m unittest discover -s tests -v
+        working-directory: pipeline

@@ -42,6 +42,9 @@ class CertifyEndToEnd(unittest.TestCase):
         self.assertEqual(certificate.physics_backend, "mujoco-3.11.0")
         self.assertEqual(certificate.policy_count, 12)
         self.assertGreaterEqual(certificate.rank_lower, GATE_THRESHOLD)
+        # Twelve policies exceed the 8-policy enumeration limit, so no
+        # exact p is claimed — Fisher-z carries the claim alone.
+        self.assertIsNone(certificate.exact_p_value)
         self.assertGreater(certificate.top_pick, 0.5)
         # Every policy carries its own real-side interval.
         for result in certificate.policies:
@@ -67,6 +70,13 @@ class CertifyEndToEnd(unittest.TestCase):
             )
         self.assertFalse(certificate.gate_passed)
         self.assertIn("FAIL", certificate.summary())
+        # The R2 fix: at n <= 8 the certificate carries the exact
+        # permutation p alongside the interval, and it says something the
+        # FAIL verdict does not — the agreement itself is real (small p),
+        # the sample is just too small to certify its strength.
+        self.assertIsNotNone(certificate.exact_p_value)
+        self.assertLess(certificate.exact_p_value, 0.05)
+        self.assertIn("exact p=", certificate.summary())
 
     def test_unstamped_bundle_refused(self) -> None:
         with self.assertRaises(ValueError) as caught:

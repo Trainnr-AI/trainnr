@@ -28,6 +28,15 @@ here must name the exact recording (`name@hash`) it was fitted from.
    `profile.json` is the one place the robot's numbers live.
 3. `rq_pipeline.robot.identify` fits the eight parameters and reports
    which are pinned.
+4. `rq_pipeline.robot.fit_record.write_fit_record(bundle_dir, result,
+   robot=..., recording=..., anchor=...)` lands the fit in this
+   directory's `fits/` as a committed artifact. The recording must be a
+   `name@hash` stamp and the anchor statement is mandatory (see the
+   torque-scale caveat below) — the writer refuses both omissions.
+   Repeat the sweep, record each run, and read
+   `fit_record.spread_summary(load_fit_records(bundle_dir))`: when the
+   cross-run spread exceeds the per-run intervals, the spread is the
+   number to report.
 
 ⚠️ Chase recordings cannot substitute for the sweep: the wire status
 carries one scalar duty, so the per-wheel split during turns is
