@@ -25,6 +25,7 @@ it is *supposed* to name things that were later removed.
 Usage:  python3 tools/check-docs.py
 """
 import re
+import posixpath
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,19 @@ HISTORY = "07-progress-log.md"
 PLACEHOLDERS = {"chase.perc", "run.wire", "mine.wire", "chase.pero", "x.rrd", "run.perc"}
 
 docs = sorted(list((ROOT / "docs").rglob("*.md")) + list(ROOT.glob("*.md")))
+
+# The universe of files a doc may name is what GIT TRACKS, not what this
+# laptop's filesystem holds. The filesystem version passed locally while
+# failing in CI the day a doc named a file inside a git-ignored clone —
+# a reference that was dead for every machine but one. (Caught by CI's
+# first ever run.)
+tracked = set(
+    subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True
+    ).stdout.splitlines()
+)
+tracked_basenames = {Path(p).name for p in tracked}
+
 source = subprocess.run(
     ["git", "grep", "-h", "", "--", "*.rs", "*.toml", "*.sh", "*.py", "*.ts"],
     cwd=ROOT, capture_output=True, text=True,
@@ -54,16 +68,18 @@ for doc in docs:
 
     # ---- 1. file paths ----
     for path in set(re.findall(r"`([A-Za-z0-9_./-]+\.(?:rs|toml|sh|py|md|ts|uf2))`", body)):
-        if path in PLACEHOLDERS or (ROOT / path).exists():
+        if path in PLACEHOLDERS or path in tracked:
             continue
-        # a bare basename mentioned in prose is fine if it exists anywhere
-        if list(ROOT.rglob(Path(path).name)):
+        # a bare basename mentioned in prose is fine if git tracks it anywhere
+        if Path(path).name in tracked_basenames:
             continue
         problems.append(f"{rel}: path does not exist: {path}")
 
     # ---- 2. markdown links to local files ----
     for link in set(re.findall(r"\]\(([A-Za-z0-9_./-]+\.(?:md|rs|sh|py|toml))\)", body)):
-        if (ROOT / link).exists() or (doc.parent / link).exists():
+        from_root = posixpath.normpath(link)
+        from_doc = posixpath.normpath(str(rel.parent / link))
+        if from_root in tracked or from_doc in tracked:
             continue
         problems.append(f"{rel}: link goes nowhere: {link}")
 
