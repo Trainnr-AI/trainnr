@@ -28,9 +28,15 @@ class RigBundleProfile(unittest.TestCase):
         self.assertEqual(profile.name, "rig-drivetrain")
         self.assertEqual(profile.model_file, "model.xml")
         self.assertTrue((RIG_BUNDLE / profile.model_file).exists())
-        # The unverified number must SAY it is unverified, in the file
-        # itself — the whole point of provenance-per-value.
-        self.assertIn("UNVERIFIED", profile.provenance["ticks_per_revolution"])
+        # Provenance-per-value doing its job, twice: this field shipped as
+        # an UNVERIFIED nominal 960.0 until the R13 investigation found
+        # the firmware's own doc recording a bench count of 4290 — the
+        # flag existed precisely so the number could not be quietly
+        # trusted. The provenance must still name its source and the
+        # pending re-verification.
+        self.assertEqual(profile.ticks_per_revolution, 4290.0)
+        self.assertIn("bench", profile.provenance["ticks_per_revolution"])
+        self.assertIn("re-verify", profile.provenance["ticks_per_revolution"])
 
 
 class Validation(unittest.TestCase):

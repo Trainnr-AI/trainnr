@@ -46,8 +46,12 @@ makes the two encoder streams two independent single-wheel experiments.
 ⚠️ `ticks_per_revolution` lives in `profile.json`, not in code, and is
 never fitted — it is degenerate with `gear` (both scale the output), so
 it must come from the encoder datasheet or a hand-count. The profile's
-`provenance` entry says which; right now it says **UNVERIFIED**, and the
-fit cannot be trusted until that word is replaced by a source.
+provenance entry proved its worth once already: the value shipped as an
+UNVERIFIED nominal 960.0 until the R13 investigation surfaced the
+firmware's own doc recording a **bench count of 4290** (pico-odom
+main.rs, which also notes its `RobotSpec` constant 1024.0 is wrong the
+same way). The profile now says 4290 with that source named — re-verify
+by hand count at the Paper 0 session before trusting any fit.
 
 ⚠️ **The torque scale is structurally unobservable from duty→angle data
 alone** — scaling `gear`, `damping`, `frictionloss` and `armature` by a
@@ -61,11 +65,20 @@ it is. Discovered by this repo's own rehearsal test, whose first run
 converged to 2× truth with a tight interval because the anchor was too
 small to see. Paper 0's protocol must state the anchor and its source.
 
-⚠️ **Quantization bias is systematic, and now measured.** Integer tick
-rounding of an integrated signal is *correlated* noise: the rehearsal
-recovered gear to ~2% but damping only to ~5% from a single sweep, and
-doubling the sweep from 12 s to 24 s barely moved it — the bias does not
-average away, and the iid-assuming intervals cannot cover it. Protocol
-consequences for Paper 0: expect ~5% single-run bias on damping-class
-parameters at 960 ticks/rev and 50 Hz; repeat runs; and report the
-spread across runs alongside the per-run intervals.
+⚠️ **The "quantization bias" finding was wrong, and the correction is a
+better finding (R13, 2026-08-23).** The rehearsal's ~2%/~5% systematic
+error survived unchanged when NOTHING was quantized — it was never
+quantization. It was a one-sample timestamp convention mismatch in the
+rehearsal's own synthesis: `mujoco.rollout`'s output row k belongs to
+time (k+1)·dt, and stamping it k·dt biased every parameter. With the
+wire-faithful convention (the firmware reports "ticks as of now, duty
+in force now", which matches `mujoco.sysid`'s pairing — verified
+empirically to recover truth to 0.00% on unquantized data), the true
+single-run floor is **~0.6% gear / ~0.5% damping / ~1.2% friction — and
+it is resolution-independent** (identical at 960 and 4096 ticks/rev),
+so finer encoders buy accuracy nothing here; the residual is integer
+duty and boundary effects. Protocol consequences stand in amended form:
+**timestamp conventions are a first-class part of the instrument** —
+state them, test them against a known-truth rollout, and only then
+fit; and repeat runs still, because real hardware has noise no
+rehearsal synthesizes.

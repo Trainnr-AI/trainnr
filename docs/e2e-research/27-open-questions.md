@@ -211,6 +211,25 @@ So the question is not "can this be done" but specifically: *does parametric
 identification converge on a machine with backlash, no torque feedback and a
 plastic gearbox?*
 
+**The nonlinearity budget now has numbers (added 2026-08-23).** From a
+third-party bench test of one STS3215-12V (operator-supplied video summary,
+not archived — re-grade when linked):
+
+| Quantity | Measured | Against |
+|---|---|---|
+| Encoder resolution | 12-bit, 4,096 counts/rev = **0.088°/count** | 4.3× finer than the rig drivetrain's 960 ticks/rev — Paper 0's ~2%/~5% quantization bias should shrink accordingly |
+| Backlash | **0.0151 rad ≈ 0.87°** (~10 counts) | ~2× the < 0.5° datasheet spec |
+| Firmware dead zone | **10 encoder counts ≈ 0.88°** | motions inside it are *invisible to the encoder output by firmware choice*, not physics |
+| Repeatability | ±0.17° (~2 counts) on a 10 cm arm | the effective noise floor |
+| Low-speed behaviour | ~7% speed fluctuation with oscillation | velocity-dependent, matters for chirp design |
+| Overload governor | throttles to **~20% of rated torque** at ~2/3 rated load | **a hidden actuator clamp: any excitation that crosses it poisons the fit silently** |
+
+Consequence for the sub-questions below: backlash and the dead zone stack to
+**~1.7–1.8° of nonlinearity — a 20-count blind band against 0.088° resolution**
+— so excitation amplitudes must dwarf it, and the deadband question is now
+two questions (mechanical backlash AND a firmware dead zone, different
+mechanisms, similar magnitude, both ~10 counts).
+
 **Specific sub-questions:**
 - Is **backlash** capturable as a combination of joint damping, `armature` and
   friction loss, or does it need an explicit model?

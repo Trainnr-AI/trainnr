@@ -241,6 +241,26 @@ actuator. Supporting evidence, all weak individually and consistent in direction
 **No quantitative failure-rate or gear-wear data exists. Anyone who gives you a
 number is making it up.**
 
+**One bench test now exists (added 2026-08-23), and it puts numbers on the
+thermal assessment below.** Evidence grade: operator-supplied summary of a
+third-party video bench test, **single STS3215-12V unit**, video not archived
+— re-grade when linked. What it measured:
+
+- **Continuous duty at half rated torque already heats**: 10 minutes of
+  cycling at 1.5 kg on a 10 cm arm (15 kg·cm, half the 30 kg·cm rating) gave a
+  **+15 °C rise**; 1.0 kg (one third rated) cycled clean.
+- **The overload governor trips at ~2/3 of rated torque**: 2.0 kg on the same
+  arm (20 kg·cm) triggered built-in protection that **throttles output to
+  ~20% of rated** — so the 30 kg·cm figure is a peak, not an operating point,
+  and the *continuous* envelope is realistically ≤ half rated.
+- Stall pushed ~35 kg·cm (above rating), measured speed ~46 RPM vs 45 rated —
+  the headline specs are honest; the *duty* behind them is what the datasheet
+  never says.
+
+This is one unit and one video, so the MTBF/failure-rate claim above stands —
+but the shape it supports is exactly the assessment below: the thermal
+envelope, not the gearset, is the binding constraint.
+
 ⚠️ *Assessment, not a sourced claim:* the dominant failure mode is thermal
 rather than gear wear, and it will hit **joint 2 (shoulder lift)** first, because
 that motor holds the entire arm's static weight continuously — a stationary

@@ -75,7 +75,18 @@ class AdapterOnTheChaseFixture(unittest.TestCase):
 class PaperZeroRehearsal(unittest.TestCase):
     def _synthesize_sweep(self):
         """Simulate the bench sweep on a TRUE drivetrain, then degrade to
-        exactly what the wire carries: integer ticks, integer duty."""
+        exactly what the wire carries: integer ticks, integer duty.
+
+        The wire-faithful convention is load-bearing (R13): the firmware
+        reports "ticks as of now, duty in force now", so status seq k
+        must carry the rollout output produced BY step k — sensordata
+        row k-1, stamped one sample after the control that caused it,
+        with a rest row first. This test's original synthesis stamped
+        rollout rows one sample early, and the resulting ~2%/~5%
+        systematic error spent a week in the docs blamed on tick
+        quantization; re-measured with nothing quantized, the bias was
+        unchanged — it was this timestamp convention all along.
+        """
         import mujoco  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
         from mujoco import rollout  # noqa: PLC0415
@@ -103,15 +114,26 @@ class PaperZeroRehearsal(unittest.TestCase):
         radians = sensordata[0]  # (n, 2): left, right
 
         radians_per_tick = tau / RIG.ticks_per_revolution
-        ticks = np.rint(radians / radians_per_tick).astype(int)
-        statuses = [
+        at_rest = StatusFrame(
+            seq=1000,
+            x=0.0,
+            y=0.0,
+            heading=0.0,
+            ticks_left=0,
+            ticks_right=0,
+            errors_left=0,
+            errors_right=0,
+            duty_percent=int(duty[0]),
+            stalled=False,
+        )
+        statuses = [at_rest] + [
             StatusFrame(
-                seq=1000 + step,
+                seq=1001 + step,
                 x=0.0,
                 y=0.0,
                 heading=0.0,
-                ticks_left=int(ticks[step, 0]),
-                ticks_right=int(ticks[step, 1]),
+                ticks_left=int(np.rint(radians[step, 0] / radians_per_tick)),
+                ticks_right=int(np.rint(radians[step, 1] / radians_per_tick)),
                 errors_left=0,
                 errors_right=0,
                 duty_percent=int(duty[step]),
@@ -169,17 +191,18 @@ class PaperZeroRehearsal(unittest.TestCase):
             self.assertTrue(
                 fitted.pinned, f"{name} should be pinned:\n{result.summary()}"
             )
-            # Measured by this test's own runs, and now pinned as the
-            # rehearsal's finding: tick quantization of an integrated
-            # signal is CORRELATED noise, giving a SYSTEMATIC single-run
-            # bias (~2% on gear, ~5% on damping at 12 s; barely improved
-            # at 24 s) that iid-assuming intervals cannot cover. So the
-            # honest gate is 8% relative accuracy with pinned verdicts —
-            # and Paper 0's protocol repeats runs rather than trusting
-            # one interval, with these numbers as the ceiling to beat.
+            # R13 re-measured this gate: with the wire-faithful synthesis
+            # the residual bias is ~0.6% gear / ~0.5% damping / ~1.2%
+            # friction — and it is RESOLUTION-INDEPENDENT (identical at
+            # 960 and 4096 ticks/rev), so it is boundary/rounding effects
+            # of integer duty and the rest-row assumption, not tick
+            # quantization. The gate is 2%: comfortably above the
+            # measured floor, 4x tighter than the old 8% that was really
+            # covering a synthesis timestamp bug. Paper 0 still repeats
+            # runs — real hardware has noise sources no rehearsal does.
             self.assertLessEqual(
                 abs(fitted.estimate - truth),
-                max(0.08 * truth, 3.0 * fitted.half_width),
+                max(0.02 * truth, 3.0 * fitted.half_width),
                 f"{name} estimate {fitted.estimate} vs truth {truth}",
             )
 
