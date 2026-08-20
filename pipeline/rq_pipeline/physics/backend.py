@@ -32,6 +32,20 @@ class PhysicsBackend(Protocol):
     ) -> Sequence[Sequence[Sequence[float]]]:
         """Batched state trajectories; one entry per initial state."""
 
+    def closed_loop_rollout(
+        self,
+        initial_state: Sequence[float],
+        policy: object,
+        steps: int,
+        control_interval: int,
+    ) -> tuple[object, object]:
+        """One episode driven by a policy observing the model's SENSORS.
+
+        `policy(step_index, sensordata) -> control vector`, held for
+        `control_interval` physics steps — policies run slower than
+        physics, and they see what the instrument's sensors report, never
+        privileged state. Returns (states, sensor_history)."""
+
 
 class ModelCounts:
     """What the loaded model actually contains, for fail-loudly gates."""

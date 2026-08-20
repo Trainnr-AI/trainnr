@@ -36,7 +36,7 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | ⑤ curate | planned `rq_pipeline/curate` | PSD ranker first (needs nothing), rollout scoring later |
 | ⑥ expand | planned `rq_pipeline/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage |
 | ⑦ train | planned `rq_pipeline/train` | thin LeRobot wrappers, ACT first |
-| ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals, exact permutation p whenever n ≤ 8); the `mujoco.rollout` harness that feeds it is next |
+| ③/⑧ evaluate | `pipeline/rq_pipeline/evaluate/` | **built end to end** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals, exact permutation p whenever n ≤ 8) **and the harness that feeds it** (`harness.py`): census-gated closed-loop episodes, paired trials across policies, sensors-only observations, exact-join to real outcomes by name. The whole Gate A chain runs in one test: four policies → sim ranking → join → honest FAIL at n=4 with exact p = 1/24 |
 | ⑨ envelope | stays in `firmware/` | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
 ## 2.1 The two entry maps: where the ML enters, where the physics enters

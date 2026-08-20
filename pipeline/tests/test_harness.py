@@ -1,0 +1,183 @@
+"""Gate A end to end in simulation: policies → scores → join → certificate.
+
+A gravity-loaded pendulum must be swung to a target angle. Four scripted
+policies of visibly different competence are scored under the identical
+paired-trial protocol; their sim ranking must come out in competence
+order, and the joined certificate must behave the way the statistics
+promise at n=4: honest FAIL on the interval gate, small exact p.
+"""
+
+import importlib.util
+import unittest
+
+MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+
+PENDULUM = """
+<mujoco>
+  <option timestep="0.01" gravity="0 0 -9.81"/>
+  <worldbody>
+    <body>
+      <joint name="arm" type="hinge" axis="0 1 0" damping="0.02"/>
+      <geom type="capsule" fromto="0 0 0  0.3 0 0" size="0.02" mass="0.2"/>
+    </body>
+  </worldbody>
+  <actuator><motor joint="arm" gear="1"/></actuator>
+  <sensor><jointpos joint="arm"/><jointvel joint="arm"/></sensor>
+</mujoco>
+"""
+
+INERT_SCENE = """
+<mujoco>
+  <worldbody><geom type="plane" size="1 1 0.1"/></worldbody>
+</mujoco>
+"""
+
+TARGET_ANGLE = 0.8
+TOLERANCE = 0.15
+# Gravity torque scale at horizontal: mass x g x lever of the capsule's
+# centre of mass. Used by the compensating policies below.
+_MGL = 0.2 * 9.81 * 0.15
+# FULLPHYSICS state layout is [time, qpos..., qvel..., act...]; index 1 is
+# the single hinge's angle.
+_QPOS_INDEX = 1
+
+
+def _pd_controller(kp: float, kd: float, gravity_comp: float = 1.0):
+    """PD over the two sensors (angle, velocity) plus gravity feedforward.
+
+    Pure P at these inertias is sampled-data unstable at useful gains
+    (measured by this suite's own first run: kp=3 held for 5 physics
+    steps diverged to 1e6 rad) — which is itself a small argument for
+    the harness: the instability only appears because policies run at
+    control rate, not physics rate, exactly like the real loop.
+    """
+    from math import cos  # noqa: PLC0415
+
+    def act(step, sensordata):
+        angle, velocity = sensordata[0], sensordata[1]
+        return [
+            kp * (TARGET_ANGLE - angle)
+            - kd * velocity
+            - gravity_comp * _MGL * cos(angle)
+        ]
+
+    return act
+
+
+def _perturb(trial, home):
+    initial = home.copy()
+    initial[_QPOS_INDEX] = -0.3 + 0.15 * trial
+    return initial
+
+
+def _settled_near_target(states, sensors):
+    tail = sensors[-50:, 0]
+    return bool(abs(tail.mean() - TARGET_ANGLE) < TOLERANCE)
+
+
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class GateAInSimulation(unittest.TestCase):
+    def _scores(self):
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            EpisodeProtocol,
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        # Competence order by proportional gain: with identical gravity
+        # feedforward, weaker kp converges slower, so fewer of the paired
+        # starts settle within the episode. Probed 2026-08-23: 6/3/1/0
+        # successes out of 6.
+        policies = [
+            SimPolicy("tuned", _pd_controller(2.0, 0.3)),
+            SimPolicy("soft", _pd_controller(0.25, 0.35)),
+            SimPolicy("sluggish", _pd_controller(0.17, 0.35)),
+            SimPolicy("reversed", _pd_controller(-0.8, 0.3, gravity_comp=0.0)),
+        ]
+        protocol = EpisodeProtocol(
+            trials=6,
+            steps=250,
+            control_interval=5,
+            perturb=_perturb,
+            success=_settled_near_target,
+        )
+        return evaluate_policies(
+            backend, policies, protocol, source="pendulum-test@000000000000"
+        )
+
+    def test_ranking_matches_competence_and_certificate_is_honest(self) -> None:
+        from rq_pipeline.evaluate.certificate import certify  # noqa: PLC0415
+        from rq_pipeline.evaluate.harness import join_with_real  # noqa: PLC0415
+
+        scores = self._scores()
+        by_name = {score.name: score.score for score in scores}
+        self.assertEqual(by_name["tuned"], 1.0)
+        self.assertEqual(by_name["reversed"], 0.0)
+        self.assertGreater(by_name["tuned"], by_name["soft"])
+        self.assertGreater(by_name["soft"], by_name["sluggish"])
+        self.assertGreater(by_name["sluggish"], by_name["reversed"])
+
+        real = {
+            "tuned": (44, 50),
+            "soft": (31, 50),
+            "sluggish": (18, 50),
+            "reversed": (4, 50),
+        }
+        certificate = certify(
+            robot_bundle="pendulum-test@000000000000",
+            scene_bundle="bench@000000000000",
+            outcomes=join_with_real(scores, real),
+            gate_threshold=0.5,
+            physics_backend="mujoco-cpu",
+        )
+        # Four policies in perfect agreement: the interval gate must still
+        # FAIL (n=4 cannot certify strength), while the exact permutation
+        # p says the agreement itself is unlikely to be luck (1/24).
+        self.assertFalse(certificate.gate_passed)
+        self.assertAlmostEqual(certificate.exact_p_value, 1.0 / 24.0)
+        self.assertGreater(certificate.top_pick, 0.5)
+
+    def test_dead_model_is_refused_before_any_episode(self) -> None:
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            EpisodeProtocol,
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.robot.model_checks import DeadModelError  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(INERT_SCENE)
+        protocol = EpisodeProtocol(
+            trials=1,
+            steps=10,
+            control_interval=1,
+            perturb=lambda _trial, home: home,
+            success=lambda _states, _sensors: True,
+        )
+        with self.assertRaises(DeadModelError):
+            evaluate_policies(
+                backend,
+                [SimPolicy("any", lambda _step, _sense: [])],
+                protocol,
+                source="inert@000000000000",
+            )
+
+    def test_mismatched_policy_sets_are_refused(self) -> None:
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            SimScore,
+            join_with_real,
+        )
+
+        scores = [SimScore("a", 5, 10), SimScore("b", 3, 10)]
+        with self.assertRaises(ValueError):
+            join_with_real(scores, {"a": (5, 10)})
+        with self.assertRaises(ValueError):
+            join_with_real(scores, {"a": (5, 10), "b": (3, 10), "c": (1, 10)})
+
+
+if __name__ == "__main__":
+    unittest.main()

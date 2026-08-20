@@ -103,3 +103,54 @@ class MuJoCoBackend:
         data = mujoco.MjData(model)
         state, _sensordata = mj_rollout.rollout(model, data, initial, control)
         return state
+
+    def closed_loop_rollout(
+        self,
+        initial_state: numpy.ndarray,
+        policy: Any,
+        steps: int,
+        control_interval: int,
+    ) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """One policy-in-the-loop episode; see the protocol docstring.
+
+        The policy observes `data.sensordata` (a copy — it cannot write
+        into the simulator) and its control is clamped to nothing: what
+        it commands is what the actuators get, exactly like the wire.
+        """
+        mujoco = self._mujoco
+        import numpy as np  # noqa: PLC0415
+
+        model = self._require_model()
+        if steps <= 0 or control_interval <= 0:
+            raise ValueError(
+                f"steps and control_interval must be positive, got "
+                f"{steps} and {control_interval}"
+            )
+        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        initial = np.asarray(initial_state, dtype=float)
+        if initial.shape != (size,):
+            raise ValueError(
+                f"initial_state must have shape ({size},), got {initial.shape}"
+            )
+        data = mujoco.MjData(model)
+        mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        # Populate sensordata for the policy's first observation.
+        mujoco.mj_forward(model, data)
+
+        states = np.empty((steps, size))
+        sensors = np.empty((steps, model.nsensordata))
+        for step in range(steps):
+            if step % control_interval == 0:
+                control = np.asarray(policy(step, data.sensordata.copy()), dtype=float)
+                if control.shape != (model.nu,):
+                    raise ValueError(
+                        f"policy returned control of shape {control.shape}, "
+                        f"model has {model.nu} actuators"
+                    )
+                data.ctrl[:] = control
+            mujoco.mj_step(model, data)
+            sensors[step] = data.sensordata
+            mujoco.mj_getState(
+                model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
+            )
+        return states, sensors
