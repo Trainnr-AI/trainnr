@@ -11,6 +11,11 @@
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 source "$HOME/.cargo/env" 2>/dev/null || true
+# The clippy gate below greps for lines STARTING with "error". CI's
+# shakedown proved forced cargo colors defeat that grep (the ANSI prefix
+# hides the word) — a build failure then sails through the gate. Same
+# guard CI uses, applied here.
+export CARGO_TERM_COLOR=never
 
 fail=0
 gate() {

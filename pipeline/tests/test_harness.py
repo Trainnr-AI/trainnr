@@ -45,11 +45,14 @@ _QPOS_INDEX = 1
 def _pd_controller(kp: float, kd: float, gravity_comp: float = 1.0):
     """PD over the two sensors (angle, velocity) plus gravity feedforward.
 
-    Pure P at these inertias is sampled-data unstable at useful gains
-    (measured by this suite's own first run: kp=3 held for 5 physics
-    steps diverged to 1e6 rad) — which is itself a small argument for
-    the harness: the instability only appears because policies run at
-    control rate, not physics rate, exactly like the real loop.
+    Gains are chosen for DISCRETE-loop stability: a velocity gain held
+    for T=50 ms on inertia I=0.006 multiplies velocity by (1 - kd*T/I)
+    per control tick, so kd must stay below I/T = 0.12. This suite
+    learned that twice: its first run showed pure P at kp=3 diverging
+    to 1e6 rad, and the fourth review (R7) found its original kd=0.3
+    design was only stable BECAUSE of the one-tick sensor-lag bug —
+    fixing the lag exposed the genuinely unstable controller. Sampled
+    dynamics are exactly the fidelity the harness exists to capture.
     """
     from math import cos  # noqa: PLC0415
 
@@ -89,17 +92,17 @@ class GateAInSimulation(unittest.TestCase):
         backend.load_mjcf_string(PENDULUM)
         # Competence order by proportional gain: with identical gravity
         # feedforward, weaker kp converges slower, so fewer of the paired
-        # starts settle within the episode. Probed 2026-08-23: 6/3/1/0
-        # successes out of 6.
+        # starts settle within the episode. Probed with aligned
+        # observations 2026-08-23: 6/2/1/0 successes out of 6.
         policies = [
-            SimPolicy("tuned", _pd_controller(2.0, 0.3)),
-            SimPolicy("soft", _pd_controller(0.25, 0.35)),
-            SimPolicy("sluggish", _pd_controller(0.17, 0.35)),
-            SimPolicy("reversed", _pd_controller(-0.8, 0.3, gravity_comp=0.0)),
+            SimPolicy("tuned", _pd_controller(1.0, 0.08)),
+            SimPolicy("soft", _pd_controller(0.13, 0.10)),
+            SimPolicy("sluggish", _pd_controller(0.10, 0.10)),
+            SimPolicy("reversed", _pd_controller(-0.8, 0.08, gravity_comp=0.0)),
         ]
         protocol = EpisodeProtocol(
             trials=6,
-            steps=250,
+            steps=150,
             control_interval=5,
             perturb=_perturb,
             success=_settled_near_target,

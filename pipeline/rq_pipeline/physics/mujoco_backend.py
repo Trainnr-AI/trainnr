@@ -149,6 +149,15 @@ class MuJoCoBackend:
                     )
                 data.ctrl[:] = control
             mujoco.mj_step(model, data)
+            # mj_step leaves sensordata evaluated at the PRE-integration
+            # state; recompute so sensors[k] and states[k] describe the
+            # same instant and the policy's next observation is fresh.
+            # Measured by this suite's fourth review (R7): without this,
+            # every recording carried an accidental one-physics-tick
+            # sensor lag nobody chose. Latency, when we model it, will be
+            # an explicit fitted parameter (mujoco.sysid fits sensor
+            # delays), never a side effect of the stepping loop.
+            mujoco.mj_forward(model, data)
             sensors[step] = data.sensordata
             mujoco.mj_getState(
                 model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
