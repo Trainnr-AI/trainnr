@@ -1,0 +1,25 @@
+<mujoco model="so101_nominal">
+  <!-- The bundle's canonical model: Menagerie's so_arm100.xml UNMODIFIED
+       (its provenance is the point — this is the NOMINAL condition of
+       Paper 2, the file the field actually downloads), plus the one
+       thing the evaluation harness cannot work without and the upstream
+       file does not carry: sensors. Policies observe sensordata only,
+       so a sensorless robot is unusable by contract, and the census
+       gate would rightly refuse it. -->
+  <include file="so_arm100.xml"/>
+
+  <sensor>
+    <jointpos name="Rotation_pos" joint="Rotation"/>
+    <jointpos name="Pitch_pos" joint="Pitch"/>
+    <jointpos name="Elbow_pos" joint="Elbow"/>
+    <jointpos name="Wrist_Pitch_pos" joint="Wrist_Pitch"/>
+    <jointpos name="Wrist_Roll_pos" joint="Wrist_Roll"/>
+    <jointpos name="Jaw_pos" joint="Jaw"/>
+    <jointvel name="Rotation_vel" joint="Rotation"/>
+    <jointvel name="Pitch_vel" joint="Pitch"/>
+    <jointvel name="Elbow_vel" joint="Elbow"/>
+    <jointvel name="Wrist_Pitch_vel" joint="Wrist_Pitch"/>
+    <jointvel name="Wrist_Roll_vel" joint="Wrist_Roll"/>
+    <jointvel name="Jaw_vel" joint="Jaw"/>
+  </sensor>
+</mujoco>
