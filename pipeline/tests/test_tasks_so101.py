@@ -100,5 +100,42 @@ class LiftTask(unittest.TestCase):
         self.assertEqual(by_name["limp"], 0.0)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class StackTask(unittest.TestCase):
+    def test_graded_stack_ladder(self) -> None:
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.tasks.so101 import (  # noqa: PLC0415
+            build_stack,
+            scripted_no_close,
+            scripted_stack,
+            scripted_stack_no_release,
+        )
+
+        task = build_stack()
+        backend = MuJoCoBackend()
+        backend.load_spec(task.spec)
+        scores = evaluate_policies(
+            backend,
+            [
+                SimPolicy("stack", scripted_stack),
+                SimPolicy("no-release", scripted_stack_no_release),
+                SimPolicy("no-close", scripted_no_close),
+            ],
+            task.protocol,
+            source="so101-stack@000000000000",
+        )
+        by_name = {score.name: score.score for score in scores}
+        # The measured catch basin covers the whole +-2 mm jitter grid
+        # (9/9), so the scripted stacker must go clear; carrying without
+        # releasing, or never gripping, must never count as a stack.
+        self.assertEqual(by_name["stack"], 1.0)
+        self.assertEqual(by_name["no-release"], 0.0)
+        self.assertEqual(by_name["no-close"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

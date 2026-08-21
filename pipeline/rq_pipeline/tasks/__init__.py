@@ -12,8 +12,11 @@ from rq_pipeline.tasks.so101 import (
     SO101Task,
     build_lift,
     build_reach,
+    build_stack,
     scripted_no_close,
     scripted_pick,
+    scripted_stack,
+    scripted_stack_no_release,
 )
 
 __all__ = [
@@ -22,7 +25,10 @@ __all__ = [
     "attach_arm",
     "build_lift",
     "build_reach",
+    "build_stack",
     "compose",
     "scripted_no_close",
     "scripted_pick",
+    "scripted_stack",
+    "scripted_stack_no_release",
 ]

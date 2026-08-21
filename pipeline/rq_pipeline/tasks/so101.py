@@ -238,3 +238,125 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             success=success,
         ),
     )
+
+
+# --------------------------------------------------------------- stack --
+
+# block_stack: pick cube A from the measured pocket, swing the base by
+# _STACK_PHI, and DROP it onto cube B. Three measured facts shape the
+# script (2026-08-24):
+#
+# - Near the table the arm has NO steady state above the surface — every
+#   hover/descend-family command sags to table contact within ~2 s at
+#   the nominal kp=50, so a "lower gently and release" place cannot
+#   exist; the working release is a controlled ~4 cm drop from the
+#   carry pose.
+# - B's position is the MEASURED landing point of that drop
+#   ((0.082, -0.203)), the same probe-first discipline as every pocket.
+# - The retract after release must pull UP along the carry arc: a
+#   hover-family retract sweeps low and demolishes the fresh stack
+#   (measured: 0/9 with a bigger B, debris at 50-70 mm — every "drop
+#   miss" in the first grid was actually a demolition). With the high
+#   retract the stack survives 9/9 across +-2 mm pick jitter.
+_CUBE_B_HOME = (0.082, -0.203, 0.015)
+_CUBE_B_HALF = 0.014
+_STACK_PHI = 0.5
+_STACK_STEPS = 3600
+_STACKED_HEIGHT_M = 0.038
+_STACK_HORIZ_TOLERANCE_M = _CUBE_B_HALF + 0.002
+_B_SETTLE_TOLERANCE_M = 0.006
+# State indices (time + arm 6 + A free 7 + B free 7):
+CUBE_A_STATE_SLICE = slice(7, 10)
+CUBE_B_STATE_SLICE = slice(14, 17)
+
+# Stack phase boundaries (physics steps): pick through 1400, then carry
+# up, two staged base sub-swings (a single 0.5 rad jump whips the cube
+# out of the pinch — measured), release, retract high.
+_STACK_CARRY_AT = 1400
+_STACK_SWING_HALF_AT = 1900
+_STACK_SWING_FULL_AT = 2200
+_STACK_RELEASE_AT = 2600
+_STACK_RETURN_AT = 3200
+
+_STACK_CARRY = [0.0, -1.57, 1.57, 1.57, -1.571, -0.15]
+_STACK_RELEASE = [_STACK_PHI, -1.57, 1.57, 1.57, -1.571, 1.3]
+_STACK_RETURN = [0.0, -1.57, 1.57, 1.57, -1.571, 1.3]
+
+
+def scripted_stack(step: int, sensordata: Any) -> Any:
+    """Pick A, staged base swing over B, open, retract high."""
+    if step < _STACK_CARRY_AT:
+        return scripted_pick(step, sensordata)
+    if step < _STACK_SWING_HALF_AT:
+        return _STACK_CARRY
+    if step < _STACK_SWING_FULL_AT:
+        return [_STACK_PHI / 2, *_STACK_CARRY[1:]]
+    if step < _STACK_RELEASE_AT:
+        return [_STACK_PHI, *_STACK_CARRY[1:]]
+    if step < _STACK_RETURN_AT:
+        return _STACK_RELEASE
+    return _STACK_RETURN
+
+
+def scripted_stack_no_release(step: int, sensordata: Any) -> Any:
+    """Carries A over B but never opens — the graded near-miss."""
+    control = list(scripted_stack(step, sensordata))
+    control[5] = -0.15
+    return control
+
+
+def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+    """block_stack: cube A ends resting ON cube B, B undisturbed."""
+    import mujoco  # noqa: PLC0415 - sim extra
+    import numpy as np  # noqa: PLC0415
+
+    scene = _scene_with_arm("so101-stack", arm_xml)
+    cube_a = scene.worldbody.add_body(name="cube_a", pos=list(_CUBE_HOME))
+    cube_a.add_freejoint()
+    cube_a.add_geom(
+        name="cube_a_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=list(_CUBE_HALF),
+        mass=0.02,
+        friction=[2.0, 0.02, 0.001],
+        rgba=[0.85, 0.15, 0.15, 1.0],
+    )
+    cube_b = scene.worldbody.add_body(name="cube_b", pos=list(_CUBE_B_HOME))
+    cube_b.add_freejoint()
+    cube_b.add_geom(
+        name="cube_b_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=[_CUBE_B_HALF, _CUBE_B_HALF, 0.015],
+        mass=0.06,
+        friction=[2.0, 0.02, 0.001],
+        rgba=[0.15, 0.35, 0.85, 1.0],
+    )
+
+    def perturb(trial: int, home: Any) -> Any:
+        initial = home.copy()
+        initial[CUBE_A_STATE_SLICE.start] += -0.002 + 0.002 * (trial % 3)
+        initial[CUBE_A_STATE_SLICE.start + 1] += -0.002 + 0.002 * (trial % 2) * 2
+        return initial
+
+    def success(states: Any, sensors: Any) -> bool:
+        tail = states[-_HOLD_STEPS:]
+        a = tail[:, CUBE_A_STATE_SLICE]
+        b = tail[:, CUBE_B_STATE_SLICE]
+        horizontal = np.linalg.norm(a[:, :2] - b[:, :2], axis=1)
+        return bool(
+            a[:, 2].min() > _STACKED_HEIGHT_M
+            and horizontal.max() < _STACK_HORIZ_TOLERANCE_M
+            and abs(b[:, 2] - _CUBE_B_HOME[2]).max() < _B_SETTLE_TOLERANCE_M
+        )
+
+    return SO101Task(
+        name="block_stack",
+        spec=scene,
+        protocol=EpisodeProtocol(
+            trials=_TRIALS,
+            steps=_STACK_STEPS,
+            control_interval=_CONTROL_INTERVAL,
+            perturb=perturb,
+            success=success,
+        ),
+    )
