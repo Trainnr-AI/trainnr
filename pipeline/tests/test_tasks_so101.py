@@ -137,5 +137,41 @@ class StackTask(unittest.TestCase):
         self.assertEqual(by_name["no-close"], 0.0)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class InsertTask(unittest.TestCase):
+    def test_graded_insert_ladder(self) -> None:
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.tasks.so101 import (  # noqa: PLC0415
+            build_insert,
+            scripted_insert,
+            scripted_insert_no_release,
+            scripted_no_close,
+        )
+
+        task = build_insert()
+        backend = MuJoCoBackend()
+        backend.load_spec(task.spec)
+        scores = evaluate_policies(
+            backend,
+            [
+                SimPolicy("insert", scripted_insert),
+                SimPolicy("no-release", scripted_insert_no_release),
+                SimPolicy("no-close", scripted_no_close),
+            ],
+            task.protocol,
+            source="so101-insert@000000000000",
+        )
+        by_name = {score.name: score.score for score in scores}
+        # 9/9 across the jitter grid in the sizing probes; the pocket's
+        # +-6 mm clearance is the task's precision axis.
+        self.assertEqual(by_name["insert"], 1.0)
+        self.assertEqual(by_name["no-release"], 0.0)
+        self.assertEqual(by_name["no-close"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

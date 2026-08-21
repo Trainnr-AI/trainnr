@@ -360,3 +360,88 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             success=success,
         ),
     )
+
+
+# -------------------------------------------------------------- insert --
+
+# tool_insert analogue: the same pick-swing-drop delivers cube A into a
+# walled pocket instead of onto a block. Pocket centred on the measured
+# free-fall landing point (scatter across the pick-jitter grid is only
+# 5 x 4 mm); walls are LOW on purpose — 24 mm walls let the cube cock
+# against their tops and perch (3/9), 12 mm walls seat it 9/9. The
+# pocket's inner clearance is the task's precision: +-6 mm.
+_SLOT_CENTRE = (0.085, -0.209)
+_SLOT_INNER = (0.018, 0.017)  # half-extents of the pocket cavity
+_SLOT_WALL_THICKNESS = 0.004
+_SLOT_WALL_HALF_HEIGHT = 0.006
+_INSERT_SEATED_Z_M = 0.019
+_INSERT_MARGIN_M = 0.010
+
+# The reference insert policy IS the stack script: same pick, same
+# swing, same drop — the scene decides whether that lands on a block or
+# into a pocket. One behaviour, two tasks, exactly how a real policy
+# gets evaluated across a suite.
+scripted_insert = scripted_stack
+scripted_insert_no_release = scripted_stack_no_release
+
+
+def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+    """tool_insert: cube A seated inside the pocket, flat on the table."""
+    import mujoco  # noqa: PLC0415 - sim extra
+    import numpy as np  # noqa: PLC0415
+
+    scene = _scene_with_arm("so101-insert", arm_xml)
+    cube_a = scene.worldbody.add_body(name="cube_a", pos=list(_CUBE_HOME))
+    cube_a.add_freejoint()
+    cube_a.add_geom(
+        name="cube_a_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=list(_CUBE_HALF),
+        mass=0.02,
+        friction=[2.0, 0.02, 0.001],
+        rgba=[0.85, 0.15, 0.15, 1.0],
+    )
+    centre_x, centre_y = _SLOT_CENTRE
+    inner_x, inner_y = _SLOT_INNER
+    thickness = _SLOT_WALL_THICKNESS
+    for label, dx, dy, sx, sy in (
+        ("north", 0.0, inner_y + thickness, inner_x + 2 * thickness, thickness),
+        ("south", 0.0, -(inner_y + thickness), inner_x + 2 * thickness, thickness),
+        ("east", inner_x + thickness, 0.0, thickness, inner_y),
+        ("west", -(inner_x + thickness), 0.0, thickness, inner_y),
+    ):
+        scene.worldbody.add_geom(
+            name=f"slot_{label}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[sx, sy, _SLOT_WALL_HALF_HEIGHT],
+            pos=[centre_x + dx, centre_y + dy, _SLOT_WALL_HALF_HEIGHT],
+            rgba=[0.3, 0.3, 0.35, 1.0],
+        )
+
+    def perturb(trial: int, home: Any) -> Any:
+        initial = home.copy()
+        initial[CUBE_A_STATE_SLICE.start] += -0.002 + 0.002 * (trial % 3)
+        initial[CUBE_A_STATE_SLICE.start + 1] += -0.002 + 0.002 * (trial % 2) * 2
+        return initial
+
+    def success(states: Any, sensors: Any) -> bool:
+        tail = states[-_HOLD_STEPS:, CUBE_A_STATE_SLICE]
+        return bool(
+            np.abs(tail[:, 0] - centre_x).max()
+            < inner_x - _CUBE_HALF[0] + _INSERT_MARGIN_M
+            and np.abs(tail[:, 1] - centre_y).max()
+            < inner_y - _CUBE_HALF[1] + _INSERT_MARGIN_M
+            and tail[:, 2].max() < _INSERT_SEATED_Z_M
+        )
+
+    return SO101Task(
+        name="tool_insert",
+        spec=scene,
+        protocol=EpisodeProtocol(
+            trials=_TRIALS,
+            steps=_STACK_STEPS,
+            control_interval=_CONTROL_INTERVAL,
+            perturb=perturb,
+            success=success,
+        ),
+    )
