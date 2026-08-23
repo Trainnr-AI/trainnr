@@ -15,11 +15,26 @@ Provenance rules of the house apply: the bundle is addressed as
 `rig-drivetrain@hash` via `rq_pipeline.bundles.stamp`, and any fit recorded
 here must name the exact recording (`name@hash`) it was fitted from.
 
-## The data path (ready; waiting on one rig session)
+## Session 2026-08-24: the first real fits are in `fits/`
+
+Three sweeps (b, c, d), ratio-form fits — see the anchor note inside
+each record. Findings, all live in docs/07 and the paper draft queue:
+the torque scale is unobservable exactly as the rehearsal predicted
+(the ~2 ms motor defeats the armature anchor at 50 Hz), the ratio
+`gear/damping` pins at ~1.5% per run, and **cross-run spread (5.6%
+left, 14.6% right) dominates every per-run interval** — per-wheel and
+run-level, not explained by battery alone. Encoder decode errors are
+speed-correlated (~0.7% of transitions at full speed).
+
+## The data path (proven on hardware 2026-08-24)
 
 1. Flash the default `pico-odom` build (the calibration sweep — not
-   teleop, not chase) and record it: `rig_view /dev/tty.usbmodemXX
-   --record recordings/sweep-<date>.wire`.
+   teleop, not chase) and record it:
+   `cargo run -p hil-host -- --serial /dev/cu.usbmodemXX --record
+   recordings/sweep-<date>.wire`. The sweep waits for the host to
+   connect before it moves. **Wheels off the ground** — the model is
+   the bench configuration, and the first live session proved a ground
+   run is unusable (and drives the car off the desk).
 2. `rq_pipeline.collect.excitation.drivetrain_excitation(recording,
    profile)` turns the recording into `ExcitationData` (times from the
    50 Hz status counter; both wheels' commanded duty; encoder ticks

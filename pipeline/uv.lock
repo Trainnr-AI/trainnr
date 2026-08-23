@@ -2637,6 +2637,25 @@ wheels = [
 ]
 
 [[package]]
+name = "rerun-sdk"
+version = "0.36.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "psutil" },
+    { name = "pyarrow" },
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/cd/b6889ca236ee678f1647c699d2d648a20fe15a81a23abec3ce5647b9b2c0/rerun_sdk-0.36.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:6e5c052ce81cb5b0c6e72730edb3e0f2eca97b4b607d08ac4d0f42c2cde2a319", size = 147515678, upload-time = "2026-08-21T16:48:06.019Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/56/3fda522118a012acbff390f85d4c0332e56e54ed54b6802abaa1109264ba/rerun_sdk-0.36.2-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:dcbfc53d2e8b5acac87487b3e1011fe04885c02ac5aa181a38d4dc43355fa183", size = 157787400, upload-time = "2026-08-21T16:48:14.063Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/66/9c3e574c6c359a2a58af9fed67dad7895e507eb37fb4967d9203eb1a4006/rerun_sdk-0.36.2-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:4870263016b8d97d88563a247c3981dcd7b439f431b7fe99e0ea99243585f53a", size = 163004149, upload-time = "2026-08-21T16:48:21.778Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/4d/f4e6204bb1ba64b124cbb50a899f3c8a10debc0dc611a284cc50404e6fdd/rerun_sdk-0.36.2-cp310-abi3-win_amd64.whl", hash = "sha256:d7c73d60f02ca6d52ffd55fa633e1ba76ff162b5f85d8ab19115aaf3fe54f550", size = 140645647, upload-time = "2026-08-21T16:48:28.794Z" },
+]
+
+[[package]]
 name = "rq-pipeline"
 version = "0.1.0"
 source = { editable = "." }
@@ -2651,14 +2670,18 @@ sim = [
 train = [
     { name = "lerobot", extra = ["dataset"], marker = "python_full_version >= '3.12'" },
 ]
+viz = [
+    { name = "rerun-sdk" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "lerobot", extras = ["dataset"], marker = "python_full_version >= '3.12' and extra == 'train'", specifier = ">=0.6.1" },
     { name = "mujoco", extras = ["sysid"], marker = "extra == 'sim'", specifier = ">=3.5" },
     { name = "mujoco-warp", marker = "extra == 'gpu'" },
+    { name = "rerun-sdk", marker = "extra == 'viz'", specifier = ">=0.20" },
 ]
-provides-extras = ["sim", "train", "gpu"]
+provides-extras = ["sim", "train", "gpu", "viz"]
 
 [[package]]
 name = "safetensors"

@@ -193,15 +193,35 @@ def _record_note(recording: Recording, payload: str) -> None:
         recording.plain_notes.append(payload)
 
 
+def _strip_direction(line: str, recording: Recording) -> str | None:
+    """Normalize `hil-host --record`'s direction-prefixed transcript.
+
+    `<` marks device→host lines, `>` host→device commands; the older
+    capture path wrote bare lines. Discovered on Paper 0's first live
+    sweep (2026-08-24), when every status line of a fresh recording
+    would have counted as unparsable. Host commands are kept as events —
+    they are part of the run's provenance — but carry no telemetry, so
+    the caller gets None for them.
+    """
+    if line.startswith(">"):
+        recording.events.append(("host", len(recording.plain_notes)))
+        recording.plain_notes.append(line)
+        return None
+    if line.startswith("<"):
+        line = line[1:].lstrip()
+    return line or None
+
+
 def parse_recording(path: Path) -> Recording:
     """Classify every line of a `.wire` file, mirroring `rig_replay` exactly."""
     recording = Recording()
     open_image: tuple[int, int, list[tuple[int, ...]]] | None = None
 
     for raw_line in Path(path).read_text(errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line:
+        stripped = _strip_direction(raw_line.strip(), recording)
+        if not stripped:
             continue
+        line = stripped
 
         dimensions = parse_image_header(line)
         if dimensions is not None:

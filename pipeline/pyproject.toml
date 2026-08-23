@@ -17,7 +17,8 @@ license = { text = "FSL-1.1-ALv2" }
 [project.optional-dependencies]
 sim = ["mujoco[sysid]>=3.5"]
 train = ["lerobot[dataset]>=0.6.1; python_version >= '3.12'"]
-gpu = ["mujoco-warp"]  # NVIDIA GPU required
+gpu = ["mujoco-warp"]
+viz = ["rerun-sdk>=0.20"]  # NVIDIA GPU required
 
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]

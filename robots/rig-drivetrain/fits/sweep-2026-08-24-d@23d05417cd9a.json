@@ -1,0 +1,44 @@
+{
+  "robot": "rig-drivetrain",
+  "recording": "sweep-2026-08-24-d@23d05417cd9a",
+  "anchor": "RATIO FIT: damping FIXED at 1e-3 as the scale reference, because the torque scale is structurally unobservable at 50 Hz for this ~2 ms motor (the armature anchor cannot bite; confirmed live 2026-08-24 when free bounds sent every parameter NOT PINNED). gear and frictionloss are per-unit-damping. Measurement sign flipped (+duty drives -ticks, DRIVETRAIN_SIGN). ticks/rev 4290 per profile.json, hand-count pending.",
+  "confidence": 0.95,
+  "parameters": [
+    {
+      "name": "scale_ref_damping",
+      "estimate": 0.001,
+      "half_width": Infinity,
+      "allowed_range": 1.9999999999998318e-06,
+      "pinned": false
+    },
+    {
+      "name": "left_gear_per_damp",
+      "estimate": 5.998815962521376e-05,
+      "half_width": 6.528947447471892e-07,
+      "allowed_range": 0.00099,
+      "pinned": true
+    },
+    {
+      "name": "left_fric_per_damp",
+      "estimate": 0.00012726513506281032,
+      "half_width": 3.6339661251549284e-05,
+      "allowed_range": 0.005,
+      "pinned": true
+    },
+    {
+      "name": "right_gear_per_damp",
+      "estimate": 6.859429815181139e-05,
+      "half_width": 5.585356551836868e-07,
+      "allowed_range": 0.00099,
+      "pinned": true
+    },
+    {
+      "name": "right_fric_per_damp",
+      "estimate": 0.0007828657053289962,
+      "half_width": 3.219671808206913e-05,
+      "allowed_range": 0.005,
+      "pinned": true
+    }
+  ],
+  "created_utc": "2026-08-23T19:28:42.829151+00:00"
+}
