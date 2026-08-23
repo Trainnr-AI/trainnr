@@ -48,11 +48,22 @@ use pca9685_driver::{Channel, SERVO_FRAME_HZ};
 /// screw it down. From then on 1500 = that pose, permanently. The spline
 /// seats in ~18° steps; the remainder becomes a per-joint trim constant,
 /// which is software's job, not a reason to lever a powered horn.
-const ASSEMBLY_CENTRE: bool = false;
+const ASSEMBLY_CENTRE: bool = true;
 
 /// Channels held during assembly — the full five-joint arm, not just the
 /// three servos currently on hand, so the MG90S get the same jig.
 const ASSEMBLY_CHANNELS: usize = 5;
+
+/// With [`ASSEMBLY_CENTRE`], `true` runs the gentle per-joint exercise
+/// after the initial centre hold instead of holding forever.
+const ASSEMBLY_EXERCISE: bool = true;
+
+/// Exercise amplitude around centre. ±150 µs ≈ ±13°: enough to see every
+/// joint move both ways, nowhere near any mechanical stop.
+const EXERCISE_US: i32 = 150;
+
+/// Per-40 ms slew step during the exercise — ~9°/s at the horn.
+const EXERCISE_STEP_US: i32 = 4;
 
 /// Bring-up lever: `true` restores the blind lockstep sweep that proved
 /// the servos on 2026-08-15. Kept for the same reason the camera keeps
@@ -190,17 +201,50 @@ pub async fn run(bus: I2c<'static, I2C0, Async>) {
     }
 }
 
-/// Hold every assembly channel at centre, forever. The horns go on here.
+/// Hold every assembly channel at centre — then, if the exercise flag
+/// is up, gently wave each joint in turn: the assembled arm's first
+/// commanded motion. One joint at a time, ±EXERCISE_US around centre,
+/// slewed in small steps — slow enough to grab the power lead if a
+/// linkage binds, small enough that nothing can reach a hard stop.
 async fn centre_hold(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
-    let pulses = [CENTRE_US as u32; ASSEMBLY_CHANNELS];
+    let mut pulses = [CENTRE_US as u32; ASSEMBLY_CHANNELS];
     let Ok(first) = Channel::new(0) else { return };
     if driver.set_pulses(first, &pulses).await.is_err() {
         crate::diag::note("# servo bus error — centre hold failed");
         return;
     }
+    if !ASSEMBLY_EXERCISE {
+        loop {
+            crate::diag::note(
+                "# servo ASSEMBLY MODE — ch0-4 held at 1500us, attach horns now",
+            );
+            Timer::after_millis(5000).await;
+        }
+    }
+    Timer::after_millis(3000).await;
     loop {
-        crate::diag::note("# servo ASSEMBLY MODE — ch0-4 held at 1500us, attach horns now");
-        Timer::after_millis(5000).await;
+        for joint in 0..ASSEMBLY_CHANNELS {
+            crate::diag::note("# servo EXERCISE — next joint");
+            // centre -> +EXERCISE_US -> -EXERCISE_US -> centre, slewed.
+            let centre = CENTRE_US as i32;
+            for target in [centre + EXERCISE_US, centre - EXERCISE_US, centre] {
+                loop {
+                    let now = pulses[joint] as i32;
+                    let step = (target - now).clamp(-EXERCISE_STEP_US, EXERCISE_STEP_US);
+                    if step == 0 {
+                        break;
+                    }
+                    pulses[joint] = (now + step) as u32;
+                    if driver.set_pulses(first, &pulses).await.is_err() {
+                        crate::diag::note("# servo bus error — exercise aborted");
+                        return;
+                    }
+                    Timer::after_millis(40).await;
+                }
+                Timer::after_millis(600).await;
+            }
+        }
+        Timer::after_millis(2000).await;
     }
 }
 
