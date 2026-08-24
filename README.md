@@ -1,412 +1,154 @@
-# robotiq
+# robotiq — a measurement instrument for robots
 
-A Rust-first journey from zero hardware knowledge to autonomous robots.
+We fit the dynamics of *your* robot — motor by motor, unit by unit — and
+report every parameter with a confidence interval and an honesty
+verdict: **pinned**, or **NOT PINNED** with the reason. The output is a
+hash-stamped robot bundle a simulator can load and a certificate can
+cite. Where the field ships one copied guess, we ship a measurement — or
+an explicit admission that the data cannot support one.
 
-## Vision
+## The first artifact
 
-Build robots end-to-end in Rust — starting from a simulated robot on a laptop and
-climbing, stage by stage, to real machines: simple toys, robot pets, and eventually
-autonomous working machines (inspection rovers, delivery pods, autonomous service
-vehicles) driven by Vision-Language-Action (VLA) models.
+**Ours** — from a real fit of this repo's own drivetrain
+([`robots/rig-drivetrain/fits/`](robots/rig-drivetrain/fits/)):
 
-The end goal is **end-to-end Rust**, but the learning path deliberately touches the
-whole ecosystem — C++ (the incumbent), Python (the ML/training side), Rust (the
-backbone), and WebAssembly (UIs, digital twins, sandboxed robot behaviors) — because
-real robotics work means interoperating with all of them.
+```
+scale_ref_damping        0.001    ± unbounded   [NOT PINNED]  FIXED anchor, not estimated
+left_gear_per_damp    5.98e-05    ± 2.1e-06     [pinned]
+right_gear_per_damp   6.08e-05    ± 2.1e-06     [pinned]
 
-## Operator background
+anchor: RATIO FIT: damping FIXED at 1e-3 as the scale reference, because
+the torque scale is structurally unobservable at 50 Hz for this ~2 ms
+motor (confirmed live 2026-08-24 when free bounds sent every parameter
+NOT PINNED).
 
-Strong software engineer. New to hardware and electronics. Learning by building:
-every stage must produce something that actually runs.
+CROSS-RUN VERDICT: right_gear estimates span 14.9% across three runs
+against ~3% per-run intervals — spread EXCEEDS intervals; trust the
+spread.  (fits/SPREAD.json — the verdict is an artifact, not prose.)
+```
 
-## The staged roadmap
+**The field** — the SO-101 constants shipped by two companies, read in
+their own trees (docs/e2e-research/30 §3.3–3.4): `kp=17.8, damping=0.60`
+— one guess for six different joints, byte-identical across both repos;
+the same vendor's own two repos disagree on the same arm by 56× in
+stiffness. No intervals, no verdicts, no anchor, anywhere.
 
-| Stage | What | Where it runs | Cost | Teaches |
-|-------|------|--------------|------|---------|
-| 0 | 2D simulated differential-drive robot | Laptop (Rust) | $0 | Control loops, PID, kinematics, odometry, state machines |
-| 1 | Perception pipeline with webcam | Laptop (Rust) | $0 | Vision models, perception→decision→action pipeline |
-| 2 | First microcontroller firmware | Pico 2 / ESP32 | ~$10–30 | GPIO, PWM, I2C/SPI, motors, electronics basics |
-| 3 | First real mobile robot | Chassis + MCU + laptop brain | ~$100–150 | Real-world control, drift, sensor noise, teleop→autonomy |
-| 4 | Onboard AI compute | Pi 5 + Hailo, or Jetson Orin Nano | ~$110–400 | Two-tier architecture, onboard perception, SLAM |
-| 5 | Arm + VLA | SO-101 leader+follower pair | ~$300–450 | Teleop data collection, VLA fine-tuning, language-conditioned action |
+Ours says NOT PINNED where it cannot know. Theirs never says it
+anywhere. **Possession of the robot is not identification of the robot.**
 
-Each stage reuses the previous stage's code. The Stage 0 simulator remains the
-permanent test bed — real robotics teams work exactly this way.
+## What the instrument is
 
-The product ladder — toy → pet → inspection rover → delivery pod — is Stages 3→5,
-then the same two-tier architecture (real-time microcontroller + AI compute) scaled
-up with safety, redundancy, and better actuators.
+[`pipeline/`](pipeline/README.md) is the product
+([architecture](docs/22-pipeline-architecture.md)): typed measurement
+bundles with `name@hash` identity ([`robots/`](robots/rig-drivetrain/README.md));
+identification wrapped thin over `mujoco.sysid` with intervals and
+pinned/NOT-PINNED verdicts (`rq_pipeline.robot.identify`); a fit-record
+writer that **refuses** a fit without its recording hash and anchor
+statement (`rq_pipeline.robot.fit_record`); exact small-n statistics
+with no dependencies, so a signed report is recomputable anywhere
+(`rq_pipeline.stats`); and an evaluation harness whose certificates gate
+on the *lower* confidence bound (`rq_pipeline.evaluate`).
 
-## Ecosystem map (who plays what)
+Reproduce the flagship measurement in one command, no hardware — the
+committed sweep recordings are the input, and the report is the product:
 
-- **C++** — the incumbent. ROS 2 core, Gazebo, sensor drivers, OpenCV/PCL, Autoware.
-  We need reading fluency and FFI/interop skills, not authorship.
-- **Python** — the glue and the ML side. PyTorch, LeRobot, and every VLA training
-  pipeline. Robots run Rust; their brains are *trained* in Python.
-- **Rust** — the backbone. `embassy` (microcontrollers), Zenoh (middleware, an
-  official ROS 2 transport), dora-rs (Rust-native dataflow), `candle`/`ort`/`burn`
-  (inference), Rerun (visualization).
-- **WebAssembly** — teleop dashboards and monitoring UIs (Rust→Wasm), browser-based
-  digital twins, and sandboxed hot-swappable behavior plugins on the robot itself.
+```sh
+cd pipeline && uv sync --extra sim
+uv run --extra sim python ../tools/fit-report.py ../robots/rig-drivetrain
+```
 
-Strategy: build our own stack Rust-native (dora-rs / Zenoh) as the main line, with
-one deliberate detour through vanilla ROS 2 (Python/C++) around Stage 3 — it is the
-industry lingua franca and every sensor assumes it.
+To measure **your** robot from a CSV of its own log, start at
+[`docs/28-quickstart-identify.md`](docs/28-quickstart-identify.md).
 
-## Key decisions (validated by web research, July 2026)
+## Why you can trust the verdicts
 
-- **Stage 0 sim (revised — see [docs/06-stage0-design.md](docs/06-stage0-design.md)):**
-  a pure, deterministic, tested `sim-core` crate — no game engine, no physics
-  engine; we write the kinematics ourselves — visualized through **Rerun**.
-  Bevy becomes an optional later frontend (wasm+WebGPU shareable demo). Adopt
-  **MuJoCo** (first-class on macOS, has SO-101 models in its menagerie) as the
-  "real physics" engine when manipulation starts.
-- **First board:** **Raspberry Pi Pico 2 W ($7) + Pi Debug Probe ($12)** — best
-  embassy/probe-rs support; E9 erratum fixed in A4 silicon. ESP32-C6 second.
-- **MCU ↔ computer link:** `postcard-rpc` over USB (no Rust micro-ROS exists).
-- **Rust middleware:** **dora-rs** (1.0-rc, LeRobot/VLA node ecosystem) as main
-  line; **Copper** (1.0, deterministic) and **Zenoh** (Tier-1 ROS 2 middleware
-  since May 2025) as the other pillars. OpenRR is dormant — don't adopt.
-- **ROS 2:** learn **Lyrical Luth LTS** (May 2026) in Docker + Foxglove/
-  Lichtblick; native macOS ROS 2 is Tier 3 — don't fight it.
-- **VLA path:** LeRobot + SO-101 pair + **SmolVLA** (fine-tunes for $0–10 on
-  Colab/rented GPU; runs on Jetson Orin Nano with TensorRT). Training stays
-  Python; Rust does robot I/O, perception plumbing, safety.
-- **Compute buying:** a DRAM shortage repriced everything in 2025–26 (Jetson
-  Orin Nano Super $249→$399, July 2026). Buy compute only when the stage
-  demands it; Pi 5 + Hailo 26-TOPS HAT (~$205) covers detection workloads at
-  half the Jetson price; VLA inference can run on a PC GPU over WiFi at first.
+The instrument was tested on itself, and the misses are on the record:
 
-## Knowledge base
+- The rehearsal converged to **2× truth with a tight interval** until
+  the anchor was audited — which is why an anchor statement is now
+  *refused-if-absent* on every fit record
+  ([`robots/rig-drivetrain/README.md`](robots/rig-drivetrain/README.md)).
+- A one-sample timestamp convention produced a biased fit with tight
+  intervals (R13, [`docs/07-progress-log.md`](docs/07-progress-log.md));
+  the same failure class was then caught **three more times** building
+  the servo study — truth-recovery on synthetic data is now a standing
+  gate for any new excitation harness
+  ([`docs/26`](docs/26-sts3215-synthetic-identifiability.md)).
+- The synthetic STS3215 study's cautionary finding: under structured
+  corruption a fit can be **confidently wrong** — "pinned" with −53% to
+  −88% errors — which is why fit records now spell out their pinning
+  criterion and the residual-whiteness diagnostic is queued
+  ([figure](data/sts3215-identifiability.html)).
+- ⚠️ **There is no CI.** The gate (`tools/verify.sh`, 42 steps, 354
+  tests) runs only when a human runs it, and one emulator step is RED —
+  documented, not hidden: until it is fixed, "the full suite passes" is
+  not a claim this repo can make
+  ([details](docs/27-rig-tour.md)).
 
-Detailed, dated research on the current (mid-2026) state of each layer lives in
-[`docs/`](docs/):
+## What's next (the measured roadmap)
 
-- **[`docs/17-one-page.md`](docs/17-one-page.md) — START HERE: the whole system in one
-  view, with pointers into everything else**
-- [`docs/00-roadmap.md`](docs/00-roadmap.md) — the staged plan in full detail
-- [`docs/01-rust-robotics-stack.md`](docs/01-rust-robotics-stack.md) — dora-rs, Zenoh, Copper, ros2-rust, Rerun
-- [`docs/02-embedded-rust.md`](docs/02-embedded-rust.md) — Embassy, Pico 2/RP2350, ESP32, tooling, MCU↔host link
-- [`docs/03-vla-robot-learning.md`](docs/03-vla-robot-learning.md) — LeRobot, VLA models, Rust inference
-- [`docs/04-hardware.md`](docs/04-hardware.md) — compute boards, sensors, budgets, shopping plan per stage
-- [`docs/05-simulation-ros2-wasm.md`](docs/05-simulation-ros2-wasm.md) — simulators, ROS 2 state, Wasm in robotics
-- [`docs/06-stage0-design.md`](docs/06-stage0-design.md) — Stage 0 red-team critique + revised design
-- [`docs/07-progress-log.md`](docs/07-progress-log.md) — dated log of everything done and decided
-- [`docs/08-hardware-sim.md`](docs/08-hardware-sim.md) — emulating a Pico before owning one
-- [`docs/09-shopping-list.md`](docs/09-shopping-list.md) — what to buy, tiered
-- [`docs/10-hil-protocol.md`](docs/10-hil-protocol.md) — hardware-in-the-loop wire format
-- [`docs/11-perception-stack.md`](docs/11-perception-stack.md) — camera, detectors, measured limits
-- [`docs/12-model-choice.md`](docs/12-model-choice.md) — fixed-class vs open-vocab vs VLM, and licences
-- [`docs/13-architecture-review.md`](docs/13-architecture-review.md) — DRY/composability review + fixes
-- [`docs/14-model-landscape.md`](docs/14-model-landscape.md) — detector options, **measured on this laptop**
-- [`docs/15-testing-and-coverage.md`](docs/15-testing-and-coverage.md) — test suite, coverage, LOC
-- [`docs/16-the-map.md`](docs/16-the-map.md) — every symbol, unit and formula, and how
-  the maths, the physics and the code connect
-- [`docs/17-one-page.md`](docs/17-one-page.md) — the whole system on one page
-- [`docs/18-code-quality.md`](docs/18-code-quality.md) — an honest scorecard, and what would move it
-- [`docs/19-the-arm.md`](docs/19-the-arm.md) — **the arm: why its failsafe is the
-  opposite of the base's**, the four limits and why their order matters, one input
-  type that a VLA can drive unchanged, and what the viewer caught that the tests could not
-- [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — **what has to be
-  true before a recording becomes VLA/WAM training data**, and why a video of a
-  human doing the task is not training data on its own
-- [`docs/21-the-data-company.md`](docs/21-the-data-company.md) — **the same pipeline
-  read as a market**: which stages are commoditised, which are contested (curation
-  and evaluation both already have companies in them), and the one square that is
-  empty — **nobody sells system identification.** Also why "splat for appearance,
-  simulate for physics" is a solved paper rather than a gap
-- [`docs/e2e-research/`](docs/e2e-research/README.md) — **end-to-end research
-  (2026-08-08): what it would take to build, deploy and operate a small
-  commercial fleet of mobile manipulators.** Nine documents on policies, data
-  collection, data generation, simulation and real→sim, compute and hardware,
-  fleet operations, and safety and regulation. Research notes, not a plan —
-  nothing here has been built or bought.
-- [`recordings/README.md`](recordings/README.md) — recorded sessions, and how replay
-  turns one into a regression test
-- [`docs/learning/`](docs/learning/) — Rust walkthroughs of the code we write, plus exercises
-  - [`math-00-symbol-decoder.md`](docs/learning/math-00-symbol-decoder.md) — what every
-    maths symbol means, in plain words. Start here if formulas look alien.
-  - [`hw-00-microcontroller-decoder.md`](docs/learning/hw-00-microcontroller-decoder.md) —
-    the chip: pins, boot, GPIO/UART/I2C, embassy, and where the maths meets the metal.
-  - [`hw-01-bench-rig.md`](docs/learning/hw-01-bench-rig.md) — **the physical rig in
-    one page**: breadboard, pin→column map, encoder wiring with colours, the
-    commands, what has been measured, and every trap that cost time.
-  - [`hw-02-power-and-motor-decoder.md`](docs/learning/hw-02-power-and-motor-decoder.md) —
-    everything that is not the chip: why one driver has two power pins, what
-    `AO1`/`AO2` really are, pull-up vs pull-down and the erratum, push-pull vs
-    open-drain, and why the test LED must be red.
-- [`docs/photos/`](docs/photos/README.md) — dated photo record of the build, so a
-  claim about the hardware can be checked against what was on the desk
+From the [strategy review](docs/25-strategy-review-2026-08-24.md):
 
-## Verification
+1. **The bench protocol for a feedback arm is already specced,
+   hardware-free**: the synthetic STS3215 study found position+load
+   telemetry recovers all four parameters within ~6% at any rate down
+   to 25 Hz — and that the derived-velocity register poisons the fit
+   ([`docs/26`](docs/26-sts3215-synthetic-identifiability.md)).
+2. **Paper 2** — the first sim↔real rank-correlation certificate for
+   cheap arms; the real half is committed
+   ([`data/armnetbench-v01-so101-counts.json`](data/armnetbench-v01-so101-counts.json)),
+   the statistics are code
+   ([`docs/23-research-agenda.md`](docs/23-research-agenda.md)).
+3. **Paper 1** — the first graded robot bundle: parametric sysid of a
+   low-cost servo arm plus the first published unit-to-unit spread.
+4. Porting the whole loop to a new robot is a documented, honest recipe:
+   [`docs/24-porting-the-rig.md`](docs/24-porting-the-rig.md).
 
-`tools/verify.sh` is the single definition of "does this repo work" — one
-script rather than a workflow file restating the same checks, which would
-be one more pair of things that must agree and eventually will not.
+## The shakedown vehicle
 
-⚠️ **There is no CI.** No `.github/workflows` exists; the gate runs only
-when a human runs it. This README previously claimed CI called it, which
-was not true, and the cost of that gap is the next warning.
-
-| | steps | when |
-|---|---|---|
-| `tools/verify.sh` | 42 | before pushing |
-| `tools/verify.sh --fast` | 40 | while iterating |
-| `tools/verify.sh --serial <port>` | 44 | with a Pico on a cable |
-
-`--fast` drops exactly two, both named in the script with the reason: the
-emulator step, which takes ~9 minutes since the measured robot speed
-landed, and the RP2350 wire replay, which is **stale pending a hardware
-re-record**. Both still run in the full gate, so neither is hidden.
-
-⚠️ **`HIL on the emulator (RP2040)` is RED — and it is the only one.**
-With a board on a cable, **31 of 32 steps pass**; the emulator step stalls
-at ~14.6 s of simulated time, deterministically, across six runs.
-
-The rig settles where the fault is *not*. On real RP2350 silicon the same
-mission completes — **4256 ticks, 1/1 waypoints, 0 wall bumps, 62×
-timing headroom** — reproducing the committed recording tick-for-tick to
-three decimals, and all four `chip_probe` conformance checks pass. So the
-control code and the wire protocol are sound; what stalls is the RP2040
-build running under `rp2040js`, which this repo already patches.
-
-⚠️ Not yet separated: an rp2040js limitation from an RP2040-specific
-firmware bug. The emulator runs a *different binary* on a different core
-(Cortex-M0+ vs M33), so "RP2350 is fine" does not by itself acquit the
-RP2040 firmware. Evidence in
-[`docs/07-progress-log.md`](docs/07-progress-log.md) (2026-08-12).
-
-Until it is fixed, **"the full suite passes" is not a claim this repo can
-make** — and note that a step which can hang makes a red gate and a slow
-one look identical, which is how this went unseen.
+The $100 rover/arm rig — drive, chase, autonomous fetch laps — was the
+shakedown vehicle that stress-tested this toolchain end to end; its
+sessions live in [`recordings/`](recordings/README.md) and replay as
+regression tests. The whole journey — staged roadmap, demos, learning
+docs — is preserved in [`docs/27-rig-tour.md`](docs/27-rig-tour.md).
 
 ## Repository layout
 
 ```
 robotiq/
-├── README.md
-├── docs/                    # knowledge base (research, decisions, learning, log)
-│   └── learning/            #   Rust walkthroughs + math lessons
-├── Cargo.toml               # laptop workspace
-├── crates/
-│   ├── sim-core/            # robot math + simulator. Builds twice:
-│   │                        #   std = full sim; no_std = the MCU subset
-│   │                        #   exercises.rs — YOUR code goes there
-│   ├── sim-run/             # the mission, and the Rerun viewer
-│   ├── vision/              # camera, detectors, target lock, the chase loop
-│   ├── arm/                 # joint-space arm control: limits, plans, safety.
-│   │                        #   No servo driver, no geometry — all of it
-│   │                        #   runs in `cargo test` with nothing plugged in
-│   ├── n20-joint/           # a DC gearmotor pretending to be a servo,
-│   │                        #   so the arm stack runs on motors we own
-│   ├── blob/                # find a coloured object in a frame —
-│   │                        #   no_std, one pass, no allocation
-│   ├── belief-viz/          # one definition of how a belief is drawn
-│   ├── teleop-web/          # drive the robot from a phone browser
-│   ├── hil-protocol/        # the host↔chip wire format, one definition
-│   ├── hil-host/            # simulated body for a real chip; record/replay
-│   ├── mpu6050-driver/      # IMU driver (host-tested against a mock bus)
-│   └── quad-encoder/        # quadrature decoding
-├── firmware/                # no_std, ARM target — outside the workspace
-│   ├── build-support/       #   one copy of the linker scripts + build.rs
-│   ├── support/             #   USB CDC, heartbeat, Report, the TB6612
-│   │                        #   and its encoders — one copy each
-│   ├── pico-arm/            #   one arm joint on a real N20 —
-│   │                        #     the first firmware that HOLDS on failure
-│   ├── pico-blink/          #   H0  async tasks
-│   ├── pico-button/         #   H1  input + PWM
-│   ├── pico-imu/            #   H2  I2C sensor
-│   ├── pico-encoder/        #   H3  encoder decoding
-│   ├── pico-odom/           #   L1  sim-core's odometry, on the chip
-│   ├── pico-led/            #   the CYW43 onboard LED (a real Pico 2 W)
-│   ├── pico-selftest/       #   the shared maths on real silicon, diffed
-│   └── pico-robot/          #   the controller: UART (emulator) or USB (real)
-├── recordings/              # committed sessions that replay as regression tests
-└── tools/
-    ├── verify.sh            # EVERYTHING, end to end, one command
-    ├── coverage.sh          # coverage + lines-of-code report
-    ├── check-docs.py        # do the docs describe code that exists?
-    ├── build-robot.sh       # pico-robot for BOTH chips, together
-    ├── setup-emulator.sh    # clones + patches wokwi/rp2040js (not committed)
-    ├── harness/             # our emulator harnesses (virtual sensors, tests)
-    ├── patches/             # our fix to the upstream emulator
-    └── sim-*.sh             # build → UF2 → emulate, one command each
+├── pipeline/                # THE PRODUCT: bundles, identification, stats,
+│   │                        #   evaluation, collection (Python, uv)
+│   └── rq_pipeline/{bundles,robot,stats,evaluate,collect,tasks,physics}
+├── robots/                  # measurement bundles: profile.json + model.xml
+│   └── rig-drivetrain/      #   + fits/*.json + fits/SPREAD.json (real data)
+├── data/                    # committed evidence (benchmarks, studies)
+├── recordings/              # sessions that replay as regression tests
+├── tools/                   # fit-report, sts-study/figure, verify.sh, viewers
+├── crates/                  # Rust: wire protocol, recorder, sim-core, …
+├── firmware/                # the rig's Pico firmware (no_std)
+└── docs/                    # dated research, decisions, the progress log
 ```
 
-## Running it
+## Knowledge base
 
-**Stage 0 — the laptop robot** (needs [Rust](https://rustup.rs) and the
-[Rerun viewer](https://rerun.io) 0.35):
+Product and research, first:
 
-```sh
-tools/verify.sh             # everything: fmt, clippy, 354 tests, firmware,
-                            # both replay fixtures, and the emulator HIL run
-tools/verify.sh --fast      # the same, minus the emulator and the stale
-                            # wire replay — for iterating
-cargo run -p sim-run        # watch the robot map, plan and drive (Rerun window)
-```
+- [`docs/25-strategy-review-2026-08-24.md`](docs/25-strategy-review-2026-08-24.md) — the strategy: verdict, critical path, operator's list
+- [`docs/22-pipeline-architecture.md`](docs/22-pipeline-architecture.md) — the codebase map and its contracts
+- [`docs/23-research-agenda.md`](docs/23-research-agenda.md) — Papers 0–3, novelty adversarially pre-verified
+- [`docs/26-sts3215-synthetic-identifiability.md`](docs/26-sts3215-synthetic-identifiability.md) — the servo study and its protocol verdicts
+- [`docs/24-porting-the-rig.md`](docs/24-porting-the-rig.md) — the honest porting recipe
+- [`docs/28-quickstart-identify.md`](docs/28-quickstart-identify.md) — measure your robot from a CSV
+- [`docs/21-the-data-company.md`](docs/21-the-data-company.md) — the market read: the empty square is identification
+- [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — when a recording becomes training data
+- [`docs/e2e-research/`](docs/e2e-research/README.md) — the fleet research (13 documents; start at [29-the-company](docs/e2e-research/29-the-company.md) and [30-the-pipeline](docs/e2e-research/30-the-pipeline.md))
+- [`docs/07-progress-log.md`](docs/07-progress-log.md) — the dated log of everything done, decided, and gotten wrong
 
-**Stage 5 — the arm, before owning one.** Joint-space control with no servo
-attached; the safety layer is the point, and it is the *opposite* of the base's
-(silence must make an arm hold, not stop). Four acts in Rerun — a plan followed,
-an absurd command turned into a ramp, a commander that dies, a joint that
-overheats:
+How this instrument was built (the apprenticeship record):
 
-```sh
-cargo run -p arm --example watch
-```
-
-Watch the `authorised` panel fall to 0 at 6.48 s and stay there while the plan
-runs on without it. See [`docs/19-the-arm.md`](docs/19-the-arm.md).
-
-The same picture, from **real motors** rather than a simulator — live off a
-board, or replayed from a committed session with no hardware at all:
-
-```sh
-cargo run -p hil-host --example joint_viz -- /dev/cu.usbmodem11
-cargo run -p hil-host --example joint_viz -- --replay recordings/bench-two-joint.wire
-```
-
-Both draw through `belief_viz::arm`, one routine, so a simulated angle and a
-measured one make the same figure. ⚠️ That figure is SO-ARM101 geometry driven
-by whatever angles arrive: on the bench there are no links on those shafts, so
-it is the arm those angles *would* command, not a picture of the bench.
-
-**Stage 2 — firmware** (needs Node ≥18 and `cargo install elf2uf2-rs`):
-
-```sh
-tools/setup-emulator.sh     # one-time: clone rp2040js, patch it, install harnesses
-tools/sim-blink.sh          # H0  two async tasks blinking
-tools/sim-button.sh         # H1  button + software PWM (duty measured)
-tools/sim-imu.sh            # H2  MPU6050 over I2C, virtual sensor tilted
-tools/sim-encoder.sh        # H3  quadrature decoding (and aliasing at speed)
-tools/sim-odom.sh           # L1  sim-core's Odometry running on emulated ARM
-```
-
-No microcontroller required — `tools/rp2040js` is a local emulator, and
-the firmware built here is the same UF2 that will run on a real Pico.
-
-To read a **real** encoder, build the USB variant instead — on a physical
-board GP0/GP1 are bare header pins, so the UART build reports into the
-void:
-
-```sh
-tools/build-pico2.sh pico-encoder usb   # then: picotool load -x <the .uf2>
-screen /dev/cu.usbmodem11 115200        # count / direction / ticks-per-s / errors
-```
-
-Turn the output shaft ten revolutions by hand and divide `count` by ten —
-that is `ticks_per_revolution` measured rather than computed, which
-`crates/sim-core/src/spec.rs` insists on because advertised gear ratios
-are approximations. Wiring is in
-[`docs/09-shopping-list.md`](docs/09-shopping-list.md).
-
-**Level 3 — hardware in the loop.** The chip is the brain; the laptop is
-the body and the world. Same mission either way:
-
-```sh
-tools/sim-hil.sh                                     # emulated RP2040
-cargo run -p hil-host -- --serial /dev/cu.usbmodem11 # a REAL Pico 2 W
-```
-
-Measured on all three, one trajectory:
-
-| | ticks | waypoints | drift | worst compute |
-|---|---:|---:|---:|---:|
-| `sim-run` (Mac, hardware `f64`) | — | 1/1 | 0.052 m | — |
-| emulated RP2040 (M0+, no FPU) | 1139 | 1/1 | 0.052 m | 278 µs |
-| real RP2350 (M33, SP FPU) | 1139 | 1/1 | 0.052 m | 268 µs |
-
-⚠️ Those tick counts are from before `RobotSpec::REAL_BOT` carried its
-bench measurements. The measured robot is **3.86× slower**, so the same
-journey now takes ~4460 ticks — about 90 s on real hardware, and about
-nine minutes on the emulator, which is why the emulator step is one of
-two that CI skips.
-
-**Level 4 — a camera drives real motors.** The whole chain, on hardware:
-
-```sh
-tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
-cargo run --release -p vision --bin chase -- --drive /dev/cu.usbmodem11
-```
-
-```text
-  camera ─▶ detector ─▶ bearing ─▶ GotoController ─▶ BodyTwist
-                                                        │
-                                       T v w over USB ──┴─▶ pico-odom
-                                                             │
-                                             CommandWatchdog ┤ TB6612
-                                             StuckMonitor    ┘   │
-                                                              motors
-```
-
-`--drive` is a flag on the existing `chase` loop, not a second binary:
-the twist that drove a simulated robot is the twist that goes down the
-wire. Two loops that "do the same thing" drift.
-
-**Stopping the program stops the motors** — there is no shutdown handler,
-because a failsafe that needs the dying process to say goodbye does not
-cover the deaths that matter. The chip's watchdog does it after 200 ms of
-silence. Measured on the bench: 160 ms to zero duty, then 8 ticks of
-coast.
-
-Both physical Pico 2 W boards command **byte-identical** duty across all
-1139 ticks.
-
-**Level 5 — drive it from a phone.** The same command path, with a thumb
-on the other end instead of a camera:
-
-```sh
-tools/build-pico2.sh pico-odom teleop      # then BOOTSEL + picotool load
-cargo run --release -p teleop-web -- /dev/cu.usbmodem11
-```
-
-It prints a URL; open it on a phone on the same WiFi.
-
-```text
-  phone browser ──WebSocket──▶ teleop-web ──USB──▶ pico-odom ──▶ motors
-                        │                    │
-             500 ms phone timeout   200 ms CommandWatchdog, on the chip
-```
-
-**Two watchdogs, not one.** The laptop resends the current twist at 50 Hz
-regardless of what the phone is doing, and judges the phone's own liveness
-on a slacker 500 ms budget. Forwarding phone messages directly would let
-ordinary WiFi jitter trip the chip's 200 ms window and read as a fault.
-
-Both use `sim_core::CommandWatchdog` — the same tested type, on both hops.
-
-This doubles as a **manual override**: something to hold while
-`chase --drive` is running, for the first time it aims at a wall.
-
-**Level 6 — the chip does it all alone (2026-08-15).** No laptop in the
-loop: an OV7670 streams through hand-written PIO+DMA into an on-chip
-brightness blob, and its three errors drive everything the rig owns —
-wheels chase (`x`, `area`), three arm servos track (`x`→pan, `y`→tilt,
-`area`→grip), all failsafed (watchdog, stall guard, hold-on-loss,
-image-freshness):
-
-```sh
-tools/build-pico2.sh pico-odom chase,arm     # BOOTSEL + picotool load
-cargo run --release -p hil-host --example rig_view -- /dev/cu.usbmodem11
-```
-
-`rig_view` shows the whole causal chain on one clock — what the camera
-sees, the arm those commands would make, the belief trail, duty, ticks —
-and `--record` turns the session into a replayable fixture that
-`rig_replay` pins in the gate. A phone torch steers the entire robot.
-
-**Recording and replay.** Every session can be captured and re-run with no
-hardware attached — and replay checks what the code *would now command*,
-so a behaviour change fails loudly:
-
-```sh
-cargo run -p hil-host -- --serial /dev/cu.usbmodem11 --record run.wire
-cargo run -p hil-host -- --replay run.wire            # ~4 s, no board
-
-cargo run -p vision --bin chase -- --record chase.perc --video
-cargo run -p vision --bin chase -- --replay chase.perc  # no camera
-```
-
-This is what found a chip carrying its previous run's pose into a new
-session — from four lines of log. See [`recordings/README.md`](recordings/README.md).
+- [`docs/27-rig-tour.md`](docs/27-rig-tour.md) — the journey, the staged roadmap, and every demo
+- [`docs/17-one-page.md`](docs/17-one-page.md) — the rig on one page
+- [`docs/16-the-map.md`](docs/16-the-map.md) — every symbol, unit and formula
+- [`docs/01`](docs/01-rust-robotics-stack.md)–[`docs/19`](docs/19-the-arm.md) — the dated research that got us here
+- [`docs/learning/`](docs/learning/) — Rust walkthroughs, decoders, exercises
+- [`docs/photos/`](docs/photos/README.md) — the dated photo record
