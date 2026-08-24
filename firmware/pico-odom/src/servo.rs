@@ -109,6 +109,11 @@ const FETCH_PICK: [([i32; 5], u64); 5] = [
 
 /// Drive→arm handshake: the drive state machine sets GO when parked;
 /// the arm sets DONE when the cube is (hopefully) held aloft.
+/// Set by the drive at the starting gun: the claw waves open-shut
+/// twice so a human can tell "waiting to park" from "servo rail dead"
+/// in one look.
+pub static SALUTE_GO: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
 pub static PICK_GO: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
 pub static PICK_DONE: core::sync::atomic::AtomicBool =
@@ -447,6 +452,23 @@ async fn fetch_arm(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
         Timer::after_millis(400).await;
     }
     crate::diag::note("# fetch arm TUCKED, waiting for drive");
+    while !SALUTE_GO.load(Ordering::Relaxed) {
+        Timer::after_millis(50).await;
+    }
+    let Ok(claw) = Channel::new(4) else { return };
+    let mut wave = FETCH_PICK[0].0;
+    for _ in 0..2 {
+        for claw_offset in [212, -303] {
+            wave[4] = claw_offset;
+            let pulses = apply(&wave);
+            if driver.set_pulses(claw, &pulses[4..=4]).await.is_err() {
+                crate::diag::note("# servo bus error — salute failed");
+                return;
+            }
+            Timer::after_millis(350).await;
+        }
+    }
+    crate::diag::note("# fetch arm SALUTED — rail is alive");
     loop {
         while !PICK_GO.load(Ordering::Relaxed) {
             Timer::after_millis(50).await;

@@ -924,6 +924,7 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
         Timer::after_millis(50).await;
     }
     crate::diag::note("# fetch SEEKING");
+    servo::SALUTE_GO.store(true, Ordering::Relaxed);
 
     let mut drivetrain = Drivetrain::new(motors);
     // ---- SEEK (turn-and-glance) ----
