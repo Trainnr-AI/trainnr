@@ -53,5 +53,51 @@ class YellowRigTwin(unittest.TestCase):
         self.assertLess(abs(pitch), 2.0)
 
 
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class RearPick(unittest.TestCase):
+    def _lift(self, dx, dy, close=True):
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.tasks.yellow import (  # noqa: PLC0415
+            REAR_GRASP_POINT,
+            REAR_PICK_SEQUENCE,
+            compose_rig,
+        )
+
+        scene = compose_rig(car=True)
+        cube = scene.worldbody.add_body(
+            name="prop",
+            pos=[REAR_GRASP_POINT[0] + dx, REAR_GRASP_POINT[1] + dy, 0.0125],
+        )
+        cube.add_freejoint()
+        cube.add_geom(
+            name="prop_geom",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[0.0125, 0.0125, 0.0125],
+            mass=0.015,
+            friction=[2.0, 0.02, 0.001],
+        )
+        model = scene.compile()
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        cq = model.jnt_qposadr[model.body("prop").jntadr[0]]
+        for pose, seconds in REAR_PICK_SEQUENCE:
+            ctrl = list(pose)
+            if not close:
+                ctrl[4] = 0.5
+            for step in range(int(seconds * 500)):
+                if step % 10 == 0:
+                    data.ctrl[:] = [0.0, 0.0, *ctrl]
+                mujoco.mj_step(model, data)
+        return float(data.qpos[cq + 2])
+
+    def test_picks_at_centre_and_basin_corner(self) -> None:
+        self.assertGreater(self._lift(0.0, 0.0), 0.05)
+        self.assertGreater(self._lift(0.008, 0.008), 0.05)
+
+    def test_no_close_no_lift(self) -> None:
+        self.assertLess(self._lift(0.0, 0.0, close=False), 0.05)
+
+
 if __name__ == "__main__":
     unittest.main()

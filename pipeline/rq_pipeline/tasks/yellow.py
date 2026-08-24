@@ -162,7 +162,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
     platform.add_joint(
         name="yarm_base_yaw",
         axis=[0, 0, 1],
-        range=[-1.4, 1.4],
+        range=[-1.57, 1.57],
         damping=SERVO_DAMPING,
         armature=SERVO_ARMATURE,
     )
@@ -178,7 +178,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
     upper.add_joint(
         name="yarm_waist",
         axis=[0, 1, 0],
-        range=[-1.4, 1.4],
+        range=[-1.57, 1.57],
         damping=SERVO_DAMPING,
         armature=SERVO_ARMATURE,
     )
@@ -229,7 +229,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         jaw = hand.add_body(name=f"yarm_jaw_{side}", pos=[sign * 0.012, 0, 0.04])
         jaw.add_joint(
             name=f"yarm_jaw_{side}_hinge",
-            axis=[0, 0, sign],
+            axis=[0, sign, 0],
             range=[-0.6, 0.6],
             damping=SERVO_DAMPING,
             armature=SERVO_ARMATURE,
@@ -292,3 +292,44 @@ def compose_rig(*, car: bool = True) -> Any:
     else:
         add_yellow_arm(scene, scene.worldbody)
     return scene
+
+
+# ------------------------------------------------------------ rear pick --
+
+# The rear floor pick, tuned in the twin 2026-08-26 (probe log in
+# docs/07). Grasp point in the CHASSIS frame; the basin is a measured
+# 15/15 across +-8 mm in both axes — the parking spec for the fetch.
+# The tuning found two things a spec sheet never would: the claw's V
+# tilts with the hand (no wrist roll exists to level it), so dead-centre
+# approaches punched the cube's far corner until shoulder depth put both
+# tips below cube-top before closing; and the working (shoulder, wrist)
+# region is a RIDGE, not a point — (0.55, 0.7..0.85) all lift.
+REAR_GRASP_POINT = (-0.197, 0.0)
+REAR_PICK_BASIN_M = 0.008
+
+# ctrl vectors: [base_yaw, waist, shoulder, wrist, jaw]
+REAR_TUCK = [0.0, 0.2, 0.3, 0.2, 0.5]
+REAR_HOVER = [0.0, 1.1, 0.55, 0.8, 0.5]
+REAR_REACH = [0.0, 1.50, 0.55, 0.8, 0.5]
+REAR_GRIP = [0.0, 1.50, 0.55, 0.8, -0.35]
+REAR_LIFT = [0.0, 0.9, 0.55, 0.8, -0.35]
+
+REAR_PICK_SEQUENCE = (
+    (REAR_TUCK, 1.2),
+    (REAR_HOVER, 1.2),
+    (REAR_REACH, 1.8),
+    (REAR_GRIP, 1.0),
+    (REAR_LIFT, 1.8),
+)
+
+
+def pose_to_pulses_us(pose: list[float]) -> list[int]:
+    """Joint radians → PCA pulse widths for the metal arm.
+
+    1500 µs is centre by construction (the horns went on against a held
+    centre). ⚠️ Per-joint SIGNS and spline trims are properties of the
+    assembled metal, not of this model — they get measured against the
+    real arm before the first hardware pick, the same promotion every
+    sign constant in the firmware went through.
+    """
+    return [round(1500 + angle / RAD_PER_US) for angle in pose]
