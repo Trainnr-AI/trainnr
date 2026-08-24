@@ -1,0 +1,1068 @@
+{
+ "design_date": "2026-08-25",
+ "truth": {
+  "servo_kp": 6.0,
+  "damping": 0.08,
+  "frictionloss": 0.03,
+  "armature": 0.002
+ },
+ "legend": "P=pinned np=not-pinned, (signed error vs truth); clean cells all recover exactly",
+ "conditions": [
+  {
+   "label": "200Hz pos clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "200Hz pos servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.389611,
+     "half_width": 0.75806,
+     "pinned": true,
+     "error_pct": 6.49,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.079636,
+     "half_width": 0.009501,
+     "pinned": true,
+     "error_pct": -0.45,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.068875,
+     "half_width": 0.008738,
+     "pinned": true,
+     "error_pct": 129.58,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002016,
+     "half_width": 0.00027,
+     "pinned": true,
+     "error_pct": 0.78,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+vel clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+vel servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.617036,
+     "half_width": 3.029988,
+     "pinned": false,
+     "error_pct": -6.38,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.070332,
+     "half_width": 0.03806,
+     "pinned": true,
+     "error_pct": -12.08,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.053372,
+     "half_width": 0.029248,
+     "pinned": false,
+     "error_pct": 77.91,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.001718,
+     "half_width": 0.001137,
+     "pinned": true,
+     "error_pct": -14.12,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.014885,
+     "half_width": 0.034515,
+     "pinned": true,
+     "error_pct": 0.25,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.079983,
+     "half_width": 0.000443,
+     "pinned": true,
+     "error_pct": -0.02,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.031101,
+     "half_width": 0.001281,
+     "pinned": true,
+     "error_pct": 3.67,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.001981,
+     "half_width": 1.6e-05,
+     "pinned": true,
+     "error_pct": -0.93,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+vel+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "200Hz pos+vel+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.995099,
+     "half_width": 0.063778,
+     "pinned": true,
+     "error_pct": -0.08,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.078298,
+     "half_width": 0.000856,
+     "pinned": true,
+     "error_pct": -2.13,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.037556,
+     "half_width": 0.002375,
+     "pinned": true,
+     "error_pct": 25.19,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.001954,
+     "half_width": 3.1e-05,
+     "pinned": true,
+     "error_pct": -2.28,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "100Hz pos clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "100Hz pos servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.670456,
+     "half_width": 0.989912,
+     "pinned": true,
+     "error_pct": 11.17,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.083929,
+     "half_width": 0.012534,
+     "pinned": true,
+     "error_pct": 4.91,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.058564,
+     "half_width": 0.009435,
+     "pinned": true,
+     "error_pct": 95.21,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002141,
+     "half_width": 0.000356,
+     "pinned": true,
+     "error_pct": 7.05,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+vel clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+vel servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 4.715661,
+     "half_width": 1.48813,
+     "pinned": true,
+     "error_pct": -21.41,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.060364,
+     "half_width": 0.019132,
+     "pinned": true,
+     "error_pct": -24.54,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.039124,
+     "half_width": 0.012674,
+     "pinned": true,
+     "error_pct": 30.41,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.001413,
+     "half_width": 0.000569,
+     "pinned": true,
+     "error_pct": -29.35,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.994457,
+     "half_width": 0.049069,
+     "pinned": true,
+     "error_pct": -0.09,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.079023,
+     "half_width": 0.000616,
+     "pinned": true,
+     "error_pct": -1.22,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.031748,
+     "half_width": 0.001778,
+     "pinned": true,
+     "error_pct": 5.83,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002007,
+     "half_width": 2.2e-05,
+     "pinned": true,
+     "error_pct": 0.36,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+vel+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "100Hz pos+vel+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.97553,
+     "half_width": 0.054259,
+     "pinned": true,
+     "error_pct": -0.41,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.077938,
+     "half_width": 0.000716,
+     "pinned": true,
+     "error_pct": -2.58,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.036178,
+     "half_width": 0.001979,
+     "pinned": true,
+     "error_pct": 20.59,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.001982,
+     "half_width": 2.6e-05,
+     "pinned": true,
+     "error_pct": -0.91,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "50Hz pos clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "50Hz pos servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.485113,
+     "half_width": 0.881338,
+     "pinned": true,
+     "error_pct": -8.58,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.069515,
+     "half_width": 0.011276,
+     "pinned": true,
+     "error_pct": -13.11,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.042841,
+     "half_width": 0.007861,
+     "pinned": true,
+     "error_pct": 42.8,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.001747,
+     "half_width": 0.000322,
+     "pinned": true,
+     "error_pct": -12.67,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+vel clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+vel servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 2.805017,
+     "half_width": 0.524112,
+     "pinned": true,
+     "error_pct": -53.25,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.037402,
+     "half_width": 0.007058,
+     "pinned": true,
+     "error_pct": -53.25,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.02082,
+     "half_width": 0.004228,
+     "pinned": true,
+     "error_pct": -30.6,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.000739,
+     "half_width": 0.00021,
+     "pinned": true,
+     "error_pct": -63.06,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.006056,
+     "half_width": 0.078766,
+     "pinned": true,
+     "error_pct": 0.1,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.080107,
+     "half_width": 0.000928,
+     "pinned": true,
+     "error_pct": 0.13,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.031119,
+     "half_width": 0.002663,
+     "pinned": true,
+     "error_pct": 3.73,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002007,
+     "half_width": 3.4e-05,
+     "pinned": true,
+     "error_pct": 0.34,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+vel+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "50Hz pos+vel+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.925221,
+     "half_width": 0.069486,
+     "pinned": true,
+     "error_pct": -1.25,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.079201,
+     "half_width": 0.000883,
+     "pinned": true,
+     "error_pct": -1.0,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.034467,
+     "half_width": 0.002424,
+     "pinned": true,
+     "error_pct": 14.89,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002001,
+     "half_width": 3.2e-05,
+     "pinned": true,
+     "error_pct": 0.07,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "25Hz pos clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "25Hz pos servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.003536,
+     "half_width": 1.076836,
+     "pinned": true,
+     "error_pct": 0.06,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.078858,
+     "half_width": 0.01427,
+     "pinned": true,
+     "error_pct": -1.43,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.035122,
+     "half_width": 0.007532,
+     "pinned": true,
+     "error_pct": 17.07,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002007,
+     "half_width": 0.000405,
+     "pinned": true,
+     "error_pct": 0.37,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+vel clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+vel servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 1.967656,
+     "half_width": 0.616734,
+     "pinned": true,
+     "error_pct": -67.21,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.033279,
+     "half_width": 0.010528,
+     "pinned": true,
+     "error_pct": -58.4,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.003499,
+     "half_width": 0.003155,
+     "pinned": true,
+     "error_pct": -88.34,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.000292,
+     "half_width": 0.000208,
+     "pinned": true,
+     "error_pct": -85.41,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.96284,
+     "half_width": 0.131451,
+     "pinned": true,
+     "error_pct": -0.62,
+     "truth_covered": true
+    },
+    "damping": {
+     "estimate": 0.078939,
+     "half_width": 0.001344,
+     "pinned": true,
+     "error_pct": -1.33,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.031468,
+     "half_width": 0.003799,
+     "pinned": true,
+     "error_pct": 4.89,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.002004,
+     "half_width": 5e-05,
+     "pinned": true,
+     "error_pct": 0.2,
+     "truth_covered": true
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+vel+load clean",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 6.0,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.08,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": -0.0,
+     "truth_covered": false
+    },
+    "frictionloss": {
+     "estimate": 0.03,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    },
+    "armature": {
+     "estimate": 0.002,
+     "half_width": 0.0,
+     "pinned": true,
+     "error_pct": 0.0,
+     "truth_covered": false
+    }
+   }
+  },
+  {
+   "label": "25Hz pos+vel+load servo-real",
+   "parameters": {
+    "servo_kp": {
+     "estimate": 5.704247,
+     "half_width": 0.154077,
+     "pinned": true,
+     "error_pct": -4.93,
+     "truth_covered": false
+    },
+    "damping": {
+     "estimate": 0.080774,
+     "half_width": 0.001756,
+     "pinned": true,
+     "error_pct": 0.97,
+     "truth_covered": true
+    },
+    "frictionloss": {
+     "estimate": 0.026156,
+     "half_width": 0.004722,
+     "pinned": true,
+     "error_pct": -12.81,
+     "truth_covered": true
+    },
+    "armature": {
+     "estimate": 0.001962,
+     "half_width": 6.8e-05,
+     "pinned": true,
+     "error_pct": -1.91,
+     "truth_covered": true
+    }
+   }
+  }
+ ]
+}
