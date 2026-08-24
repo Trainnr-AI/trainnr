@@ -914,14 +914,11 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     const CENTRE_DEADBAND: f32 = 0.20;
     /// Blob at least this big = the prop fills the near field = parked.
     const AREA_ARRIVED: u32 = 1800;
-    /// The blob must stay arrived this long before we commit.
-    const ARRIVE_HOLD_MS: u64 = 1500;
     /// Timed 180° at TURN_RAD_PER_S ≈ π/1.4 s; trimmed on the floor.
     const SPIN_MS: u64 = 2250;
     /// Reverse leg that lays the prop into the arm's pocket.
     const BACK_MS: u64 = 1400;
     const CARRY_MS: u64 = 1500;
-    const FRESH_MS: u64 = 1000;
 
     while !HOST_WATCHING.load(Ordering::Relaxed) {
         Timer::after_millis(50).await;
@@ -929,58 +926,88 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     crate::diag::note("# fetch SEEKING");
 
     let mut drivetrain = Drivetrain::new(motors);
-    let mut last_frame_total = camera::frame_total();
-    let mut last_frame_at = firmware_support::now_ms();
-    let mut arrived_since: Option<u64> = None;
+    // ---- SEEK (turn-and-glance) ----
+    // Attempt 4's lesson, straight off the wire: the camera delivers
+    // ~4 fps and the stiction-breaking turn rate swings ~20 deg per
+    // frame, so CONTINUOUS turning orbits the prop forever (+-33k
+    // ticks of pure spin). The car never turns while looking now: a
+    // short burst, a full stop, a fresh frame, then decide again. Only
+    // the straight creep - which the camera CAN track - runs
+    // continuously, and arrival needs three stationary glances.
+    const TURN_BURST_MS: u64 = 150;
+    const GLANCE_MS: u64 = 700;
+    const CREEP_LEG_MS: u64 = 1500;
+    const ARRIVE_GLANCES: u32 = 3;
 
-    // ---- SEEK ----
-    loop {
-        Timer::after(POLL).await;
-        let now = firmware_support::now_ms();
-        let frames = camera::frame_total();
-        if frames != last_frame_total {
-            last_frame_total = frames;
-            last_frame_at = now;
-        }
-        let image_alive = now.saturating_sub(last_frame_at) < FRESH_MS;
-
-        // Turn first; creep only while centred. Unlike the chase, the
-        // fetch WANTS to close the distance all the way to AREA_ARRIVED.
-        let (v, w, arrived) = match camera::blob_error() {
-            Some((x, _y, area)) if image_alive => {
-                let centred = x.abs() <= CENTRE_DEADBAND;
-                if area >= AREA_ARRIVED && centred {
-                    (0.0, 0.0, true)
-                } else {
-                    let w = if x > CENTRE_DEADBAND {
-                        -TURN_RAD_PER_S
-                    } else if x < -CENTRE_DEADBAND {
-                        TURN_RAD_PER_S
-                    } else {
-                        0.0
-                    };
-                    let v = if centred && area < AREA_ARRIVED {
-                        CREEP_M_PER_S
-                    } else {
-                        0.0
-                    };
-                    (v, w, false)
-                }
-            }
-            _ => (0.0, 0.0, false),
-        };
+    let mut arrive_streak: u32 = 0;
+    let mut search_left = true;
+    'seek: loop {
         {
-            let (left, right) = Drivetrain::duty_for(&spec, v, w);
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
             drivetrain.apply(left, right);
         }
-
-        if arrived {
-            let since = *arrived_since.get_or_insert(now);
-            if now - since >= ARRIVE_HOLD_MS {
-                break;
+        let glance_from = camera::frame_total();
+        let glance_start = firmware_support::now_ms();
+        while camera::frame_total() == glance_from
+            && firmware_support::now_ms().saturating_sub(glance_start) < GLANCE_MS
+        {
+            Timer::after(POLL).await;
+        }
+        let burst = match camera::blob_error() {
+            Some((x, _y, area)) => {
+                let centred = x.abs() <= CENTRE_DEADBAND;
+                if centred && area >= AREA_ARRIVED {
+                    arrive_streak += 1;
+                    if arrive_streak >= ARRIVE_GLANCES {
+                        break 'seek;
+                    }
+                    None
+                } else if !centred {
+                    arrive_streak = 0;
+                    search_left = x < 0.0;
+                    Some(if x < 0.0 { TURN_RAD_PER_S } else { -TURN_RAD_PER_S })
+                } else {
+                    // Centred but far: creep straight while it stays so,
+                    // re-glancing at least every CREEP_LEG_MS.
+                    arrive_streak = 0;
+                    {
+                        let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+                        drivetrain.apply(left, right);
+                    }
+                    let creep_from = firmware_support::now_ms();
+                    loop {
+                        Timer::after(POLL).await;
+                        let leg_done = firmware_support::now_ms()
+                            .saturating_sub(creep_from)
+                            > CREEP_LEG_MS;
+                        let keep = match camera::blob_error() {
+                            Some((cx, _cy, carea)) => {
+                                cx.abs() <= CENTRE_DEADBAND && carea < AREA_ARRIVED
+                            }
+                            None => false,
+                        };
+                        if leg_done || !keep {
+                            break;
+                        }
+                    }
+                    None
+                }
             }
-        } else {
-            arrived_since = None;
+            None => {
+                arrive_streak = 0;
+                Some(if search_left { TURN_RAD_PER_S } else { -TURN_RAD_PER_S })
+            }
+        };
+        if let Some(w) = burst {
+            {
+                let (left, right) = Drivetrain::duty_for(&spec, 0.0, w);
+                drivetrain.apply(left, right);
+            }
+            Timer::after_millis(TURN_BURST_MS).await;
+            {
+                let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+                drivetrain.apply(left, right);
+            }
         }
     }
     {
