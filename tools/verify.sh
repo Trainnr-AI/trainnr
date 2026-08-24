@@ -45,7 +45,7 @@ step "tests"                 "cargo test -q --workspace"
 step "docs describe real code" "python3 tools/check-docs.py"
 step "unsafe forbidden everywhere" "python3 tools/check-unsafe-gates.py"
 step "simulator solves the U-trap" \
-     "cargo run -q -p sim-run | grep -q 'Waypoints reached: 1/1'"
+     "cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
 
 # The two crates that must compile for the chip as well as the laptop.
 # `cargo test` proves neither: it builds the std shape only, so an
@@ -115,7 +115,7 @@ step "firmware pico-odom (RP2350, usb+wifi)" "SKIP_UF2=1 tools/build-pico2.sh pi
 # No longer excluded from --fast: it passes, so it guards every run
 # rather than only the ones somebody remembered to make slow.
 step "replay: RP2350 wire recording" \
-     "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep -q 'matched the recording exactly'"
+     "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep 'matched the recording exactly' >/dev/null"
 # The teleop page is compiled into the binary with `include_str!`, so a
 # missing or renamed file is a build error rather than a 404 discovered by
 # someone standing in a room holding a phone over a robot. This checks the
@@ -137,27 +137,27 @@ step "teleop page still has its touch handlers" \
 #       --record recordings/bench-two-joint.wire
 step "replay: two-joint bench recording" \
      "cargo run -q -p hil-host --example joint -- --replay recordings/bench-two-joint.wire \
-      | grep -q '0 unparsable'"
+      | grep '0 unparsable' >/dev/null"
 step "replay: perception fixture" \
-     "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep -q 'every command matched'"
+     "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep 'every command matched' >/dev/null"
 # The rig recordings, read headless. Counts pinned exactly: a parser
 # change that breaks Status, thumbnail or arm_pulses stops being a
 # surprise in the viewer and becomes a red build here.
 step "replay: chase session (camera wire format)" \
      "cargo run -q -p hil-host --example rig_replay -- recordings/chase-brightness.wire \
-      | grep -q '1034 status (0 stalled), 5 images (0 torn), 0 servo, 2 notes, 0 unparsable'"
+      | grep '1034 status (0 stalled), 5 images (0 torn), 0 servo, 2 notes, 0 unparsable' >/dev/null"
 step "replay: servo tracking and the stall latch" \
      "cargo run -q -p hil-host --example rig_replay -- recordings/track-and-stall.wire \
-      | grep -q '1132 status (1119 stalled), 7 images (0 torn), 47 servo, 3 notes, 0 unparsable'"
+      | grep '1132 status (1119 stalled), 7 images (0 torn), 47 servo, 3 notes, 0 unparsable' >/dev/null"
 
 # Slowest, and needs npx + the emulator checkout.
 [ -z "$CI" ] && \
 step "HIL on the emulator (RP2040)" \
-     "tools/build-robot.sh && cargo run -q -p hil-host | grep -q 'waypoints:   1/1'"
+     "tools/build-robot.sh && cargo run -q -p hil-host | grep 'waypoints:   1/1' >/dev/null"
 
 if [ -n "$SERIAL" ]; then
   step "HIL on real silicon ($SERIAL)" \
-       "cargo run -q -p hil-host -- --serial $SERIAL | grep -q 'waypoints:   1/1'"
+       "cargo run -q -p hil-host -- --serial $SERIAL | grep 'waypoints:   1/1' >/dev/null"
   # The failures a SUCCESSFUL mission never exercises: a corrupt command,
   # and a host that dies and reconnects. Both were broken on hardware and
   # invisible from the laptop.

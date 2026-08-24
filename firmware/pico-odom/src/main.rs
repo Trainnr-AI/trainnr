@@ -826,7 +826,11 @@ mod diag {
     }
 
     /// Queue a note, dropping it if nobody is draining.
-    #[cfg(any(feature = "camera", feature = "arm"))]
+    // Every consumer, not a guess: camera and servo narrate, and the
+    // wifi transport reports its own join/telemetry lines. The first
+    // cut of this gate omitted wifi and broke that build — caught by
+    // the full gate, not the hand-picked variant matrix.
+    #[cfg(any(feature = "camera", feature = "arm", feature = "wifi"))]
     pub fn note(text: &str) {
         let mut line = Line::new();
         if line.extend_from_slice(text.as_bytes()).is_ok()
