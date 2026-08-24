@@ -224,12 +224,15 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
     )
     # The claw: two jaws on mirrored hinges, gear-meshed in metal =
     # equality-coupled here. Jaw length reaches the measured tip.
+    # LATERAL pinch, matching the metal (observed 2026-08-26: the real
+    # claw closes left-right across the car's width, 90° from the first
+    # model). Jaws offset along hand-Y, hinging about hand-X.
     jaw_len = WRIST_TO_TIP - 0.04
     for side, sign in (("l", 1.0), ("r", -1.0)):
-        jaw = hand.add_body(name=f"yarm_jaw_{side}", pos=[sign * 0.012, 0, 0.04])
+        jaw = hand.add_body(name=f"yarm_jaw_{side}", pos=[0, sign * 0.012, 0.04])
         jaw.add_joint(
             name=f"yarm_jaw_{side}_hinge",
-            axis=[0, sign, 0],
+            axis=[sign, 0, 0],
             range=[-0.6, 0.6],
             damping=SERVO_DAMPING,
             armature=SERVO_ARMATURE,
@@ -237,8 +240,8 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         jaw.add_geom(
             name=f"yarm_jaw_{side}_geom",
             type=mujoco.mjtGeom.mjGEOM_BOX,
-            size=[0.004, 0.008, jaw_len / 2],
-            pos=[sign * 0.004, 0, jaw_len / 2],
+            size=[0.008, 0.004, jaw_len / 2],
+            pos=[0, sign * 0.004, jaw_len / 2],
             mass=0.004,
             friction=[1.5, 0.02, 0.001],
             rgba=[0.95, 0.8, 0.1, 1.0],
@@ -304,15 +307,17 @@ def compose_rig(*, car: bool = True) -> Any:
 # approaches punched the cube's far corner until shoulder depth put both
 # tips below cube-top before closing; and the working (shoulder, wrist)
 # region is a RIDGE, not a point — (0.55, 0.7..0.85) all lift.
-REAR_GRASP_POINT = (-0.197, 0.0)
+REAR_GRASP_POINT = (-0.187, 0.0)
 REAR_PICK_BASIN_M = 0.008
 
 # ctrl vectors: [base_yaw, waist, shoulder, wrist, jaw]
-REAR_TUCK = [0.0, 0.2, 0.3, 0.2, 0.5]
-REAR_HOVER = [0.0, 1.1, 0.55, 0.8, 0.5]
-REAR_REACH = [0.0, 1.50, 0.55, 0.8, 0.5]
-REAR_GRIP = [0.0, 1.50, 0.55, 0.8, -0.35]
-REAR_LIFT = [0.0, 0.9, 0.55, 0.8, -0.35]
+# Jaw sense with the LATERAL pinch (matches the metal): NEGATIVE opens,
+# POSITIVE closes — inverted from the first radial-pinch model.
+REAR_TUCK = [0.0, 0.2, 0.3, 0.2, -0.5]
+REAR_HOVER = [0.0, 1.1, 0.55, 0.8, -0.5]
+REAR_REACH = [0.0, 1.50, 0.55, 0.8, -0.5]
+REAR_GRIP = [0.0, 1.50, 0.55, 0.8, 0.35]
+REAR_LIFT = [0.0, 0.9, 0.55, 0.8, 0.35]
 
 REAR_PICK_SEQUENCE = (
     (REAR_TUCK, 1.2),
