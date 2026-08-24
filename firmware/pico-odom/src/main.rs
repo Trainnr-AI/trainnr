@@ -809,7 +809,19 @@ mod diag {
         if line.extend_from_slice(text.as_bytes()).is_ok()
             && line.extend_from_slice(b"\r\n").is_ok()
         {
-            NOTES.send(line).await;
+            // ⚠️ Backpressure only while someone drains. The drain is
+            // gated on HOST_WATCHING, so a HEADLESS board fills the
+            // eight slots and then a blocking send waits forever — and
+            // the caller here is the CAMERA task, so the first rover-
+            // mode run (2026-08-24, phone brick) wedged capture inside
+            // an announcement: frames froze, the seek's dead-camera
+            // failsafe parked the rig after one burst and a salute.
+            // Headless, notes drop like everything else.
+            if crate::HOST_WATCHING.load(core::sync::atomic::Ordering::Relaxed) {
+                NOTES.send(line).await;
+            } else {
+                let _ = NOTES.try_send(line);
+            }
         }
     }
 
