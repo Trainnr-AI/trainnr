@@ -36,6 +36,10 @@ chase = ["usb", "camera"]
 # without eyes has nothing to reach the bus with yet:
 #   tools/build-pico2.sh pico-odom teleop,camera,arm
 arm = ["camera", "dep:pca9685-driver"]
+# The whole errand: camera seeks the prop, the car parks/spins/backs up,
+# the arm runs the twin-tuned rear pick, the car carries the prize.
+#   tools/build-pico2.sh pico-odom fetch
+fetch = ["usb", "camera", "arm"]
 # Report over UDP on the CYW43 radio instead of a cable — a Pico 2 W with
 # no tether. RP2350-only, because RP2040 Picos in this project have no
 # radio, and telemetry-only by design (see the compile_error! below):

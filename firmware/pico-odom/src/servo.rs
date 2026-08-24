@@ -65,6 +65,45 @@ const EXERCISE_US: i32 = 150;
 /// Per-40 ms slew step during the exercise — ~9°/s at the horn.
 const EXERCISE_STEP_US: i32 = 4;
 
+// ---------------------------------------------------------------- fetch --
+//
+// The rear pick, tuned in the MuJoCo twin (pipeline tasks/yellow.py,
+// 15/15 across ±8 mm) and translated to pulses: µs = 1500 + rad/0.00165.
+// ⚠️ SIGNS AND TRIMS ARE PER-METAL, NOT PER-MODEL: each joint's
+// direction depends on which way its horn faced when it was screwed on.
+// Flip ARM_SIGN entries / adjust ARM_TRIM_US against the real arm — the
+// same promotion every sign constant in this firmware went through.
+/// Multiplies each channel's offset from centre. Start all +1; flip on
+/// first sight of a joint moving the wrong way.
+const ARM_SIGN: [i32; 5] = [1, 1, 1, 1, 1];
+/// Added to each channel after sign — the spline-seating remainder.
+const ARM_TRIM_US: [i32; 5] = [0, 0, 0, 0, 0];
+/// Fetch pick clamps: wider than the tracking sweep band because the
+/// reach genuinely needs ~2400 µs on the waist, but still inside the
+/// SG90's physical 500–2400 with margin at the low end.
+const FETCH_MIN_US: u32 = 600;
+const FETCH_MAX_US: u32 = 2400;
+/// Slew per 40 ms tick during the pick — gentle, grabbable.
+const FETCH_STEP_US: i32 = 6;
+
+/// Waypoints as (offsets-from-centre µs per channel, hold ms). Derived
+/// from the twin's REAR_PICK_SEQUENCE via pose_to_pulses_us.
+const FETCH_PICK: [([i32; 5], u64); 6] = [
+    ([0, 121, 182, 121, 303], 1200),    // tuck
+    ([0, 667, 333, 485, 303], 1200),    // hover
+    ([0, 909, 333, 485, 303], 1800),    // reach
+    ([0, 909, 333, 485, -212], 1000),   // grip
+    ([0, 545, 333, 485, -212], 1800),   // lift
+    ([0, 545, 333, 485, -212], 600),    // hold
+];
+
+/// Drive→arm handshake: the drive state machine sets GO when parked;
+/// the arm sets DONE when the cube is (hopefully) held aloft.
+pub static PICK_GO: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+pub static PICK_DONE: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
 /// Bring-up lever: `true` restores the blind lockstep sweep that proved
 /// the servos on 2026-08-15. Kept for the same reason the camera keeps
 /// `TEST_PATTERN` — comparing against a known motion is the move that
@@ -192,6 +231,12 @@ pub async fn run(bus: I2c<'static, I2C0, Async>) {
     if !wake(&mut driver).await {
         return;
     }
+    #[cfg(feature = "fetch")]
+    {
+        fetch_arm(&mut driver).await;
+        return;
+    }
+    #[cfg(not(feature = "fetch"))]
     if ASSEMBLY_CENTRE {
         centre_hold(&mut driver).await;
     } else if BRINGUP_SWEEP {
@@ -352,5 +397,62 @@ async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
             crate::diag::note(&text);
         }
         Timer::after_millis(TICK_MS).await;
+    }
+}
+
+
+/// The fetch pick: hold tuck until the drive says GO, then slew through
+/// the twin's waypoints and report DONE with the claw (hopefully) full.
+#[cfg(feature = "fetch")]
+async fn fetch_arm(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
+    use core::sync::atomic::Ordering;
+
+    let centre = CENTRE_US as i32;
+    let apply = |offsets: &[i32; 5]| -> [u32; 5] {
+        let mut pulses = [0u32; 5];
+        for (index, offset) in offsets.iter().enumerate() {
+            let commanded = centre + ARM_SIGN[index] * offset + ARM_TRIM_US[index];
+            pulses[index] = (commanded.max(0) as u32).clamp(FETCH_MIN_US, FETCH_MAX_US);
+        }
+        pulses
+    };
+    let Ok(first) = Channel::new(0) else { return };
+    let mut current = apply(&FETCH_PICK[0].0);
+    if driver.set_pulses(first, &current).await.is_err() {
+        crate::diag::note("# servo bus error — fetch arm dead");
+        return;
+    }
+    crate::diag::note("# fetch arm TUCKED, waiting for drive");
+    loop {
+        while !PICK_GO.load(Ordering::Relaxed) {
+            Timer::after_millis(50).await;
+        }
+        crate::diag::note("# fetch arm PICKING");
+        for (offsets, hold_ms) in FETCH_PICK.iter() {
+            let target = apply(offsets);
+            loop {
+                let mut moving = false;
+                for (slot, goal) in current.iter_mut().zip(target.iter()) {
+                    let step = (*goal as i32 - *slot as i32)
+                        .clamp(-FETCH_STEP_US, FETCH_STEP_US);
+                    if step != 0 {
+                        *slot = (*slot as i32 + step) as u32;
+                        moving = true;
+                    }
+                }
+                if driver.set_pulses(first, &current).await.is_err() {
+                    crate::diag::note("# servo bus error — pick aborted");
+                    return;
+                }
+                if !moving {
+                    break;
+                }
+                Timer::after_millis(40).await;
+            }
+            Timer::after_millis(*hold_ms).await;
+        }
+        crate::diag::note("# fetch arm LIFTED");
+        PICK_DONE.store(true, Ordering::Relaxed);
+        PICK_GO.store(false, Ordering::Relaxed);
     }
 }

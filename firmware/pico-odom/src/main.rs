@@ -128,14 +128,14 @@ use embassy_rp::peripherals::{PWM_SLICE3, PWM_SLICE5};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
 use embassy_time::{Instant, Timer};
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 use embassy_time::Duration;
 use firmware_support::motor::{Channel, Encoders, Motors, PWM_TOP};
 use firmware_support::Report;
 use panic_halt as _;
 use quad_encoder::QuadratureDecoder;
 use sim_core::{Odometry, Pose, RobotSpec};
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 use sim_core::{BodyTwist, DUTY_FULL};
 #[cfg(feature = "teleop")]
 use sim_core::CommandWatchdog;
@@ -255,7 +255,7 @@ const COMMAND_TIMEOUT_MS: u64 = 200;
 /// How long a read waits before coming up for air to check the watchdog.
 /// Shorter than [`COMMAND_TIMEOUT_MS`], so staleness is acted on within
 /// one poll of becoming true.
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 const POLL: Duration = Duration::from_millis(50);
 
 
@@ -265,14 +265,14 @@ const POLL: Duration = Duration::from_millis(50);
 ///
 /// 150 of 1000 is 15%, clear of the measured ~4.3% deadband with margin —
 /// below that, "not moving" is legitimate physics rather than a fault.
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 const STALL_DUTY_FLOOR: i32 = 150;
 
 /// Consecutive polls of commanded-but-not-moving before cutting the
 /// motors. At [`POLL`] = 50 ms, four polls is 200 ms — long enough that a
 /// motor still overcoming its own inertia is never mistaken for a stall,
 /// short enough that a genuinely locked rotor is not held at full duty.
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 const STALL_POLLS: u32 = 4;
 
 /// Duty above which the motor **must** move, or something is wrong.
@@ -523,7 +523,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
 /// pins and deadband notes "diverge silently once there are two of them",
 /// and chase's first draft proved it by copying forty-five lines of this
 /// verbatim.
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 struct Drivetrain {
     motors: Motors,
     cfg: PwmConfig,
@@ -541,10 +541,10 @@ struct Drivetrain {
 /// brief ~500 mA draw, thermally trivial — while a transient snag (a
 /// carpet edge, a cable, one wheel late to break away) costs 2 s
 /// instead of the rest of the run.
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 const STALL_COOLDOWN_POLLS: u32 = 40;
 
-#[cfg(any(feature = "teleop", feature = "chase"))]
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 impl Drivetrain {
     /// Take the motors, stopped.
     fn new(mut motors: Motors) -> Self {
@@ -889,6 +889,151 @@ embassy_rp::bind_interrupts!(struct I2cIrqs {
     I2C0_IRQ => embassy_rp::i2c::InterruptHandler<embassy_rp::peripherals::I2C0>;
 });
 
+/// The fetch errand as a state machine over the chase primitives.
+///
+/// SEEK reuses the chase law verbatim. ARRIVE latches when the blob is
+/// big and centred for a sustained beat — one glimpse of a big blob is
+/// a hand waving past the lens, half a second of one is the prop. SPIN
+/// and BACK are open-loop timed (constants trimmed on the floor, like
+/// every drive constant in this file). PICK hands the body to the servo
+/// task through `servo::PICK_GO`/`PICK_DONE`, wheels frozen. CARRY
+/// creeps forward with the prize and parks. Single-shot: replug to run
+/// the errand again — a fetch robot that immediately re-hunts with a
+/// full claw would chase its own cargo.
+#[cfg(feature = "fetch")]
+async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
+    use core::sync::atomic::Ordering;
+
+    const CREEP_M_PER_S: f64 = 0.06;
+    const TURN_RAD_PER_S: f64 = 0.9;
+    const CENTRE_DEADBAND: f32 = 0.20;
+    /// Blob at least this big = the prop fills the near field = parked.
+    const AREA_ARRIVED: u32 = 1800;
+    /// The blob must stay arrived this long before we commit.
+    const ARRIVE_HOLD_MS: u64 = 500;
+    /// Timed 180° at TURN_RAD_PER_S ≈ π/0.9 s; trimmed on the floor.
+    const SPIN_MS: u64 = 3500;
+    /// Reverse leg that lays the prop into the arm's ±8 mm pocket.
+    const BACK_MS: u64 = 2000;
+    const CARRY_MS: u64 = 1500;
+    const FRESH_MS: u64 = 1000;
+
+    while !HOST_WATCHING.load(Ordering::Relaxed) {
+        Timer::after_millis(50).await;
+    }
+    crate::diag::note("# fetch SEEKING");
+
+    let mut drivetrain = Drivetrain::new(motors);
+    let mut last_frame_total = camera::frame_total();
+    let mut last_frame_at = firmware_support::now_ms();
+    let mut arrived_since: Option<u64> = None;
+
+    // ---- SEEK ----
+    loop {
+        Timer::after(POLL).await;
+        let now = firmware_support::now_ms();
+        let frames = camera::frame_total();
+        if frames != last_frame_total {
+            last_frame_total = frames;
+            last_frame_at = now;
+        }
+        let image_alive = now.saturating_sub(last_frame_at) < FRESH_MS;
+
+        // Turn first; creep only while centred. Unlike the chase, the
+        // fetch WANTS to close the distance all the way to AREA_ARRIVED.
+        let (v, w, arrived) = match camera::blob_error() {
+            Some((x, _y, area)) if image_alive => {
+                let centred = x.abs() <= CENTRE_DEADBAND;
+                if area >= AREA_ARRIVED && centred {
+                    (0.0, 0.0, true)
+                } else {
+                    let w = if x > CENTRE_DEADBAND {
+                        -TURN_RAD_PER_S
+                    } else if x < -CENTRE_DEADBAND {
+                        TURN_RAD_PER_S
+                    } else {
+                        0.0
+                    };
+                    let v = if centred && area < AREA_ARRIVED {
+                        CREEP_M_PER_S
+                    } else {
+                        0.0
+                    };
+                    (v, w, false)
+                }
+            }
+            _ => (0.0, 0.0, false),
+        };
+        {
+            let (left, right) = Drivetrain::duty_for(&spec, v, w);
+            drivetrain.apply(left, right);
+        }
+
+        if arrived {
+            let since = *arrived_since.get_or_insert(now);
+            if now - since >= ARRIVE_HOLD_MS {
+                break;
+            }
+        } else {
+            arrived_since = None;
+        }
+    }
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+        drivetrain.apply(left, right);
+    }
+    crate::diag::note("# fetch ARRIVED, spinning");
+    Timer::after_millis(300).await;
+
+    // ---- SPIN 180° (timed) ----
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, 0.0, TURN_RAD_PER_S);
+        drivetrain.apply(left, right);
+    }
+    Timer::after_millis(SPIN_MS).await;
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+        drivetrain.apply(left, right);
+    }
+    crate::diag::note("# fetch SPUN, backing up");
+    Timer::after_millis(300).await;
+
+    // ---- BACK onto the prop ----
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, -CREEP_M_PER_S, 0.0);
+        drivetrain.apply(left, right);
+    }
+    Timer::after_millis(BACK_MS).await;
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+        drivetrain.apply(left, right);
+    }
+    crate::diag::note("# fetch PARKED, arm's turn");
+
+    // ---- PICK (the arm's show; wheels frozen) ----
+    servo::PICK_DONE.store(false, Ordering::Relaxed);
+    servo::PICK_GO.store(true, Ordering::Relaxed);
+    while !servo::PICK_DONE.load(Ordering::Relaxed) {
+        Timer::after_millis(100).await;
+    }
+    crate::diag::note("# fetch CARRYING");
+
+    // ---- CARRY and park ----
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+        drivetrain.apply(left, right);
+    }
+    Timer::after_millis(CARRY_MS).await;
+    {
+        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+        drivetrain.apply(left, right);
+    }
+    loop {
+        crate::diag::note("# fetch DONE — errand complete, replug to rerun");
+        Timer::after_millis(5000).await;
+    }
+}
+
 #[cfg(feature = "camera")]
 mod camera;
 #[cfg(feature = "arm")]
@@ -1126,13 +1271,13 @@ mod transport {
 #[cfg(feature = "usb")]
 mod transport {
     use super::*;
-    #[cfg(not(any(feature = "teleop", feature = "chase")))]
+    #[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
     use embassy_futures::join::join;
     use embassy_rp::bind_interrupts;
     use embassy_rp::peripherals::USB;
     use embassy_rp::usb::{Driver, InterruptHandler};
     use embassy_time::{with_timeout, Duration};
-    #[cfg(any(feature = "teleop", feature = "chase"))]
+    #[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
     use embassy_futures::join::join3;
     #[cfg(feature = "teleop")]
     use embassy_usb::class::cdc_acm::Receiver;
@@ -1322,10 +1467,23 @@ mod transport {
         // being open would silently lose every tick between power-up and
         // the first `screen`. `send` already declines to write while
         // `dtr()` is low.
-        #[cfg(not(any(feature = "teleop", feature = "chase")))]
+        #[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
         {
             spawner.spawn(drive_sweep(motors).unwrap());
             join(usb.run(), odometry_forever(encoders, &mut out)).await;
+        }
+
+        // The whole errand: seek the prop by camera, park, spin, back up,
+        // hand the body to the arm, carry the prize. Same three-futures
+        // shape as chase, one state machine deeper.
+        #[cfg(feature = "fetch")]
+        {
+            join3(
+                usb.run(),
+                odometry_forever(encoders, &mut out),
+                fetch_forever(motors, RobotSpec::REAL_BOT),
+            )
+            .await;
         }
 
         // The camera commands the wheels; the host only watches. Same
