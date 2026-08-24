@@ -38,6 +38,12 @@ def _base_scene(name: str) -> Any:
 
     scene = mujoco.MjSpec()
     scene.modelname = name
+    # Radians, explicitly: MjSpec's programmatic default is DEGREES,
+    # which turned the yellow arm's range=[-1.4, 1.4] into a ±1.4°
+    # straitjacket — every joint sat pinned on its own limit and the
+    # servos looked 85% too weak (measured; the XML models never hit
+    # this because they declare angle="radian").
+    scene.compiler.degree = False
     # The arm's contact options, restored as always (attach drops them);
     # harmless for the car-only scene.
     scene.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
