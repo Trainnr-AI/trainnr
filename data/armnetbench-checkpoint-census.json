@@ -1,0 +1,314 @@
+{
+ "generator": "R8 retrainability census, 2026-08-25 (session tool run)",
+ "finding": "R8's premise is STALE: the agenda recorded 'no public checkpoints; retraining from released demos is part of the method'. The ArmnetBench ecosystem has since released per-task checkpoints for all 7 policies x 8 tasks. Paper 2's primary condition becomes EVALUATION of released checkpoints, not retraining.",
+ "formats": {
+  "lerobot-safetensors": "act, diffusion, smolvla, grootn1.7, molmoact2 - load via LeRobot, inference fits 24GB (largest weights 10.9GB)",
+  "openpi-orbax": "pi0, pi0.5 - openpi JAX runtime required (second stack), or weight conversion to the LeRobot port"
+ },
+ "sizes_gb_block_stack": {
+  "act": 0.2,
+  "smolvla": 0.9,
+  "grootn1.7": 6.9,
+  "molmoact2": 10.9
+ },
+ "demos": "50 teleop demos per task in per-task HF repos (spot-verified); available for later co-training conditions",
+ "dataset": "armnet/armnetbench_v01_lerobot_so101 (LeRobot v3.0, 2499 rollouts, ungated, Apache-2.0)",
+ "matrix": {
+  "block_stack": {
+   "act": {
+    "repo": "pravsels/act_block_stack_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/armnetbench_block_stack_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_block_stack",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-armnetbench-block-stack-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 24
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-armnetbench-block-stack-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_block_stack_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_block_stack_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "cable_clip": {
+   "act": {
+    "repo": "pravsels/act_cable_clip_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/cable_clip_remote_v2_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_cable_clip",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-cable-clip-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-cable-clip-isambard",
+    "format": "openpi-orbax",
+    "files": 65
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_cable_clip_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_cable_clip_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "cable_unclip": {
+   "act": {
+    "repo": "pravsels/act_cable_unclip_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/cable_unclip_remote_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_cable_unclip",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-cable-unclip-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-cable-unclip-isambard",
+    "format": "openpi-orbax",
+    "files": 71
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_cable_unclip_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_cable_unclip_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "eye_drops_to_basket": {
+   "act": {
+    "repo": "pravsels/act_eyedrops_basket_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/object_top_shelf_reset_remote_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_eyedrops_basket",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-object-top-shelf-reset-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-object-top-shelf-reset-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 24
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_eyedrops_basket_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_eyedrops_basket_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "eye_drops_to_shelf": {
+   "act": {
+    "repo": "pravsels/act_eyedrops_shelf",
+    "format": "lerobot-safetensors",
+    "files": 23
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/object_top_shelf_remote_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_eyedrops_shelf",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-object-top-shelf-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-object-top-shelf-isambard",
+    "format": "openpi-orbax",
+    "files": 72
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_eyedrops_shelf_20k",
+    "format": "lerobot-safetensors",
+    "files": 14
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_eyedrops_shelf_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "ring_insert": {
+   "act": {
+    "repo": "pravsels/act_ring_insert_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/armnetbench_ring_insert_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_ring_insert",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-armnetbench-ring-insert-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 26
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-armnetbench-ring-insert-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_ring_insert_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_ring_insert_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "tool_insert": {
+   "act": {
+    "repo": "pravsels/act_tool_insert",
+    "format": "lerobot-safetensors",
+    "files": 23
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/armnetbench_tool_insert_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_tool_insert",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-armnetbench-tool-insert-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 25
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-armnetbench-tool-insert-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 24
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_tool_insert_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_tool_insert_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  },
+  "tool_removal": {
+   "act": {
+    "repo": "pravsels/act_tool_removal_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "diffusion": {
+    "repo": "villekuosmanen/armnetbench_tool_removal_diffusion",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "smolvla": {
+    "repo": "pravsels/smolvla_tool_removal",
+    "format": "lerobot-safetensors",
+    "files": 9
+   },
+   "pi0": {
+    "repo": "lorenzouttini/pi0-so101-armnetbench-tool-removal-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 26
+   },
+   "pi0.5": {
+    "repo": "lorenzouttini/pi05-so101-armnetbench-tool-removal-isambard-v50",
+    "format": "openpi-orbax",
+    "files": 23
+   },
+   "grootn1.7": {
+    "repo": "pravsels/groot1.7_tool_removal_20k",
+    "format": "lerobot-safetensors",
+    "files": 16
+   },
+   "molmoact2": {
+    "repo": "pravsels/molmoact2_tool_removal_20k",
+    "format": "lerobot-safetensors",
+    "files": 9
+   }
+  }
+ }
+}
