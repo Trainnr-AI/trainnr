@@ -133,6 +133,7 @@ robotiq/
 
 Product and research, first:
 
+- [`docs/29-the-platform.md`](docs/29-the-platform.md) — the destination: the two-sided platform, mapped and fenced
 - [`docs/25-strategy-review-2026-08-24.md`](docs/25-strategy-review-2026-08-24.md) — the strategy: verdict, critical path, operator's list
 - [`docs/22-pipeline-architecture.md`](docs/22-pipeline-architecture.md) — the codebase map and its contracts
 - [`docs/23-research-agenda.md`](docs/23-research-agenda.md) — Papers 0–3, novelty adversarially pre-verified
