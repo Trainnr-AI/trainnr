@@ -90,7 +90,47 @@ def _scene_with_arm(name: str, arm_xml: Path) -> Any:
     )
     frame = scene.worldbody.add_frame(pos=[0, 0, 0])
     frame.attach_body(arm.worldbody.first_body(), ARM_PREFIX, "")
+    _add_armnetbench_cameras(scene)
     return scene
+
+
+def _add_armnetbench_cameras(scene: Any) -> None:
+    """The three-camera rig every ArmnetBench policy was trained on.
+
+    front/top/wrist, matching the dataset's observation keys. Placement
+    is V1 GEOMETRY — real-frame matching (sim render beside dataset
+    video, tools/camera-match.py) is the calibration step, deliberately
+    done by eye against the 2,499 released episodes before any
+    correlation is trusted; a vision policy can fail on cosmetics, and
+    that failure must not be read as a dynamics gap.
+    """
+    # The offscreen framebuffer defaults to 640x480; the wrist camera
+    # renders 1280x720, so the scene must say so or Renderer refuses.
+    scene.visual.global_.offwidth = 1280
+    scene.visual.global_.offheight = 720
+    scene.worldbody.add_camera(
+        name="front",
+        pos=[0.0, -0.85, 0.25],
+        # x flipped +: with x=[-1,0,0] the -z view axis pointed AWAY
+        # from the arm and rendered pure black - caught by the
+        # black-frame guard on its first outing.
+        xyaxes=[1, 0, 0, 0, 0.35, 0.94],
+        fovy=52,
+    )
+    scene.worldbody.add_camera(
+        name="top",
+        pos=[0.0, -0.25, 0.85],
+        xyaxes=[-1, 0, 0, 0, -1, 0],
+        fovy=58,
+    )
+    # The wrist camera rides the jaw; the body exists only post-attach.
+    wrist_mount = scene.body(f"{ARM_PREFIX}Fixed_Jaw")
+    wrist_mount.add_camera(
+        name="wrist",
+        pos=[0.0, -0.06, 0.04],
+        xyaxes=[0, -1, 0, 1, 0, 1],
+        fovy=70,
+    )
 
 
 def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:

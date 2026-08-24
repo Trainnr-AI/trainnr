@@ -14,6 +14,7 @@ precisely so it can raise the helpful error.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -171,4 +172,90 @@ class MuJoCoBackend:
             mujoco.mj_getState(
                 model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
             )
+        return states, sensors
+
+    def closed_loop_vision_rollout(
+        self,
+        initial_state: numpy.ndarray,
+        policy: Any,
+        steps: int,
+        control_interval: int,
+        cameras: Sequence[Any],
+    ) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """The vision episode: the policy sees RENDERED PIXELS + state.
+
+        Added 2026-08-25 for Paper 2's released-checkpoint evaluation:
+        ArmnetBench policies observe three cameras and six joint
+        positions, never the simulator's internals. `cameras` is a
+        sequence of specs with (key, camera_name, width, height); the
+        policy receives a LeRobot-shaped dict per control step:
+        {"observation.images.<key>": uint8 (H, W, 3), ...,
+         "observation.state": float32 (6,)} and returns nu controls.
+        The state is the first six SENSOR values (the so101 wrapper's
+        jointpos block) — sensors, not qpos: same instrument rule as
+        the sensor-only rollout above.
+
+        One renderer per unique resolution, shared across cameras.
+        """
+        mujoco = self._mujoco
+        import numpy as np  # noqa: PLC0415
+
+        model = self._require_model()
+        if steps <= 0 or control_interval <= 0:
+            raise ValueError(
+                f"steps and control_interval must be positive, got "
+                f"{steps} and {control_interval}"
+            )
+        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        initial = np.asarray(initial_state, dtype=float)
+        if initial.shape != (size,):
+            raise ValueError(
+                f"initial_state must have shape ({size},), got {initial.shape}"
+            )
+        renderers: dict[tuple[int, int], Any] = {}
+        for camera in cameras:
+            key = (camera.height, camera.width)
+            if key not in renderers:
+                renderers[key] = mujoco.Renderer(
+                    model, height=camera.height, width=camera.width
+                )
+        data = mujoco.MjData(model)
+        mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        mujoco.mj_forward(model, data)
+
+        states = np.empty((steps, size))
+        sensors = np.empty((steps, model.nsensordata))
+        try:
+            for step in range(steps):
+                if step % control_interval == 0:
+                    observation: dict[str, Any] = {
+                        "observation.state": np.asarray(
+                            data.sensordata[:6], dtype=np.float32
+                        ).copy()
+                    }
+                    for camera in cameras:
+                        renderer = renderers[(camera.height, camera.width)]
+                        renderer.update_scene(data, camera=camera.camera_name)
+                        observation[f"observation.images.{camera.key}"] = (
+                            renderer.render()
+                        )
+                    control = np.asarray(policy(step, observation), dtype=float)
+                    if control.shape != (model.nu,):
+                        raise ValueError(
+                            f"policy returned shape {control.shape}, "
+                            f"expected ({model.nu},)"
+                        )
+                    data.ctrl[:] = control
+                mujoco.mj_step(model, data)
+                # Same R7 rule as the sensor-only rollout above: recompute
+                # so sensors[k], states[k] and the next render all describe
+                # ONE instant — no accidental one-tick lag.
+                mujoco.mj_forward(model, data)
+                sensors[step] = data.sensordata
+                mujoco.mj_getState(
+                    model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
+                )
+        finally:
+            for renderer in renderers.values():
+                renderer.close()
         return states, sensors
