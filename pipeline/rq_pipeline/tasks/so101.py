@@ -44,8 +44,12 @@ DEFAULT_ARM_XML = (
     Path(__file__).resolve().parents[3] / "robots" / "so101-nominal" / "so101.xml"
 )
 
+# One definition repo-wide; components.py imports it from here (it
+# already imports from this module, so this direction has no cycle).
+ARM_SENSOR_WIDTH = 12  # qpos+qvel slice width of the arm's sensordata
+
 # The arm's own sensor block: six jointpos then six jointvel.
-ARM_SENSOR_WIDTH = 12
+
 FINGERTIP_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
 
 # Episode design: 500 Hz physics (the model default), policies at 50 Hz —

@@ -2,10 +2,12 @@
 `crates/hil-protocol`.
 
 Two implementations of one format, in two languages, is exactly the
-repo's recurring bug shape — so this module's conformance test replays a
-committed recording and asserts the Rust gate's exact published counts
-(`tools/verify.sh` pins the same numbers). The two parsers are allowed
-to exist only because something now compares them.
+repo's recurring bug shape — so this module's conformance test replays
+committed recordings and asserts pinned census counts. ⚠️ Honest gap
+(found in review 2026-08-24): the Rust gate pins DIFFERENT recordings
+than the Python tests, and the Rust replayer does not understand the
+direction prefixes hil-host writes — the parsers are compared on the
+same bytes only within each language's own fixtures until that closes.
 
 Format facts mirrored from the Rust source, not from memory:
 - Status lines are `key=value` tokens; all nine fields must parse or the
@@ -93,12 +95,22 @@ class Recording:
         )
 
 
+_STATUS_KEYS = ("n", "x", "y", "th", "L", "R", "errL", "errR", "duty")
+
+
 def parse_status(line: str) -> StatusFrame | None:
     values: dict[str, str] = {}
+    matched = 0
     for token in line.split():
         key, _, value = token.partition("=")
-        if value:
+        if value and key in _STATUS_KEYS:
+            # A duplicated key (torn line re-emitted after reconnect)
+            # makes the count wrong on purpose: Rust counts tokens and
+            # rejects the whole line, so we must too.
+            matched += 1
             values[key] = value
+    if matched != STATUS_FIELD_COUNT:
+        return None
     try:
         frame = StatusFrame(
             seq=int(values["n"]),
@@ -113,6 +125,9 @@ def parse_status(line: str) -> StatusFrame | None:
             stalled="STALLED" in line,
         )
     except (KeyError, ValueError):
+        return None
+    # Rust parses these as unsigned; a negative here is a corrupt line.
+    if frame.seq < 0 or frame.errors_left < 0 or frame.errors_right < 0:
         return None
     return frame
 
@@ -137,26 +152,37 @@ def parse_image_row(line: str, width: int) -> tuple[int, ...] | None:
     expected_length = width * _HEX_DIGITS_PER_PIXEL
     if len(hex_digits) != expected_length:
         return None
-    try:
-        return tuple(
-            int(hex_digits[i : i + _HEX_DIGITS_PER_PIXEL], 16)
-            for i in range(0, expected_length, _HEX_DIGITS_PER_PIXEL)
-        )
-    except ValueError:
+    # Pure hex digits only — Python's int(x, 16) also accepts +FFF,
+    # -FFF and AB_C, which the Rust side rejects; a corrupted row with
+    # a sign would otherwise become a NEGATIVE "pixel" and poison
+    # rgb565_to_rgb888 downstream.
+    if not all(c in "0123456789abcdefABCDEF" for c in hex_digits):
         return None
+    return tuple(
+        int(hex_digits[i : i + _HEX_DIGITS_PER_PIXEL], 16)
+        for i in range(0, expected_length, _HEX_DIGITS_PER_PIXEL)
+    )
 
 
 def parse_servo_note(payload: str) -> tuple[int, int, int] | None:
     if not payload.startswith(SERVO_PAYLOAD_PREFIX):
         return None
-    parts = payload[len(SERVO_PAYLOAD_PREFIX) :].split()
-    if len(parts) != _SERVO_CHANNELS:
+    # Mirror the Rust parser exactly: it filter_maps u32 parses and
+    # takes the first three, so extra tokens or non-numeric noise do
+    # not reject the line — and negatives are NOT valid pulses.
+    pulses = []
+    for part in payload[len(SERVO_PAYLOAD_PREFIX) :].split():
+        try:
+            value = int(part)
+        except ValueError:
+            continue
+        if value >= 0:
+            pulses.append(value)
+        if len(pulses) == _SERVO_CHANNELS:
+            break
+    if len(pulses) != _SERVO_CHANNELS:
         return None
-    try:
-        first, second, third = (int(part) for part in parts)
-    except ValueError:
-        return None
-    return first, second, third
+    return pulses[0], pulses[1], pulses[2]
 
 
 def parse_camera_note(payload: str) -> CameraNote | None:

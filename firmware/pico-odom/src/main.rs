@@ -81,10 +81,10 @@
 //!
 //! # What this can and cannot prove on real hardware
 //!
-//! The geometry it reads from [`RobotSpec::REAL_BOT`] is **still
-//! placeholder** — see that constant's docs. In particular its
-//! `ticks_per_revolution` is `1024.0` where the bench says **4290**, so
-//! reported distances are roughly 4.2x too large.
+//! The geometry it reads from [`RobotSpec::REAL_BOT`] carries the
+//! bench-measured `ticks_per_revolution` (4290) and max wheel speed;
+//! wheel radius and track are still ruler-grade — see that constant's
+//! docs for which numbers have real provenance and which are estimates.
 //!
 //! **The shape is still right, and that is what this firmware
 //! demonstrates.** Turn both wheels the same way and the pose travels in
@@ -173,17 +173,14 @@ const POLL_US: u64 = 100;
 const REPORT_MS: u64 = 20;
 
 /// PWM counter wrap. 5000 counts at ~150 MHz gives roughly **30 kHz**,
-/// deliberately above the audible band — a motor driven at 2 kHz whines,
-/// and the winding heats more on the switching edges.
-
 /// The duty sweep, as percentages held for [`STEP_SECS`] each.
 ///
 /// It **ends at zero and parks**, rather than looping. A bench motor on
 /// four thin encoder wires should not run unattended, and a firmware whose
 /// natural end state is "stopped" cannot be left running by accident.
-#[cfg(not(any(feature = "teleop", feature = "chase")))]
+#[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
 const SWEEP: [u16; 6] = [0, 25, 50, 75, 100, 0];
-#[cfg(not(any(feature = "teleop", feature = "chase")))]
+#[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
 const STEP_SECS: u64 = 3;
 
 /// The duty the sweep is currently commanding, so the report line can say
@@ -280,7 +277,7 @@ const STALL_POLLS: u32 = 4;
 /// The measured deadband is ~4.6% (docs/07, 2026-08-09), so 15% is clear
 /// of it with margin — below that, "not moving" is legitimate physics
 /// rather than a fault.
-#[cfg(not(any(feature = "teleop", feature = "chase")))]
+#[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
 const MUST_MOVE_ABOVE: u16 = 15;
 
 /// Where a status line goes. The odometry loop does not care.
@@ -321,8 +318,7 @@ const MUST_MOVE_ABOVE: u16 = 15;
 /// last entry in [`SWEEP`] is `0` and `STBY` drops after it — belt and
 /// braces, because a zero duty with the driver still enabled is a stopped
 /// motor that can still be commanded, and this one should not be.
-#[cfg(not(feature = "teleop"))]
-#[cfg(not(any(feature = "teleop", feature = "chase")))]
+#[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
 #[embassy_executor::task]
 async fn drive_sweep(mut motors: Motors) {
     // Nothing moves until a host is listening. See `HOST_WATCHING`.
@@ -437,6 +433,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
     let mut seq = 0u64;
     let mut last_report = Instant::now();
     let mut last_l = 0i32;
+    let mut total_motion: u32 = 0;
     let mut last_r = 0i32;
 
     loop {
@@ -466,12 +463,15 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             last_r = right_count;
             odom.update(dl as i64, dr as i64);
 
-            // Publish for the stall check. Sum of magnitudes, so motion in
-            // either direction on either wheel counts as "it moved".
-            TOTAL_TICKS.store(
-                left_count.unsigned_abs() + right_count.unsigned_abs(),
-                Ordering::Relaxed,
-            );
+            // Publish for the stall check: a MONOTONE odometer of
+            // motion. The old sum of |cumulative| counts could hold
+            // constant during a spin after forward travel (|left|
+            // falling while |right| rises cancel exactly), reading as
+            // "not moving" while the robot turned — a phantom stall
+            // found in review 2026-08-24, never on the floor.
+            total_motion =
+                total_motion.wrapping_add(dl.unsigned_abs() + dr.unsigned_abs());
+            TOTAL_TICKS.store(total_motion, Ordering::Relaxed);
 
             let p = odom.pose;
             // ONE definition of this line, shared with both hosts.
@@ -503,7 +503,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // ⚠️ The interval and the rate divisor are the same fact, so
             // they come from one constant. 50 Hz reporting x 10 s.
             #[cfg(feature = "camera")]
-            if seq.is_multiple_of(u64::from(50 * camera::ANNOUNCE_SECONDS)) {
+            if seq.is_multiple_of((1000 / REPORT_MS) * u64::from(camera::ANNOUNCE_SECONDS)) {
                 camera::announce();
             }
             drain_notes!(out);
@@ -637,7 +637,12 @@ impl Drivetrain {
         if should_run != self.enabled {
             self.motors.standby.set_level(Level::from(should_run));
             self.enabled = should_run;
-            STALLED.store(false, Ordering::Relaxed);
+            // Clear only on the way UP: clearing on the disable
+            // transition un-latched a stall in the same call that set
+            // it, blipping STALLED=false at the host once per latch.
+            if should_run {
+                STALLED.store(false, Ordering::Relaxed);
+            }
         }
         // The same mounting fact as everywhere else, applied on the way
         // out — see `firmware_support::motor::DRIVETRAIN_SIGN`.
@@ -763,21 +768,6 @@ struct MotorPins {
     bin2: Peri<'static, PIN_12>,
 }
 
-/// The four encoder pins and the motor driver, identical whichever
-/// transport is built.
-///
-/// # Why the LED is not set up here
-///
-/// It used to be, taking `PIN_25` alongside the encoder pins. That stopped
-/// working the moment a third transport existed: **on a Pico 2 W, GP25 is
-/// the radio's chip-select**, so the `wifi` build has to hand that pin to
-/// `PioSpi` and blink the radio's own GPIO 0 instead. A function that
-/// claimed the pin unconditionally would have made the wifi transport
-/// impossible to write without a flag saying "don't do the thing you were
-/// named for".
-///
-/// So the heartbeat belongs to the transport, which is the thing that
-/// knows what a sign of life looks like on its board.
 // ---------------------------------------------------------------------
 // Notes — prose the chip wants the host to read, on the wire the poses
 // already use.
@@ -820,6 +810,7 @@ mod diag {
     /// image and produce a picture with holes in it. Anything on a
     /// control path must use [`note`] instead: this one can block, and
     /// blocking is exactly what diagnostics are forbidden to do.
+    #[cfg(any(feature = "camera", feature = "arm"))]
     pub async fn note_blocking(text: &str) {
         let mut line = Line::new();
         if line.extend_from_slice(text.as_bytes()).is_ok()
@@ -830,6 +821,7 @@ mod diag {
     }
 
     /// Queue a note, dropping it if nobody is draining.
+    #[cfg(any(feature = "camera", feature = "arm"))]
     pub fn note(text: &str) {
         let mut line = Line::new();
         if line.extend_from_slice(text.as_bytes()).is_ok()
@@ -891,8 +883,9 @@ embassy_rp::bind_interrupts!(struct I2cIrqs {
 
 /// The fetch errand as a state machine over the chase primitives.
 ///
-/// SEEK reuses the chase law verbatim. ARRIVE latches when the blob is
-/// big and centred for a sustained beat — one glimpse of a big blob is
+/// SEEK is turn-and-glance (never turning while looking — the camera
+/// is too slow to track a stiction-rate turn). ARRIVE latches on three
+/// consecutive stationary glances of a big centred blob — one glimpse is
 /// a hand waving past the lens, half a second of one is the prop. SPIN
 /// and BACK are open-loop timed (constants trimmed on the floor, like
 /// every drive constant in this file). PICK hands the body to the servo
@@ -904,7 +897,7 @@ embassy_rp::bind_interrupts!(struct I2cIrqs {
 async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     use core::sync::atomic::Ordering;
 
-    /// ⚠️ RAISED from the chase's 0.06/0.9 on 2026-08-26, attempt 1:
+    /// ⚠️ RAISED from the chase's 0.06/0.9 on 2026-08-24, attempt 1:
     /// the fetch rig carries the arm, PCA and loom the chase never did,
     /// and the old turn duty (~29%) stalled against the new breakaway —
     /// guard latched at 175 ticks. Same promotion path as the chase's
@@ -942,6 +935,8 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
 
     let mut arrive_streak: u32 = 0;
     let mut search_left = true;
+    let mut last_frame_seen = camera::frame_total();
+    let mut last_frame_at = firmware_support::now_ms();
     'seek: loop {
         {
             let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
@@ -954,8 +949,26 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
         {
             Timer::after(POLL).await;
         }
+        let fresh = camera::frame_total() != glance_from;
+        if fresh {
+            last_frame_seen = camera::frame_total();
+            last_frame_at = firmware_support::now_ms();
+        } else if firmware_support::now_ms().saturating_sub(last_frame_at) > 5000 {
+            // The chase parks on a dead image; the fetch must too — a
+            // wedged capture reads as "no blob" and an unguarded seek
+            // pirouettes on it forever (review 2026-08-24).
+            let _ = last_frame_seen;
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+            drivetrain.apply(left, right);
+            loop {
+                crate::diag::note("# fetch camera DEAD — parked, replug to retry");
+                Timer::after_millis(5000).await;
+            }
+        }
+        // A glance that timed out without a fresh frame decides on the
+        // PRE-turn image — treat it as no blob instead.
         let burst = match camera::blob_error() {
-            Some((x, _y, area)) => {
+            Some((x, _y, area)) if fresh => {
                 let centred = x.abs() <= CENTRE_DEADBAND;
                 if centred && area >= AREA_ARRIVED {
                     arrive_streak += 1;
@@ -977,6 +990,11 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
                     }
                     let creep_from = firmware_support::now_ms();
                     loop {
+                        {
+                            let (left, right) =
+                                Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+                            drivetrain.apply(left, right);
+                        }
                         Timer::after(POLL).await;
                         let leg_done = firmware_support::now_ms()
                             .saturating_sub(creep_from)
@@ -994,7 +1012,7 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
                     None
                 }
             }
-            None => {
+            _ => {
                 arrive_streak = 0;
                 Some(if search_left { TURN_RAD_PER_S } else { -TURN_RAD_PER_S })
             }
@@ -1019,11 +1037,16 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     Timer::after_millis(300).await;
 
     // ---- SPIN 180° (timed) ----
-    {
+    // Every timed leg RE-APPLIES its duty each POLL: the stall guard
+    // only advances inside apply(), so a single apply + sleep held a
+    // blocked wheel at full duty for the whole leg with the guard
+    // asleep (review 2026-08-24).
+    let leg = firmware_support::now_ms();
+    while firmware_support::now_ms().saturating_sub(leg) < SPIN_MS {
         let (left, right) = Drivetrain::duty_for(&spec, 0.0, TURN_RAD_PER_S);
         drivetrain.apply(left, right);
+        Timer::after(POLL).await;
     }
-    Timer::after_millis(SPIN_MS).await;
     {
         let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
         drivetrain.apply(left, right);
@@ -1032,11 +1055,12 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     Timer::after_millis(300).await;
 
     // ---- BACK onto the prop ----
-    {
+    let leg = firmware_support::now_ms();
+    while firmware_support::now_ms().saturating_sub(leg) < BACK_MS {
         let (left, right) = Drivetrain::duty_for(&spec, -CREEP_M_PER_S, 0.0);
         drivetrain.apply(left, right);
+        Timer::after(POLL).await;
     }
-    Timer::after_millis(BACK_MS).await;
     {
         let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
         drivetrain.apply(left, right);
@@ -1046,17 +1070,25 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     // ---- PICK (the arm's show; wheels frozen) ----
     servo::PICK_DONE.store(false, Ordering::Relaxed);
     servo::PICK_GO.store(true, Ordering::Relaxed);
+    // Bounded: a dead arm task (bus error) can never set PICK_DONE,
+    // and an unbounded wait froze the errand forever at "arm's turn".
+    let pick_started = firmware_support::now_ms();
     while !servo::PICK_DONE.load(Ordering::Relaxed) {
+        if firmware_support::now_ms().saturating_sub(pick_started) > 60_000 {
+            crate::diag::note("# fetch ABANDONED — arm never reported done");
+            break;
+        }
         Timer::after_millis(100).await;
     }
     crate::diag::note("# fetch CARRYING");
 
     // ---- CARRY and park ----
-    {
+    let leg = firmware_support::now_ms();
+    while firmware_support::now_ms().saturating_sub(leg) < CARRY_MS {
         let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
         drivetrain.apply(left, right);
+        Timer::after(POLL).await;
     }
-    Timer::after_millis(CARRY_MS).await;
     {
         let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
         drivetrain.apply(left, right);
@@ -1194,6 +1226,21 @@ async fn chase_forever(motors: Motors, spec: RobotSpec) -> ! {
     }
 }
 
+/// The four encoder pins and the motor driver, identical whichever
+/// transport is built.
+///
+/// # Why the LED is not set up here
+///
+/// It used to be, taking `PIN_25` alongside the encoder pins. That stopped
+/// working the moment a third transport existed: **on a Pico 2 W, GP25 is
+/// the radio's chip-select**, so the `wifi` build has to hand that pin to
+/// `PioSpi` and blink the radio's own GPIO 0 instead. A function that
+/// claimed the pin unconditionally would have made the wifi transport
+/// impossible to write without a flag saying "don't do the thing you were
+/// named for".
+///
+/// So the heartbeat belongs to the transport, which is the thing that
+/// knows what a sign of life looks like on its board.
 fn shared_setup(
     la: Peri<'static, PIN_2>,
     lb: Peri<'static, PIN_3>,
@@ -1430,7 +1477,6 @@ mod transport {
         // The note it queues is drained by the report loop, so it reaches
         // the host whenever the host turns up, rather than being written
         // into a port nobody has opened yet.
-        #[cfg(feature = "camera")]
         // One bus, three tenants: the camera's SCCB, the PCA9685, and
         // whatever joins GP4/GP5 next. Built HERE because a bus is a
         // board resource — each module borrows it and hands it back.

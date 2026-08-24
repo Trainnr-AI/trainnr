@@ -1,6 +1,6 @@
 """The yellow arm's MuJoCo twin, on the car — the REAL rig's double.
 
-Link lengths measured by ruler on the assembled arm (2026-08-26, ±2 mm):
+Link lengths measured by ruler on the assembled arm (2026-08-24, ±2 mm):
 base platform top 40 mm, waist→shoulder 15 mm, shoulder→elbow 59 mm,
 elbow→wrist 55 mm, wrist→gripper tip 80 mm; whole arm ~50-60 g. Every
 dynamics number beyond geometry is NOMINAL hobby-servo guesswork and
@@ -10,8 +10,10 @@ gets tuned before the metal runs it.
 
 Joint map mirrors the PCA channels (canonical since assembly):
 
-    ch0 base yaw · ch1 waist pitch · ch2 shoulder pitch ·
-    ch3 wrist pitch · ch4 gripper (two gear-meshed jaws, one servo)
+    ch0 base yaw · ch1 waist pitch (EMPTY since 2026-08-24 — servo
+    removed after the toppling; the joint stays in the twin for the
+    REAR floor-pick capability) · ch2 shoulder pitch · ch3 wrist pitch ·
+    ch4 gripper (two gear-meshed jaws, one servo)
 
 Servo pulse ↔ joint angle: 1500 µs is centre = 0 rad; SG90-class travel
 is ~180° over ~1900 µs, so RAD_PER_US ≈ 0.00165. The claw's second jaw
@@ -26,7 +28,7 @@ from typing import Any
 
 from rq_pipeline.tasks.components import CAR_PREFIX, _base_scene
 
-# Real car geometry, measured by ruler 2026-08-26. Self-consistent:
+# Real car geometry, measured by ruler 2026-08-24. Self-consistent:
 # axle 75 mm from the rear of a 250 mm chassis = 50 mm behind centre;
 # caster 50 mm from the front = 75 mm ahead of centre; axle→caster
 # 125 mm ≈ the measured 130 mm wheelbase. REAR-wheel drive, single
@@ -131,6 +133,10 @@ SERVO_FORCE = 0.22
 SERVO_ARMATURE = 0.0005
 SERVO_DAMPING = 0.03
 RAD_PER_US = 0.00165
+# The firmware's FETCH_MIN/MAX_US, mirrored (servo.rs) — both ends
+# clamp identically, pinned by test_firmware_mirror.
+PULSE_FLOOR_US = 600
+PULSE_CEILING_US = 2400
 YELLOW_SENSOR_WIDTH = 6  # five joints + the driven jaw
 
 ARM_MASS = 0.055  # ruler-and-guesswork estimate, whole arm
@@ -224,7 +230,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
     )
     # The claw: two jaws on mirrored hinges, gear-meshed in metal =
     # equality-coupled here. Jaw length reaches the measured tip.
-    # LATERAL pinch, matching the metal (observed 2026-08-26: the real
+    # LATERAL pinch, matching the metal (observed 2026-08-24: the real
     # claw closes left-right across the car's width, 90° from the first
     # model). Jaws offset along hand-Y, hinging about hand-X.
     jaw_len = WRIST_TO_TIP - 0.04
@@ -299,7 +305,7 @@ def compose_rig(*, car: bool = True) -> Any:
 
 # ------------------------------------------------------------ rear pick --
 
-# The rear floor pick, tuned in the twin 2026-08-26 (probe log in
+# The rear floor pick, tuned in the twin 2026-08-24 (probe log in
 # docs/07). Grasp point in the CHASSIS frame; the basin is a measured
 # 15/15 across +-8 mm in both axes — the parking spec for the fetch.
 # The tuning found two things a spec sheet never would: the claw's V
@@ -323,20 +329,70 @@ REAR_LIFT = [0.0, 0.9, 0.55, 0.8, 0.35]
 # (2026-08-24). The REAR_* floor pick stays as the TWIN's capability —
 # the metal performs the AIR mime instead. The WAIST SERVO IS REMOVED
 # from the real arm (2026-08-24, after it kept toppling): ch1 is an
-# empty channel, the twin freezes that joint at 0 to approximate the
-# now-rigid link. Yaw stays hand-aligned; shoulder and wrist carry the
+# empty channel. The twin's waist joint still EXISTS (kp=2 servo, full
+# range — needed for the REAR capability); the AIR poses merely hold it
+# at 0, which is not the same as the metal's rigid link — under load
+# the twin's waist can sag where the metal cannot.
+# Yaw stays hand-aligned; shoulder and wrist carry the
 # mime at moderate angles (max 0.9 rad), claw acts.
 AIR_TUCK = [0.0, 0.0, 0.3, 0.2, -0.5]
 AIR_REACH = [0.0, 0.0, 0.7, 0.9, -0.5]
 AIR_GRAB = [0.0, 0.0, 0.7, 0.9, 0.35]
 AIR_CARRY = [0.0, 0.0, 0.4, 0.4, 0.35]
 
+# Holds mirror the firmware's FETCH_PICK table row for row (including
+# the final hold) — pinned by test_firmware_mirror, so a retune here
+# fails the build until servo.rs is regenerated to match.
 AIR_PICK_SEQUENCE = [
     (AIR_TUCK, 1.5),
     (AIR_REACH, 2.0),
-    (AIR_GRAB, 1.0),
+    (AIR_GRAB, 1.2),
     (AIR_CARRY, 2.0),
+    (AIR_CARRY, 0.8),
 ]
+
+# The firmware slews FETCH_STEP_US = 3 µs per 40 ms tick (servo.rs) —
+# 75 µs/s, which through RAD_PER_US is the arm's true joint speed. The
+# viewers reconstruct the mime with THIS rate; a fixed guess of 1.2 s
+# per transition had the replayed arm finishing ~14 s before the metal.
+FIRMWARE_SLEW_US_PER_S = 75
+SLEW_RAD_PER_S = FIRMWARE_SLEW_US_PER_S * RAD_PER_US
+
+# The salute (servo.rs fetch_arm): at the starting gun the claw runs
+# 2 waves x [close 350 ms, open 350 ms] = 1.4 s, jaw only.
+SALUTE_HALF_S = 0.35
+SALUTE_TOTAL_S = 4 * SALUTE_HALF_S
+
+
+def salute_pose(t: float) -> list[float] | None:
+    """Arm pose t seconds after the starting gun, or None once done."""
+    if t < 0 or t >= SALUTE_TOTAL_S:
+        return None
+    jaw = 0.35 if int(t / SALUTE_HALF_S) % 2 == 0 else -0.5
+    return [*AIR_TUCK[:4], jaw]
+
+
+def air_mime_pose(t: float) -> list[float]:
+    """Arm pose t seconds after PICKING, at the firmware's true slew.
+
+    The ONE reconstruction of the metal's mime — every viewer imports
+    this instead of guessing its own blend times.
+    """
+    prev = AIR_TUCK
+    for pose, hold in AIR_PICK_SEQUENCE:
+        blend = (
+            max(abs(a - b) for a, b in zip(prev, pose, strict=True)) / SLEW_RAD_PER_S
+        )
+        if t < blend:
+            frac = t / blend if blend > 0 else 1.0
+            return [a + (b - a) * frac for a, b in zip(prev, pose, strict=True)]
+        t -= blend
+        if t < hold:
+            return list(pose)
+        t -= hold
+        prev = pose
+    return list(AIR_PICK_SEQUENCE[-1][0])
+
 
 REAR_PICK_SEQUENCE = (
     (REAR_TUCK, 1.2),
@@ -351,9 +407,15 @@ def pose_to_pulses_us(pose: list[float]) -> list[int]:
     """Joint radians → PCA pulse widths for the metal arm.
 
     1500 µs is centre by construction (the horns went on against a held
-    centre). ⚠️ Per-joint SIGNS and spline trims are properties of the
-    assembled metal, not of this model — they get measured against the
-    real arm before the first hardware pick, the same promotion every
-    sign constant in the firmware went through.
+    centre). Clamped to the firmware's FETCH_MIN/MAX_US band exactly as
+    the metal clamps — the REAR poses' waist (1.50 rad → 2409 µs) sits
+    past the SG90's physical stop, and an unclamped translation would
+    command a buzz-at-stall. ⚠️ Per-joint SIGNS and spline trims are
+    properties of the assembled metal, not of this model — they get
+    measured against the real arm, the same promotion every sign
+    constant in the firmware went through.
     """
-    return [round(1500 + angle / RAD_PER_US) for angle in pose]
+    return [
+        min(max(round(1500 + angle / RAD_PER_US), PULSE_FLOOR_US), PULSE_CEILING_US)
+        for angle in pose
+    ]

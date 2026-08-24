@@ -11,17 +11,26 @@ from pathlib import Path
 
 import mujoco
 import mujoco.viewer
-import numpy as np
 import rerun as rr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.collect.frames import STATUS_HZ
 from rq_pipeline.collect.wire import parse_recording
-from rq_pipeline.tasks.yellow import compose_rig, AIR_PICK_SEQUENCE, AIR_TUCK
+from rq_pipeline.tasks.yellow import (
+    AIR_TUCK,
+    air_mime_pose,
+    compose_rig,
+    salute_pose,
+)
 
+if len(sys.argv) < 2:
+    sys.exit("usage: replay-errand.py <recording.wire>")
 WIRE = Path(sys.argv[1])
-TICK = 0.02  # one status frame
+if not WIRE.exists():
+    sys.exit(f"no such recording: {WIRE}")
+TICK = 1.0 / STATUS_HZ
 
 rec = parse_recording(WIRE)
 
@@ -40,8 +49,7 @@ for line in WIRE.read_text(errors="replace").splitlines():
         count += 1
 
 pick_at = next((c for c, t in marks if "arm PICKING" in t), None)
-arrive_at = next((c for c, t in marks if "ARRIVED" in t), None)
-print(f"{count} status frames; ARRIVED@{arrive_at} PICKING@{pick_at}")
+print(f"{count} status frames; PICKING@{pick_at}")
 
 # --- twin ---
 scene = compose_rig(car=True)
@@ -57,54 +65,19 @@ jaw_l = model.jnt_qposadr[model.joint("yarm_jaw_l_hinge").id]
 jaw_r = model.jnt_qposadr[model.joint("yarm_jaw_r_hinge").id]
 JOINT_NAMES = ["base", "waist", "shoulder", "wrist", "jaw"]
 
-# Mirror MuJoCo's actual geometry into Rerun: every rig geom as an
-# oriented box (cylinders/spheres approximated by their bounding box),
-# so both viewers show the same shapes, not a stick abstraction.
-rig_geoms = []
-rig_half_sizes = []
-rig_colors = []
-for g in range(model.ngeom):
-    name = model.geom(g).name
-    if name == "floor":
-        continue
-    size = model.geom_size[g]
-    kind = int(model.geom_type[g])
-    if kind == int(mujoco.mjtGeom.mjGEOM_BOX):
-        half = size.tolist()
-    elif kind == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
-        half = [size[0], size[0], size[1]]
-    elif kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE):
-        half = [size[0], size[0], size[1] + size[0]]
-    else:
-        half = [size[0]] * 3
-    rig_geoms.append(g)
-    rig_half_sizes.append(half)
-    rig_colors.append([255, 190, 40] if name.startswith("yarm") else [90, 130, 220])
-
+mirror = RigMirror(model)
 
 
 # --- arm pose as a function of status index ---
 def mime_pose(i):
-    # salute: two claw waves right after ARRIVED
-    if arrive_at is not None and arrive_at <= i < arrive_at + 70 and (pick_at is None or i < pick_at):
-        phase = ((i - arrive_at) // 18) % 2
-        jaw = 0.35 if phase == 0 else -0.5
-        return [*AIR_TUCK[:4], jaw]
-    if pick_at is None or i < pick_at:
-        return AIR_TUCK
-    t = (i - pick_at) * TICK
-    prev = AIR_TUCK
-    for pose, hold in AIR_PICK_SEQUENCE:
-        blend = 1.2
-        if t < blend:
-            a = t / blend
-            return [p + (q - p) * a for p, q in zip(prev, pose)]
-        t -= blend
-        if t < hold:
-            return pose
-        t -= hold
-        prev = pose
-    return AIR_PICK_SEQUENCE[-1][0]
+    # The salute fires at the STARTING GUN (SALUTE_GO is set the moment
+    # the host connects — servo.rs), not at ARRIVED as an earlier cut
+    # of this file guessed; the mime follows the PICKING cue at the
+    # firmware's true slew rate via yellow.air_mime_pose.
+    if pick_at is not None and i >= pick_at:
+        return air_mime_pose((i - pick_at) * TICK)
+    wave = salute_pose(i * TICK)
+    return wave if wave is not None else AIR_TUCK
 
 rr.init(f"yellow-rig-{WIRE.stem}", spawn=False)
 try:

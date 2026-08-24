@@ -16,7 +16,6 @@ from pathlib import Path
 
 import mujoco
 import mujoco.viewer
-import numpy as np
 import rerun as rr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
@@ -25,8 +24,22 @@ from _rig3d import RigMirror  # noqa: E402
 from rq_pipeline.tasks.yellow import (  # noqa: E402
     AIR_PICK_SEQUENCE,
     AIR_TUCK,
+    SLEW_RAD_PER_S,
+    air_mime_pose,
     compose_rig,
+    salute_pose,
 )
+
+
+def _mime_total_s() -> float:
+    total, prev = 0.0, AIR_TUCK
+    for pose, hold in AIR_PICK_SEQUENCE:
+        total += max(abs(a - b) for a, b in zip(prev, pose)) / SLEW_RAD_PER_S + hold
+        prev = pose
+    return total
+
+
+MIME_TOTAL_S = _mime_total_s()
 
 # ---- firmware constants, mirrored (main.rs fetch_forever) ----
 CREEP_M_PER_S = 0.10
@@ -93,32 +106,7 @@ def synthetic_blob():
 
 # ---- Rerun mirror (same entity paths as tools/replay-errand.py) ----
 JOINT_NAMES = ["base", "waist", "shoulder", "wrist", "jaw"]
-rig_geoms, rig_half_sizes, rig_colors = [], [], []
-for g in range(model.ngeom):
-    name = model.geom(g).name
-    if name == "floor":
-        continue
-    size = model.geom_size[g]
-    kind = int(model.geom_type[g])
-    if kind == int(mujoco.mjtGeom.mjGEOM_BOX):
-        half = size.tolist()
-    elif kind == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
-        half = [size[0], size[0], size[1]]
-    elif kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE):
-        half = [size[0], size[0], size[1] + size[0]]
-    else:
-        half = [size[0]] * 3
-    rig_geoms.append(g)
-    rig_half_sizes.append(half)
-    if name.startswith("yarm"):
-        rig_colors.append([255, 190, 40])
-    elif name.startswith("prop"):
-        rig_colors.append([230, 40, 40])
-    else:
-        rig_colors.append([90, 130, 220])
-
-
-
+mirror = RigMirror(model)
 
 rr.init("yellow-rig-sim-errand", spawn=False)
 try:
@@ -147,12 +135,11 @@ arm_pose = list(AIR_TUCK)
 trail = []
 state = "glance"
 state_since = 0.0
+glance_from = 0
+cam_frames = 0
 arrive_streak = 0
 search_left = True
 glance_burst = None
-mime_index = -1
-mime_since = 0.0
-mime_prev = list(AIR_TUCK)
 stage_note = "fetch SEEKING (sim)"
 last_cam = -1.0
 blob = None
@@ -168,11 +155,15 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         wall = time.time()
         if t - last_cam >= CAM_PERIOD_S:
             last_cam = t
+            cam_frames += 1
             blob = synthetic_blob()
 
         if state == "glance":
             duty = (0.0, 0.0)
-            if t - state_since >= GLANCE_S:
+            # A fresh frame ends the glance early — 700 ms is only the
+            # cap (mirrors main.rs); without this the sim's seek runs
+            # ~2.8x slower than the firmware it claims to predict.
+            if cam_frames != glance_from or t - state_since >= GLANCE_S:
                 if blob is None:
                     arrive_streak = 0
                     state, state_since = "burst", t
@@ -183,10 +174,10 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
                     if centred and area >= AREA_ARRIVED:
                         arrive_streak += 1
                         if arrive_streak >= ARRIVE_GLANCES:
-                            state, state_since = "spin", t
+                            state, state_since = "arrive_settle", t
                             stage_note = "fetch ARRIVED, spinning (sim)"
                         else:
-                            state_since = t
+                            state_since, glance_from = t, cam_frames
                     elif not centred:
                         arrive_streak = 0
                         search_left = x_err < 0
@@ -200,40 +191,38 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             duty = (-glance_burst, glance_burst)
             if t - state_since >= TURN_BURST_S:
                 state, state_since = "glance", t
+                glance_from = cam_frames
         elif state == "creep":
             duty = (CREEP_DUTY, CREEP_DUTY)
             keep = blob is not None and abs(blob[0]) <= CENTRE_DEADBAND and blob[1] < AREA_ARRIVED
             if t - state_since >= CREEP_LEG_S or not keep:
                 state, state_since = "glance", t
+                glance_from = cam_frames
+        elif state == "arrive_settle":
+            duty = (0.0, 0.0)
+            if t - state_since >= 0.3:  # main.rs settles 300 ms
+                state, state_since = "spin", t
         elif state == "spin":
             duty = (-TURN_DUTY, TURN_DUTY)
             if t - state_since >= SPIN_S:
-                state, state_since = "back", t
+                state, state_since = "spun_settle", t
                 stage_note = "fetch SPUN, backing up (sim)"
+        elif state == "spun_settle":
+            duty = (0.0, 0.0)
+            if t - state_since >= 0.3:  # main.rs settles 300 ms
+                state, state_since = "back", t
         elif state == "back":
             duty = (-CREEP_DUTY, -CREEP_DUTY)
             if t - state_since >= BACK_S:
                 state, state_since = "pick", t
                 stage_note = "fetch PARKED, arm's turn (sim)"
-                mime_index, mime_since = 0, t
-                mime_prev = list(arm_pose)
         elif state == "pick":
             duty = (0.0, 0.0)
-            pose, hold = AIR_PICK_SEQUENCE[mime_index]
-            blend = 1.2
-            dt_m = t - mime_since
-            if dt_m < blend:
-                a = dt_m / blend
-                arm_pose = [p + (q - p) * a for p, q in zip(mime_prev, pose)]
-            elif dt_m < blend + hold:
-                arm_pose = list(pose)
-            else:
-                mime_prev = list(pose)
-                mime_index += 1
-                mime_since = t
-                if mime_index >= len(AIR_PICK_SEQUENCE):
-                    state, state_since = "carry", t
-                    stage_note = "fetch CARRYING (sim)"
+            # The one shared reconstruction, at the firmware's slew.
+            arm_pose = air_mime_pose(t - state_since)
+            if t - state_since >= MIME_TOTAL_S:
+                state, state_since = "carry", t
+                stage_note = "fetch CARRYING (sim)"
         elif state == "carry":
             duty = (CREEP_DUTY, CREEP_DUTY)
             if t - state_since >= CARRY_S:
@@ -245,6 +234,9 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             if done_at is not None and t - done_at > 4.0:
                 break
 
+        if state not in ("pick", "carry", "done"):
+            wave = salute_pose(t)
+            arm_pose = wave if wave is not None else list(AIR_TUCK)
         data.ctrl[:] = [duty[0], duty[1], *arm_pose]
         for _ in range(8):
             mujoco.mj_step(model, data)

@@ -8,10 +8,10 @@ import time
 import mujoco
 import mujoco.viewer
 
-from rq_pipeline.tasks.yellow import compose_rig
+from rq_pipeline.tasks.yellow import REAR_GRASP_POINT, compose_rig
 
 scene = compose_rig(car=True)
-cube = scene.worldbody.add_body(name="prop", pos=[-0.197, 0.0, 0.0125])
+cube = scene.worldbody.add_body(name="prop", pos=[*REAR_GRASP_POINT, 0.0125])
 cube.add_freejoint()
 cube.add_geom(
     name="prop_geom",
@@ -73,7 +73,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             if not viewer.is_running():
                 break
         # reset the cube for the next lap
-        data.qpos[cq : cq + 3] = [-0.19, 0.0, 0.0125]
+        data.qpos[cq : cq + 3] = [*REAR_GRASP_POINT, 0.0125]
         data.qpos[cq + 3 : cq + 7] = [1, 0, 0, 0]
         data.qvel[:] = 0
         mujoco.mj_forward(model, data)

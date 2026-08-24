@@ -30,7 +30,6 @@ CAR_PREFIX = "car_"
 
 # Sensor widths, for slicing sensordata downstream.
 CAR_SENSOR_WIDTH = 2  # one wheel encoder per side
-ARM_SENSOR_WIDTH = 12
 
 
 def _base_scene(name: str) -> Any:

@@ -1,17 +1,12 @@
-//! The PCA9685 and the arm servos behind it — from bus probe to
-//! camera-driven motion.
+//! The PCA9685 and the arm servos behind it.
 //!
-//! ```text
-//!   blob x    ─▶  ch0   pan toward the target
-//!   blob y    ─▶  ch1   tilt toward it
-//!   blob area ─▶  ch2   "gripper" closes as it nears
-//!   no blob / stale frames  ─▶  HOLD
-//! ```
-//!
-//! This is `crates/blob`'s founding promise made physical: *one blob
-//! yields three independent errors, which is exactly the three motions
-//! the rig has*. The wheels consume `x` and `area` in the chase build;
-//! the arm consumes all three its own way.
+//! Two eras live in this file. The FETCH build (the current rig) drives
+//! the five-channel yellow arm through the air-mime pick — waypoints
+//! generated from the MuJoCo twin (`tasks/yellow.py::pose_to_pulses_us`,
+//! pinned by `test_firmware_mirror`), gated on the host's starting gun,
+//! with the claw salute as a one-look rail-health check. The older
+//! tracking/sweep/assembly modes (blob x→pan, y→tilt, area→grip) remain
+//! compiled for the non-fetch builds that still use them.
 //!
 //! # ⚠️ Hold, not release, on target loss
 //!
@@ -48,21 +43,26 @@ use pca9685_driver::{Channel, SERVO_FRAME_HZ};
 /// screw it down. From then on 1500 = that pose, permanently. The spline
 /// seats in ~18° steps; the remainder becomes a per-joint trim constant,
 /// which is software's job, not a reason to lever a powered horn.
+#[cfg(not(feature = "fetch"))]
 const ASSEMBLY_CENTRE: bool = true;
 
 /// Channels held during assembly — the full five-joint arm, not just the
 /// three servos currently on hand, so the MG90S get the same jig.
+#[cfg(not(feature = "fetch"))]
 const ASSEMBLY_CHANNELS: usize = 5;
 
 /// With [`ASSEMBLY_CENTRE`], `true` runs the gentle per-joint exercise
 /// after the initial centre hold instead of holding forever.
+#[cfg(not(feature = "fetch"))]
 const ASSEMBLY_EXERCISE: bool = true;
 
 /// Exercise amplitude around centre. ±150 µs ≈ ±13°: enough to see every
 /// joint move both ways, nowhere near any mechanical stop.
+#[cfg(not(feature = "fetch"))]
 const EXERCISE_US: i32 = 150;
 
 /// Per-40 ms slew step during the exercise — ~9°/s at the horn.
+#[cfg(not(feature = "fetch"))]
 const EXERCISE_STEP_US: i32 = 4;
 
 // ---------------------------------------------------------------- fetch --
@@ -75,16 +75,18 @@ const EXERCISE_STEP_US: i32 = 4;
 // same promotion every sign constant in this firmware went through.
 /// Multiplies each channel's offset from centre. Start all +1; flip on
 /// first sight of a joint moving the wrong way.
-/// MEASURED against the metal 2026-08-26 (the exercise dance): base +
+/// MEASURED against the metal 2026-08-24 (the exercise dance): base +
 /// is CCW ✓, waist + leans rear ✓, shoulder + moved FRONT (flipped),
-/// wrist + tips FRONT (measured 2026-08-26, flipped), jaw + closes ✓
+/// wrist + tips FRONT (measured 2026-08-24, flipped), jaw + closes ✓
 /// (matches the lateral-pinch twin).
 const ARM_SIGN: [i32; 5] = [1, 1, -1, -1, 1];
 /// Added to each channel after sign — the spline-seating remainder.
 const ARM_TRIM_US: [i32; 5] = [0, 0, 0, 0, 0];
-/// Fetch pick clamps: wider than the tracking sweep band because the
-/// reach genuinely needs ~2400 µs on the waist, but still inside the
-/// SG90's physical 500–2400 with margin at the low end.
+/// Fetch pick clamps, matching the twin's PULSE_FLOOR/CEILING_US
+/// exactly (pinned by test_firmware_mirror) and inside the SG90's
+/// physical 500–2400. The old "the reach needs ~2400 µs on the waist"
+/// justification died with the waist servo — today's largest commanded
+/// pulse is 2045 µs (1500 + the 545 wrist reach).
 const FETCH_MIN_US: u32 = 600;
 const FETCH_MAX_US: u32 = 2400;
 /// Slew per 40 ms tick during the pick — gentle, grabbable.
@@ -123,37 +125,48 @@ pub static PICK_DONE: core::sync::atomic::AtomicBool =
 /// the servos on 2026-08-15. Kept for the same reason the camera keeps
 /// `TEST_PATTERN` — comparing against a known motion is the move that
 /// ends guessing sessions, and the next person deserves the lever.
+#[cfg(not(feature = "fetch"))]
 const BRINGUP_SWEEP: bool = false;
 
 /// Sweep bounds, 100 µs inside even the conservative nominal span. A
 /// servo commanded past its stop buzzes at stall current, and nothing on
 /// this rail can see the shaft.
+#[cfg(not(feature = "fetch"))]
 const SWEEP_LOW_US: u32 = 1100;
+#[cfg(not(feature = "fetch"))]
 const SWEEP_HIGH_US: u32 = 1900;
 /// Sweep step per 20 ms tick — ~8 s per half-sweep.
+#[cfg(not(feature = "fetch"))]
 const SWEEP_STEP_US: u32 = 2;
 
 /// Tracking centre and swing: full blob error deflects ±400 µs, staying
 /// inside the sweep bounds by construction.
 const CENTRE_US: f32 = 1500.0;
+#[cfg(not(feature = "fetch"))]
 const SWING_US: f32 = 400.0;
 /// Slew per 20 ms tick — 400 µs/s, two seconds lock-to-lock. The blob
 /// updates at ~4 Hz; slew is what turns those steps into motion.
+#[cfg(not(feature = "fetch"))]
 const TRACK_SLEW_US: u32 = 8;
 /// Blob area at which the "gripper" is fully closed.
+#[cfg(not(feature = "fetch"))]
 const AREA_NEAR: u32 = 1500;
 /// No new frame for this long → the image has stopped → the arm holds.
+#[cfg(not(feature = "fetch"))]
 const FRESH_MS: u64 = 1000;
 
 /// How many channels the tracker drives — the three SG90s on hand.
+#[cfg(not(feature = "fetch"))]
 const SERVO_COUNT: usize = 3;
 
 /// The control tick, one servo frame at 50 Hz. Every per-tick rate in
 /// this file (slew, sweep step) is calibrated against this number, so
 /// it exists exactly once.
+#[cfg(not(feature = "fetch"))]
 const TICK_MS: u64 = 20;
 /// Announce the commanded pulses every this many ticks — twice a second
 /// at the 20 ms tick, enough for the viewer, cheap on the notes queue.
+#[cfg(not(feature = "fetch"))]
 const NOTE_EVERY_TICKS: u32 = 25;
 /// The datasheet's ≥500 µs oscillator settle after wake, rounded up to
 /// the timer's comfortable resolution.
@@ -163,6 +176,7 @@ const OSCILLATOR_SETTLE_MS: u64 = 1;
 /// `const`, so a `SERVO_COUNT` beyond the chip's sixteen fails the build
 /// here instead of surfacing as a runtime `else return` buried in a
 /// control loop — the error path deleted rather than handled.
+#[cfg(not(feature = "fetch"))]
 const CHANNELS: [Channel; SERVO_COUNT] = {
     let mut channels = [match Channel::new(0) {
         Ok(channel) => channel,
@@ -220,14 +234,20 @@ async fn wake(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) -> bool {
     // Oscillator settle the driver cannot wait out itself.
     Timer::after_millis(OSCILLATOR_SETTLE_MS).await;
     let mut text: heapless::String<96> = heapless::String::new();
+    // The expectation is DERIVED, not hardcoded: a frame-rate change
+    // must move both the setting and the check together.
+    let expected = pca9685_driver::prescale_for(SERVO_FRAME_HZ).unwrap_or(0);
     match driver.read_register(pca9685_driver::REG_PRESCALE).await {
-        Ok(121) => {
-            let _ = text.push_str("# servo prescale=121 — 50 Hz confirmed by read-back");
+        Ok(value) if value == expected => {
+            let _ = write!(
+                text,
+                "# servo prescale={value} — {SERVO_FRAME_HZ} Hz confirmed by read-back"
+            );
         }
         Ok(other) => {
             let _ = write!(
                 text,
-                "# servo ⚠️ PRESCALE={other} not 121 — pulses too narrow, servos will NOT move"
+                "# servo ⚠️ PRESCALE={other} not {expected} — pulses wrong, servos will NOT move"
             );
         }
         Err(_) => {
@@ -248,6 +268,13 @@ pub async fn run(bus: I2c<'static, I2C0, Async>) {
     }
     #[cfg(feature = "fetch")]
     {
+        // No pulse leaves the board before the host connects — an arm
+        // that snaps to tuck on a wall charger is exactly the surprise
+        // HOST_WATCHING exists to prevent. SALUTE_GO doubles as that
+        // gate: the drive sets it at the starting gun.
+        while !SALUTE_GO.load(core::sync::atomic::Ordering::Relaxed) {
+            Timer::after_millis(50).await;
+        }
         fetch_arm(&mut driver).await;
         return;
     }
@@ -266,6 +293,7 @@ pub async fn run(bus: I2c<'static, I2C0, Async>) {
 /// commanded motion. One joint at a time, ±EXERCISE_US around centre,
 /// slewed in small steps — slow enough to grab the power lead if a
 /// linkage binds, small enough that nothing can reach a hard stop.
+#[cfg(not(feature = "fetch"))]
 async fn centre_hold(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     let mut pulses = [CENTRE_US as u32; ASSEMBLY_CHANNELS];
     let Ok(first) = Channel::new(0) else { return };
@@ -309,6 +337,7 @@ async fn centre_hold(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
 }
 
 /// Camera-driven tracking: three errors in, three positions out.
+#[cfg(not(feature = "fetch"))]
 async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     crate::diag::note("# servo TRACKING the camera: x->ch0 y->ch1 area->ch2");
     let mut current = [CENTRE_US as u32; SERVO_COUNT];
@@ -385,6 +414,7 @@ async fn track(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
 }
 
 /// The blind lockstep sweep — the bring-up instrument of 2026-08-15.
+#[cfg(not(feature = "fetch"))]
 async fn sweep(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     crate::diag::note("# servo ch0-2 sweeping TOGETHER 1100-1900us");
     let centre = (SWEEP_LOW_US + SWEEP_HIGH_US) / 2;
@@ -451,10 +481,7 @@ async fn fetch_arm(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
         }
         Timer::after_millis(400).await;
     }
-    crate::diag::note("# fetch arm TUCKED, waiting for drive");
-    while !SALUTE_GO.load(Ordering::Relaxed) {
-        Timer::after_millis(50).await;
-    }
+    crate::diag::note("# fetch arm TUCKED");
     let Ok(claw) = Channel::new(4) else { return };
     let mut wave = FETCH_PICK[0].0;
     for _ in 0..2 {
@@ -467,6 +494,14 @@ async fn fetch_arm(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
             }
             Timer::after_millis(350).await;
         }
+    }
+    // By-construction safety for the wave's exit state: the pick slews
+    // from `current`, so the wave must end recorded there — today the
+    // last wave offset happens to equal tuck's claw, but reordering the
+    // wave array must not become an unslewed 515 µs jump.
+    current = apply(&FETCH_PICK[0].0);
+    if driver.set_pulses(claw, &current[4..=4]).await.is_err() {
+        return;
     }
     crate::diag::note("# fetch arm SALUTED — rail is alive");
     loop {
