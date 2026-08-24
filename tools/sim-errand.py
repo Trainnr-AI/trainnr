@@ -20,6 +20,8 @@ import numpy as np
 import rerun as rr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _rig3d import RigMirror  # noqa: E402
 from rq_pipeline.tasks.yellow import (  # noqa: E402
     AIR_PICK_SEQUENCE,
     AIR_TUCK,
@@ -116,26 +118,6 @@ for g in range(model.ngeom):
         rig_colors.append([90, 130, 220])
 
 
-def mat_to_xyzw(flat):
-    m = np.asarray(flat).reshape(3, 3)
-    t = m[0, 0] + m[1, 1] + m[2, 2]
-    if t > 0:
-        r = math.sqrt(1 + t)
-        w = 0.5 * r
-        x = (m[2, 1] - m[1, 2]) / (2 * r)
-        y = (m[0, 2] - m[2, 0]) / (2 * r)
-        z = (m[1, 0] - m[0, 1]) / (2 * r)
-    else:
-        i = int(np.argmax([m[0, 0], m[1, 1], m[2, 2]]))
-        j, k = (i + 1) % 3, (i + 2) % 3
-        r = math.sqrt(1 + m[i, i] - m[j, j] - m[k, k])
-        q = [0.0, 0.0, 0.0]
-        q[i] = 0.5 * r
-        q[j] = (m[j, i] + m[i, j]) / (2 * r)
-        q[k] = (m[k, i] + m[i, k]) / (2 * r)
-        w = (m[k, j] - m[j, k]) / (2 * r)
-        x, y, z = q
-    return [x, y, z, w]
 
 
 rr.init("yellow-rig-sim-errand", spawn=False)
@@ -150,18 +132,7 @@ def log_frame(t, pose, stage=None):
     x, y, yaw = chassis_pose()
     trail.append([x, y, 0.005])
     rr.log("world/car/trail", rr.LineStrips3D([trail], colors=[[80, 220, 120]]))
-    rr.log(
-        "world/rig",
-        rr.Boxes3D(
-            centers=data.geom_xpos[rig_geoms],
-            half_sizes=rig_half_sizes,
-            quaternions=[
-                rr.Quaternion(xyzw=mat_to_xyzw(data.geom_xmat[g])) for g in rig_geoms
-            ],
-            colors=rig_colors,
-            fill_mode="solid",
-        ),
-    )
+    mirror.log(data)
     for name, val in zip(JOINT_NAMES, pose):
         rr.log(f"arm/{name}", rr.Scalars(val))
     rr.log("car/heading", rr.Scalars(yaw))
