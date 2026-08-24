@@ -48,8 +48,10 @@ CENTRE_DEADBAND = 0.20
 AREA_ARRIVED = 1800
 TURN_BURST_S = 0.150
 GLANCE_S = 0.700
-CREEP_LEG_S = 1.500
 ARRIVE_GLANCES = 3
+ARC_M_PER_S = 0.08
+ARC_RAD_PER_S = 0.9
+ARC_X_MAX = 0.55
 SPIN_S = 2.250
 BACK_S = 1.400
 CARRY_S = 1.500
@@ -57,6 +59,16 @@ CARRY_S = 1.500
 # ---- twin duty calibration (tools/sim-errand.py trial, 2026-08-24) ----
 CREEP_DUTY = 0.12  # ~0.10 m/s
 TURN_DUTY = 0.50  # ~1.4 rad/s
+_M_PER_S_PER_DUTY = 0.93
+_HALF_TRACK = 0.0575
+
+
+def duty_pair(v, w):
+    """(forward m/s, turn rad/s) -> (left, right) wheel duty."""
+    return (
+        (v - w * _HALF_TRACK) / _M_PER_S_PER_DUTY,
+        (v + w * _HALF_TRACK) / _M_PER_S_PER_DUTY,
+    )
 
 # ---- synthetic camera: 4 fps, ~35 deg half-FOV, area ~ 1/dist^2,
 # calibrated so AREA_ARRIVED corresponds to arriving ~0.30 m out ----
@@ -159,45 +171,47 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             blob = synthetic_blob()
 
         if state == "glance":
-            duty = (0.0, 0.0)
-            # A fresh frame ends the glance early — 700 ms is only the
-            # cap (mirrors main.rs); without this the sim's seek runs
-            # ~2.8x slower than the firmware it claims to predict.
+            # Glance-and-flow (mirrors main.rs): duty HOLDS while
+            # waiting for a fresh frame; a blob in view keeps the car
+            # moving — straight when centred, an arc toward it when
+            # off-centre. Stop-and-burst only for lost or far blobs,
+            # arrival confirmed standing still.
             if cam_frames != glance_from or t - state_since >= GLANCE_S:
+                state_since, glance_from = t, cam_frames
                 if blob is None:
                     arrive_streak = 0
+                    duty = (0.0, 0.0)
                     state, state_since = "burst", t
                     glance_burst = TURN_DUTY if search_left else -TURN_DUTY
                 else:
                     x_err, area = blob
                     centred = abs(x_err) <= CENTRE_DEADBAND
                     if centred and area >= AREA_ARRIVED:
+                        duty = (0.0, 0.0)
                         arrive_streak += 1
                         if arrive_streak >= ARRIVE_GLANCES:
                             state, state_since = "arrive_settle", t
                             stage_note = "fetch ARRIVED, spinning (sim)"
-                        else:
-                            state_since, glance_from = t, cam_frames
-                    elif not centred:
+                    elif centred:
+                        arrive_streak = 0
+                        duty = (CREEP_DUTY, CREEP_DUTY)
+                    elif abs(x_err) < ARC_X_MAX:
                         arrive_streak = 0
                         search_left = x_err < 0
-                        state, state_since = "burst", t
-                        # x_err > 0 = prop right of centre -> clockwise
-                        glance_burst = -TURN_DUTY if x_err > 0 else TURN_DUTY
+                        w = ARC_RAD_PER_S if x_err < 0 else -ARC_RAD_PER_S
+                        duty = duty_pair(ARC_M_PER_S, w)
                     else:
                         arrive_streak = 0
-                        state, state_since = "creep", t
+                        search_left = x_err < 0
+                        duty = (0.0, 0.0)
+                        state, state_since = "burst", t
+                        glance_burst = -TURN_DUTY if x_err > 0 else TURN_DUTY
         elif state == "burst":
             duty = (-glance_burst, glance_burst)
             if t - state_since >= TURN_BURST_S:
                 state, state_since = "glance", t
                 glance_from = cam_frames
-        elif state == "creep":
-            duty = (CREEP_DUTY, CREEP_DUTY)
-            keep = blob is not None and abs(blob[0]) <= CENTRE_DEADBAND and blob[1] < AREA_ARRIVED
-            if t - state_since >= CREEP_LEG_S or not keep:
-                state, state_since = "glance", t
-                glance_from = cam_frames
+                duty = (0.0, 0.0)
         elif state == "arrive_settle":
             duty = (0.0, 0.0)
             if t - state_since >= 0.3:  # main.rs settles 300 ms

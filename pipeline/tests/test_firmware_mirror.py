@@ -99,11 +99,13 @@ class SimErrandMirror(unittest.TestCase):
         ("CENTRE_DEADBAND", "CENTRE_DEADBAND"),
         ("AREA_ARRIVED", "AREA_ARRIVED"),
         ("ARRIVE_GLANCES", "ARRIVE_GLANCES"),
+        ("ARC_M_PER_S", "ARC_M_PER_S"),
+        ("ARC_RAD_PER_S", "ARC_RAD_PER_S"),
+        ("ARC_X_MAX", "ARC_X_MAX"),
     ]
     MS_PAIRS: ClassVar = [
         ("TURN_BURST_MS", "TURN_BURST_S"),
         ("GLANCE_MS", "GLANCE_S"),
-        ("CREEP_LEG_MS", "CREEP_LEG_S"),
         ("SPIN_MS", "SPIN_S"),
         ("BACK_MS", "BACK_S"),
         ("CARRY_MS", "CARRY_S"),

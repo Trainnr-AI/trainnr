@@ -941,44 +941,48 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     let mut drivetrain = Drivetrain::new(motors);
     loop {
         crate::diag::note("# fetch SEEKING");
-        // ---- SEEK (turn-and-glance) ----
-        // Attempt 4's lesson, straight off the wire: the camera delivers
-        // ~4 fps and the stiction-breaking turn rate swings ~20 deg per
-        // frame, so CONTINUOUS turning orbits the prop forever (+-33k
-        // ticks of pure spin). The car never turns while looking now: a
-        // short burst, a full stop, a fresh frame, then decide again. Only
-        // the straight creep - which the camera CAN track - runs
-        // continuously, and arrival needs three stationary glances.
+        // ---- SEEK (glance-and-flow) ----
+        // Attempt 4 taught stop-and-look for SEARCH: a stiction-rate
+        // in-place turn outruns a 4 fps camera. The rover sessions
+        // taught the opposite for FOLLOW (2026-08-24, "not feeling the
+        // camera"): once a blob is IN view the car keeps moving and
+        // re-decides on every fresh frame — straight when centred, an
+        // ARC toward an off-centre blob. Arcs work where in-place
+        // turns stall: both wheels roll forward, rolling friction not
+        // stiction, so gentle rates track smoothly. Stop-and-burst
+        // remains for lost or far-off blobs, and arrival is still
+        // confirmed standing still.
         const TURN_BURST_MS: u64 = 150;
         const GLANCE_MS: u64 = 700;
-        const CREEP_LEG_MS: u64 = 1500;
         const ARRIVE_GLANCES: u32 = 3;
+        const ARC_M_PER_S: f64 = 0.08;
+        const ARC_RAD_PER_S: f64 = 0.9;
+        const ARC_X_MAX: f32 = 0.55;
 
         let mut arrive_streak: u32 = 0;
         let mut search_left = true;
-        let mut last_frame_seen = camera::frame_total();
+        let mut forward = 0.0_f64;
+        let mut turn = 0.0_f64;
         let mut last_frame_at = firmware_support::now_ms();
         'seek: loop {
-            {
-                let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-                drivetrain.apply(left, right);
-            }
+            // Hold the current command while waiting for a fresh frame
+            // — re-applied per poll so the stall guard keeps guarding.
             let glance_from = camera::frame_total();
             let glance_start = firmware_support::now_ms();
             while camera::frame_total() == glance_from
                 && firmware_support::now_ms().saturating_sub(glance_start) < GLANCE_MS
             {
+                let (left, right) = Drivetrain::duty_for(&spec, forward, turn);
+                drivetrain.apply(left, right);
                 Timer::after(POLL).await;
             }
             let fresh = camera::frame_total() != glance_from;
             if fresh {
-                last_frame_seen = camera::frame_total();
                 last_frame_at = firmware_support::now_ms();
             } else if firmware_support::now_ms().saturating_sub(last_frame_at) > 5000 {
-                // The chase parks on a dead image; the fetch must too — a
-                // wedged capture reads as "no blob" and an unguarded seek
-                // pirouettes on it forever (review 2026-08-24).
-                let _ = last_frame_seen;
+                // The chase parks on a dead image; the fetch must too —
+                // a wedged capture reads as "no blob" and an unguarded
+                // seek pirouettes on it forever (review 2026-08-24).
                 let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
                 drivetrain.apply(left, right);
                 loop {
@@ -986,57 +990,51 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
                     Timer::after_millis(5000).await;
                 }
             }
-            // A glance that timed out without a fresh frame decides on the
-            // PRE-turn image — treat it as no blob instead.
+            // A glance that timed out without a fresh frame decides on
+            // the PRE-move image — treat it as no blob instead.
             let burst = match camera::blob_error() {
                 Some((x, _y, area)) if fresh => {
                     let centred = x.abs() <= CENTRE_DEADBAND;
                     if centred && area >= AREA_ARRIVED {
+                        forward = 0.0;
+                        turn = 0.0;
                         arrive_streak += 1;
                         if arrive_streak >= ARRIVE_GLANCES {
                             break 'seek;
                         }
                         None
-                    } else if !centred {
+                    } else if centred {
+                        arrive_streak = 0;
+                        forward = CREEP_M_PER_S;
+                        turn = 0.0;
+                        None
+                    } else if x.abs() < ARC_X_MAX {
+                        // The follow: keep rolling, curve toward it.
                         arrive_streak = 0;
                         search_left = x < 0.0;
+                        forward = ARC_M_PER_S;
+                        turn = if x < 0.0 {
+                            ARC_RAD_PER_S
+                        } else {
+                            -ARC_RAD_PER_S
+                        };
+                        None
+                    } else {
+                        arrive_streak = 0;
+                        search_left = x < 0.0;
+                        forward = 0.0;
+                        turn = 0.0;
                         Some(if x < 0.0 {
                             TURN_RAD_PER_S
                         } else {
                             -TURN_RAD_PER_S
                         })
-                    } else {
-                        // Centred but far: creep straight while it stays so,
-                        // re-glancing at least every CREEP_LEG_MS.
-                        arrive_streak = 0;
-                        {
-                            let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
-                            drivetrain.apply(left, right);
-                        }
-                        let creep_from = firmware_support::now_ms();
-                        loop {
-                            {
-                                let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
-                                drivetrain.apply(left, right);
-                            }
-                            Timer::after(POLL).await;
-                            let leg_done = firmware_support::now_ms().saturating_sub(creep_from)
-                                > CREEP_LEG_MS;
-                            let keep = match camera::blob_error() {
-                                Some((cx, _cy, carea)) => {
-                                    cx.abs() <= CENTRE_DEADBAND && carea < AREA_ARRIVED
-                                }
-                                None => false,
-                            };
-                            if leg_done || !keep {
-                                break;
-                            }
-                        }
-                        None
                     }
                 }
                 _ => {
                     arrive_streak = 0;
+                    forward = 0.0;
+                    turn = 0.0;
                     Some(if search_left {
                         TURN_RAD_PER_S
                     } else {
