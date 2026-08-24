@@ -1,4 +1,5 @@
 {
+ "generator": "tools/sts-study.py (rq_pipeline.robot.sts_synth)",
  "design_date": "2026-08-25",
  "truth": {
   "servo_kp": 6.0,
@@ -6,7 +7,15 @@
   "frictionloss": 0.03,
   "armature": 0.002
  },
- "legend": "P=pinned np=not-pinned, (signed error vs truth); clean cells all recover exactly",
+ "units": {
+  "servo_kp": "N*m/rad (position-loop P gain)",
+  "damping": "N*m*s/rad (joint damping)",
+  "frictionloss": "N*m (Coulomb friction torque)",
+  "armature": "kg*m^2 (reflected rotor inertia)"
+ },
+ "corruption_source": "third-party video bench test of one STS3215-12V, operator-supplied summary (docs/e2e-research/27 s5) \u2014 vendor/reported-grade evidence, never our measurement",
+ "rng_seed": 20260824,
+ "legend": "pinned = half_width <= 0.1*allowed_range. error_pct is signed vs truth. Clean cells recover truth to machine precision; their truth_covered can read false because a near-zero interval fails float-equality coverage \u2014 that is a numerics footnote, not a miss (see docs/26).",
  "conditions": [
   {
    "label": "200Hz pos clean",

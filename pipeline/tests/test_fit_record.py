@@ -13,6 +13,10 @@ from rq_pipeline.robot.fit_record import (
 from rq_pipeline.robot.identify import IdentificationResult, IdentifiedParameter
 
 ANCHOR = "armature=0.0004 anchored from reflected rotor inertia (bundle README)"
+UNITS = {
+    "left_gear": "N*m per duty percent (motor gear)",
+    "left_damping": "N*m*s/rad (joint damping)",
+}
 
 
 def _result(gear: float, damping: float) -> IdentificationResult:
@@ -47,6 +51,7 @@ class WriteAndReload(unittest.TestCase):
                 robot="rig-drivetrain",
                 recording="sweep-a@aaaaaaaaaaaa",
                 anchor=ANCHOR,
+                units=UNITS,
             )
             write_fit_record(
                 bundle,
@@ -54,6 +59,7 @@ class WriteAndReload(unittest.TestCase):
                 robot="rig-drivetrain",
                 recording="sweep-b@bbbbbbbbbbbb",
                 anchor=ANCHOR,
+                units=UNITS,
             )
             records = load_fit_records(bundle)
         self.assertEqual(len(records), 2)
@@ -75,6 +81,7 @@ class WriteAndReload(unittest.TestCase):
                     robot="rig-drivetrain",
                     recording="sweep-a@aaaaaaaaaaaa",
                     anchor=ANCHOR,
+                    units=UNITS,
                 )
             records = load_fit_records(bundle)
         self.assertEqual(len(records), 1)
@@ -97,6 +104,7 @@ class Refusals(unittest.TestCase):
                 robot="rig-drivetrain",
                 recording="sweep-a",
                 anchor=ANCHOR,
+                units=UNITS,
             )
 
     def test_path_separator_in_recording_refused(self) -> None:
@@ -110,6 +118,7 @@ class Refusals(unittest.TestCase):
                 robot="rig-drivetrain",
                 recording="../escape@aaaaaaaaaaaa",
                 anchor=ANCHOR,
+                units=UNITS,
             )
 
     def test_missing_anchor_refused(self) -> None:
@@ -125,6 +134,7 @@ class Refusals(unittest.TestCase):
                 robot="rig-drivetrain",
                 recording="sweep-a@aaaaaaaaaaaa",
                 anchor="   ",
+                units=UNITS,
             )
 
 

@@ -6,39 +6,50 @@
   "parameters": [
     {
       "name": "scale_ref_damping",
-      "estimate": 0.001,
-      "half_width": Infinity,
+      "estimate": 0.001001,
+      "half_width": 3.1391691243101324e-05,
       "allowed_range": 1.9999999999998318e-06,
       "pinned": false
     },
     {
       "name": "left_gear_per_damp",
-      "estimate": 5.977154158256467e-05,
-      "half_width": 8.596566658301623e-07,
+      "estimate": 5.98305355092738e-05,
+      "half_width": 2.1341681364032015e-06,
       "allowed_range": 0.00099,
       "pinned": true
     },
     {
       "name": "left_fric_per_damp",
-      "estimate": 4.80628208824132e-06,
-      "half_width": 4.498138596109279e-05,
+      "estimate": 4.82750338266639e-06,
+      "half_width": 4.53764250814624e-05,
       "allowed_range": 0.005,
       "pinned": true
     },
     {
       "name": "right_gear_per_damp",
-      "estimate": 6.0777274777740415e-05,
-      "half_width": 8.636635297905967e-07,
+      "estimate": 6.083657877336379e-05,
+      "half_width": 2.1405924758196575e-06,
       "allowed_range": 0.00099,
       "pinned": true
     },
     {
       "name": "right_fric_per_damp",
-      "estimate": 3.3087956050262623e-06,
-      "half_width": 4.4882456634598e-05,
+      "estimate": 3.2927948343956827e-06,
+      "half_width": 4.514292690207877e-05,
       "allowed_range": 0.005,
       "pinned": true
     }
   ],
-  "created_utc": "2026-08-23T19:28:41.762041+00:00"
+  "created_utc": "2026-08-24T18:57:44.815593+00:00",
+  "profile": "profile.json@70facc4843ef",
+  "model": "model.xml@1f7519e08be8",
+  "code": "68a09be",
+  "units": {
+    "scale_ref_damping": "N*m*s/rad \u2014 FIXED anchor, not estimated",
+    "left_gear_per_damp": "actuator gear (N*m per duty%) per unit damping ratio",
+    "left_fric_per_damp": "joint frictionloss (N*m) per unit damping ratio",
+    "right_gear_per_damp": "actuator gear (N*m per duty%) per unit damping ratio",
+    "right_fric_per_damp": "joint frictionloss (N*m) per unit damping ratio"
+  },
+  "pinned_criterion": "half_width <= 0.1 * allowed_range (range-relative; a pinned interval can still span zero)"
 }

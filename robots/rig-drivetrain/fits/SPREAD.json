@@ -1,0 +1,41 @@
+{
+  "summarizes": [
+    "sweep-2026-08-24-b@1f1e7cd6f0bf",
+    "sweep-2026-08-24-c@5ce5d35789ac",
+    "sweep-2026-08-24-d@23d05417cd9a"
+  ],
+  "spread": {
+    "scale_ref_damping": {
+      "lowest_estimate": 0.001001,
+      "highest_estimate": 0.001001,
+      "mean_half_width": 3.534916359439755e-05,
+      "verdict": "runs agree within their intervals"
+    },
+    "left_gear_per_damp": {
+      "lowest_estimate": 5.98305355092738e-05,
+      "highest_estimate": 6.323243789888471e-05,
+      "mean_half_width": 2.512873522731686e-06,
+      "verdict": "runs agree within their intervals"
+    },
+    "left_fric_per_damp": {
+      "lowest_estimate": 4.82750338266639e-06,
+      "highest_estimate": 0.00040575001275320894,
+      "mean_half_width": 4.6686116777814686e-05,
+      "verdict": "spread EXCEEDS per-run intervals \u2014 trust the spread"
+    },
+    "right_gear_per_damp": {
+      "lowest_estimate": 6.083657877336379e-05,
+      "highest_estimate": 7.059855820731517e-05,
+      "mean_half_width": 2.6683346615267916e-06,
+      "verdict": "spread EXCEEDS per-run intervals \u2014 trust the spread"
+    },
+    "right_fric_per_damp": {
+      "lowest_estimate": 3.2927948343956827e-06,
+      "highest_estimate": 0.0009262811082088244,
+      "mean_half_width": 5.572115797217273e-05,
+      "verdict": "spread EXCEEDS per-run intervals \u2014 trust the spread"
+    }
+  },
+  "created_utc": "2026-08-24T18:57:46.550373+00:00",
+  "code": "68a09be"
+}

@@ -23,18 +23,53 @@ are lying and the spread is the truth.
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from rq_pipeline.robot.identify import IdentificationResult, IdentifiedParameter
+from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.robot.identify import (
+    DEFAULT_PINNED_FRACTION,
+    IdentificationResult,
+    IdentifiedParameter,
+)
 
 FITS_DIRECTORY = "fits"
+SPREAD_FILENAME = "SPREAD.json"
+
+
+def _code_version() -> str:
+    """The git sha the fit ran under; 'unknown' outside a checkout."""
+    try:
+        return (
+            subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=Path(__file__).parent,
+            ).stdout.strip()
+            or "unknown"
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 @dataclass(frozen=True)
 class FitRecord:
-    """One excitation run's fit, bound to the exact bytes it came from."""
+    """One excitation run's fit, bound to the exact bytes it came from.
+
+    The 2026-08-25 artifact review walked the flagship hash chain and
+    found one present link of five — the record named its recording and
+    nothing else it was produced under. The four absent links are now
+    fields: `profile` and `model` (name@hash of the bundle files whose
+    values the fit consumed), `code` (git sha), and `units` (a bare
+    float is not a measurement). `pinned_criterion` spells out what
+    "pinned" means, because range-relative pinning can mark an interval
+    nine times its estimate as pinned and a recipient deserves to know.
+    Records written before that date lack the fields (None on load).
+    """
 
     robot: str
     recording: str
@@ -42,18 +77,31 @@ class FitRecord:
     confidence: float
     parameters: tuple[IdentifiedParameter, ...]
     created_utc: str
+    profile: str | None = None
+    model: str | None = None
+    code: str | None = None
+    units: dict[str, str] | None = None
+    pinned_criterion: str | None = None
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self), indent=2)
+        # Strict JSON: `Infinity` is not RFC 8259 and broke JSON.parse
+        # on exactly the honesty feature (an unbounded half-width). An
+        # unbounded interval serializes as null; the loader restores it.
+        payload = asdict(self)
+        for parameter in payload["parameters"]:
+            if parameter["half_width"] == float("inf"):
+                parameter["half_width"] = None
+        return json.dumps(payload, indent=2, allow_nan=False)
 
 
-def write_fit_record(
+def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
     bundle_dir: Path,
     result: IdentificationResult,
     *,
     robot: str,
     recording: str,
     anchor: str,
+    units: dict[str, str],
 ) -> Path:
     """Record a fit into the bundle. One file per recording; refitting the
     same recording overwrites (git history keeps the old fit)."""
@@ -73,6 +121,17 @@ def write_fit_record(
             "scale is unobservable from the data alone, so say which "
             "parameter was anchored and from what source"
         )
+    missing_units = [
+        parameter.name for parameter in result.parameters if parameter.name not in units
+    ]
+    if missing_units:
+        raise ValueError(
+            f"every parameter needs a units entry; missing {missing_units} — "
+            "a bare float is not a measurement"
+        )
+    bundle = Path(bundle_dir)
+    profile_path = bundle / "profile.json"
+    model_files = sorted(bundle.glob("*.xml"))
     record = FitRecord(
         robot=robot,
         recording=recording,
@@ -80,6 +139,16 @@ def write_fit_record(
         confidence=result.confidence,
         parameters=result.parameters,
         created_utc=datetime.now(timezone.utc).isoformat(),
+        profile=(
+            stamp(profile_path.name, profile_path) if profile_path.is_file() else None
+        ),
+        model=(stamp(model_files[0].name, model_files[0]) if model_files else None),
+        code=_code_version(),
+        units=dict(units),
+        pinned_criterion=(
+            f"half_width <= {DEFAULT_PINNED_FRACTION} * allowed_range "
+            "(range-relative; a pinned interval can still span zero)"
+        ),
     )
     fits = Path(bundle_dir) / FITS_DIRECTORY
     fits.mkdir(parents=True, exist_ok=True)
@@ -95,7 +164,12 @@ def load_fit_records(bundle_dir: Path) -> tuple[FitRecord, ...]:
         return ()
     records = []
     for path in sorted(fits.glob("*.json")):
+        if path.name == SPREAD_FILENAME:
+            continue
         raw = json.loads(path.read_text())
+        for parameter in raw["parameters"]:
+            if parameter["half_width"] is None:
+                parameter["half_width"] = float("inf")
         raw["parameters"] = tuple(
             IdentifiedParameter(**parameter) for parameter in raw["parameters"]
         )
@@ -138,3 +212,50 @@ def spread_summary(records: tuple[FitRecord, ...]) -> str:
             f"mean half-width {mean_half_width:.6g} — {verdict}"
         )
     return "\n".join(lines)
+
+
+def write_spread_record(bundle_dir: Path) -> Path:
+    """Persist the cross-run verdict — the number the house calls the truth.
+
+    The doctrine ("when the spread dwarfs the intervals, the intervals
+    are lying") lived only in README prose while every record shipped
+    its per-run confidence; the review called that a claim the contents
+    don't support. This writes `fits/SPREAD.json`: per-parameter spread
+    beside mean interval width with the exceeds/agrees verdict, plus
+    the records it summarizes so the verdict is bound to its inputs.
+    """
+    minimum_records = 2  # a spread of one run is not a spread
+    records = load_fit_records(bundle_dir)
+    if len(records) < minimum_records:
+        raise ValueError(
+            f"cross-run spread needs at least {minimum_records} fit records, "
+            f"got {len(records)}"
+        )
+    widths: dict[str, list[float]] = {}
+    for record in records:
+        for parameter in record.parameters:
+            widths.setdefault(parameter.name, []).append(parameter.half_width)
+    spread = {}
+    for name, (low, high) in cross_run_spread(records).items():
+        finite = [width for width in widths[name] if width != float("inf")]
+        mean_half_width = sum(finite) / len(finite) if finite else None
+        exceeds = mean_half_width is not None and high - low > 2.0 * mean_half_width
+        spread[name] = {
+            "lowest_estimate": low,
+            "highest_estimate": high,
+            "mean_half_width": mean_half_width,
+            "verdict": (
+                "spread EXCEEDS per-run intervals — trust the spread"
+                if exceeds
+                else "runs agree within their intervals"
+            ),
+        }
+    payload = {
+        "summarizes": [record.recording for record in records],
+        "spread": spread,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "code": _code_version(),
+    }
+    path = Path(bundle_dir) / FITS_DIRECTORY / SPREAD_FILENAME
+    path.write_text(json.dumps(payload, indent=2, allow_nan=False))
+    return path
