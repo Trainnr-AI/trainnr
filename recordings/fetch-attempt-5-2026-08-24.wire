@@ -1,0 +1,2013 @@
+>I 1.0000 3.0000 0.0000
+<3BE63A8642C642C6FF96D6FC218253A69DAF956E7C0C
+<# 0000CE31C691D713D6F3C6925330EF96EFB7EFB8EFD7F7B8F7B8FFD8F7D8F7D83272326532C532653A86748C3BE6FF95D6DCBEEAE7D9E7D9640D746A
+<# 0000D631D734D6F2CEB2CEF27C71E771F7B7EFB7F796F7B7F7B8F7B8F7B8F7B72A0F32043285328632C64B694B06FFB7FFFDFFDBFFFDFFFEAED92A65
+<# 0000CE51B62FB5CFB5F0ADEFA5CFDF0DEF97EFB7FFD8FFD8FFD9F7D9FFD8EFD732F03A4532856C2B32063AC64B07FFFBFFFCFFFFFFFFFFFFFFFF29A6
+<# 0000C6F0CEB4CED4E755CE14ADEFD7EB748CE738FFD8FFD9FFD9FFD9F7D8FFD94A513A2542A56C6B3AC64AE69D69FFFCFFFFFFFFFFFFFFFFFFFF3A0A
+<# 0000842C8D2D7CAC6C4A63EA63695BC95B89BE90C635C6B7CED8DF1A95B7C6F38C2D646B426542C643477DCDF7BAFFFFFFFFFFFFFFFFFFFFFFFF4370
+<# 0000FFB5EFFEE778D716C757C716CF16D737FFFFFFFFFFFFFFFFFFFFFFFCFFFFD6968C504B887DB84B4895C9FFFDFFFFFFFFFFFFFFFFFFFFFFFE53B3
+<# 0000FFB5FFFEFFFFEFFDDFDAD7B9DFB8DF98E7FADFB9F778FFDBFFFDFFDAFFFED756A5B853AA4B8F42C6FF55FFFFFFFFFFFFFFFEFFFFFFFEFFFD7316
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFF7FDFFDCF7FFE7DBF7FBFFDBFFFFFFFEFFFFFFFFBDDE4AE774AD32C6FFDBFFFFFFFFFFFDFFFDFFFFFFFEFFFD7C77
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FDF7DBE7DAEFDBE7DAE799FFFFF7FC74F53AC73A4632A6FFFEFFFFFFFEFFFEFFFDFFFFFFFFFFFE8477
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDCF7DBDFB9DFB9DF98FFFCE7FC5CD33AA639C43225FFDCFFFFFFFFFFFCFFFDFFFFFFFFFFFE6357
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFDFFFCF7DCEFFBEFBAFFFDE7FC53323AE64A663AC6FFB4FFFFFFFEFFDCFFDBFFFEFFFFFFFE5BD5
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFDFFFDFFDCF7FBFFDBFFFDEFDB5B9032E794CA8CEBD72DFFFFFFDAE7F9EFD8FFFDFFFEFFFE32D0
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFDFFFCFFFCFFDCFFFEEFFB630F3AE6844A7C2984EAFFFFFF37D656E775FFDCFFFEFFFD21A7
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFEFFDCFFFCFFFFEFFB53AC4AE719C319428C2AF7B1CEDBE776EFB7FFFCFFFDFFFD19C3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFDB5B0B32068C4B84CB746A63A6C6F2FFDAFFDAFFFDFFFEFFFE2922
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FDFFBAFFFFF7DA632B32677C4A744A74E84AA35368F7B3FFDBFFFBAE6BB5FB5245
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFBFFB9FFFFEFDA5B2A42C77BC973E973A84BE453EA08229D8B84B07C6D84CD8CAC
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDDF7FCFFFFF7DA4BC942A632E55B8763475B244B88102253066C0A7CAC8CCDA56F
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFBF7DCFFFEF7DA53883A0721C4D6D3CEF46B664B6810025B856C0A848C850D9D6F
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFDCF7FBFFFFEFDA5B0732A61983D754CEF363245B89108353E474EA7C8C85CC9D4E
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FBFFFEFFFFE7D942E62A861963952C848C19454B4708C33A6363C86C2A7CED9D30
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7DBFFFDFFFEE7DA42C72904088110A108C111E221C410C421423A655B487C2B850C
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFEFFFEFFFDFFFDFFDCF7DCFFDBFFFEF7FEDFD92A862105108108A108E119C121623A652A433A2553E66CEA7C8C
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFEFFFEFFFDFFFDF7DCEFDBFFFBFFFEF7FECFD92AA52124106108A110A142E229020862294232244B075B8874EB
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFDFFFDFFDCFFDBF7DCF7DBFFDCFFFEF7FDBED83AC619C40881008108A11101216208E2298339C44B075B6864C9
+<n=664 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=665 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<# fetch SEEKING
+<n=666 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=667 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=668 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=669 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=670 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=671 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=672 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=673 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=674 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=675 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=676 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=677 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=678 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=679 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=680 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=681 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=682 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=683 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=684 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=685 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=686 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=687 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=688 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=689 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=690 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=691 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=692 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=693 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=694 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=695 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=696 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=697 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=698 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=699 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=700 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=701 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=702 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=703 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=704 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=705 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=706 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=707 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=708 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=709 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=710 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=711 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=712 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=713 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=714 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=715 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=716 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=717 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=718 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=719 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=720 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=721 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=722 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=723 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=724 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=725 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=726 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=727 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=728 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=729 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=730 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=731 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=732 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=733 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=734 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=735 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=736 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=737 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=738 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=739 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=740 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=741 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=742 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=743 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=744 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=745 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=746 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=747 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=748 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=749 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=750 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=751 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=752 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=753 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=754 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=755 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=756 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=757 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=758 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=759 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=760 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=761 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=762 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=763 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=764 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=765 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=766 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=767 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=768 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=769 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=770 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=771 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=772 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=773 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=774 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=775 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=776 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=777 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=778 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=779 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=780 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=781 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=782 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=783 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=784 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=785 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=786 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=787 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=788 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=789 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=790 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=791 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=792 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=793 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=794 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=795 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=796 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=797 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=798 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=799 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=800 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=801 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=802 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=803 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=804 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=805 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=806 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=807 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=808 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=809 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=810 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=811 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=812 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=813 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=814 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=815 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=816 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=817 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=818 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=819 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=820 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=821 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=822 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=823 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=824 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=825 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=826 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=827 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=828 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=829 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=830 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=831 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=832 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=833 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=834 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=835 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=836 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=837 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=838 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=839 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=840 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=841 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=842 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=843 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=844 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=845 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=846 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=847 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=848 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=849 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=850 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=851 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=852 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=853 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=854 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=855 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=856 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=857 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=858 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=859 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=860 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=861 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=862 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=863 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=864 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000CE32DFB3D731DF96C6727C09F797F7D8F7D9FFB8FFD9F7D8FFD9FFD9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FBF7FBE7DADF78CF77
+<# 0000E653D755CE55E776CE5463CDF7B8F7D8F7D9F7D9F7B9F7D9F7D9FFD9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFEFDAEFDADFB9CF56CF57
+<# 0000DF72DF54DF34E7B6E7B663F0E7B7EF77F7B8FFB7F7D8EFB8F7D8FFDAFFFBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBEFCC6CA840EBE10B6B2BE73
+<# 0000CE11D7D4E776D6D3EF354B0FFF97F7D8F7B8F7D9F7D8FFD9F7D9FFD8FFFAFFFFFFFFFFFFFFFFFFFFFFFDC698FFFBCEFD42E45B47ADCFB650AD11
+<# 0000E632D735DFF4DFB2DF546314F7B8F7D8F7D8F7D8FFD8FFD9FFDAFFD9FFD964D753884B694BC8432753285348FFF8DEFD22256BE8AE90AD109D8E
+<# 0000DF73DF34EF54E755D7346CB1FFD8FFD9FFD9FFD9FFD9FFDAFFDAFFD9FFD942F44AC73B284B0643277C0E4B88FFF9DEDDCE2CF7DAEFDB844E8C2D
+<# 0000EF52EF96E7B6E774E7958DF3F7F4FFD8FFD9FFD9FFD9FFD9FFD9FFD9FFD9437343C643274B2742485BCA5B67FFF9FFFEFFFCFFFFFFFFC6FB3227
+<# 0000DE73CED3CE93D6D2CEB1B692F7CFF7D8F7D9FFD9FFDAFFD9FFDAFFDAFFD94B9253674B4885ED536753E85BC9FFFDFFFEFFFFFFFFFFFFFFFF3A47
+<# 0000D672EF97E7B8FFB8E7B7C6B2E7EE8D50F75AFFDBFFDBFFDAFFDAFFDAFFDB6CF56BA9530A9D2F63AA4BE9AE0AFFFDFFFFFFFFFFFFFFFFFFFF53AC
+<# 00009D8EAE33CEF5C616A6958D307CEF74AD7CAD84AD8CCE950F9DB18590BE31EF58E7BB6C8C642A532A958FFFDBFFFFFFFFFFFFFFFFFFFFFFFF4B12
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFDDEFFCEFDCF7DCF7FCF7DDF7FDEFDAFFFFFFFFFFFF95D09E9B6B0CA6CDFFFFFFFFFFFFFFFFFFFFFFFFFFFF6C35
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95717C925BEAFF59FFFFFFFFFFFFFFFFFFFFFFFFFFFE7C79
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6FB74AD959164A8FFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF8CB9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFAEFC6CAE63AA5BC9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8CB9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9DFC6C8C5BA95BAAFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF7498
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8DBA74CC630B642AFFB9FFFFFFFFFFFDFFFDFFFFFFFFFFFF6357
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9D3874ADADF0ADD1E731FFFFFFFCF7DAF7DAFFFEFFFFFFFF4A11
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9DF77CEE9D4E9D2D9D2DFFFFFF99E7B8F7B7FFFEFFFFFFFF2A2A
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB638746E43683205A50DFF52E7FDF7D8F7D9FFFEFFFEFFFF2924
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6BA8D50ADEFA58F8C0D7C07DE96FFDCFFDCFFFEFFFFFFFF3284
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFAE998C4FA56E940D84AC53056CE8F734FFFCFFFDD7B0C6FD6B47
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA6167C0E8D6D95CC8C8C6BA6736C1962B62EAED4BE95BEF6A570
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFA5746C8C53A87429730B74E66B2B19A36CC9A56FB673C6F5D756
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF95736CAC4227DF96DFB784E8644A19C374A9A590BE52C7F5D736
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9D90638B3286E7B6E7776C666C2A190463E6A570C653CFF5D757
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7C50434A2AA7A5EF9D4E22055409118443E5950EB631CEF5D735
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFF6C0E4A6A1163196211A419633A85112432A26C2A9D70BE73C693
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF64AD42681901190211632A2232A3430742C46C47952EA632BE73
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFEFFFDFFFFFFFFFFFF6C6C3AA91903114211224B432A2419043AE463278D2EA6F1AE12
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFEFFFDFFFDFFFFFFFFF7FF6C6C428911220902112222622AE410423204532784CD9D6E9DD1
+<n=865 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=866 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=867 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=868 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=869 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=870 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=871 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=872 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=873 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=874 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=875 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=876 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=877 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=878 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=879 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=880 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=881 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=882 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=883 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=884 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=885 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=886 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=887 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=888 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=889 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=890 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=891 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=892 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=893 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=894 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=895 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=896 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=897 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=898 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=899 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=900 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=901 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=902 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=903 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=904 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=905 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=906 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=907 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=908 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=909 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=910 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=911 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=912 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=913 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=914 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=915 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=916 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=917 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=918 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=919 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=920 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=921 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=922 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=923 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=924 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=925 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=926 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=927 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=928 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=929 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=930 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=931 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=932 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=933 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=934 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=935 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=936 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=937 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=938 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=939 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=940 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=941 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=942 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=943 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=944 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=945 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=946 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=947 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=948 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=949 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=950 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=951 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=952 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=953 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=954 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=955 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=956 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=957 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=958 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=959 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=960 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=961 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=962 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=963 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=964 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=965 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=966 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=967 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=968 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=969 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=970 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=971 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=972 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=973 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=974 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=975 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=976 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=977 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=978 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=979 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=980 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=981 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=982 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=983 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=984 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=985 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=986 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=987 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=988 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=989 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=990 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=991 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=992 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=993 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=994 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=995 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=996 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=997 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=998 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=999 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1000 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 2 fps | com7=0x04 com15=0xD0 format confirmed | no blob
+<n=1001 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1002 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1003 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1004 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1005 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1006 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1007 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1008 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1009 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1010 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1011 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1012 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1013 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1014 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1015 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1016 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1017 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1018 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1019 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1020 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1021 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1022 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1023 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1024 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1025 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1026 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1027 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1028 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1029 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1030 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1031 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1032 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1033 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1034 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1035 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1036 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1037 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1038 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1039 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1040 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1041 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1042 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1043 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1044 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1045 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1046 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1047 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1048 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1049 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1050 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1051 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1052 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1053 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1054 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1055 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1056 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1057 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1058 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1059 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1060 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1061 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1062 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1063 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1064 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000D652DFD3DF11D7B6C6927429F7B8FFD9F7D9FFD9F7D8FFDAF7D9FFDAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFFDBE7D9D798D798
+<# 0000E673D735DF35E776D6756BCCEFD7F7D9F7D9F7D9F7D8FFD9FFD9FFD9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFEFFBE7FADFD7D756CF57
+<# 0000E772DF56DF34E7B7E7975351EFB7EF76F7D7FFB8F7D9F7D8FFB9FFD9FFFCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB5FBC6EB852EC631BEF4BED4
+<# 0000C611D7D3DF96CEB3EF154BEFF7B8F7D8F7D8F7D9FFD9F7D9F7D9FFD8FFFAFFFFFFFFFFFFFFFFFFFFFFFECE99FFFCD6FC3A246347B6F0BE92AE30
+<# 0000DF52D735D714D7D3DF766334F7B7F7B9FFB9FFD9F7D8FFD9FFD9FFD9FFDA7CD75BAA4BA85B894B884B4753A8FFF8DEFD3A4464A9B652AD109DAF
+<# 0000DF72D713E796E776D7356CF3F7B8FFD8F7D9FFD9FFD9FFDAFFDAFFDAFFDA4AD44307532753284B678D4E63A9FFF8D6FDCE6DF7DBF7DB74D08C2D
+<# 0000E753EFB7E796E795E7958D53F7D4FFB9FFD9FFD9FFD9FFD9FFD9FFD9FFD94B934B074B484B885BA9644A63EAFFF9FFFEFFFDFFFFFFFFB6FC3A27
+<# 0000E773CED3CEB3D6D3CED2BE92F7B0FFD8F7D9FFDAFFDAFFDAFFDAFFDAFFD95394534853898DED53C963C96C0AFFFDFFFEFFFFFFFFFFFFFFFF3A07
+<# 0000DE52EF97E798FFB8E7B7C6D4E72F8D70F77BFFDAFFDBFFDBFFDAFFDBFFDA643463CA5B0A956E6BCA644ABE2CFFFEFFFFFFFFFFFFFFFFFFFF5B8D
+<# 0000ADF0C6B4C717BEF6A6329590AED19EF3C695BE94BEF8C6D7D73BE77BF79CF7BCEFFD6C2B74CA6C0A95CFFFDBFFFFFFFFFFFFFFFFFFFFFFFF5B11
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FF950F9E7A648DB6CEFFFFFFFFFFFFFFFFFFFFFFFFFFFF6415
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95D17DD35B2BFF39FFFFFFFFFFFFFFFFFFFFFFFFFFFE7C78
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95D09E126CCAFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8CB9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFEFFFFFFFFFFFF9D5274AD740AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8CBA
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFF7FF9DB2742C6C2BFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF7C98
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFDFFFFFFFFFFFFFFFFC6DD9DD084CE648CFFB6FFFFFFFFFFDDFFDDFFFFFFFFFFFF6357
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6DE9570BE52BE30EF71FFFFFFFCF7DAFFDAFFFEFFFFFFFF4B51
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCEBD9590B5D0A58E9D6EFFFFFF99EFD8F7D7FFFDFFFFFFFF3AEA
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FC9D12632B4207A54DFF94E7FDF7D8FFD9FFFEFFFFFFFF2964
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFC9D53BE51A510A56E7C49DFB6FFDCFFDBFFFEFFFFFFFF3A03
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFD9D33AD119D6D8D0C5B86748AFF74FFFDFFFEE753CEFD6CC8
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FB95F2ADD09D2D94CC63C66CEC21E4BE6FD757FFDBFFFCD7B3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBE788D706C2A7CCB7C4B7427648B19C484C9BE52EF98FFDBFFFD
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBED67C6F53E9E7B7DFB78C08744C19E47C88AE10DFF4E798FFD9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFFFFFFFA6F16CEC4228EFB8E7967CC7744B19246C27A58FC693D7F5DF97
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7DCFFFFFFFF858F6C2B5AE7AE30ADAF3207632A11C65325950EB5D1BEB3CF15
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCF7FEFFFF8D6F634B31642924194321A43AE711A642E47CEB9DAFBE53C6D5
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF95125B4B21C419E319833A833AE44B28430484C9BE32D716E7B8
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9552536B19A4210219425B633AC419653224856AD7F5EFB8F7DA
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8DF1434A19A3114211422A832AC31922328584CAD7D4EFB8F7DA
+<n=1065 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1066 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1067 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1068 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1069 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1070 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1071 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1072 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1073 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1074 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1075 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1076 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1077 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1078 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1079 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1080 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1081 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1082 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1083 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1084 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1085 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1086 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1087 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1088 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1089 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1090 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1091 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1092 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1093 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1094 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1095 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1096 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1097 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1098 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1099 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1100 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1101 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1102 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1103 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1104 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1105 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1106 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1107 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1108 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1109 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1110 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1111 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1112 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1113 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1114 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1115 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1116 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1117 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1118 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1119 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1120 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1121 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1122 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1123 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1124 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1125 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1126 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1127 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1128 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1129 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1130 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1131 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1132 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1133 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1134 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1135 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1136 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1137 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1138 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1139 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1140 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1141 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1142 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1143 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1144 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1145 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1146 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1147 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1148 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1149 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1150 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1151 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1152 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1153 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1154 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1155 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1156 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1157 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1158 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1159 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1160 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1161 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1162 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1163 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1164 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1165 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1166 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1167 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1168 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1169 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1170 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1171 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1172 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1173 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1174 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1175 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1176 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1177 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1178 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1179 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1180 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1181 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1182 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1183 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1184 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1185 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1186 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1187 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1188 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1189 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1190 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1191 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1192 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1193 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1194 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1195 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1196 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1197 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1198 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1199 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1200 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1201 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1202 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1203 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1204 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1205 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1206 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1207 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1208 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1209 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1210 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1211 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1212 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1213 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1214 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1215 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1216 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1217 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1218 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1219 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1220 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1221 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1222 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1223 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1224 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1225 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1226 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1227 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1228 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1229 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1230 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1231 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1232 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1233 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1234 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1235 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1236 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1237 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1238 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1239 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1240 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1241 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1242 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1243 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1244 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1245 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1246 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1247 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1248 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1249 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1250 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1251 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1252 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1253 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1254 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1255 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1256 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1257 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1258 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1259 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1260 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1261 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1262 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1263 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1264 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000D631DFF2DF30DF95C69274E9F7B7F7D9F7D8F7D9F7D9F7D9F7D9FFD9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FCF7DBE7DADF97CF97
+<# 0000E772D734D636E776D63563ADF7B8FFD8F7B8F7D9FFD9FFD9FFD9F7D9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFEFDBEFDADFB8D776CF56
+<# 0000DF73DF55E715E7D7DFD75B30E7B7EF76F7D8FFB8F7D8F7D8FFB9FFBAFFFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB5FCCEEA7C4DC671C6D4BEB3
+<# 0000C611D7D3DF95C6D3EF1443CEF7B7F7D8F7D9F7D9F7D9F7D9F7D7FFD8FFFAFFFFFFFFFFFFFFFFFFFFFFFDC678FFFCCEFC42046B48AECFB651AE31
+<# 0000E773DF15DF35DFD2DFB75C54FFB8F7D9FFD9F7D9FFD9FFD9FFD9FFD9FFD974D75BA953A963A85B485B895389FFF8DEFD2A247448AE72A52F9DEF
+<# 0000DE93DF14E796E796D73474D3F7B8FFD9FFD9FFD9FFD9FFDAFFD9FFD9FFDA4BD4530753074B264B69854E5BA9FFD8D6FDCE4CF7DBEFFB7C8F8C2C
+<# 0000EF53EFB5DFB5DFB5E7958D13F7F4FFDAFFD9FFD8FFD9FFD9FFD9FFDAFFD93B9353C753274B684B87534A6389FFFAFFFEFFFCFFFEFFFFC6FB3A06
+<# 0000E773CF13CED3D6F4CEF3BEB2F7B0FFD9FFDAFFD9FFDAFFDAFFDBFFDAFFD953D35B684B288DCD53684B885BE9FFFDFFFEFFFFFFFFFFFFFFFF4A68
+<# 0000DF53EFB7E7D8FFB9E7D7C6F3E7509D91F79BFFDAFFDBFFDBFFFBFFDBFFDA6435648863A9950E5BCA5368AE4BFFFDFFFFFFFFFFFFFFFFFFFF538D
+<# 0000BE11BFF5C737C717A6949DD19DB0A633C675C696BE75C6F9D73AE7BCF75BF7DDEFFD5CAB63EA5BC98D90FFDBFFFFFFFFFFFFFFFFFFFFFFFF5BB1
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8D2F8D7A632CA5ACFFFFFFFFFFFFFFFFFFFFFFFFFFFF6415
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF8D9084B253EAFF18FFFFFFFFFFFFFFFFFFFFFFFFFFFF7C98
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF7C0E9DD15B0AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8DD9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF842F6C2B63C9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8CB9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6FE942F6B0B64EAFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF7498
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FF8DCF846C634BFF19FFFFFFFFFFFEFFFEFFFFFFFFFFFF6B16
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF858FB551B611DF52FFFFFFFDF7DAFFDAFFFEFFFFFFFF4A52
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFCEBD952FAD90A52DA50DFFFFFF99EFD9F7D8FFFDFFFFFFFF324A
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFB6F68D2E4BA83A86A54EFFD6E7FDF7D8FFD9FFFEFFFEFFFF2985
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6F58D90BD10ADAF8D8D8C49DFD6FFDCFFFBFFFFFFFFFFFF3AC4
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7B99DF2ADF19D6D94EC53456C4AFF54FFFDFFFDDFB1CEFD6BA8
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFB9D11ADAF9D4D8CCC6BC66CCC19C3BE4ED776F799FFDBF798
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7DA9DF27B0B7CEC7C6C744774AC19A37C2AD7D4FFDAFFFDFFFF
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCF9995F14BE9EFB7DF978467744B19E37CC8CFB4FFDCFFFDFFFF
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC615746F43A8EFB8E79684A76C6B21247C07C674FFBAFFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF95F2636D4207AE10A56E2A67640A19C65325AD8FDF36F7DBFFDC
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF856E5BCA21A429A419832A843AA519C64AC47C0AA6F0D717E756
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FDFFFCFFFF6C8D3BA9196311C3212222822A2453894A84634995CDAE32C673
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFEEFDAFFFF6B2B3A48192319E219624BE33225192532C45306848D954EA5F0
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FEDFB9D7FF5BAA32891142090211422A832A03086232455306644A8D0D9D6F
+<n=1265 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1266 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1267 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1268 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1269 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1270 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1271 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1272 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1273 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1274 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1275 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1276 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1277 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1278 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1279 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1280 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1281 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1282 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1283 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1284 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1285 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1286 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1287 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1288 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1289 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1290 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1291 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1292 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1293 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1294 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1295 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1296 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1297 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1298 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1299 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1300 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1301 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1302 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1303 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1304 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1305 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1306 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1307 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1308 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1309 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1310 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1311 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1312 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1313 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1314 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1315 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1316 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1317 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1318 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1319 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1320 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1321 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1322 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1323 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1324 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1325 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1326 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1327 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1328 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1329 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1330 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1331 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1332 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1333 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1334 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1335 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1336 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1337 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1338 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1339 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1340 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1341 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1342 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1343 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1344 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1345 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1346 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1347 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1348 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1349 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1350 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1351 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1352 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1353 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1354 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1355 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1356 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1357 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1358 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1359 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1360 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1361 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1362 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1363 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1364 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1365 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1366 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1367 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1368 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1369 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1370 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1371 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1372 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1373 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1374 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1375 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1376 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1377 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1378 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1379 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1380 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1381 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1382 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1383 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1384 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1385 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1386 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1387 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1388 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1389 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1390 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1391 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1392 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1393 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1394 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1395 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1396 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1397 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1398 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1399 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1400 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1401 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1402 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1403 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1404 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1405 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1406 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1407 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1408 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1409 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1410 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1411 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1412 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1413 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1414 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1415 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1416 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1417 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1418 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1419 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1420 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1421 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1422 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1423 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1424 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1425 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1426 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1427 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1428 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1429 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1430 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1431 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1432 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1433 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1434 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1435 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1436 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1437 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1438 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1439 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1440 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1441 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1442 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1443 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1444 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1445 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1446 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1447 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1448 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1449 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1450 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1451 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1452 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1453 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1454 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1455 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1456 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1457 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1458 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1459 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1460 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1461 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1462 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1463 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1464 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000CE31DFB3D751DF76C6937CC9EFB7F7D9F7D9F7D9F7B8F7D9FFDAFFD9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCF7FBEFBADF98D798
+<# 0000EE52DF75D776E795D6566BEDF7B7F7B8F7D9FFD8F7D9FFD9FFD9FFDAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFF7DBEFBBDFD8D756CF57
+<# 0000DF73DF55DF35EFB7E7B75B10F7B6EF76F7B7FFB8F7B8F7D9FFB8FFDAFFFCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6FCC60A852DC692C6F3BEB3
+<# 0000CE31D7D4DF96C6B3E73553EFFF98F7D8F7D9F7D9F7D8F7D9F7D9FFD9FFF9FFFFFFFFFFFFFFFFFFFFFFFEC6B8FFFCD6DC3AE35B47B60FB670AE51
+<# 0000E652D735DF35D7F4E7966433F7B8F7B8F7D9F7D9FFD9FFD8FFD9FFD9FFD964F85B8A53885BA95B894BA85368FFF8DEFD3A646C27AE51A551A5AF
+<# 0000DE73DF55E796E795D7556C33F7B8FFD9F7D9FFD9FFD9FFDAFFD9FFDAFFDA4BB443285B085B084B28852E5BC9FFD8DEFDC64DF7DAEFDB7C908D4D
+<# 0000EF73EFB6E7B6DF95E7959D14F7F5FFDAFFD9FFD9FFB9FFDAFFDAFFD9FFD94B524B2753484B875368632A5BA9FFFAFFFEFFFDFFFFFFFFBEFC42C7
+<# 0000E773D713CED3D6D3CED3B6D2F7D1FFD9FFDAFFDAFFDAFFDAFFD9FFDAFFDA53B2536853478D0D4BA853685BC9FFFDFFFEFFFFFFFFFFFFFFFF3A88
+<# 0000DE52F7B7EFB8FFB9E7D7CEF3E72F95B2F75AFFDAFFDBFFDBFFDCFFDBFFDB5B365BC95BC9856E5B895BA9B60BFFFEFFFFFFFFFFFFFFFFFFFF53AD
+<# 0000B631C6D4D737C737B6949DF19DF1A654BE75C696BE94CED8CF19DF7BEF7CFFFDEFFD6C4B6CAA5BA9958FFFDBFFFFFFFFFFFFFFFFFFFFFFFF5BD2
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF852F9D3A642CAEADFFFFFFFFFFFFFFFFFFFFFFFFFFFF6C15
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FF8D90749263EAFF38FFFFFFFFFFFFFFFFFFFFFFFFFFFF7CB8
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FF852E95D15CE9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8CD9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF85AF6B6C5BEAFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFF8CD9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFFF85B0742A5BEBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7C99
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF8DF17C8C646BFF19FFFFFFFFFFFDFFFDFFFFFFFFFFFF6457
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF956FBE52AE10E732FFFFFFDCF7FAFFDAFFFFFFFFFFFF5332
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6BD9570A5F0AD4F9D2DFFFFFFB9EFB8F7B8FFFEFFFFFFFF324A
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFAE379D7053093AC6A54EFFF6E7FDF7D9FFD9FFFDFFFEFFFF1964
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBE779512BE32A5D09D4E8C48DFB6FFDCFFDBFFFEFFFFFFFF3AC3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FC9D33AE119DAF940D53447C4BFF34FFFDFFFDDFB1D6FD7CC9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFCA532ADD0A52E8C0C6BA66CAC19E4BE4FDF77FFDAFFDCF799
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFDB9DF3744B8CAC842B7C48746B21C4840ADFF5FFFBFFFEFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFB995D25BEAE7B7E7B78C496C8B21E484EAD714FFFBFFFDFFFF
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6F5744F5387E7B8EF977C07744A196574C8CE94FFBAFFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9DD26C6C3A07AD10A56F2A27640A11065B04AD6FDFF5F7DAFFDB
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF8C104B0A218421A319832A844A6621A742037CEAADB1D7F5DF56
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFCFFFEFFFF6CAC428821832182196332833A054B2742E46368950DB6F1C672
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFDCF7BAFFFF5C4A3AAA2143114119434BA33A04194532C543677C8B9D2FA5D1
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FDE7BAD7FE5C0A2A88112309E211422AA3322411423A245BC7744A8DEE9D6F
+<n=1465 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1466 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1467 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1468 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1469 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1470 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1471 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1472 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1473 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1474 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1475 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1476 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1477 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1478 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1479 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1480 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1481 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1482 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1483 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1484 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1485 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1486 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1487 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1488 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1489 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1490 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1491 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1492 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1493 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1494 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1495 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1496 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1497 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1498 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1499 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1500 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 4 fps | com7=0x04 com15=0xD0 format confirmed | no blob
+<n=1501 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1502 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1503 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1504 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1505 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1506 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1507 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1508 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1509 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1510 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1511 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1512 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1513 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1514 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1515 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1516 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1517 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1518 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1519 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1520 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1521 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1522 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1523 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1524 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1525 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1526 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1527 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1528 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1529 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1530 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1531 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1532 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1533 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1534 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1535 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1536 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1537 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1538 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1539 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1540 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1541 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1542 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1543 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1544 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1545 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1546 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1547 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1548 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1549 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1550 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1551 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1552 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1553 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1554 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1555 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1556 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1557 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1558 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1559 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1560 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1561 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1562 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1563 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1564 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1565 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1566 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1567 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1568 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1569 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1570 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1571 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1572 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1573 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1574 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1575 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1576 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1577 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1578 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1579 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1580 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1581 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1582 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1583 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1584 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1585 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1586 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1587 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1588 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1589 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1590 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1591 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1592 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1593 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1594 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1595 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1596 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1597 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1598 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1599 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1600 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1601 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1602 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1603 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1604 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1605 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1606 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1607 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1608 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1609 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1610 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1611 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1612 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1613 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1614 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1615 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1616 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1617 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1618 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1619 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1620 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1621 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1622 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1623 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1624 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1625 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1626 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1627 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1628 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1629 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1630 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1631 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1632 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1633 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1634 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1635 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1636 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1637 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1638 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1639 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1640 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1641 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1642 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1643 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1644 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1645 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1646 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1647 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1648 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1649 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1650 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1651 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1652 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1653 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1654 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1655 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1656 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1657 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1658 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1659 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1660 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1661 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1662 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1663 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1664 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<# IMG 30 30 rgb565
+<# 00006AE75A864A4551E439E4318362656B478C29946A930972C66AC67B079C0AAD8EBDF1C512CE32CE32BDF1BDF1B56FACEE94CB84096B4862065285
+<# 000072C862C74AA54A45422439A45A8663268388A48C944A7A4762867B079CEAB50DBDD0C652C631BE72C631BDD0AD8EAD0E946B830A6B4752E54A25
+<# 0000620762E652A64A8549E441A44A246A6584A8A46BA48B83876AE672C79489A4CCBD8FC612CE12CE52CE51C6F0B5AFA44D948A7BC97B2752C65245
+<# 0000732962275A6552454A2541E44984528573489C6AA4AC932A83277BE6936AAC8BBD71BDD1CE12CE32C672C6F1BDB0A54E94AB73E962475AA55224
+<# 00007B486B275AC652455AE441E449A452E463A69C0AACCB9C4B836783E793079C29B52EBDB0CDF2C631C631BE11B5AFA54D8C8B7B296B275AC64145
+<# 00007A096A0762C65A454A85490441A349835A4594E9AD2CACCB8B887A0783078CE9ADCCB570BDD0BE11C631C6F1BDAFAD4E9C8C8BA86A0752654A25
+<# 000082E96AE762865A4552654A04398341E452057B48A5ECACCB8BA8830682E67B879C2AB52EBD8FBDD0BDF0BDB1B58F9D4E9C8B8B096B675AE65225
+<# 00007AE86AA65AE75A454A84490439C3416339C483C5A5CCB54D9C698328726573E67BA8AC6BB50DBD6FBD70B5AFAD2E9C0D944B83A86B4752854A64
+<# 00006B0772865A865A655A2552C44963398441A36BA5ADECBD8E9CEC7B476A856AA67BA6940AA4ACB52EB58FB52EA54D9CAB8C0B7B886A0762A54A04
+<# 00007AC86285628662655205516441A34143318252468CA8BDF1AC4E8BE86A06624572658B899C6AA4CCA52DA40DA4CC946B7BE97B466AC55A655203
+<# 00007A0972A762E5624459E451833983416339837388DF32EF79C5338B0972E76A6562457328940A9CCBA40E9CCB948B8CEA738972E762865A254A04
+<# 00007B0A6A276AA661E562C449A351644923318374E6FFB4FFDCDEB99C6A7A276225626572E794A9A4CCADCDA4ED946B8C2983486AE662665A454A44
+<# 000083E87AE862865A6562A451435183414331227CE6F7F5FFFEE7B9A4EC72686A6572457B68A40AAD0DAD6EAD2E9CAC942B7BA873076A865AA55225
+<# 0000832972286206626561E4596449834923396373A6F797FFFCFFDCADAE83A8728673E68B48A46CAD4FBD70AD4EA4CC944B8BE97B476A4762075244
+<# 00008BC972E76AC75A25610449C44903410341635A04DF36FFFDFFDDB51193C97A077BE77B889C6AB54FB56FAD4E9CED946C8BEA7B686B276A866224
+<# 000082E972076A875925490459A4516339A341635AA4BE38FFDBE7FAC511932B7B2773E77B489C6BAD4EB56FA54EA4ED944C8B2B7BC9734862E65A25
+<# 0000834A7B276AA661455A0559845143414331426BC3A50EC693E777CD329C8B83677A8683079409A5EDB54EAD0FA4CC9C6B94EB83896B2762C55AC5
+<# 000083086A086AA56145492451C349633963414439837306BE70E7F5D693ACEC83887AE7830794A9A4CCAD2EAD4EA5CC9C8C8B0A8348732773C65AA6
+<# 00007AC972E772866245510451C451A34123398341836B48ADEECE53D673B46F932A7AE77B4894A8A4ACAD2EAD4EACED9CCC944C7BA87B886B0662A6
+<# 00007B2A72E7724662E5594551A351A44964414351438368CE74F7BAE799C5F1930B7B687B2993CA9CCAB5EDAD6EA52DA4CD9C6C8BEA7B486BE762E6
+<# 0000830972E7726569C45A44598449C43963392251848487CE53F7BBF7DAD692ACAD8B6883689CAAAC6BAD2DB54FAD4EA5EC9C8C8B0A83697B0872C7
+<# 0000820972A6626559E4512449834984394349435284C62FFFFEFFFFFFFFF7FEB56F8BCA83A894EAA46BAD0EAD4EAD0D9D2E9CAC932B7BA96B486207
+<# 00007AE972C76245622559E551644183414339625A25FF77FFFFFFFFFFFFFFFFC56F9B2B938893899C6AACEDA52EAD0EACED9CCC8C6B7B8973497207
+<# 00007B096AE76A6659C459E551A441634123396352E5EF32FFFFFFFFFFFFFFFFC511946B93CA9BEA9C8CADEDAC0EA52DADED9CAD8C298BA9734862E6
+<# 000072C862456A6661045163518341435103416362E4AD4AFFFFFFFFFFFFFFFFC552A48B930A9CCAA46BB4ACACCDAD0DAD0CA4CD946B83A972286206
+<# 00007AC8728572065A2451C441635184494341A45A06D652E7FEFFDCFFFFFFDCC552ACCD9B0A9C4BA4ACACEDAC2EB52EA40D9CED946B7BC97B886AC8
+<# 00007AA862A66245510451E451A44984418341A35A24FFFEFFFFFFFEFFBAFFDAD6F5B4ACA42A9C6BAC6CACEEB52EAD2DA56EA4ED930B8B887B086207
+<# 00007A876A8662265A2461C55183516349A3498351C494C9CE93F7B9DF17FFD9E677B44DA4ABAC6AACCDAD4DB54FAD4EAD0FA4AD8C2A83A96B6772E7
+<# 000072E862A66A4659C4510551C4498341A351E359C49C0ACE73F7DAD7DAF778EFBABD4EB4ACACACB4EEB50EAD4EBD0EB54EACAD9C4B83E973486207
+<# 000072A872455A65620459E451A449A35164516362C49CC9D673F7DBCF99F798EFB8C58FB4EEB40DB50EB52EB56EB52FAD4EA54E946B83EA73486A07
+<n=1665 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1666 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1667 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1668 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1669 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1670 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1671 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1672 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1673 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1674 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1675 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1676 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=42%
+<n=1677 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1678 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1679 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1680 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1681 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1682 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1683 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1684 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1685 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1686 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1687 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1688 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1689 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1690 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1691 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1692 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1693 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1694 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1695 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1696 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1697 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1698 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1699 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1700 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1701 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1702 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1703 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1704 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1705 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1706 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1707 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1708 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1709 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1710 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1711 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1712 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1713 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1714 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1715 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1716 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1717 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1718 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1719 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1720 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1721 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1722 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1723 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1724 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1725 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1726 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1727 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1728 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1729 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1730 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1731 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1732 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1733 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1734 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1735 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1736 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1737 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1738 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1739 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1740 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1741 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1742 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1743 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1744 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1745 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1746 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1747 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1748 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1749 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1750 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1751 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1752 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1753 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1754 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1755 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1756 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1757 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1758 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1759 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1760 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1761 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1762 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1763 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1764 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1765 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1766 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1767 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1768 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1769 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1770 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1771 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1772 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1773 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1774 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1775 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1776 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1777 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1778 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1779 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1780 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1781 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1782 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1783 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1784 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1785 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1786 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1787 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1788 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1789 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1790 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1791 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1792 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1793 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1794 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1795 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1796 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1797 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1798 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1799 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1800 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1801 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1802 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1803 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1804 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1805 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1806 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1807 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1808 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1809 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1810 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1811 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1812 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1813 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1814 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1815 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1816 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1817 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1818 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1819 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1820 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1821 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1822 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1823 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1824 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1825 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1826 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1827 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1828 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1829 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1830 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1831 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1832 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1833 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1834 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1835 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1836 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1837 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1838 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1839 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1840 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1841 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1842 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1843 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1844 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1845 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1846 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1847 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1848 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1849 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1850 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1851 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1852 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1853 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1854 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1855 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1856 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1857 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1858 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1859 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1860 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1861 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1862 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1863 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1864 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000D632D7F4DF51DF76C6B37C09EFB7FFB8F7D8F7D9F7D9FFB9FFD9FFDAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCF7DBE7DAD777CF77
+<# 0000E752DF35D776DF96CE546BABEFB7FFD8F7D8F7D8F7B9FFD9F7D9F7D9FFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFEFFBEFDAD798D716C636
+<# 0000DF73DF15DF55E7D7E7B65BCFEFD7EF96F7D8FFB8F7D8F7D9FFD9FFD9FFFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9DFBC76C7C0EBE51B692B673
+<# 0000CEF0DEB4DF95CED3E735536FF7B7F7D8F7D8FFD9FFB9FFD9F7D8FFD8FFFBFFFFFFFFFFFFFFFFFFFFFFFDBE97FFFCB5DB42035346AD8EAD10ADAF
+<# 0000E752D735D715DEB3E7765B34F7D8FFD9FFB9FFD9FFD9FFB9FFD9FFD9FFDA74975B8953A863A94B2753685B89FFF8C6FC32E363479DAE9DEF8D4D
+<# 0000DE73DF34EF96EF96D75474D3F7D9FFDAFFD9FFD8FFD9FFDAFFDAFFDAFFDA43934AC653484B284B07842E53C9FFF9ADFCC60BCEF5B69353E684AC
+<# 0000EF53E7B6E7B7E796DF968D34F714FFD9FFD9FFD9FFD9FFD9FFD9FFD9FFD93A314BE7432753484B685BC95367FFFAFFFDE798E7F9DFD9534E21C4
+<# 0000DF73CE14CED3D6F3D6D3BED2F7B1FFD8FFD9FFD9FFDAFFDBFFDBFFDAFFDA43924B674B688DEE43684B495389FFFDF7DAFFDCFFFEFFFDB6D91182
+<# 0000E772EF97E798F7D8EFB7C6D3E72FA592FF7BFFDAFFDBFFDBFFDBFFFAFFDA64155CC853EA8D2E5B6953C8A5EAFFDAFFFEFFFFFFFFFFFFF7FF21C4
+<# 0000BEF0C6D5CF36C615A69395D195B095D2A633B654A633C697C719D77BE73AF7DDEFFD6C0A6CEB5BA98D6FF7D9FFFEFFFFFFFFFFFFFFFFFFFF2185
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FF8D2E953A5BECA68CFFFCFFFFFFFFFFFFFFDCEFD7E7981926
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF95B17C934BE9FF38FFFEFFFFFFFFE755FFD8F7D9E7B721A7
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF840F95B15368FFFFFFFFFFFFE776F777FFDAFFDAF7D93AA9
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FF7C6F6C6B53A9FFFFFFFFE778EF97FF77FFFBFFDBF7D9326A
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6FF8D70630A4BA9FFFFFFFFF7DAEF96F7B8FFFCFFDBFFDA2A69
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF95D07C6C544AFF7AFFFFFFB9DE97DE77FFDCFFDCFFDA3109
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95B1B672AD10EF12FFFFF776B5D3C673FFDAFFDBFFDA1988
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6FD952FAD8FA52E9D2DF7FFE752AD31BDF0F7B9FFDAFFDA1923
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6168D9053883AA5AD2DFFD6A5D5C511C652FFD9FFD9FFDA1942
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBE3795F0B672A5AE954D8468C6B1DF76F736FFFAFFDBEFFB2103
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7DAA553B5F1A54D8CCC5B247429E770E796E7B7D72F9C9963C6
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFB9D13A5AF9D2E84EC5BC56C8C19639D6CCE92F7BAFFFBF758
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFFAA5D26C2B7CAB7C2A74E7646B212274A9D7B4FFDBFFFEFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFD995B15368EF97E7B78C486C4B21627C08D7B3FFDBFFFEFFFF
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6F57C0E4327EFB8E79774E66C4B19E463A6C673F7B9FFFCFFFD
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF95D1636C42C7AE30A5AF32075B2A114542E49DEECFB4E7D9FFBA
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF740E4B8A21422163198429633A65112429636B689D0EC654D7D5
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDBFFFF6C6C4289194219631942224221A31965322253A6846BA590BE52
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFBAFFFF5BCA32691943114211213A8329A40862294343A57C2B8DEDA56F
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFE7B9DFFF532932E7100210021102214321C310E229A34A456BC97CAB8CCD
+<n=1865 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1866 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1867 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1868 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1869 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1870 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1871 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1872 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1873 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1874 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1875 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1876 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1877 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1878 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1879 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1880 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1881 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1882 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1883 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1884 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1885 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1886 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1887 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1888 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1889 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1890 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1891 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1892 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1893 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1894 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1895 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1896 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1897 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1898 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1899 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1900 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1901 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1902 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1903 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1904 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1905 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1906 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1907 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1908 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1909 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1910 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1911 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1912 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1913 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1914 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1915 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1916 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1917 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1918 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1919 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1920 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1921 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1922 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1923 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1924 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1925 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1926 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1927 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1928 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1929 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1930 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1931 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1932 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1933 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1934 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1935 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1936 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1937 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1938 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1939 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1940 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1941 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1942 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1943 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1944 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1945 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1946 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1947 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1948 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1949 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1950 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1951 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1952 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1953 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1954 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1955 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1956 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1957 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1958 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1959 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1960 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1961 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1962 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1963 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1964 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1965 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1966 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1967 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1968 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1969 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1970 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1971 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1972 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1973 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1974 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1975 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1976 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1977 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1978 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1979 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1980 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1981 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1982 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1983 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1984 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1985 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1986 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1987 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1988 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1989 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1990 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1991 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1992 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1993 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1994 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1995 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1996 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=1997 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1998 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=1999 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2000 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<# camera pid=0x76 ver=0x73 mid=0x7FA2 OK — this is an OV7670 | px 0..255 | 4 fps | com7=0x04 com15=0xD0 format confirmed | blob x-0.37 y-0.06 area 4991
+<n=2001 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2002 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2003 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2004 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2005 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2006 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2007 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2008 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2009 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2010 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2011 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2012 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2013 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2014 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2015 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2016 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2017 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2018 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2019 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2020 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2021 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2022 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2023 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2024 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2025 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2026 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2027 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2028 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2029 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2030 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2031 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2032 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2033 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2034 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2035 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2036 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2037 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2038 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2039 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2040 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2041 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2042 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2043 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2044 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2045 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2046 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2047 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2048 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2049 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2050 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2051 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2052 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2053 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2054 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2055 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2056 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2057 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2058 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2059 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2060 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2061 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2062 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2063 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2064 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000CE32D7D3DF11D795C6737CCAEFB7F7D9F7D9FFD9F7D8F7D9FFBAFFDAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDF7DCE7D9D797CF77
+<# 0000EF73DF56D776E797D655738DF7D8F7D9F7D9F7D9F7D9FFD9FFD9F7DAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFEFDBE7DACF97D716C6F5
+<# 0000E652DF35E755EFB7E7B753EFEFB7EF76F7B8FFD9F7D9F7B7FFD8FFD9FFFCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8DF8C6CC74ADB6D0B632AE52
+<# 0000CE11D7F3DF96CED3E71553EFF7B7F7D8F7B8FFD8F7D8FFD9F7D9FFD8FFFAFFFFFFFFFFFFFFFFFFFFFFFDC798FFDAB5D92A634BA59D0CA58F958E
+<# 0000DF52D734DF13DED4E7966334F7B7F7D9F7B8FFD9FFD9FFD9FFD9FFD9FFDA74B863C94BAA53884B8853285388FF97B5D821834346942D954D8C0B
+<# 0000E673D714E775EF76CF5474F2F7B8FFD9FFDAFFD9FFDAFFD9FFDAFFDAFFDA4BD34BC7530843684B47852D5B27FF97ADD8AD28CEF5AED34A077C4B
+<# 0000E773EFB7EF96DFB6E7B59514F715FFD9FFD9FFD8FFD9FFD9FFD9FFD9FFDA43B24BE743884B284B475BA95B47FFB8FFDCDF97EFD9E7B95BD02104
+<# 0000E753D7F2CED2CEF3CED2B6D3F7D1FFB8FFD9FFD9FFD9FFDAFFDAFFDAFFDA3BD243284B8985EE53074B475BA9FFDCEFB9FFDBFFFDFFFDC6FA1163
+<# 0000DE53EF98E797FFD9EFD7C6D3E730A5B3F79BFFDBFFDBFFDBFFDBFFDAFFDB6C165BAA53EA950E53A9536895A9FF98FFFDFFFFFFFFFFFFF7FF2105
+<# 0000BE31C7D4C716C635AE7495D195D09513B654B655B634BE96C61ACFF8D719F7DDEFDD744B64EA53C98D8FEF97FFFCFFFFFFFFFFFFFFFFFFFF21A6
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8D2F95195B2C954BFFFBFFFFFFFFFFFFFFFEEFD8E7B72987
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF8D907CD453EAFF17FFFEFFFFFFFFF7B8FFDAF7DAEFD83269
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FF7C2E9DD15348FFFFFFFFFFFFEFD8F7D8FFDBFFDBF7D93AEB
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF7C4F630B5BC9FFFFFFFFF7BAF7D9FFB8FFDCFFFCFFDA4A2E
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6FF858F63AA5B6AFFFFFFFFFFDAFFB9FFD9FFFCFFFDFFDA3A6E
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FF8DF174AD5329FF19FFFFFFDAEFD9EFD9FFDCFFFDFFDB3A0D
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95B1B651AE30E731FFFFFFB8CE76D635FFDCFFFCFFDB298A
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FE8D6FAD6F9D4E9D0DFFFFF7B4BDD3D693FFDBFFDBFFFB19E6
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFB6388D6F53CA4266A54EFFF7BE99D6D3DEF4FFDBFFDBFFFB19A3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBE178DB0B531A5F0954D7C69D614F7D9F7D8FFFCFFFDF7DC2183
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC798A513AD10958E8D0D5345744AF7F2FFDAF7DAD76FADFB5B07
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FC9511ADD09D2E8CAB63C66C8C1963B50CCED5EFB9F7FAEF78
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FA9DF16C2B84CB840A6C07746A198374C8D794FFDAFFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFB98DF25BC9E7B7E7968C08744A11C374A8D7B4FFDBFFFDFFFF
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6F67C504347EFB8E7967CE6646A19E46BC6C673FFB9FFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8D526C6B3247B650A5D02A29630911A44BE4AE6EDF36FFDAFFFB
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7C2F53CA198419A3216329233AA511A632A374E99DB0D7F5E737
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7DCFFFFFFFF6C4C3A88192319832143294232042A273A835B6885ABAE12C673
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FDFFBAFFFF6C2B4248190311221922424332C4100432A44B06748B9D4E9DD0
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7FDF79AF7FF5BEA2A291942110219E129E229C410422AC452866BE98DCD8D2E
+<n=2065 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2066 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2067 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2068 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2069 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2070 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2071 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2072 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2073 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2074 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2075 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2076 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2077 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2078 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2079 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2080 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2081 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2082 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2083 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2084 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2085 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2086 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2087 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2088 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2089 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2090 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2091 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2092 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2093 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2094 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2095 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2096 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2097 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2098 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2099 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2100 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2101 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2102 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2103 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2104 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2105 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2106 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2107 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2108 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2109 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2110 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2111 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2112 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2113 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2114 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2115 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2116 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2117 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2118 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2119 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2120 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2121 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2122 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2123 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2124 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2125 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2126 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2127 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2128 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2129 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2130 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2131 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2132 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2133 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2134 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2135 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2136 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2137 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2138 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2139 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2140 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2141 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2142 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2143 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2144 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2145 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2146 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2147 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2148 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2149 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2150 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2151 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2152 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2153 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2154 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2155 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2156 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2157 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2158 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2159 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2160 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2161 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2162 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2163 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2164 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2165 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2166 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2167 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2168 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2169 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2170 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2171 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2172 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2173 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2174 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2175 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2176 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2177 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2178 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2179 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2180 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2181 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2182 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2183 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2184 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2185 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2186 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2187 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2188 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2189 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2190 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2191 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2192 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2193 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2194 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2195 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2196 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2197 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2198 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2199 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2200 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2201 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2202 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2203 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2204 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2205 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2206 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2207 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2208 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2209 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2210 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2211 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2212 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2213 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2214 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2215 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2216 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2217 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2218 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2219 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2220 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2221 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2222 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2223 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2224 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2225 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2226 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2227 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2228 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2229 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2230 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2231 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2232 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2233 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2234 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2235 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2236 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2237 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2238 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2239 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2240 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2241 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2242 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2243 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2244 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2245 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2246 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2247 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2248 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2249 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2250 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2251 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2252 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2253 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2254 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2255 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2256 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2257 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2258 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2259 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2260 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2261 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2262 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2263 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2264 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<# IMG 30 30 rgb565
+<# 0000D631DFF4DF32DF96C6927429F7B7F7D9F7D9F7D8F7D9F7D9FFB9FFDAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFE7DAE798D7B7C715BEF5
+<# 0000E772D755D776E796D6556B8BF7B7F7D8F7D9F7D9F7D9F7D9FFD9F7DAFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FED778D776C6F5B6B4AED5
+<# 0000E773DF15DF35EFB7E7B66331E7B7EF96F7B8F7B8F7D9F7B8FFB9FFD9FFFCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7CD5AE695B4B9D2EAE11A511
+<# 0000D611D7D3DF96CEF4E73453EFF7B7F7D8F7D8F7D9F7D9F7D8F7D9FFD9FFFAFFFFFFFFFFFFFFFFFFFFFFFDD798FFDA9DD53A42324484CCA54E858E
+<# 0000DE52D735D734D6B3DF965B34F7B8FFB9FFD9FFD8FFD9FFD9FFD9FFD9FFD97CB853895369634A4B284B2753E7FF549DD619423A258CCC8D2C7CEB
+<# 0000E773DF34EF95E796D7757413F7D9FFD8FFD8FFD9FFD9FFD9FFD9FFDAFFDA53D44B264A2753083B47858F4B88FF559DF69D86CE16BEB35B07636A
+<# 0000EF53EFB6E7B6DF95DF959534F7F5FFDAFFD9FFD9FFD9FFD9FFDAFFD9FFD943924AC743274B684B474BCA5B69FF96FFFADF96EFB8E7D974312124
+<# 0000EF53D713D6D4CEF3D6D3B692F7D1FFD8FFDAFFDAFFDAFFDBFFDAFFDAFFD943B24B2653898D0F4BA84B675387FFDBEFB9FFFCFFFEFFFFCFFC2104
+<# 0000DF72E7D7EF98F7D9E7B8C6D3EF0FA592F79BFFDAFFDBFFDBFFDBFFDBFFDA64355B8963C984EC4BA95B688DA8EFB8FFFEFFFFFFFFFFFFFFFF2AE6
+<# 0000B631C6B4C736C636A653958F95909DF3AE74AD14B6F2BE35C739CFD8E719F7DCEFDC6C6C64EA5BE995B0EFB8FFFDFFFFFFFFFFFFFFFFFFFF32CA
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8D4F8D39540B950BFFDCFFFFFFFFFFFFFFFFFFFCFFDC324D
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF95D184F453EBFFD7FFFFFFFFFFFFFFDAFFFCFFDCFFDA5312
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF7C2EB6D25388FFFFFFFFFFFFFFDAFFDAFFFDFFFDFFFC53D3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDFFF7D6F644B6BAAFFFFFFFFF7DCFFDBFFFAFFFEFFFEFFFD5BD4
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFFF85B05BE953CAFFFFFFFFFFDCFFDAFFDBFFFEFFFFFFFD5BD4
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCEFE95707CCD644AFF5AFFFFFFFCF7DAF7DAFFFEFFFEFFFD5B53
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF9511B653B531EF31FFFFFFDADFB7E7B7FFDCFFFEFFFD328F
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFF8DD1A58F9D2EA54FF7FFF737CE35DE15FFDCFFFDFFFD21C7
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBEDB95B153684A86AD6EFFF7C6DADF35E756FFDCFFDCFFFD21E3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6169590B632A5CE942F7CA9D653F7DAFFD9FFFDFFFEFFFE31A3
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB6579D12ADF19D4E94CB5B457409F754FFDBFFDBD790CEDD5B48
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD7FC9D11AD8E9D2D8CEC5BC56B4B1963BE2EBEF4D736E7B9E736
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCFFA95D16C0A848B7C2B6C276B4B11837CA9CF72F7B9FFDCFFFD
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7988D905BAAE7B7DF977C476C8A11C37C89CEB4FFDAFFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC6F6746F4A69EFB8DF9774C67C2919447486C693FFBAFFFDFFFE
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9D54636C3A87BE92B5D12A476BEA11C553C4AEF0E797FFDCFFFC
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF854F4BCA216421A319622163426519673AE47C2ABE32E798F7B8
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF64CC4A68214219831942216332E43AE742646368950EBE93D7D5
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFDBFFFFFFFF6C4B3A29114319221143326232E419E43AA35BE78C8D9DB0AE32
+<# 0000FFB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7DAFFFDF7FF532A3248102209010901216322E410023A834BC7746C8D2DA5B0
+<n=2265 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2266 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2267 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2268 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2269 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2270 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2271 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2272 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2273 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2274 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2275 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2276 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2277 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2278 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2279 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2280 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2281 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2282 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2283 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2284 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2285 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2286 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2287 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2288 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2289 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2290 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2291 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2292 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2293 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2294 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2295 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2296 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2297 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2298 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2299 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2300 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2301 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2302 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2303 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2304 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2305 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2306 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2307 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2308 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2309 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2310 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2311 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2312 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2313 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2314 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2315 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2316 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2317 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2318 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2319 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2320 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2321 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2322 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2323 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2324 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2325 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2326 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2327 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2328 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2329 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2330 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2331 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2332 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2333 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2334 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2335 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2336 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2337 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2338 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2339 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2340 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2341 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2342 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2343 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2344 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2345 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2346 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2347 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2348 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2349 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2350 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2351 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2352 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2353 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2354 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2355 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2356 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2357 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2358 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2359 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2360 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2361 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2362 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2363 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2364 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2365 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2366 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2367 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2368 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2369 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2370 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2371 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2372 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2373 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2374 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2375 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2376 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2377 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2378 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2379 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2380 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2381 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2382 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2383 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2384 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2385 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2386 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2387 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2388 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%
+<n=2389 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2390 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2391 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2392 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2393 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2394 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2395 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2396 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=45%
+<n=2397 pose x=+0.000 y=+0.000 th=+0.000  ticks L=0 R=0  errL=0 errR=0  duty=0%

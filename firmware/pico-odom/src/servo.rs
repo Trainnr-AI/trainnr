@@ -430,9 +430,21 @@ async fn fetch_arm(driver: &mut Pca9685<I2c<'static, I2C0, Async>>) {
     // user's hand alignment holds. Writes start at channel 1.
     let Ok(first) = Channel::new(1) else { return };
     let mut current = apply(&FETCH_PICK[0].0);
-    if driver.set_pulses(first, &current[1..]).await.is_err() {
-        crate::diag::note("# servo bus error — fetch arm dead");
-        return;
+    // Energize ONE servo at a time, 400 ms apart: four servos jumping
+    // to tuck simultaneously sagged the servo rail hard enough to hang
+    // the Pico at the starting gun (attempts 2 and 5 died exactly
+    // there). A gentle, staggered wake-up keeps the surge to one motor.
+    for channel_index in 1..current.len() {
+        let Ok(channel) = Channel::new(channel_index as u8) else { return };
+        if driver
+            .set_pulses(channel, &current[channel_index..=channel_index])
+            .await
+            .is_err()
+        {
+            crate::diag::note("# servo bus error — fetch arm dead");
+            return;
+        }
+        Timer::after_millis(400).await;
     }
     crate::diag::note("# fetch arm TUCKED, waiting for drive");
     loop {
