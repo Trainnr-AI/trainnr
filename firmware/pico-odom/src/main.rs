@@ -904,17 +904,22 @@ embassy_rp::bind_interrupts!(struct I2cIrqs {
 async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     use core::sync::atomic::Ordering;
 
-    const CREEP_M_PER_S: f64 = 0.06;
-    const TURN_RAD_PER_S: f64 = 0.9;
+    /// ⚠️ RAISED from the chase's 0.06/0.9 on 2026-08-26, attempt 1:
+    /// the fetch rig carries the arm, PCA and loom the chase never did,
+    /// and the old turn duty (~29%) stalled against the new breakaway —
+    /// guard latched at 175 ticks. Same promotion path as the chase's
+    /// own constants (raised the day THAT robot left the stand).
+    const CREEP_M_PER_S: f64 = 0.10;
+    const TURN_RAD_PER_S: f64 = 1.4;
     const CENTRE_DEADBAND: f32 = 0.20;
     /// Blob at least this big = the prop fills the near field = parked.
     const AREA_ARRIVED: u32 = 1800;
     /// The blob must stay arrived this long before we commit.
-    const ARRIVE_HOLD_MS: u64 = 500;
-    /// Timed 180° at TURN_RAD_PER_S ≈ π/0.9 s; trimmed on the floor.
-    const SPIN_MS: u64 = 3500;
-    /// Reverse leg that lays the prop into the arm's ±8 mm pocket.
-    const BACK_MS: u64 = 2000;
+    const ARRIVE_HOLD_MS: u64 = 1500;
+    /// Timed 180° at TURN_RAD_PER_S ≈ π/1.4 s; trimmed on the floor.
+    const SPIN_MS: u64 = 2250;
+    /// Reverse leg that lays the prop into the arm's pocket.
+    const BACK_MS: u64 = 1400;
     const CARRY_MS: u64 = 1500;
     const FRESH_MS: u64 = 1000;
 

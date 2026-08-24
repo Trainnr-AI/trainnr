@@ -319,6 +319,22 @@ REAR_REACH = [0.0, 1.50, 0.55, 0.8, -0.5]
 REAR_GRIP = [0.0, 1.50, 0.55, 0.8, 0.35]
 REAR_LIFT = [0.0, 0.9, 0.55, 0.8, 0.35]
 
+# The real arm's acrylic base toppled at the floor pick's full stretch
+# (2026-08-24). The REAR_* floor pick stays as the TWIN's capability —
+# the metal performs the AIR mime instead: same rhythm, lean capped at
+# 0.70 rad (was 1.50), tip stays ~9 cm up, nothing touches the floor.
+AIR_TUCK = [0.0, 0.2, 0.3, 0.2, -0.5]
+AIR_REACH = [0.0, 0.70, 0.80, 1.15, -0.5]
+AIR_GRAB = [0.0, 0.70, 0.80, 1.15, 0.35]
+AIR_CARRY = [0.0, 0.35, 0.5, 0.5, 0.35]
+
+AIR_PICK_SEQUENCE = [
+    (AIR_TUCK, 1.5),
+    (AIR_REACH, 2.0),
+    (AIR_GRAB, 1.0),
+    (AIR_CARRY, 2.0),
+]
+
 REAR_PICK_SEQUENCE = (
     (REAR_TUCK, 1.2),
     (REAR_HOVER, 1.2),
