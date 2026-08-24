@@ -127,18 +127,18 @@ use embassy_rp::peripherals::{PIN_23, PIN_24, PIN_25, PIN_29};
 use embassy_rp::peripherals::{PWM_SLICE3, PWM_SLICE5};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::Peri;
-use embassy_time::{Instant, Timer};
 #[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 use embassy_time::Duration;
+use embassy_time::{Instant, Timer};
 use firmware_support::motor::{Channel, Encoders, Motors, PWM_TOP};
 use firmware_support::Report;
 use panic_halt as _;
 use quad_encoder::QuadratureDecoder;
-use sim_core::{Odometry, Pose, RobotSpec};
-#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
-use sim_core::{BodyTwist, DUTY_FULL};
 #[cfg(feature = "teleop")]
 use sim_core::CommandWatchdog;
+#[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
+use sim_core::{BodyTwist, DUTY_FULL};
+use sim_core::{Odometry, Pose, RobotSpec};
 
 /// Encoder sampling period. 100 µs = 10 kHz (see math-09 on aliasing).
 const POLL_US: u64 = 100;
@@ -254,8 +254,6 @@ const COMMAND_TIMEOUT_MS: u64 = 200;
 /// one poll of becoming true.
 #[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
 const POLL: Duration = Duration::from_millis(50);
-
-
 
 /// Duty above which a commanded motor **must** be turning, in the
 /// `±DUTY_FULL` units the wire carries.
@@ -469,8 +467,7 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
             // falling while |right| rises cancel exactly), reading as
             // "not moving" while the robot turned — a phantom stall
             // found in review 2026-08-24, never on the floor.
-            total_motion =
-                total_motion.wrapping_add(dl.unsigned_abs() + dr.unsigned_abs());
+            total_motion = total_motion.wrapping_add(dl.unsigned_abs() + dr.unsigned_abs());
             TOTAL_TICKS.store(total_motion, Ordering::Relaxed);
 
             let p = odom.pose;
@@ -696,11 +693,7 @@ impl Drivetrain {
 /// wall at whatever it was last told. [`COMMAND_TIMEOUT_MS`] is the whole
 /// distance between those two outcomes.
 #[cfg(feature = "teleop")]
-async fn follow_host_forever(
-    rx: &mut impl CommandSource,
-    motors: Motors,
-    spec: RobotSpec,
-) -> ! {
+async fn follow_host_forever(rx: &mut impl CommandSource, motors: Motors, spec: RobotSpec) -> ! {
     use hil_protocol::{LineReader, Message};
 
     let mut drivetrain = Drivetrain::new(motors);
@@ -890,9 +883,14 @@ embassy_rp::bind_interrupts!(struct I2cIrqs {
 /// and BACK are open-loop timed (constants trimmed on the floor, like
 /// every drive constant in this file). PICK hands the body to the servo
 /// task through `servo::PICK_GO`/`PICK_DONE`, wheels frozen. CARRY
-/// creeps forward with the prize and parks. Single-shot: replug to run
-/// the errand again — a fetch robot that immediately re-hunts with a
-/// full claw would chase its own cargo.
+/// creeps forward with the prize, rests, and GOES AGAIN — the errand
+/// loops until power is pulled (the rover mode, requested 2026-08-24
+/// once the loop had closed six times supervised). Re-hunting works
+/// because the pick is an air mime: the prop stays on the floor behind
+/// the car, so every lap has something real to find. The host is a
+/// bonus, not a gate: with no host after AUTOSTART_GRACE_MS the rig
+/// starts anyway — a phone brick is a legitimate power source now, and
+/// the grace period is the time to put the rig down and step back.
 #[cfg(feature = "fetch")]
 async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     use core::sync::atomic::Ordering;
@@ -912,190 +910,206 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     /// Reverse leg that lays the prop into the arm's pocket.
     const BACK_MS: u64 = 1400;
     const CARRY_MS: u64 = 1500;
+    /// No host after this long from power-up → start anyway. Long
+    /// enough to set the rig on the floor after plugging the brick in.
+    const AUTOSTART_GRACE_MS: u64 = 10_000;
+    /// Breather between laps — lets the operator grab the rig, and the
+    /// camera settle, before the next hunt.
+    const RERUN_REST_MS: u64 = 5_000;
 
+    let boot = firmware_support::now_ms();
     while !HOST_WATCHING.load(Ordering::Relaxed) {
+        if firmware_support::now_ms().saturating_sub(boot) > AUTOSTART_GRACE_MS {
+            break;
+        }
         Timer::after_millis(50).await;
     }
-    crate::diag::note("# fetch SEEKING");
     servo::SALUTE_GO.store(true, Ordering::Relaxed);
 
     let mut drivetrain = Drivetrain::new(motors);
-    // ---- SEEK (turn-and-glance) ----
-    // Attempt 4's lesson, straight off the wire: the camera delivers
-    // ~4 fps and the stiction-breaking turn rate swings ~20 deg per
-    // frame, so CONTINUOUS turning orbits the prop forever (+-33k
-    // ticks of pure spin). The car never turns while looking now: a
-    // short burst, a full stop, a fresh frame, then decide again. Only
-    // the straight creep - which the camera CAN track - runs
-    // continuously, and arrival needs three stationary glances.
-    const TURN_BURST_MS: u64 = 150;
-    const GLANCE_MS: u64 = 700;
-    const CREEP_LEG_MS: u64 = 1500;
-    const ARRIVE_GLANCES: u32 = 3;
+    loop {
+        crate::diag::note("# fetch SEEKING");
+        // ---- SEEK (turn-and-glance) ----
+        // Attempt 4's lesson, straight off the wire: the camera delivers
+        // ~4 fps and the stiction-breaking turn rate swings ~20 deg per
+        // frame, so CONTINUOUS turning orbits the prop forever (+-33k
+        // ticks of pure spin). The car never turns while looking now: a
+        // short burst, a full stop, a fresh frame, then decide again. Only
+        // the straight creep - which the camera CAN track - runs
+        // continuously, and arrival needs three stationary glances.
+        const TURN_BURST_MS: u64 = 150;
+        const GLANCE_MS: u64 = 700;
+        const CREEP_LEG_MS: u64 = 1500;
+        const ARRIVE_GLANCES: u32 = 3;
 
-    let mut arrive_streak: u32 = 0;
-    let mut search_left = true;
-    let mut last_frame_seen = camera::frame_total();
-    let mut last_frame_at = firmware_support::now_ms();
-    'seek: loop {
-        {
-            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-            drivetrain.apply(left, right);
-        }
-        let glance_from = camera::frame_total();
-        let glance_start = firmware_support::now_ms();
-        while camera::frame_total() == glance_from
-            && firmware_support::now_ms().saturating_sub(glance_start) < GLANCE_MS
-        {
-            Timer::after(POLL).await;
-        }
-        let fresh = camera::frame_total() != glance_from;
-        if fresh {
-            last_frame_seen = camera::frame_total();
-            last_frame_at = firmware_support::now_ms();
-        } else if firmware_support::now_ms().saturating_sub(last_frame_at) > 5000 {
-            // The chase parks on a dead image; the fetch must too — a
-            // wedged capture reads as "no blob" and an unguarded seek
-            // pirouettes on it forever (review 2026-08-24).
-            let _ = last_frame_seen;
-            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-            drivetrain.apply(left, right);
-            loop {
-                crate::diag::note("# fetch camera DEAD — parked, replug to retry");
-                Timer::after_millis(5000).await;
-            }
-        }
-        // A glance that timed out without a fresh frame decides on the
-        // PRE-turn image — treat it as no blob instead.
-        let burst = match camera::blob_error() {
-            Some((x, _y, area)) if fresh => {
-                let centred = x.abs() <= CENTRE_DEADBAND;
-                if centred && area >= AREA_ARRIVED {
-                    arrive_streak += 1;
-                    if arrive_streak >= ARRIVE_GLANCES {
-                        break 'seek;
-                    }
-                    None
-                } else if !centred {
-                    arrive_streak = 0;
-                    search_left = x < 0.0;
-                    Some(if x < 0.0 { TURN_RAD_PER_S } else { -TURN_RAD_PER_S })
-                } else {
-                    // Centred but far: creep straight while it stays so,
-                    // re-glancing at least every CREEP_LEG_MS.
-                    arrive_streak = 0;
-                    {
-                        let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
-                        drivetrain.apply(left, right);
-                    }
-                    let creep_from = firmware_support::now_ms();
-                    loop {
-                        {
-                            let (left, right) =
-                                Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
-                            drivetrain.apply(left, right);
-                        }
-                        Timer::after(POLL).await;
-                        let leg_done = firmware_support::now_ms()
-                            .saturating_sub(creep_from)
-                            > CREEP_LEG_MS;
-                        let keep = match camera::blob_error() {
-                            Some((cx, _cy, carea)) => {
-                                cx.abs() <= CENTRE_DEADBAND && carea < AREA_ARRIVED
-                            }
-                            None => false,
-                        };
-                        if leg_done || !keep {
-                            break;
-                        }
-                    }
-                    None
-                }
-            }
-            _ => {
-                arrive_streak = 0;
-                Some(if search_left { TURN_RAD_PER_S } else { -TURN_RAD_PER_S })
-            }
-        };
-        if let Some(w) = burst {
-            {
-                let (left, right) = Drivetrain::duty_for(&spec, 0.0, w);
-                drivetrain.apply(left, right);
-            }
-            Timer::after_millis(TURN_BURST_MS).await;
+        let mut arrive_streak: u32 = 0;
+        let mut search_left = true;
+        let mut last_frame_seen = camera::frame_total();
+        let mut last_frame_at = firmware_support::now_ms();
+        'seek: loop {
             {
                 let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
                 drivetrain.apply(left, right);
             }
+            let glance_from = camera::frame_total();
+            let glance_start = firmware_support::now_ms();
+            while camera::frame_total() == glance_from
+                && firmware_support::now_ms().saturating_sub(glance_start) < GLANCE_MS
+            {
+                Timer::after(POLL).await;
+            }
+            let fresh = camera::frame_total() != glance_from;
+            if fresh {
+                last_frame_seen = camera::frame_total();
+                last_frame_at = firmware_support::now_ms();
+            } else if firmware_support::now_ms().saturating_sub(last_frame_at) > 5000 {
+                // The chase parks on a dead image; the fetch must too — a
+                // wedged capture reads as "no blob" and an unguarded seek
+                // pirouettes on it forever (review 2026-08-24).
+                let _ = last_frame_seen;
+                let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+                drivetrain.apply(left, right);
+                loop {
+                    crate::diag::note("# fetch camera DEAD — parked, replug to retry");
+                    Timer::after_millis(5000).await;
+                }
+            }
+            // A glance that timed out without a fresh frame decides on the
+            // PRE-turn image — treat it as no blob instead.
+            let burst = match camera::blob_error() {
+                Some((x, _y, area)) if fresh => {
+                    let centred = x.abs() <= CENTRE_DEADBAND;
+                    if centred && area >= AREA_ARRIVED {
+                        arrive_streak += 1;
+                        if arrive_streak >= ARRIVE_GLANCES {
+                            break 'seek;
+                        }
+                        None
+                    } else if !centred {
+                        arrive_streak = 0;
+                        search_left = x < 0.0;
+                        Some(if x < 0.0 {
+                            TURN_RAD_PER_S
+                        } else {
+                            -TURN_RAD_PER_S
+                        })
+                    } else {
+                        // Centred but far: creep straight while it stays so,
+                        // re-glancing at least every CREEP_LEG_MS.
+                        arrive_streak = 0;
+                        {
+                            let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+                            drivetrain.apply(left, right);
+                        }
+                        let creep_from = firmware_support::now_ms();
+                        loop {
+                            {
+                                let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+                                drivetrain.apply(left, right);
+                            }
+                            Timer::after(POLL).await;
+                            let leg_done = firmware_support::now_ms().saturating_sub(creep_from)
+                                > CREEP_LEG_MS;
+                            let keep = match camera::blob_error() {
+                                Some((cx, _cy, carea)) => {
+                                    cx.abs() <= CENTRE_DEADBAND && carea < AREA_ARRIVED
+                                }
+                                None => false,
+                            };
+                            if leg_done || !keep {
+                                break;
+                            }
+                        }
+                        None
+                    }
+                }
+                _ => {
+                    arrive_streak = 0;
+                    Some(if search_left {
+                        TURN_RAD_PER_S
+                    } else {
+                        -TURN_RAD_PER_S
+                    })
+                }
+            };
+            if let Some(w) = burst {
+                {
+                    let (left, right) = Drivetrain::duty_for(&spec, 0.0, w);
+                    drivetrain.apply(left, right);
+                }
+                Timer::after_millis(TURN_BURST_MS).await;
+                {
+                    let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+                    drivetrain.apply(left, right);
+                }
+            }
         }
-    }
-    {
-        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-        drivetrain.apply(left, right);
-    }
-    crate::diag::note("# fetch ARRIVED, spinning");
-    Timer::after_millis(300).await;
-
-    // ---- SPIN 180° (timed) ----
-    // Every timed leg RE-APPLIES its duty each POLL: the stall guard
-    // only advances inside apply(), so a single apply + sleep held a
-    // blocked wheel at full duty for the whole leg with the guard
-    // asleep (review 2026-08-24).
-    let leg = firmware_support::now_ms();
-    while firmware_support::now_ms().saturating_sub(leg) < SPIN_MS {
-        let (left, right) = Drivetrain::duty_for(&spec, 0.0, TURN_RAD_PER_S);
-        drivetrain.apply(left, right);
-        Timer::after(POLL).await;
-    }
-    {
-        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-        drivetrain.apply(left, right);
-    }
-    crate::diag::note("# fetch SPUN, backing up");
-    Timer::after_millis(300).await;
-
-    // ---- BACK onto the prop ----
-    let leg = firmware_support::now_ms();
-    while firmware_support::now_ms().saturating_sub(leg) < BACK_MS {
-        let (left, right) = Drivetrain::duty_for(&spec, -CREEP_M_PER_S, 0.0);
-        drivetrain.apply(left, right);
-        Timer::after(POLL).await;
-    }
-    {
-        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-        drivetrain.apply(left, right);
-    }
-    crate::diag::note("# fetch PARKED, arm's turn");
-
-    // ---- PICK (the arm's show; wheels frozen) ----
-    servo::PICK_DONE.store(false, Ordering::Relaxed);
-    servo::PICK_GO.store(true, Ordering::Relaxed);
-    // Bounded: a dead arm task (bus error) can never set PICK_DONE,
-    // and an unbounded wait froze the errand forever at "arm's turn".
-    let pick_started = firmware_support::now_ms();
-    while !servo::PICK_DONE.load(Ordering::Relaxed) {
-        if firmware_support::now_ms().saturating_sub(pick_started) > 60_000 {
-            crate::diag::note("# fetch ABANDONED — arm never reported done");
-            break;
+        {
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+            drivetrain.apply(left, right);
         }
-        Timer::after_millis(100).await;
-    }
-    crate::diag::note("# fetch CARRYING");
+        crate::diag::note("# fetch ARRIVED, spinning");
+        Timer::after_millis(300).await;
 
-    // ---- CARRY and park ----
-    let leg = firmware_support::now_ms();
-    while firmware_support::now_ms().saturating_sub(leg) < CARRY_MS {
-        let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
-        drivetrain.apply(left, right);
-        Timer::after(POLL).await;
-    }
-    {
-        let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
-        drivetrain.apply(left, right);
-    }
-    loop {
-        crate::diag::note("# fetch DONE — errand complete, replug to rerun");
-        Timer::after_millis(5000).await;
+        // ---- SPIN 180° (timed) ----
+        // Every timed leg RE-APPLIES its duty each POLL: the stall guard
+        // only advances inside apply(), so a single apply + sleep held a
+        // blocked wheel at full duty for the whole leg with the guard
+        // asleep (review 2026-08-24).
+        let leg = firmware_support::now_ms();
+        while firmware_support::now_ms().saturating_sub(leg) < SPIN_MS {
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, TURN_RAD_PER_S);
+            drivetrain.apply(left, right);
+            Timer::after(POLL).await;
+        }
+        {
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+            drivetrain.apply(left, right);
+        }
+        crate::diag::note("# fetch SPUN, backing up");
+        Timer::after_millis(300).await;
+
+        // ---- BACK onto the prop ----
+        let leg = firmware_support::now_ms();
+        while firmware_support::now_ms().saturating_sub(leg) < BACK_MS {
+            let (left, right) = Drivetrain::duty_for(&spec, -CREEP_M_PER_S, 0.0);
+            drivetrain.apply(left, right);
+            Timer::after(POLL).await;
+        }
+        {
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+            drivetrain.apply(left, right);
+        }
+        crate::diag::note("# fetch PARKED, arm's turn");
+
+        // ---- PICK (the arm's show; wheels frozen) ----
+        servo::PICK_DONE.store(false, Ordering::Relaxed);
+        servo::PICK_GO.store(true, Ordering::Relaxed);
+        // Bounded: a dead arm task (bus error) can never set PICK_DONE,
+        // and an unbounded wait froze the errand forever at "arm's turn".
+        let pick_started = firmware_support::now_ms();
+        while !servo::PICK_DONE.load(Ordering::Relaxed) {
+            if firmware_support::now_ms().saturating_sub(pick_started) > 60_000 {
+                crate::diag::note("# fetch ABANDONED — arm never reported done");
+                break;
+            }
+            Timer::after_millis(100).await;
+        }
+        crate::diag::note("# fetch CARRYING");
+
+        // ---- CARRY and park ----
+        let leg = firmware_support::now_ms();
+        while firmware_support::now_ms().saturating_sub(leg) < CARRY_MS {
+            let (left, right) = Drivetrain::duty_for(&spec, CREEP_M_PER_S, 0.0);
+            drivetrain.apply(left, right);
+            Timer::after(POLL).await;
+        }
+        {
+            let (left, right) = Drivetrain::duty_for(&spec, 0.0, 0.0);
+            drivetrain.apply(left, right);
+        }
+        crate::diag::note("# fetch DONE — resting, then again (unplug to stop)");
+        Timer::after_millis(RERUN_REST_MS).await;
     }
 }
 
@@ -1353,12 +1367,12 @@ mod transport {
     use super::*;
     #[cfg(not(any(feature = "teleop", feature = "chase", feature = "fetch")))]
     use embassy_futures::join::join;
+    #[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
+    use embassy_futures::join::join3;
     use embassy_rp::bind_interrupts;
     use embassy_rp::peripherals::USB;
     use embassy_rp::usb::{Driver, InterruptHandler};
     use embassy_time::{with_timeout, Duration};
-    #[cfg(any(feature = "teleop", feature = "chase", feature = "fetch"))]
-    use embassy_futures::join::join3;
     #[cfg(feature = "teleop")]
     use embassy_usb::class::cdc_acm::Receiver;
     use embassy_usb::class::cdc_acm::Sender;
@@ -1367,7 +1381,6 @@ mod transport {
     bind_interrupts!(struct Irqs {
         USBCTRL_IRQ => InterruptHandler<USB>;
     });
-
 
     /// Longest a status line may spend trying to reach the host before it
     /// is abandoned. Sized against the 1 ms USB full-speed frame: a
@@ -1494,25 +1507,22 @@ mod transport {
             embassy_rp::i2c::Config::default(),
         );
         #[cfg(feature = "camera")]
-        let (_camera_clock, _shared_bus) = camera::start(spawner, shared_bus, camera::CameraPins {
-            xclk_slice: p.PWM_SLICE2,
-            xclk: p.PIN_21,
-            vsync: p.PIN_1,
-            href: p.PIN_22,
-            pclk: p.PIN_0,
-            pio: p.PIO0,
-            dma: p.DMA_CH0,
-            data: (
-                p.PIN_13,
-                p.PIN_14,
-                p.PIN_15,
-                p.PIN_16,
-                p.PIN_17,
-                p.PIN_18,
-                p.PIN_19,
-                p.PIN_20,
-            ),
-        })
+        let (_camera_clock, _shared_bus) = camera::start(
+            spawner,
+            shared_bus,
+            camera::CameraPins {
+                xclk_slice: p.PWM_SLICE2,
+                xclk: p.PIN_21,
+                vsync: p.PIN_1,
+                href: p.PIN_22,
+                pclk: p.PIN_0,
+                pio: p.PIO0,
+                dma: p.DMA_CH0,
+                data: (
+                    p.PIN_13, p.PIN_14, p.PIN_15, p.PIN_16, p.PIN_17, p.PIN_18, p.PIN_19, p.PIN_20,
+                ),
+            },
+        )
         .await;
         #[cfg(feature = "arm")]
         {
@@ -1676,14 +1686,14 @@ mod wifi_link {
     use embassy_futures::poll_once;
     use embassy_net::udp::{PacketMetadata, UdpSocket};
     use embassy_net::{IpEndpoint, StackResources};
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    use embassy_sync::channel::Channel;
-    use embassy_time::{with_timeout, Duration};
     use embassy_rp::bind_interrupts;
     use embassy_rp::clocks::RoscRng;
     use embassy_rp::dma;
     use embassy_rp::peripherals::{DMA_CH0, PIO0};
     use embassy_rp::pio::{InterruptHandler, Pio};
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::channel::Channel;
+    use embassy_time::{with_timeout, Duration};
     use static_cell::StaticCell;
 
     bind_interrupts!(struct Irqs {
@@ -1819,9 +1829,7 @@ mod wifi_link {
     /// Services the TCP/IP stack: ARP, DHCP renewal, and moving frames
     /// between smoltcp and the radio.
     #[embassy_executor::task]
-    async fn net_task(
-        mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>,
-    ) -> ! {
+    async fn net_task(mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>) -> ! {
         runner.run().await
     }
 
@@ -2043,7 +2051,6 @@ mod wifi_link {
     /// telemetry rather than accumulate a backlog that arrives late and
     /// describes a robot that has since moved.
     static OUTBOX: Channel<CriticalSectionRawMutex, Line, 2> = Channel::new();
-
 
     /// What network the robot is hosting, and where it is.
     fn announce_ap() {

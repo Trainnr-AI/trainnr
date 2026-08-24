@@ -173,9 +173,9 @@ const QQVGA_RGB565: &[(u8, u8)] = &[
     // 3 MHz, under the sensor's ~10 MHz floor, collapsing the rate ~100x
     // rather than the 8x a divider implies. /2 is in spec and explicitly
     // NOT tuned: brightness is only judgeable from a picture.
-    (0x11, 0x01), // CLKRC  — internal clock / 2
-    (0x0C, 0x04), // COM3   — enable downsampling (DCW)
-    (0x3E, 0x1A), // COM14  — DCW on, PCLK divided by 4
+    (0x11, 0x01),                                  // CLKRC  — internal clock / 2
+    (0x0C, 0x04),                                  // COM3   — enable downsampling (DCW)
+    (0x3E, 0x1A),                                  // COM14  — DCW on, PCLK divided by 4
     (ov7670_driver::REG_COM15, COM15_RGB565_FULL), // RGB565, full 0-255 range
     // ⚠️ Bit 7 of XSC/YSC selects the sensor's internal TEST PATTERN —
     // [`TEST_PATTERN`] flips YSC's. Colour bars are generated inside the
@@ -266,7 +266,10 @@ pub async fn start(
     // the program.
     let mut result = sensor.identify();
     for _ in 0..ATTEMPTS - 1 {
-        if result.as_ref().is_ok_and(ov7670_driver::Identity::is_ov7670) {
+        if result
+            .as_ref()
+            .is_ok_and(ov7670_driver::Identity::is_ov7670)
+        {
             break;
         }
         Timer::after_millis(SETTLE_MS).await;
@@ -280,8 +283,9 @@ pub async fn start(
             identity
         }
         Err(_) => {
-            let _ = text
-                .push_str("# camera BUS ERROR — nobody acknowledged 0x21; check SIOD/SIOC and RESET");
+            let _ = text.push_str(
+                "# camera BUS ERROR — nobody acknowledged 0x21; check SIOD/SIOC and RESET",
+            );
             ov7670_driver::Identity {
                 product: 0,
                 version: 0,
@@ -306,8 +310,12 @@ pub async fn start(
             applied &= sensor.write_register(0x71, SCALING_YSC | 0x80).is_ok();
         }
         Timer::after_millis(SETTLE_MS).await;
-        let com7 = sensor.read_register(ov7670_driver::REG_COM7).unwrap_or(0xEE);
-        let com15 = sensor.read_register(ov7670_driver::REG_COM15).unwrap_or(0xEE);
+        let com7 = sensor
+            .read_register(ov7670_driver::REG_COM7)
+            .unwrap_or(0xEE);
+        let com15 = sensor
+            .read_register(ov7670_driver::REG_COM15)
+            .unwrap_or(0xEE);
         CONFIG_READBACK.store(
             u32::from(applied) | (u32::from(com7) << 8) | (u32::from(com15) << 16),
             Ordering::Relaxed,
@@ -498,7 +506,10 @@ async fn watch(
             None => BLOB_AREA.store(0, Ordering::Relaxed),
         }
 
-        if FRAMES.load(Ordering::Relaxed).is_multiple_of(THUMBNAIL_EVERY) {
+        if FRAMES
+            .load(Ordering::Relaxed)
+            .is_multiple_of(THUMBNAIL_EVERY)
+        {
             send_thumbnail(buffer).await;
         }
     }
