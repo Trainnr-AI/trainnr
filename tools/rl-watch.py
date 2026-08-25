@@ -42,6 +42,7 @@ import contextlib
 import functools
 import sys
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +63,7 @@ HIDDEN_GROUP = 4
 PITCH = 1.6
 MIRROR_EVERY = 10  # control steps at 50 Hz -> 5 Hz
 REALTIME_SLEEP = 0.02  # one control step
+BOX_HELD_Z = 0.15  # the env's own "picked" threshold
 
 
 def parse_args():
@@ -119,65 +121,94 @@ def grid_model(env, worlds: int):
 
 
 class Stage:
-    """The grid on screen: copies batched rollouts into the CPU model."""
+    """The grid on screen, in its own thread: loops the latest policy's
+    rollout continuously; training publishes a new one at every
+    evaluation. The viewer never waits for the GPU and the GPU never
+    waits for the viewer."""
 
     def __init__(self, env, worlds: int):
-        self.model, side = grid_model(env, worlds)
+        self.model, self.side = grid_model(env, worlds)
         self.data = mujoco.MjData(self.model)
-        self.nq = env.mjx_model.nq
         self.worlds = worlds
         self.mirror = RigMirror(
             self.model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)
         )
-        self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
-        self.viewer.cam.distance = 2.2 * side
-        self.viewer.cam.azimuth = 90
-        self.viewer.cam.elevation = -40
-        self.viewer.cam.lookat[:] = [0, 0, 0]
         box = env.mj_model.body("box").id
         self.box_z = int(env.mj_model.jnt_qposadr[env.mj_model.body_jntadr[box]]) + 2
+        self._lock = threading.Lock()
+        self._history = None  # (T, worlds, nq)
+        self._label = "waiting for the first policy"
+        self._env_steps = 0
+        self.closed = threading.Event()
+        threading.Thread(target=self._loop, daemon=True).start()
 
-    def play(self, qpos_history: np.ndarray, env_steps: int, label: str):
-        """qpos_history: (T, worlds, nq) from the GPU rollout."""
-        rr.log("stage", rr.TextLog(f"{label}: playing {self.worlds} worlds"))
-        for t in range(qpos_history.shape[0]):
-            if not self.viewer.is_running():
-                raise SystemExit("viewer closed")
-            self.data.qpos[:] = qpos_history[t].reshape(-1)
-            mujoco.mj_forward(self.model, self.data)
-            self.viewer.sync()
-            if t % MIRROR_EVERY == 0:
-                rr.set_time("env_steps", sequence=env_steps)
-                rr.set_time("sim_time", duration=t * 0.02)
-                self.mirror.log(self.data, path="world/rig")
-                for n in range(self.worlds):
-                    rr.log(
-                        f"worlds/{n:02d}/box_z",
-                        rr.Scalars(float(qpos_history[t, n, self.box_z])),
-                    )
-            time.sleep(REALTIME_SLEEP)
-        picked = int((qpos_history[-1, :, self.box_z] > 0.15).sum())  # noqa: PLR2004 - env's own threshold
+    def publish(self, qpos_history: np.ndarray, env_steps: int, label: str) -> int:
+        """Swap in a new rollout; returns how many worlds ended holding the box."""
+        picked = int((qpos_history[-1, :, self.box_z] > BOX_HELD_Z).sum())
+        with self._lock:
+            self._history, self._label, self._env_steps = qpos_history, label, env_steps
+        rr.set_time("env_steps", sequence=env_steps)
+        rr.log("eval/boxes_held", rr.Scalars(picked))
         rr.log("stage", rr.TextLog(f"{label}: {picked}/{self.worlds} boxes held up"))
         print(
             f"[rl] {label}: {picked}/{self.worlds} boxes held up at the end", flush=True
         )
+        return picked
+
+    def _loop(self):
+        # The viewer belongs to this thread (GLFW context affinity).
+        viewer = mujoco.viewer.launch_passive(self.model, self.data)
+        viewer.cam.distance = 2.2 * self.side
+        viewer.cam.azimuth = 90
+        viewer.cam.elevation = -40
+        viewer.cam.lookat[:] = [0, 0, 0]
+        try:
+            while viewer.is_running():
+                with self._lock:
+                    history, env_steps = self._history, self._env_steps
+                if history is None:
+                    time.sleep(0.1)
+                    continue
+                for t in range(history.shape[0]):
+                    if not viewer.is_running():
+                        break
+                    with viewer.lock():
+                        self.data.qpos[:] = history[t].reshape(-1)
+                        mujoco.mj_forward(self.model, self.data)
+                    viewer.sync()
+                    if t % MIRROR_EVERY == 0:
+                        rr.set_time("env_steps", sequence=env_steps)
+                        rr.set_time("sim_time", duration=t * 0.02)
+                        self.mirror.log(self.data, path="world/rig")
+                        for n in range(self.worlds):
+                            rr.log(
+                                f"worlds/{n:02d}/box_z",
+                                rr.Scalars(float(history[t, n, self.box_z])),
+                            )
+                    time.sleep(REALTIME_SLEEP)
+        finally:
+            viewer.close()
+            self.closed.set()
 
 
 def rollout_fn(env, worlds: int, make_policy):
     """A jitted batched rollout of one full episode under the policy
     `make_policy(params)` — params are traced, so one compile serves
-    every evaluation."""
+    every evaluation. STOCHASTIC actions: this is what the learner's
+    own rollouts look like (its exploration), which is the honest thing
+    to watch — an early deterministic mean of this env's +-0.015 rad
+    deltas is a robot standing still."""
     episode = env._config.episode_length
 
     def run(params, rng):
-        policy = make_policy(params, deterministic=True)
+        policy = make_policy(params, deterministic=False)
         keys = jax.random.split(rng, worlds)
         state = jax.vmap(env.reset)(keys)
 
         def body(carry, _):
             state, key = carry
             key, sub = jax.random.split(key)
-            action, _ = policy(state.obs, jax.random.split(sub, worlds))
+            action, _ = policy(state.obs, sub)  # one key serves the whole batch
             state = jax.vmap(env.step)(state, action)
             return (state, key), state.data.qpos
 
@@ -230,7 +261,9 @@ def main() -> None:
         if make_policy not in rollouts:
             rollouts[make_policy] = rollout_fn(env, args.show, make_policy)
         qpos = np.asarray(rollouts[make_policy](params, sub))
-        stage.play(qpos, current_step, f"policy at {current_step:,} env steps")
+        stage.publish(qpos, current_step, f"policy at {current_step:,} env steps")
+        if stage.closed.is_set():
+            raise SystemExit("viewer closed")
 
     rr.log("stage", rr.TextLog(f"PPO on {ENV_NAME}: {args.envs} worlds on the GPU"))
     print(
@@ -247,10 +280,12 @@ def main() -> None:
         seed=args.seed,
         **train_kwargs,
     )
-    rr.log("stage", rr.TextLog("training finished"))
+    rr.log(
+        "stage",
+        rr.TextLog("training finished - the grid keeps looping the final policy"),
+    )
     print("[rl] training finished - close the MuJoCo window to exit", flush=True)
-    while stage.viewer.is_running():
-        time.sleep(0.2)
+    stage.closed.wait()
 
 
 if __name__ == "__main__":
