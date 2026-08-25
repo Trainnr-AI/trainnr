@@ -13,7 +13,9 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+from _lab import bootstrap
+
+bootstrap()
 from rq_pipeline.robot.sts_synth import (  # noqa: E402
     STUDY_MATRIX,
     TRUE_ARMATURE,

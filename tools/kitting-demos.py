@@ -1,7 +1,7 @@
 """Generate scripted kitting demonstrations — T5's data source.
 
     cd pipeline && uv run --extra sim python ../tools/kitting-demos.py \
-        [episodes=10] [out=runs/kitting-demos]
+        [episodes] [out] [--max-attempts N]
 
 Each episode: spawn both parts uniformly in the PROVEN band (the front
 half of the spawn box — the far band's closing-plane edge is a known
@@ -16,25 +16,40 @@ box's train venv converts the batch to a LeRobot dataset for T5
 training; this side stays torch-free.
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+from _lab import bootstrap
+
+bootstrap()
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
-
+from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     PART_SPAWN,
     PART_STATE_SLICE,
+    KittingStats,
     build_kitting,
     scripted_kitting_episode,
 )
 
-EPISODES = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-OUT = Path(sys.argv[2] if len(sys.argv) > 2 else "runs/kitting-demos")
+parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+parser.add_argument("episodes", nargs="?", type=int, default=10)
+parser.add_argument("out", nargs="?", type=Path, default=Path("runs/kitting-demos"))
+parser.add_argument(
+    "--max-attempts",
+    type=int,
+    default=None,
+    help="give up after this many draws (default: 20 * episodes) — the DR"
+    " sampler can in principle draw only unreachable dynamics",
+)
+args = parser.parse_args()
+EPISODES, OUT = args.episodes, args.out
+MAX_ATTEMPTS = args.max_attempts if args.max_attempts is not None else 20 * EPISODES
 DR_SPAN = 0.30  # +-30% around the bundle's identified/nominal values
 FRAME_EVERY = 5  # control ticks between saved frames (10 Hz at 50 Hz control)
 SEED = 20260826
@@ -46,6 +61,12 @@ OUT.mkdir(parents=True, exist_ok=True)
 kept = 0
 attempt = 0
 while kept < EPISODES:
+    if attempt >= MAX_ATTEMPTS:
+        print(
+            f"gave up after {attempt} attempts: kept {kept}/{EPISODES} -> {OUT}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     attempt += 1
     # Domain randomization: recompile the scene with scaled dynamics.
     spec = build_kitting().spec
@@ -58,13 +79,7 @@ while kept < EPISODES:
         actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
     model = spec.compile()
 
-    data = mujoco.MjData(model)
-    key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "neutral_pose")
-    mujoco.mj_resetDataKeyframe(model, data, key)
-    mujoco.mj_forward(model, data)
-    size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-    initial = np.empty(size)
-    mujoco.mj_getState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    initial = keyframe_state(model, "neutral_pose")
     draws = {}
     for arm in ("right", "left"):
         (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
@@ -81,13 +96,17 @@ while kept < EPISODES:
     frames_dir = episode_dir / "frames"
     frames: list[tuple[int, Path]] = []
 
-    def snap(tick: int, live: mujoco.MjData) -> None:
+    # renderer/frames bound as defaults — a late-binding closure would see
+    # only the LAST attempt's objects (ruff B023).
+    def snap(
+        tick: int, live: mujoco.MjData, renderer=renderer, frames=frames
+    ) -> None:
         if tick % (FRAME_EVERY * 10) != 0:  # tick is a physics step here
             return
         renderer.update_scene(live, camera="top")
         frames.append((tick, renderer.render().copy()))
 
-    stats: dict = {}
+    stats = KittingStats()
     try:
         states, sensors, actions = scripted_kitting_episode(
             model, initial, on_control=snap, stats=stats
@@ -99,11 +118,12 @@ while kept < EPISODES:
         # generator keeps its throughput (it filters).
         print(f"attempt {attempt}: discard (IK: {error})", file=sys.stderr)
         succeeded = False
-    renderer.close()
+    finally:
+        renderer.close()
     print(
         f"attempt {attempt}: {'KEEP' if succeeded else 'discard'} "
         f"(damping x{damping_scale:.2f}, gain x{gain_scale:.2f}, "
-        f"retries {len(stats.get('retries', []))})",
+        f"retries {len(stats.retries)})",
         file=sys.stderr,
     )
     if not succeeded:
@@ -129,7 +149,7 @@ while kept < EPISODES:
                 "draws": draws,
                 "damping_scale": damping_scale,
                 "gain_scale": gain_scale,
-                "retries": stats.get("retries", []),
+                "retries": stats.retries,
                 "control_hz": 50,
                 "frame_every_control_ticks": FRAME_EVERY,
                 "action_semantics": "14 commanded joint positions (ctrl order)",

@@ -26,8 +26,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol, SimScore, home_state
-from rq_pipeline.robot.model_checks import assert_model_alive
+from rq_pipeline.evaluate.harness import EpisodeProtocol, SimScore, score_policies
+from rq_pipeline.physics.backend import PhysicsBackend
 
 
 @dataclass(frozen=True)
@@ -63,55 +63,41 @@ class VisionPolicy:
 
 
 def evaluate_vision_policies(  # noqa: PLR0913 - the sixth is a scalar; a spec object would hide it
-    backend: Any,
+    backend: PhysicsBackend,
     policies: Sequence[VisionPolicy],
     protocol: EpisodeProtocol,
     *,
     cameras: Sequence[CameraSpec] = ARMNETBENCH_CAMERAS,
-    state_width: int = 6,
+    state_width: int,
     source: str,
 ) -> tuple[SimScore, ...]:
     """`harness.evaluate_policies`, over pixels. Same rules, same pairing.
 
     `state_width` is the bundle's jointpos block (six for the SO-101,
-    fourteen for ALOHA 2) — the `observation.state` the policy sees.
+    fourteen for ALOHA 2) — the `observation.state` the policy sees. No
+    default: a silent six on a fourteen-servo rig would feed the policy
+    half its state with no error.
     """
-    names = [policy.name for policy in policies]
-    if len(set(names)) != len(names):
-        raise ValueError(f"duplicate policy names: {sorted(names)}")
-    if "@" not in source:
-        raise ValueError(
-            f"source must be a name@hash stamp, got {source!r} — the same "
-            "rule certify() enforces, applied before episodes are spent"
+
+    def run_episode(policy: VisionPolicy, initial: Any) -> tuple[Any, Any]:
+        policy.reset()
+        return backend.closed_loop_vision_rollout(
+            initial,
+            policy.act,
+            protocol.steps,
+            protocol.control_interval,
+            cameras,
+            state_width=state_width,
         )
-    counts = backend.counts()
-    assert_model_alive(
-        counts.actuators,
-        counts.sensors,
-        counts.geoms,
+
+    return score_policies(
+        backend,
+        policies,
+        protocol,
         source=source,
-        cameras=counts.cameras,
+        run_episode=run_episode,
+        gate_cameras=True,
     )
-    home = home_state(backend, protocol)
-    scores = []
-    for policy in policies:
-        successes = 0
-        for trial in range(protocol.trials):
-            policy.reset()
-            states, sensors = backend.closed_loop_vision_rollout(
-                protocol.perturb(trial, home),
-                policy.act,
-                protocol.steps,
-                protocol.control_interval,
-                cameras,
-                state_width=state_width,
-            )
-            if protocol.success(states, sensors):
-                successes += 1
-        scores.append(
-            SimScore(name=policy.name, successes=successes, trials=protocol.trials)
-        )
-    return tuple(scores)
 
 
 def lerobot_checkpoint_policy(

@@ -32,7 +32,6 @@ import argparse
 import re
 import signal
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -42,11 +41,10 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "pipeline"))
-from _rig3d import RigMirror  # noqa: E402
+from _lab import bootstrap, rr_session
 
+HERE = Path(__file__).resolve().parent
+bootstrap()
 from rq_pipeline.evaluate.harness import home_state  # noqa: E402
 from rq_pipeline.evaluate.vision import (  # noqa: E402
     VisionPolicy,
@@ -59,6 +57,8 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     build_transfer_cube,
     ctrl_from_act_sim_action,
 )
+
+from _rig3d import RigMirror  # noqa: E402
 
 LOG_LINE = re.compile(r"step:(\d+).*?loss:([\d.]+).*?grdn:([\d.]+).*?lr:([\d.e+-]+)")
 EXTRA = re.compile(r"(l1_loss|kld_loss):([\d.]+)")
@@ -305,7 +305,7 @@ def _exit_on_sigterm(signum, frame):
 def play_only(args) -> None:
     """Watch one checkpoint: every paired start, both viewers, no training."""
     checkpoint = Path(args.play)
-    rr.init(f"robotiq-play-{checkpoint.parent.name}", spawn=True)
+    rr_session(f"robotiq-play-{checkpoint.parent.name}", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     watcher = Watcher(args.look)
     raw = lerobot_checkpoint_policy(
@@ -344,7 +344,7 @@ def main() -> None:
         play_only(args)
         return
     output_dir = Path(args.runs) / args.name
-    rr.init(f"robotiq-train-watch-{args.name}", spawn=True)
+    rr_session(f"robotiq-train-watch-{args.name}", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
 
     process = subprocess.Popen(

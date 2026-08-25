@@ -24,20 +24,16 @@ needs the MJX-patched model Menagerie ships alongside this one.
 """
 
 import argparse
-import sys
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "pipeline"))
-from _rig3d import RigMirror  # noqa: E402
+from _lab import bootstrap, rr_session
 
+bootstrap()
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     ACT_SIM_LOOK,
     CUBE_HALF,
@@ -48,6 +44,8 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     build_transfer_cube,
     ctrl_from_act_sim_action,
 )
+
+from _rig3d import RigMirror  # noqa: E402
 
 NEUTRAL_QPOS = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084, 0.0084] * 2
 COLLISION_GROUP = 3
@@ -190,7 +188,7 @@ def main() -> None:
     actions = load_demo(args.dataset, args.episode)
     ctrl_per_step = [ctrl_from_act_sim_action(a) for a in actions]
 
-    rr.init(f"robotiq-many-{args.worlds}", spawn=True)
+    rr_session(f"robotiq-many-{args.worlds}", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     mirror = RigMirror(
         model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)

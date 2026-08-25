@@ -13,11 +13,12 @@ decoder; run that half on the WSL box where torchcodec works.)
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+from _lab import bootstrap
+
+bootstrap()
 
 import mujoco  # noqa: E402
 from PIL import Image  # noqa: E402
-
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS  # noqa: E402
 from rq_pipeline.tasks import so101  # noqa: E402
 

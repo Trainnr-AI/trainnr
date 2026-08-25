@@ -30,7 +30,7 @@ the table at the end.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -238,52 +238,63 @@ def _act_sim_cosmetics(scene: Any) -> None:
     scene.visual.headlight.diffuse = [0.3, 0.3, 0.3]
 
 
-def build_transfer_cube(
-    bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK
-) -> ALOHA2Task:
-    """Transfer cube, gym-aloha's protocol on the identified rig.
-
-    `look` selects the appearance: the bundle's own (`aloha2`) or the
-    ACT simulator's (`act_sim`) for checkpoints trained on its renders.
-    """
-    import mujoco  # noqa: PLC0415 - sim extra
-    import numpy as np  # noqa: PLC0415
-
+def _task_scene(task: str, bundle_xml: Path, look: str) -> Any:
+    """Load the rig, validate + apply the look — every builder's opening."""
     if look not in (ALOHA2_LOOK, ACT_SIM_LOOK):
         raise ValueError(
             f"look must be {ALOHA2_LOOK!r} or {ACT_SIM_LOOK!r}, got {look!r}"
         )
-    scene = _rig_scene(f"aloha2-transfer-cube-{look}", bundle_xml)
+    scene = _rig_scene(f"aloha2-{task}-{look}", bundle_xml)
     if look == ACT_SIM_LOOK:
         _act_sim_cosmetics(scene)
-    cube = scene.worldbody.add_body(name="cube", pos=list(CUBE_HOME))
-    cube.add_freejoint()
-    # gym-aloha's red_box, verbatim: 2 cm half-size, its contact params
-    # (their XML gives solimp three values; MjSpec wants all five, so the
-    # parser's defaults for midpoint and power are written out).
-    cube.add_geom(
-        name="cube_geom",
+    return scene
+
+
+def _add_free_box(scene: Any, name: str, pos: Any, half: float, rgba: Any) -> None:
+    """A free-floating box with gym-aloha's red_box contact params,
+    keyframes extended (see `_extend_keyframes` for why that is not
+    optional). The transfer cube and both kitting parts are this box —
+    same physics, different colour — so it exists once.
+
+    Contact params are their XML verbatim; it gives solimp three values
+    and MjSpec wants all five, so the parser's defaults for midpoint
+    and power are written out.
+    """
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    body = scene.worldbody.add_body(name=name, pos=list(pos))
+    body.add_freejoint()
+    body.add_geom(
+        name=f"{name}_geom",
         type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=[CUBE_HALF] * 3,
+        size=[half] * 3,
         condim=4,
         solimp=[2, 1, 0.01, 0.5, 2],
         solref=[0.01, 1],
         friction=[1, 0.005, 0.0001],
-        rgba=[1, 0, 0, 1],
+        rgba=list(rgba),
     )
-    _extend_keyframes(scene, [*CUBE_HOME, 1.0, 0.0, 0.0, 0.0])
+    _extend_keyframes(scene, [*pos, 1.0, 0.0, 0.0, 0.0])
+
+
+def _add_top_camera_and_referees(scene: Any) -> None:
+    """The task instrumentation both scenes share: the translated
+    gym-aloha `top` camera, and a framepos referee per gripper so
+    success can ask "is the object at the LEFT/RIGHT pads" without a
+    contact query. A real arm computes its own forward kinematics, so
+    policies may see the referees too. Each referee reads the finger
+    PADS (the inner collision sphere of the arm's left finger), not the
+    wrist body: "held" means at the pads, which sit ~10 cm past the
+    wrist.
+    """
+    import mujoco  # noqa: PLC0415 - sim extra
+
     scene.worldbody.add_camera(
         name="top",
         pos=list(TOP_CAMERA_POS),
         xyaxes=[1, 0, 0, 0, 1, 0],
         fovy=TOP_CAMERA_FOVY,
     )
-    # Referee: where the left gripper is, so success can ask "is the cube
-    # held by the LEFT arm" without a contact query. A real arm computes
-    # its own forward kinematics, so policies may see this too.
-    # The referee reads the finger PADS (the inner collision spheres of
-    # each arm's left finger), not the wrist body: "held" means the
-    # cube is at the pads, and the pads sit ~10 cm beyond the wrist.
     for arm in ("left", "right"):
         scene.add_sensor(
             name=f"referee/{arm}_gripper_pos",
@@ -292,12 +303,35 @@ def build_transfer_cube(
             objname=f"{arm}/left_g1",
         )
 
+
+def _corner_fraction(trial: int, inset: float) -> tuple[float, float]:
+    """Deterministic paired starts: the spawn box's four corners pulled
+    in by `inset` (a fraction of each side), cycling with the trial
+    index — gym-aloha's per-episode draw in spirit, identical across
+    policies by construction."""
+    fx, fy = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0))[trial % 4]
+    span = 1.0 - 2.0 * inset
+    return (inset + fx * span, inset + fy * span)
+
+
+def build_transfer_cube(
+    bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK
+) -> ALOHA2Task:
+    """Transfer cube, gym-aloha's protocol on the identified rig.
+
+    `look` selects the appearance: the bundle's own (`aloha2`) or the
+    ACT simulator's (`act_sim`) for checkpoints trained on its renders.
+    """
+    import numpy as np  # noqa: PLC0415
+
+    scene = _task_scene("transfer-cube", bundle_xml, look)
+    # gym-aloha's red_box, verbatim: 2 cm half-size, red.
+    _add_free_box(scene, "cube", CUBE_HOME, CUBE_HALF, (1, 0, 0, 1))
+    _add_top_camera_and_referees(scene)
+
     def perturb(trial: int, home: Any) -> Any:
-        # Deterministic paired starts across the spawn box: four corners
-        # pulled in by 2 cm, matching gym-aloha's per-episode cube draw
-        # in spirit while keeping trials identical across policies.
         initial = home.copy()
-        fx, fy = ((0.1, 0.1), (0.9, 0.1), (0.1, 0.9), (0.9, 0.9))[trial % 4]
+        fx, fy = _corner_fraction(trial, inset=0.1)
         initial[CUBE_STATE_SLICE.start] = CUBE_SPAWN_X[0] + fx * (
             CUBE_SPAWN_X[1] - CUBE_SPAWN_X[0]
         )
@@ -418,13 +452,7 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
-    if look not in (ALOHA2_LOOK, ACT_SIM_LOOK):
-        raise ValueError(
-            f"look must be {ALOHA2_LOOK!r} or {ACT_SIM_LOOK!r}, got {look!r}"
-        )
-    scene = _rig_scene(f"aloha2-kitting-{look}", bundle_xml)
-    if look == ACT_SIM_LOOK:
-        _act_sim_cosmetics(scene)
+    scene = _task_scene("kitting", bundle_xml, look)
 
     # The tray: two shallow square wells built from wall boxes, static.
     for arm, (cx, cy) in SLOT_CENTERS.items():
@@ -444,40 +472,14 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
                 rgba=[0.35, 0.25, 0.15, 1.0],
             )
 
-    colors = {"right": [1, 0, 0, 1], "left": [0, 0.55, 1, 1]}
+    colors = {"right": (1, 0, 0, 1), "left": (0, 0.55, 1, 1)}
     for arm in ("right", "left"):  # declaration order pins the state slices
-        part = scene.worldbody.add_body(name=f"part_{arm}", pos=list(PART_HOME[arm]))
-        part.add_freejoint()
-        part.add_geom(
-            name=f"part_{arm}_geom",
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            size=[PART_HALF] * 3,
-            condim=4,
-            solimp=[2, 1, 0.01, 0.5, 2],
-            solref=[0.01, 1],
-            friction=[1, 0.005, 0.0001],
-            rgba=colors[arm],
-        )
-    _extend_keyframes(scene, [*PART_HOME["right"], 1.0, 0.0, 0.0, 0.0])
-    _extend_keyframes(scene, [*PART_HOME["left"], 1.0, 0.0, 0.0, 0.0])
-
-    scene.worldbody.add_camera(
-        name="top",
-        pos=list(TOP_CAMERA_POS),
-        xyaxes=[1, 0, 0, 0, 1, 0],
-        fovy=TOP_CAMERA_FOVY,
-    )
-    for arm in ("left", "right"):
-        scene.add_sensor(
-            name=f"referee/{arm}_gripper_pos",
-            type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
-            objtype=mujoco.mjtObj.mjOBJ_GEOM,
-            objname=f"{arm}/left_g1",
-        )
+        _add_free_box(scene, f"part_{arm}", PART_HOME[arm], PART_HALF, colors[arm])
+    _add_top_camera_and_referees(scene)
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
-        fx, fy = ((0.2, 0.2), (0.8, 0.2), (0.2, 0.8), (0.8, 0.8))[trial % 4]
+        fx, fy = _corner_fraction(trial, inset=0.2)
         for arm in ("right", "left"):
             (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
             part = PART_STATE_SLICE[arm]
@@ -526,6 +528,17 @@ _PICK_PLACE_SEGMENTS = (
 )
 
 
+@dataclass
+class KittingStats:
+    """What the choreographer observed about its own run — typed so a
+    consumer misspelling a key gets an AttributeError, not a silent
+    empty default. Each retry records (arm, physics_step, part_z)."""
+
+    retries: list[tuple[str, int, float]] = field(default_factory=list)
+    steps_used_before_hold: int = 0
+    truncated: bool = False
+
+
 class Waypoint(NamedTuple):
     """One choreography beat — typed because the tuple's arity already
     lied once (an annotation described a removed 3-tuple shape while
@@ -557,7 +570,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
     initial_state: Any,
     *,
     on_control: Any = None,
-    stats: dict | None = None,
+    stats: KittingStats | None = None,
 ) -> tuple[Any, Any, Any]:
     """One scripted kitting demonstration, privileged, R7-correct.
 
@@ -694,16 +707,14 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 # with no signal was the silent-truncation gap the
                 # review named. Record it and stop pretending.
                 if stats is not None:
-                    stats["truncated"] = True
+                    stats.truncated = True
                 break
             name, target_xyz, grip, secs = plan[segment_index]
             segment_index += 1
             command_reach(target_xyz, grip, secs)
             if name == "lift" and part_z() < _LIFT_CHECK_Z_M and not grasp_retried:
                 if stats is not None:
-                    stats.setdefault("retries", []).append(
-                        (arm, physics_step, round(part_z(), 3))
-                    )
+                    stats.retries.append((arm, physics_step, round(part_z(), 3)))
                 # The referee's cheapest service: a lift that lifted
                 # nothing restarts the grasp once (open, re-descend on
                 # the part's CURRENT position — the failed close may
@@ -748,7 +759,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                     ]
                     command_reach(corrected, grip, 0.5)
     if stats is not None:
-        stats["steps_used_before_hold"] = physics_step
+        stats.steps_used_before_hold = physics_step
     # Hold the final pose for the rest of the protocol window.
     while physics_step < steps_total:
         advance(1.0, ctrl)

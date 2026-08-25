@@ -44,6 +44,12 @@ step "clippy (all targets)"  "! cargo clippy -q --workspace --all-targets 2>&1 |
 step "tests"                 "cargo test -q --workspace"
 step "docs describe real code" "python3 tools/check-docs.py"
 step "unsafe forbidden everywhere" "python3 tools/check-unsafe-gates.py"
+# The Python pipeline, under the same roof as the crates. These mirror
+# the pre-commit hook — but verify.sh is the "prove EVERYTHING" command
+# and until 2026-08-26 it proved everything except the Python half.
+step "ruff format (pipeline)"  "(cd pipeline && uvx ruff format --check .)"
+step "ruff lint (pipeline)"    "(cd pipeline && uvx ruff check .)"
+step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "simulator solves the U-trap" \
      "cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
 

@@ -23,24 +23,24 @@ On Linux/WSL plain `python` drives the passive viewer; macOS needs
 `mjpython` (the repo's other viewer tools say so in their headers).
 """
 
-import sys
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _rig3d import RigMirror
+from _lab import bootstrap, rr_session
 
-from rq_pipeline.tasks.components import (
+bootstrap()
+from rq_pipeline.tasks.components import (  # noqa: E402
     DECK_PICK_SEQUENCE,
     TRAY_CENTRE_X,
     TRAY_CENTRE_Y,
     compose,
 )
+
+from _rig3d import RigMirror  # noqa: E402
 
 CROUCH = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
 CUBE_QPOS = 15  # free joint: cube x, y, z
@@ -131,7 +131,7 @@ def run_lap(model, data, lap, mirror=None, viewer=None):
 
 
 def main() -> None:
-    rr.init("robotiq-cargo-chaos", spawn=True)
+    rr_session("robotiq-cargo-chaos", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     # The tray pocket the cube is supposed to come home to.
     rr.log(

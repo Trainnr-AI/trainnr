@@ -54,6 +54,7 @@ class KittingScene(unittest.TestCase):
         import numpy as np  # noqa: PLC0415
 
         from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            KittingStats,
             build_kitting,
             scripted_kitting_episode,
         )
@@ -67,15 +68,15 @@ class KittingScene(unittest.TestCase):
         size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
         home = np.empty(size)
         mujoco.mj_getState(model, data, home, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        stats: dict = {}
+        stats = KittingStats()
         states, sensors, actions = scripted_kitting_episode(
             model, task.protocol.perturb(0, home), stats=stats
         )
         self.assertTrue(task.protocol.success(states, sensors), stats)
         # The proven band needs no retry and never truncates — if either
         # fires here, robustness regressed and the stats say where.
-        self.assertEqual(stats.get("retries", []), [])
-        self.assertNotIn("truncated", stats)
+        self.assertEqual(stats.retries, [])
+        self.assertFalse(stats.truncated)
         # The dataset contract: one 14-wide action row per control tick.
         self.assertEqual(actions.shape[1], 14)
         self.assertEqual(len(actions), task.protocol.steps // 10)

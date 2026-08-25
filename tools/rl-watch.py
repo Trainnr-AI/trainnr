@@ -38,10 +38,11 @@ certificate. The harness judges what comes out of it afterwards.
 """
 
 import argparse
+import atexit
 import contextlib
 import functools
 import multiprocessing
-import sys
+import shutil
 import tempfile
 import time
 from datetime import datetime
@@ -53,8 +54,9 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+from _lab import bootstrap, rr_session
+
+bootstrap()
 from _rig3d import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
@@ -83,6 +85,7 @@ def materialise_assets(env) -> Path:
     disk. Write the dict out once — flat, plus an `assets/` copy so
     `meshdir="assets"` resolves — and build from the file."""
     root = Path(tempfile.mkdtemp(prefix="rl-watch-assets-"))
+    atexit.register(shutil.rmtree, root, ignore_errors=True)
     (root / "assets").mkdir()
     for name, payload in env._model_assets.items():
         (root / name).write_bytes(payload)
@@ -138,8 +141,10 @@ def stage_process(spec, queue, closed):
     mirror = RigMirror(
         model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)
     )
-    rr.init(f"robotiq-rl-watch-{ENV_NAME}", recording_id=recording_id)
-    rr.connect_grpc()  # the viewer the training process spawned
+    # mode="connect": the viewer the training process spawned exists.
+    rr_session(
+        f"robotiq-rl-watch-{ENV_NAME}", mode="connect", recording_id=recording_id
+    )
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     history, env_steps = None, 0
     viewer = mujoco.viewer.launch_passive(model, data)
@@ -255,7 +260,9 @@ def main() -> None:
     del train_kwargs["network_factory"]
 
     recording_id = f"rl-watch-{ENV_NAME}-{datetime.now():%Y%m%d-%H%M%S}"
-    rr.init(f"robotiq-rl-watch-{ENV_NAME}", recording_id=recording_id, spawn=True)
+    rr_session(
+        f"robotiq-rl-watch-{ENV_NAME}", mode="spawn", recording_id=recording_id
+    )
     stage = Stage(env, args.show, recording_id)
     rollouts = {}  # one jitted rollout per make_policy (brax passes the same one)
     started = time.time()

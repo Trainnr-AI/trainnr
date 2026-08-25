@@ -39,6 +39,32 @@ def _require_mujoco() -> Any:
     return mujoco
 
 
+def keyframe_state(model: Any, name: str) -> numpy.ndarray:
+    """The named keyframe of a COMPILED model as a FULLPHYSICS state row.
+
+    Free function on purpose: the backend method below wraps it for
+    harness callers, but demo generators and tools hold a bare model and
+    were each re-typing the reset-forward-getState ritual.
+    """
+    mujoco = _require_mujoco()
+    import numpy as np  # noqa: PLC0415
+
+    key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, name)
+    if key < 0:
+        names = [
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, i)
+            for i in range(model.nkey)
+        ]
+        raise KeyError(f"no keyframe {name!r} in model; it has {names}")
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, key)
+    mujoco.mj_forward(model, data)
+    size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    state = np.empty(size)
+    mujoco.mj_getState(model, data, state, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    return state
+
+
 class MuJoCoBackend:
     """`PhysicsBackend` implementation over CPU MuJoCo."""
 
@@ -105,18 +131,7 @@ class MuJoCoBackend:
         real rig never traverses that pose; a harness that starts there
         measures a collision, not a policy.
         """
-        mujoco = self._mujoco
-        model = self._require_model()
-        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, name)
-        if key < 0:
-            names = [
-                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, i)
-                for i in range(model.nkey)
-            ]
-            raise KeyError(f"no keyframe {name!r} in model; it has {names}")
-        data = mujoco.MjData(model)
-        mujoco.mj_resetDataKeyframe(model, data, key)
-        return self._state_of(data)
+        return keyframe_state(self._require_model(), name)
 
     def _state_of(self, data: Any) -> numpy.ndarray:
         mujoco = self._mujoco
@@ -155,18 +170,20 @@ class MuJoCoBackend:
         state, _sensordata = mj_rollout.rollout(model, data, initial, control)
         return state
 
-    def closed_loop_rollout(
+    def _closed_loop(
         self,
         initial_state: numpy.ndarray,
-        policy: Any,
         steps: int,
         control_interval: int,
+        control_for: Any,
     ) -> tuple[numpy.ndarray, numpy.ndarray]:
-        """One policy-in-the-loop episode; see the protocol docstring.
+        """The one stepping loop both closed-loop rollouts share.
 
-        The policy observes `data.sensordata` (a copy — it cannot write
-        into the simulator) and its control is clamped to nothing: what
-        it commands is what the actuators get, exactly like the wire.
+        `control_for(step, data)` builds the observation (its business)
+        and returns nu controls (checked here). Everything else —
+        validation, seating the state, the R7 same-instant rule — is
+        physics discipline and must not fork between the sensor and
+        vision paths.
         """
         mujoco = self._mujoco
         import numpy as np  # noqa: PLC0415
@@ -185,14 +202,15 @@ class MuJoCoBackend:
             )
         data = mujoco.MjData(model)
         mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        # Populate sensordata for the policy's first observation.
+        # Populate sensordata (and poses, for renders) for the first
+        # observation.
         mujoco.mj_forward(model, data)
 
         states = np.empty((steps, size))
         sensors = np.empty((steps, model.nsensordata))
         for step in range(steps):
             if step % control_interval == 0:
-                control = np.asarray(policy(step, data.sensordata.copy()), dtype=float)
+                control = np.asarray(control_for(step, data), dtype=float)
                 if control.shape != (model.nu,):
                     raise ValueError(
                         f"policy returned control of shape {control.shape}, "
@@ -201,8 +219,8 @@ class MuJoCoBackend:
                 data.ctrl[:] = control
             mujoco.mj_step(model, data)
             # mj_step leaves sensordata evaluated at the PRE-integration
-            # state; recompute so sensors[k] and states[k] describe the
-            # same instant and the policy's next observation is fresh.
+            # state; recompute so sensors[k], states[k] and any render all
+            # describe ONE instant and the next observation is fresh.
             # Measured by this suite's fourth review (R7): without this,
             # every recording carried an accidental one-physics-tick
             # sensor lag nobody chose. Latency, when we model it, will be
@@ -215,6 +233,25 @@ class MuJoCoBackend:
             )
         return states, sensors
 
+    def closed_loop_rollout(
+        self,
+        initial_state: numpy.ndarray,
+        policy: Any,
+        steps: int,
+        control_interval: int,
+    ) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """One policy-in-the-loop episode; see the protocol docstring.
+
+        The policy observes `data.sensordata` (a copy — it cannot write
+        into the simulator) and its control is clamped to nothing: what
+        it commands is what the actuators get, exactly like the wire.
+        """
+
+        def control_for(step: int, data: Any) -> Any:
+            return policy(step, data.sensordata.copy())
+
+        return self._closed_loop(initial_state, steps, control_interval, control_for)
+
     def closed_loop_vision_rollout(  # noqa: PLR0913 - state_width is keyword-only and a scalar
         self,
         initial_state: numpy.ndarray,
@@ -223,7 +260,7 @@ class MuJoCoBackend:
         control_interval: int,
         cameras: Sequence[Any],
         *,
-        state_width: int = 6,
+        state_width: int,
     ) -> tuple[numpy.ndarray, numpy.ndarray]:
         """The vision episode: the policy sees RENDERED PIXELS + state.
 
@@ -245,17 +282,6 @@ class MuJoCoBackend:
         import numpy as np  # noqa: PLC0415
 
         model = self._require_model()
-        if steps <= 0 or control_interval <= 0:
-            raise ValueError(
-                f"steps and control_interval must be positive, got "
-                f"{steps} and {control_interval}"
-            )
-        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        initial = np.asarray(initial_state, dtype=float)
-        if initial.shape != (size,):
-            raise ValueError(
-                f"initial_state must have shape ({size},), got {initial.shape}"
-            )
         renderers: dict[tuple[int, int], Any] = {}
         for camera in cameras:
             key = (camera.height, camera.width)
@@ -263,43 +289,23 @@ class MuJoCoBackend:
                 renderers[key] = mujoco.Renderer(
                     model, height=camera.height, width=camera.width
                 )
-        data = mujoco.MjData(model)
-        mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        mujoco.mj_forward(model, data)
 
-        states = np.empty((steps, size))
-        sensors = np.empty((steps, model.nsensordata))
+        def control_for(step: int, data: Any) -> Any:
+            observation: dict[str, Any] = {
+                "observation.state": np.asarray(
+                    data.sensordata[:state_width], dtype=np.float32
+                ).copy()
+            }
+            for camera in cameras:
+                renderer = renderers[(camera.height, camera.width)]
+                renderer.update_scene(data, camera=camera.camera_name)
+                observation[f"observation.images.{camera.key}"] = renderer.render()
+            return policy(step, observation)
+
         try:
-            for step in range(steps):
-                if step % control_interval == 0:
-                    observation: dict[str, Any] = {
-                        "observation.state": np.asarray(
-                            data.sensordata[:state_width], dtype=np.float32
-                        ).copy()
-                    }
-                    for camera in cameras:
-                        renderer = renderers[(camera.height, camera.width)]
-                        renderer.update_scene(data, camera=camera.camera_name)
-                        observation[f"observation.images.{camera.key}"] = (
-                            renderer.render()
-                        )
-                    control = np.asarray(policy(step, observation), dtype=float)
-                    if control.shape != (model.nu,):
-                        raise ValueError(
-                            f"policy returned shape {control.shape}, "
-                            f"expected ({model.nu},)"
-                        )
-                    data.ctrl[:] = control
-                mujoco.mj_step(model, data)
-                # Same R7 rule as the sensor-only rollout above: recompute
-                # so sensors[k], states[k] and the next render all describe
-                # ONE instant — no accidental one-tick lag.
-                mujoco.mj_forward(model, data)
-                sensors[step] = data.sensordata
-                mujoco.mj_getState(
-                    model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
-                )
+            return self._closed_loop(
+                initial_state, steps, control_interval, control_for
+            )
         finally:
             for renderer in renderers.values():
                 renderer.close()
-        return states, sensors

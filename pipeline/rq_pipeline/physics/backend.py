@@ -39,6 +39,10 @@ class PhysicsBackend(Protocol):
     ) -> Sequence[Sequence[Sequence[float]]]:
         """Batched state trajectories; one entry per initial state."""
 
+    def load_spec(self, spec: object) -> None:
+        """Load an MjSpec-composed scene (task builders); same census
+        rules as `load_mjcf` — one door for every model."""
+
     def closed_loop_rollout(
         self,
         initial_state: Sequence[float],
@@ -52,6 +56,23 @@ class PhysicsBackend(Protocol):
         `control_interval` physics steps — policies run slower than
         physics, and they see what the instrument's sensors report, never
         privileged state. Returns (states, sensor_history)."""
+
+    def closed_loop_vision_rollout(  # noqa: PLR0913 - mirrors the implementation
+        self,
+        initial_state: Sequence[float],
+        policy: object,
+        steps: int,
+        control_interval: int,
+        cameras: Sequence[object],
+        *,
+        state_width: int,
+    ) -> tuple[object, object]:
+        """One episode driven by a policy observing RENDERED PIXELS plus
+        the first `state_width` sensor values — the vision harness's
+        loop. `state_width` has no default here on purpose: six is the
+        SO-101's jointpos block and fourteen is ALOHA 2's, and a silent
+        six on a fourteen-servo rig would feed a policy half its state
+        with no error. Callers say which rig they mean."""
 
 
 class ModelCounts:

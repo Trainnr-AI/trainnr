@@ -10,17 +10,15 @@ match.
 """
 
 import math
-import sys
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import rerun as rr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _rig3d import RigMirror  # noqa: E402
+from _lab import bootstrap, rr_session
+
+bootstrap()
 from rq_pipeline.tasks.yellow import (  # noqa: E402
     AIR_PICK_SEQUENCE,
     AIR_TUCK,
@@ -29,6 +27,8 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
     compose_rig,
     salute_pose,
 )
+
+from _rig3d import RigMirror  # noqa: E402
 
 
 def _mime_total_s() -> float:
@@ -120,11 +120,7 @@ def synthetic_blob():
 JOINT_NAMES = ["base", "waist", "shoulder", "wrist", "jaw"]
 mirror = RigMirror(model)
 
-rr.init("yellow-rig-sim-errand", spawn=False)
-try:
-    rr.connect_grpc()
-except Exception:
-    rr.spawn()
+rr_session("yellow-rig-sim-errand")
 
 
 def log_frame(t, pose, stage=None):

@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rq_pipeline.evaluate.certificate import PolicyOutcome
+from rq_pipeline.physics.backend import PhysicsBackend
 from rq_pipeline.robot.model_checks import assert_model_alive
 
 
@@ -89,21 +90,30 @@ class SimScore:
         return self.successes / self.trials
 
 
-def home_state(backend: Any, protocol: EpisodeProtocol) -> Any:
+def home_state(backend: PhysicsBackend, protocol: EpisodeProtocol) -> Any:
     """The protocol's declared start: its keyframe, else the model's reset."""
     if protocol.home is None:
         return backend.default_initial_state()
     return backend.keyframe_state(protocol.home)
 
 
-def evaluate_policies(
-    backend: Any,
-    policies: Sequence[SimPolicy],
+def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knobs
+    backend: PhysicsBackend,
+    policies: Sequence[Any],
     protocol: EpisodeProtocol,
     *,
     source: str,
+    run_episode: Callable[[Any, Any], tuple[Any, Any]],
+    gate_cameras: bool = False,
 ) -> tuple[SimScore, ...]:
-    """Score every policy under the identical protocol; census-gated."""
+    """The scoring skeleton both harnesses share: refuse duplicate
+    names and unstamped sources, census-gate the model, then run every
+    policy through the identical paired trials. `run_episode(policy,
+    initial_state) -> (states, sensors)` is the only thing that differs
+    between observing sensors and observing pixels — so it is the only
+    thing callers supply. Vision callers set `gate_cameras` because a
+    camera-less model would score their policies 0% silently.
+    """
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"duplicate policy names: {sorted(names)}")
@@ -113,24 +123,44 @@ def evaluate_policies(
             "rule certify() enforces, applied before episodes are spent"
         )
     counts = backend.counts()
-    assert_model_alive(counts.actuators, counts.sensors, counts.geoms, source=source)
+    assert_model_alive(
+        counts.actuators,
+        counts.sensors,
+        counts.geoms,
+        source=source,
+        cameras=counts.cameras if gate_cameras else None,
+    )
     home = home_state(backend, protocol)
     scores = []
     for policy in policies:
-        successes = 0
-        for trial in range(protocol.trials):
-            states, sensors = backend.closed_loop_rollout(
-                protocol.perturb(trial, home),
-                policy.act,
-                protocol.steps,
-                protocol.control_interval,
-            )
-            if protocol.success(states, sensors):
-                successes += 1
+        successes = sum(
+            1
+            for trial in range(protocol.trials)
+            if protocol.success(*run_episode(policy, protocol.perturb(trial, home)))
+        )
         scores.append(
             SimScore(name=policy.name, successes=successes, trials=protocol.trials)
         )
     return tuple(scores)
+
+
+def evaluate_policies(
+    backend: PhysicsBackend,
+    policies: Sequence[SimPolicy],
+    protocol: EpisodeProtocol,
+    *,
+    source: str,
+) -> tuple[SimScore, ...]:
+    """Score every policy under the identical protocol; census-gated."""
+
+    def run_episode(policy: SimPolicy, initial: Any) -> tuple[Any, Any]:
+        return backend.closed_loop_rollout(
+            initial, policy.act, protocol.steps, protocol.control_interval
+        )
+
+    return score_policies(
+        backend, policies, protocol, source=source, run_episode=run_episode
+    )
 
 
 def join_with_real(

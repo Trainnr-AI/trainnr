@@ -31,6 +31,12 @@ def cell_color(error_pct: float) -> str:
 
 
 def main() -> int:
+    if not SOURCE.exists():
+        print(
+            f"missing {SOURCE} — run tools/sts-study.py to generate it",
+            file=sys.stderr,
+        )
+        return 1
     study = json.loads(SOURCE.read_text())
     groups: dict[str, list[dict]] = {}
     for condition in study["conditions"]:

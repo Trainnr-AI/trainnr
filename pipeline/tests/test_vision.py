@@ -31,7 +31,12 @@ class VisionRollout(unittest.TestCase):
             return np.zeros(6)
 
         backend.closed_loop_vision_rollout(
-            backend.default_initial_state(), probe, 4, 2, ARMNETBENCH_CAMERAS
+            backend.default_initial_state(),
+            probe,
+            4,
+            2,
+            ARMNETBENCH_CAMERAS,
+            state_width=6,
         )
         self.assertEqual(seen["observation.images.front"].shape, (576, 1024, 3))
         self.assertEqual(seen["observation.images.top"].shape, (576, 1024, 3))
@@ -60,7 +65,12 @@ class VisionRollout(unittest.TestCase):
 
         for _ in range(2):
             backend.closed_loop_vision_rollout(
-                backend.default_initial_state(), grab, 2, 1, ARMNETBENCH_CAMERAS
+                backend.default_initial_state(),
+                grab,
+                2,
+                1,
+                ARMNETBENCH_CAMERAS,
+                state_width=6,
             )
         self.assertTrue(np.array_equal(frames[0], frames[1]))
 
@@ -75,9 +85,11 @@ class VisionRollout(unittest.TestCase):
         task, backend = self._task_and_backend()
         limp = VisionPolicy(name="limp", act=lambda step, obs: np.zeros(6))
         with self.assertRaises(ValueError):
-            evaluate_vision_policies(backend, [limp], task.protocol, source="unstamped")
+            evaluate_vision_policies(
+                backend, [limp], task.protocol, state_width=6, source="unstamped"
+            )
         scores = evaluate_vision_policies(
-            backend, [limp], task.protocol, source="so101-reach@testhash"
+            backend, [limp], task.protocol, state_width=6, source="so101-reach@testhash"
         )
         self.assertEqual(scores[0].trials, task.protocol.trials)
 

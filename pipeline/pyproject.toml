@@ -22,7 +22,7 @@ sim = ["mujoco[sysid]>=3.5"]
 # the harness is our evaluation environment anyway.
 train = ["lerobot[dataset,smolvla,training]>=0.6.1; python_version >= '3.12'"]
 gpu = ["mujoco-warp"]
-viz = ["rerun-sdk>=0.20"]  # NVIDIA GPU required
+viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
 
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]

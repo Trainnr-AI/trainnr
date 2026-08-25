@@ -65,9 +65,9 @@ class ExcitationData:
     from synthetic rollouts. Either way the three arrays are row-aligned.
     """
 
-    times: Any
-    controls: Any
-    measurements: Any
+    times: numpy.ndarray
+    controls: numpy.ndarray
+    measurements: numpy.ndarray
 
     def __post_init__(self) -> None:
         lengths = {

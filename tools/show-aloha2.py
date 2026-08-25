@@ -30,7 +30,6 @@ Close the MuJoCo window (or Ctrl-C) to stop. Linux/WSL runs the viewer
 under plain python; macOS needs mjpython.
 """
 
-import sys
 import time
 from pathlib import Path
 
@@ -39,8 +38,10 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _rig3d import RigMirror
+from _lab import bootstrap, rr_session
+
+bootstrap()
+from _rig3d import RigMirror  # noqa: E402
 
 BUNDLE = Path(__file__).resolve().parents[1] / "robots" / "aloha2-nominal"
 NEUTRAL = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084] * 2
@@ -137,7 +138,7 @@ def main() -> None:
     model.vis.quality.shadowsize = LIVE_SHADOWSIZE
     data = mujoco.MjData(model)
 
-    rr.init("robotiq-aloha2", spawn=True)
+    rr_session("robotiq-aloha2", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
 
     mujoco.mj_resetDataKeyframe(model, data, 0)

@@ -233,20 +233,29 @@ def add_cargo(scene: Any) -> None:
             mass=0.005,
             rgba=[0.25, 0.4, 0.7, 1.0],
         )
-    cube = scene.worldbody.add_body(
-        name="cargo_cube",
-        pos=[
+    _add_cargo_cube(
+        scene,
+        [
             TRAY_CENTRE_X,
             TRAY_CENTRE_Y,
             CHASSIS_CLEARANCE + 2 * CHASSIS_SIZE[2] + CUBE_HALF,
         ],
     )
+
+
+def _add_cargo_cube(scene: Any, pos: Any) -> None:
+    """THE cargo cube — deck tray and floor pick grasp the same one.
+
+    Grippy on purpose (foam-wrapped in spirit): contact friction
+    combines by max, so the cube's own coefficients govern both the
+    pad pinch and whatever it rests on. The torsional term matters —
+    with the default 0.005 the pinched cube pivoted out of the narrow
+    pad contact during the carry swing.
+    """
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    cube = scene.worldbody.add_body(name="cargo_cube", pos=list(pos))
     cube.add_freejoint()
-    # Grippy on purpose (foam-wrapped in spirit): contact friction
-    # combines by max, so the cube's own coefficients govern both the
-    # pad pinch and the tray floor. The torsional term matters — with
-    # the default 0.005 the pinched cube pivoted out of the narrow pad
-    # contact during the carry swing.
     cube.add_geom(
         name="cargo_cube_geom",
         type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -287,18 +296,7 @@ GROUND_PLACE_SEQUENCE = (
 
 def add_floor_cube(scene: Any, pos: tuple[float, float]) -> None:
     """A graspable cube on the floor — the ground-pick target."""
-    import mujoco  # noqa: PLC0415 - sim extra
-
-    cube = scene.worldbody.add_body(name="cargo_cube", pos=[pos[0], pos[1], 0.015])
-    cube.add_freejoint()
-    cube.add_geom(
-        name="cargo_cube_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=[CUBE_HALF, CUBE_HALF, 0.015],
-        mass=0.02,
-        friction=[2.0, 0.02, 0.001],
-        rgba=[0.85, 0.15, 0.15, 1.0],
-    )
+    _add_cargo_cube(scene, [pos[0], pos[1], 0.015])
 
 
 def compose(

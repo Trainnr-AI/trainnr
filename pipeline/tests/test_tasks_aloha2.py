@@ -151,7 +151,12 @@ class TransferCubeScene(unittest.TestCase):
             return NEUTRAL_CTRL
 
         backend.closed_loop_vision_rollout(
-            home_state(backend, task.protocol), probe, 2, 1, task.cameras
+            home_state(backend, task.protocol),
+            probe,
+            2,
+            1,
+            task.cameras,
+            state_width=14,
         )
         frame = seen["observation.images.top"]
         self.assertEqual(frame.shape, (480, 640, 3))
@@ -187,7 +192,12 @@ class TransferCubeScene(unittest.TestCase):
                 return NEUTRAL_CTRL
 
             backend.closed_loop_vision_rollout(
-                home_state(backend, task.protocol), probe, 2, 1, task.cameras
+                home_state(backend, task.protocol),
+                probe,
+                2,
+                1,
+                task.cameras,
+                state_width=14,
             )
         self.assertGreater(float(frames["grey"].mean()), BLACK_FRAME_MEAN)
         self.assertLess(float(frames["grey"].mean()), float(frames["wood"].mean()))

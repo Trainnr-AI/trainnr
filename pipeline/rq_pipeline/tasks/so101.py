@@ -237,6 +237,47 @@ def scripted_no_close(step: int, sensordata: Any) -> Any:
     return control
 
 
+def _add_free_cube(  # noqa: PLR0913 - a geom's facts, not knobs
+    scene: Any, name: str, pos: Any, half: Any, *, mass: float, friction: Any, rgba: Any
+) -> None:
+    """A free-floating box on the table; every task object here is one."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    body = scene.worldbody.add_body(name=name, pos=list(pos))
+    body.add_freejoint()
+    body.add_geom(
+        name=f"{name}_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=list(half),
+        mass=mass,
+        friction=list(friction),
+        rgba=list(rgba),
+    )
+
+
+def _add_cube_a(scene: Any) -> None:
+    """Cube A in the measured pocket — stack and insert pick the SAME
+    cube with the same high-friction skin; it exists once so the two
+    tasks cannot drift apart."""
+    _add_free_cube(
+        scene,
+        "cube_a",
+        _CUBE_HOME,
+        _CUBE_HALF,
+        mass=0.02,
+        friction=(2.0, 0.02, 0.001),
+        rgba=(0.85, 0.15, 0.15, 1.0),
+    )
+
+
+def _jitter_cube_a(trial: int, home: Any) -> Any:
+    """The +-2 mm paired pick jitter stack and insert share."""
+    initial = home.copy()
+    initial[CUBE_A_STATE_SLICE.start] += -0.002 + 0.002 * (trial % 3)
+    initial[CUBE_A_STATE_SLICE.start + 1] += -0.002 + 0.002 * (trial % 2) * 2
+    return initial
+
+
 def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
     """Lift: squeeze the cube out of the pocket and hold it clear.
 
@@ -246,19 +287,17 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
     later, and pretending proprioception is perception would flatter
     every policy tested here.
     """
-    import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-lift", arm_xml)
-    cube = scene.worldbody.add_body(name="cube", pos=list(_CUBE_HOME))
-    cube.add_freejoint()
-    cube.add_geom(
-        name="cube_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=list(_CUBE_HALF),
+    _add_free_cube(
+        scene,
+        "cube",
+        _CUBE_HOME,
+        _CUBE_HALF,
         mass=0.02,
-        rgba=[0.8, 0.1, 0.1, 1.0],
-        friction=[1.0, 0.005, 0.0001],
+        friction=(1.0, 0.005, 0.0001),
+        rgba=(0.8, 0.1, 0.1, 1.0),
     )
 
     def perturb(trial: int, home: Any) -> Any:
@@ -351,36 +390,19 @@ def scripted_stack_no_release(step: int, sensordata: Any) -> Any:
 
 def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
     """block_stack: cube A ends resting ON cube B, B undisturbed."""
-    import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-stack", arm_xml)
-    cube_a = scene.worldbody.add_body(name="cube_a", pos=list(_CUBE_HOME))
-    cube_a.add_freejoint()
-    cube_a.add_geom(
-        name="cube_a_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=list(_CUBE_HALF),
-        mass=0.02,
-        friction=[2.0, 0.02, 0.001],
-        rgba=[0.85, 0.15, 0.15, 1.0],
-    )
-    cube_b = scene.worldbody.add_body(name="cube_b", pos=list(_CUBE_B_HOME))
-    cube_b.add_freejoint()
-    cube_b.add_geom(
-        name="cube_b_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=[_CUBE_B_HALF, _CUBE_B_HALF, 0.015],
+    _add_cube_a(scene)
+    _add_free_cube(
+        scene,
+        "cube_b",
+        _CUBE_B_HOME,
+        (_CUBE_B_HALF, _CUBE_B_HALF, 0.015),
         mass=0.06,
-        friction=[2.0, 0.02, 0.001],
-        rgba=[0.15, 0.35, 0.85, 1.0],
+        friction=(2.0, 0.02, 0.001),
+        rgba=(0.15, 0.35, 0.85, 1.0),
     )
-
-    def perturb(trial: int, home: Any) -> Any:
-        initial = home.copy()
-        initial[CUBE_A_STATE_SLICE.start] += -0.002 + 0.002 * (trial % 3)
-        initial[CUBE_A_STATE_SLICE.start + 1] += -0.002 + 0.002 * (trial % 2) * 2
-        return initial
 
     def success(states: Any, sensors: Any) -> bool:
         tail = states[-_HOLD_STEPS:]
@@ -400,7 +422,7 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             trials=_TRIALS,
             steps=_STACK_STEPS,
             control_interval=_CONTROL_INTERVAL,
-            perturb=perturb,
+            perturb=_jitter_cube_a,
             success=success,
         ),
     )
@@ -435,16 +457,7 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-insert", arm_xml)
-    cube_a = scene.worldbody.add_body(name="cube_a", pos=list(_CUBE_HOME))
-    cube_a.add_freejoint()
-    cube_a.add_geom(
-        name="cube_a_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=list(_CUBE_HALF),
-        mass=0.02,
-        friction=[2.0, 0.02, 0.001],
-        rgba=[0.85, 0.15, 0.15, 1.0],
-    )
+    _add_cube_a(scene)
     centre_x, centre_y = _SLOT_CENTRE
     inner_x, inner_y = _SLOT_INNER
     thickness = _SLOT_WALL_THICKNESS
@@ -461,12 +474,6 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             pos=[centre_x + dx, centre_y + dy, _SLOT_WALL_HALF_HEIGHT],
             rgba=[0.3, 0.3, 0.35, 1.0],
         )
-
-    def perturb(trial: int, home: Any) -> Any:
-        initial = home.copy()
-        initial[CUBE_A_STATE_SLICE.start] += -0.002 + 0.002 * (trial % 3)
-        initial[CUBE_A_STATE_SLICE.start + 1] += -0.002 + 0.002 * (trial % 2) * 2
-        return initial
 
     def success(states: Any, sensors: Any) -> bool:
         tail = states[-_HOLD_STEPS:, CUBE_A_STATE_SLICE]
@@ -485,7 +492,7 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             trials=_TRIALS,
             steps=_STACK_STEPS,
             control_interval=_CONTROL_INTERVAL,
-            perturb=perturb,
+            perturb=_jitter_cube_a,
             success=success,
         ),
     )

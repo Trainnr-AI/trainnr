@@ -13,17 +13,19 @@ import mujoco
 import mujoco.viewer
 import rerun as rr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _rig3d import RigMirror  # noqa: E402
-from rq_pipeline.collect.frames import STATUS_HZ
-from rq_pipeline.collect.wire import parse_recording
-from rq_pipeline.tasks.yellow import (
+from _lab import bootstrap, rr_session
+
+bootstrap()
+from rq_pipeline.collect.frames import STATUS_HZ  # noqa: E402
+from rq_pipeline.collect.wire import parse_recording  # noqa: E402
+from rq_pipeline.tasks.yellow import (  # noqa: E402
     AIR_TUCK,
     air_mime_pose,
     compose_rig,
     salute_pose,
 )
+
+from _rig3d import RigMirror  # noqa: E402
 
 if len(sys.argv) < 2:
     sys.exit("usage: replay-errand.py <recording.wire>")
@@ -79,11 +81,7 @@ def mime_pose(i):
     wave = salute_pose(i * TICK)
     return wave if wave is not None else AIR_TUCK
 
-rr.init(f"yellow-rig-{WIRE.stem}", spawn=False)
-try:
-    rr.connect_grpc()
-except Exception:
-    rr.spawn()
+rr_session(f"yellow-rig-{WIRE.stem}")
 
 trail = []
 with mujoco.viewer.launch_passive(model, data) as viewer:

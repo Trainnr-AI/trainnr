@@ -31,7 +31,10 @@ window = float(sys.argv[2]) if len(sys.argv) > 2 else 600.0
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-sock.bind(("0.0.0.0", TELEMETRY_PORT))
+try:
+    sock.bind(("0.0.0.0", TELEMETRY_PORT))
+except OSError:
+    sys.exit(f"cannot bind UDP {TELEMETRY_PORT} — another bridge probably holds it")
 sock.settimeout(5.0)
 
 count = 0
