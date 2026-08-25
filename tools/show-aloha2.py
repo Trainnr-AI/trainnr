@@ -1,7 +1,15 @@
 """The ALOHA 2 bundle in both viewers: rig, servos, contacts, cameras.
 
-    cd pipeline && WGPU_BACKEND=vulkan uv run --extra sim --extra viz \
-        python ../tools/show-aloha2.py
+    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan \
+        uv run --extra sim --extra viz python ../tools/show-aloha2.py
+
+The two environment variables are the WSL GPU story: Rerun renders
+through Vulkan (Dozen, over D3D12) and the MuJoCo viewer through
+OpenGL — and Mesa's default OpenGL pick under WSLg is llvmpipe, the
+software rasterizer, even with Dozen installed. GALLIUM_DRIVER=d3d12
+routes GL to the Windows NVIDIA driver too (measured 2026-08-26:
+"llvmpipe" -> "D3D12 (NVIDIA GeForce RTX 3090 Ti)"). Harmless on a
+native Linux box or a Mac.
 
 Three laps, each narrated as a stage note:
 
@@ -53,6 +61,7 @@ SIM_HZ = 500
 LOG_EVERY = 10  # 50 Hz plots and mirror
 CAM_EVERY = 50  # 10 Hz images
 COLLISION_GROUP = 3
+LIVE_SHADOWSIZE = 2048  # upstream scene.xml says 8192
 
 
 def max_contact_force(model, data):
@@ -122,6 +131,10 @@ def main() -> None:
     model = mujoco.MjModel.from_xml_path(str(BUNDLE / "aloha2.xml"))
     model.vis.global_.offwidth = 1280
     model.vis.global_.offheight = 720
+    # Menagerie's scene asks for an 8192x8192 shadow map — a screenshot
+    # setting, and a per-frame cost that makes the interactive viewer
+    # crawl. 2048 is plenty for a live window. The physics is untouched.
+    model.vis.quality.shadowsize = LIVE_SHADOWSIZE
     data = mujoco.MjData(model)
 
     rr.init("robotiq-aloha2", spawn=True)

@@ -9,7 +9,11 @@ both cube paths together. They separate by centimetres, which is why
 on the Mac and failed on the WSL box: it pinned a number the physics
 does not pin. (The test now asserts the deck landing, not the pocket.)
 
-    cd pipeline && uv run --extra sim --extra viz python ../tools/show-cargo-chaos.py
+    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan \
+        uv run --extra sim --extra viz python ../tools/show-cargo-chaos.py
+
+(The two variables are WSL's GPU routing for the MuJoCo and Rerun
+windows respectively — see show-aloha2.py's header; harmless elsewhere.)
 
 Both viewers open: the MuJoCo window shows the live run (the second
 lap), Rerun collects both laps' cube trails on a shared timeline. Close
