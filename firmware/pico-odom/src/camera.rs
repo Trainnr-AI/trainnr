@@ -34,8 +34,18 @@ use embassy_time::{Duration, Timer};
 bind_interrupts!(struct CameraIrqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
 });
-bind_interrupts!(struct DmaIrqs {
+// Every DMA channel routes to DMA_IRQ_0, and only ONE binding of an
+// interrupt may exist in the binary — so when the radio is in the build
+// its DMA_CH1 handler rides here (the deeper half of the old
+// camera-xor-wifi rule, dissolved 2026-08-25 for the full-dance build).
+#[cfg(not(feature = "wifi"))]
+bind_interrupts!(pub struct DmaIrqs {
     DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>;
+});
+#[cfg(feature = "wifi")]
+bind_interrupts!(pub struct DmaIrqs {
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<DMA_CH0>,
+        embassy_rp::dma::InterruptHandler<embassy_rp::peripherals::DMA_CH1>;
 });
 
 /// XCLK divider. A top of 5 gives 25 MHz on an RP2350 — the value every

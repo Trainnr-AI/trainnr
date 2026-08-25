@@ -463,9 +463,17 @@ async fn odometry_forever(pins: Encoders, out: &mut impl Report) -> ! {
     // Waiting costs nothing. `NOTES` is a drop queue, so a board nobody
     // ever attaches to fills eight slots and discards the rest, which is
     // the same outcome as before minus the pretence of having reported.
+    fn someone_listening() -> bool {
+        #[cfg(feature = "wifi")]
+        if crate::diag::RADIO_UP.load(Ordering::Relaxed) {
+            return true;
+        }
+        HOST_WATCHING.load(Ordering::Relaxed)
+    }
+
     macro_rules! drain_notes {
         ($out:expr) => {
-            if HOST_WATCHING.load(Ordering::Relaxed) {
+            if someone_listening() {
                 while let Ok(note) = crate::diag::NOTES.try_receive() {
                     $out.send(&note).await;
                 }
@@ -832,6 +840,16 @@ struct MotorPins {
 // 10 kHz sampler: a note that waits for a reader costs encoder ticks, and
 // ticks are the measurement.
 mod diag {
+    /// True once the radio's socket is up — the UDP analogue of a host
+    /// opening the serial port. A broadcaster cannot know who listens;
+    /// rover mode already accepted narrating into the void, and the
+    /// wireless dashboard needs the stage notes to cue its arm
+    /// reconstruction. Lives here so the wifi module can set it and the
+    /// report loop can read it.
+    #[cfg(feature = "wifi")]
+    pub static RADIO_UP: core::sync::atomic::AtomicBool =
+        core::sync::atomic::AtomicBool::new(false);
+
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::channel::Channel;
 
@@ -923,13 +941,6 @@ compile_error!(
      and the host would both write duty, and whichever wrote last would win \
      silently. Two things that must agree, with nothing comparing them: \
      refused at compile time instead."
-);
-
-#[cfg(all(feature = "camera", feature = "wifi"))]
-compile_error!(
-    "`camera` and `wifi` both claim PIO0 and DMA_CH0 — the radio uses them for \
-     its SPI, the camera for parallel capture. Pick one. Refused here rather \
-     than discovered as a silently corrupt frame or a radio that will not join."
 );
 
 // The shared I2C bus interrupt: async mode hands the bus wait back to
@@ -1607,8 +1618,8 @@ mod transport {
                     cs: p.PIN_25,
                     dio: p.PIN_24,
                     clk: p.PIN_29,
-                    pio: p.PIO0,
-                    dma: p.DMA_CH0,
+                    pio: p.PIO1,
+                    dma: p.DMA_CH1,
                 },
             ),
         );
@@ -1753,16 +1764,29 @@ mod wifi_link {
     use embassy_rp::bind_interrupts;
     use embassy_rp::clocks::RoscRng;
     use embassy_rp::dma;
-    use embassy_rp::peripherals::{DMA_CH0, PIO0};
+    // PIO1/DMA_CH1, deliberately: the camera owns PIO0/DMA_CH0, and
+    // the RP2350 has PIO blocks to spare — the old camera-xor-wifi
+    // compile_error was an unassigned-resource guard, not physics
+    // (removed 2026-08-25 for the full-dance build: fetch + wifi).
+    use embassy_rp::peripherals::{DMA_CH1, PIO1};
     use embassy_rp::pio::{InterruptHandler, Pio};
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::channel::Channel;
     use embassy_time::{with_timeout, Duration};
     use static_cell::StaticCell;
 
+    // Every DMA channel routes to DMA_IRQ_0, so whoever else binds it
+    // (the camera) must carry OUR channel's handler too — the deeper
+    // half of the old camera-xor-wifi rule. Without the camera we bind
+    // it ourselves.
+    #[cfg(not(feature = "camera"))]
     bind_interrupts!(struct Irqs {
-        PIO0_IRQ_0 => InterruptHandler<PIO0>;
-        DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
+        PIO1_IRQ_0 => InterruptHandler<PIO1>;
+        DMA_IRQ_0 => dma::InterruptHandler<DMA_CH1>;
+    });
+    #[cfg(feature = "camera")]
+    bind_interrupts!(struct Irqs {
+        PIO1_IRQ_0 => InterruptHandler<PIO1>;
     });
 
     /// Where status lines are broadcast, and where `odom_view --udp`
@@ -1885,7 +1909,7 @@ mod wifi_link {
     /// Services the radio. Must run forever, or the chip stops answering.
     #[embassy_executor::task]
     async fn cyw43_task(
-        runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO0, 0>>>,
+        runner: cyw43::Runner<'static, cyw43::SpiBus<Output<'static>, PioSpi<'static, PIO1, 0>>>,
     ) -> ! {
         runner.run().await
     }
@@ -2176,8 +2200,8 @@ mod wifi_link {
         pub cs: Peri<'static, PIN_25>,
         pub dio: Peri<'static, PIN_24>,
         pub clk: Peri<'static, PIN_29>,
-        pub pio: Peri<'static, PIO0>,
-        pub dma: Peri<'static, DMA_CH0>,
+        pub pio: Peri<'static, PIO1>,
+        pub dma: Peri<'static, DMA_CH1>,
     }
 
     /// Hands back a report sink **immediately**, and does every slow or
@@ -2214,6 +2238,12 @@ mod wifi_link {
             cs,
             pins.dio,
             pins.clk,
+            // The DMA binding proof rides whichever struct actually
+            // binds DMA_IRQ_0: the camera's (which carries our CH1
+            // handler when both features are in) or our own.
+            #[cfg(feature = "camera")]
+            dma::Channel::new(pins.dma, crate::camera::DmaIrqs),
+            #[cfg(not(feature = "camera"))]
             dma::Channel::new(pins.dma, Irqs),
         );
 
@@ -2265,6 +2295,10 @@ mod wifi_link {
         // Bound to the same port it broadcasts to, so a host that replies
         // has somewhere to reply *to* when the command path lands.
         let _ = socket.bind(TELEMETRY_PORT);
+        // The UDP analogue of a host opening the serial port: from here
+        // the notes drain over the air too (the wireless dashboard's
+        // stage narration depends on it).
+        crate::diag::RADIO_UP.store(true, core::sync::atomic::Ordering::Relaxed);
         let broadcast = IpEndpoint::new(Ipv4Addr::BROADCAST.into(), TELEMETRY_PORT);
 
         loop {
@@ -2326,8 +2360,8 @@ mod transport {
                 cs: p.PIN_25,
                 dio: p.PIN_24,
                 clk: p.PIN_29,
-                pio: p.PIO0,
-                dma: p.DMA_CH0,
+                pio: p.PIO1,
+                dma: p.DMA_CH1,
             },
         );
 
