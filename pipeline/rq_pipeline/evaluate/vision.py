@@ -62,15 +62,20 @@ class VisionPolicy:
     reset: Callable[[], None] = lambda: None
 
 
-def evaluate_vision_policies(
+def evaluate_vision_policies(  # noqa: PLR0913 - the sixth is a scalar; a spec object would hide it
     backend: Any,
     policies: Sequence[VisionPolicy],
     protocol: EpisodeProtocol,
     *,
     cameras: Sequence[CameraSpec] = ARMNETBENCH_CAMERAS,
+    state_width: int = 6,
     source: str,
 ) -> tuple[SimScore, ...]:
-    """`harness.evaluate_policies`, over pixels. Same rules, same pairing."""
+    """`harness.evaluate_policies`, over pixels. Same rules, same pairing.
+
+    `state_width` is the bundle's jointpos block (six for the SO-101,
+    fourteen for ALOHA 2) — the `observation.state` the policy sees.
+    """
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"duplicate policy names: {sorted(names)}")
@@ -93,6 +98,7 @@ def evaluate_vision_policies(
                 protocol.steps,
                 protocol.control_interval,
                 cameras,
+                state_width=state_width,
             )
             if protocol.success(states, sensors):
                 successes += 1
@@ -108,48 +114,65 @@ def lerobot_checkpoint_policy(
     task_instruction: str,
     device: str = "cuda",
 ) -> VisionPolicy:
-    """A released checkpoint as a VisionPolicy, via LeRobot.
+    """A released checkpoint (Hub id or local checkpoint dir) as a
+    VisionPolicy, via LeRobot — mirroring `lerobot-eval`'s own path.
 
-    Covers the five LeRobot-native families (act, diffusion, smolvla,
-    grootn1.7, molmoact2 — the census's safetensors column). pi0/pi0.5
-    are openpi-format and need their own adapter later. Requires the
-    `train` extra and a working torch; exercised on the WSL card.
+    Covers the LeRobot-native families (act, diffusion, smolvla,
+    molmoact2, ...). pi0/pi0.5 in openpi format need their own adapter.
+    Requires the `train` extra and a working torch.
+
+    Three things LeRobot 0.6 does that the first draft of this adapter
+    (written before the train venv existed) did not: the concrete
+    policy class is resolved from the checkpoint's config `type` (the
+    base class is abstract); observations go through the checkpoint's
+    PRE-processor (normalisation, device placement) before
+    `select_action`; and actions come back through its POST-processor
+    (un-normalisation). Skipping the processors feeds raw pixels to a
+    network trained on standardised ones — a silent, wrong answer.
     """
     try:
         import torch  # noqa: PLC0415
-        from lerobot.policies.factory import get_policy_class  # noqa: PLC0415
-        from lerobot.policies.pretrained import PreTrainedPolicy  # noqa: PLC0415
+        from lerobot.configs.policies import PreTrainedConfig  # noqa: PLC0415
+        from lerobot.policies.factory import (  # noqa: PLC0415
+            get_policy_class,
+            make_pre_post_processors,
+        )
     except ImportError as error:
         raise ImportError(
             "checkpoint policies need the 'train' extra: uv sync --extra train"
         ) from error
 
-    del get_policy_class  # resolution happens inside from_pretrained
-    policy: Any = PreTrainedPolicy.from_pretrained(repo_id)
+    config = PreTrainedConfig.from_pretrained(repo_id)
+    config.device = device
+    policy: Any = get_policy_class(config.type).from_pretrained(repo_id, config=config)
     policy.to(device)
     policy.eval()
+    preprocessor, postprocessor = make_pre_post_processors(
+        config,
+        pretrained_path=repo_id,
+        preprocessor_overrides={"device_processor": {"device": device}},
+    )
 
     def act(step: int, observation: dict[str, Any]) -> Any:
         del step
-        batch: dict[str, Any] = {"task": task_instruction}
+        batch: dict[str, Any] = {"task": [task_instruction]}
         for key, value in observation.items():
             if key.startswith("observation.images."):
-                # uint8 HWC -> float32 CHW in [0,1], batched — LeRobot's
-                # preprocessing contract for camera features.
-                tensor = torch.from_numpy(value).to(device)
+                # uint8 HWC -> float32 CHW in [0,1], batched — the same
+                # conversion lerobot.envs.utils.preprocess_observation does.
+                tensor = torch.from_numpy(value)
                 batch[key] = (
                     tensor.permute(2, 0, 1).unsqueeze(0).to(torch.float32) / 255.0
                 )
             else:
-                batch[key] = (
-                    torch.from_numpy(value).to(device).unsqueeze(0).to(torch.float32)
-                )
+                batch[key] = torch.from_numpy(value).unsqueeze(0).to(torch.float32)
         with torch.no_grad():
-            action = policy.select_action(batch)
+            action = policy.select_action(preprocessor(batch))
+            action = postprocessor(action)
         return action.squeeze(0).cpu().numpy()
 
     return VisionPolicy(
-        name=repo_id.rsplit("/", maxsplit=1)[-1],
+        name=repo_id.rstrip("/").rsplit("/", maxsplit=1)[-1],
         act=act,
         reset=policy.reset,
     )

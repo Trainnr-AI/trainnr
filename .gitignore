@@ -16,5 +16,8 @@ node_modules/
 
 # uv-managed virtualenvs (pipeline/)
 .venv/
+.venv-train/
+# Training runs: checkpoints and logs are artifacts by hash, not source.
+pipeline/runs/
 __pycache__/
 *.egg-info/

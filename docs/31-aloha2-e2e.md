@@ -76,12 +76,61 @@ with no error, the failure class the census gate exists for.
 session), each wrist camera looking down its own fingers at the
 opposite arm; the jam pose rendered from the teleoperator viewpoint.
 
-## 3. Next rung
+## 3. The training ladder (⑥/⑦) — started 2026-08-26
+
+The operator's turn, verbatim: "now lets get to the training part,
+from a robotics foundation model, to different policy training
+techniques in simulation with physics and dynamics" — and the
+addendum: "with evals of trying and combnining different policy
+models or mixture of models to quickly train the robot to some
+industrial task."
+
+Stage ⑦ had zero code by design (census first); ALOHA 2 is where it
+starts, because the whole public ecosystem for this rig already
+exists — ACT was born on it, LeRobot ships its datasets and
+checkpoints, and the identified dynamics give "physics" a meaning.
+The addendum names the two things the ladder is FOR: the recipe
+engine's second axis — *combining* models (seed ensembles, a VLM
+planner over BC skills, merged fine-tunes), every combination judged
+by the same harness as a single model — and the target: not the
+cube-transfer toy the public data covers, but an industrial-shaped
+task in our own scene (kitting: parts into slots, bimanual handover
+where reach demands it), where demos are generated, not downloaded.
+"Quickly" is the platform's promise; the certificate is what makes
+the speed honest.
+
+Principles carried in from the research (docs/e2e-research/20, 22,
+30 §⑥⑦, and the sprint's 32): **adopt, do not build** (LeRobot is
+the trainer; we write recipes, not optimizers); **ACT first, not to
+ship but to test the data pipeline** (trains in under an hour); **the
+foundation-model rung is a fine-tune** (SmolVLA fits a 3090 Ti
+comfortably; π0.5's LoRA is borderline at 24 GB; MolmoAct2 LoRA
+~20 GiB); **synthetic data is centred on identified values** (DR
+around a guess trains robustness to the wrong distribution); and
+**the judge is our harness**, never the trainer's own eval —
+validation loss provably does not predict rollout success
+(robomimic), and a recipe is a hash-stamped artifact whose winner is
+chosen by a certificate.
+
+| Rung | What | Data | Judge | Status |
+|---|---|---|---|---|
+| T0 | The train environment: `.venv-train` (Python 3.12.8, `lerobot[dataset,smolvla,training]` 0.6.1 + our sim extras, torch 2.11 + CUDA 13) beside the untouched 3.11 sim venv; the smoke `lerobot-train` proved the GPU path — ACT, 300 steps in 39 s at ~10 steps/s, batch 8, 2.1 GB VRAM, loss 3.23 → L1 0.505, checkpoint at `runs/t0-act-smoke/checkpoints/000300` | `lerobot/aloha_sim_transfer_cube_human` (50 human demos, 20k frames, the original ACT sim) | — | **DONE 2026-08-26** — the repo's first training run |
+| T1 | Released checkpoint through OUR harness: `lerobot/act_aloha_sim_transfer_cube_human` via `evaluate.vision.lerobot_checkpoint_policy` on the ALOHA 2 bundle's transfer-cube scene (`pipeline/rq_pipeline/tasks/aloha2.py`, cameras matched to gym-aloha's `top`, `look="act_sim"` for their cosmetics). The gap between its published sim score and ours is a sim-to-sim dynamics + camera gap — Paper 2's shape, before any hardware | released weights | harness, paired trials | next |
+| T2 | ACT from scratch on the public demos (the 30–60 min run) → `policy@hash` → harness beside T1 and the scripted ladder: the recipe engine's first walk over one family | public demos | certificate dry run | queued |
+| T3 | Foundation model: SmolVLA fine-tune on the same demos (fits), then MolmoAct2/π0.5 LoRA if VRAM allows — same harness, same protocol; the family axis of the recipe space | public demos | certificate dry run | queued |
+| T4 | Combining models — the second axis: seed ensembles of T2/T3 checkpoints (action averaging), a VLM planner routing between BC skills, and merged fine-tunes (weight-space soups); each combination is a `recipe@hash` scored by the same protocol as a single model | public demos | certificate dry run | queued |
+| T5 | The industrial task, ⑥ EXPAND: `kitting` in OUR ALOHA 2 scene (parts → slots, bimanual where reach demands), scripted demos generated with domain randomisation centred on the identified parameters → the mixture axis (ours / public / both) × the family axis × the combination axis — the recipe engine's first full walk, "quickly train the robot to an industrial task" as an experiment with a certificate at the end | our sim | certificate dry run | queued |
+| T6 | Techniques beyond BC: RLT-shaped refinement of a frozen generalist (chunk-level RL, sparse success from the referee sensors) — the ⑩ loop rehearsed in sim | our sim | harness | later |
+
+Tracking: wandb API surface only, off by default (`--wandb.enable=false`),
+Trackio the escape hatch; every run stamped with the bundle, scene,
+dataset and recipe hashes it was produced under.
+
+## 4. Next rung (evaluation side)
 
 rq_pipeline/tasks/aloha2.py (next rung) — transfer cube: cube on the table
 between the arms, right arm picks, hands to left, success = cube held
 by the left gripper clear of the table. Scripted reference policy,
 graded ladder (pick / no-close / limp), paired trials, through the
 harness to a certificate dry run — the same shape that proved the
-SO-101 tasks, one rig up. Then released ACT checkpoints through the
-vision path, with camera matching against gym-aloha's `top` view.
+SO-101 tasks, one rig up. T1 above needs it; they land together.

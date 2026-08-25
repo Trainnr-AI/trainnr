@@ -16,7 +16,11 @@ license = { text = "FSL-1.1-ALv2" }
 # opt-in extras with their own floors:
 [project.optional-dependencies]
 sim = ["mujoco[sysid]>=3.5"]
-train = ["lerobot[dataset]>=0.6.1; python_version >= '3.12'"]
+# dataset: LeRobotDataset + video decode; smolvla: the first foundation-model
+# rung (fits a 24 GB card); training: wandb + accelerate. gym-aloha stays
+# out on purpose: its dm_control dependency pins exact MuJoCo versions and
+# the harness is our evaluation environment anyway.
+train = ["lerobot[dataset,smolvla,training]>=0.6.1; python_version >= '3.12'"]
 gpu = ["mujoco-warp"]
 viz = ["rerun-sdk>=0.20"]  # NVIDIA GPU required
 

@@ -215,13 +215,15 @@ class MuJoCoBackend:
             )
         return states, sensors
 
-    def closed_loop_vision_rollout(
+    def closed_loop_vision_rollout(  # noqa: PLR0913 - state_width is keyword-only and a scalar
         self,
         initial_state: numpy.ndarray,
         policy: Any,
         steps: int,
         control_interval: int,
         cameras: Sequence[Any],
+        *,
+        state_width: int = 6,
     ) -> tuple[numpy.ndarray, numpy.ndarray]:
         """The vision episode: the policy sees RENDERED PIXELS + state.
 
@@ -231,10 +233,11 @@ class MuJoCoBackend:
         sequence of specs with (key, camera_name, width, height); the
         policy receives a LeRobot-shaped dict per control step:
         {"observation.images.<key>": uint8 (H, W, 3), ...,
-         "observation.state": float32 (6,)} and returns nu controls.
-        The state is the first six SENSOR values (the so101 wrapper's
-        jointpos block) — sensors, not qpos: same instrument rule as
-        the sensor-only rollout above.
+         "observation.state": float32 (state_width,)} and returns nu
+        controls. The state is the first `state_width` SENSOR values
+        (the bundle wrapper's jointpos block: six for the SO-101,
+        fourteen for ALOHA 2) — sensors, not qpos: same instrument
+        rule as the sensor-only rollout above.
 
         One renderer per unique resolution, shared across cameras.
         """
@@ -271,7 +274,7 @@ class MuJoCoBackend:
                 if step % control_interval == 0:
                     observation: dict[str, Any] = {
                         "observation.state": np.asarray(
-                            data.sensordata[:6], dtype=np.float32
+                            data.sensordata[:state_width], dtype=np.float32
                         ).copy()
                     }
                     for camera in cameras:
