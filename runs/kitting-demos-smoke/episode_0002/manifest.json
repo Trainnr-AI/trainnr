@@ -1,0 +1,21 @@
+{
+ "seed": 20260826,
+ "attempt": 8,
+ "draws": {
+  "right": [
+   0.2037883517574886,
+   -0.18130920107284149
+  ],
+  "left": [
+   -0.15354722200001428,
+   -0.2200164255290334
+  ]
+ },
+ "damping_scale": 0.9279089047903433,
+ "gain_scale": 1.050052664676042,
+ "retries": [],
+ "control_hz": 50,
+ "frame_every_control_ticks": 5,
+ "action_semantics": "14 commanded joint positions (ctrl order)",
+ "verdict": "success (task referee)"
+}

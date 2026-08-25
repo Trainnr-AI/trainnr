@@ -1,0 +1,81 @@
+"""Kitting: the T5 scene, its pins, and the scripted demo's proof."""
+
+import importlib.util
+import unittest
+
+MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+
+
+@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+class KittingScene(unittest.TestCase):
+    def test_census_and_state_slices(self) -> None:
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            PART_HOME,
+            PART_STATE_SLICE,
+            build_kitting,
+        )
+
+        task = build_kitting()
+        model = task.spec.compile()
+        self.assertEqual(model.nu, 14)
+        self.assertEqual(model.ncam, 7)  # six D405 + the task's top
+        data = mujoco.MjData(model)
+        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "neutral_pose")
+        mujoco.mj_resetDataKeyframe(model, data, key)
+        mujoco.mj_forward(model, data)
+        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        state = np.empty(size)
+        mujoco.mj_getState(model, data, state, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        # The slice pins: FULLPHYSICS carries time first, so the parts'
+        # keyframe homes must read back through the declared slices.
+        for arm in ("right", "left"):
+            found = state[PART_STATE_SLICE[arm]]
+            self.assertTrue(
+                np.allclose(found, PART_HOME[arm], atol=1e-9),
+                f"{arm}: {found} != {PART_HOME[arm]}",
+            )
+
+    def test_scripted_demo_succeeds_in_the_proven_band(self) -> None:
+        """Trial 0 (the demo generator's band) must place both parts.
+
+        The scripted choreography is the T5 demo source; this run IS
+        the proof that the whole chain — chained grip-centre IK with
+        tilted approach, closed-loop clamped correction, verify-and-
+        retry — carries two parts into their slots. The far spawn band
+        (parts near the arms' base line) is a KNOWN open edge: the
+        closing-plane orientation is IK-nullspace-random there and the
+        close back-drives upward. The generator samples the proven
+        band and filters by this same referee.
+        """
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            build_kitting,
+            scripted_kitting_episode,
+        )
+
+        task = build_kitting()
+        model = task.spec.compile()
+        data = mujoco.MjData(model)
+        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "neutral_pose")
+        mujoco.mj_resetDataKeyframe(model, data, key)
+        mujoco.mj_forward(model, data)
+        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        home = np.empty(size)
+        mujoco.mj_getState(model, data, home, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        stats: dict = {}
+        states, sensors, actions = scripted_kitting_episode(
+            model, task.protocol.perturb(0, home), stats=stats
+        )
+        self.assertTrue(task.protocol.success(states, sensors), stats)
+        # The dataset contract: one 14-wide action row per control tick.
+        self.assertEqual(actions.shape[1], 14)
+        self.assertEqual(len(actions), task.protocol.steps // 10)
+
+
+if __name__ == "__main__":
+    unittest.main()

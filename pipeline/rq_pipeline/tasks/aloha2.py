@@ -326,3 +326,406 @@ def build_transfer_cube(
         ),
         cameras=ALOHA_TOP_CAMERAS,
     )
+
+
+# ------------------------------------------------------------- kitting --
+# T5's industrial task (docs/31): parts into a tray's slots, one part
+# per arm so the task is bimanual by reach. Everything below serves two
+# consumers: `build_kitting` gives the harness the scene and the judge;
+# `kitting_waypoints` gives the DEMO GENERATOR (tools/kitting-demos.py)
+# the Cartesian choreography it converts to joint-space commands via
+# IK — chained solves, each warm-starting the next, because a cold IK
+# jump to a low target can stall in a local minimum (measured: a lone
+# 6 cm-height target failed at 69 mm where the same target approached
+# from 10 cm above converges).
+
+TRAY_CENTER = (0.0, -0.02)
+SLOT_HALF = 0.045
+SLOT_WALL = 0.008
+SLOT_WALL_HEIGHT = 0.015
+# One slot per arm, mirrored; the part that starts on the RIGHT goes
+# into the right slot.
+SLOT_CENTERS = {"right": (0.09, -0.02), "left": (-0.09, -0.02)}
+PART_HALF = 0.02
+# Spawn bands, one per arm side, inside the proven reach envelope
+# (transfer_cube's spawn box, mirrored for the left arm).
+PART_SPAWN = {
+    "right": ((0.14, 0.24), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
+    "left": ((-0.24, -0.14), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
+}
+PART_HOME = {
+    "right": (0.19, 0.36 + ACT_SIM_Y_SHIFT, PART_HALF),
+    "left": (-0.19, 0.36 + ACT_SIM_Y_SHIFT, PART_HALF),
+}
+# FULLPHYSICS: qpos = 16 arm + 7 right part + 7 left part; positions at
+# 17..19 and 24..26. Pinned by test.
+PART_STATE_SLICE = {"right": slice(17, 20), "left": slice(24, 27)}
+# 28 s at 500 Hz: two sequential pick-places PLUS the closed-loop
+# corrections and one grasp retry per arm. The budget was 18 s and
+# every robustness fix shifted which trial's endgame got truncated —
+# the whack-a-mole was the clock, not the choreography.
+_KITTING_STEPS = 14000
+# The choreographer's judgement thresholds, named for the lint and the
+# reader alike: a lift that left the part below this never lifted it,
+# and closed-loop grip corrections stop inside this radius.
+_LIFT_CHECK_Z_M = 0.05
+_CORRECTION_DONE_M = 0.008
+_PART_IN_SLOT_XY_M = 0.035
+_PART_IN_SLOT_Z_M = 0.045
+
+ARM_IK_JOINTS = {
+    arm: tuple(
+        f"{arm}/{name}"
+        for name in (
+            "waist",
+            "shoulder",
+            "elbow",
+            "forearm_roll",
+            "wrist_angle",
+            "wrist_rotate",
+        )
+    )
+    for arm in ("left", "right")
+}
+ARM_CTRL_SLICES = {"left": slice(0, 7), "right": slice(7, 14)}
+# The grasp approach: near-horizontal, pointing FROM the arm's base
+# TOWARD the target and 45 degrees down — computed per reach, because
+# a fixed inward axis failed the far corners (trial 2: the left arm
+# never lifted at (-0.22, -0.111), where "inward" and "toward the
+# part" diverge). A straight-down approach is IMPOSSIBLE on this
+# gripper: the base housing's collision meshes reach the table before
+# the pads reach a 4 cm part (measured via contacts: 1-8 cm of
+# penetration in every vertical solve; tilted solves are clean).
+ARM_BASE_XY = {"right": (0.469, -0.019), "left": (-0.469, -0.019)}
+
+
+def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
+    """Fixed inward tilt — the adaptive base-to-target version made
+    every trial fail (the y-tilt degrades the wrist pose); the fixed
+    axis carried 2/4. target_xy stays in the signature for the day a
+    smarter axis earns its way back with evidence."""
+    del target_xy
+    return (-0.7, 0.0, -0.71) if arm == "right" else (0.7, 0.0, -0.71)
+
+
+def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALOHA2Task:
+    """Kitting: each arm places its side's part into its slot."""
+    import mujoco  # noqa: PLC0415 - sim extra
+    import numpy as np  # noqa: PLC0415
+
+    if look not in (ALOHA2_LOOK, ACT_SIM_LOOK):
+        raise ValueError(
+            f"look must be {ALOHA2_LOOK!r} or {ACT_SIM_LOOK!r}, got {look!r}"
+        )
+    scene = _rig_scene(f"aloha2-kitting-{look}", bundle_xml)
+    if look == ACT_SIM_LOOK:
+        _act_sim_cosmetics(scene)
+
+    # The tray: two shallow square wells built from wall boxes, static.
+    for arm, (cx, cy) in SLOT_CENTERS.items():
+        for index, (dx, dy, sx, sy) in enumerate(
+            (
+                (0.0, SLOT_HALF, SLOT_HALF + SLOT_WALL, SLOT_WALL),
+                (0.0, -SLOT_HALF, SLOT_HALF + SLOT_WALL, SLOT_WALL),
+                (SLOT_HALF, 0.0, SLOT_WALL, SLOT_HALF),
+                (-SLOT_HALF, 0.0, SLOT_WALL, SLOT_HALF),
+            )
+        ):
+            scene.worldbody.add_geom(
+                name=f"slot_{arm}_wall{index}",
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=[sx, sy, SLOT_WALL_HEIGHT],
+                pos=[cx + dx, cy + dy, SLOT_WALL_HEIGHT],
+                rgba=[0.35, 0.25, 0.15, 1.0],
+            )
+
+    colors = {"right": [1, 0, 0, 1], "left": [0, 0.55, 1, 1]}
+    for arm in ("right", "left"):  # declaration order pins the state slices
+        part = scene.worldbody.add_body(name=f"part_{arm}", pos=list(PART_HOME[arm]))
+        part.add_freejoint()
+        part.add_geom(
+            name=f"part_{arm}_geom",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[PART_HALF] * 3,
+            condim=4,
+            solimp=[2, 1, 0.01, 0.5, 2],
+            solref=[0.01, 1],
+            friction=[1, 0.005, 0.0001],
+            rgba=colors[arm],
+        )
+    _extend_keyframes(scene, [*PART_HOME["right"], 1.0, 0.0, 0.0, 0.0])
+    _extend_keyframes(scene, [*PART_HOME["left"], 1.0, 0.0, 0.0, 0.0])
+
+    scene.worldbody.add_camera(
+        name="top",
+        pos=list(TOP_CAMERA_POS),
+        xyaxes=[1, 0, 0, 0, 1, 0],
+        fovy=TOP_CAMERA_FOVY,
+    )
+    for arm in ("left", "right"):
+        scene.add_sensor(
+            name=f"referee/{arm}_gripper_pos",
+            type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
+            objtype=mujoco.mjtObj.mjOBJ_GEOM,
+            objname=f"{arm}/left_g1",
+        )
+
+    def perturb(trial: int, home: Any) -> Any:
+        initial = home.copy()
+        fx, fy = ((0.2, 0.2), (0.8, 0.2), (0.2, 0.8), (0.8, 0.8))[trial % 4]
+        for arm in ("right", "left"):
+            (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
+            part = PART_STATE_SLICE[arm]
+            initial[part.start] = x_low + fx * (x_high - x_low)
+            initial[part.start + 1] = y_low + fy * (y_high - y_low)
+        return initial
+
+    def success(states: Any, sensors: Any) -> bool:
+        del sensors
+        tail = states[-_HOLD_STEPS:]
+        for arm, (cx, cy) in SLOT_CENTERS.items():
+            part = tail[:, PART_STATE_SLICE[arm]]
+            xy_off = np.hypot(part[:, 0] - cx, part[:, 1] - cy)
+            if not (
+                bool(np.max(xy_off) < _PART_IN_SLOT_XY_M)
+                and bool(np.max(part[:, 2]) < _PART_IN_SLOT_Z_M)
+            ):
+                return False
+        return True
+
+    return ALOHA2Task(
+        name="kitting",
+        spec=scene,
+        protocol=EpisodeProtocol(
+            trials=_TRIALS,
+            steps=_KITTING_STEPS,
+            control_interval=_CONTROL_INTERVAL,
+            perturb=perturb,
+            success=success,
+            home=HOME_KEYFRAME,
+        ),
+        cameras=ALOHA_TOP_CAMERAS,
+    )
+
+
+# Per-segment (dz above part/slot, gripper normalized, seconds).
+_PICK_PLACE_SEGMENTS = (
+    ("above_part", 0.10, 1.0, 1.2),
+    ("descend", 0.005, 1.0, 1.0),
+    ("close", 0.005, 0.0, 0.6),
+    ("lift", 0.12, 0.0, 1.0),
+    ("above_slot", 0.12, 0.0, 1.4),
+    ("lower", 0.045, 0.0, 1.0),
+    ("open", 0.045, 1.0, 0.6),
+    ("retreat", 0.14, 1.0, 0.8),
+)
+
+
+def kitting_waypoints(arm: str, part_xy: Any) -> list[tuple[Any, float, float]]:
+    """The Cartesian choreography for one arm: (target_xyz, grip, secs).
+
+    Targets before `above_slot` track the PART's spawn position;
+    from `above_slot` on they track the slot. The demo generator turns
+    each into a joint waypoint via chained IK.
+    """
+    slot = SLOT_CENTERS[arm]
+    plan = []
+    for name, dz, grip, secs in _PICK_PLACE_SEGMENTS:
+        anchor = slot if name in ("above_slot", "lower", "open", "retreat") else part_xy
+        plan.append((name, [anchor[0], anchor[1], PART_HALF + dz], grip, secs))
+    return plan
+
+
+def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
+    model: Any,
+    initial_state: Any,
+    *,
+    on_control: Any = None,
+    stats: dict | None = None,
+) -> tuple[Any, Any, Any]:
+    """One scripted kitting demonstration, privileged, R7-correct.
+
+    Arms act sequentially (right, then left), each running the
+    choreography over ITS part's actual position read from state —
+    which is why this is the demo GENERATOR's path, not a harness
+    policy. Returns (states, sensors, actions): per-physics-step
+    FULLPHYSICS states and sensors shaped exactly like the harness
+    rollout (so the task's `success` judges them unchanged), and the
+    50 Hz commanded-position actions a dataset records.
+
+    `on_control(step, data)` is the generator's hook (render frames).
+    """
+    import mujoco  # noqa: PLC0415 - sim extra
+    import numpy as np  # noqa: PLC0415
+
+    from rq_pipeline.robot.arm_ik import solve_arm_ik  # noqa: PLC0415
+
+    size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    data = mujoco.MjData(model)
+    mujoco.mj_setState(
+        model,
+        data,
+        np.asarray(initial_state, dtype=float),
+        mujoco.mjtState.mjSTATE_FULLPHYSICS,
+    )
+    mujoco.mj_forward(model, data)
+    scratch = mujoco.MjData(model)
+
+    steps_total = _KITTING_STEPS
+    states = np.empty((steps_total, size))
+    sensors = np.empty((steps_total, model.nsensordata))
+    actions: list[Any] = []
+    ctrl = np.array(NEUTRAL_CTRL, dtype=float)
+    physics_step = 0
+
+    def advance(seconds: float, target_ctrl: Any) -> None:
+        nonlocal physics_step, ctrl
+        controls = max(1, round(seconds * 50))
+        start = ctrl.copy()
+        target = np.asarray(target_ctrl, dtype=float)
+        for tick in range(controls):
+            if physics_step >= steps_total:
+                return
+            blend = (tick + 1) / controls
+            ctrl = start + blend * (target - start)
+            actions.append(ctrl.copy())
+            if on_control is not None:
+                on_control(physics_step, data)
+            data.ctrl[:] = ctrl
+            for _ in range(_CONTROL_INTERVAL):
+                if physics_step >= steps_total:
+                    return
+                mujoco.mj_step(model, data)
+                mujoco.mj_forward(model, data)  # R7: one instant per row
+                sensors[physics_step] = data.sensordata
+                mujoco.mj_getState(
+                    model,
+                    data,
+                    states[physics_step],
+                    mujoco.mjtState.mjSTATE_FULLPHYSICS,
+                )
+                physics_step += 1
+
+    for arm in ("right", "left"):
+        part = data.qpos[
+            PART_STATE_SLICE[arm].start - 1 : PART_STATE_SLICE[arm].stop - 1
+        ].copy()
+        ctrl_slice = ARM_CTRL_SLICES[arm]
+        gripper_index = ctrl_slice.start + SERVOS_PER_ARM - 1
+        pad_names = tuple(f"{arm}/{finger}_g1" for finger in ("left", "right"))
+        pad_ids = [
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            for name in pad_names
+        ]
+
+        def command_reach(  # noqa: PLR0913 - loop bindings, not an interface
+            target_xyz: Any,
+            grip: float,
+            secs: float,
+            *,
+            arm: str = arm,
+            ctrl_slice: Any = ctrl_slice,
+            gripper_index: int = gripper_index,
+            pad_names: Any = pad_names,
+        ) -> None:
+            # Chained IK on the GRIP CENTRE itself (the pad midpoint) —
+            # each solve warm-starts from the live pose. The site+offset
+            # approach died twice; the postmortems live in arm_ik.py.
+            scratch.qpos[:] = data.qpos
+            reached = solve_arm_ik(
+                model,
+                scratch,
+                site=f"{arm}/gripper",
+                joints=ARM_IK_JOINTS[arm],
+                grip_geoms=pad_names,
+                target_pos=target_xyz,
+                approach_axis=grasp_axis(arm, target_xyz[:2]),
+                down_weight=0.5,
+                pos_tol=0.008,
+                max_iters=250,
+                damping=5e-3,
+            )
+            if not reached:
+                raise RuntimeError(
+                    f"IK failed: {arm} arm to {target_xyz} — the choreography "
+                    "must not pretend a reach happened"
+                )
+            target_ctrl = ctrl.copy()
+            for joint, name in enumerate(ARM_IK_JOINTS[arm]):
+                joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                target_ctrl[ctrl_slice.start + joint] = scratch.qpos[
+                    model.jnt_qposadr[joint_id]
+                ]
+            target_ctrl[gripper_index] = gripper_ctrl_from_normalized(grip)
+            advance(secs, target_ctrl)
+
+        def live_grip_error(target_xyz: Any, *, pad_ids: Any = pad_ids) -> Any:
+            grip_center = 0.5 * (
+                data.geom_xpos[pad_ids[0]] + data.geom_xpos[pad_ids[1]]
+            )
+            return grip_center - np.asarray(target_xyz)
+
+        def part_z(*, arm: str = arm) -> float:
+            return float(data.qpos[PART_STATE_SLICE[arm].start - 1 + 2])
+
+        plan = kitting_waypoints(arm, part[:2])
+        segment_index = 0
+        grasp_retried = False
+        while segment_index < len(plan):
+            name, target_xyz, grip, secs = plan[segment_index]
+            segment_index += 1
+            command_reach(target_xyz, grip, secs)
+            if name == "lift" and part_z() < _LIFT_CHECK_Z_M and not grasp_retried:
+                if stats is not None:
+                    stats.setdefault("retries", []).append(
+                        (arm, physics_step, round(part_z(), 3))
+                    )
+                # The referee's cheapest service: a lift that lifted
+                # nothing restarts the grasp once (open, re-descend on
+                # the part's CURRENT position — the failed close may
+                # have nudged it).
+                grasp_retried = True
+                here = data.qpos[
+                    PART_STATE_SLICE[arm].start - 1 : PART_STATE_SLICE[arm].stop - 1
+                ]
+                plan = kitting_waypoints(arm, here[:2])
+                segment_index = 0
+                continue
+            if name in ("descend", "lower"):
+                # Closed-loop correction: kinematic IK is exact but the
+                # position servos carry ~3 cm of steady-state error
+                # (waist friction), which put one pad inside the part's
+                # footprint — closing then NUDGES the part instead of
+                # grasping it (measured: parts ended 1-2 cm from spawn,
+                # never lifted). Measure the LIVE grip error and lean
+                # the command the other way before closing/releasing.
+                # All THREE axes: correcting xy only re-IK'd into
+                # postures whose z steady-state error reached +4 cm and
+                # the pads closed above the cube (left arm, trial 2 —
+                # grip rose 3.2 cm during close, pinched air).
+                for _ in range(3):
+                    error = live_grip_error(target_xyz)
+                    if float(np.linalg.norm(error)) < _CORRECTION_DONE_M:
+                        break
+                    # CLAMPED compensation: linear correction only
+                    # holds locally — mirroring a 14 cm miss once aimed
+                    # the left arm across the table into impossible IK,
+                    # but SKIPPING big errors regressed a working trial
+                    # whose place drifted 6 cm. Correct in 5 cm bites;
+                    # three rounds converge either way.
+                    step_err = np.clip(error, -0.05, 0.05)
+                    corrected = [
+                        target_xyz[0] - step_err[0],
+                        target_xyz[1] - step_err[1],
+                        # Floored: a +5 cm z error once corrected the
+                        # target to BELOW the table and IK rightly
+                        # refused. The pads never need to go under 2 cm.
+                        max(0.02, target_xyz[2] - step_err[2]),
+                    ]
+                    command_reach(corrected, grip, 0.5)
+    if stats is not None:
+        stats["steps_used_before_hold"] = physics_step
+    # Hold the final pose for the rest of the protocol window.
+    while physics_step < steps_total:
+        advance(1.0, ctrl)
+    return states, sensors, np.asarray(actions)
