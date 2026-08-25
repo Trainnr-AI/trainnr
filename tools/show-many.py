@@ -55,7 +55,10 @@ HIDDEN_GROUP = 4
 PITCH = 1.6  # metres between world origins; the rig is 1.22 m wide
 LIFTED_M = 0.05  # cube centre 3 cm above resting counts as lifted
 SIM_HZ = 500
-LOG_EVERY = 10
+# The Rerun mirror costs one transform log per mesh per world (~900 for
+# 16 worlds); at 50 Hz that starves the physics loop (measured: the
+# MuJoCo window lagged seconds behind). 5 Hz keeps the grid live.
+LOG_EVERY = 100
 SYNC_EVERY = 10
 
 
