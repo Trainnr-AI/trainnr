@@ -210,6 +210,16 @@ and wants **24+ GB VRAM**.
 
 This needs saying because the opposite is widely assumed.
 
+> **2026-08-25 re-check — the verdict is amended.** The architecture
+> claim stands (no manipulation training simulator computes contact on
+> Gaussian kernels; every shipped system keeps a mesh/particle proxy),
+> but as strategy it now misleads: the proxy is generated, co-registered
+> and in the best work co-trained *through* the splat pipeline — Isaac
+> Sim 6.0 ships splat+collision-proxy pairs natively, GASE closes the
+> scan-to-policy gap to <10%, and DeepMind jointly optimizes splats +
+> physics meshes in differentiable MuJoCo. Full findings, licences and
+> the amended wording: [34-physics-splats-2026.md](34-physics-splats-2026.md).
+
 | Tool | What it produces | Collision geometry? |
 |---|---|---|
 | **gsplat** v1.5.3 (Apache-2.0) | CUDA rasterisation of Gaussians; recent work is HiGS, MCMC, LiDAR rasterisation, 3DGUT | **No. Mesh extraction is not documented in the repo at all.** |

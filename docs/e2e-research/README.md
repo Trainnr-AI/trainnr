@@ -25,6 +25,14 @@ measures the customer's robot**. An adversarial review of the whole corpus
 followed; its findings and their fix status live in
 [31-defects.md](31-defects.md).
 
+**Fourth pass: 2026-08-25 — the full-loop sprint.** Seven fields
+researched in parallel (one agent per field, primary sources) to
+harden the surfaces the operator's platform brief added
+([../30-the-full-loop.md](../30-the-full-loop.md)); results in docs
+32–38, verdicts summarized in the brief's §6. One standing verdict
+amended (physics splats, doc 23 cross-linked); one decided (MLOps
+stack); the rest confirmed with refinements.
+
 Read [19-the-system.md](19-the-system.md) first; it is the map.
 
 | Doc | Field | The one thing to remember |
@@ -42,6 +50,13 @@ Read [19-the-system.md](19-the-system.md) first; it is the map.
 | [29](29-the-company.md) | The company thesis | Scene and engine are commodities; **the unclaimed layer is the customer's robot's own dynamics** |
 | [30](30-the-pipeline.md) | The pipeline design | Twelve stages (⓪–⑪), three gates — **a number from an unvalidated simulator is not evidence** |
 | [31](31-defects.md) | The defect register | Adversarial review of everything above, with fix status — **the corpus audits itself** |
+| [32](32-recipe-engine-prior-art.md) | Auto-selection + data mixtures | Every pillar exists in isolation — **the certificate-judged recipe engine is unclaimed**; validation loss provably fails as a judge |
+| [33](33-agentic-engineering.md) | Agent-written engineering | Copilots gate on humans, labs gate on solvability — **hash-stamped artifacts behind agent-untouchable gates is unclaimed**; referees must be tamper-evident |
+| [34](34-physics-splats-2026.md) | Physics-carrying splats | Splats still never carry contact, but **the collision proxy now arrives through the splat pipeline** — scanner output is a splat+proxy pair |
+| [35](35-modular-mojo-max.md) | Modular Mojo/MAX | Qualcomm owns it, Mojo is Apache-2.0, **zero VLAs ever served on MAX** — active-watch with defined flip triggers |
+| [36](36-newton-status.md) | Newton status | One organism with MuJoCo, not a fork — and **MJX-Warp gives the Newton-era solver on the sysid'd mjModel directly** |
+| [37](37-mlops-tooling.md) | MLOps tooling | **wandb is the only tracker robot learning uses** — adopt its API surface with the Trackio escape; the registry stays custom |
+| [38](38-fleet-data-planes.md) | Fleet data planes | Every fleet converged on the three tiers; **the trigger-campaign retro-pull is the load-bearing AV pattern**; our calibration chain is ahead of practice |
 
 ## The five findings that changed the picture
 
