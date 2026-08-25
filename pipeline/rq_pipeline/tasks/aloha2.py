@@ -46,7 +46,9 @@ ARMS = 2
 SERVOS_PER_ARM = 7
 SERVOS = ARMS * SERVOS_PER_ARM
 ARM_SENSOR_WIDTH = 2 * SERVOS  # jointpos x14 then jointvel x14
-LEFT_GRIPPER_POS_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)  # referee
+# Referee framepos sensors, after the arm's block: left gripper, right gripper.
+LEFT_GRIPPER_POS_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
+RIGHT_GRIPPER_POS_SLICE = slice(ARM_SENSOR_WIDTH + 3, ARM_SENSOR_WIDTH + 6)
 NEUTRAL_CTRL = [0.0, -0.96, 1.16, 0.0, -0.3, 0.0, 0.0084] * ARMS
 
 # gym-aloha frame -> bundle frame (module docstring).
@@ -277,12 +279,16 @@ def build_transfer_cube(
     # Referee: where the left gripper is, so success can ask "is the cube
     # held by the LEFT arm" without a contact query. A real arm computes
     # its own forward kinematics, so policies may see this too.
-    scene.add_sensor(
-        name="referee/left_gripper_pos",
-        type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
-        objtype=mujoco.mjtObj.mjOBJ_BODY,
-        objname="left/gripper_link",
-    )
+    # The referee reads the finger PADS (the inner collision spheres of
+    # each arm's left finger), not the wrist body: "held" means the
+    # cube is at the pads, and the pads sit ~10 cm beyond the wrist.
+    for arm in ("left", "right"):
+        scene.add_sensor(
+            name=f"referee/{arm}_gripper_pos",
+            type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
+            objtype=mujoco.mjtObj.mjOBJ_GEOM,
+            objname=f"{arm}/left_g1",
+        )
 
     def perturb(trial: int, home: Any) -> Any:
         # Deterministic paired starts across the spawn box: four corners

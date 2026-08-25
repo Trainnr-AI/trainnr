@@ -60,7 +60,7 @@ class GripperRemap(unittest.TestCase):
             ctrl_from_act_sim_action,
         )
 
-        sensordata = np.arange(ARM_SENSOR_WIDTH + 3, dtype=np.float64) * 0.01
+        sensordata = np.arange(ARM_SENSOR_WIDTH + 6, dtype=np.float64) * 0.01
         state = act_sim_state(sensordata)
         self.assertEqual(state.shape, (14,))
         np.testing.assert_allclose(state[:6], sensordata[:6])
@@ -89,8 +89,8 @@ class TransferCubeScene(unittest.TestCase):
         _task, backend = self._loaded()
         counts = backend.counts()
         self.assertEqual(counts.actuators, SERVOS)
-        # Sensor ELEMENTS: 28 scalar joint sensors + one 3-vector referee.
-        self.assertEqual(counts.sensors, ARM_SENSOR_WIDTH + 1)
+        # Sensor ELEMENTS: 28 scalar joint sensors + two 3-vector referees.
+        self.assertEqual(counts.sensors, ARM_SENSOR_WIDTH + 2)
         self.assertEqual(counts.cameras, 6 + 1)  # the rig's six + top
 
     def test_home_is_the_keyframe_with_the_cube_resting_in_its_box(self) -> None:
