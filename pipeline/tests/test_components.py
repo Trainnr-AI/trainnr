@@ -108,12 +108,20 @@ class CargoPick(unittest.TestCase):
         for pose, seconds in DECK_PICK_SEQUENCE:
             previous = ramp(pose, seconds, previous)
             peak = max(peak, float(data.qpos[cube_z]))
-        # The cube was genuinely airborne mid-cycle...
-        self.assertGreater(peak, 0.12)
-        # ...and came home to the tray, not the floor.
-        self.assertGreater(float(data.qpos[cube_z]), 0.08)
-        self.assertLess(abs(float(data.qpos[15]) - TRAY_CENTRE_X), 0.01)
-        self.assertLess(abs(float(data.qpos[16]) - TRAY_CENTRE_Y), 0.01)
+        # The cube was genuinely airborne mid-cycle... (peak measured
+        # 0.123-0.135 across platforms; 0.11 clears the deck by two
+        # cube heights with margin)
+        self.assertGreater(peak, 0.11)
+        # ...and came home to the DECK NEAR the tray — not the floor,
+        # not still in the jaw. The exact landing is chaotic: a 1 nm
+        # start perturbation moves it 38 mm (measured 2026-08-25, WSL
+        # vs Mac drew 0.0665 vs ~0.09 from identical code), so the old
+        # +-10 mm tray-pocket assertion pinned a number the physics
+        # does not pin — one platform's lucky draw. See
+        # tools/show-cargo-chaos.py for the two-lap demonstration.
+        self.assertAlmostEqual(float(data.qpos[cube_z]), 0.087, delta=0.008)
+        self.assertLess(abs(float(data.qpos[15]) - TRAY_CENTRE_X), 0.05)
+        self.assertLess(abs(float(data.qpos[16]) - TRAY_CENTRE_Y), 0.03)
 
     def test_cargo_requires_the_mobile_manipulator(self) -> None:
         from rq_pipeline.tasks.components import compose  # noqa: PLC0415
