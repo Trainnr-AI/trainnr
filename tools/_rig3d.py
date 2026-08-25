@@ -50,17 +50,21 @@ class RigMirror:
     palette the standing dashboards were tuned on.
     """
 
-    def __init__(self, model, skip=("floor",), model_colors=False):
+    def __init__(self, model, skip=("floor",), model_colors=False, skip_groups=()):
         self.geoms, self.half_sizes, self.colors = [], [], []
         self.meshes = []  # (geom id, entity name, vertices, faces, rgba)
         self._mesh_logged: set[str] = set()
         for g in range(model.ngeom):
             name = model.geom(g).name
-            if name in skip:
+            if name in skip or int(model.geom_group[g]) in skip_groups:
                 continue
             size = model.geom_size[g]
             kind = int(model.geom_type[g])
-            rgba = [int(c * 255) for c in model.geom_rgba[g]]
+            # A geom with a material takes the material's colour (the
+            # geom's own rgba is the grey default then).
+            mat = int(model.geom_matid[g])
+            rgba_f = model.mat_rgba[mat] if mat >= 0 else model.geom_rgba[g]
+            rgba = [int(c * 255) for c in rgba_f]
             if kind == int(mujoco.mjtGeom.mjGEOM_MESH):
                 mid = int(model.geom_dataid[g])
                 v0, nv = int(model.mesh_vertadr[mid]), int(model.mesh_vertnum[mid])
