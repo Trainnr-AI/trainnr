@@ -320,7 +320,20 @@ const MUST_MOVE_ABOVE: u16 = 15;
 #[embassy_executor::task]
 async fn drive_sweep(mut motors: Motors) {
     // Nothing moves until a host is listening. See `HOST_WATCHING`.
+    // The WIFI build relaxes this the way rover mode did (2026-08-25,
+    // "telemetry with the robot moving"): a UDP broadcaster cannot know
+    // a host exists, so after a grace period the sweep starts anyway —
+    // the grace is the time to put the rig down, wheels FREE (the sweep
+    // reaches 100% duty; on the floor that is a runaway).
+    #[cfg(feature = "wifi")]
+    const AUTOSTART_GRACE_MS: u64 = 10_000;
+    #[cfg(feature = "wifi")]
+    let boot = firmware_support::now_ms();
     while !HOST_WATCHING.load(Ordering::Relaxed) {
+        #[cfg(feature = "wifi")]
+        if firmware_support::now_ms().saturating_sub(boot) > AUTOSTART_GRACE_MS {
+            break;
+        }
         Timer::after_millis(100).await;
     }
 
@@ -356,6 +369,43 @@ async fn drive_sweep(mut motors: Motors) {
     motors.right.set_duty(&mut cfg, 0);
     DUTY_PERCENT.store(0, Ordering::Relaxed);
     motors.standby.set_low();
+
+    // The WIFI build LOOPS the staircase with a rest between laps —
+    // an untethered viewer joins whenever they like and still sees
+    // motion (a single 18 s sweep would be parked long before anyone
+    // finds the network). Stall latch still ends everything. The bench
+    // builds keep run-once semantics: a calibration recording must not
+    // contain two laps.
+    #[cfg(feature = "wifi")]
+    if !STALLED.load(Ordering::Relaxed) {
+        Timer::after_secs(5).await;
+        // Re-arm and go again by looping the whole task body: cheapest
+        // correct restart is recursion-free tail — spawn semantics don't
+        // allow re-calling, so loop inline.
+        loop {
+            motors.standby.set_high();
+            for percent in SWEEP {
+                motors.left.set_duty(&mut cfg, percent);
+                motors.right.set_duty(&mut cfg, percent);
+                DUTY_PERCENT.store(percent, Ordering::Relaxed);
+                let before = TOTAL_TICKS.load(Ordering::Relaxed);
+                Timer::after_secs(STEP_SECS).await;
+                let moved = TOTAL_TICKS.load(Ordering::Relaxed) != before;
+                if percent > MUST_MOVE_ABOVE && !moved {
+                    STALLED.store(true, Ordering::Relaxed);
+                    break;
+                }
+            }
+            motors.left.set_duty(&mut cfg, 0);
+            motors.right.set_duty(&mut cfg, 0);
+            DUTY_PERCENT.store(0, Ordering::Relaxed);
+            motors.standby.set_low();
+            if STALLED.load(Ordering::Relaxed) {
+                break;
+            }
+            Timer::after_secs(5).await;
+        }
+    }
 
     // Park. The odometry task keeps reporting, so the final counts stay
     // readable after the motor has stopped.
