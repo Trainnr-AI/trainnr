@@ -30,6 +30,7 @@ the viewer window still uses GLFW.
 
 import argparse
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -56,6 +57,7 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     SERVOS,
     act_sim_vision_policy,
     build_transfer_cube,
+    ctrl_from_act_sim_action,
 )
 
 LOG_LINE = re.compile(r"step:(\d+).*?loss:([\d.]+).*?grdn:([\d.]+).*?lr:([\d.e+-]+)")
@@ -71,9 +73,23 @@ def parse_args():
     parser.add_argument("--policy", default="act")
     parser.add_argument("--dataset", default="lerobot/aloha_sim_transfer_cube_human")
     parser.add_argument("--steps", type=int, default=20000)
-    parser.add_argument("--save-freq", type=int, default=1000)
+    parser.add_argument("--save-freq", type=int, default=250)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--runs", default="runs")
+    parser.add_argument(
+        "--play",
+        default=None,
+        help="no training: play this checkpoint directory (pretrained_model) "
+        "for --trials paired starts in both viewers, then hold",
+    )
+    parser.add_argument("--trials", type=int, default=4)
+    parser.add_argument(
+        "--replay-demos",
+        type=int,
+        default=1,
+        help="human demonstrations from the dataset to replay through the bundle "
+        "before training's first checkpoint (0 to skip)",
+    )
     parser.add_argument(
         "--look",
         default="act_sim",
@@ -164,25 +180,18 @@ class Watcher:
 
         return home_state(_Backend(self.model), self.task.protocol)
 
-    def play(self, checkpoint_dir: Path, step: int):
+    def _episode(self, controller, prefix: str, note: str, trial: int = 0):
+        """One episode from paired start `trial`, driven by `controller(k,
+        observation) -> ctrl`; logs frames, mirror, cube height; returns
+        the referee's verdict."""
         model, data, protocol = self.model, self.data, self.task.protocol
-        rr.set_time("train_step", sequence=step)
-        rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
-        raw = lerobot_checkpoint_policy(
-            str(checkpoint_dir), task_instruction="transfer the cube", device="cuda"
-        )
-        policy = act_sim_vision_policy(
-            VisionPolicy(name=f"ckpt-{step}", act=raw.act, reset=raw.reset)
-        )
-        policy.reset()
-        initial = protocol.perturb(0, self._home())
+        initial = protocol.perturb(trial, self._home())
         mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
         mujoco.mj_forward(model, data)
         size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
         states = np.empty((protocol.steps, size))
         sensors = np.empty((protocol.steps, model.nsensordata))
-        rr.log("stage", rr.TextLog(f"checkpoint {step}: playing trial 0"))
-        prefix = f"eval/{step:06d}"
+        rr.log("stage", rr.TextLog(note))
         for k in range(protocol.steps):
             rr.set_time("sim_time", duration=k * model.opt.timestep)
             if k % protocol.control_interval == 0:
@@ -194,7 +203,7 @@ class Watcher:
                     ).copy(),
                     f"observation.images.{self.camera.key}": frame,
                 }
-                data.ctrl[:] = np.asarray(policy.act(k, observation), dtype=float)
+                data.ctrl[:] = np.asarray(controller(k, observation), dtype=float)
                 if k % CAMERA_EVERY == 0:
                     rr.log(f"{prefix}/top", rr.Image(frame))
             mujoco.mj_step(model, data)
@@ -211,7 +220,63 @@ class Watcher:
                 if not self.viewer.is_running():
                     raise SystemExit("viewer closed")
                 self.viewer.sync()
-        success = protocol.success(states, sensors)
+        return protocol.success(states, sensors)
+
+    def replay_demo(self, dataset_id: str, episode: int):
+        """Play a human demonstration's actions open-loop through the bundle.
+
+        The target behaviour, in our simulator, before any checkpoint
+        exists — and a live check of the frame and gripper mapping: the
+        demo's arm motion should look like the dataset's video. The
+        cube sits at our paired start, not wherever theirs was, so the
+        grasp itself need not land; the choreography is the point.
+        """
+        import torch  # noqa: PLC0415
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
+
+        dataset = LeRobotDataset(dataset_id)
+        table = dataset.hf_dataset
+        episodes = np.asarray([int(e) for e in table["episode_index"]])
+        rows = np.flatnonzero(episodes == episode)
+        actions = np.stack(
+            [np.asarray(torch.as_tensor(table[int(i)]["action"])) for i in rows]
+        )
+        interval = self.task.protocol.control_interval
+        rr.set_time("train_step", sequence=0)
+
+        def controller(k, observation):
+            del observation
+            index = min(k // interval, len(actions) - 1)
+            return ctrl_from_act_sim_action(actions[index])
+
+        success = self._episode(
+            controller,
+            f"demo/{episode:03d}",
+            f"human demo {episode} from {dataset_id}: replaying {len(actions)} actions",
+        )
+        verdict = "SUCCESS" if success else "no transfer"
+        rr.log(
+            "stage",
+            rr.TextLog(
+                f"human demo {episode} replayed: {verdict} "
+                "(open-loop, cube at our paired start)"
+            ),
+        )
+        print(f"[watch] demo {episode}: {verdict}", flush=True)
+
+    def play(self, checkpoint_dir: Path, step: int):
+        rr.set_time("train_step", sequence=step)
+        rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
+        raw = lerobot_checkpoint_policy(
+            str(checkpoint_dir), task_instruction="transfer the cube", device="cuda"
+        )
+        policy = act_sim_vision_policy(
+            VisionPolicy(name=f"ckpt-{step}", act=raw.act, reset=raw.reset)
+        )
+        policy.reset()
+        success = self._episode(
+            policy.act, f"eval/{step:06d}", f"checkpoint {step}: playing trial 0"
+        )
         rr.set_time("train_step", sequence=step)
         rr.log("eval/success", rr.Scalars(1.0 if success else 0.0))
         verdict = "SUCCESS" if success else "fail"
@@ -232,8 +297,52 @@ class Watcher:
             self.play(pretrained, step)
 
 
+def _exit_on_sigterm(signum, frame):
+    # A plain SIGTERM would skip `finally` and orphan the trainer.
+    raise SystemExit(128 + signum)
+
+
+def play_only(args) -> None:
+    """Watch one checkpoint: every paired start, both viewers, no training."""
+    checkpoint = Path(args.play)
+    rr.init(f"robotiq-play-{checkpoint.parent.name}", spawn=True)
+    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    watcher = Watcher(args.look)
+    raw = lerobot_checkpoint_policy(
+        str(checkpoint), task_instruction="transfer the cube", device="cuda"
+    )
+    policy = act_sim_vision_policy(
+        VisionPolicy(name=checkpoint.parent.name, act=raw.act, reset=raw.reset)
+    )
+    successes = 0
+    for trial in range(args.trials):
+        policy.reset()
+        rr.set_time("train_step", sequence=trial)
+        success = watcher._episode(
+            policy.act,
+            f"play/trial{trial}",
+            f"{policy.name}: trial {trial}",
+            trial=trial,
+        )
+        successes += int(success)
+        verdict = "SUCCESS" if success else "fail"
+        rr.log("stage", rr.TextLog(f"{policy.name}: trial {trial} {verdict}"))
+        print(f"[play] trial {trial}: {verdict}", flush=True)
+    rr.log("stage", rr.TextLog(f"{policy.name}: {successes}/{args.trials}"))
+    print(
+        f"[play] {successes}/{args.trials} - close the MuJoCo window to exit",
+        flush=True,
+    )
+    while watcher.viewer.is_running():
+        time.sleep(0.2)
+
+
 def main() -> None:
+    signal.signal(signal.SIGTERM, _exit_on_sigterm)
     args = parse_args()
+    if args.play:
+        play_only(args)
+        return
     output_dir = Path(args.runs) / args.name
     rr.init(f"robotiq-train-watch-{args.name}", spawn=True)
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
@@ -253,6 +362,8 @@ def main() -> None:
     watcher = Watcher(args.look)
     checkpoints = output_dir / "checkpoints"
     try:
+        for episode in range(args.replay_demos):
+            watcher.replay_demo(args.dataset, episode)
         while process.poll() is None:
             watcher.poll(checkpoints)
             if not watcher.viewer.is_running():

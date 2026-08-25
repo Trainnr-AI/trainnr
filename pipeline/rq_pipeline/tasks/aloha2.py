@@ -69,11 +69,17 @@ ALOHA_TOP_CAMERAS: tuple[CameraSpec, ...] = (
 
 # Gripper channel: gym-aloha normalises the ACT sim's finger POSITION
 # (close 0.01844 m, open 0.05800 m) to [0, 1] in both state and action.
-# ALOHA 2's gripper drive spans ctrlrange 0.002..0.037 (its finger
-# joint 0..0.041). Both directions use the ctrl range, so a commanded
-# opening reads back as itself at steady state.
+# ALOHA 2's gripper drive spans ctrlrange 0.002..0.037; commands map
+# onto that. The STATE side uses the finger's MEASURED travel: commanded
+# to 0.002 the fingers meet pad-on-pad at 0.0078 m and stop (eight
+# contacts, 2026-08-26), so 0.0078 is "closed" — normalising from the
+# ctrl floor instead left a closed gripper reading 0.18 where the
+# dataset reads 0.00 (found by replaying a human demo: every arm joint
+# tracked at r >= 0.98, the gripper at 0.72).
 ALOHA2_GRIPPER_CTRL_CLOSE = 0.002
 ALOHA2_GRIPPER_CTRL_OPEN = 0.037
+ALOHA2_GRIPPER_JOINT_CLOSED = 0.0078  # measured
+ALOHA2_GRIPPER_JOINT_OPEN = 0.037  # measured, equals the ctrl ceiling
 _GRIPPER_INDICES = (SERVOS_PER_ARM - 1, SERVOS - 1)  # 6 and 13
 
 # FULLPHYSICS layout: [time, qpos(16 arm + 7 cube), qvel(...)]. The cube's
@@ -111,9 +117,10 @@ def gripper_ctrl_from_normalized(value: float) -> float:
 
 
 def gripper_normalized_from_joint(position: float) -> float:
-    """ALOHA 2 finger jointpos (m) -> gym-aloha's [0, 1] state."""
-    span = ALOHA2_GRIPPER_CTRL_OPEN - ALOHA2_GRIPPER_CTRL_CLOSE
-    value = (float(position) - ALOHA2_GRIPPER_CTRL_CLOSE) / span
+    """ALOHA 2 finger jointpos (m) -> gym-aloha's [0, 1] state, over
+    the finger's measured travel (closed pads to full open)."""
+    span = ALOHA2_GRIPPER_JOINT_OPEN - ALOHA2_GRIPPER_JOINT_CLOSED
+    value = (float(position) - ALOHA2_GRIPPER_JOINT_CLOSED) / span
     return min(1.0, max(0.0, value))
 
 

@@ -17,10 +17,14 @@ BLACK_FRAME_MEAN = 5.0
 
 
 class GripperRemap(unittest.TestCase):
-    def test_round_trip_and_clipping(self) -> None:
+    def test_commands_span_the_ctrl_range_and_states_the_measured_travel(
+        self,
+    ) -> None:
         from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
             ALOHA2_GRIPPER_CTRL_CLOSE,
             ALOHA2_GRIPPER_CTRL_OPEN,
+            ALOHA2_GRIPPER_JOINT_CLOSED,
+            ALOHA2_GRIPPER_JOINT_OPEN,
             gripper_ctrl_from_normalized,
             gripper_normalized_from_joint,
         )
@@ -34,11 +38,18 @@ class GripperRemap(unittest.TestCase):
         self.assertAlmostEqual(
             gripper_ctrl_from_normalized(7.0), ALOHA2_GRIPPER_CTRL_OPEN
         )
-        for value in (0.0, 0.25, 0.5, 1.0):
-            self.assertAlmostEqual(
-                gripper_normalized_from_joint(gripper_ctrl_from_normalized(value)),
-                value,
-            )
+        # Closed pads read 0 like the dataset; full open reads 1; the
+        # ctrl floor (unreachable by the fingers) clips to 0.
+        self.assertAlmostEqual(
+            gripper_normalized_from_joint(ALOHA2_GRIPPER_JOINT_CLOSED), 0.0
+        )
+        self.assertAlmostEqual(
+            gripper_normalized_from_joint(ALOHA2_GRIPPER_JOINT_OPEN), 1.0
+        )
+        self.assertAlmostEqual(
+            gripper_normalized_from_joint(ALOHA2_GRIPPER_CTRL_CLOSE), 0.0
+        )
+        self.assertAlmostEqual(gripper_normalized_from_joint(0.5), 1.0)
 
     def test_state_and_action_adapters_touch_only_the_gripper_channels(self) -> None:
         import numpy as np  # noqa: PLC0415
