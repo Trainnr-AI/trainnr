@@ -1,0 +1,48 @@
+<mujoco model="aloha2_nominal">
+  <!-- The bundle's canonical model: Menagerie's ALOHA 2 scene UNMODIFIED
+       (scene.xml includes aloha.xml: two ViperX 300S arms on the
+       extrusion frame, the table, and the four D405-matched cameras),
+       plus the one thing the evaluation harness cannot work without and
+       the upstream files do not carry: sensors. Policies observe
+       sensordata only, so a sensorless robot is unusable by contract,
+       and the census gate would rightly refuse it.
+
+       Sensor layout mirrors what the real ALOHA bus reports — seven
+       servos per arm (six joints + the gripper drive; the second finger
+       is an equality mimic, not a servo): fourteen jointpos, then
+       fourteen jointvel, left arm first, in actuator order. So
+       sensordata[0:14] lines up with ctrl[0:14]. -->
+  <include file="scene.xml"/>
+
+  <sensor>
+    <jointpos name="left/waist_pos" joint="left/waist"/>
+    <jointpos name="left/shoulder_pos" joint="left/shoulder"/>
+    <jointpos name="left/elbow_pos" joint="left/elbow"/>
+    <jointpos name="left/forearm_roll_pos" joint="left/forearm_roll"/>
+    <jointpos name="left/wrist_angle_pos" joint="left/wrist_angle"/>
+    <jointpos name="left/wrist_rotate_pos" joint="left/wrist_rotate"/>
+    <jointpos name="left/gripper_pos" joint="left/left_finger"/>
+    <jointpos name="right/waist_pos" joint="right/waist"/>
+    <jointpos name="right/shoulder_pos" joint="right/shoulder"/>
+    <jointpos name="right/elbow_pos" joint="right/elbow"/>
+    <jointpos name="right/forearm_roll_pos" joint="right/forearm_roll"/>
+    <jointpos name="right/wrist_angle_pos" joint="right/wrist_angle"/>
+    <jointpos name="right/wrist_rotate_pos" joint="right/wrist_rotate"/>
+    <jointpos name="right/gripper_pos" joint="right/left_finger"/>
+
+    <jointvel name="left/waist_vel" joint="left/waist"/>
+    <jointvel name="left/shoulder_vel" joint="left/shoulder"/>
+    <jointvel name="left/elbow_vel" joint="left/elbow"/>
+    <jointvel name="left/forearm_roll_vel" joint="left/forearm_roll"/>
+    <jointvel name="left/wrist_angle_vel" joint="left/wrist_angle"/>
+    <jointvel name="left/wrist_rotate_vel" joint="left/wrist_rotate"/>
+    <jointvel name="left/gripper_vel" joint="left/left_finger"/>
+    <jointvel name="right/waist_vel" joint="right/waist"/>
+    <jointvel name="right/shoulder_vel" joint="right/shoulder"/>
+    <jointvel name="right/elbow_vel" joint="right/elbow"/>
+    <jointvel name="right/forearm_roll_vel" joint="right/forearm_roll"/>
+    <jointvel name="right/wrist_angle_vel" joint="right/wrist_angle"/>
+    <jointvel name="right/wrist_rotate_vel" joint="right/wrist_rotate"/>
+    <jointvel name="right/gripper_vel" joint="right/left_finger"/>
+  </sensor>
+</mujoco>

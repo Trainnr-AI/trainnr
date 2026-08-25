@@ -49,6 +49,13 @@ class EpisodeProtocol:
     it receives the trial index (not an RNG) so trials are paired across
     policies and the whole evaluation is deterministic by construction.
     `success(states, sensors) -> bool` judges one episode.
+
+    `home` names the keyframe every trial starts from (before
+    `perturb`); None means the model's reset state. Where an episode
+    starts is a fact about the protocol, declared here, never inherited
+    from the backend — the ALOHA rig's reset state has both arms
+    straight up on a path that jams the grippers together at over 1 kN,
+    while the SO-101 tasks were tuned from theirs.
     """
 
     trials: int
@@ -56,6 +63,7 @@ class EpisodeProtocol:
     control_interval: int
     perturb: Callable[[int, Any], Any]
     success: Callable[[Any, Any], bool]
+    home: str | None = None
 
     def __post_init__(self) -> None:
         for field_name, value in (
@@ -81,6 +89,13 @@ class SimScore:
         return self.successes / self.trials
 
 
+def home_state(backend: Any, protocol: EpisodeProtocol) -> Any:
+    """The protocol's declared start: its keyframe, else the model's reset."""
+    if protocol.home is None:
+        return backend.default_initial_state()
+    return backend.keyframe_state(protocol.home)
+
+
 def evaluate_policies(
     backend: Any,
     policies: Sequence[SimPolicy],
@@ -99,7 +114,7 @@ def evaluate_policies(
         )
     counts = backend.counts()
     assert_model_alive(counts.actuators, counts.sensors, counts.geoms, source=source)
-    home = backend.default_initial_state()
+    home = home_state(backend, protocol)
     scores = []
     for policy in policies:
         successes = 0

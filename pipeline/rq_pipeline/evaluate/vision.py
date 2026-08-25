@@ -26,7 +26,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol, SimScore
+from rq_pipeline.evaluate.harness import EpisodeProtocol, SimScore, home_state
 from rq_pipeline.robot.model_checks import assert_model_alive
 
 
@@ -81,7 +81,7 @@ def evaluate_vision_policies(
         )
     counts = backend.counts()
     assert_model_alive(counts.actuators, counts.sensors, counts.geoms, source=source)
-    home = backend.default_initial_state()
+    home = home_state(backend, protocol)
     scores = []
     for policy in policies:
         successes = 0

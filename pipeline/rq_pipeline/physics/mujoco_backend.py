@@ -71,15 +71,56 @@ class MuJoCoBackend:
 
     def counts(self) -> ModelCounts:
         model = self._require_model()
-        return ModelCounts(actuators=model.nu, sensors=model.nsensor, geoms=model.ngeom)
+        return ModelCounts(
+            actuators=model.nu,
+            sensors=model.nsensor,
+            geoms=model.ngeom,
+            cameras=model.ncam,
+        )
 
     def default_initial_state(self) -> numpy.ndarray:
-        """The model's home state as a full-physics state vector —
-        the row format `rollout` expects for `initial_states`."""
+        """The model's RESET state (qpos0, zero velocity) as a
+        full-physics state vector — the row format `rollout` expects.
+
+        This is the model's zero, not necessarily a pose the robot can
+        occupy: for a two-arm rig it may not be. Task protocols that
+        need a real pose name a keyframe (`EpisodeProtocol.home`) and
+        get it through `keyframe_state`.
+        """
         mujoco = self._mujoco
         model = self._require_model()
         data = mujoco.MjData(model)
         mujoco.mj_resetData(model, data)
+        return self._state_of(data)
+
+    def keyframe_state(self, name: str) -> numpy.ndarray:
+        """The named keyframe as a full-physics state vector.
+
+        A bundle that ships keyframes has declared where it lives;
+        starting anywhere else can measure the wrong thing. Measured
+        reason (aloha2-nominal, 2026-08-26): from qpos=0 both ALOHA
+        arms point straight up, and driving them to `neutral_pose`
+        folds the elbows inward before the shoulders lean back — the
+        two grippers meet at the top centre and jam at over 1 kN. The
+        real rig never traverses that pose; a harness that starts there
+        measures a collision, not a policy.
+        """
+        mujoco = self._mujoco
+        model = self._require_model()
+        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, name)
+        if key < 0:
+            names = [
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, i)
+                for i in range(model.nkey)
+            ]
+            raise KeyError(f"no keyframe {name!r} in model; it has {names}")
+        data = mujoco.MjData(model)
+        mujoco.mj_resetDataKeyframe(model, data, key)
+        return self._state_of(data)
+
+    def _state_of(self, data: Any) -> numpy.ndarray:
+        mujoco = self._mujoco
+        model = self._require_model()
         size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
         import numpy as np  # noqa: PLC0415
 
