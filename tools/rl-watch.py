@@ -1,8 +1,15 @@
 """Watch reinforcement learning happen: thousands of worlds on the GPU,
 sixteen of them on screen.
 
-    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan MUJOCO_GL=egl \
+    cd pipeline && LD_LIBRARY_PATH=/usr/lib/wsl/lib GALLIUM_DRIVER=d3d12 \
+        WGPU_BACKEND=vulkan MUJOCO_GL=egl \
         .venv-train/bin/python ../tools/rl-watch.py --timesteps 20000000
+
+`LD_LIBRARY_PATH=/usr/lib/wsl/lib` is what lets Warp find the GPU under
+WSL (measured: without it Warp reports "no CUDA-capable device" and
+falls to the CPU, and the JAX->Warp FFI call fails). Warp is the only
+backend fast enough for these mesh-contact environments: 36k
+env-steps/s at 2,048 worlds versus 1.8k on MJX-JAX.
 
 MuJoCo Playground's `AlohaHandOver` (two ALOHA arms, a box to pick up
 with the right arm and hand to the left — Menagerie's MJX-patched
@@ -63,7 +70,7 @@ def parse_args():
     parser.add_argument("--envs", type=int, default=2048)
     parser.add_argument("--evals", type=int, default=20)
     parser.add_argument("--show", type=int, default=16, help="worlds on screen")
-    parser.add_argument("--impl", default="jax", choices=("jax", "warp"))
+    parser.add_argument("--impl", default="warp", choices=("jax", "warp"))
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
 
