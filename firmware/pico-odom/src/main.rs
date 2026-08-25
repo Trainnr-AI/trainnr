@@ -207,6 +207,17 @@ static DUTY_PERCENT: AtomicU16 = AtomicU16::new(0);
 /// a surprise.
 static HOST_WATCHING: AtomicBool = AtomicBool::new(false);
 
+/// The autonomy clock, shared by every headless starter (the wifi
+/// sweep and the fetch rover): no host after this long from power-up
+/// means start anyway — the grace is the time to put the rig down.
+/// ONE definition; the review (2026-08-26) found it hand-copied into
+/// two functions.
+#[cfg(any(feature = "wifi", feature = "fetch"))]
+const AUTOSTART_GRACE_MS: u64 = 10_000;
+/// The breather between autonomous laps, same two consumers.
+#[cfg(any(feature = "wifi", feature = "fetch"))]
+const LAP_REST_SECS: u64 = 5;
+
 /// Total distance the encoders have seen, published by the odometry loop
 /// so [`drive_sweep`] can check whether the robot did what it was told.
 ///
@@ -326,8 +337,6 @@ async fn drive_sweep(mut motors: Motors) {
     // the grace is the time to put the rig down, wheels FREE (the sweep
     // reaches 100% duty; on the floor that is a runaway).
     #[cfg(feature = "wifi")]
-    const AUTOSTART_GRACE_MS: u64 = 10_000;
-    #[cfg(feature = "wifi")]
     let boot = firmware_support::now_ms();
     while !HOST_WATCHING.load(Ordering::Relaxed) {
         #[cfg(feature = "wifi")]
@@ -378,7 +387,7 @@ async fn drive_sweep(mut motors: Motors) {
     // contain two laps.
     #[cfg(feature = "wifi")]
     if !STALLED.load(Ordering::Relaxed) {
-        Timer::after_secs(5).await;
+        Timer::after_secs(LAP_REST_SECS).await;
         // Re-arm and go again by looping the whole task body: cheapest
         // correct restart is recursion-free tail — spawn semantics don't
         // allow re-calling, so loop inline.
@@ -403,7 +412,7 @@ async fn drive_sweep(mut motors: Motors) {
             if STALLED.load(Ordering::Relaxed) {
                 break;
             }
-            Timer::after_secs(5).await;
+            Timer::after_secs(LAP_REST_SECS).await;
         }
     }
 
@@ -987,12 +996,6 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
     /// Reverse leg that lays the prop into the arm's pocket.
     const BACK_MS: u64 = 1400;
     const CARRY_MS: u64 = 1500;
-    /// No host after this long from power-up → start anyway. Long
-    /// enough to set the rig on the floor after plugging the brick in.
-    const AUTOSTART_GRACE_MS: u64 = 10_000;
-    /// Breather between laps — lets the operator grab the rig, and the
-    /// camera settle, before the next hunt.
-    const RERUN_REST_MS: u64 = 5_000;
 
     let boot = firmware_support::now_ms();
     while !HOST_WATCHING.load(Ordering::Relaxed) {
@@ -1184,7 +1187,7 @@ async fn fetch_forever(motors: Motors, spec: RobotSpec) -> ! {
             drivetrain.apply(left, right);
         }
         crate::diag::note("# fetch DONE — resting, then again (unplug to stop)");
-        Timer::after_millis(RERUN_REST_MS).await;
+        Timer::after_secs(LAP_REST_SECS).await;
     }
 }
 

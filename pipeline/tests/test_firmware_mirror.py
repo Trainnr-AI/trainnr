@@ -33,12 +33,32 @@ REPO = Path(__file__).resolve().parents[2]
 SERVO_RS = (REPO / "firmware" / "pico-odom" / "src" / "servo.rs").read_text()
 MAIN_RS = (REPO / "firmware" / "pico-odom" / "src" / "main.rs").read_text()
 SIM_ERRAND = (REPO / "tools" / "sim-errand.py").read_text()
+BRIDGE = (REPO / "tools" / "udp-wire-bridge.py").read_text()
+
+
+def rust_fn(source: str, name: str) -> str:
+    """The body of one fn — scoping matters: CREEP/TURN/DEADBAND exist
+    in BOTH fetch_forever and chase_forever with different values, and
+    a whole-file first-match pin held only because of declaration order
+    (found in review 2026-08-26)."""
+    match = re.search(rf"fn {name}[^{{]*\{{", source)
+    assert match, f"fn {name} not found"
+    depth, index = 1, match.end()
+    while depth and index < len(source):
+        depth += {"{": 1, "}": -1}.get(source[index], 0)
+        index += 1
+    return source[match.start() : index]
 
 
 def rust_const(source: str, name: str) -> float:
-    match = re.search(rf"const {name}: \w+ = ([\d.]+)", source)
+    # Underscored literals (10_000) parse; [\d.] alone read 10_000 as 10.
+    match = re.search(rf"const {name}: \w+ = ([\d_.]+)", source)
     assert match, f"const {name} not found"
-    return float(match.group(1))
+    return float(match.group(1).replace("_", ""))
+
+
+FETCH_FOREVER = rust_fn(MAIN_RS, "fetch_forever")
+FETCH_ARM = rust_fn(SERVO_RS, "fetch_arm")
 
 
 class FetchPickTable(unittest.TestCase):
@@ -80,14 +100,18 @@ class FetchPickTable(unittest.TestCase):
         self.assertEqual(step * 25, FIRMWARE_SLEW_US_PER_S)
 
     def test_salute_cadence_matches_firmware(self):
-        # servo.rs waves via Timer::after_millis(350) per half-wave
-        self.assertIn("Timer::after_millis(350)", SERVO_RS)
+        # Scoped to fetch_arm: a whole-file assertIn was satisfiable by
+        # any other 350 ms timer anywhere in the servo module.
+        self.assertIn("Timer::after_millis(350)", FETCH_ARM)
         self.assertEqual(SALUTE_HALF_S, 0.35)
 
-    def test_arm_sign_covers_five_channels(self):
+    def test_arm_sign_is_the_measured_vector(self):
+        # The dance measured [+1, +1, -1, -1, +1] (2026-08-24); pinning
+        # only the length pinned the shape and not the fact.
         match = re.search(r"const ARM_SIGN: \[i32; 5\] = \[([-\d, ]+)\]", SERVO_RS)
         assert match
-        self.assertEqual(len(match.group(1).split(",")), 5)
+        signs = [int(value) for value in match.group(1).split(",")]
+        self.assertEqual(signs, [1, 1, -1, -1, 1])
 
 
 class SimErrandMirror(unittest.TestCase):
@@ -119,7 +143,7 @@ class SimErrandMirror(unittest.TestCase):
     def test_direct_constants_match(self):
         for rust_name, py_name in self.PAIRS:
             self.assertEqual(
-                rust_const(MAIN_RS, rust_name),
+                rust_const(FETCH_FOREVER, rust_name),
                 self.python_const(py_name),
                 rust_name,
             )
@@ -127,7 +151,7 @@ class SimErrandMirror(unittest.TestCase):
     def test_millisecond_constants_match(self):
         for rust_name, py_name in self.MS_PAIRS:
             self.assertAlmostEqual(
-                rust_const(MAIN_RS, rust_name) / 1000.0,
+                rust_const(FETCH_FOREVER, rust_name) / 1000.0,
                 self.python_const(py_name),
                 msg=rust_name,
             )
@@ -160,3 +184,31 @@ class AirMimeInvariants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WireClockAndPort(unittest.TestCase):
+    """The wire's clock and the radio's port: mirrors found unpinned in
+    the 2026-08-26 review. STATUS_HZ scales every timestamp the
+    identification consumes — a REPORT_MS retune would silently rescale
+    the flagship fits."""
+
+    def test_status_hz_matches_report_ms(self):
+        from rq_pipeline.collect.frames import STATUS_HZ  # noqa: PLC0415
+
+        report_ms = rust_const(MAIN_RS, "REPORT_MS")
+        self.assertEqual(STATUS_HZ, 1000.0 / report_ms)
+
+    def test_bridge_port_matches_firmware(self):
+        rust_port = rust_const(MAIN_RS, "TELEMETRY_PORT")
+        match = re.search(r"^TELEMETRY_PORT = (\d+)", BRIDGE, re.MULTILINE)
+        assert match, "bridge port constant not found"
+        self.assertEqual(float(match.group(1)), rust_port)
+
+    def test_autonomy_clock_is_single_sourced(self):
+        # One module-level definition each; the grace was once
+        # hand-copied into two functions. sim-errand deliberately does
+        # NOT mirror these (its prediction covers one errand, not the
+        # rest between laps) — this pin guards the firmware side only.
+        self.assertEqual(MAIN_RS.count("const AUTOSTART_GRACE_MS"), 1)
+        self.assertEqual(MAIN_RS.count("const LAP_REST_SECS"), 1)
+        self.assertEqual(rust_const(MAIN_RS, "AUTOSTART_GRACE_MS"), 10_000)

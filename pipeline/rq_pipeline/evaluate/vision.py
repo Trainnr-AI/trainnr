@@ -85,7 +85,13 @@ def evaluate_vision_policies(  # noqa: PLR0913 - the sixth is a scalar; a spec o
             "rule certify() enforces, applied before episodes are spent"
         )
     counts = backend.counts()
-    assert_model_alive(counts.actuators, counts.sensors, counts.geoms, source=source)
+    assert_model_alive(
+        counts.actuators,
+        counts.sensors,
+        counts.geoms,
+        source=source,
+        cameras=counts.cameras,
+    )
     home = home_state(backend, protocol)
     scores = []
     for policy in policies:

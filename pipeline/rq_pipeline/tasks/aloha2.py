@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from rq_pipeline.evaluate.harness import EpisodeProtocol
 from rq_pipeline.evaluate.vision import CameraSpec
@@ -46,9 +46,11 @@ ARMS = 2
 SERVOS_PER_ARM = 7
 SERVOS = ARMS * SERVOS_PER_ARM
 ARM_SENSOR_WIDTH = 2 * SERVOS  # jointpos x14 then jointvel x14
-# Referee framepos sensors, after the arm's block: left gripper, right gripper.
+# Referee framepos sensors, after the arm's block: left gripper first.
+# (Both grippers' referees are DECLARED in the scenes for tools and
+# future predicates; only the left one is consumed today, so only its
+# slice exists — an unused right slice implied a check nobody wrote.)
 LEFT_GRIPPER_POS_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
-RIGHT_GRIPPER_POS_SLICE = slice(ARM_SENSOR_WIDTH + 3, ARM_SENSOR_WIDTH + 6)
 NEUTRAL_CTRL = [0.0, -0.96, 1.16, 0.0, -0.3, 0.0, 0.0084] * ARMS
 
 # gym-aloha frame -> bundle frame (module docstring).
@@ -343,9 +345,14 @@ TRAY_CENTER = (0.0, -0.02)
 SLOT_HALF = 0.045
 SLOT_WALL = 0.008
 SLOT_WALL_HEIGHT = 0.015
-# One slot per arm, mirrored; the part that starts on the RIGHT goes
-# into the right slot.
-SLOT_CENTERS = {"right": (0.09, -0.02), "left": (-0.09, -0.02)}
+_SLOT_OFFSET_X = 0.09
+# One slot per arm, mirrored about the tray centre; the part that
+# starts on the RIGHT goes into the right slot. Derived, not restated —
+# the tray centre existed beside hand-copied slot y values once.
+SLOT_CENTERS = {
+    "right": (TRAY_CENTER[0] + _SLOT_OFFSET_X, TRAY_CENTER[1]),
+    "left": (TRAY_CENTER[0] - _SLOT_OFFSET_X, TRAY_CENTER[1]),
+}
 PART_HALF = 0.02
 # Spawn bands, one per arm side, inside the proven reach envelope
 # (transfer_cube's spawn box, mirrored for the left arm).
@@ -388,15 +395,13 @@ ARM_IK_JOINTS = {
     for arm in ("left", "right")
 }
 ARM_CTRL_SLICES = {"left": slice(0, 7), "right": slice(7, 14)}
-# The grasp approach: near-horizontal, pointing FROM the arm's base
-# TOWARD the target and 45 degrees down — computed per reach, because
-# a fixed inward axis failed the far corners (trial 2: the left arm
-# never lifted at (-0.22, -0.111), where "inward" and "toward the
-# part" diverge). A straight-down approach is IMPOSSIBLE on this
-# gripper: the base housing's collision meshes reach the table before
-# the pads reach a 4 cm part (measured via contacts: 1-8 cm of
-# penetration in every vertical solve; tilted solves are clean).
-ARM_BASE_XY = {"right": (0.469, -0.019), "left": (-0.469, -0.019)}
+# The grasp approach: near-horizontal, tilted 45 degrees down and
+# pointing inward (away from the arm's own base). A straight-down
+# approach is IMPOSSIBLE on this gripper: the base housing's collision
+# meshes reach the table before the pads reach a 4 cm part (measured
+# via contacts: 1-8 cm of penetration in every vertical solve; tilted
+# solves are clean). An adaptive base-toward-target axis was tried and
+# REVERTED — its y-tilt degraded the wrist pose and every trial failed.
 
 
 def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
@@ -521,8 +526,19 @@ _PICK_PLACE_SEGMENTS = (
 )
 
 
-def kitting_waypoints(arm: str, part_xy: Any) -> list[tuple[Any, float, float]]:
-    """The Cartesian choreography for one arm: (target_xyz, grip, secs).
+class Waypoint(NamedTuple):
+    """One choreography beat — typed because the tuple's arity already
+    lied once (an annotation described a removed 3-tuple shape while
+    the code appended and unpacked four)."""
+
+    name: str
+    target: list[float]
+    grip: float
+    seconds: float
+
+
+def kitting_waypoints(arm: str, part_xy: Any) -> list[Waypoint]:
+    """The Cartesian choreography for one arm.
 
     Targets before `above_slot` track the PART's spawn position;
     from `above_slot` on they track the slot. The demo generator turns
@@ -532,7 +548,7 @@ def kitting_waypoints(arm: str, part_xy: Any) -> list[tuple[Any, float, float]]:
     plan = []
     for name, dz, grip, secs in _PICK_PLACE_SEGMENTS:
         anchor = slot if name in ("above_slot", "lower", "open", "retreat") else part_xy
-        plan.append((name, [anchor[0], anchor[1], PART_HALF + dz], grip, secs))
+        plan.append(Waypoint(name, [anchor[0], anchor[1], PART_HALF + dz], grip, secs))
     return plan
 
 
@@ -672,6 +688,14 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
         segment_index = 0
         grasp_retried = False
         while segment_index < len(plan):
+            if physics_step >= steps_total:
+                # Out of clock mid-choreography: solving IK against a
+                # frozen sim and returning states that end mid-reach
+                # with no signal was the silent-truncation gap the
+                # review named. Record it and stop pretending.
+                if stats is not None:
+                    stats["truncated"] = True
+                break
             name, target_xyz, grip, secs = plan[segment_index]
             segment_index += 1
             command_reach(target_xyz, grip, secs)

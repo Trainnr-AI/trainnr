@@ -21,3 +21,8 @@ node_modules/
 pipeline/runs/
 __pycache__/
 *.egg-info/
+# Generated debris: MuJoCo's cwd log, episode/training
+# output (artifacts travel by hash, never as source), ruff cache.
+MUJOCO_LOG.TXT
+runs/
+.ruff_cache/

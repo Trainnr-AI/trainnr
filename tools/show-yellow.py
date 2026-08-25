@@ -28,6 +28,7 @@ jadr = model.body("prop").jntadr[0]
 cq = model.jnt_qposadr[jadr]
 
 from rq_pipeline.tasks.yellow import (  # noqa: E402
+    REAR_PICK_SEQUENCE,
     REAR_GRIP,
     REAR_HOVER,
     REAR_LIFT,
@@ -35,12 +36,13 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
     REAR_TUCK,
 )
 
+# Derived from REAR_PICK_SEQUENCE — the hand-retyped durations here had
+# ALREADY drifted from the source (1.5/2.0/1.2/2.0 vs 1.2/1.8/1.0/1.8,
+# review 2026-08-26): the named two-copies bug, in a viewer.
 SEQ = [
-    (REAR_TUCK, 1.5, "tuck"),
-    (REAR_HOVER, 1.5, "hover"),
-    (REAR_REACH, 2.0, "reach"),
-    (REAR_GRIP, 1.2, "grip"),
-    (REAR_LIFT, 2.0, "lift"),
+    *((pose, secs, name) for (pose, secs), name in zip(
+        REAR_PICK_SEQUENCE, ("tuck", "hover", "reach", "grip", "lift")
+    )),
     (REAR_LIFT, 1.5, "hold"),
     (REAR_REACH, 2.0, "lower"),
     ([*REAR_REACH[:4], 0.5], 1.0, "release"),

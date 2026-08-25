@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from typing import Any
 
 
-def solve_arm_ik(  # noqa: PLR0913 - the solver's knobs are its interface
+def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     model: Any,
     data: Any,
     *,
@@ -69,11 +69,27 @@ def solve_arm_ik(  # noqa: PLR0913 - the solver's knobs are its interface
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if joint_id < 0:
             raise ValueError(f"no joint named {name!r}")
+        if model.jnt_type[joint_id] not in (
+            mujoco.mjtJoint.mjJNT_HINGE,
+            mujoco.mjtJoint.mjJNT_SLIDE,
+        ):
+            # A free or ball joint has multi-dof addressing; the scalar
+            # dq indexing below would write plausible-looking garbage.
+            raise ValueError(
+                f"joint {name!r} is not single-dof (hinge/slide); "
+                "solve_arm_ik cannot drive it"
+            )
         joint_ids.append(joint_id)
+    import numpy as _np  # noqa: PLC0415
+
     dof_columns = [int(model.jnt_dofadr[j]) for j in joint_ids]
     qpos_rows = [int(model.jnt_qposadr[j]) for j in joint_ids]
-    lower = model.jnt_range[joint_ids, 0]
-    upper = model.jnt_range[joint_ids, 1]
+    # An UNLIMITED joint carries range (0, 0); clamping to that froze
+    # every rangeless joint at zero — caught by this module's first
+    # direct test (2026-08-26). Only declared limits clamp.
+    limited = model.jnt_limited[joint_ids].astype(bool)
+    lower = _np.where(limited, model.jnt_range[joint_ids, 0], -_np.inf)
+    upper = _np.where(limited, model.jnt_range[joint_ids, 1], _np.inf)
 
     target = np.asarray(target_pos, dtype=float)
     down = np.asarray(approach_axis, dtype=float)
@@ -110,7 +126,7 @@ def solve_arm_ik(  # noqa: PLR0913 - the solver's knobs are its interface
         gram = jac @ jac.T + damping * np.eye(jac.shape[0])
         dq = jac.T @ np.linalg.solve(gram, err)
         dq = np.clip(dq, -step_limit, step_limit)
-        for row, (index, _) in zip(qpos_rows, enumerate(joint_ids), strict=True):
+        for index, row in enumerate(qpos_rows):
             data.qpos[row] = float(
                 np.clip(data.qpos[row] + dq[index], lower[index], upper[index])
             )

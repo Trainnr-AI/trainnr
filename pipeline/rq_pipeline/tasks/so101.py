@@ -44,11 +44,11 @@ DEFAULT_ARM_XML = (
     Path(__file__).resolve().parents[3] / "robots" / "so101-nominal" / "so101.xml"
 )
 
-# One definition repo-wide; components.py imports it from here (it
-# already imports from this module, so this direction has no cycle).
-ARM_SENSOR_WIDTH = 12  # qpos+qvel slice width of the arm's sensordata
+# The SO-101 arm's sensor block: six jointpos then six jointvel.
+# (aloha2.py declares its own for the 14-servo rig; each rig owns its
+# census constant.)
+ARM_SENSOR_WIDTH = 12
 
-# The arm's own sensor block: six jointpos then six jointvel.
 
 FINGERTIP_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
 

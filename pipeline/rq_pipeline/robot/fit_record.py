@@ -173,7 +173,13 @@ def load_fit_records(bundle_dir: Path) -> tuple[FitRecord, ...]:
         raw["parameters"] = tuple(
             IdentifiedParameter(**parameter) for parameter in raw["parameters"]
         )
-        records.append(FitRecord(**raw))
+        try:
+            records.append(FitRecord(**raw))
+        except TypeError as error:
+            raise ValueError(
+                f"fit record {path} has unknown field(s) — written by newer "
+                f"code? ({error})"
+            ) from error
     return tuple(sorted(records, key=lambda record: record.created_utc))
 
 
@@ -191,25 +197,68 @@ def cross_run_spread(records: tuple[FitRecord, ...]) -> dict[str, tuple[float, f
     return {name: (min(values), max(values)) for name, values in estimates.items()}
 
 
+@dataclass(frozen=True)
+class SpreadVerdict:
+    """One parameter's cross-run judgement — the single spread truth.
+
+    The review (2026-08-26) caught the summary and the artifact
+    encoding this rule TWICE with a divergence: the artifact filtered
+    unbounded half-widths before averaging, the summary did not — so a
+    parameter with one unbounded interval made the summary's mean
+    infinite and it printed "runs agree" for exactly the parameter
+    that was never pinned. One implementation now; both faces render it.
+    """
+
+    lowest: float
+    highest: float
+    mean_half_width: float | None  # None when every interval is unbounded
+
+    @property
+    def exceeds(self) -> bool:
+        if self.mean_half_width is None:
+            return False
+        return self.highest - self.lowest > 2.0 * self.mean_half_width
+
+    @property
+    def verdict(self) -> str:
+        return (
+            "spread EXCEEDS per-run intervals — trust the spread"
+            if self.exceeds
+            else "runs agree within their intervals"
+        )
+
+
+def spread_verdicts(records: tuple[FitRecord, ...]) -> dict[str, SpreadVerdict]:
+    """Per parameter: estimate span vs mean FINITE interval width."""
+    widths: dict[str, list[float]] = {}
+    for record in records:
+        for parameter in record.parameters:
+            widths.setdefault(parameter.name, []).append(parameter.half_width)
+    verdicts = {}
+    for name, (low, high) in cross_run_spread(records).items():
+        finite = [width for width in widths[name] if width != float("inf")]
+        verdicts[name] = SpreadVerdict(
+            lowest=low,
+            highest=high,
+            mean_half_width=sum(finite) / len(finite) if finite else None,
+        )
+    return verdicts
+
+
 def spread_summary(records: tuple[FitRecord, ...]) -> str:
     """Human-readable cross-run report: spread beside mean interval width."""
     if not records:
         return "no fit records"
     lines = [f"{len(records)} fit run(s)"]
-    widths: dict[str, list[float]] = {}
-    for record in records:
-        for parameter in record.parameters:
-            widths.setdefault(parameter.name, []).append(parameter.half_width)
-    for name, (low, high) in cross_run_spread(records).items():
-        mean_half_width = sum(widths[name]) / len(widths[name])
-        verdict = (
-            "spread EXCEEDS per-run intervals — trust the spread"
-            if high - low > 2.0 * mean_half_width
-            else "runs agree within their intervals"
+    for name, judged in spread_verdicts(records).items():
+        width = (
+            f"{judged.mean_half_width:.6g}"
+            if judged.mean_half_width is not None
+            else "unbounded"
         )
         lines.append(
-            f"  {name}: estimates span [{low:.6g}, {high:.6g}], "
-            f"mean half-width {mean_half_width:.6g} — {verdict}"
+            f"  {name}: estimates span [{judged.lowest:.6g}, {judged.highest:.6g}], "
+            f"mean half-width {width} — {judged.verdict}"
         )
     return "\n".join(lines)
 
@@ -217,12 +266,8 @@ def spread_summary(records: tuple[FitRecord, ...]) -> str:
 def write_spread_record(bundle_dir: Path) -> Path:
     """Persist the cross-run verdict — the number the house calls the truth.
 
-    The doctrine ("when the spread dwarfs the intervals, the intervals
-    are lying") lived only in README prose while every record shipped
-    its per-run confidence; the review called that a claim the contents
-    don't support. This writes `fits/SPREAD.json`: per-parameter spread
-    beside mean interval width with the exceeds/agrees verdict, plus
-    the records it summarizes so the verdict is bound to its inputs.
+    `fits/SPREAD.json`: per-parameter spread beside mean interval width
+    with the exceeds/agrees verdict, bound to the records it summarizes.
     """
     minimum_records = 2  # a spread of one run is not a spread
     records = load_fit_records(bundle_dir)
@@ -231,28 +276,17 @@ def write_spread_record(bundle_dir: Path) -> Path:
             f"cross-run spread needs at least {minimum_records} fit records, "
             f"got {len(records)}"
         )
-    widths: dict[str, list[float]] = {}
-    for record in records:
-        for parameter in record.parameters:
-            widths.setdefault(parameter.name, []).append(parameter.half_width)
-    spread = {}
-    for name, (low, high) in cross_run_spread(records).items():
-        finite = [width for width in widths[name] if width != float("inf")]
-        mean_half_width = sum(finite) / len(finite) if finite else None
-        exceeds = mean_half_width is not None and high - low > 2.0 * mean_half_width
-        spread[name] = {
-            "lowest_estimate": low,
-            "highest_estimate": high,
-            "mean_half_width": mean_half_width,
-            "verdict": (
-                "spread EXCEEDS per-run intervals — trust the spread"
-                if exceeds
-                else "runs agree within their intervals"
-            ),
-        }
     payload = {
         "summarizes": [record.recording for record in records],
-        "spread": spread,
+        "spread": {
+            name: {
+                "lowest_estimate": judged.lowest,
+                "highest_estimate": judged.highest,
+                "mean_half_width": judged.mean_half_width,
+                "verdict": judged.verdict,
+            }
+            for name, judged in spread_verdicts(records).items()
+        },
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "code": _code_version(),
     }

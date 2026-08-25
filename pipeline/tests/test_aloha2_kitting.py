@@ -72,9 +72,40 @@ class KittingScene(unittest.TestCase):
             model, task.protocol.perturb(0, home), stats=stats
         )
         self.assertTrue(task.protocol.success(states, sensors), stats)
+        # The proven band needs no retry and never truncates — if either
+        # fires here, robustness regressed and the stats say where.
+        self.assertEqual(stats.get("retries", []), [])
+        self.assertNotIn("truncated", stats)
         # The dataset contract: one 14-wide action row per control tick.
         self.assertEqual(actions.shape[1], 14)
         self.assertEqual(len(actions), task.protocol.steps // 10)
+
+    def test_referee_slice_reads_the_left_pad(self) -> None:
+        """Pin the sensor LAYOUT the success predicate assumes.
+
+        LEFT_GRIPPER_POS_SLICE indexes sensordata by position; a sensor
+        declared before the referees would shift it and transfer/kitting
+        would score garbage silently (the review's E2).
+        """
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            LEFT_GRIPPER_POS_SLICE,
+            build_kitting,
+        )
+
+        model = build_kitting().spec.compile()
+        data = mujoco.MjData(model)
+        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "neutral_pose")
+        mujoco.mj_resetDataKeyframe(model, data, key)
+        mujoco.mj_forward(model, data)
+        pad = data.geom_xpos[
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "left/left_g1")
+        ]
+        self.assertTrue(
+            np.allclose(data.sensordata[LEFT_GRIPPER_POS_SLICE], pad, atol=1e-9)
+        )
 
 
 if __name__ == "__main__":

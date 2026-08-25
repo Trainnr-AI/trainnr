@@ -43,6 +43,25 @@ class FromCsv(unittest.TestCase):
             with self.assertRaises(ValueError):
                 excitation_from_csv(path, time="t", controls=["u"], measurements=["y"])
 
+    def test_non_numeric_value_names_the_column(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = _write(directory, "t,u,y\n0,0,0\n1,oops,1\n")
+            with self.assertRaises(ValueError) as caught:
+                excitation_from_csv(path, time="t", controls=["u"], measurements=["y"])
+        self.assertIn("'u'", str(caught.exception))
+
+    def test_single_row_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = _write(directory, "t,u,y\n0,0,0\n")
+            with self.assertRaises(ValueError):
+                excitation_from_csv(path, time="t", controls=["u"], measurements=["y"])
+
+    def test_headerless_file_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = _write(directory, "")
+            with self.assertRaises(ValueError):
+                excitation_from_csv(path, time="t", controls=["u"], measurements=["y"])
+
 
 if __name__ == "__main__":
     unittest.main()
