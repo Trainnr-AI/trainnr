@@ -33,6 +33,17 @@ harden the surfaces the operator's platform brief added
 amended (physics splats, doc 23 cross-linked); one decided (MLOps
 stack); the rest confirmed with refinements.
 
+**Fifth pass: 2026-08-26 — Isaac Lab Arena, read code-first.** After
+T5's training loop closed on the WSL card, six fields of NVIDIA's
+Arena (the one shipping composable-evaluation system) were read in
+parallel from a repomix bundle of its whole repository — docs and
+source, 977 files — one agent per field, every claim cited to a bundle
+line. Results in docs 39–44; verdicts and the order of adoption in
+[../30-the-full-loop.md §7](../30-the-full-loop.md). The finding that
+ties them: Arena has the coverage machinery and no honesty layer — no
+interval anywhere in the code — and five of six reports converge on
+one artifact we lack, the per-trial record.
+
 Read [19-the-system.md](19-the-system.md) first; it is the map.
 
 | Doc | Field | The one thing to remember |
@@ -57,6 +68,12 @@ Read [19-the-system.md](19-the-system.md) first; it is the map.
 | [36](36-newton-status.md) | Newton status | One organism with MuJoCo, not a fork — and **MJX-Warp gives the Newton-era solver on the sysid'd mjModel directly** |
 | [37](37-mlops-tooling.md) | MLOps tooling | **wandb is the only tracker robot learning uses** — adopt its API surface with the Trackio escape; the registry stays custom |
 | [38](38-fleet-data-planes.md) | Fleet data planes | Every fleet converged on the three tiers; **the trigger-campaign retro-pull is the load-bearing AV pattern**; our calibration chain is ahead of practice |
+| [39](39-arena-metrics-and-progress.md) | Arena: metrics & progress | `success_rate = np.mean`, no interval or paired test anywhere — **adopt the progress funnel** (ordered predicate chains, events, `success ≠ all_complete` flag), computed offline over the arrays we keep |
+| [40](40-arena-experiments-and-runner.md) | Arena: experiments & runner | The per-episode JSONL row is the contract between evaluation and analysis — **adopt the record with the pairing key Arena lacks**, run-per-directory output, failed runs as data; skip OSMO/Hydra |
+| [41](41-arena-variations-and-sensitivity.md) | Arena: variations & sensitivity | Samplers hit the global RNG, nothing is paired; sensitivity is a neural posterior on 10 episodes — **adopt the schema with `draw(trial)`, answer the question with a main-effects table in the certificate** |
+| [42](42-arena-placement-and-relations.md) | Arena: placement & relations | Relations → Adam solver → validators → pools, with failed layouts stored by default — **adopt the validators on `mj_forward` contacts and `arm_ik`, raise on exhaustion**; skip the solver |
+| [43](43-arena-policy-interface.md) | Arena: policy interface | One blocking `get_action`, horizons picked by eye — **executed horizon becomes a protocol field**, rig/model adapter split, a chunk-replay client over openpi's websocket for π0.5 |
+| [44](44-arena-environment-and-agentic-generation.md) | Arena: env spec & agent layer | "Validation only proves a spec is admissible, not that it is the environment you asked for" — **the existence proof for §3.6**: load gates against the compiled model, critic loop capped at 3, hand-written predicates and physics |
 
 ## The five findings that changed the picture
 
