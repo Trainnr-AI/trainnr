@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from rq_pipeline.physics.backend import (
     FullPhysicsLayout,
     ModelCounts,
+    census,
     check_rollout_shapes,
     instrument_stamp,
     no_model_message,
@@ -45,12 +46,13 @@ def _require_mujoco() -> Any:
     return mujoco
 
 
-def keyframe_state(model: Any, name: str) -> numpy.ndarray:
-    """The named keyframe of a COMPILED model as a FULLPHYSICS state row.
+def seat_at_keyframe(model: Any, data: Any, name: str) -> None:
+    """Reset `data` to the named keyframe and forward — the ritual
+    `keyframe_state` packs into a row and a caller who needs the live
+    `MjData` (a probe reading `sensordata`, say) runs directly.
 
-    Free function on purpose: the backend method below wraps it for
-    harness callers, but demo generators and tools hold a bare model and
-    were each re-typing the reset-forward-getState ritual.
+    Refuses by name, listing what the model actually has: a keyframe
+    typo should not read as "the pose is at the origin."
     """
     mujoco = _require_mujoco()
 
@@ -61,9 +63,21 @@ def keyframe_state(model: Any, name: str) -> numpy.ndarray:
             for i in range(model.nkey)
         ]
         raise KeyError(f"no keyframe {name!r} in model; it has {names}")
-    data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, key)
     mujoco.mj_forward(model, data)
+
+
+def keyframe_state(model: Any, name: str) -> numpy.ndarray:
+    """The named keyframe of a COMPILED model as a FULLPHYSICS state row.
+
+    Free function on purpose: the backend method below wraps it for
+    harness callers, but demo generators and tools hold a bare model and
+    were each re-typing the reset-forward-getState ritual.
+    """
+    mujoco = _require_mujoco()
+
+    data = mujoco.MjData(model)
+    seat_at_keyframe(model, data, name)
     return full_state(model, data)
 
 
@@ -232,13 +246,7 @@ class MuJoCoBackend:
         return self._model
 
     def counts(self) -> ModelCounts:
-        model = self._require_model()
-        return ModelCounts(
-            actuators=model.nu,
-            sensors=model.nsensor,
-            geoms=model.ngeom,
-            cameras=model.ncam,
-        )
+        return census(self._require_model())
 
     def default_initial_state(self) -> numpy.ndarray:
         """The model's RESET state (qpos0, zero velocity) as a

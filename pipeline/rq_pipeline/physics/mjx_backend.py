@@ -16,9 +16,9 @@ CPU MuJoCo stays the metrology reference. The acceptance gauntlet
 divergence bound against the reference before anything downstream
 trusts a trajectory.
 
-The gymnasium-env wrapper (a vectorized env over the same tasks) lands
-with the GPU card where it can be measured; this module is the engine
-seam it will drive.
+`MJXBatchedStepper` gives the same `reset`/`step` shape as the CPU
+`Stepper` over a batch of worlds at once — the seam the gymnasium env
+would vectorize over once it's measured on the GPU card.
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from rq_pipeline.physics.backend import (
     ROLLOUT_STATE_RANK,
     FullPhysicsLayout,
     ModelCounts,
+    census,
     check_rollout_shapes,
     instrument_stamp,
     no_model_message,
@@ -147,13 +148,7 @@ class MJXWarpBackend:
         return keyframe_state(self._require_model(), name)
 
     def counts(self) -> ModelCounts:
-        model = self._require_model()
-        return ModelCounts(
-            actuators=model.nu,
-            sensors=model.nsensor,
-            geoms=model.ngeom,
-            cameras=model.ncam,
-        )
+        return census(self._require_model())
 
     def rollout(
         self,

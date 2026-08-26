@@ -121,3 +121,15 @@ LOAD_DOORS = ("load_spec", "load_model", "load_mjcf_string")
 
 def no_model_message() -> str:
     return f"no model loaded — call one of {', '.join(LOAD_DOORS)} first"
+
+
+def census(model: Any) -> ModelCounts:
+    """The fail-loudly census, read the same way off any compiled
+    mjModel — MuJoCo's and MJX's share the field names, so both
+    backends' `counts()` is this one call."""
+    return ModelCounts(
+        actuators=model.nu,
+        sensors=model.nsensor,
+        geoms=model.ngeom,
+        cameras=model.ncam,
+    )

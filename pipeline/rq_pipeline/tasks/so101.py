@@ -38,6 +38,7 @@ from typing import Any
 
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
+from rq_pipeline.physics.mujoco_backend import seat_at_keyframe
 from rq_pipeline.protocol import EpisodeProtocol
 from rq_pipeline.tasks.registry import register
 from rq_pipeline.tasks.scene import pin_nominal_options, set_render_budget
@@ -182,11 +183,7 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
 
     probe_model = scene.compile()
     probe_data = mujoco.MjData(probe_model)
-    key = mujoco.mj_name2id(probe_model, mujoco.mjtObj.mjOBJ_KEY, HOME_KEYFRAME)
-    if key < 0:
-        raise KeyError(f"no keyframe {HOME_KEYFRAME!r} in the probe model")
-    mujoco.mj_resetDataKeyframe(probe_model, probe_data, key)
-    mujoco.mj_forward(probe_model, probe_data)
+    seat_at_keyframe(probe_model, probe_data, HOME_KEYFRAME)
     target = tuple(float(v) for v in probe_data.sensordata[FINGERTIP_SLICE])
 
     def perturb(trial: int, home: Any) -> Any:
