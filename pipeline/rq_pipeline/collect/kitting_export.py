@@ -25,6 +25,7 @@ import json
 from pathlib import Path
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.tasks.aloha2 import KITTING_INSTRUCTION
 
 PROVENANCE_FILE = "provenance.json"
 SERVO_NAMES = [
@@ -57,7 +58,7 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     root: Path,
     *,
     repo_id: str = "rq-pipeline/aloha2-kitting",
-    task: str = "kit both parts into their slots",
+    task: str = KITTING_INSTRUCTION,
     bundle_dir: Path = DEFAULT_BUNDLE,
     use_videos: bool = True,
 ) -> Path:

@@ -292,9 +292,18 @@ needed for step 3's checkpoint.
   `lerobot-eval`), so a runner that keeps only a success list still
   leaves events, seed and stamps behind. Pinned: the kitting expert
   walks all four; a limp policy leaves an empty chain. 196 sim tests.
+- **The `Task` unification (§6)**: one frozen `Task(name, spec,
+  protocol, cameras, state_width, instruction, target)` in
+  `rq_pipeline/tasks/task.py`, validated on construction (a positive
+  state width, a non-empty instruction, at least one camera) replaces
+  `SO101Task` and `ALOHA2Task`; every builder states its rig's jointpos
+  block and its sentence, and `RobotiqEnv(task, source=…)` reads them
+  instead of taking them as keyword arguments. `KITTING_INSTRUCTION` is
+  one string read by the exporter and the task. All six tasks — the
+  four SO-101 and the two ALOHA 2 — register as `robotiq/<task>-v0` on
+  their own bundles' stamps. 199 sim tests.
 - Not yet: the variation schema with `draw(trial)` and the main-effects
-  table; the `Task` unification (§6) beyond `cameras`; `train-watch`
-  re-verified on screen after its rewrite.
+  table; `train-watch` re-verified on screen after its rewrite.
 
 ## 10. Open questions (carried from 45 §4 and 46 §5)
 

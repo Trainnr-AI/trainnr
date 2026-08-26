@@ -146,9 +146,7 @@ class TransferCubeScene(unittest.TestCase):
     def _first_frame(self, task):
         from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
 
-        env = RobotiqEnv(
-            task, state_width=14, instruction="transfer", source=f"{task.name}@test"
-        )
+        env = RobotiqEnv(task, source=f"{task.name}@test")
         try:
             observation, _ = env.reset(seed=0)
             return observation["pixels"]["top"]

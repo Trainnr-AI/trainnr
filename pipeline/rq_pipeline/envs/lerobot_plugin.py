@@ -61,17 +61,17 @@ class RobotiqEnvConfig(EnvConfig):
     def __post_init__(self) -> None:
         if self.task not in TASKS:
             raise ValueError(f"no task {self.task!r}; the env knows {sorted(TASKS)}")
-        entry = TASKS[self.task]
-        # The action is one command per servo and the state one reading
-        # per servo: the same width on both rigs.
-        width = entry.state_width
+        # Building the task (an MjSpec, no compile) is cheap; its state
+        # width and cameras are the features. The action is one command
+        # per servo and the state one reading per servo: the same width.
+        task = TASKS[self.task].build()
+        width = task.state_width
         self.features = {
             ACTION: PolicyFeature(type=FeatureType.ACTION, shape=(width,)),
             "agent_pos": PolicyFeature(type=FeatureType.STATE, shape=(width,)),
         }
         self.features_map = {ACTION: ACTION, "agent_pos": OBS_STATE}
-        # Cameras are the task's; building the spec (no compile) is cheap.
-        for camera in entry.build().cameras:
+        for camera in task.cameras:
             key = f"pixels/{camera.key}"
             self.features[key] = PolicyFeature(
                 type=FeatureType.VISUAL,

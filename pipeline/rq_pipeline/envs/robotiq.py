@@ -60,11 +60,13 @@ from rq_pipeline.evaluate.records import (
 )
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.robot.model_checks import assert_model_alive
-from rq_pipeline.tasks.aloha2 import (
-    BUNDLE_XML,
-    SERVOS,
-    build_kitting,
-    build_transfer_cube,
+from rq_pipeline.tasks.aloha2 import BUNDLE_XML, build_kitting, build_transfer_cube
+from rq_pipeline.tasks.so101 import (
+    DEFAULT_ARM_XML,
+    build_insert,
+    build_lift,
+    build_reach,
+    build_stack,
 )
 
 RGB_CHANNELS = 3
@@ -75,42 +77,41 @@ GYM_ID_VERSION = "v0"
 
 @dataclass(frozen=True)
 class TaskEntry:
-    """What the env needs beyond the builder: the rig's state block and
-    the language the task is judged under."""
+    """A builder and the bundle it composes, whose hash stamps the source."""
 
     build: Callable[[], Any]
-    state_width: int
-    instruction: str
+    bundle_dir: Path
 
 
-# The tasks anyone with gymnasium can construct by id. Instructions are the
-# strings the datasets were exported with (collect/kitting_export.py).
+# The tasks anyone with gymnasium can construct by id, on the nominal
+# bundles. State width, cameras and instruction are the Task's own.
 TASKS: dict[str, TaskEntry] = {
-    "transfer_cube": TaskEntry(
-        build_transfer_cube, SERVOS, "transfer the cube to the left gripper"
-    ),
-    "kitting": TaskEntry(build_kitting, SERVOS, "kit both parts into their slots"),
+    "transfer_cube": TaskEntry(build_transfer_cube, BUNDLE_XML.parent),
+    "kitting": TaskEntry(build_kitting, BUNDLE_XML.parent),
+    "reach": TaskEntry(build_reach, DEFAULT_ARM_XML.parent),
+    "lift": TaskEntry(build_lift, DEFAULT_ARM_XML.parent),
+    "block_stack": TaskEntry(build_stack, DEFAULT_ARM_XML.parent),
+    "tool_insert": TaskEntry(build_insert, DEFAULT_ARM_XML.parent),
 }
 
 
 @functools.cache
 def bundle_source(bundle_dir: Path = BUNDLE_XML.parent) -> str:
-    """The rig bundle's `name@hash` — hashed once per process."""
+    """A bundle's `name@hash` — hashed once per process."""
     return stamp(bundle_dir.name, bundle_dir)
 
 
 class RobotiqEnv(gym.Env):
-    """A task (spec + protocol + cameras) as a gymnasium env.
+    """A `Task` (spec + protocol + cameras + state width + instruction)
+    as a gymnasium env.
 
-    `state_width` is the bundle's jointpos block the policy may see (six
-    for the SO-101, fourteen for ALOHA 2) — no default, a silent six on a
-    fourteen-servo rig would feed a policy half its state with no error.
-    `instruction` is the language the task is judged under, exposed as
-    `task_description` for evaluators that read it. With `record_to`, the
-    env appends one `EpisodeRecord` per finished episode — verdict,
-    milestones, seed, stamps — so a runner that keeps only a success list
-    (LeRobot's) still leaves our full row behind; `policy_name` is what
-    the row calls the policy, since the env never sees it.
+    The task's `state_width` is the `agent_pos` the policy sees and its
+    `instruction` is exposed as `task_description` for evaluators that
+    read it. With `record_to`, the env appends one `EpisodeRecord` per
+    finished episode — verdict, milestones, seed, stamps — so a runner
+    that keeps only a success list (LeRobot's) still leaves our full row
+    behind; `policy_name` is what the row calls the policy, since the
+    env never sees it.
     """
 
     metadata: ClassVar[dict[str, Any]] = {
@@ -118,17 +119,17 @@ class RobotiqEnv(gym.Env):
         "render_fps": 0,  # per instance, from the model's timestep
     }
 
-    def __init__(  # noqa: PLR0913 - keyword-only identity, each part of the row
+    def __init__(
         self,
         task: Any,
         *,
-        state_width: int,
-        instruction: str,
         source: str,
         render_mode: str = "rgb_array",
         record_to: Path | None = None,
         policy_name: str = "policy",
     ) -> None:
+        state_width = task.state_width
+        instruction = task.instruction
         if "@" not in source:
             raise ValueError(
                 f"source must be a name@hash stamp, got {source!r} — the same "
@@ -326,9 +327,7 @@ def make_env(
     entry = TASKS[task]
     return RobotiqEnv(
         entry.build(),
-        state_width=entry.state_width,
-        instruction=entry.instruction,
-        source=bundle_source(),
+        source=bundle_source(entry.bundle_dir),
         render_mode=render_mode,
         record_to=Path(record_to) if record_to is not None else None,
         policy_name=policy_name,

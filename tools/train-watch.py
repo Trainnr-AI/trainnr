@@ -49,7 +49,6 @@ bootstrap()
 from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     CUBE_Z_STATE_INDEX,
-    SERVOS,
     act_sim_state,
     build_transfer_cube,
     ctrl_from_act_sim_action,
@@ -62,7 +61,6 @@ EXTRA = re.compile(r"(l1_loss|kld_loss):([\d.]+)")
 COLLISION_GROUP = 3
 CAMERA_EVERY_TICKS = 5  # 50 Hz control -> 10 Hz frames in Rerun
 LIVE_SHADOWSIZE = 2048
-INSTRUCTION = "transfer the cube"
 
 
 def parse_args():
@@ -141,7 +139,9 @@ def tail_training(process, seen_steps):
         seen_steps.append(step)
 
 
-def load_checkpoint(path: Path, action_space: str, device: str = "cuda"):
+def load_checkpoint(
+    path: Path, action_space: str, instruction: str, device: str = "cuda"
+):
     """A checkpoint as `act(observation) -> ctrl` plus its reset, through
     LeRobot's own pre/post-processors and `preprocess_observation` — the
     same path `lerobot-eval` takes, so nothing is hand-converted here."""
@@ -170,7 +170,7 @@ def load_checkpoint(path: Path, action_space: str, device: str = "cuda"):
         if translate:
             raw["agent_pos"] = act_sim_state(observation["agent_pos"])
         batch = preprocess_observation(raw)
-        batch["task"] = [INSTRUCTION]
+        batch["task"] = [instruction]
         with torch.inference_mode():
             action = postprocessor(policy.select_action(preprocessor(batch)))
         action = action.squeeze(0).cpu().numpy()
@@ -183,10 +183,7 @@ class Watcher:
     """The env, the viewer, the mirror: plays one episode per checkpoint."""
 
     def __init__(self, look: str):
-        task = build_transfer_cube(look=look)
-        self.env = RobotiqEnv(
-            task, state_width=SERVOS, instruction=INSTRUCTION, source=bundle_source()
-        )
+        self.env = RobotiqEnv(build_transfer_cube(look=look), source=bundle_source())
         self.env.model.vis.quality.shadowsize = LIVE_SHADOWSIZE
         self.mirror = RigMirror(
             self.env.model, model_colors=True, skip_groups=(COLLISION_GROUP,)
@@ -267,7 +264,9 @@ class Watcher:
     def play(self, checkpoint_dir: Path, step: int, action_space: str):
         rr.set_time("train_step", sequence=step)
         rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
-        act, reset = load_checkpoint(checkpoint_dir, action_space)
+        act, reset = load_checkpoint(
+            checkpoint_dir, action_space, self.env.task_description
+        )
         reset()
         success = self._episode(
             lambda _tick, observation: act(observation),
@@ -305,7 +304,9 @@ def play_only(args) -> None:
     rr_session(f"robotiq-play-{checkpoint.parent.name}", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     watcher = Watcher(args.look)
-    act, reset = load_checkpoint(checkpoint, args.action_space)
+    act, reset = load_checkpoint(
+        checkpoint, args.action_space, watcher.env.task_description
+    )
     name = checkpoint.parent.name
     successes = 0
     for trial in range(args.trials):

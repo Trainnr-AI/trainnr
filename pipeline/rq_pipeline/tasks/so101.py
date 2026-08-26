@@ -33,12 +33,12 @@ worth measuring rather than assuming.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.evaluate.harness import EpisodeProtocol
-from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS, CameraSpec
+from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
+from rq_pipeline.tasks.task import Task
 
 ARM_PREFIX = "arm_"
 DEFAULT_ARM_XML = (
@@ -49,6 +49,8 @@ DEFAULT_ARM_XML = (
 # (aloha2.py declares its own for the 14-servo rig; each rig owns its
 # census constant.)
 ARM_SENSOR_WIDTH = 12
+# The jointpos half is what a policy sees as `agent_pos`.
+STATE_WIDTH = ARM_SENSOR_WIDTH // 2
 
 
 FINGERTIP_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
@@ -64,19 +66,20 @@ _REACH_TOLERANCE_M = 0.03
 _QPOS_OFFSET = 1
 
 
-@dataclass(frozen=True)
-class SO101Task:
-    """A composed scene and the protocol that scores episodes in it.
-
-    `cameras` is the ArmnetBench rig every scene here carries (the
-    front/top/wrist cameras `_scene_with_arm` places), so the gymnasium
-    env can render what a released checkpoint expects."""
-
-    name: str
-    spec: Any
-    protocol: EpisodeProtocol
-    target: tuple[float, float, float] | None = None
-    cameras: tuple[CameraSpec, ...] = ARMNETBENCH_CAMERAS
+def _so101_task(
+    name: str, scene: Any, protocol: EpisodeProtocol, instruction: str, **extra: Any
+) -> Task:
+    """Every scene here carries the ArmnetBench rig (the front/top/wrist
+    cameras `_scene_with_arm` places) and the six-joint state block."""
+    return Task(
+        name=name,
+        spec=scene,
+        protocol=protocol,
+        cameras=ARMNETBENCH_CAMERAS,
+        state_width=STATE_WIDTH,
+        instruction=instruction,
+        **extra,
+    )
 
 
 def _scene_with_arm(name: str, arm_xml: Path) -> Any:
@@ -139,7 +142,7 @@ def _add_armnetbench_cameras(scene: Any) -> None:
     )
 
 
-def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """Reach: fingertip to the home keyframe's fingertip position, held.
 
     The target is COMPUTED from the bundle's own home keyframe rather
@@ -177,16 +180,17 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
         distances = np.linalg.norm(tail - np.array(target), axis=1)
         return bool(distances.max() < _REACH_TOLERANCE_M)
 
-    return SO101Task(
-        name="reach",
-        spec=scene,
-        protocol=EpisodeProtocol(
+    return _so101_task(
+        "reach",
+        scene,
+        EpisodeProtocol(
             trials=_TRIALS,
             steps=_STEPS,
             control_interval=_CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
         ),
+        "reach the target and hold",
         target=target,
     )
 
@@ -284,7 +288,7 @@ def _jitter_cube_a(trial: int, home: Any) -> Any:
     return initial
 
 
-def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """Lift: squeeze the cube out of the pocket and hold it clear.
 
     Success reads the cube's height from privileged STATE (the referee
@@ -316,16 +320,17 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
         tail = states[-_HOLD_STEPS:, CUBE_Z_STATE_INDEX]
         return bool(np.min(tail) > _LIFTED_HEIGHT_M)
 
-    return SO101Task(
-        name="lift",
-        spec=scene,
-        protocol=EpisodeProtocol(
+    return _so101_task(
+        "lift",
+        scene,
+        EpisodeProtocol(
             trials=_TRIALS,
             steps=_LIFT_STEPS,
             control_interval=_CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
         ),
+        "lift the cube out of the pocket and hold it clear",
     )
 
 
@@ -394,7 +399,7 @@ def scripted_stack_no_release(step: int, sensordata: Any) -> Any:
     return control
 
 
-def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """block_stack: cube A ends resting ON cube B, B undisturbed."""
     import numpy as np  # noqa: PLC0415
 
@@ -421,16 +426,17 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             and abs(b[:, 2] - _CUBE_B_HOME[2]).max() < _B_SETTLE_TOLERANCE_M
         )
 
-    return SO101Task(
-        name="block_stack",
-        spec=scene,
-        protocol=EpisodeProtocol(
+    return _so101_task(
+        "block_stack",
+        scene,
+        EpisodeProtocol(
             trials=_TRIALS,
             steps=_STACK_STEPS,
             control_interval=_CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
         ),
+        "stack cube A on cube B",
     )
 
 
@@ -457,7 +463,7 @@ scripted_insert = scripted_stack
 scripted_insert_no_release = scripted_stack_no_release
 
 
-def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
+def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """tool_insert: cube A seated inside the pocket, flat on the table."""
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
@@ -491,14 +497,15 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> SO101Task:
             and tail[:, 2].max() < _INSERT_SEATED_Z_M
         )
 
-    return SO101Task(
-        name="tool_insert",
-        spec=scene,
-        protocol=EpisodeProtocol(
+    return _so101_task(
+        "tool_insert",
+        scene,
+        EpisodeProtocol(
             trials=_TRIALS,
             steps=_STACK_STEPS,
             control_interval=_CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
         ),
+        "seat cube A inside the pocket",
     )

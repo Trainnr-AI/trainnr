@@ -26,12 +26,7 @@ class ArmnetBenchRig(unittest.TestCase):
         from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
         from rq_pipeline.tasks.so101 import build_reach  # noqa: PLC0415
 
-        env = RobotiqEnv(
-            build_reach(),
-            state_width=SO101_JOINTS,
-            instruction="reach the target",
-            source="so101-reach@testhash",
-        )
+        env = RobotiqEnv(build_reach(), source="so101-reach@testhash")
         try:
             observation, _ = env.reset(seed=0)
             pixels = observation["pixels"]

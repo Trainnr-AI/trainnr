@@ -36,6 +36,7 @@ from typing import Any, NamedTuple
 
 from rq_pipeline.evaluate.harness import EpisodeProtocol
 from rq_pipeline.evaluate.vision import CameraSpec
+from rq_pipeline.tasks.task import Task
 
 BUNDLE_XML = (
     Path(__file__).resolve().parents[3] / "robots" / "aloha2-nominal" / "aloha2.xml"
@@ -106,16 +107,6 @@ _HELD_RADIUS_M = 0.05  # cube centre within this of the left gripper referee
 # start was touched. Below the pad-jitter a settling box shows (<1 mm),
 # far below a nudge (1-2 cm measured when a close missed the part).
 MOVED_M = 0.01
-
-
-@dataclass(frozen=True)
-class ALOHA2Task:
-    """A composed scene and the protocol that scores episodes in it."""
-
-    name: str
-    spec: Any
-    protocol: EpisodeProtocol
-    cameras: tuple[CameraSpec, ...]
 
 
 def gripper_ctrl_from_normalized(value: float) -> float:
@@ -309,9 +300,7 @@ def _corner_fraction(trial: int, inset: float) -> tuple[float, float]:
     return (inset + fx * span, inset + fy * span)
 
 
-def build_transfer_cube(
-    bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK
-) -> ALOHA2Task:
+def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Task:
     """Transfer cube, gym-aloha's protocol on the identified rig.
 
     `look` selects the appearance: the bundle's own (`aloha2`) or the
@@ -361,9 +350,12 @@ def build_transfer_cube(
         left = sensors[step, LEFT_GRIPPER_POS_SLICE]
         return bool(np.linalg.norm(cube - left) < _HELD_RADIUS_M)
 
-    return ALOHA2Task(
+    return Task(
         name="transfer_cube",
         spec=scene,
+        cameras=ALOHA_TOP_CAMERAS,
+        state_width=SERVOS,
+        instruction="transfer the cube to the left gripper",
         protocol=EpisodeProtocol(
             trials=_TRIALS,
             steps=_STEPS,
@@ -377,7 +369,6 @@ def build_transfer_cube(
                 ("cube_at_left", cube_at_left),
             ),
         ),
-        cameras=ALOHA_TOP_CAMERAS,
     )
 
 
@@ -427,6 +418,9 @@ _KITTING_STEPS = 14000
 # reader alike: a lift that left the part below this never lifted it,
 # and closed-loop grip corrections stop inside this radius.
 _LIFT_CHECK_Z_M = 0.05
+# The sentence the dataset was exported with (collect/kitting_export.py)
+# and the policy is judged under — one string, both places read it.
+KITTING_INSTRUCTION = "kit both parts into their slots"
 _CORRECTION_DONE_M = 0.008
 _PART_IN_SLOT_XY_M = 0.035
 _PART_IN_SLOT_Z_M = 0.045
@@ -464,7 +458,7 @@ def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
     return (-0.7, 0.0, -0.71) if arm == "right" else (0.7, 0.0, -0.71)
 
 
-def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALOHA2Task:
+def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Task:
     """Kitting: each arm places its side's part into its slot."""
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
@@ -544,9 +538,12 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
         del sensors
         return all(in_slot(part, arm) for arm, part in parts(states, step).items())
 
-    return ALOHA2Task(
+    return Task(
         name="kitting",
         spec=scene,
+        cameras=ALOHA_TOP_CAMERAS,
+        state_width=SERVOS,
+        instruction=KITTING_INSTRUCTION,
         protocol=EpisodeProtocol(
             trials=_TRIALS,
             steps=_KITTING_STEPS,
@@ -561,7 +558,6 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
                 ("both_in_slot", both_in_slot),
             ),
         ),
-        cameras=ALOHA_TOP_CAMERAS,
     )
 
 

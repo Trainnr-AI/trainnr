@@ -9,7 +9,6 @@ divorced from the scene it judges is a bug waiting for a rename.
 
 from rq_pipeline.tasks.components import add_car, attach_arm, compose
 from rq_pipeline.tasks.so101 import (
-    SO101Task,
     build_insert,
     build_lift,
     build_reach,
@@ -20,9 +19,10 @@ from rq_pipeline.tasks.so101 import (
     scripted_stack,
     scripted_stack_no_release,
 )
+from rq_pipeline.tasks.task import Task
 
 __all__ = [
-    "SO101Task",
+    "Task",
     "add_car",
     "attach_arm",
     "build_insert",

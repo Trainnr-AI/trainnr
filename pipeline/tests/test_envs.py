@@ -78,9 +78,7 @@ class GymnasiumContract(unittest.TestCase):
             task = dataclasses.replace(
                 task, protocol=dataclasses.replace(task.protocol, steps=steps)
             )
-        return RobotiqEnv(
-            task, state_width=SERVOS, instruction="transfer the cube", source=SOURCE
-        )
+        return RobotiqEnv(task, source=SOURCE)
 
     def test_passes_gymnasium_env_checker(self) -> None:
         from gymnasium.utils.env_checker import check_env  # noqa: PLC0415
@@ -106,7 +104,7 @@ class GymnasiumContract(unittest.TestCase):
         self.assertIs(info["is_success"], False)
         self.assertEqual(env.metadata["render_fps"], 50)
         self.assertEqual(env._max_episode_steps, SHORT_STEPS // 10)
-        self.assertEqual(env.task_description, "transfer the cube")
+        self.assertEqual(env.task_description, "transfer the cube to the left gripper")
         env.close()
 
     def test_seed_is_the_trial_so_starts_pair(self) -> None:
@@ -163,14 +161,7 @@ class GymnasiumContract(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "episodes.jsonl"
-            env = RobotiqEnv(
-                task,
-                state_width=SERVOS,
-                instruction="transfer the cube",
-                source=SOURCE,
-                record_to=path,
-                policy_name="limp",
-            )
+            env = RobotiqEnv(task, source=SOURCE, record_to=path, policy_name="limp")
             env.reset(seed=1001)
             limp = np.asarray(NEUTRAL_CTRL, dtype=np.float32)
             for _ in range(env._max_episode_steps):
@@ -190,12 +181,21 @@ class GymnasiumContract(unittest.TestCase):
         from rq_pipeline.tasks.aloha2 import build_transfer_cube  # noqa: PLC0415
 
         with self.assertRaises(ValueError):
-            RobotiqEnv(
-                build_transfer_cube(),
-                state_width=SERVOS,
-                instruction="transfer the cube",
-                source="unstamped",
-            )
+            RobotiqEnv(build_transfer_cube(), source="unstamped")
+
+    def test_every_registered_task_makes_by_gym_id(self) -> None:
+        import gymnasium as gym  # noqa: PLC0415
+
+        from rq_pipeline.envs.robotiq import TASKS  # noqa: PLC0415
+
+        for name in TASKS:
+            env = gym.make(f"robotiq/{name}-v0")
+            try:
+                self.assertEqual(env.unwrapped.task, name)
+                self.assertIn("@", env.unwrapped.source)
+                self.assertGreater(env.unwrapped.state_width, 0)
+            finally:
+                env.close()
 
 
 if __name__ == "__main__":
