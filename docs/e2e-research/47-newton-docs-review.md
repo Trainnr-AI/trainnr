@@ -9,7 +9,9 @@ marked MEASURED (run here today). This extends
 refresh is at the bottom. Field-agent reports:
 [48-solver-landscape.md](48-solver-landscape.md) (solver theory vs our
 scenes) and [49-gpu-path-mjxwarp.md](49-gpu-path-mjxwarp.md) (the
-MJX-Warp probe); the Newton-engine install probe lands separately.*
+MJX-Warp probe), [50-newton-delta-probe.md](50-newton-delta-probe.md)
+(the Newton install probe — which verified §3's sensor-drop row by
+execution and corrected §5's Isaac Lab read).*
 
 **One naming collision, pinned first:** MuJoCo's default constraint
 solver is literally named "Newton" (`mjSOL_NEWTON` — Newton's method on
@@ -137,10 +139,11 @@ MuJoCo scenes verbatim (the semantics are MuJoCo's own):
 - Tested configs: Ubuntu 22.04/24.04, Windows, macOS (CPU only);
   NVIDIA Ada/Blackwell; Python 3.10+; CUDA 12/13 (12.3+ required for
   reliable CUDA graph capture).
-- FAQ now says Isaac Lab's Newton integration includes "basic
-  manipulation" among initial environments (the 08-25 report: "not
-  there yet") — still experimental, but the trigger condition in
-  36's revisit rule is inching closer.
+- Newton's FAQ claims Isaac Lab's integration includes "basic
+  manipulation" — but Isaac Lab's OWN docs (updated 2026-08-26, see
+  [50](50-newton-delta-probe.md)) still say locomotion-only with no
+  manipulation environments. The primary source on Isaac Lab wins:
+  the revisit trigger has not moved.
 - `warp.sim` was deprecated in Warp 1.8, removed in 1.10 — Newton is
   its successor, so Warp-side sim code has exactly one home now.
 
