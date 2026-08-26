@@ -44,6 +44,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 
 | Tool | What it does |
 |---|---|
+| `solver-study.py` | Constraint-solver sweep on the kitting scene: solver x cone x integrator, judged by the referee |
 | `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
