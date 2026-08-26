@@ -72,8 +72,12 @@ def load_policy(path: Path | str, *, instruction: str, device: str) -> LoadedPol
             action = postprocessor(policy.select_action(preprocessor(batch)))
         return action.squeeze(0).cpu().numpy()
 
-    return LoadedPolicy(
-        name=Path(path).rstrip("/") if isinstance(path, str) else str(path),
-        act=act,
-        reset=policy.reset,
+    # LeRobot saves a checkpoint as <run>/checkpoints/<step>/pretrained_model:
+    # the step directory is the name a human recognises.
+    checkpoint = Path(path)
+    name = (
+        checkpoint.parent.name
+        if checkpoint.name == "pretrained_model"
+        else checkpoint.name
     )
+    return LoadedPolicy(name=name, act=act, reset=policy.reset)

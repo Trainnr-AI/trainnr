@@ -6,6 +6,7 @@ contract itself is pinned in test_envs.py with the sim extra alone.
 
 import importlib.util
 import unittest
+from pathlib import Path
 
 TRAIN_PRESENT = (
     importlib.util.find_spec("lerobot") is not None
@@ -14,6 +15,7 @@ TRAIN_PRESENT = (
 SERVOS = 14
 TOP_CAMERA_HW = (480, 640)
 ALOHA_TICKS = 400  # 4000 physics steps / control every 10
+T5_CHECKPOINT = Path("runs/t5-act-kitting/checkpoints/020000/pretrained_model")
 
 
 @unittest.skipUnless(TRAIN_PRESENT, "train extra not installed (use .venv-train)")
@@ -68,6 +70,32 @@ class ThroughLeRobot(unittest.TestCase):
             RobotiqEnvConfig(task="juggling")
         with self.assertRaises(ValueError):
             RobotiqEnvConfig()  # no silent default task
+
+    @unittest.skipUnless(
+        T5_CHECKPOINT.exists(), "no local T5 checkpoint (runs/ is per machine)"
+    )
+    def test_load_policy_acts_on_the_env_observation(self) -> None:
+        """The library loader: a checkpoint acts on the env's raw
+        observation and returns one command per servo. Runs only where
+        the T5 checkpoint exists (the WSL card that trained it)."""
+        from rq_pipeline.envs.lerobot_policy import (  # noqa: PLC0415
+            best_device,
+            load_policy,
+        )
+        from rq_pipeline.envs.robotiq import make_env  # noqa: PLC0415
+
+        env = make_env("kitting")
+        try:
+            observation, _ = env.reset(seed=1000)
+            loaded = load_policy(
+                T5_CHECKPOINT, instruction=env.task_description, device=best_device()
+            )
+            loaded.reset()
+            action = loaded.act(observation)
+            self.assertEqual(action.shape, (SERVOS,))
+            self.assertTrue(env.action_space.contains(action.astype("float32")))
+        finally:
+            env.close()
 
     def test_fps_comes_from_the_task(self) -> None:
         from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
