@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.tasks.scene import restore_contact_options
+from rq_pipeline.tasks.scene import pin_nominal_options
 from rq_pipeline.tasks.so101 import ARM_PREFIX, DEFAULT_ARM_XML
 
 # RobotSpec::REAL_BOT geometry (placeholders there, single-sourced here).
@@ -46,7 +46,7 @@ def _base_scene(name: str) -> Any:
     scene.compiler.degree = False
     # The arm's contact options, restored as always (attach drops them);
     # harmless for the car-only scene.
-    restore_contact_options(scene)
+    pin_nominal_options(scene)
     scene.worldbody.add_geom(
         name="floor",
         type=mujoco.mjtGeom.mjGEOM_PLANE,

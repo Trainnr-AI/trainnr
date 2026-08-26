@@ -6,8 +6,10 @@
 locally — every claim below is from the repo's own docs/source unless
 marked MEASURED (run here today). This extends
 [36-newton-status.md](36-newton-status.md) (2026-08-25); the verdict
-refresh is at the bottom. Field-agent reports on the install probe,
-solver theory, and the GPU path land separately.*
+refresh is at the bottom. Field-agent reports:
+[48-solver-landscape.md](48-solver-landscape.md) (solver theory vs our
+scenes) and [49-gpu-path-mjxwarp.md](49-gpu-path-mjxwarp.md) (the
+MJX-Warp probe); the Newton-engine install probe lands separately.*
 
 **One naming collision, pinned first:** MuJoCo's default constraint
 solver is literally named "Newton" (`mjSOL_NEWTON` — Newton's method on

@@ -37,7 +37,7 @@ from typing import Any, NamedTuple
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
 from rq_pipeline.tasks.registry import register
-from rq_pipeline.tasks.scene import set_render_budget
+from rq_pipeline.tasks.scene import pin_nominal_options, set_render_budget
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 BUNDLE_XML = bundle_file("aloha2-nominal", "aloha2.xml")
@@ -181,6 +181,7 @@ def _rig_scene(name: str, bundle_xml: Path) -> Any:
 
     scene = mujoco.MjSpec.from_file(str(require_bundle_file(bundle_xml)))
     scene.modelname = name
+    pin_nominal_options(scene)
     # The top camera renders 640x480; the D405 cameras 1280x720. The
     # offscreen framebuffer must cover the largest.
     # Menagerie's scene asks for an 8192x8192 shadow map — a screenshot
