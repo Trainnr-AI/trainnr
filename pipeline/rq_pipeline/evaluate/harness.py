@@ -27,11 +27,29 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from rq_pipeline.evaluate.certificate import PolicyOutcome
+from rq_pipeline.evaluate.records import (
+    EpisodeRecord,
+    SimScore,
+    append_records,
+    fold,
+    protocol_fields,
+)
 from rq_pipeline.physics.backend import PhysicsBackend
 from rq_pipeline.robot.model_checks import assert_model_alive
+
+__all__ = [
+    "EpisodeProtocol",
+    "SimPolicy",
+    "SimScore",
+    "evaluate_policies",
+    "home_state",
+    "join_with_real",
+    "score_policies",
+]
 
 
 @dataclass(frozen=True)
@@ -76,20 +94,6 @@ class EpisodeProtocol:
                 raise ValueError(f"{field_name} must be positive, got {value}")
 
 
-@dataclass(frozen=True)
-class SimScore:
-    """One policy's showing in simulation, as counts — never just a rate,
-    so the trial count survives into every downstream statistic."""
-
-    name: str
-    successes: int
-    trials: int
-
-    @property
-    def score(self) -> float:
-        return self.successes / self.trials
-
-
 def home_state(backend: PhysicsBackend, protocol: EpisodeProtocol) -> Any:
     """The protocol's declared start: its keyframe, else the model's reset."""
     if protocol.home is None:
@@ -105,6 +109,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     source: str,
     run_episode: Callable[[Any, Any], tuple[Any, Any]],
     gate_cameras: bool = False,
+    record_to: Path | None = None,
 ) -> tuple[SimScore, ...]:
     """The scoring skeleton both harnesses share: refuse duplicate
     names and unstamped sources, census-gate the model, then run every
@@ -113,6 +118,10 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     between observing sensors and observing pixels — so it is the only
     thing callers supply. Vision callers set `gate_cameras` because a
     camera-less model would score their policies 0% silently.
+
+    Every trial becomes an `EpisodeRecord`; the scores are the fold over
+    them (records.py), and `record_to` appends the rows as trials finish
+    — a crash at trial 9 leaves 8 lines, not nothing.
     """
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
@@ -131,17 +140,25 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
         cameras=counts.cameras if gate_cameras else None,
     )
     home = home_state(backend, protocol)
-    scores = []
+    instrument = getattr(backend, "instrument", backend.name)
+    fields = protocol_fields(protocol)
+    records: list[EpisodeRecord] = []
     for policy in policies:
-        successes = sum(
-            1
-            for trial in range(protocol.trials)
-            if protocol.success(*run_episode(policy, protocol.perturb(trial, home)))
-        )
-        scores.append(
-            SimScore(name=policy.name, successes=successes, trials=protocol.trials)
-        )
-    return tuple(scores)
+        for trial in range(protocol.trials):
+            states, sensors = run_episode(policy, protocol.perturb(trial, home))
+            record = EpisodeRecord(
+                source=source,
+                policy=policy.name,
+                trial=trial,
+                success=bool(protocol.success(states, sensors)),
+                steps=len(states),
+                instrument=instrument,
+                protocol=fields,
+            )
+            records.append(record)
+            if record_to is not None:
+                append_records(record_to, [record])
+    return fold(records)
 
 
 def evaluate_policies(
@@ -191,7 +208,8 @@ def join_with_real(
         outcomes.append(
             PolicyOutcome(
                 name=score.name,
-                sim_score=score.score,
+                sim_successes=score.successes,
+                sim_trials=score.trials,
                 real_successes=successes,
                 real_trials=trials,
             )

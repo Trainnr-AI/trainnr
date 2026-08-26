@@ -142,6 +142,48 @@ class GateAInSimulation(unittest.TestCase):
         self.assertFalse(certificate.gate_passed)
         self.assertAlmostEqual(certificate.exact_p_value, 1.0 / 24.0)
         self.assertGreater(certificate.top_pick, 0.5)
+        # The sim trial count reaches the certificate (docs/32 §6).
+        self.assertEqual({r.sim_trials for r in certificate.policies}, {6})
+
+    def test_records_are_written_as_trials_finish_and_fold_back(self) -> None:
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            EpisodeProtocol,
+            SimPolicy,
+            score_policies,
+        )
+        from rq_pipeline.evaluate.records import fold, read_records  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        protocol = EpisodeProtocol(
+            trials=3,
+            steps=20,
+            control_interval=5,
+            perturb=_perturb,
+            success=_settled_near_target,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "episodes.jsonl"
+            scores = score_policies(
+                backend,
+                [SimPolicy("limp", lambda _step, _sense: [0.0])],
+                protocol,
+                source="pendulum-test@000000000000",
+                run_episode=lambda policy, initial: backend.closed_loop_rollout(
+                    initial, policy.act, protocol.steps, protocol.control_interval
+                ),
+                record_to=path,
+            )
+            records = read_records(path)
+        self.assertEqual([r.trial for r in records], [0, 1, 2])
+        self.assertEqual(records[0].steps, 20)
+        self.assertTrue(records[0].instrument.startswith("mujoco-"))
+        self.assertEqual(records[0].protocol["control_interval"], 5)
+        self.assertEqual(fold(records), scores)
 
     def test_dead_model_is_refused_before_any_episode(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415

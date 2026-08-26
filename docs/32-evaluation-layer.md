@@ -247,8 +247,20 @@ needed for step 3's checkpoint.
   the order and writes our own record; and the WSL box's D3D12 renderer
   is not bit-exact (±1 LSB in ~20 pixels, once ±2), so pixel pairing is
   asserted to within that noise while physics pairing stays exact.
-- Not yet: step 4 (records + fold + the two audit fixes), step 5 (the
-  deletions), step 6.
+- **Step 4, the record**: `evaluate/records.py` — `EpisodeRecord`
+  (source, policy, trial, success, steps, instrument, protocol, seed,
+  events), `append_records`/`read_records` (JSONL, NaN refused),
+  `fold` (records → `SimScore`s; a duplicate trial or unpaired policy
+  sets are refused with the culprit named), and `from_eval_info` for
+  LeRobot's file (seed and trial recovered from episode order).
+  `SimScore` moved here — it IS the fold. `score_policies` now builds a
+  record per trial, appends to `record_to` as trials finish, and
+  returns the fold. The two audit fixes: `PolicyOutcome`/`PolicyResult`
+  carry `sim_successes, sim_trials` (validated on construction; the
+  certificate's JSON now states its sim n), and `MuJoCoBackend.instrument`
+  is `"mujoco-<version>"`, stamped into every record and exposed by the
+  env. 192 tests green.
+- Not yet: step 5 (the deletions), step 6.
 
 ## 10. Open questions (carried from 45 §4 and 46 §5)
 

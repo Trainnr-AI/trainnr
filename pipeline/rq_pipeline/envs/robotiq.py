@@ -134,6 +134,7 @@ class RobotiqEnv(gym.Env):
             cameras=counts.cameras,
         )
         self._model = backend.model
+        self.instrument = backend.instrument
         self.protocol = task.protocol
         self.cameras = tuple(task.cameras)
         self.state_width = state_width

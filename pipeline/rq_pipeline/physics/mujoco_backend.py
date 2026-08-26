@@ -157,6 +157,12 @@ class MuJoCoBackend:
         (`Stepper`, renderers). Loading stays the backend's job."""
         return self._require_model()
 
+    @property
+    def instrument(self) -> str:
+        """Backend and version, e.g. "mujoco-3.11.0": a certificate
+        produced by a different version is a different instrument."""
+        return f"{self.name}-{self._mujoco.__version__}"
+
     def load_mjcf(self, path: Path) -> None:
         self._model = self._mujoco.MjModel.from_xml_path(str(path))
 

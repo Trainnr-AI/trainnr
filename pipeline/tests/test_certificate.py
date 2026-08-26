@@ -10,12 +10,15 @@ from rq_pipeline.evaluate.certificate import PolicyOutcome, certify
 
 # Twelve policies with strong-but-imperfect sim/real agreement — the
 # realistic shape of a passing Gate A run at the sample size the defect
-# register says the gate actually needs.
-SIM = [0.15, 0.22, 0.28, 0.35, 0.41, 0.48, 0.55, 0.61, 0.68, 0.74, 0.81, 0.88]
+# register says the gate actually needs. Sim successes out of 100 trials.
+SIM_SUCCESSES = [15, 22, 28, 35, 41, 48, 55, 61, 68, 74, 81, 88]
+SIM_TRIALS = 100
 REAL_SUCCESSES = [8, 12, 13, 19, 20, 26, 27, 24, 33, 38, 40, 44]
 OUTCOMES = [
-    PolicyOutcome(f"policy-{index:02d}", sim, successes, 50)
-    for index, (sim, successes) in enumerate(zip(SIM, REAL_SUCCESSES, strict=True))
+    PolicyOutcome(f"policy-{index:02d}", sim, SIM_TRIALS, successes, 50)
+    for index, (sim, successes) in enumerate(
+        zip(SIM_SUCCESSES, REAL_SUCCESSES, strict=True)
+    )
 ]
 GATE_THRESHOLD = 0.5
 
@@ -46,14 +49,23 @@ class CertifyEndToEnd(unittest.TestCase):
         # exact p is claimed — Fisher-z carries the claim alone.
         self.assertIsNone(certificate.exact_p_value)
         self.assertGreater(certificate.top_pick, 0.5)
-        # Every policy carries its own real-side interval.
+        # Every policy carries its own real-side interval AND its sim n —
+        # the count, never just the rate (docs/32 §6).
         for result in certificate.policies:
             self.assertLess(result.real_lower, result.real_upper)
+            self.assertEqual(result.sim_trials, SIM_TRIALS)
         # The artifact is machine-readable and self-describing.
         parsed = json.loads(certificate.to_json())
         self.assertEqual(parsed["robot_bundle"], robot)
         self.assertEqual(len(parsed["policies"]), 12)
+        self.assertEqual(parsed["policies"][0]["sim_successes"], SIM_SUCCESSES[0])
         self.assertIn("PASS", certificate.summary())
+
+    def test_counts_are_validated_on_construction(self) -> None:
+        with self.assertRaises(ValueError):
+            PolicyOutcome("p", 5, 4, 1, 10)  # more sim successes than trials
+        with self.assertRaises(ValueError):
+            PolicyOutcome("p", 1, 4, 1, 0)  # no real trials
 
     def test_five_policies_cannot_buy_a_pass_with_agreement(self) -> None:
         # The C1 lesson, now enforced by the artifact itself: near-perfect

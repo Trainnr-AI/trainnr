@@ -25,14 +25,33 @@ from rq_pipeline.stats.ranking import (
 )
 
 
+def _check_counts(label: str, successes: int, trials: int) -> None:
+    if trials <= 0 or not 0 <= successes <= trials:
+        raise ValueError(f"invalid {label} counts: {successes}/{trials}")
+
+
 @dataclass(frozen=True)
 class PolicyOutcome:
-    """One policy's raw showing: what the simulator scored, what the robot did."""
+    """One policy's raw showing: what the simulator scored, what the
+    robot did — both as counts. Until 2026-08-26 the sim side arrived
+    as a rate and the certificate could not state its own sim n; the
+    audit that day (docs/32 §6) caught the rule "counts, never rates"
+    broken at exactly the join it existed for.
+    """
 
     name: str
-    sim_score: float
+    sim_successes: int
+    sim_trials: int
     real_successes: int
     real_trials: int
+
+    def __post_init__(self) -> None:
+        _check_counts("sim", self.sim_successes, self.sim_trials)
+        _check_counts("real", self.real_successes, self.real_trials)
+
+    @property
+    def sim_score(self) -> float:
+        return self.sim_successes / self.sim_trials
 
 
 @dataclass(frozen=True)
@@ -40,11 +59,16 @@ class PolicyResult:
     """One policy's showing, sim and real, with the real side intervalled."""
 
     name: str
-    sim_score: float
+    sim_successes: int
+    sim_trials: int
     real_successes: int
     real_trials: int
     real_lower: float
     real_upper: float
+
+    @property
+    def sim_score(self) -> float:
+        return self.sim_successes / self.sim_trials
 
 
 @dataclass(frozen=True)
@@ -139,7 +163,8 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     policies = tuple(
         PolicyResult(
             name=outcome.name,
-            sim_score=outcome.sim_score,
+            sim_successes=outcome.sim_successes,
+            sim_trials=outcome.sim_trials,
             real_successes=outcome.real_successes,
             real_trials=outcome.real_trials,
             real_lower=lower,
