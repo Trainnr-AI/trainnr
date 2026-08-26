@@ -40,12 +40,16 @@ class StepperIsTheOneLoop(unittest.TestCase):
         # short last tick when the budget is not a multiple.
         import numpy as np  # noqa: PLC0415
 
+        # No 'tests.' prefix: unittest discover -s tests imports these
+        # modules top-level, and a site-packages dep that ships its own
+        # 'tests' package shadows the prefixed spelling (Mac, 2026-08-27).
+        from test_mujoco_backend import PENDULUM  # noqa: PLC0415
+
         from rq_pipeline.evaluate.harness import run_sensor_episode  # noqa: PLC0415
         from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
             MuJoCoBackend,
             Stepper,
         )
-        from tests.test_mujoco_backend import PENDULUM  # noqa: PLC0415
 
         backend = MuJoCoBackend()
         backend.load_mjcf_string(PENDULUM)
