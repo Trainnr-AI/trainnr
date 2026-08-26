@@ -1,6 +1,6 @@
 """Live viewer: the real rig's twin trying the rear pick, looping.
 
-    cd pipeline && uv run --extra sim mjpython ../tools/show-yellow.py
+cd pipeline && uv run --extra sim mjpython ../tools/show-yellow.py
 """
 
 import time
@@ -40,9 +40,12 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
 # ALREADY drifted from the source (1.5/2.0/1.2/2.0 vs 1.2/1.8/1.0/1.8,
 # review 2026-08-26): the named two-copies bug, in a viewer.
 SEQ = [
-    *((pose, secs, name) for (pose, secs), name in zip(
-        REAR_PICK_SEQUENCE, ("tuck", "hover", "reach", "grip", "lift")
-    )),
+    *(
+        (pose, secs, name)
+        for (pose, secs), name in zip(
+            REAR_PICK_SEQUENCE, ("tuck", "hover", "reach", "grip", "lift")
+        )
+    ),
     (REAR_LIFT, 1.5, "hold"),
     (REAR_REACH, 2.0, "lower"),
     ([*REAR_REACH[:4], 0.5], 1.0, "release"),

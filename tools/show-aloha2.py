@@ -139,7 +139,6 @@ def main() -> None:
     data = mujoco.MjData(model)
 
     rr_session("robotiq-aloha2", mode="spawn")
-    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
 
     mujoco.mj_resetDataKeyframe(model, data, 0)
     with mujoco.viewer.launch_passive(model, data) as viewer:

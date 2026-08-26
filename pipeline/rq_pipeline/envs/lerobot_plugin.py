@@ -1,24 +1,25 @@
 """LeRobot's door to our tasks: the `EnvConfig` that `lerobot-eval` and
 `lerobot-train` load.
 
-    LD_LIBRARY_PATH=/usr/lib/wsl/lib GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl \\
-    .venv-train/bin/lerobot-eval --env.type=robotiq --env.task=kitting \\
+    # any OS:
+    lerobot-eval --env.type=robotiq --env.task=kitting \\
         --env.discover_packages_path=rq_pipeline.envs \\
         --policy.path=runs/t5-act-kitting/checkpoints/020000/pretrained_model \\
         --seed=1000 --eval.n_episodes=4 --eval.batch_size=1 \\
         --eval.use_async_envs=false
+    # on WSL prefix: LD_LIBRARY_PATH=/usr/lib/wsl/lib GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl
+    # (docs/07 2026-08-26: llvmpipe otherwise renders at 317 ms a frame)
 
 `--env.discover_packages_path` (lerobot/configs/parser.py) imports every
 module of the named PACKAGE before the CLI is parsed — a module path is
 refused, it walks `__path__` — which runs the registration decorator
 below; a distribution named `lerobot_env_*` is imported the same way with
-no flag.
-Everything LeRobot needs beyond gymnasium lives here and nowhere else:
-the feature declarations a policy config reads (`features`,
+no flag. Everything LeRobot needs beyond gymnasium lives here and nowhere
+else: the feature declarations a policy config reads (`features`,
 `features_map`) and the vector-env factory. Physics, cameras, referee and
-pairing are the gymnasium env's (rq_pipeline.envs.robotiq) — GR00T,
-openpi or a bare `gym.make("robotiq/kitting-v0")` reach the same env
-without this module.
+pairing are the gymnasium env's (rq_pipeline.envs.robotiq); the task
+comes from the registry (`rq_pipeline.tasks.registry`), so a plugin
+package's `acme/pour` is `--env.task=acme/pour` with nothing here edited.
 
 Pairing survives the runner: `lerobot-eval` seeds episode i with
 `seed + i`, and the env starts trial `seed % trials` — so every policy's
@@ -37,25 +38,35 @@ from lerobot.configs import FeatureType, PolicyFeature
 from lerobot.envs.configs import EnvConfig
 from lerobot.utils.constants import ACTION, OBS_IMAGES, OBS_STATE
 
-from rq_pipeline.envs.robotiq import RGB_CHANNELS, TASKS, make_env
+from rq_pipeline.envs.contract import (
+    DEFAULT_POLICY_NAME,
+    ENV_TYPE,
+    RGB_CHANNELS,
+    ObservationKeys,
+)
+from rq_pipeline.envs.robotiq import make_env
 from rq_pipeline.evaluate.variations import parse_variation
+from rq_pipeline.tasks.registry import resolve, tasks
 
-DEFAULT_TASK = "kitting"
-CONTROL_HZ = 50  # the ALOHA protocols: 500 Hz physics, control every 10 steps
+# Worker processes must each build their own GL context; `spawn` exists
+# on every OS (`forkserver` does not on Windows) and gives that for free.
+WORKER_START_METHOD = "spawn"
 
 
-@EnvConfig.register_subclass("robotiq")
+@EnvConfig.register_subclass(ENV_TYPE)
 @dataclass
 class RobotiqEnvConfig(EnvConfig):
-    """`--env.type=robotiq --env.task=<name>`; features come from the task."""
+    """`--env.type=robotiq --env.task=<id>`; features and fps come from
+    the task. `task` has no default on purpose — the repo's rule is no
+    silent default where a wrong value is possible, and evaluating the
+    wrong task silently is exactly that."""
 
-    task: str | None = DEFAULT_TASK
-    fps: int = CONTROL_HZ
+    task: str | None = None
     # `--env.record_to=<file>.jsonl --env.policy_name=<name>`: the env
     # appends our full per-episode row (verdict, milestones, seed) that
     # eval_info.json lacks.
     record_to: str | None = None
-    policy_name: str = "policy"
+    policy_name: str = DEFAULT_POLICY_NAME
     # `--env.variations='["joints.damping_scale=0.7:1.3",
     #                     "top.offset_m=-0.03,-0.03,-0.03:0.03,0.03,0.03"]'`
     # — each drawn by trial index (paired across policies), applied at
@@ -65,20 +76,29 @@ class RobotiqEnvConfig(EnvConfig):
     features_map: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.task not in TASKS:
-            raise ValueError(f"no task {self.task!r}; the env knows {sorted(TASKS)}")
+        if self.task is None:
+            raise ValueError(
+                f"--env.task is required; the registry knows {sorted(tasks())}"
+            )
         # Building the task (an MjSpec, no compile) is cheap; its state
-        # width and cameras are the features. The action is one command
-        # per servo and the state one reading per servo: the same width.
-        task = TASKS[self.task].build()
-        width = task.state_width
+        # width, cameras and control rate are the features. The action is
+        # one command per servo and the state one reading per servo: the
+        # same width.
+        try:
+            built = resolve(self.task).build()
+        except KeyError as error:  # a config error is a ValueError, like the rest
+            raise ValueError(str(error)) from error
+        self.fps = built.control_hz
+        width = built.state_width
         self.features = {
             ACTION: PolicyFeature(type=FeatureType.ACTION, shape=(width,)),
-            "agent_pos": PolicyFeature(type=FeatureType.STATE, shape=(width,)),
+            ObservationKeys.AGENT_POS: PolicyFeature(
+                type=FeatureType.STATE, shape=(width,)
+            ),
         }
-        self.features_map = {ACTION: ACTION, "agent_pos": OBS_STATE}
-        for camera in task.cameras:
-            key = f"pixels/{camera.key}"
+        self.features_map = {ACTION: ACTION, ObservationKeys.AGENT_POS: OBS_STATE}
+        for camera in built.cameras:
+            key = f"{ObservationKeys.PIXELS}/{camera.key}"
             self.features[key] = PolicyFeature(
                 type=FeatureType.VISUAL,
                 shape=(camera.height, camera.width, RGB_CHANNELS),
@@ -98,13 +118,13 @@ class RobotiqEnvConfig(EnvConfig):
         self, n_envs: int, use_async_envs: bool = False
     ) -> dict[str, dict[int, gym.vector.VectorEnv]]:
         """`{suite: {task_id: VectorEnv}}`, the shape `lerobot.envs.make_env`
-        documents. Async copies use forkserver so each worker builds its
-        own renderer (the env defers renderer creation to first use)."""
+        documents. Async copies are spawned so each worker builds its own
+        renderer (the env defers renderer creation to first use)."""
         factories = [partial(make_env, **self.gym_kwargs)] * n_envs
         if use_async_envs and n_envs > 1:
             vec: gym.vector.VectorEnv = gym.vector.AsyncVectorEnv(
                 factories,
-                context="forkserver",
+                context=WORKER_START_METHOD,
                 autoreset_mode=AutoresetMode.SAME_STEP,
             )
         else:

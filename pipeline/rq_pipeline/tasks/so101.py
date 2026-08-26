@@ -36,14 +36,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol
+from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
-from rq_pipeline.tasks.task import Task
+from rq_pipeline.protocol import EpisodeProtocol
+from rq_pipeline.tasks.registry import register
+from rq_pipeline.tasks.scene import restore_contact_options, set_render_budget
+from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 ARM_PREFIX = "arm_"
-DEFAULT_ARM_XML = (
-    Path(__file__).resolve().parents[3] / "robots" / "so101-nominal" / "so101.xml"
-)
+DEFAULT_ARM_XML = bundle_file("so101-nominal", "so101.xml")
 
 # The SO-101 arm's sensor block: six jointpos then six jointvel.
 # (aloha2.py declares its own for the 14-servo rig; each rig owns its
@@ -58,16 +59,25 @@ FINGERTIP_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
 # Episode design: 500 Hz physics (the model default), policies at 50 Hz —
 # the same order of control rate the real bus sustains.
 _STEPS = 600
-_CONTROL_INTERVAL = 10
-_TRIALS = 4
 _HOLD_STEPS = 50
+# Task names: the registry key, `Task.name`, and the gym id's last part.
+REACH = "reach"
+LIFT = "lift"
+BLOCK_STACK = "block_stack"
+TOOL_INSERT = "tool_insert"
+RIG = "so101"
 _REACH_TOLERANCE_M = 0.03
 # FULLPHYSICS layout: [time, qpos(6), qvel(6)]; joint angles start at 1.
 _QPOS_OFFSET = 1
 
 
 def _so101_task(
-    name: str, scene: Any, protocol: EpisodeProtocol, instruction: str, **extra: Any
+    name: str,
+    scene: Any,
+    protocol: EpisodeProtocol,
+    instruction: str,
+    arm_xml: Path,
+    **extra: Any,
 ) -> Task:
     """Every scene here carries the ArmnetBench rig (the front/top/wrist
     cameras `_scene_with_arm` places) and the six-joint state block."""
@@ -78,6 +88,7 @@ def _so101_task(
         cameras=ARMNETBENCH_CAMERAS,
         state_width=STATE_WIDTH,
         instruction=instruction,
+        bundle_dir=Path(arm_xml).parent,
         **extra,
     )
 
@@ -85,12 +96,11 @@ def _so101_task(
 def _scene_with_arm(name: str, arm_xml: Path) -> Any:
     import mujoco  # noqa: PLC0415 - sim extra
 
-    arm = mujoco.MjSpec.from_file(str(arm_xml))
+    arm = mujoco.MjSpec.from_file(str(require_bundle_file(arm_xml)))
     scene = mujoco.MjSpec()
     scene.modelname = name
     # Restore what attach drops — see module docstring.
-    scene.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
-    scene.option.impratio = 10
+    restore_contact_options(scene)
     scene.worldbody.add_geom(
         name="table",
         type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -115,8 +125,7 @@ def _add_armnetbench_cameras(scene: Any) -> None:
     """
     # The offscreen framebuffer defaults to 640x480; the wrist camera
     # renders 1280x720, so the scene must say so or Renderer refuses.
-    scene.visual.global_.offwidth = 1280
-    scene.visual.global_.offheight = 720
+    set_render_budget(scene)
     scene.worldbody.add_camera(
         name="front",
         pos=[0.0, -0.85, 0.25],
@@ -142,6 +151,7 @@ def _add_armnetbench_cameras(scene: Any) -> None:
     )
 
 
+@register(REACH, rig=RIG)
 def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """Reach: fingertip to the home keyframe's fingertip position, held.
 
@@ -181,16 +191,17 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         return bool(distances.max() < _REACH_TOLERANCE_M)
 
     return _so101_task(
-        "reach",
+        REACH,
         scene,
         EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
         ),
         "reach the target and hold",
+        arm_xml,
         target=target,
     )
 
@@ -288,6 +299,7 @@ def _jitter_cube_a(trial: int, home: Any) -> Any:
     return initial
 
 
+@register(LIFT, rig=RIG)
 def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """Lift: squeeze the cube out of the pocket and hold it clear.
 
@@ -321,16 +333,17 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         return bool(np.min(tail) > _LIFTED_HEIGHT_M)
 
     return _so101_task(
-        "lift",
+        LIFT,
         scene,
         EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_LIFT_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
         ),
         "lift the cube out of the pocket and hold it clear",
+        arm_xml,
     )
 
 
@@ -399,6 +412,7 @@ def scripted_stack_no_release(step: int, sensordata: Any) -> Any:
     return control
 
 
+@register(BLOCK_STACK, rig=RIG)
 def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """block_stack: cube A ends resting ON cube B, B undisturbed."""
     import numpy as np  # noqa: PLC0415
@@ -427,16 +441,17 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         )
 
     return _so101_task(
-        "block_stack",
+        BLOCK_STACK,
         scene,
         EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_STACK_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
         ),
         "stack cube A on cube B",
+        arm_xml,
     )
 
 
@@ -463,6 +478,7 @@ scripted_insert = scripted_stack
 scripted_insert_no_release = scripted_stack_no_release
 
 
+@register(TOOL_INSERT, rig=RIG)
 def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """tool_insert: cube A seated inside the pocket, flat on the table."""
     import mujoco  # noqa: PLC0415 - sim extra
@@ -498,14 +514,15 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         )
 
     return _so101_task(
-        "tool_insert",
+        TOOL_INSERT,
         scene,
         EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_STACK_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
         ),
         "seat cube A inside the pocket",
+        arm_xml,
     )

@@ -24,6 +24,7 @@ it is *supposed* to name things that were later removed.
 
 Usage:  python3 tools/check-docs.py
 """
+
 import re
 import posixpath
 import subprocess
@@ -33,7 +34,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HISTORY = "07-progress-log.md"
 # Placeholders in usage examples, not files that should exist.
-PLACEHOLDERS = {"chase.perc", "run.wire", "mine.wire", "chase.pero", "x.rrd", "run.perc"}
+PLACEHOLDERS = {
+    "chase.perc",
+    "run.wire",
+    "mine.wire",
+    "chase.pero",
+    "x.rrd",
+    "run.perc",
+}
 
 docs = sorted(list((ROOT / "docs").rglob("*.md")) + list(ROOT.glob("*.md")))
 
@@ -51,12 +59,18 @@ tracked_basenames = {Path(p).name for p in tracked}
 
 source = subprocess.run(
     ["git", "grep", "-h", "", "--", "*.rs", "*.toml", "*.sh", "*.py", "*.ts"],
-    cwd=ROOT, capture_output=True, text=True,
+    cwd=ROOT,
+    capture_output=True,
+    text=True,
 ).stdout
 
 # Types this workspace defines. Anything else in a `Foo::bar` is somebody
 # else's crate and not ours to police.
-OURS = set(re.findall(r"\b(?:pub\s+)?(?:struct|enum|trait|type)\s+([A-Z][A-Za-z0-9_]*)", source))
+OURS = set(
+    re.findall(
+        r"\b(?:pub\s+)?(?:struct|enum|trait|type)\s+([A-Z][A-Za-z0-9_]*)", source
+    )
+)
 
 problems = []
 
@@ -67,7 +81,9 @@ for doc in docs:
     body = doc.read_text()
 
     # ---- 1. file paths ----
-    for path in set(re.findall(r"`([A-Za-z0-9_./-]+\.(?:rs|toml|sh|py|md|ts|uf2))`", body)):
+    for path in set(
+        re.findall(r"`([A-Za-z0-9_./-]+\.(?:rs|toml|sh|py|md|ts|uf2))`", body)
+    ):
         if path in PLACEHOLDERS or path in tracked:
             continue
         # a bare basename mentioned in prose is fine if git tracks it anywhere
@@ -76,7 +92,9 @@ for doc in docs:
         problems.append(f"{rel}: path does not exist: {path}")
 
     # ---- 2. markdown links to local files ----
-    for link in set(re.findall(r"\]\(([A-Za-z0-9_./-]+\.(?:md|rs|sh|py|toml))\)", body)):
+    for link in set(
+        re.findall(r"\]\(([A-Za-z0-9_./-]+\.(?:md|rs|sh|py|toml))\)", body)
+    ):
         from_root = posixpath.normpath(link)
         from_doc = posixpath.normpath(str(rel.parent / link))
         if from_root in tracked or from_doc in tracked:
@@ -84,7 +102,9 @@ for doc in docs:
         problems.append(f"{rel}: link goes nowhere: {link}")
 
     # ---- 3. code identifiers, ours only ----
-    for ident in set(re.findall(r"`([A-Z][A-Za-z0-9_]*::[a-zA-Z_][A-Za-z0-9_]*)`", body)):
+    for ident in set(
+        re.findall(r"`([A-Z][A-Za-z0-9_]*::[a-zA-Z_][A-Za-z0-9_]*)`", body)
+    ):
         ty, member = ident.split("::", 1)
         if ty not in OURS:
             continue

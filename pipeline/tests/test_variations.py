@@ -6,6 +6,7 @@ from rq_pipeline.evaluate.variations import (
     Choice,
     Uniform,
     Variation,
+    VariationKeys,
     describe,
     draw,
     draw_all,
@@ -13,6 +14,8 @@ from rq_pipeline.evaluate.variations import (
     sensitivity_table,
 )
 from rq_pipeline.stats.effects import (
+    SplitLabel,
+    Verdict,
     fisher_exact,
     format_table,
     main_effect,
@@ -21,7 +24,9 @@ from rq_pipeline.stats.effects import (
 
 PROTOCOL_HASH = "abc123"
 LOW, HIGH = 0.8, 1.2
-DAMPING = Variation("joints", "damping_scale", Uniform((LOW,), (HIGH,)))
+DAMPING = Variation(
+    VariationKeys.JOINTS, VariationKeys.DAMPING_SCALE, Uniform((LOW,), (HIGH,))
+)
 CAMERA = Variation("top", "offset_m", Uniform((-0.03,) * 3, (0.03,) * 3))
 LIGHT = Variation("light", "level", Choice(("dim", "nominal", "bright")))
 OFF = Variation("cube", "mass_kg", Uniform((0.05,), (0.2,)), enabled=False)
@@ -104,8 +109,8 @@ class ParseAndTable(unittest.TestCase):
         ]
         two_lights = Variation("light", "level", Choice(("dim", "bright")))
         table = sensitivity_table(rows, (DAMPING, two_lights), alpha=ALPHA, delta=DELTA)
-        by_key = {e.key: e for e in table if e.side_b in (">=midpoint", "dim")}
-        self.assertEqual(by_key["joints.damping_scale"].verdict, "SENSITIVE")
+        by_key = {e.key: e for e in table if e.side_b in (SplitLabel.HIGH, "dim")}
+        self.assertEqual(by_key["joints.damping_scale"].verdict, Verdict.SENSITIVE)
         # Light and damping are confounded in this synthetic sweep (dim
         # rides with low damping), so light reads SENSITIVE too — the
         # table reports the data, the balanced design is what prevents
@@ -136,7 +141,7 @@ class MainEffects(unittest.TestCase):
             alpha=ALPHA,
             delta=DELTA,
         )
-        self.assertEqual(sensitive.verdict, "SENSITIVE")
+        self.assertEqual(sensitive.verdict, Verdict.SENSITIVE)
         self.assertAlmostEqual(sensitive.difference, -1.0)
         unresolved = main_effect(
             "joints.damping_scale",
@@ -147,7 +152,7 @@ class MainEffects(unittest.TestCase):
             alpha=ALPHA,
             delta=DELTA,
         )
-        self.assertEqual(unresolved.verdict, "UNRESOLVED")
+        self.assertEqual(unresolved.verdict, Verdict.UNRESOLVED)
         insensitive = main_effect(
             "light.level",
             "dim",
@@ -157,7 +162,7 @@ class MainEffects(unittest.TestCase):
             alpha=ALPHA,
             delta=DELTA,
         )
-        self.assertEqual(insensitive.verdict, "INSENSITIVE")
+        self.assertEqual(insensitive.verdict, Verdict.INSENSITIVE)
         self.assertIn("SENSITIVE", format_table([sensitive]))
         with self.assertRaises(ValueError):
             main_effect("k", "a", "b", [], [True], alpha=ALPHA, delta=DELTA)

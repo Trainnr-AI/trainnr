@@ -52,12 +52,8 @@ def main() -> int:
                 "estimate": round(parameter.estimate, 6),
                 "half_width": round(parameter.half_width, 6),
                 "pinned": parameter.pinned,
-                "error_pct": round(
-                    100.0 * (parameter.estimate - truth) / truth, 2
-                ),
-                "truth_covered": bool(
-                    parameter.lower <= truth <= parameter.upper
-                ),
+                "error_pct": round(100.0 * (parameter.estimate - truth) / truth, 2),
+                "truth_covered": bool(parameter.lower <= truth <= parameter.upper),
             }
         rows.append({"label": condition.label, "parameters": cells})
         print(condition.label, file=sys.stderr)

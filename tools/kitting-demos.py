@@ -26,9 +26,9 @@ training; this side stays torch-free.
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from _lab import bootstrap
 
@@ -36,7 +36,7 @@ bootstrap()
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
-from PIL import Image  # noqa: E402
+from rq_pipeline.collect.kitting_export import Manifest, write_episode  # noqa: E402
 from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     PART_SPAWN,
@@ -106,7 +106,7 @@ while kept < EPISODES:
     scale_dynamics(spec, damping_scale=damping_scale, gain_scale=gain_scale)
     model = spec.compile()
 
-    initial = keyframe_state(model, "neutral_pose")
+    initial = keyframe_state(model, task.protocol.home)
     draws = {}
     for arm in ("right", "left"):
         (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
@@ -118,17 +118,22 @@ while kept < EPISODES:
         initial[part.start + 1] = y
         draws[arm] = (x, y)
 
-    renderer = mujoco.Renderer(model, height=480, width=640)
-    episode_dir = OUT / f"episode_{kept:04d}"
-    frames_dir = episode_dir / "frames"
-    frames: list[tuple[int, Path]] = []
+    camera = task.cameras[0]
+    renderer = mujoco.Renderer(model, height=camera.height, width=camera.width)
+    frames: list[tuple[int, Any]] = []
 
     # renderer/frames bound as defaults — a late-binding closure would see
     # only the LAST attempt's objects (ruff B023).
-    def snap(tick: int, live: mujoco.MjData, renderer=renderer, frames=frames) -> None:
-        if tick % (FRAME_EVERY * 10) != 0:  # tick is a physics step here
-            return
-        renderer.update_scene(live, camera="top")
+    def snap(
+        tick: int,
+        live: mujoco.MjData,
+        renderer=renderer,
+        frames=frames,
+        camera=camera,
+    ) -> None:
+        if tick % (FRAME_EVERY * task.protocol.control_interval) != 0:
+            return  # tick is a physics step here
+        renderer.update_scene(live, camera=camera.camera_name)
         frames.append((tick, renderer.render().copy()))
 
     stats = KittingStats()
@@ -154,33 +159,24 @@ while kept < EPISODES:
     if not succeeded:
         continue
 
-    episode_dir.mkdir(parents=True, exist_ok=True)
-    frames_dir.mkdir(exist_ok=True)
-    np.savez_compressed(
-        episode_dir / "trajectory.npz",
-        states=states.astype(np.float32),
-        sensors=sensors.astype(np.float32),
-        actions=actions.astype(np.float32),
-    )
-    for tick, frame in frames:
-        Image.fromarray(frame).save(frames_dir / f"{tick:06d}.jpg", quality=85)
-    (episode_dir / "manifest.json").write_text(
-        json.dumps(
-            {
-                "seed": SEED,
-                "attempt": attempt,
-                "draws": draws,
-                "dr_span": DR_SPAN,
-                "damping_scale": damping_scale,
-                "gain_scale": gain_scale,
-                "retries": stats.retries,
-                "control_hz": 50,
-                "frame_every_control_ticks": FRAME_EVERY,
-                "action_semantics": "14 commanded joint positions (ctrl order)",
-                "verdict": "success (task referee)",
-            },
-            indent=1,
-        )
+    write_episode(
+        OUT,
+        kept,
+        states=states,
+        sensors=sensors,
+        actions=actions,
+        frames=frames,
+        manifest=Manifest(
+            seed=SEED,
+            attempt=attempt,
+            draws=draws,
+            dr_span=DR_SPAN,
+            damping_scale=damping_scale,
+            gain_scale=gain_scale,
+            retries=stats.retries,
+            control_hz=task.control_hz,
+            frame_every_control_ticks=FRAME_EVERY,
+        ),
     )
     kept += 1
 

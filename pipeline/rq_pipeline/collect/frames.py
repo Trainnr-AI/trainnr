@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from rq_pipeline.bundles.hashing import require_stamp
 from rq_pipeline.collect.wire import Recording, StatusFrame
 
 STATUS_HZ = 50.0
@@ -81,11 +82,7 @@ def _expand_image(rows: tuple[tuple[int, ...], ...]) -> bytes:
 
 def align(recording: Recording, source: str) -> AlignedEpisode:
     """Pair each image with the first status and servo command that follow it."""
-    if "@" not in source:
-        raise ValueError(
-            f"source identity must be name@hash, got {source!r} — "
-            "stamp the recording with rq_pipeline.bundles.stamp first"
-        )
+    require_stamp(source, "source identity")
     frames: list[Frame] = []
     dropped = 0
     events = recording.events

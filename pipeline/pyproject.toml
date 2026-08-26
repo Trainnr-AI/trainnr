@@ -23,8 +23,15 @@ sim = ["mujoco[sysid]>=3.5", "gymnasium>=1.1.1,<2"]
 # out on purpose: its dm_control dependency pins exact MuJoCo versions and
 # the harness is our evaluation environment anyway.
 train = ["lerobot[dataset,smolvla,training]>=0.6.1; python_version >= '3.12'"]
-gpu = ["mujoco-warp"]
+gpu = ["mujoco-warp; sys_platform != 'darwin'"]  # CUDA only; the Mac resolves cleanly without it
 viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+
+# The task registry's plugin door (rq_pipeline/tasks/registry.py): a third
+# party lists its task module here under its own name and `lerobot-eval
+# --env.task=<namespace>/<task>` finds it. Our own two are listed too.
+[project.entry-points."rq_pipeline.tasks"]
+aloha2 = "rq_pipeline.tasks.aloha2"
+so101 = "rq_pipeline.tasks.so101"
 
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]

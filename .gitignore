@@ -26,3 +26,10 @@ __pycache__/
 MUJOCO_LOG.TXT
 runs/
 .ruff_cache/
+
+# Local secrets/config: never tracked (a root .env appeared 2026-08-26).
+.env
+.env.*
+
+# Per-user Claude Code settings (shared settings, if any, live in .claude/settings.json).
+.claude/settings.local.json

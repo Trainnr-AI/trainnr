@@ -132,7 +132,6 @@ def run_lap(model, data, lap, mirror=None, viewer=None):
 
 def main() -> None:
     rr_session("robotiq-cargo-chaos", mode="spawn")
-    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     # The tray pocket the cube is supposed to come home to.
     rr.log(
         "world/tray_centre",

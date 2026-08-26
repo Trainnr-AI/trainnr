@@ -23,8 +23,23 @@ from math import exp, lgamma
 
 from rq_pipeline.stats.intervals import clopper_pearson
 
-_SPLIT = ">=midpoint"
-_ONE_TOLERANCE = 1e-9
+_ONE_TOLERANCE = 1e-9  # a p summed over every table may overshoot 1 by noise
+_TIE_TOLERANCE = 1e-7  # tables with the observed probability count as ties
+
+
+class Verdict:
+    """A factor's reading, under thresholds the protocol declared."""
+
+    SENSITIVE = "SENSITIVE"  # exact p below alpha
+    INSENSITIVE = "INSENSITIVE"  # both intervals bound the difference inside ±delta
+    UNRESOLVED = "UNRESOLVED"  # neither — the honest answer at n = 4
+
+
+class SplitLabel:
+    """The two sides of a continuous factor, split at its midpoint."""
+
+    LOW = "<midpoint"
+    HIGH = ">=midpoint"
 
 
 def _log_choose(n: int, k: int) -> float:
@@ -53,7 +68,7 @@ def fisher_exact(a: int, b: int, c: int, d: int) -> float:
 
     observed = log_probability(a)
     low, high = max(0, col1 - row2), min(row1, col1)
-    tolerance = 1e-7 * abs(observed)  # ties count, floating noise does not
+    tolerance = _TIE_TOLERANCE * abs(observed)
     p = 0.0
     for x in range(low, high + 1):
         lp = log_probability(x)
@@ -116,11 +131,11 @@ def main_effect(  # noqa: PLR0913 - the two sides and two thresholds, all requir
     # The widest difference the two intervals allow, either direction.
     spread = max(abs(interval_b[1] - interval_a[0]), abs(interval_b[0] - interval_a[1]))
     if p < alpha:
-        verdict = "SENSITIVE"
+        verdict = Verdict.SENSITIVE
     elif spread <= delta:
-        verdict = "INSENSITIVE"
+        verdict = Verdict.INSENSITIVE
     else:
-        verdict = "UNRESOLVED"
+        verdict = Verdict.UNRESOLVED
     return FactorEffect(
         key=key,
         side_a=side_a,
@@ -160,7 +175,3 @@ def format_table(effects: Sequence[FactorEffect]) -> str:
             f"{e.interval_b[1]:.2f}], diff {e.difference:+.2f}, p = {e.p_value:.3f})"
         )
     return "\n".join(lines)
-
-
-SPLIT_LABEL_LOW = "<midpoint"
-SPLIT_LABEL_HIGH = _SPLIT

@@ -10,6 +10,7 @@ That protection is only as durable as the lines declaring it, and deleting
 a line from a manifest is silent. This checks the guard rather than
 grepping for the thing the guard already prevents.
 """
+
 import re
 import sys
 from pathlib import Path
@@ -25,7 +26,9 @@ for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
         missing.append(f"{manifest.relative_to(ROOT)}: no unsafe gate")
 
 # The workspace block the inheriting crates rely on.
-if not re.search(r'^unsafe_code\s*=\s*"forbid"', (ROOT / "Cargo.toml").read_text(), re.M):
+if not re.search(
+    r'^unsafe_code\s*=\s*"forbid"', (ROOT / "Cargo.toml").read_text(), re.M
+):
     missing.append("Cargo.toml: [workspace.lints.rust] no longer forbids unsafe")
 
 # Firmware is outside the workspace, so each declares it in source.

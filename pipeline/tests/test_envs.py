@@ -251,12 +251,17 @@ class GymnasiumContract(unittest.TestCase):
     def test_every_registered_task_makes_by_gym_id(self) -> None:
         import gymnasium as gym  # noqa: PLC0415
 
-        from rq_pipeline.envs.robotiq import TASKS  # noqa: PLC0415
+        from rq_pipeline.envs.contract import gym_id  # noqa: PLC0415
+        from rq_pipeline.tasks.registry import tasks  # noqa: PLC0415
 
-        for name in TASKS:
-            env = gym.make(f"robotiq/{name}-v0")
+        registry = tasks()
+        self.assertEqual(
+            gym_id("robotiq/kitting"), "robotiq/kitting-v0"
+        )  # the one literal pin
+        for task_id, entry in registry.items():
+            env = gym.make(gym_id(task_id))
             try:
-                self.assertEqual(env.unwrapped.task, name)
+                self.assertEqual(env.unwrapped.task, entry.name)
                 self.assertIn("@", env.unwrapped.source)
                 self.assertGreater(env.unwrapped.state_width, 0)
             finally:

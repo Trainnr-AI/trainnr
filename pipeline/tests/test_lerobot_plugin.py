@@ -61,11 +61,19 @@ class ThroughLeRobot(unittest.TestCase):
         finally:
             vec.close()
 
-    def test_unknown_task_is_refused_at_config_time(self) -> None:
+    def test_unknown_or_missing_task_is_refused_at_config_time(self) -> None:
         from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
 
         with self.assertRaises(ValueError):
             RobotiqEnvConfig(task="juggling")
+        with self.assertRaises(ValueError):
+            RobotiqEnvConfig()  # no silent default task
+
+    def test_fps_comes_from_the_task(self) -> None:
+        from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+
+        self.assertEqual(RobotiqEnvConfig(task="kitting").fps, 50)
+        self.assertEqual(RobotiqEnvConfig(task="reach").fps, 50)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,35 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from rq_pipeline.stats.effects import SplitLabel, main_effect, split_continuous
+
 _HASH_BITS = 53  # a float's mantissa: the largest exact integer fraction
+KEY_SEPARATOR = "."
+
+
+class VariationKeys:
+    """The vocabulary, spelled once. Hosts that are fixed words, and the
+    knob names an engine's appliers register under (physics/variations.py):
+    `joints.damping_scale`, `actuators.gain_scale`, `lights.diffuse_scale`,
+    `<body>.mass_scale`, `<camera>.offset_m`."""
+
+    JOINTS = "joints"
+    ACTUATORS = "actuators"
+    LIGHTS = "lights"
+    DAMPING_SCALE = "damping_scale"
+    GAIN_SCALE = "gain_scale"
+    DIFFUSE_SCALE = "diffuse_scale"
+    MASS_SCALE = "mass_scale"
+    OFFSET_M = "offset_m"
+
+    @staticmethod
+    def key(host: str, name: str) -> str:
+        return f"{host}{KEY_SEPARATOR}{name}"
+
+    @staticmethod
+    def split(key: str) -> tuple[str, str]:
+        host, _, name = key.rpartition(KEY_SEPARATOR)
+        return host, name
 
 
 @dataclass(frozen=True)
@@ -70,7 +98,7 @@ class Variation:
 
     @property
     def key(self) -> str:
-        return f"{self.host}.{self.name}"
+        return VariationKeys.key(self.host, self.name)
 
 
 def _unit(protocol_hash: str, key: str, trial: int, component: int) -> float:
@@ -155,13 +183,6 @@ def sensitivity_table(
     the certificate prints (stats/effects.py). Records that lack a
     factor are refused: an unrecorded draw is a protocol bug, not a
     missing value."""
-    from rq_pipeline.stats.effects import (  # noqa: PLC0415 - stats is the lower layer
-        SPLIT_LABEL_HIGH,
-        SPLIT_LABEL_LOW,
-        main_effect,
-        split_continuous,
-    )
-
     effects = []
     outcomes = [bool(r.success) for r in records]
     for variation in variations:
@@ -202,8 +223,8 @@ def sensitivity_table(
             effects.append(
                 main_effect(
                     name,
-                    SPLIT_LABEL_LOW,
-                    SPLIT_LABEL_HIGH,
+                    SplitLabel.LOW,
+                    SplitLabel.HIGH,
                     below,
                     above,
                     alpha=alpha,

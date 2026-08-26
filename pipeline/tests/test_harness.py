@@ -134,7 +134,7 @@ class GateAInSimulation(unittest.TestCase):
             scene_bundle="bench@000000000000",
             outcomes=join_with_real(scores, real),
             gate_threshold=0.5,
-            physics_backend="mujoco-cpu",
+            instrument="mujoco-cpu",
         )
         # Four policies in perfect agreement: the interval gate must still
         # FAIL (n=4 cannot certify strength), while the exact permutation

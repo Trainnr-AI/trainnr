@@ -4,6 +4,7 @@ recorded stage cues — MuJoCo window + Rerun stream, side by side.
     cd pipeline && uv run --extra sim --extra viz mjpython \
         ../tools/replay-errand.py ../recordings/<run>.wire
 """
+
 import math
 import sys
 import time
@@ -61,8 +62,10 @@ mujoco.mj_forward(model, data)
 free_j = next(j for j in range(model.njnt) if int(model.jnt_type[j]) == 0)
 free_q = model.jnt_qposadr[free_j]
 z0 = float(data.qpos[free_q + 2])
-arm_joints = [model.jnt_qposadr[model.joint(n).id] for n in
-              ("yarm_base_yaw", "yarm_waist", "yarm_shoulder", "yarm_wrist")]
+arm_joints = [
+    model.jnt_qposadr[model.joint(n).id]
+    for n in ("yarm_base_yaw", "yarm_waist", "yarm_shoulder", "yarm_wrist")
+]
 jaw_l = model.jnt_qposadr[model.joint("yarm_jaw_l_hinge").id]
 jaw_r = model.jnt_qposadr[model.joint("yarm_jaw_r_hinge").id]
 JOINT_NAMES = ["base", "waist", "shoulder", "wrist", "jaw"]
@@ -81,6 +84,7 @@ def mime_pose(i):
     wave = salute_pose(i * TICK)
     return wave if wave is not None else AIR_TUCK
 
+
 rr_session(f"yellow-rig-{WIRE.stem}")
 
 trail = []
@@ -90,8 +94,13 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
     for i, st in enumerate(rec.statuses):
         start = time.time()
         yaw = st.heading
-        data.qpos[free_q:free_q + 3] = [st.x, st.y, z0]
-        data.qpos[free_q + 3:free_q + 7] = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
+        data.qpos[free_q : free_q + 3] = [st.x, st.y, z0]
+        data.qpos[free_q + 3 : free_q + 7] = [
+            math.cos(yaw / 2),
+            0,
+            0,
+            math.sin(yaw / 2),
+        ]
         pose = mime_pose(i)
         for adr, val in zip(arm_joints, pose[:4]):
             data.qpos[adr] = val

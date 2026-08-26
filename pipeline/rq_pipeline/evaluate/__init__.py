@@ -24,7 +24,7 @@ from rq_pipeline.evaluate.records import (
     append_records,
     disagreements,
     fold,
-    from_eval_info,
+    from_success_list,
     funnel,
     read_records,
 )
@@ -44,7 +44,7 @@ __all__ = [
     "evaluate_policies",
     "events_for",
     "fold",
-    "from_eval_info",
+    "from_success_list",
     "funnel",
     "join_with_real",
     "load_benchmark",

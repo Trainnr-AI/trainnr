@@ -28,7 +28,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.hashing import require_stamp, stamp
 from rq_pipeline.robot.identify import (
     DEFAULT_PINNED_FRACTION,
     IdentificationResult,
@@ -105,11 +105,7 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
 ) -> Path:
     """Record a fit into the bundle. One file per recording; refitting the
     same recording overwrites (git history keeps the old fit)."""
-    if "@" not in recording:
-        raise ValueError(
-            f"recording identity must be name@hash, got {recording!r} — "
-            "stamp it with rq_pipeline.bundles.stamp first"
-        )
+    require_stamp(recording, "recording identity")
     if "/" in recording or "\\" in recording:
         raise ValueError(
             f"recording identity must not contain path separators, got "

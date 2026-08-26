@@ -104,7 +104,7 @@ class GateADryRun(unittest.TestCase):
                 scene_bundle=f"so101-{task_name}@000000000000",
                 outcomes=outcomes,
                 gate_threshold=0.5,
-                physics_backend="mujoco-cpu",
+                instrument="mujoco-cpu",
             )
             pooling_input[task_name] = (
                 [outcome.sim_score for outcome in outcomes],

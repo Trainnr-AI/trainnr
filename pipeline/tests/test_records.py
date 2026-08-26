@@ -12,7 +12,6 @@ from rq_pipeline.evaluate.records import (
     append_records,
     disagreements,
     fold,
-    from_eval_info,
     funnel,
     read_records,
 )
@@ -165,6 +164,8 @@ class RoundTrip(unittest.TestCase):
         self.assertEqual(back, tuple(rows))
 
     def test_lerobot_eval_info_folds_by_seed_order(self) -> None:
+        from rq_pipeline.envs.lerobot_info import from_eval_info  # noqa: PLC0415
+
         # LeRobot 0.6.1: successes as a list in episode order, no seed.
         eval_info = {
             "per_task": [

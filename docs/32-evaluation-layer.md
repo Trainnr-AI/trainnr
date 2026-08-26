@@ -332,7 +332,83 @@ needed for step 3's checkpoint.
   placement validators, the scheduler/adapter split and the remote
   client for π0.5, the task spec and critic loop.
 
-## 10. Open questions (carried from 45 §4 and 46 §5)
+## 10. The review pass (2026-08-26, night) — standards applied
+
+The operator's standard, stated after the build: modular and
+cross-platform, nothing hardcoded unless necessary, open-source-ready,
+strings and constants handled cleanly, DRY. Three reviewers read the
+day's code against it (hardcoding/portability/OSS hygiene; DRY and
+constants; modularity and layering), and their findings were folded
+into two batches the same night. What changed:
+
+- **Layering, written down and enforced.** `rq_pipeline/protocol.py`
+  holds the vocabulary every layer shares (`EpisodeProtocol`,
+  `Milestone`, `CameraSpec`, `events_for`, `protocol_fields`); the
+  chain `stats ← bundles, protocol, robot.model_checks ← evaluate ←
+  physics, tasks, collect, robot (sysid) ← envs ← tools` is pinned by
+  `tests/test_layers.py` over every import, lazy ones included. It found
+  two violations on its first run: the harness reaching up into
+  `physics` (now the harness declares an `Engine` protocol it needs and
+  the backend offers `stepper()`), and the sysid half of `robot`
+  importing `collect` (placed a tier up).
+- **Registries where there were tables.** Tasks register themselves
+  (`tasks/registry.py`: `@register(name, rig=…)`, `tasks()`, `resolve()`,
+  ids `namespace/name`, a `rq_pipeline.tasks` entry-point group so an
+  installed package's `acme/pour` is `--env.task=acme/pour` and
+  `gym.make("acme/pour-v0")` with nothing of ours edited); variation
+  appliers register by knob name (`physics/variations.py`), so a new
+  knob or a new engine is one decorated class, and the "known keys"
+  message is built from the registry.
+- **One truth per contract string.** `envs/contract.py` (observation
+  and info keys, env type, gym id, render mode, defaults);
+  `VariationKeys`; `Verdict` and `SplitLabel`; `require_stamp` replacing
+  six copies of the `name@hash` rule; `CONTROL_INTERVAL` and
+  `PAIRED_TRIALS` shared by both rigs; task-name constants used by the
+  builders, the registry and the tools; `tasks/scene.py` for the
+  offscreen budget, shadow map, contact options and geom groups;
+  `collect/kitting_export.py::DemoLayout`/`Manifest`/`write_episode`
+  read and written by the generator, the exporter and the test alike.
+- **Nothing rig-specific in generic modules.** `Task` carries
+  `bundle_dir` and derives `control_hz` from its spec's timestep; the
+  LeRobot plugin's fps comes from the task and its `task` field has no
+  default; `bundle_source` has no ALOHA default; the choreographer's
+  `* 50` and the generator's five restated facts read the task.
+- **Cross-platform.** `spawn` for async workers (`forkserver` has no
+  Windows); `train-watch` launches the trainer through
+  `sys.executable -m …` and resolves the device (cuda → mps → cpu); the
+  bundle hash skips hidden files and `.gitattributes` pins LF, so a Mac
+  `.DS_Store` or a Windows CRLF checkout cannot change a stamp; bundles
+  are located through `RQ_ROBOTS_DIR` with a loud error; launch lines
+  are labelled WSL vs macOS.
+- **Open-source hygiene.** `LICENSE` (Apache-2.0) and `NOTICE` at the
+  root, `license` on the Cargo workspace; `.env` and per-user Claude
+  settings ignored; provenance records a batch's name, not its absolute
+  path; `mujoco-warp` marked non-Darwin. Left for the operator's
+  decision: `claude-sync/` (transcripts, a personal memory file, home
+  paths) is tracked and must be filtered out of history before any
+  public push — it is the cross-machine chat sync, so its fate is a
+  choice, not a fix.
+- **Library code out of tools.** `envs/lerobot_policy.py` (a checkpoint
+  as `act(observation)` through LeRobot's own processors) and
+  `envs/lerobot_info.py` (the `eval_info.json` reader over the generic
+  `records.from_success_list`); `tools/_lab.py` gained the demo loader,
+  the preview rate and the world-up logging.
+
+Deferred, with the reviewers' rows as the spec: per-task
+`EpisodeDesign` structs and hold windows in seconds; the neutral pose
+pinned to the bundle keyframe instead of copied; ALOHA joint-name lists
+derived once; FULLPHYSICS offsets derived from the model; typed
+`MilestoneEvent`/`ProtocolFields`; the full engine seam (`Engine`
+exists for the harness; the env still touches MuJoCo directly);
+bundles as package data; the remaining tool copies of scene constants
+(show-many, rl-watch, show-aloha2); and the older tools themselves —
+`tools/` was never under the ruff gate that `pipeline/` runs, and a
+sweep found 60 findings (magic numbers, `zip` without `strict`,
+`subprocess.run` without `check`) in files this pass did not touch.
+215 sim tests, 3 plugin tests, the kitting-export round trip, and the
+layer chain all green.
+
+## 11. Open questions (carried from 45 §4 and 46 §5)
 
 1. Async vector envs under WSL: LIBERO defers simulator creation to the
    first `reset` inside the worker to dodge stale EGL contexts under

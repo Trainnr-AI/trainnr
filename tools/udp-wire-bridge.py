@@ -52,5 +52,8 @@ with out_path.open("a") as out:
         out.flush()
         count += 1
         if count == 1:
-            print(f"[{time.time() - start:6.1f}s] first datagram from {addr[0]}", flush=True)
+            print(
+                f"[{time.time() - start:6.1f}s] first datagram from {addr[0]}",
+                flush=True,
+            )
 print(f"done: {count} datagrams -> {out_path}", flush=True)

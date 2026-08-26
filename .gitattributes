@@ -1,0 +1,14 @@
+# Bundle identity is a hash of file bytes (pipeline/rq_pipeline/bundles/hashing.py).
+# A Windows checkout with autocrlf would change every .xml/.md's bytes and
+# every name@hash stamp with them; pin line endings so the stamp is the
+# same on every machine.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.stl binary
+*.obj binary
+*.mp4 binary
+*.gz binary
+*.uf2 binary
+*.wire binary
+*.npz binary

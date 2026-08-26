@@ -1,0 +1,36 @@
+robotiq
+Copyright 2026 the robotiq authors
+
+This product is licensed under the Functional Source License, Version 1.1,
+ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
+competing product or service is allowed, and each version is also licensed
+under the Apache License, Version 2.0 from the second anniversary of the
+day it is made available. The third-party material below keeps its own
+licence; the text of the Apache License, Version 2.0 is in LICENSE-APACHE.
+
+It includes or builds on the following third-party material:
+
+- MuJoCo Menagerie (Google DeepMind) — the ALOHA 2 model under
+  robots/aloha2-nominal/ (BSD-3-Clause, upstream commit da76818e) and the
+  SO-101 / SO-ARM100 model under robots/so101-nominal/ (Apache-2.0). Each
+  bundle directory carries the upstream LICENSE and a README recording the
+  repository, branch, commit and date; the upstream files are byte-identical
+  and our wrappers (aloha2.xml, so101.xml) add sensors and keyframes only.
+- gym-aloha / ACT (Tony Z. Zhao et al.; Hugging Face) — the transfer-cube
+  task's spawn box, cube contact parameters and top-camera placement in
+  pipeline/rq_pipeline/tasks/aloha2.py follow the original ACT simulator's
+  conventions (Apache-2.0 / MIT) so released checkpoints see the scene they
+  were trained on. No source code is copied.
+- LeRobot (Hugging Face, Apache-2.0) — used as a dependency (training,
+  datasets, policy loading, the evaluator's environment contract). No source
+  code is copied; pipeline/rq_pipeline/envs/lerobot_plugin.py implements
+  its EnvConfig interface.
+- Gymnasium (Farama Foundation, MIT) — used as a dependency.
+- MuJoCo (Google DeepMind, Apache-2.0) — used as a dependency.
+- Infineon CYW43 wireless firmware — firmware/cyw43-firmware/, under the
+  license files kept alongside it.
+- rp2040js (Wokwi, MIT) — an ignored vendor checkout used by the firmware
+  tests; not distributed here.
+
+Data and session files under claude-sync/ are the maintainers' private
+working notes and are not part of the licensed product.

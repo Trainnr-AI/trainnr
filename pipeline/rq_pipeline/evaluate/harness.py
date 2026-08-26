@@ -28,24 +28,26 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
+from rq_pipeline.bundles.hashing import require_stamp
 from rq_pipeline.evaluate.certificate import PolicyOutcome
 from rq_pipeline.evaluate.records import (
     EpisodeRecord,
     SimScore,
     append_records,
     fold,
+)
+from rq_pipeline.protocol import (
+    EpisodeProtocol,
+    Milestone,
+    events_for,
     protocol_fields,
 )
 from rq_pipeline.robot.model_checks import assert_model_alive
 
-if TYPE_CHECKING:  # pragma: no cover
-    from rq_pipeline.physics.mujoco_backend import MuJoCoBackend
-
-Milestone = tuple[str, Callable[[Any, Any, int], bool]]
-
 __all__ = [
+    "Engine",
     "EpisodeProtocol",
     "Milestone",
     "SimPolicy",
@@ -59,6 +61,23 @@ __all__ = [
 ]
 
 
+class Engine(Protocol):
+    """What the harness asks of a physics engine — declared here, where
+    it is consumed, so `evaluate` names no engine. `MuJoCoBackend`
+    satisfies it structurally; a second engine implements these five."""
+
+    @property
+    def instrument(self) -> str: ...  # name and version, e.g. "mujoco-3.11.0"
+
+    def counts(self) -> Any: ...  # the census: actuators, sensors, geoms, cameras
+
+    def default_initial_state(self) -> Any: ...
+
+    def keyframe_state(self, name: str) -> Any: ...
+
+    def stepper(self, initial_state: Any, steps: int) -> Any: ...
+
+
 @dataclass(frozen=True)
 class SimPolicy:
     """A named closed-loop controller: (step_index, sensordata) → controls."""
@@ -67,70 +86,7 @@ class SimPolicy:
     act: Callable[[int, Any], Any]
 
 
-@dataclass(frozen=True)
-class EpisodeProtocol:
-    """The episode recipe every policy is scored under, identically.
-
-    `perturb(trial_index, home_state) -> initial_state` varies the start;
-    it receives the trial index (not an RNG) so trials are paired across
-    policies and the whole evaluation is deterministic by construction.
-    `success(states, sensors) -> bool` judges one episode.
-
-    `home` names the keyframe every trial starts from (before
-    `perturb`); None means the model's reset state. Where an episode
-    starts is a fact about the protocol, declared here, never inherited
-    from the backend — the ALOHA rig's reset state has both arms
-    straight up on a path that jams the grippers together at over 1 kN,
-    while the SO-101 tasks were tuned from theirs.
-    """
-
-    trials: int
-    steps: int
-    control_interval: int
-    perturb: Callable[[int, Any], Any]
-    success: Callable[[Any, Any], bool]
-    home: str | None = None
-    # Milestones: an ORDERED chain of (name, predicate(states, sensors,
-    # step) -> bool) — Arena's progress tracking (docs/30 §7 row 39),
-    # computed offline over the episode we already keep. Never a
-    # verdict: `success` alone decides; milestones say how far a
-    # failure got ("moved 4/4, lifted 0/4"), which a row of zeros hides.
-    milestones: tuple[Milestone, ...] = ()
-
-    def __post_init__(self) -> None:
-        for field_name, value in (
-            ("trials", self.trials),
-            ("steps", self.steps),
-            ("control_interval", self.control_interval),
-        ):
-            if value <= 0:
-                raise ValueError(f"{field_name} must be positive, got {value}")
-        names = [name for name, _ in self.milestones]
-        if len(set(names)) != len(names):
-            raise ValueError(f"milestone names must be unique, got {names}")
-
-
-def events_for(
-    protocol: EpisodeProtocol, states: Any, sensors: Any
-) -> tuple[dict, ...]:
-    """Walk the episode once: evaluate only the chain's current
-    milestone at each physics step, advance at most one per step, and
-    record the first step each fires (Arena's tracker rule, offline).
-    Returns the fired milestones in order — an empty tuple means the
-    policy never reached the first one."""
-    events: list[dict] = []
-    index = 0
-    for step in range(len(states)):
-        if index >= len(protocol.milestones):
-            break
-        name, predicate = protocol.milestones[index]
-        if predicate(states, sensors, step):
-            events.append({"index": index, "name": name, "step": step})
-            index += 1
-    return tuple(events)
-
-
-def home_state(backend: MuJoCoBackend, protocol: EpisodeProtocol) -> Any:
+def home_state(backend: Engine, protocol: EpisodeProtocol) -> Any:
     """The protocol's declared start: its keyframe, else the model's reset."""
     if protocol.home is None:
         return backend.default_initial_state()
@@ -138,7 +94,7 @@ def home_state(backend: MuJoCoBackend, protocol: EpisodeProtocol) -> Any:
 
 
 def run_sensor_episode(
-    backend: MuJoCoBackend,
+    backend: Engine,
     act: Callable[[int, Any], Any],
     initial_state: Any,
     *,
@@ -152,9 +108,7 @@ def run_sensor_episode(
     is what the actuators get, exactly like the wire. Pixel policies go
     through the gymnasium env instead (rq_pipeline.envs); both are the
     same `Stepper`."""
-    from rq_pipeline.physics.mujoco_backend import Stepper  # noqa: PLC0415
-
-    stepper = Stepper(backend.model, initial_state, steps)
+    stepper = backend.stepper(initial_state, steps)
     while not stepper.done:
         control = act(stepper.step, stepper.data.sensordata.copy())
         stepper.advance(control, control_interval)
@@ -162,7 +116,7 @@ def run_sensor_episode(
 
 
 def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knobs
-    backend: MuJoCoBackend,
+    backend: Engine,
     policies: Sequence[Any],
     protocol: EpisodeProtocol,
     *,
@@ -186,11 +140,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"duplicate policy names: {sorted(names)}")
-    if "@" not in source:
-        raise ValueError(
-            f"source must be a name@hash stamp, got {source!r} — the same "
-            "rule certify() enforces, applied before episodes are spent"
-        )
+    require_stamp(source)  # the same rule certify() enforces, before episodes are spent
     counts = backend.counts()
     assert_model_alive(
         counts.actuators,
@@ -200,7 +150,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
         cameras=counts.cameras if gate_cameras else None,
     )
     home = home_state(backend, protocol)
-    instrument = getattr(backend, "instrument", backend.name)
+    instrument = backend.instrument
     fields = protocol_fields(protocol)
     records: list[EpisodeRecord] = []
     for policy in policies:
@@ -223,7 +173,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
 
 
 def evaluate_policies(
-    backend: MuJoCoBackend,
+    backend: Engine,
     policies: Sequence[SimPolicy],
     protocol: EpisodeProtocol,
     *,
@@ -272,10 +222,7 @@ def join_with_real(
     outcomes = []
     for score in sim_scores:
         successes, trials = real_outcomes[score.name]
-        if trials <= 0 or not 0 <= successes <= trials:
-            raise ValueError(
-                f"invalid real counts for {score.name!r}: {successes}/{trials}"
-            )
+        # Counts are validated once, by PolicyOutcome itself.
         outcomes.append(
             PolicyOutcome(
                 name=score.name,

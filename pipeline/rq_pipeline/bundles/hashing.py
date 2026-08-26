@@ -25,7 +25,15 @@ def bundle_hash(root: Path) -> str:
         digest.update(root.name.encode())
         digest.update(root.read_bytes())
         return digest.hexdigest()
-    files = sorted(path for path in root.rglob("*") if path.is_file())
+    # Hidden files are not bundle content: a Finder `.DS_Store` or an
+    # editor's `.swp` would otherwise give the same bundle a different
+    # identity on a different machine, and no error would say why.
+    files = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
+    )
     if not files:
         raise ValueError(f"bundle is empty: {root}")
     for path in files:
@@ -36,8 +44,27 @@ def bundle_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
+STAMP_SEPARATOR = "@"
+
+
 def stamp(name: str, root: Path) -> str:
     """`name@hash` identity for an artifact, e.g. `scene-lab@3fa9c12ab45d`."""
-    if "@" in name:
-        raise ValueError(f"artifact name must not contain '@': {name}")
-    return f"{name}@{bundle_hash(root)[:STAMP_LENGTH]}"
+    if STAMP_SEPARATOR in name:
+        raise ValueError(f"artifact name must not contain '{STAMP_SEPARATOR}': {name}")
+    return f"{name}{STAMP_SEPARATOR}{bundle_hash(root)[:STAMP_LENGTH]}"
+
+
+def is_stamp(value: str) -> bool:
+    return STAMP_SEPARATOR in value
+
+
+def require_stamp(value: str, what: str = "source") -> str:
+    """The one rule every consumer of an identity applies: nothing is
+    nameable without its hash. Until 2026-08-26 six modules each spelled
+    the check (and three different messages); this is the only copy."""
+    if not is_stamp(value):
+        raise ValueError(
+            f"{what} must be a name{STAMP_SEPARATOR}hash stamp, got {value!r} — "
+            "stamp it with rq_pipeline.bundles.stamp first"
+        )
+    return value

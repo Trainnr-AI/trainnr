@@ -59,5 +59,16 @@ class BundleHash(unittest.TestCase):
                 stamp("bad@name", root)
 
 
+class StampRule(unittest.TestCase):
+    def test_require_stamp_is_the_one_rule(self) -> None:
+        from rq_pipeline.bundles.hashing import is_stamp, require_stamp  # noqa: PLC0415
+
+        self.assertTrue(is_stamp("robot@000000000000"))
+        self.assertEqual(require_stamp("robot@000000000000"), "robot@000000000000")
+        with self.assertRaises(ValueError) as caught:
+            require_stamp("robot", "robot bundle identity")
+        self.assertIn("robot bundle identity", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

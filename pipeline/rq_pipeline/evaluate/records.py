@@ -25,6 +25,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.hashing import STAMP_LENGTH, require_stamp
+from rq_pipeline.protocol import protocol_fields
+
+__all__ = [
+    "EpisodeRecord",
+    "SimScore",
+    "append_records",
+    "disagreements",
+    "fold",
+    "from_success_list",
+    "funnel",
+    "protocol_fields",
+    "protocol_hash",
+    "read_records",
+]
+
 
 @dataclass(frozen=True)
 class SimScore:
@@ -66,8 +82,7 @@ class EpisodeRecord:
     )
 
     def __post_init__(self) -> None:
-        if "@" not in self.source:
-            raise ValueError(f"source must be a name@hash stamp, got {self.source!r}")
+        require_stamp(self.source)
         if self.trial < 0 or self.steps <= 0:
             raise ValueError(
                 f"trial must be >= 0 and steps > 0, got {self.trial}, {self.steps}"
@@ -83,20 +98,7 @@ def protocol_hash(fields: Mapping[str, Any]) -> str:
     variation space, when the env adds one): the seed of every draw, so
     two sweeps that differ in any declared knob draw different values."""
     encoded = json.dumps(dict(fields), sort_keys=True, default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()[:12]
-
-
-def protocol_fields(protocol: Any) -> dict[str, Any]:
-    """The scalar half of an `EpisodeProtocol` — what a row can carry,
-    including the milestone chain's names so a reader knows how long
-    a complete funnel is."""
-    return {
-        "trials": protocol.trials,
-        "steps": protocol.steps,
-        "control_interval": protocol.control_interval,
-        "home": protocol.home,
-        "milestones": [name for name, _ in getattr(protocol, "milestones", ())],
-    }
+    return hashlib.sha256(encoded).hexdigest()[:STAMP_LENGTH]
 
 
 def funnel(records: Sequence[EpisodeRecord]) -> dict[str, list[int]]:
@@ -184,8 +186,8 @@ def fold(records: Sequence[EpisodeRecord]) -> tuple[SimScore, ...]:
     )
 
 
-def from_eval_info(  # noqa: PLR0913 - every argument is identity the file lacks
-    eval_info: Mapping[str, Any],
+def from_success_list(  # noqa: PLR0913 - every argument is identity the list lacks
+    successes: Sequence[bool],
     *,
     policy: str,
     source: str,
@@ -195,18 +197,10 @@ def from_eval_info(  # noqa: PLR0913 - every argument is identity the file lacks
     trials: int,
     steps: int,
 ) -> tuple[EpisodeRecord, ...]:
-    """LeRobot 0.6.1's `eval_info.json` → records.
-
-    The file carries `per_task[0].metrics.successes` as a list in episode
-    order and no seed; `lerobot-eval` seeded episode i with
-    `start_seed + i` and our env started trial `seed % trials`, so both
-    are recovered from the order. One task per file is assumed and
-    checked.
-    """
-    per_task = eval_info["per_task"]
-    if len(per_task) != 1:
-        raise ValueError(f"expected one task in eval_info, got {len(per_task)}")
-    successes = per_task[0]["metrics"]["successes"]
+    """An ordered success list from a runner that seeded episode i with
+    `start_seed + i` (LeRobot's convention; `envs/lerobot_info.py` reads
+    its file) → records with seed and pairing trial recovered from the
+    order. Events and draws are unknown to such a runner and stay empty."""
     return tuple(
         EpisodeRecord(
             source=source,

@@ -145,7 +145,6 @@ def stage_process(spec, queue, closed):
     rr_session(
         f"robotiq-rl-watch-{ENV_NAME}", mode="connect", recording_id=recording_id
     )
-    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     history, env_steps = None, 0
     viewer = mujoco.viewer.launch_passive(model, data)
     viewer.cam.distance = 2.2 * side
@@ -260,9 +259,7 @@ def main() -> None:
     del train_kwargs["network_factory"]
 
     recording_id = f"rl-watch-{ENV_NAME}-{datetime.now():%Y%m%d-%H%M%S}"
-    rr_session(
-        f"robotiq-rl-watch-{ENV_NAME}", mode="spawn", recording_id=recording_id
-    )
+    rr_session(f"robotiq-rl-watch-{ENV_NAME}", mode="spawn", recording_id=recording_id)
     stage = Stage(env, args.show, recording_id)
     rollouts = {}  # one jitted rollout per make_policy (brax passes the same one)
     started = time.time()

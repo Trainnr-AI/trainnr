@@ -13,10 +13,18 @@ certificate read them from one place.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol
-from rq_pipeline.evaluate.vision import CameraSpec
+from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
+
+# Episode design shared by every rig's tasks: 500 Hz physics (the
+# bundles' timestep) with a control tick every ten steps — the 50 Hz
+# the public ALOHA data and the real buses run at — and four paired
+# starts (the spawn box's corners), so trials pair across policies by
+# index. A task that needs another rate says so on its own protocol.
+CONTROL_INTERVAL = 10
+PAIRED_TRIALS = 4
 
 
 @dataclass(frozen=True)
@@ -28,8 +36,9 @@ class Task:
     policy sees (six for the SO-101, fourteen for ALOHA 2) — and
     `instruction` the language the task is judged under, exposed as
     `task_description` by the env and stamped into every record.
-    `target` is the reach task's goal point (a scene fact its referee
-    and viewer share); None elsewhere.
+    `bundle_dir` is the robot bundle the scene was composed from — its
+    hash stamps every record. `target` is the reach task's goal point
+    (a scene fact its referee and viewer share); None elsewhere.
     """
 
     name: str
@@ -38,6 +47,7 @@ class Task:
     cameras: tuple[CameraSpec, ...]
     state_width: int
     instruction: str
+    bundle_dir: Path
     target: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
@@ -47,3 +57,12 @@ class Task:
             raise ValueError("instruction must not be empty")
         if not self.cameras:
             raise ValueError(f"task {self.name!r} declares no cameras")
+
+    @property
+    def control_hz(self) -> int:
+        """The policy's rate: one control tick per `control_interval`
+        physics steps of the spec's timestep — readable before compile,
+        so the LeRobot plugin, the env's `render_fps` and the tools all
+        ask the task instead of restating a number."""
+        timestep = float(self.spec.option.timestep)
+        return round(1.0 / (timestep * self.protocol.control_interval))

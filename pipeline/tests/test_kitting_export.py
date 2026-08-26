@@ -21,33 +21,36 @@ FRAME_TICKS = (0, 10, 20, 30, 40, 50)  # frame_every=1 at 500 Hz physics / 50 Hz
 
 def synthetic_batch(root: Path, episodes: int = 2, frame_every: int = 1) -> Path:
     import numpy as np  # noqa: PLC0415
-    from PIL import Image  # noqa: PLC0415
+
+    from rq_pipeline.collect.kitting_export import (  # noqa: PLC0415
+        Manifest,
+        write_episode,
+    )
 
     rng = np.random.default_rng(0)
     demos = root / "demos"
     for index in range(episodes):
-        episode = demos / f"episode_{index:04d}"
-        (episode / "frames").mkdir(parents=True)
-        np.savez_compressed(
-            episode / "trajectory.npz",
-            states=rng.normal(size=(STEPS, 40)).astype(np.float32),
-            sensors=rng.normal(size=(STEPS, 34)).astype(np.float32),
-            actions=rng.normal(size=(CONTROL_TICKS, 14)).astype(np.float32),
-        )
-        for tick in FRAME_TICKS:
-            Image.fromarray(rng.integers(0, 255, (48, 64, 3), dtype=np.uint8)).save(
-                episode / "frames" / f"{tick:06d}.jpg"
-            )
-        (episode / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "control_hz": 50,
-                    "frame_every_control_ticks": frame_every,
-                    "damping_scale": 1.0,
-                    "gain_scale": 1.0,
-                    "verdict": "success (task referee)",
-                }
-            )
+        write_episode(
+            demos,
+            index,
+            states=rng.normal(size=(STEPS, 40)),
+            sensors=rng.normal(size=(STEPS, 34)),
+            actions=rng.normal(size=(CONTROL_TICKS, 14)),
+            frames=[
+                (tick, rng.integers(0, 255, (48, 64, 3), dtype=np.uint8))
+                for tick in FRAME_TICKS
+            ],
+            manifest=Manifest(
+                seed=0,
+                attempt=index + 1,
+                draws={},
+                dr_span=0.0,
+                damping_scale=1.0,
+                gain_scale=1.0,
+                retries=[],
+                control_hz=50,
+                frame_every_control_ticks=frame_every,
+            ),
         )
     return demos
 

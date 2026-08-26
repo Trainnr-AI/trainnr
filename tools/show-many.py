@@ -189,7 +189,6 @@ def main() -> None:
     ctrl_per_step = [ctrl_from_act_sim_action(a) for a in actions]
 
     rr_session(f"robotiq-many-{args.worlds}", mode="spawn")
-    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     mirror = RigMirror(
         model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)
     )

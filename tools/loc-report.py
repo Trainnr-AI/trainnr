@@ -112,7 +112,10 @@ def main():
     sep = " | " if markdown else "  "
 
     def emit(cells, widths):
-        out = sep.join(c.ljust(w) if i else c.ljust(w) for i, (c, w) in enumerate(zip(cells, widths)))
+        out = sep.join(
+            c.ljust(w) if i else c.ljust(w)
+            for i, (c, w) in enumerate(zip(cells, widths))
+        )
         print(f"{bar} {out} {bar}" if markdown else out)
 
     widths = [34, 7, 7, 7, 7, 7, 7]
@@ -130,9 +133,11 @@ def main():
         if crate != last and not markdown:
             print(f"\n[{crate}]")
             last = crate
-        pct = f"{100*doc/(code+doc):.0f}%" if (code + doc) else "-"
+        pct = f"{100 * doc / (code + doc):.0f}%" if (code + doc) else "-"
         name = os.path.basename(rel) if not markdown else rel
-        emit([name, str(code), str(doc), str(blank), str(test), str(total), pct], widths)
+        emit(
+            [name, str(code), str(doc), str(blank), str(test), str(total), pct], widths
+        )
 
     print("\n## Per-crate\n")
     emit(["crate", "code", "doc", "blank", "test", "total", "files"], widths)
@@ -144,18 +149,34 @@ def main():
     tot = [0, 0, 0, 0, 0, 0]
     for crate in sorted(crates):
         c = crates[crate]
-        emit([crate, str(c[0]), str(c[1]), str(c[2]), str(c[3]), str(c[4]), str(c[5])], widths)
+        emit(
+            [crate, str(c[0]), str(c[1]), str(c[2]), str(c[3]), str(c[4]), str(c[5])],
+            widths,
+        )
         for i in range(6):
             tot[i] += c[i]
 
     print()
-    emit(["TOTAL", str(tot[0]), str(tot[1]), str(tot[2]), str(tot[3]), str(tot[4]), str(tot[5])], widths)
+    emit(
+        [
+            "TOTAL",
+            str(tot[0]),
+            str(tot[1]),
+            str(tot[2]),
+            str(tot[3]),
+            str(tot[4]),
+            str(tot[5]),
+        ],
+        widths,
+    )
 
     code, doc, test = tot[0], tot[1], tot[3]
     print()
-    print(f"code:test ratio     1 : {test/code:.2f}" if code else "")
-    print(f"doc:code ratio      1 : {code/doc:.2f}" if doc else "")
-    print(f"documentation       {100*doc/(code+doc):.1f}% of non-blank non-test lines")
+    print(f"code:test ratio     1 : {test / code:.2f}" if code else "")
+    print(f"doc:code ratio      1 : {code / doc:.2f}" if doc else "")
+    print(
+        f"documentation       {100 * doc / (code + doc):.1f}% of non-blank non-test lines"
+    )
 
 
 if __name__ == "__main__":

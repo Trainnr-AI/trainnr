@@ -23,6 +23,7 @@ exclude = ["firmware"]
 
 [workspace.package]
 edition = "2021"
+license = "FSL-1.1-ALv2"
 
 # ---------------------------------------------------------------------
 # Lints, declared once for every workspace member.

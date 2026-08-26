@@ -171,6 +171,11 @@ class MuJoCoBackend:
         produced by a different version is a different instrument."""
         return f"{self.name}-{self._mujoco.__version__}"
 
+    def stepper(self, initial_state: Any, steps: int, *, data: Any = None) -> Stepper:
+        """One episode's stepping loop over the loaded model — the seam the
+        harness and the env drive; a second engine offers the same method."""
+        return Stepper(self._require_model(), initial_state, steps, data=data)
+
     def load_mjcf(self, path: Path) -> None:
         self._model = self._mujoco.MjModel.from_xml_path(str(path))
 

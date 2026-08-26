@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
+from rq_pipeline.bundles.hashing import require_stamp
 from rq_pipeline.stats.intervals import clopper_pearson
 from rq_pipeline.stats.ranking import (
     EXACT_ENUMERATION_LIMIT,
@@ -24,8 +25,12 @@ from rq_pipeline.stats.ranking import (
     top_pick_probability,
 )
 
+# A certificate with no simulated side at all (real trials only).
+REAL_ONLY_INSTRUMENT = "real-only"
 
-def _check_counts(label: str, successes: int, trials: int) -> None:
+
+def check_counts(label: str, successes: int, trials: int) -> None:
+    """Counts are valid or refused — the one rule for both sides."""
     if trials <= 0 or not 0 <= successes <= trials:
         raise ValueError(f"invalid {label} counts: {successes}/{trials}")
 
@@ -46,8 +51,8 @@ class PolicyOutcome:
     real_trials: int
 
     def __post_init__(self) -> None:
-        _check_counts("sim", self.sim_successes, self.sim_trials)
-        _check_counts("real", self.real_successes, self.real_trials)
+        check_counts("sim", self.sim_successes, self.sim_trials)
+        check_counts("real", self.real_successes, self.real_trials)
 
     @property
     def sim_score(self) -> float:
@@ -82,9 +87,10 @@ class Certificate:
     robot_bundle: str
     scene_bundle: str
     # The simulator IS part of the instrument: a certificate produced by a
-    # different backend (or version) is a different instrument and needs
-    # its own Gate A run.
-    physics_backend: str
+    # different engine or version is a different instrument and needs its
+    # own Gate A run — so the field carries name AND version
+    # (`MuJoCoBackend.instrument`, e.g. "mujoco-3.11.0").
+    instrument: str
     confidence: float
     policies: tuple[PolicyResult, ...]
     rank_lower: float
@@ -126,7 +132,7 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     outcomes: Sequence[PolicyOutcome],
     *,
     gate_threshold: float,
-    physics_backend: str = "real-only",
+    instrument: str = REAL_ONLY_INSTRUMENT,
     confidence: float = 0.95,
 ) -> Certificate:
     """Assemble a certificate from paired sim and real outcomes.
@@ -134,12 +140,8 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     Bundle identities must already be `name@hash` stamps — an evaluation
     against an unstamped artifact is not reproducible and is refused.
     """
-    for bundle in (robot_bundle, scene_bundle):
-        if "@" not in bundle:
-            raise ValueError(
-                f"bundle identity must be name@hash, got {bundle!r} — "
-                "stamp it with rq_pipeline.bundles.stamp first"
-            )
+    require_stamp(robot_bundle, "robot bundle identity")
+    require_stamp(scene_bundle, "scene bundle identity")
     if not 0.0 < gate_threshold < 1.0:
         raise ValueError(f"gate threshold must be in (0, 1), got {gate_threshold}")
 
@@ -183,7 +185,7 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     return Certificate(
         robot_bundle=robot_bundle,
         scene_bundle=scene_bundle,
-        physics_backend=physics_backend,
+        instrument=instrument,
         confidence=confidence,
         policies=policies,
         rank_lower=rank_lower,

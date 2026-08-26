@@ -70,6 +70,7 @@ def duty_pair(v, w):
         (v + w * _HALF_TRACK) / _M_PER_S_PER_DUTY,
     )
 
+
 # ---- synthetic camera: 4 fps, ~35 deg half-FOV, area ~ 1/dist^2,
 # calibrated so AREA_ARRIVED corresponds to arriving ~0.30 m out ----
 CAM_PERIOD_S = 0.25

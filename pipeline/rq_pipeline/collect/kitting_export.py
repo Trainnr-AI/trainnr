@@ -22,12 +22,97 @@ imports cleanly without them so it can raise the helpful error.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.tasks.aloha2 import KITTING_INSTRUCTION
 
 PROVENANCE_FILE = "provenance.json"
+
+
+class DemoLayout:
+    """The demo batch on disk — one spelling for the writer (the demo
+    generator), the reader (this exporter) and the tests. Frames are
+    named by the PHYSICS step they were rendered at."""
+
+    EPISODE_DIR = "episode_{index:04d}"
+    EPISODE_GLOB = "episode_*"
+    FRAMES_DIR = "frames"
+    FRAME_FILE = "{tick:06d}.jpg"
+    TRAJECTORY_FILE = "trajectory.npz"
+    MANIFEST_FILE = "manifest.json"
+    STATES, SENSORS, ACTIONS = "states", "sensors", "actions"  # the npz keys
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """What a kept episode records about itself: the draw, the dynamics
+    it ran under, the referee's verdict, and the rates the exporter
+    needs. Written by the generator, read here; one shape."""
+
+    seed: int
+    attempt: int
+    draws: dict[str, tuple[float, float]]
+    dr_span: float
+    damping_scale: float
+    gain_scale: float
+    retries: list
+    control_hz: int
+    frame_every_control_ticks: int
+    action_semantics: str = "commanded actuator positions, ctrl order"
+    verdict: str = "success (task referee)"
+
+    def write(self, episode_dir: Path) -> None:
+        (episode_dir / DemoLayout.MANIFEST_FILE).write_text(
+            json.dumps(asdict(self), indent=1), encoding="utf-8"
+        )
+
+    @classmethod
+    def read(cls, episode_dir: Path) -> Manifest:
+        raw = json.loads(
+            (episode_dir / DemoLayout.MANIFEST_FILE).read_text(encoding="utf-8")
+        )
+        return cls(**raw)
+
+
+def write_episode(  # noqa: PLR0913 - the whole episode, every part named
+    demos_dir: Path,
+    index: int,
+    *,
+    states: Any,
+    sensors: Any,
+    actions: Any,
+    frames: Iterable[tuple[int, Any]],
+    manifest: Manifest,
+) -> Path:
+    """One kept episode onto disk in `DemoLayout`; returns its directory."""
+    import numpy as np  # noqa: PLC0415 - sim extra
+    from PIL import Image  # noqa: PLC0415
+
+    episode_dir = demos_dir / DemoLayout.EPISODE_DIR.format(index=index)
+    frames_dir = episode_dir / DemoLayout.FRAMES_DIR
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        episode_dir / DemoLayout.TRAJECTORY_FILE,
+        **{
+            DemoLayout.STATES: np.asarray(states, dtype=np.float32),
+            DemoLayout.SENSORS: np.asarray(sensors, dtype=np.float32),
+            DemoLayout.ACTIONS: np.asarray(actions, dtype=np.float32),
+        },
+    )
+    for tick, frame in frames:
+        Image.fromarray(frame).save(
+            frames_dir / DemoLayout.FRAME_FILE.format(tick=tick), quality=JPEG_QUALITY
+        )
+    manifest.write(episode_dir)
+    return episode_dir
+
+
+JPEG_QUALITY = 85
 SERVO_NAMES = [
     f"{arm}/{joint}"
     for arm in ("left", "right")
@@ -42,14 +127,14 @@ SERVO_NAMES = [
     )
 ]
 STATE_WIDTH = len(SERVO_NAMES)  # 14
-DEFAULT_BUNDLE = Path(__file__).resolve().parents[3] / "robots" / "aloha2-nominal"
+DEFAULT_BUNDLE = robots_dir() / "aloha2-nominal"
 
 
 def episode_dirs(demos_dir: Path) -> list[Path]:
     """The generator's episodes, in order; refuses an empty batch."""
-    episodes = sorted(p for p in demos_dir.glob("episode_*") if p.is_dir())
+    episodes = sorted(p for p in demos_dir.glob(DemoLayout.EPISODE_GLOB) if p.is_dir())
     if not episodes:
-        raise ValueError(f"no episode_* directories under {demos_dir}")
+        raise ValueError(f"no {DemoLayout.EPISODE_GLOB} directories under {demos_dir}")
     return episodes
 
 
@@ -76,12 +161,13 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
         from PIL import Image  # noqa: PLC0415
     except ImportError as error:
         raise ImportError(
-            "kitting export needs the 'train' extra (use .venv-train)"
+            "kitting export needs the 'train' extra on Python >= 3.12 "
+            "(uv sync --python 3.12 --extra train)"
         ) from error
 
     episodes = episode_dirs(demos_dir)
-    manifests = [json.loads((ep / "manifest.json").read_text()) for ep in episodes]
-    rates = {(m["control_hz"], m["frame_every_control_ticks"]) for m in manifests}
+    manifests = [Manifest.read(ep) for ep in episodes]
+    rates = {(m.control_hz, m.frame_every_control_ticks) for m in manifests}
     if len(rates) != 1:
         raise ValueError(f"episodes disagree on frame rate: {sorted(rates)}")
     (control_hz, frame_every), *_ = rates
@@ -91,7 +177,9 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
         )
     fps = control_hz // frame_every
 
-    first_frame = next(iter(sorted((episodes[0] / "frames").glob("*.jpg"))))
+    first_frame = next(
+        iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob("*.jpg")))
+    )
     height, width = np.asarray(Image.open(first_frame)).shape[:2]
     features = {
         "observation.images.top": {
@@ -115,8 +203,9 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     )
     frame_counts = []
     for episode in episodes:
-        trajectory = np.load(episode / "trajectory.npz")
-        sensors, actions = trajectory["sensors"], trajectory["actions"]
+        trajectory = np.load(episode / DemoLayout.TRAJECTORY_FILE)
+        sensors = trajectory[DemoLayout.SENSORS]
+        actions = trajectory[DemoLayout.ACTIONS]
         # Sensors are per PHYSICS step, actions per CONTROL tick (measured:
         # 14000 rows against 1400); frames are named by physics step.
         steps_per_control = len(sensors) // len(actions)
@@ -125,7 +214,7 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
                 f"{episode}: {len(sensors)} sensor rows are not a whole "
                 f"multiple of {len(actions)} action rows"
             )
-        frames = sorted((episode / "frames").glob("*.jpg"))
+        frames = sorted((episode / DemoLayout.FRAMES_DIR).glob("*.jpg"))
         if not frames:
             raise ValueError(f"{episode} has no frames")
         for frame_path in frames:
@@ -149,7 +238,9 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
 
     provenance = {
         "bundle": stamp(bundle_dir.name, bundle_dir),
-        "source": str(demos_dir),
+        # The batch's name, never its absolute path: the file ships inside
+        # the dataset, and a home directory is not provenance.
+        "source": Path(demos_dir).name,
         "episodes": len(episodes),
         "frames": frame_counts,
         "fps": fps,
@@ -157,7 +248,9 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
         "(radians; grippers in metres) — what the harness's vision rollout "
         "observes with state_width=14",
         "action_semantics": "fourteen commanded actuator positions, ctrl order",
-        "manifests": manifests,
+        "manifests": [asdict(m) for m in manifests],
     }
-    Path(root, PROVENANCE_FILE).write_text(json.dumps(provenance, indent=1))
+    Path(root, PROVENANCE_FILE).write_text(
+        json.dumps(provenance, indent=1), encoding="utf-8"
+    )
     return Path(root)

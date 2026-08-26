@@ -1,11 +1,13 @@
 """The one task shape: what every builder must say about its rig."""
 
 import unittest
+from pathlib import Path
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
+from rq_pipeline.protocol import EpisodeProtocol
 from rq_pipeline.tasks.task import Task
 
+BUNDLE = Path("robots") / "so101-nominal"
 PROTOCOL = EpisodeProtocol(
     trials=1,
     steps=1,
@@ -24,9 +26,12 @@ class TaskShape(unittest.TestCase):
             cameras=ARMNETBENCH_CAMERAS,
             state_width=6,
             instruction="reach the target",
+            bundle_dir=BUNDLE,
         )
         self.assertEqual(task.state_width, 6)
         self.assertIsNone(task.target)
+        self.assertEqual(task.bundle_dir.name, "so101-nominal")
+        self.assertEqual(PROTOCOL.control_ticks, 1)
 
     def test_missing_facts_are_refused(self) -> None:
         for kwargs in (
@@ -35,7 +40,9 @@ class TaskShape(unittest.TestCase):
             {"state_width": 6, "instruction": "x", "cameras": ()},
         ):
             with self.assertRaises(ValueError):
-                Task(name="t", spec=None, protocol=PROTOCOL, **kwargs)
+                Task(
+                    name="t", spec=None, protocol=PROTOCOL, bundle_dir=BUNDLE, **kwargs
+                )
 
 
 if __name__ == "__main__":

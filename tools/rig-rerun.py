@@ -149,7 +149,10 @@ try:
                 data.qpos[free_q : free_q + 3] = [status.x, status.y, z0]
                 half = status.heading / 2
                 data.qpos[free_q + 3 : free_q + 7] = [
-                    math.cos(half), 0.0, 0.0, math.sin(half),
+                    math.cos(half),
+                    0.0,
+                    0.0,
+                    math.sin(half),
                 ]
                 pose = arm_pose_at(t, pick_t)
                 for adr, val in zip(arm_adrs, pose[:4]):

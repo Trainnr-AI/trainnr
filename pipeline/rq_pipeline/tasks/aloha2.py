@@ -34,15 +34,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from rq_pipeline.evaluate.harness import EpisodeProtocol
-from rq_pipeline.evaluate.vision import CameraSpec
-from rq_pipeline.tasks.task import Task
+from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
+from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
+from rq_pipeline.tasks.registry import register
+from rq_pipeline.tasks.scene import set_render_budget
+from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
-BUNDLE_XML = (
-    Path(__file__).resolve().parents[3] / "robots" / "aloha2-nominal" / "aloha2.xml"
-)
+BUNDLE_XML = bundle_file("aloha2-nominal", "aloha2.xml")
 HOME_KEYFRAME = "neutral_pose"
-OFFSCREEN_SHADOWSIZE = 2048  # upstream scene.xml says 8192
 
 ARMS = 2
 SERVOS_PER_ARM = 7
@@ -98,9 +97,11 @@ CUBE_Z_STATE_INDEX = 19
 # 400 policy steps = 8 s like the public episodes, judged over the last
 # 0.5 s.
 _STEPS = 4000
-_CONTROL_INTERVAL = 10
-_TRIALS = 4
 _HOLD_STEPS = 250
+# Task names: the registry key, `Task.name`, and the gym id's last part.
+TRANSFER_CUBE = "transfer_cube"
+KITTING = "kitting"
+RIG = "aloha2"
 _TRANSFERRED_HEIGHT_M = 0.06  # cube centre 4 cm above resting
 _HELD_RADIUS_M = 0.05  # cube centre within this of the left gripper referee
 # Milestone zero on both tasks: an object displaced this far from its
@@ -178,17 +179,15 @@ def scale_dynamics(spec: Any, *, damping_scale: float, gain_scale: float) -> Non
 def _rig_scene(name: str, bundle_xml: Path) -> Any:
     import mujoco  # noqa: PLC0415 - sim extra
 
-    scene = mujoco.MjSpec.from_file(str(bundle_xml))
+    scene = mujoco.MjSpec.from_file(str(require_bundle_file(bundle_xml)))
     scene.modelname = name
     # The top camera renders 640x480; the D405 cameras 1280x720. The
     # offscreen framebuffer must cover the largest.
-    scene.visual.global_.offwidth = 1280
-    scene.visual.global_.offheight = 720
     # Menagerie's scene asks for an 8192x8192 shadow map — a screenshot
     # setting. Every harness rollout and demo frame renders through this
     # scene, so it is a per-frame cost (measured 2026-08-26: 31 ms per
     # 640x480 frame on the RTX at 8192). Physics is untouched by it.
-    scene.visual.quality.shadowsize = OFFSCREEN_SHADOWSIZE
+    set_render_budget(scene)
     return scene
 
 
@@ -207,6 +206,19 @@ def _extend_keyframes(scene: Any, extra_qpos: list[float]) -> None:
 
 ACT_SIM_LOOK = "act_sim"
 ALOHA2_LOOK = "aloha2"
+LOOKS = (ALOHA2_LOOK, ACT_SIM_LOOK)
+# The public demos the T0-T2 rungs trained on (gym-aloha's sim, docs/31).
+PUBLIC_TRANSFER_CUBE_DEMOS = "lerobot/aloha_sim_transfer_cube_human"
+
+
+class ActionSpace:
+    """What a checkpoint speaks: gym-aloha's normalised grippers (the
+    public-demo checkpoints) or the bundle's own ctrl (our demos, T5)."""
+
+    ACT_SIM = "act_sim"
+    BUNDLE = "bundle"
+
+
 _ACT_SIM_GREY = [0.2, 0.2, 0.2, 1.0]  # their tabletop rgba
 _ACT_SIM_ARM = [0.5, 0.5, 0.5, 1.0]  # their meshes carry no material: MuJoCo's default
 _HIDDEN_GROUP = 4  # renderers show geom groups 0-2 by default
@@ -249,7 +261,7 @@ def _act_sim_cosmetics(scene: Any) -> None:
 
 def _task_scene(task: str, bundle_xml: Path, look: str) -> Any:
     """Load the rig, validate + apply the look — every builder's opening."""
-    if look not in (ALOHA2_LOOK, ACT_SIM_LOOK):
+    if look not in LOOKS:
         raise ValueError(
             f"look must be {ALOHA2_LOOK!r} or {ACT_SIM_LOOK!r}, got {look!r}"
         )
@@ -323,6 +335,7 @@ def _corner_fraction(trial: int, inset: float) -> tuple[float, float]:
     return (inset + fx * span, inset + fy * span)
 
 
+@register(TRANSFER_CUBE, rig=RIG)
 def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Task:
     """Transfer cube, gym-aloha's protocol on the identified rig.
 
@@ -374,15 +387,16 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
         return bool(np.linalg.norm(cube - left) < _HELD_RADIUS_M)
 
     return Task(
-        name="transfer_cube",
+        name=TRANSFER_CUBE,
         spec=scene,
         cameras=ALOHA_TOP_CAMERAS,
         state_width=SERVOS,
         instruction="transfer the cube to the left gripper",
+        bundle_dir=Path(bundle_xml).parent,
         protocol=EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
             home=HOME_KEYFRAME,
@@ -481,6 +495,7 @@ def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
     return (-0.7, 0.0, -0.71) if arm == "right" else (0.7, 0.0, -0.71)
 
 
+@register(KITTING, rig=RIG)
 def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Task:
     """Kitting: each arm places its side's part into its slot."""
     import mujoco  # noqa: PLC0415 - sim extra
@@ -562,15 +577,16 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
         return all(in_slot(part, arm) for arm, part in parts(states, step).items())
 
     return Task(
-        name="kitting",
+        name=KITTING,
         spec=scene,
         cameras=ALOHA_TOP_CAMERAS,
         state_width=SERVOS,
         instruction=KITTING_INSTRUCTION,
+        bundle_dir=Path(bundle_xml).parent,
         protocol=EpisodeProtocol(
-            trials=_TRIALS,
+            trials=PAIRED_TRIALS,
             steps=_KITTING_STEPS,
-            control_interval=_CONTROL_INTERVAL,
+            control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
             home=HOME_KEYFRAME,
@@ -669,9 +685,11 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
     actions: list[Any] = []
     ctrl = np.array(NEUTRAL_CTRL, dtype=float)
 
+    tick_seconds = model.opt.timestep * CONTROL_INTERVAL
+
     def advance(seconds: float, target_ctrl: Any) -> None:
         nonlocal ctrl
-        controls = max(1, round(seconds * 50))
+        controls = max(1, round(seconds / tick_seconds))
         start = ctrl.copy()
         target = np.asarray(target_ctrl, dtype=float)
         for tick in range(controls):
@@ -682,7 +700,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
             actions.append(ctrl.copy())
             if on_control is not None:
                 on_control(stepper.step, data)
-            stepper.advance(ctrl, _CONTROL_INTERVAL)
+            stepper.advance(ctrl, CONTROL_INTERVAL)
 
     for arm in ("right", "left"):
         part = data.qpos[

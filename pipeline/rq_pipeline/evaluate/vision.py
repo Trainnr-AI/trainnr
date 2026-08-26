@@ -18,18 +18,9 @@ videos (tools/camera-match.py) before any correlation is trusted.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from rq_pipeline.protocol import CameraSpec
 
-
-@dataclass(frozen=True)
-class CameraSpec:
-    """One camera: the observation key it feeds and the render geometry."""
-
-    key: str  # observation.images.<key>
-    camera_name: str  # the MuJoCo camera
-    width: int
-    height: int
-
+__all__ = ["ARMNETBENCH_CAMERAS", "CameraSpec"]
 
 # The rig every ArmnetBench policy was trained on (dataset README):
 # front/top 576x1024, wrist 720x1280, all at 20 fps.

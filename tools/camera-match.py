@@ -20,13 +20,11 @@ bootstrap()
 import mujoco  # noqa: E402
 from PIL import Image  # noqa: E402
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS  # noqa: E402
-from rq_pipeline.tasks import so101  # noqa: E402
+from rq_pipeline.tasks.registry import tasks  # noqa: E402
 
+# Every SO-101 task the registry knows, by name.
 BUILDERS = {
-    "reach": so101.build_reach,
-    "lift": so101.build_lift,
-    "block_stack": so101.build_stack,
-    "tool_insert": so101.build_insert,
+    entry.name: entry.build for entry in tasks().values() if entry.rig == "so101"
 }
 
 task_name = sys.argv[1] if len(sys.argv) > 1 else "block_stack"
