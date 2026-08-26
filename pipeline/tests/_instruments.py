@@ -9,6 +9,17 @@ both). That is why every record carries `instrument`. The pins below
 assert the rate MEASURED on the instrument they run on and skip on an
 instrument nobody has measured, instead of one number pretending to
 hold across builds.
+
+Measured the same night, so nobody re-chases it: the compiled models
+are identical (24 arrays: friction, solref, solimp, masses, gains,
+ranges) and so are the options; the expert's 360 control vectors are
+identical; the state trajectories agree to the last bit for 84 steps
+and part at step 85 by 1.6e-15, the contact count first differs at
+tick 17 (10 vs 9 contacts) and the difference grows through contact
+to centimetres by the drop — cube A ends on cube B under 3.11.0 and
+on the table under 3.12.0 for trial 3, the (-2 mm, +2 mm) pick
+corner. Engine numerics, amplified by contact, on an expert whose
+margin at that corner is thin. Not a code path; not a bug.
 """
 
 from __future__ import annotations
