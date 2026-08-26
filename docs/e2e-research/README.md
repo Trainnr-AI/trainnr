@@ -44,6 +44,13 @@ ties them: Arena has the coverage machinery and no honesty layer — no
 interval anywhere in the code — and five of six reports converge on
 one artifact we lack, the per-trial record.
 
+**Sixth pass: 2026-08-26 — the evaluation layer, minimum lines.** The
+operator's question "the most standard, ecosystem-fit, production-grade,
+minimum-lines evaluation layer": LeRobot's contract read from the
+installed package (45), six ecosystem eval interfaces from their
+repositories (46), and a line-by-line audit of our own surface. The plan
+is [../32-evaluation-layer.md](../32-evaluation-layer.md).
+
 Read [19-the-system.md](19-the-system.md) first; it is the map.
 
 | Doc | Field | The one thing to remember |
@@ -74,6 +81,8 @@ Read [19-the-system.md](19-the-system.md) first; it is the map.
 | [42](42-arena-placement-and-relations.md) | Arena: placement & relations | Relations → Adam solver → validators → pools, with failed layouts stored by default — **adopt the validators on `mj_forward` contacts and `arm_ik`, raise on exhaustion**; skip the solver |
 | [43](43-arena-policy-interface.md) | Arena: policy interface | One blocking `get_action`, horizons picked by eye — **executed horizon becomes a protocol field**, rig/model adapter split, a chunk-replay client over openpi's websocket for π0.5 |
 | [44](44-arena-environment-and-agentic-generation.md) | Arena: env spec & agent layer | "Validation only proves a spec is admissible, not that it is the environment you asked for" — **the existence proof for §3.6**: load gates against the compiled model, critic loop capped at 3, hand-written predicates and physics |
+| [45](45-lerobot-eval-contract.md) | LeRobot's eval contract (installed 0.6.1, code-first) | Four keys (`pixels`, `agent_pos`, `is_success`, `_max_episode_steps`), a `lerobot_env_*` package is auto-imported, `lerobot-train` evaluates through the same `make_env` — **expose our task as a LeRobot env, keep the harness as the judge**; `lerobot-eval` has no statistics |
+| [46](46-ecosystem-eval-interfaces.md) | The ecosystem's eval interfaces (gymnasium, openpi, GR00T, LIBERO, SimplerEnv, EnvHub, robomimic) | One `gym.Env` with `{pixels, agent_pos, task}` and `info["success"]`+`info["is_success"]` drives all six — **no interval anywhere in any of them**, LeRobot's `eval_info.json` is the only written per-episode record |
 
 ## The five findings that changed the picture
 
