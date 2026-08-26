@@ -47,12 +47,20 @@ parser.add_argument(
     help="give up after this many draws (default: 20 * episodes) — the DR"
     " sampler can in principle draw only unreachable dynamics",
 )
+parser.add_argument(
+    "--frame-every",
+    type=int,
+    default=5,
+    help="control ticks between saved frames: 5 = 10 Hz previews, 1 = 50 Hz,"
+    " the rate the harness's vision rollout observes at (T5 training data)",
+)
+parser.add_argument("--seed", type=int, default=20260826)
 args = parser.parse_args()
 EPISODES, OUT = args.episodes, args.out
 MAX_ATTEMPTS = args.max_attempts if args.max_attempts is not None else 20 * EPISODES
 DR_SPAN = 0.30  # +-30% around the bundle's identified/nominal values
-FRAME_EVERY = 5  # control ticks between saved frames (10 Hz at 50 Hz control)
-SEED = 20260826
+FRAME_EVERY = args.frame_every
+SEED = args.seed
 
 task = build_kitting()
 rng = np.random.default_rng(SEED)
