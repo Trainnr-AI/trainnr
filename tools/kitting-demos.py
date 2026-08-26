@@ -2,12 +2,15 @@
 
     cd pipeline && GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl OMP_NUM_THREADS=1 \
         uv run --extra sim python ../tools/kitting-demos.py \
-        [episodes] [out] [--frame-every 1] [--max-attempts N]
+        [episodes] [out] [--frame-every 1] [--dr-span 0.10] [--seed S]
 
 (On WSL the offscreen renderer needs GALLIUM_DRIVER=d3d12 to reach the
 GPU — Mesa's EGL default is llvmpipe at ~300 ms per frame, which
 turned a one-second episode into eight minutes; measured 2026-08-26.
-Harmless elsewhere.)
+Harmless elsewhere. Even on the GPU the WSL readback round trip costs
+~40 ms per frame and serialises across processes: four generators in
+parallel each sat at 25% CPU waiting, ~150 s per attempt — parallel
+seeds do not buy throughput on this box.)
 
 Each episode: spawn both parts uniformly in the PROVEN band (the front
 half of the spawn box — the far band's closing-plane edge is a known
@@ -61,10 +64,21 @@ parser.add_argument(
     " the rate the harness's vision rollout observes at (T5 training data)",
 )
 parser.add_argument("--seed", type=int, default=20260826)
+parser.add_argument(
+    "--dr-span",
+    type=float,
+    default=0.30,
+    help="domain-randomisation half-width around the bundle's values (0.30 ="
+    " +-30%%). The scripted expert only works at NOMINAL dynamics: measured"
+    " 2026-08-26 without rendering, 8/10 kept at 0, 2/10 at 0.10 (both"
+    " keepers within 2%% of nominal gain), 0/10 at 0.30 — the Mac's 3-of-8"
+    " smoke at 0.30 was a lucky draw. T5's batch ran at 0; DR data needs a"
+    " gain-aware choreography (open item)",
+)
 args = parser.parse_args()
 EPISODES, OUT = args.episodes, args.out
 MAX_ATTEMPTS = args.max_attempts if args.max_attempts is not None else 20 * EPISODES
-DR_SPAN = 0.30  # +-30% around the bundle's identified/nominal values
+DR_SPAN = args.dr_span  # +-span around the bundle's identified/nominal values
 FRAME_EVERY = args.frame_every
 SEED = args.seed
 
@@ -157,6 +171,7 @@ while kept < EPISODES:
                 "seed": SEED,
                 "attempt": attempt,
                 "draws": draws,
+                "dr_span": DR_SPAN,
                 "damping_scale": damping_scale,
                 "gain_scale": gain_scale,
                 "retries": stats.retries,
