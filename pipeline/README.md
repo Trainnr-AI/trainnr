@@ -24,6 +24,7 @@ Architecture, stage roadmap and the design decisions behind them:
 | `rq_pipeline/collect` | The wire in: status-line parsing, frame assembly, CSV/excitation ingest, LeRobot dataset export. |
 | `rq_pipeline/tasks` | Scene builders + episode protocols: SO-101 (reach/lift/stack/insert), ALOHA 2 (transfer, kitting + its scripted demo generator), the mobile-manipulator rig. |
 | `rq_pipeline/evaluate` | The harnesses: paired-trial scoring over sensors or pixels, ArmnetBench camera rig, sim↔real certificates. |
+| `rq_pipeline/envs` | The ecosystem's door: every task as a gymnasium env (`gym.make("robotiq/kitting-v0")`) with paired starts through the seed, plus the LeRobot `EnvConfig` that lets `lerobot-eval` and `lerobot-train` run our rollouts (`--env.type=robotiq --env.discover_packages_path=rq_pipeline.envs`). The judge stays in `evaluate`. |
 
 ## Develop
 
@@ -37,7 +38,7 @@ uvx ruff format --check . && uvx ruff check . # the same gate pre-commit runs
 ```
 
 Optional extras pull the heavy stages when a machine can carry them:
-`uv sync --extra sim` (MuJoCo ≥ 3.5), `--extra train` (LeRobot, needs
+`uv sync --extra sim` (MuJoCo ≥ 3.5 and gymnasium), `--extra train` (LeRobot, needs
 Python ≥ 3.12), `--extra gpu` (MuJoCo Warp, needs an NVIDIA GPU),
 `--extra viz` (the Rerun viewer the tools log to).
 

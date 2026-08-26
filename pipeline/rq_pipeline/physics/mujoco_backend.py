@@ -65,6 +65,83 @@ def keyframe_state(model: Any, name: str) -> numpy.ndarray:
     return state
 
 
+class Stepper:
+    """One seated model, advanced a control tick at a time — the stepping
+    discipline in ONE place.
+
+    Until 2026-08-26 this loop existed three times by hand (the harness
+    rollouts here, the kitting choreographer, train-watch's playback),
+    each carrying the same-instant rule separately. Now: seat a
+    FULLPHYSICS state, hold a control for `substeps` physics steps, and
+    record the per-physics-step `states`/`sensors` rows every referee
+    reads. The gymnasium env (rq_pipeline.envs) is a `Stepper` behind
+    `reset`/`step`; the harness's episode is `advance` in a loop.
+    """
+
+    def __init__(self, model: Any, initial_state: Any, steps: int) -> None:
+        mujoco = _require_mujoco()
+        import numpy as np  # noqa: PLC0415
+
+        if steps <= 0:
+            raise ValueError(f"steps must be positive, got {steps}")
+        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        initial = np.asarray(initial_state, dtype=float)
+        if initial.shape != (size,):
+            raise ValueError(
+                f"initial_state must have shape ({size},), got {initial.shape}"
+            )
+        self._mujoco = mujoco
+        self.model = model
+        self.data = mujoco.MjData(model)
+        full = mujoco.mjtState.mjSTATE_FULLPHYSICS
+        mujoco.mj_setState(model, self.data, initial, full)
+        # Populate sensordata (and poses, for renders) for the first
+        # observation.
+        mujoco.mj_forward(model, self.data)
+        self.steps = steps
+        self.step = 0
+        self.states = np.empty((steps, size))
+        self.sensors = np.empty((steps, model.nsensordata))
+
+    @property
+    def done(self) -> bool:
+        return self.step >= self.steps
+
+    def advance(self, control: Any, substeps: int) -> None:
+        """Hold `control` for `substeps` physics steps — fewer at the end
+        of the budget, never more. `control` must be exactly nu wide."""
+        mujoco = self._mujoco
+        model = self.model
+        import numpy as np  # noqa: PLC0415
+
+        if substeps <= 0:
+            raise ValueError(f"substeps must be positive, got {substeps}")
+        control = np.asarray(control, dtype=float)
+        if control.shape != (model.nu,):
+            raise ValueError(
+                f"policy returned control of shape {control.shape}, "
+                f"model has {model.nu} actuators"
+            )
+        self.data.ctrl[:] = control
+        for _ in range(substeps):
+            if self.done:
+                return
+            mujoco.mj_step(model, self.data)
+            # mj_step leaves sensordata evaluated at the PRE-integration
+            # state; recompute so sensors[k], states[k] and any render all
+            # describe ONE instant and the next observation is fresh.
+            # Measured by this suite's fourth review (R7): without this,
+            # every recording carried an accidental one-physics-tick
+            # sensor lag nobody chose. Latency, when we model it, will be
+            # an explicit fitted parameter (mujoco.sysid fits sensor
+            # delays), never a side effect of the stepping loop.
+            mujoco.mj_forward(model, self.data)
+            self.sensors[self.step] = self.data.sensordata
+            full = mujoco.mjtState.mjSTATE_FULLPHYSICS
+            mujoco.mj_getState(model, self.data, self.states[self.step], full)
+            self.step += 1
+
+
 class MuJoCoBackend:
     """`PhysicsBackend` implementation over CPU MuJoCo."""
 
@@ -73,6 +150,12 @@ class MuJoCoBackend:
     def __init__(self) -> None:
         self._mujoco = _require_mujoco()
         self._model: Any = None
+
+    @property
+    def model(self) -> Any:
+        """The compiled model, for callers that step it themselves
+        (`Stepper`, renderers). Loading stays the backend's job."""
+        return self._require_model()
 
     def load_mjcf(self, path: Path) -> None:
         self._model = self._mujoco.MjModel.from_xml_path(str(path))
@@ -185,53 +268,15 @@ class MuJoCoBackend:
         physics discipline and must not fork between the sensor and
         vision paths.
         """
-        mujoco = self._mujoco
-        import numpy as np  # noqa: PLC0415
-
-        model = self._require_model()
         if steps <= 0 or control_interval <= 0:
             raise ValueError(
                 f"steps and control_interval must be positive, got "
                 f"{steps} and {control_interval}"
             )
-        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        initial = np.asarray(initial_state, dtype=float)
-        if initial.shape != (size,):
-            raise ValueError(
-                f"initial_state must have shape ({size},), got {initial.shape}"
-            )
-        data = mujoco.MjData(model)
-        mujoco.mj_setState(model, data, initial, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        # Populate sensordata (and poses, for renders) for the first
-        # observation.
-        mujoco.mj_forward(model, data)
-
-        states = np.empty((steps, size))
-        sensors = np.empty((steps, model.nsensordata))
-        for step in range(steps):
-            if step % control_interval == 0:
-                control = np.asarray(control_for(step, data), dtype=float)
-                if control.shape != (model.nu,):
-                    raise ValueError(
-                        f"policy returned control of shape {control.shape}, "
-                        f"model has {model.nu} actuators"
-                    )
-                data.ctrl[:] = control
-            mujoco.mj_step(model, data)
-            # mj_step leaves sensordata evaluated at the PRE-integration
-            # state; recompute so sensors[k], states[k] and any render all
-            # describe ONE instant and the next observation is fresh.
-            # Measured by this suite's fourth review (R7): without this,
-            # every recording carried an accidental one-physics-tick
-            # sensor lag nobody chose. Latency, when we model it, will be
-            # an explicit fitted parameter (mujoco.sysid fits sensor
-            # delays), never a side effect of the stepping loop.
-            mujoco.mj_forward(model, data)
-            sensors[step] = data.sensordata
-            mujoco.mj_getState(
-                model, data, states[step], mujoco.mjtState.mjSTATE_FULLPHYSICS
-            )
-        return states, sensors
+        stepper = Stepper(self._require_model(), initial_state, steps)
+        while not stepper.done:
+            stepper.advance(control_for(stepper.step, stepper.data), control_interval)
+        return stepper.states, stepper.sensors
 
     def closed_loop_rollout(
         self,

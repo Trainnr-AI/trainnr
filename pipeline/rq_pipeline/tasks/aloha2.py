@@ -593,53 +593,33 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
+    from rq_pipeline.physics.mujoco_backend import Stepper  # noqa: PLC0415
     from rq_pipeline.robot.arm_ik import solve_arm_ik  # noqa: PLC0415
 
-    size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-    data = mujoco.MjData(model)
-    mujoco.mj_setState(
-        model,
-        data,
-        np.asarray(initial_state, dtype=float),
-        mujoco.mjtState.mjSTATE_FULLPHYSICS,
-    )
-    mujoco.mj_forward(model, data)
+    # The stepping discipline (seating, the R7 same-instant rule, the
+    # per-physics-step rows) is the Stepper's; this function only
+    # decides what to command.
+    stepper = Stepper(model, initial_state, _KITTING_STEPS)
+    data = stepper.data
     scratch = mujoco.MjData(model)
 
-    steps_total = _KITTING_STEPS
-    states = np.empty((steps_total, size))
-    sensors = np.empty((steps_total, model.nsensordata))
     actions: list[Any] = []
     ctrl = np.array(NEUTRAL_CTRL, dtype=float)
-    physics_step = 0
 
     def advance(seconds: float, target_ctrl: Any) -> None:
-        nonlocal physics_step, ctrl
+        nonlocal ctrl
         controls = max(1, round(seconds * 50))
         start = ctrl.copy()
         target = np.asarray(target_ctrl, dtype=float)
         for tick in range(controls):
-            if physics_step >= steps_total:
+            if stepper.done:
                 return
             blend = (tick + 1) / controls
             ctrl = start + blend * (target - start)
             actions.append(ctrl.copy())
             if on_control is not None:
-                on_control(physics_step, data)
-            data.ctrl[:] = ctrl
-            for _ in range(_CONTROL_INTERVAL):
-                if physics_step >= steps_total:
-                    return
-                mujoco.mj_step(model, data)
-                mujoco.mj_forward(model, data)  # R7: one instant per row
-                sensors[physics_step] = data.sensordata
-                mujoco.mj_getState(
-                    model,
-                    data,
-                    states[physics_step],
-                    mujoco.mjtState.mjSTATE_FULLPHYSICS,
-                )
-                physics_step += 1
+                on_control(stepper.step, data)
+            stepper.advance(ctrl, _CONTROL_INTERVAL)
 
     for arm in ("right", "left"):
         part = data.qpos[
@@ -707,7 +687,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
         segment_index = 0
         grasp_retried = False
         while segment_index < len(plan):
-            if physics_step >= steps_total:
+            if stepper.done:
                 # Out of clock mid-choreography: solving IK against a
                 # frozen sim and returning states that end mid-reach
                 # with no signal was the silent-truncation gap the
@@ -720,7 +700,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
             command_reach(target_xyz, grip, secs)
             if name == "lift" and part_z() < _LIFT_CHECK_Z_M and not grasp_retried:
                 if stats is not None:
-                    stats.retries.append((arm, physics_step, round(part_z(), 3)))
+                    stats.retries.append((arm, stepper.step, round(part_z(), 3)))
                 # The referee's cheapest service: a lift that lifted
                 # nothing restarts the grasp once (open, re-descend on
                 # the part's CURRENT position — the failed close may
@@ -765,8 +745,8 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                     ]
                     command_reach(corrected, grip, 0.5)
     if stats is not None:
-        stats.steps_used_before_hold = physics_step
+        stats.steps_used_before_hold = stepper.step
     # Hold the final pose for the rest of the protocol window.
-    while physics_step < steps_total:
+    while not stepper.done:
         advance(1.0, ctrl)
-    return states, sensors, np.asarray(actions)
+    return stepper.states, stepper.sensors, np.asarray(actions)

@@ -15,7 +15,9 @@ license = { text = "FSL-1.1-ALv2" }
 # no scipy, no GPU (uv provisions the interpreter). Heavy stages are
 # opt-in extras with their own floors:
 [project.optional-dependencies]
-sim = ["mujoco[sysid]>=3.5"]
+# gymnasium is the ecosystem's env interface (rq_pipeline.envs); MIT,
+# numpy-only, and LeRobot pins the same major (>=1.1.1,<2).
+sim = ["mujoco[sysid]>=3.5", "gymnasium>=1.1.1,<2"]
 # dataset: LeRobotDataset + video decode; smolvla: the first foundation-model
 # rung (fits a 24 GB card); training: wandb + accelerate. gym-aloha stays
 # out on purpose: its dm_control dependency pins exact MuJoCo versions and

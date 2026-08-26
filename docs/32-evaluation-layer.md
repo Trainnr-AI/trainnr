@@ -217,7 +217,40 @@ collapse to one each.
 Steps 1–4 are one working day on either machine; the WSL card is only
 needed for step 3's checkpoint.
 
-## 9. Open questions (carried from 45 §4 and 46 §5)
+## 9. Progress (2026-08-26, evening — steps 1–3 done)
+
+- **Step 1, the Stepper**: `physics/mujoco_backend.py::Stepper` — seat,
+  `advance(control, substeps)`, the R7 rule, the rows. `_closed_loop` is
+  now four lines over it; the kitting choreographer's `advance` lost its
+  hand-rolled inner loop. A pin: the Stepper reproduces
+  `closed_loop_rollout` bit for bit on the pendulum, including the short
+  last tick. Existing sim tests unchanged and green.
+- **Step 2, the env**: `rq_pipeline/envs/robotiq.py` (`RobotiqEnv`,
+  `TASKS`, `make_env`, `gym.register("robotiq/<task>-v0")`) and
+  `rq_pipeline/envs/lerobot_plugin.py` (`RobotiqEnvConfig`, registered
+  as `robotiq`). gymnasium joined the `sim` extra. Pinned: gymnasium's
+  own `check_env`; the raw observation shape; seed = trial pairing;
+  truncation with the verdict under both names; the unstamped source
+  refused; and, in the train venv, LeRobot's `make_env` +
+  `preprocess_observation` producing `observation.state` (1, 14) and
+  `observation.images.top` (1, 3, 480, 640).
+- **Step 3, the acceptance run**: `lerobot-eval --env.type=robotiq
+  --env.task=kitting --env.discover_packages_path=rq_pipeline.envs
+  --policy.path=<T5 checkpoint> --seed=1000 --eval.n_episodes=4` →
+  **0/4, the harness's verdict reproduced**, 78 s per episode (the
+  harness took 73), an mp4 per episode, `eval_info.json` written.
+- Three facts learned on the way, now in the code's docstrings:
+  `discover_packages_path` takes a *package* (it walks `__path__`), so
+  the flag is `rq_pipeline.envs`; LeRobot 0.6.1's `eval_info.json`
+  carries `per_task[].metrics.successes` as a list in episode order and
+  **no per-episode seed** — the fold (step 4) derives `seed + i` from
+  the order and writes our own record; and the WSL box's D3D12 renderer
+  is not bit-exact (±1 LSB in ~20 pixels, once ±2), so pixel pairing is
+  asserted to within that noise while physics pairing stays exact.
+- Not yet: step 4 (records + fold + the two audit fixes), step 5 (the
+  deletions), step 6.
+
+## 10. Open questions (carried from 45 §4 and 46 §5)
 
 1. Async vector envs under WSL: LIBERO defers simulator creation to the
    first `reset` inside the worker to dodge stale EGL contexts under
