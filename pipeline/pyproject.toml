@@ -17,13 +17,26 @@ license = { text = "FSL-1.1-ALv2" }
 [project.optional-dependencies]
 # gymnasium is the ecosystem's env interface (rq_pipeline.envs); MIT,
 # numpy-only, and LeRobot pins the same major (>=1.1.1,<2).
-sim = ["mujoco[sysid]>=3.5", "gymnasium>=1.1.1,<2"]
+# mujoco is compatible-release PINNED: the engine version is part of the
+# identified artifact (docs/e2e-research/49), and the accidental 3.12 bump
+# broke nine tests including physics outcomes. Upgrading is a deliberate
+# re-identification event: move the pin, re-run every referee, re-measure.
+sim = ["mujoco[sysid]~=3.11.0", "gymnasium>=1.1.1,<2"]
 # dataset: LeRobotDataset + video decode; smolvla: the first foundation-model
 # rung (fits a 24 GB card); training: wandb + accelerate. gym-aloha stays
 # out on purpose: its dm_control dependency pins exact MuJoCo versions and
 # the harness is our evaluation environment anyway.
 train = ["lerobot[dataset,smolvla,training]>=0.6.1; python_version >= '3.12'"]
 gpu = ["mujoco-warp; sys_platform != 'darwin'"]  # CUDA only; the Mac resolves cleanly without it
+# The batched GPU rollout path (docs/e2e-research/49): MJX with the Warp
+# implementation. Runs on Warp's CPU backend too (measured on the Mac),
+# so the adapter's tests run anywhere; only speed needs the NVIDIA card.
+# COMPATIBLE-RELEASE PIN, deliberately: an open >=3.12 floor dragged the
+# whole project from locked mujoco 3.11.0 to 3.12.0 and NINE tests broke
+# (pybind enum comparisons AND physics outcomes — the stack ladder lost
+# a trial). The engine version is part of the identified artifact; it
+# moves by decision, never as a dependency side effect.
+mjx = ["mujoco-mjx[warp]~=3.11.0"]
 viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
 
 # The task registry's plugin door (rq_pipeline/tasks/registry.py): a third

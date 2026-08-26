@@ -111,3 +111,7 @@ The third pass reached further (SEC filings, hiring boards, repository
 code-reads) but its company list is still a convenience sample, not a census —
 [29 §5.1](29-the-company.md) carries that scope bound explicitly. See
 [27 §0](27-open-questions.md).
+- [47 — Newton, read docs-first](47-newton-docs-review.md): the engine's own docs reviewed locally (1.6.0.dev0); parity ledger (keyframes/sensors not imported), solver stable, MEASURED solver sweep — only mjSOL_NEWTON + elliptic passes kitting.
+- [48 — Solver landscape](48-solver-landscape.md): MuJoCo's solver family mapped to our scenes; our config is the documented anti-slip recipe; sysid fits are fits OF the discretization → the option block is bundle state.
+- [49 — GPU path, probed](49-gpu-path-mjxwarp.md): MJX-Warp runs on the Mac (CPU), covers our contact regime fully, batches model params for DR; costs float32 + GPU non-determinism → CPU stays the metrology instrument.
+- [50 — Newton delta + live probe](50-newton-delta-probe.md): v1.5.0 still latest (PyPI name is `newton`, not `newton-physics`); SolverMuJoCo runs on the Mac CPU (300-1000x slower than plain mujoco); our so101.xml imports with matching counts but the sensor block silently vanishes — verified by execution; Isaac Lab trigger unfired.

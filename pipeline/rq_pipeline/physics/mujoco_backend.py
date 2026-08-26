@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from rq_pipeline.physics.backend import ModelCounts
+from rq_pipeline.physics.backend import ModelCounts, instrument_stamp
 
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
@@ -167,9 +167,11 @@ class MuJoCoBackend:
 
     @property
     def instrument(self) -> str:
-        """Backend and version, e.g. "mujoco-3.11.0": a certificate
-        produced by a different version is a different instrument."""
-        return f"{self.name}-{self._mujoco.__version__}"
+        """Backend, version and CPU architecture, e.g.
+        "mujoco-3.11.0+x86_64": a certificate produced by a different
+        version — or, measured, a different architecture — is a
+        different instrument (`instrument_stamp`)."""
+        return instrument_stamp(self.name, self._mujoco.__version__)
 
     def stepper(self, initial_state: Any, steps: int, *, data: Any = None) -> Stepper:
         """One episode's stepping loop over the loaded model — the seam the

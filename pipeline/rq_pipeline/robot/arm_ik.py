@@ -73,10 +73,11 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if joint_id < 0:
             raise ValueError(f"no joint named {name!r}")
-        # Compared as ints: MuJoCo 3.12's enum no longer equals a numpy
-        # integer inside a tuple membership test (3.11 did), and the two
-        # venvs run different MuJoCo versions (caught 2026-08-26 when the
-        # generator refused every hinge in the train venv).
+        # Compared as ints: MuJoCo 3.12's pybind enum no longer equals a
+        # numpy integer in a membership test (3.11 did), so a hinge stopped
+        # looking like a hinge. Caught twice the same night: the WSL train
+        # venv's 3.12 refused every hinge in the demo generator (2026-08-26),
+        # and an accidental 3.11->3.12 lock bump on the Mac (2026-08-27).
         if int(model.jnt_type[joint_id]) not in single_dof_joint_types:
             # A free or ball joint has multi-dof addressing; the scalar
             # dq indexing below would write plausible-looking garbage.

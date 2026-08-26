@@ -24,3 +24,26 @@ class ModelCounts:
         # model fails silently (black frames score 0% with no error);
         # the bundle contract pins how many the rig carries.
         self.cameras = cameras
+
+
+# platform.machine() spells the same silicon differently per OS; the stamp
+# must not.
+_ARCH_ALIASES = {"AMD64": "x86_64", "aarch64": "arm64"}
+
+
+def instrument_stamp(name: str, version: str, *qualifiers: str) -> str:
+    """The instrument's name: engine and version, any qualifiers (a
+    device, a companion library), and ALWAYS the CPU architecture.
+
+    Measured 2026-08-27 (docs/e2e-research/47 §7.1): the same MuJoCo
+    3.11.0, scene, expert and trial gives the PGS solver a different
+    referee verdict on arm64 (fail) and x86_64 (pass), and every
+    penetration figure differs — a version alone does not name the
+    instrument a certificate was produced on.
+    """
+    import platform  # noqa: PLC0415
+
+    machine = platform.machine()
+    return "+".join(
+        [f"{name}-{version}", *qualifiers, _ARCH_ALIASES.get(machine, machine)]
+    )

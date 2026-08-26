@@ -20,9 +20,22 @@ OFFSCREEN_HEIGHT = 720
 # is a per-frame cost (measured 2026-08-26: 31 ms per 640x480 frame on
 # the RTX at 8192). Physics is untouched by it.
 SHADOWSIZE = 2048
-# Contact options the arms declare that `MjSpec.attach` drops (measured:
-# MuJoCo keeps the parent's defaults with a warning); every scene sets
-# them back so "arm alone" and "arm in scene" share contact physics.
+# THE NOMINAL SOLVER CONDITION — every value spelled here, because the
+# 2026-08-27 solver review (docs/e2e-research/47/48) found half of them
+# were inherited MuJoCo defaults nobody ever chose: Euler at 500 Hz was
+# the global default, not a decision. sysid fits are fits OF this
+# discretization, so the block is part of the identified artifact; if
+# upstream MuJoCo ever changes a default (they recommend implicitfast
+# already), an unpinned scene's nominal condition would silently move.
+# elliptic + impratio 10 + the Newton solver is MuJoCo's own documented
+# anti-slip recipe for pinch grasps — and measured (tools/solver-study,
+# docs/e2e-research/47 §7): the only configuration that passes the
+# kitting referee on BOTH the Mac (arm64) and the WSL box (x86_64); CG
+# and the pyramidal cone fail on both, PGS passes only on x86_64, at
+# 28x the solver iterations.
+# (mjSOL_NEWTON is MuJoCo's constraint solver, unrelated to the NVIDIA
+# Newton engine.)
+TIMESTEP = 0.002  # 500 Hz physics; control at 50 Hz rides on it
 IMPRATIO = 10
 FLOOR_GEOM = "floor"
 
@@ -34,9 +47,21 @@ class GeomGroup:
     HIDDEN = 4
 
 
-def restore_contact_options(spec: Any) -> None:
+def pin_nominal_options(spec: Any) -> None:
+    """Write the nominal solver condition into a scene spec.
+
+    Called by every builder — both the attach-built SO-101 scenes
+    (where `MjSpec.attach` drops the arm's declared cone/impratio with
+    a warning, measured) and the bundle-loaded ALOHA scenes (where the
+    XML sets cone/impratio but left solver, integrator, and timestep to
+    the global defaults). One function, so "arm alone", "arm in scene"
+    and both rigs share one contact physics and one discretization.
+    """
     import mujoco  # noqa: PLC0415 - sim extra
 
+    spec.option.solver = mujoco.mjtSolver.mjSOL_NEWTON
+    spec.option.integrator = mujoco.mjtIntegrator.mjINT_EULER
+    spec.option.timestep = TIMESTEP
     spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
     spec.option.impratio = IMPRATIO
 

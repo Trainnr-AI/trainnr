@@ -40,7 +40,7 @@ from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
 from rq_pipeline.protocol import EpisodeProtocol
 from rq_pipeline.tasks.registry import register
-from rq_pipeline.tasks.scene import restore_contact_options, set_render_budget
+from rq_pipeline.tasks.scene import pin_nominal_options, set_render_budget
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 ARM_PREFIX = "arm_"
@@ -100,7 +100,7 @@ def _scene_with_arm(name: str, arm_xml: Path) -> Any:
     scene = mujoco.MjSpec()
     scene.modelname = name
     # Restore what attach drops — see module docstring.
-    restore_contact_options(scene)
+    pin_nominal_options(scene)
     scene.worldbody.add_geom(
         name="table",
         type=mujoco.mjtGeom.mjGEOM_BOX,
