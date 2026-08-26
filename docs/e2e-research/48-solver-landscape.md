@@ -130,8 +130,10 @@ ever fit contact stiffness/damping.
 ## Open flags (not verified)
 
 1. impratio under pyramidal cones — undocumented.
-2. mujoco_warp's "IMPLICITFAST midpoint" phrasing — test before
-   relying on implicitfast-on-Warp.
+2. ~~mujoco_warp's "IMPLICITFAST midpoint" phrasing~~ — RESOLVED
+   2026-08-27 at the source ([52](52-warp-determinism-mjwarp.md)):
+   implicitfast is supported, regression-tested, and used by their own
+   benchmarks; only the midpoint sub-feature is missing.
 3. No quantitative XPBD/VBD accuracy statements exist in Newton
    engine docs.
 4. The sysid Colab notebook was not read cell-by-cell.
