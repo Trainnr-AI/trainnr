@@ -144,7 +144,10 @@ if log.exists():
     dates = re.findall(
         r"^## (\d{4}-\d{2}-\d{2})", log.read_text(encoding="utf-8"), re.M
     )
-    for older, newer in zip(dates[1:], dates, strict=False):  # pairwise, by design
+    # pairwise by index — zip's strict kwarg needs Python 3.10 and the
+    # Mac's system python3 is 3.9; the gate must run on both boxes.
+    for index in range(1, len(dates)):
+        older, newer = dates[index], dates[index - 1]
         if older > newer:
             problems.append(
                 f"docs/{HISTORY}: {older} appears below {newer}, but the log "

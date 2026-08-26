@@ -91,7 +91,12 @@ The first two rows are decisive. Keyframes and sensors are the two
 mechanisms our protocol and instrument rules are built on, and neither
 survives import. Adopting Newton (engine) for evaluation would mean
 rebuilding the reset mechanism and the entire observation layer in
-Newton idioms — not an adapter, a port.
+Newton idioms — not an adapter, a port. MEASURED 2026-08-27
+([51-solvermujoco-roundtrip.md](51-solvermujoco-roundtrip.md)): the
+round trip also drops all 13 visual meshes, rewrites the root body's
+mass, flips the integrator in the emitted file — and the importer
+zeroes the position servos' kv, so Newton simulates this robot with
+UNDAMPED servos: the very parameter sysid identifies.
 
 ## 4. What is worth taking regardless: the tuning corpus
 
