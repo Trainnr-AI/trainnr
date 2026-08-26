@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.evaluate.harness import EpisodeProtocol
+from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS, CameraSpec
 
 ARM_PREFIX = "arm_"
 DEFAULT_ARM_XML = (
@@ -65,12 +66,17 @@ _QPOS_OFFSET = 1
 
 @dataclass(frozen=True)
 class SO101Task:
-    """A composed scene and the protocol that scores episodes in it."""
+    """A composed scene and the protocol that scores episodes in it.
+
+    `cameras` is the ArmnetBench rig every scene here carries (the
+    front/top/wrist cameras `_scene_with_arm` places), so the gymnasium
+    env can render what a released checkpoint expects."""
 
     name: str
     spec: Any
     protocol: EpisodeProtocol
     target: tuple[float, float, float] | None = None
+    cameras: tuple[CameraSpec, ...] = ARMNETBENCH_CAMERAS
 
 
 def _scene_with_arm(name: str, arm_xml: Path) -> Any:

@@ -179,6 +179,34 @@ class RobotiqEnv(gym.Env):
         self._trial = 0
         self._episodes = 0
         self._last_pixels: dict[str, Any] = {}
+        import mujoco  # noqa: PLC0415 - sim extra, present if we got here
+
+        # One MjData for the env's whole life: a passive viewer binds to
+        # the object, so resets seat into it rather than replacing it.
+        self._data = mujoco.MjData(self._model)
+
+    # -- for tools (viewers, mirrors): read-only views of the live sim ----
+
+    @property
+    def model(self) -> Any:
+        return self._model
+
+    @property
+    def data(self) -> Any:
+        """The live MjData — bind a viewer to it; never write to it."""
+        return self._data
+
+    @property
+    def states(self) -> Any:
+        """Per-physics-step FULLPHYSICS rows of the current episode so far
+        (what the referee reads); rows past `physics_step` are unset."""
+        if self._stepper is None:
+            raise RuntimeError("reset() before reading states")
+        return self._stepper.states
+
+    @property
+    def physics_step(self) -> int:
+        return 0 if self._stepper is None else self._stepper.step
 
     # -- the contract ----------------------------------------------------
 
@@ -191,7 +219,9 @@ class RobotiqEnv(gym.Env):
         self._trial = index % self.protocol.trials
         self._episodes += 1
         initial = self.protocol.perturb(self._trial, self._home)
-        self._stepper = Stepper(self._model, initial, self.protocol.steps)
+        self._stepper = Stepper(
+            self._model, initial, self.protocol.steps, data=self._data
+        )
         return self._observe(), self._info(False)
 
     def step(

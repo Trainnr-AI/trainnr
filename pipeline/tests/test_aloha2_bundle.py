@@ -92,17 +92,20 @@ class BundleContract(unittest.TestCase):
         # Position actuators at the neutral keyframe's ctrl, from the
         # keyframe state: both arms must stay put under gravity — the
         # identified gains against the identified masses. Exercises the
-        # exact closed_loop_rollout path the task suite will use.
+        # exact stepping path the task suite uses.
         import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import run_sensor_episode  # noqa: PLC0415
 
         backend = self._backend()
 
         def hold_neutral(step, sensordata):
             return NEUTRAL_CTRL
 
-        _states, sensors = backend.closed_loop_rollout(
-            backend.keyframe_state(NEUTRAL_KEYFRAME),
+        _states, sensors = run_sensor_episode(
+            backend,
             hold_neutral,
+            backend.keyframe_state(NEUTRAL_KEYFRAME),
             steps=1000,
             control_interval=10,
         )
@@ -119,15 +122,18 @@ class BundleContract(unittest.TestCase):
         # not cross the centre line, and arrive.
         import numpy as np  # noqa: PLC0415
 
+        from rq_pipeline.evaluate.harness import run_sensor_episode  # noqa: PLC0415
+
         backend = self._backend()
         target = [0.2, -0.7, 0.9, 0.0, -0.5, 0.3, 0.02] * ARMS
 
         def go(step, sensordata):
             return target
 
-        _states, sensors = backend.closed_loop_rollout(
-            backend.keyframe_state(NEUTRAL_KEYFRAME),
+        _states, sensors = run_sensor_episode(
+            backend,
             go,
+            backend.keyframe_state(NEUTRAL_KEYFRAME),
             steps=1000,
             control_interval=10,
         )

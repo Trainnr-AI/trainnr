@@ -152,7 +152,7 @@ class GateAInSimulation(unittest.TestCase):
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
             EpisodeProtocol,
             SimPolicy,
-            score_policies,
+            evaluate_policies,
         )
         from rq_pipeline.evaluate.records import fold, read_records  # noqa: PLC0415
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
@@ -168,14 +168,11 @@ class GateAInSimulation(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "episodes.jsonl"
-            scores = score_policies(
+            scores = evaluate_policies(
                 backend,
                 [SimPolicy("limp", lambda _step, _sense: [0.0])],
                 protocol,
                 source="pendulum-test@000000000000",
-                run_episode=lambda policy, initial: backend.closed_loop_rollout(
-                    initial, policy.act, protocol.steps, protocol.control_interval
-                ),
                 record_to=path,
             )
             records = read_records(path)

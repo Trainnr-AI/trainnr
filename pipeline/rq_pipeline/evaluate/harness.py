@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.evaluate.certificate import PolicyOutcome
 from rq_pipeline.evaluate.records import (
@@ -38,8 +38,10 @@ from rq_pipeline.evaluate.records import (
     fold,
     protocol_fields,
 )
-from rq_pipeline.physics.backend import PhysicsBackend
 from rq_pipeline.robot.model_checks import assert_model_alive
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rq_pipeline.physics.mujoco_backend import MuJoCoBackend
 
 __all__ = [
     "EpisodeProtocol",
@@ -48,6 +50,7 @@ __all__ = [
     "evaluate_policies",
     "home_state",
     "join_with_real",
+    "run_sensor_episode",
     "score_policies",
 ]
 
@@ -94,15 +97,39 @@ class EpisodeProtocol:
                 raise ValueError(f"{field_name} must be positive, got {value}")
 
 
-def home_state(backend: PhysicsBackend, protocol: EpisodeProtocol) -> Any:
+def home_state(backend: MuJoCoBackend, protocol: EpisodeProtocol) -> Any:
     """The protocol's declared start: its keyframe, else the model's reset."""
     if protocol.home is None:
         return backend.default_initial_state()
     return backend.keyframe_state(protocol.home)
 
 
+def run_sensor_episode(
+    backend: MuJoCoBackend,
+    act: Callable[[int, Any], Any],
+    initial_state: Any,
+    *,
+    steps: int,
+    control_interval: int,
+) -> tuple[Any, Any]:
+    """One episode of a SENSOR policy — scripted experts and the dry
+    runs' ablations: `act(step, sensordata) -> nu controls`, held for
+    `control_interval` physics steps. The policy sees a copy of the
+    sensors (it cannot write into the simulator) and what it commands
+    is what the actuators get, exactly like the wire. Pixel policies go
+    through the gymnasium env instead (rq_pipeline.envs); both are the
+    same `Stepper`."""
+    from rq_pipeline.physics.mujoco_backend import Stepper  # noqa: PLC0415
+
+    stepper = Stepper(backend.model, initial_state, steps)
+    while not stepper.done:
+        control = act(stepper.step, stepper.data.sensordata.copy())
+        stepper.advance(control, control_interval)
+    return stepper.states, stepper.sensors
+
+
 def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knobs
-    backend: PhysicsBackend,
+    backend: MuJoCoBackend,
     policies: Sequence[Any],
     protocol: EpisodeProtocol,
     *,
@@ -162,21 +189,31 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
 
 
 def evaluate_policies(
-    backend: PhysicsBackend,
+    backend: MuJoCoBackend,
     policies: Sequence[SimPolicy],
     protocol: EpisodeProtocol,
     *,
     source: str,
+    record_to: Path | None = None,
 ) -> tuple[SimScore, ...]:
-    """Score every policy under the identical protocol; census-gated."""
+    """Score every sensor policy under the identical protocol; census-gated."""
 
     def run_episode(policy: SimPolicy, initial: Any) -> tuple[Any, Any]:
-        return backend.closed_loop_rollout(
-            initial, policy.act, protocol.steps, protocol.control_interval
+        return run_sensor_episode(
+            backend,
+            policy.act,
+            initial,
+            steps=protocol.steps,
+            control_interval=protocol.control_interval,
         )
 
     return score_policies(
-        backend, policies, protocol, source=source, run_episode=run_episode
+        backend,
+        policies,
+        protocol,
+        source=source,
+        run_episode=run_episode,
+        record_to=record_to,
     )
 
 

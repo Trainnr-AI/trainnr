@@ -141,35 +141,20 @@ def act_sim_state(sensordata: Any) -> Any:
 
 
 def ctrl_from_act_sim_action(action: Any) -> Any:
-    """A gym-aloha 14-d action -> the bundle's 14 actuator commands."""
+    """A gym-aloha 14-d action -> the bundle's 14 actuator commands.
+
+    With `act_sim_state`, the two halves of the gym-aloha convention a
+    checkpoint trained on the public data speaks (normalised grippers);
+    a tool playing such a checkpoint applies them around the model
+    call. Images pass through untouched, because the `top` camera was
+    placed to match.
+    """
     import numpy as np  # noqa: PLC0415
 
     ctrl = np.asarray(action, dtype=np.float64).copy()
     for index in _GRIPPER_INDICES:
         ctrl[index] = gripper_ctrl_from_normalized(ctrl[index])
     return ctrl
-
-
-def act_sim_vision_policy(policy: Any) -> Any:
-    """Wrap a gym-aloha-trained VisionPolicy for the bundle.
-
-    The harness hands the policy `observation.state` as the bundle's
-    raw fourteen jointpos values and expects fourteen actuator commands
-    back; a checkpoint trained on the public data speaks gym-aloha's
-    convention on both sides (normalised grippers). This wrapper
-    translates both directions and nothing else — the images pass
-    through untouched, because the `top` camera was placed to match.
-    """
-    from rq_pipeline.evaluate.vision import VisionPolicy  # noqa: PLC0415
-
-    def act(step: int, observation: dict[str, Any]) -> Any:
-        translated = dict(observation)
-        translated["observation.state"] = act_sim_state(
-            observation["observation.state"]
-        )
-        return ctrl_from_act_sim_action(policy.act(step, translated))
-
-    return VisionPolicy(name=policy.name, act=act, reset=policy.reset)
 
 
 def _rig_scene(name: str, bundle_xml: Path) -> Any:

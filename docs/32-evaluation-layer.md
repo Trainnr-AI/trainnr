@@ -260,7 +260,26 @@ needed for step 3's checkpoint.
   certificate's JSON now states its sim n), and `MuJoCoBackend.instrument`
   is `"mujoco-<version>"`, stamped into every record and exposed by the
   env. 192 tests green.
-- Not yet: step 5 (the deletions), step 6.
+- **Step 5, the deletions**: `_closed_loop`, `closed_loop_rollout`,
+  `closed_loop_vision_rollout` (the env and `run_sensor_episode` over
+  the Stepper replace them); the `PhysicsBackend` Protocol (one
+  implementation ever — `backend.py` keeps `ModelCounts`); `VisionPolicy`,
+  `evaluate_vision_policies`, `lerobot_checkpoint_policy` (`lerobot-eval`
+  through the env; `vision.py` is camera data now); `act_sim_vision_policy`
+  (the two gym-aloha mapping functions stay as data adapters for demo
+  replay); `train-watch`'s `_Backend` shim and hand-rolled `_episode`
+  (the tool drives `RobotiqEnv`, binds its viewer to the env's persistent
+  `MjData`, and loads checkpoints through LeRobot's own processors and
+  `preprocess_observation`; `--action-space {act_sim,bundle}` says what
+  the checkpoint speaks). `SO101Task` gained `cameras` so the ArmnetBench
+  rig renders through the env. About 420 lines out; the evaluation path
+  outside `tasks/` is 2,275 lines including the env (401) and the record
+  (169), with the stepping loop, the observation contract, the keyframe
+  ritual and the control rate defined once each. 190 sim tests + 2
+  plugin tests green; the Stepper is now pinned against MuJoCo's own
+  batched `rollout` bit for bit.
+- Not yet: step 6 (milestones + funnel), then the variation schema and
+  the main-effects table; the `Task` unification (§6) beyond `cameras`.
 
 ## 10. Open questions (carried from 45 §4 and 46 §5)
 

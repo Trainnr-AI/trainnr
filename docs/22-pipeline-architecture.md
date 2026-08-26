@@ -81,9 +81,11 @@ dynamics-as-measurement onto owned hardware, before anything trains.
 **MuJoCo is the simulation loop; Newton is a backend, not a foundation.**
 The identification stage is `mujoco.sysid`, which is CPU MuJoCo — that alone
 anchors the canonical path. Newton (Apache-2.0, NVIDIA + DeepMind + Disney)
-slots in behind `PhysicsBackend` for GPU rollouts when a machine has the
-hardware; MuJoCo itself is becoming a solver inside Newton, so this is one
-converging stack, not a fork risk. MJCF stays the robot's source of truth and
+would slot in for GPU rollouts as another gymnasium env over the same tasks
+(`rq_pipeline/envs`, the backend-agnostic seam since 2026-08-26 — the
+`PhysicsBackend` Protocol with its single implementation was retired in
+docs/32 step 5); MuJoCo itself is becoming a solver inside Newton, so this
+is one converging stack, not a fork risk. MJCF stays the robot's source of truth and
 USD carries scenes — the split, and the silent-import failure that mandates
 the census gate in `pipeline/rq_pipeline/robot/model_checks.py`, are settled
 in [23-simulation-and-real2sim.md](e2e-research/23-simulation-and-real2sim.md) §3/§6.

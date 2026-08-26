@@ -33,9 +33,14 @@ def pixels_match(a, b) -> bool:
 
 @unittest.skipUnless(SIM_PRESENT, "sim extra not installed (uv sync --extra sim)")
 class StepperIsTheOneLoop(unittest.TestCase):
-    def test_stepper_reproduces_the_closed_loop_rollout(self) -> None:
+    def test_stepper_agrees_with_mujoco_rollout(self) -> None:
+        # Two integrators, one trajectory: the harness's tick-by-tick
+        # Stepper against MuJoCo's own batched `rollout` (the sysid path)
+        # under the same constant control, bit for bit — including the
+        # short last tick when the budget is not a multiple.
         import numpy as np  # noqa: PLC0415
 
+        from rq_pipeline.evaluate.harness import run_sensor_episode  # noqa: PLC0415
         from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
             MuJoCoBackend,
             Stepper,
@@ -47,15 +52,17 @@ class StepperIsTheOneLoop(unittest.TestCase):
         home = backend.default_initial_state()
         home[1] += 0.3  # displaced, so gravity acts
         control = np.array([0.2])
-        states, sensors = backend.closed_loop_rollout(
-            home, lambda step, sensordata: control, 7, 3
-        )
-        stepper = Stepper(backend.model, home, 7)
+        steps = 7
+        batched = backend.rollout(home[None], np.tile(control, (1, steps, 1)))[0]
+        stepper = Stepper(backend.model, home, steps)
         while not stepper.done:
             stepper.advance(control, 3)  # the last call gets one step, not three
-        self.assertEqual(stepper.step, 7)
+        self.assertEqual(stepper.step, steps)
+        self.assertTrue(np.array_equal(batched, stepper.states))
+        states, _sensors = run_sensor_episode(
+            backend, lambda step, sense: control, home, steps=steps, control_interval=3
+        )
         self.assertTrue(np.array_equal(states, stepper.states))
-        self.assertTrue(np.array_equal(sensors, stepper.sensors))
         with self.assertRaises(ValueError):
             stepper.advance(np.zeros(2), 3)  # wrong width is loud
 

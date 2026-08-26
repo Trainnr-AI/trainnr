@@ -120,7 +120,10 @@ class TransferCubeScene(unittest.TestCase):
     def test_cube_state_index_is_where_the_predicate_reads(self) -> None:
         # Settle from home with the arms held: the cube must stay on the
         # table, and its z must live at the pinned index.
-        from rq_pipeline.evaluate.harness import home_state  # noqa: PLC0415
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            home_state,
+            run_sensor_episode,
+        )
         from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
             CUBE_HALF,
             CUBE_Z_STATE_INDEX,
@@ -128,9 +131,10 @@ class TransferCubeScene(unittest.TestCase):
         )
 
         task, backend = self._loaded()
-        states, sensors = backend.closed_loop_rollout(
-            home_state(backend, task.protocol),
+        states, sensors = run_sensor_episode(
+            backend,
             lambda step, sense: NEUTRAL_CTRL,
+            home_state(backend, task.protocol),
             steps=500,
             control_interval=10,
         )
@@ -139,37 +143,30 @@ class TransferCubeScene(unittest.TestCase):
         )
         self.assertFalse(task.protocol.success(states, sensors))  # nobody picked it
 
-    def test_top_camera_renders_a_real_frame_at_checkpoint_resolution(self) -> None:
-        from rq_pipeline.evaluate.harness import home_state  # noqa: PLC0415
-        from rq_pipeline.tasks.aloha2 import NEUTRAL_CTRL  # noqa: PLC0415
+    def _first_frame(self, task):
+        from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
 
-        task, backend = self._loaded()
-        seen = {}
-
-        def probe(step, observation):
-            seen.update(observation)
-            return NEUTRAL_CTRL
-
-        backend.closed_loop_vision_rollout(
-            home_state(backend, task.protocol),
-            probe,
-            2,
-            1,
-            task.cameras,
-            state_width=14,
+        env = RobotiqEnv(
+            task, state_width=14, instruction="transfer", source=f"{task.name}@test"
         )
-        frame = seen["observation.images.top"]
+        try:
+            observation, _ = env.reset(seed=0)
+            return observation["pixels"]["top"]
+        finally:
+            env.close()
+
+    def test_top_camera_renders_a_real_frame_at_checkpoint_resolution(self) -> None:
+        task, _backend = self._loaded()
+        frame = self._first_frame(task)
         self.assertEqual(frame.shape, (480, 640, 3))
         self.assertGreater(float(frame.mean()), BLACK_FRAME_MEAN)
 
     def test_act_sim_look_is_the_same_scene_in_grey(self) -> None:
         # Same census, same physics layout, darker frame: the cosmetic
         # twin for checkpoints trained on gym-aloha's renders.
-        from rq_pipeline.evaluate.harness import home_state  # noqa: PLC0415
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
         from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
             ACT_SIM_LOOK,
-            NEUTRAL_CTRL,
             build_transfer_cube,
         )
 
@@ -181,26 +178,10 @@ class TransferCubeScene(unittest.TestCase):
             (wood.counts().actuators, wood.counts().sensors, wood.counts().cameras),
             (grey.counts().actuators, grey.counts().sensors, grey.counts().cameras),
         )
-        frames = {}
-        for name, task, backend in (
-            ("wood", wood_task, wood),
-            ("grey", grey_task, grey),
-        ):
-
-            def probe(step, observation, name=name):
-                frames[name] = observation["observation.images.top"]
-                return NEUTRAL_CTRL
-
-            backend.closed_loop_vision_rollout(
-                home_state(backend, task.protocol),
-                probe,
-                2,
-                1,
-                task.cameras,
-                state_width=14,
-            )
-        self.assertGreater(float(frames["grey"].mean()), BLACK_FRAME_MEAN)
-        self.assertLess(float(frames["grey"].mean()), float(frames["wood"].mean()))
+        wood_frame = self._first_frame(wood_task)
+        grey_frame = self._first_frame(grey_task)
+        self.assertGreater(float(grey_frame.mean()), BLACK_FRAME_MEAN)
+        self.assertLess(float(grey_frame.mean()), float(wood_frame.mean()))
         with self.assertRaises(ValueError):
             build_transfer_cube(look="neon")
 

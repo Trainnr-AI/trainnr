@@ -10,9 +10,9 @@ Two contracts, both inherited from the harness so training data and
 evaluation observe the same thing:
 
 - `observation.state` is the bundle's raw fourteen jointpos — exactly
-  `sensordata[0:14]`, what `closed_loop_vision_rollout` hands a policy
-  with `state_width=14`. No gym-aloha remap: the policy trains and is
-  judged on OUR rig.
+  `sensordata[0:14]`, what the gymnasium env's `agent_pos` hands a
+  policy with `state_width=14`. No gym-aloha remap: the policy trains
+  and is judged on OUR rig.
 - `action` is the fourteen commanded actuator positions, in ctrl order.
 
 The heavy dependencies live behind the `train` extra; the module

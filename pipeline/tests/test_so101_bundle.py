@@ -52,16 +52,22 @@ class BundleContract(unittest.TestCase):
     def test_closed_loop_hold_at_home_through_the_harness_path(self) -> None:
         # Position actuators at the home keyframe's ctrl: from the zero
         # state, the arm must travel to home and stay there. Exercises
-        # the exact closed_loop_rollout path the task suite will use.
+        # the exact stepping path the task suite uses.
         import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import run_sensor_episode  # noqa: PLC0415
 
         backend = self._backend()
 
         def hold_home(step, sensordata):
             return HOME_QPOS
 
-        _states, sensors = backend.closed_loop_rollout(
-            backend.default_initial_state(), hold_home, steps=600, control_interval=5
+        _states, sensors = run_sensor_episode(
+            backend,
+            hold_home,
+            backend.default_initial_state(),
+            steps=600,
+            control_interval=5,
         )
         final_positions = sensors[-1, :JOINTS]
         self.assertLess(
