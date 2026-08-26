@@ -1,7 +1,13 @@
 """Generate scripted kitting demonstrations — T5's data source.
 
-    cd pipeline && uv run --extra sim python ../tools/kitting-demos.py \
-        [episodes] [out] [--max-attempts N]
+    cd pipeline && GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl OMP_NUM_THREADS=1 \
+        uv run --extra sim python ../tools/kitting-demos.py \
+        [episodes] [out] [--frame-every 1] [--max-attempts N]
+
+(On WSL the offscreen renderer needs GALLIUM_DRIVER=d3d12 to reach the
+GPU — Mesa's EGL default is llvmpipe at ~300 ms per frame, which
+turned a one-second episode into eight minutes; measured 2026-08-26.
+Harmless elsewhere.)
 
 Each episode: spawn both parts uniformly in the PROVEN band (the front
 half of the spawn box — the far band's closing-plane edge is a known
@@ -106,9 +112,7 @@ while kept < EPISODES:
 
     # renderer/frames bound as defaults — a late-binding closure would see
     # only the LAST attempt's objects (ruff B023).
-    def snap(
-        tick: int, live: mujoco.MjData, renderer=renderer, frames=frames
-    ) -> None:
+    def snap(tick: int, live: mujoco.MjData, renderer=renderer, frames=frames) -> None:
         if tick % (FRAME_EVERY * 10) != 0:  # tick is a physics step here
             return
         renderer.update_scene(live, camera="top")
@@ -146,9 +150,7 @@ while kept < EPISODES:
         actions=actions.astype(np.float32),
     )
     for tick, frame in frames:
-        Image.fromarray(frame).save(
-            frames_dir / f"{tick:06d}.jpg", quality=85
-        )
+        Image.fromarray(frame).save(frames_dir / f"{tick:06d}.jpg", quality=85)
     (episode_dir / "manifest.json").write_text(
         json.dumps(
             {

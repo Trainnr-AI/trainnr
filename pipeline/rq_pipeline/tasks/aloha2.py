@@ -41,6 +41,7 @@ BUNDLE_XML = (
     Path(__file__).resolve().parents[3] / "robots" / "aloha2-nominal" / "aloha2.xml"
 )
 HOME_KEYFRAME = "neutral_pose"
+OFFSCREEN_SHADOWSIZE = 2048  # upstream scene.xml says 8192
 
 ARMS = 2
 SERVOS_PER_ARM = 7
@@ -180,6 +181,11 @@ def _rig_scene(name: str, bundle_xml: Path) -> Any:
     # offscreen framebuffer must cover the largest.
     scene.visual.global_.offwidth = 1280
     scene.visual.global_.offheight = 720
+    # Menagerie's scene asks for an 8192x8192 shadow map — a screenshot
+    # setting. Every harness rollout and demo frame renders through this
+    # scene, so it is a per-frame cost (measured 2026-08-26: 31 ms per
+    # 640x480 frame on the RTX at 8192). Physics is untouched by it.
+    scene.visual.quality.shadowsize = OFFSCREEN_SHADOWSIZE
     return scene
 
 
