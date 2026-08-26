@@ -135,3 +135,13 @@ scene the difference is a millimetre within ten steps — certificates
 from it are statistical claims about the GPU instrument, never bitwise
 comparisons with the CPU reference.
 
+## Postscript 3 (2026-08-27) — the batched stepper
+
+`MJXWarpBackend.stepper` exists: batched, every world in lockstep, one
+jitted program per substep count, the forward pass recomputed after
+each step so sensors and poses describe one instant (the CPU
+stepper's R7 rule). On the pendulum its rows agree with the
+whole-episode `rollout` to 1e-4 and with the CPU stepper to the
+gauntlet's 1e-3, world by world. The vectorized gymnasium env over it
+is the remaining piece of this report's plan.
+

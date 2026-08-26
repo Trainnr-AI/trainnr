@@ -84,6 +84,53 @@ class MJXWarpGauntlet(unittest.TestCase):
         with self.assertRaises(ValueError):
             warp.rollout(warp.default_initial_state()[None, :], [[[0.0] * 14]])
 
+    def test_the_gpu_engine_is_registered(self) -> None:
+        from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
+        from rq_pipeline.physics.registry import GPU_ENGINE, resolve  # noqa: PLC0415
+
+        self.assertIs(resolve(GPU_ENGINE).build, MJXWarpBackend)
+
+    def test_stepper_is_batched_and_agrees_with_rollout_and_the_reference(
+        self,
+    ) -> None:
+        """The fifth door: a batched stepping loop. Its rows must be the
+        rollout's rows (same kernels, one extra forward per step) and
+        within the gauntlet's bound of the CPU stepper, world by world."""
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import Stepper  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
+            Stepper as CpuStepper,
+        )
+
+        cpu, warp = self._both()
+        rng = np.random.default_rng(11)
+        nbatch, ticks, substeps = 3, 5, 4
+        initial = np.tile(cpu.default_initial_state(), (nbatch, 1))
+        initial[:, 1] += rng.uniform(-0.3, 0.3, nbatch)
+        controls = rng.uniform(-0.4, 0.4, (nbatch, ticks, cpu.model.nu))
+        stepper = warp.stepper(initial, ticks * substeps)
+        self.assertIsInstance(stepper, Stepper)
+        self.assertEqual(stepper.sensordata.shape, (nbatch, cpu.model.nsensordata))
+        for tick in range(ticks):
+            stepper.advance(controls[:, tick], substeps)
+        self.assertTrue(stepper.done)
+        self.assertEqual(
+            stepper.states.shape, (nbatch, ticks * substeps, initial.shape[1])
+        )
+        self.assertEqual(stepper.sensors.shape[:2], (nbatch, ticks * substeps))
+        rollout = warp.rollout(initial, np.repeat(controls, substeps, axis=1))
+        gap = float(np.max(np.abs(stepper.states - rollout)))
+        self.assertLess(gap, 1e-4, f"stepper vs rollout {gap}")
+        for world in range(nbatch):
+            reference = CpuStepper(cpu.model, initial[world], ticks * substeps)
+            for tick in range(ticks):
+                reference.advance(controls[world, tick], substeps)
+            gap = float(np.max(np.abs(stepper.states[world] - reference.states)))
+            self.assertLess(gap, 1e-3, f"world {world} vs the reference {gap}")
+        stepper.advance(controls[:, 0], substeps)  # past the budget: a no-op
+        self.assertEqual(stepper.step, ticks * substeps)
+
     def test_shape_refusals_match_the_reference(self) -> None:
         import numpy as np  # noqa: PLC0415
 

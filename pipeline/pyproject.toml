@@ -49,6 +49,13 @@ viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
 aloha2 = "rq_pipeline.tasks.aloha2"
 so101 = "rq_pipeline.tasks.so101"
 
+# The engine registry's plugin door (rq_pipeline/physics/registry.py): a
+# third engine over the same MJCF registers here and enters through the
+# same gauntlet.
+[project.entry-points."rq_pipeline.engines"]
+mujoco = "rq_pipeline.physics.mujoco_backend"
+mjx-warp = "rq_pipeline.physics.mjx_backend"
+
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
 

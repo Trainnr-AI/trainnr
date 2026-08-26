@@ -117,6 +117,59 @@ class SatisfiesTheHarness(unittest.TestCase):
 
         self.assertIsInstance(MuJoCoBackend(), Engine)
 
+    def test_its_stepper_is_a_stepper(self) -> None:
+        from rq_pipeline.evaluate.harness import Stepper  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        stepper = backend.stepper(backend.default_initial_state(), 3)
+        self.assertIsInstance(stepper, Stepper)
+        self.assertEqual(stepper.sensordata.shape, (backend.model.nsensordata,))
+        self.assertEqual(dict(stepper.extras), {})
+
+    def test_a_protocol_needing_what_the_engine_lacks_is_refused_first(self) -> None:
+        """`observables` is the seam's hook for engines that expose more
+        than the row (a deformable's particles): a protocol declares
+        what it needs, the engine what it has, and a mismatch is refused
+        naming both — before a trial is spent."""
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.protocol import (  # noqa: PLC0415
+            EpisodeProtocol,
+            protocol_fields,
+        )
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        width = backend.model.nu
+
+        def protocol(**extra):
+            return EpisodeProtocol(
+                trials=1,
+                steps=5,
+                control_interval=1,
+                perturb=lambda _trial, home: home,
+                success=lambda _states, _sensors: True,
+                **extra,
+            )
+
+        self.assertNotIn("observables", protocol_fields(protocol()))
+        needy = protocol(observables=("particle_q",))
+        self.assertEqual(protocol_fields(needy)["observables"], ["particle_q"])
+        with self.assertRaises(ValueError) as caught:
+            evaluate_policies(
+                backend,
+                [SimPolicy("limp", lambda _step, _sensors: [0.0] * width)],
+                needy,
+                source="pendulum@000000000000",
+            )
+        self.assertIn("particle_q", str(caught.exception))
+        self.assertIn(backend.instrument, str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

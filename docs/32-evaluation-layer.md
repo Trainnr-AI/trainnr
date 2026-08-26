@@ -430,8 +430,9 @@ Still open after it, with the reason each one waits:
 
 | Item | Why it waits |
 |---|---|
-| `MJXWarpBackend.stepper` — the fifth `Engine` door | It is the vectorized gymnasium env over the GPU backend (docs/49); lands with the cloud run, where it can be measured at scale. Until then the backend says which doors it has. |
-| A `Stepper` Protocol with `sensordata` so the harness never reads `MjData` | The env already shares the `Stepper`; the harness's one `stepper.data.sensordata.copy()` is the last engine-specific touch. Small, but the seam belongs with the door above. |
+| ~~`MJXWarpBackend.stepper`~~ — **done 2026-08-27**: a BATCHED stepper (`MJXBatchedStepper`), admitted by the gauntlet; the vectorized gymnasium env over it is what remains (docs/49) | The env class over the batched stepper lands with the cloud run, where its throughput can be measured. |
+| ~~A `Stepper` Protocol~~ — **done 2026-08-27**: `harness.Stepper` names `sensordata`/`states`/`sensors`/`extras`/`advance`/`done`; the CPU stepper is asserted to satisfy it | — |
+| An engine registry — **done 2026-08-27**: `physics/registry.py`, `rq_pipeline.engines` entry points; and the observables hook (`EpisodeProtocol.observables`, `Engine.observables`, `require_observables`) | Plumbing `Stepper.extras` into `success` waits for the first engine that exposes anything (a deformable's particles). |
 | Task-side FULLPHYSICS offsets (`CUBE_STATE_SLICE = slice(17, 20)`, `PART_STATE_SLICE`, `_QPOS_OFFSET`) adopting `physics.FullPhysicsLayout` | Every one is pinned by a test today; the adoption is a mechanical pass over two rigs, queued behind the kitting work. |
 | `show-rig.py`, `show-yellow.py` without a Rerun mirror (the house rule) | Older rig viewers; the mirror is `RigMirror` plumbing plus a yellow-twin reconstruction the two errand tools already carry twice — the next item. |
 | `YellowTwin` (replay-errand, rig-rerun, sim-errand carry ~30 lines of the yellow twin's pose reconstruction each) and `RerunPaths`/`Timelines` for the entity strings | A rig-tool refactor, not an evaluation-layer one; queued with the rig's port to a bundle (docs/24). |

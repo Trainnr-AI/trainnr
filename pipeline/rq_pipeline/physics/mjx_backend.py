@@ -23,15 +23,18 @@ seam it will drive.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from rq_pipeline.physics.backend import (
+    ROLLOUT_STATE_RANK,
     FullPhysicsLayout,
     ModelCounts,
     check_rollout_shapes,
     instrument_stamp,
     no_model_message,
 )
+from rq_pipeline.physics.registry import GPU_ENGINE, engine
 
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
@@ -51,18 +54,21 @@ def _require_mjx() -> tuple[Any, Any, Any]:
     return mujoco, mjx, jax
 
 
+@engine(GPU_ENGINE, doc="MJX-Warp: batched worlds on the device, float32")
 class MJXWarpBackend:
     """Batched rollouts over the identified model, on MJX's Warp path.
 
-    Of the harness's `Engine` doors it offers `instrument`, `counts`,
-    `default_initial_state` and `keyframe_state` (state rows are
-    engine-independent, so those come from the compiled model), and
-    the batched `rollout` contract — plus `naconmax`/`njmax`, the
-    per-world contact and constraint capacities MJX cannot infer for
-    busy scenes (the ALOHA bundle overflows the defaults; the warning
-    names the numbers to pass). `stepper` is the door it does not have
-    yet: the vectorized env over this backend (docs/32 §10).
+    Every `Engine` door: `instrument`, `counts`, `default_initial_state`
+    and `keyframe_state` (state rows are engine-independent, so those
+    come from the compiled model), the batched `rollout` contract, and
+    `stepper` — BATCHED, every world in lockstep: controls are
+    `(nbatch, nu)`, states `(nbatch, steps, width)`; a single world is a
+    batch of one. Plus `naconmax`/`njmax`, the per-world contact and
+    constraint capacities MJX cannot infer for busy scenes (the kitting
+    bundle dumps core on the GPU without them).
     """
+
+    observables: frozenset[str] = frozenset()  # the row and the sensors
 
     NAME_PREFIX = "mjx"
     DEFAULT_IMPL = "warp"
@@ -90,7 +96,9 @@ class MJXWarpBackend:
             if value is not None
         }
         self._model: Any = None
-        self._program: tuple[Any, Any, Any] | None = None  # (mx, template, run)
+        # (mx, template, layout, run-or-None): the device model once per
+        # loaded model; the whole-episode program when first asked for.
+        self._program: tuple[Any, Any, Any, Any] | None = None
 
     @property
     def instrument(self) -> str:
@@ -170,18 +178,17 @@ class MJXWarpBackend:
         _, _, run = self._compiled()
         return np.asarray(run(jnp.asarray(initial), jnp.asarray(control)))
 
-    def _compiled(self) -> tuple[Any, Any, Any]:
-        """The device model, the data template and the jitted batched
-        episode — built once per loaded model and reused. Measured
-        before this cache (RTX 3090 Ti, 3 worlds x 50 steps): every
-        `rollout` call re-traced and recompiled, 0.8 s per call after
-        an 8.6 s first; a cached program re-specialises only when the
-        batch or step shape changes."""
-        if self._program is not None:
-            return self._program
-        mjx, jax = self._mjx, self._jax
-        import jax.numpy as jnp  # noqa: PLC0415
+    def stepper(self, initial_states: Any, steps: int) -> MJXBatchedStepper:
+        """The batched stepping loop over the loaded model: the door the
+        vectorized env and a batched harness drive (see the class)."""
+        return MJXBatchedStepper(self, initial_states, steps)
 
+    def _device(self) -> tuple[Any, Any, FullPhysicsLayout]:
+        """The device model and the data template, built once per loaded
+        model; refuses a busy scene without explicit sizing."""
+        if self._program is not None:
+            return self._program[:3]
+        mjx = self._mjx
         model = self._require_model()
         if model.ngeom > self.SIZING_REQUIRED_ABOVE_GEOMS and not self._sizing:
             raise ValueError(
@@ -193,25 +200,169 @@ class MJXWarpBackend:
         layout = FullPhysicsLayout(model)
         mx = mjx.put_model(model, impl=self._impl)
         template = mjx.make_data(model, impl=self._impl, **self._sizing)
+        self._program = (mx, template, layout, None)
+        return mx, template, layout
 
-        def seat(row: Any) -> Any:
-            data = template.replace(
-                time=row[layout.TIME], qpos=row[layout.qpos], qvel=row[layout.qvel]
-            )
-            if layout.na:
-                data = data.replace(act=row[layout.act])
-            return data
+    def _compiled(self) -> tuple[Any, Any, Any]:
+        """The device model, the data template and the jitted batched
+        episode — built once per loaded model and reused. Measured
+        before this cache (RTX 3090 Ti, 3 worlds x 50 steps): every
+        `rollout` call re-traced and recompiled, 0.8 s per call after
+        an 8.6 s first; a cached program re-specialises only when the
+        batch or step shape changes."""
+        mx, template, layout = self._device()
+        if self._program[3] is not None:
+            return mx, template, self._program[3]
+        mjx, jax = self._mjx, self._jax
+        import jax.numpy as jnp  # noqa: PLC0415
+
+        seat = _seat(template, layout)
 
         def tick(data: Any, ctrl: Any) -> tuple[Any, Any]:
             data = mjx.step(mx, data.replace(ctrl=ctrl))
-            parts = [jnp.reshape(data.time, (1,)), data.qpos, data.qvel]
-            if layout.na:
-                parts.append(data.act)
-            return data, jnp.concatenate(parts)
+            return data, _row(data, layout, jnp)
 
         def episode(row: Any, ctrls: Any) -> Any:
             _, states = jax.lax.scan(tick, seat(row), ctrls)
             return states
 
-        self._program = (mx, template, jax.jit(jax.vmap(episode)))
-        return self._program
+        run = jax.jit(jax.vmap(episode))
+        self._program = (mx, template, layout, run)
+        return mx, template, run
+
+
+def _seat(template: Any, layout: FullPhysicsLayout) -> Any:
+    """A FULLPHYSICS row into the data template (one world)."""
+
+    def seat(row: Any) -> Any:
+        data = template.replace(
+            time=row[layout.TIME], qpos=row[layout.qpos], qvel=row[layout.qvel]
+        )
+        if layout.na:
+            data = data.replace(act=row[layout.act])
+        return data
+
+    return seat
+
+
+def _row(data: Any, layout: FullPhysicsLayout, jnp: Any) -> Any:
+    """One world's data as a FULLPHYSICS row."""
+    parts = [jnp.reshape(data.time, (1,)), data.qpos, data.qvel]
+    if layout.na:
+        parts.append(data.act)
+    return jnp.concatenate(parts)
+
+
+class MJXBatchedStepper:
+    """The GPU engine's stepping loop, batched: every world advances in
+    lockstep under its own control. The same contract as the CPU
+    `Stepper` with a leading batch axis — `advance((nbatch, nu), k)`,
+    `sensordata (nbatch, nsensordata)`, `states (nbatch, steps, width)`.
+    After each physics step the forward pass is recomputed so sensors,
+    poses and the row describe ONE instant (the CPU stepper's R7 rule);
+    the whole-episode `rollout` skips that, so it is the faster path
+    when nobody observes mid-episode. One program per substep count,
+    cached; a busy scene is refused without explicit sizing."""
+
+    def __init__(
+        self, backend: MJXWarpBackend, initial_states: Any, steps: int
+    ) -> None:
+        import jax.numpy as jnp  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        if steps <= 0:
+            raise ValueError(f"steps must be positive, got {steps}")
+        mx, template, layout = backend._device()
+        initial = np.asarray(initial_states, dtype=float)
+        if initial.ndim != ROLLOUT_STATE_RANK or initial.shape[1] != layout.width:
+            raise ValueError(
+                f"initial_states must be (nbatch, {layout.width}), got {initial.shape}"
+            )
+        self._mjx, self._jax, self._jnp = backend._mjx, backend._jax, jnp
+        self._mx, self._layout = mx, layout
+        self.model = backend.model
+        self.nbatch, self.steps, self.step = int(initial.shape[0]), steps, 0
+        jax, mjx = self._jax, self._mjx
+        seat = _seat(template, layout)
+        self._data = jax.jit(jax.vmap(lambda row: mjx.forward(mx, seat(row))))(
+            jnp.asarray(initial)
+        )
+        self._programs: dict[int, Any] = {}
+        self._rows: list[Any] = []
+        self._sensor_rows: list[Any] = []
+        self.extras: Mapping[str, Any] = {}
+
+    @property
+    def done(self) -> bool:
+        return self.step >= self.steps
+
+    @property
+    def sensordata(self) -> numpy.ndarray:
+        """(nbatch, nsensordata) at the current instant."""
+        import numpy as np  # noqa: PLC0415
+
+        return np.asarray(self._data.sensordata)
+
+    @property
+    def states(self) -> numpy.ndarray:
+        """(nbatch, step, width): every physics step so far."""
+        return self._stack(self._rows, self._layout.width)
+
+    @property
+    def sensors(self) -> numpy.ndarray:
+        """(nbatch, step, nsensordata): every physics step so far."""
+        return self._stack(self._sensor_rows, int(self.model.nsensordata))
+
+    def _stack(self, chunks: list[Any], width: int) -> numpy.ndarray:
+        import numpy as np  # noqa: PLC0415
+
+        if not chunks:
+            return np.empty((self.nbatch, 0, width))
+        return np.asarray(self._jnp.concatenate(chunks, axis=1))
+
+    def advance(self, controls: Any, substeps: int) -> None:
+        """Hold `controls` (nbatch, nu) for `substeps` physics steps —
+        fewer at the end of the budget, never more."""
+        import numpy as np  # noqa: PLC0415
+
+        if substeps <= 0:
+            raise ValueError(f"substeps must be positive, got {substeps}")
+        control = np.asarray(controls, dtype=float)
+        if control.shape != (self.nbatch, self.model.nu):
+            raise ValueError(
+                f"controls must be ({self.nbatch}, {self.model.nu}), "
+                f"got {control.shape}"
+            )
+        if self.done:
+            return
+        count = min(substeps, self.steps - self.step)
+        self._data, rows, sensor_rows = self._program(count)(
+            self._data, self._jnp.asarray(control)
+        )
+        self._rows.append(rows)
+        self._sensor_rows.append(sensor_rows)
+        self.step += count
+
+    def _program(self, count: int) -> Any:
+        if count in self._programs:
+            return self._programs[count]
+        mjx, jax, jnp, mx, layout = (
+            self._mjx,
+            self._jax,
+            self._jnp,
+            self._mx,
+            self._layout,
+        )
+
+        def tick(data: Any, _: Any) -> tuple[Any, tuple[Any, Any]]:
+            data = mjx.forward(mx, mjx.step(mx, data))  # R7: one instant
+            return data, (_row(data, layout, jnp), data.sensordata)
+
+        def hold(data: Any, ctrl: Any) -> tuple[Any, Any, Any]:
+            data, (rows, sensor_rows) = jax.lax.scan(
+                tick, data.replace(ctrl=ctrl), None, length=count
+            )
+            return data, rows, sensor_rows
+
+        self._programs[count] = jax.jit(jax.vmap(hold))
+        return self._programs[count]

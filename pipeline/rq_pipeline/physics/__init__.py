@@ -5,12 +5,22 @@ compiled mjModel, batched on the device, float32, admitted through the
 acceptance gauntlet in tests/test_mjx_backend.py. Engines surface to
 policies as gymnasium envs over the same tasks (rq_pipeline.envs);
 that seam keeps every stage independent of the engine underneath.
+Engines register by name (`registry.py`, the `rq_pipeline.engines`
+entry-point group): `resolve("mujoco").build()`.
 """
 
 from rq_pipeline.physics.backend import ModelCounts
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
+from rq_pipeline.physics.registry import engines, resolve
 
-__all__ = ["MJXWarpBackend", "ModelCounts", "MuJoCoBackend", "Stepper"]
+__all__ = [
+    "MJXWarpBackend",
+    "ModelCounts",
+    "MuJoCoBackend",
+    "Stepper",
+    "engines",
+    "resolve",
+]
 
 
 def __getattr__(name: str):

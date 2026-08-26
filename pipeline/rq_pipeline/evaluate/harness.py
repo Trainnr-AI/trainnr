@@ -56,19 +56,49 @@ __all__ = [
     "events_for",
     "home_state",
     "join_with_real",
+    "require_observables",
     "run_sensor_episode",
     "score_policies",
 ]
 
 
 @runtime_checkable
+class Stepper(Protocol):
+    """One episode's stepping loop, as the harness drives it: `advance`
+    holds a control for some physics steps, `sensordata` is what the
+    policy sees now, `states`/`sensors` are the rows the referees read,
+    `extras` is anything the engine exposes beyond the row (a deformable
+    engine's particles), keyed as `EpisodeProtocol.observables` names."""
+
+    step: int
+    states: Any
+    sensors: Any
+    extras: Mapping[str, Any]
+
+    @property
+    def done(self) -> bool: ...
+
+    @property
+    def sensordata(self) -> Any: ...
+
+    def advance(self, control: Any, substeps: int) -> None: ...
+
+
+@runtime_checkable
 class Engine(Protocol):
     """What the harness asks of a physics engine — declared here, where
     it is consumed, so `evaluate` names no engine. `MuJoCoBackend`
-    satisfies it structurally; a second engine implements these five."""
+    satisfies it structurally (asserted in tests); a second engine
+    implements these six, and is admitted through the gauntlet
+    (tests/test_mjx_backend.py). `observables` names what the engine
+    can expose beyond the FULLPHYSICS row; a protocol that needs more
+    is refused before a trial is spent (`require_observables`)."""
 
     @property
     def instrument(self) -> str: ...  # physics/backend.py::instrument_stamp
+
+    @property
+    def observables(self) -> frozenset[str]: ...
 
     def counts(self) -> Any: ...  # the census: actuators, sensors, geoms, cameras
 
@@ -111,9 +141,21 @@ def run_sensor_episode(
     same `Stepper`."""
     stepper = backend.stepper(initial_state, steps)
     while not stepper.done:
-        control = act(stepper.step, stepper.data.sensordata.copy())
+        control = act(stepper.step, stepper.sensordata)
         stepper.advance(control, control_interval)
     return stepper.states, stepper.sensors
+
+
+def require_observables(backend: Engine, protocol: EpisodeProtocol) -> None:
+    """A protocol that needs what the engine cannot expose is refused
+    here, naming both — before any episode is spent."""
+    missing = set(protocol.observables) - set(backend.observables)
+    if missing:
+        raise ValueError(
+            f"protocol needs observables {sorted(missing)} that engine "
+            f"{backend.instrument} does not expose "
+            f"(it exposes {sorted(backend.observables) or 'none'})"
+        )
 
 
 def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knobs
@@ -150,6 +192,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
         source=source,
         cameras=counts.cameras if gate_cameras else None,
     )
+    require_observables(backend, protocol)
     home = home_state(backend, protocol)
     instrument = backend.instrument
     fields = protocol_fields(protocol)

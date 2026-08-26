@@ -17,6 +17,7 @@ precisely so it can raise the helpful error.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +28,7 @@ from rq_pipeline.physics.backend import (
     instrument_stamp,
     no_model_message,
 )
+from rq_pipeline.physics.registry import CPU_ENGINE, engine
 
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
@@ -131,6 +133,13 @@ class Stepper:
         self.step = 0
         self.states = np.empty((steps, size))
         self.sensors = np.empty((steps, model.nsensordata))
+        # Nothing beyond the row and the sensors: a rigid engine.
+        self.extras: Mapping[str, Any] = {}
+
+    @property
+    def sensordata(self) -> numpy.ndarray:
+        """What a policy observes now — a copy, so it cannot write back."""
+        return self.data.sensordata.copy()
 
     @property
     def done(self) -> bool:
@@ -170,11 +179,13 @@ class Stepper:
             self.step += 1
 
 
+@engine(CPU_ENGINE, doc="CPU MuJoCo: the metrology instrument, deterministic")
 class MuJoCoBackend:
     """CPU MuJoCo: the one door models come alive through (load + census),
     keyframes, and the batched rollout sysid uses."""
 
-    name = "mujoco"
+    name = CPU_ENGINE
+    observables: frozenset[str] = frozenset()  # the row and the sensors, nothing more
 
     def __init__(self) -> None:
         self._mujoco = _require_mujoco()

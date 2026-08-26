@@ -59,6 +59,11 @@ class EpisodeProtocol:
     success: Callable[[Any, Any], bool]
     home: str | None = None
     milestones: tuple[Milestone, ...] = ()
+    # What the referee needs beyond the FULLPHYSICS row and the sensors —
+    # e.g. ("particle_q",) for a deformable object. An engine declares what
+    # it exposes (`Engine.observables`); the harness refuses a mismatch
+    # before a trial is spent. Empty for every rigid task today.
+    observables: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name, value in (
@@ -103,10 +108,13 @@ def protocol_fields(protocol: EpisodeProtocol) -> dict[str, Any]:
     """The scalar half of a protocol — what a record can carry, including
     the milestone chain's names so a reader knows how long a complete
     funnel is."""
-    return {
+    fields: dict[str, Any] = {
         "trials": protocol.trials,
         "steps": protocol.steps,
         "control_interval": protocol.control_interval,
         "home": protocol.home,
         "milestones": [name for name, _ in protocol.milestones],
     }
+    if protocol.observables:  # absent when empty: every existing hash stands
+        fields["observables"] = list(protocol.observables)
+    return fields
