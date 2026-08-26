@@ -81,7 +81,7 @@ enumerate it. The docs enumerate it themselves
 | **`<sensor>`** | **not imported** — Newton has its own sensor pipeline | the whole harness contract ("policies observe sensors"), the referee framepos sensors, the bundle's jointpos/jointvel census, `LEFT_GRIPPER_POS_SLICE` — all of it would need re-plumbing through Newton sensors |
 | Cameras/lights in MJCF | ignored (own viewer pipeline; `SensorTiledCamera` instead) | our vision harness renders MJCF-declared cameras per step |
 | `<plugin>`, `<composite>`, `<flex>`, `<skin>` | not supported/imported | unused by us today |
-| Version pin | `mujoco~=3.11.0` on main (1.6.0.dev0) | **cannot coexist with the MuJoCo 3.12 we run** in one env; the identified-model contract is version-locked and Newton lags the lock |
+| Version pin | `mujoco~=3.11.0` on main (1.6.0.dev0) | CORRECTED 2026-08-27: the repo's lock also runs 3.11.0 (upstream latest is 3.12.0) — so Newton's pin currently *matches* ours. The deeper point survives intact: the engine version is part of the identified artifact, and an accidental 3.11→3.12 bump broke nine of our tests the same day (see docs/49 postscript) |
 | Contact `solref` | force-space re-conversion unless MJCF-authored (`SOLREF_MODE_RAW` preserved verbatim) | our gym-aloha-copied solimp/solref are MJCF-authored → preserved; but `save_to_mjcf` round-trip is lossy for force-space joints |
 | Multi-world | model built from the **first world only**, replicated; worlds must be structurally identical | per-trial DYNAMICS variation (our `variations.py` DR) has no first-class door here; per-world values exist only via custom attributes |
 | Non-convex meshes | convex-hulled at conversion (MuJoCo semantics — same as ours) | no change |

@@ -21,8 +21,9 @@ own examples already set it True.
 ## The open question of docs/36, settled by running it
 
 `uv pip install "newton[sim]"` is clean on Apple Silicon (newton 1.5.0
-+ warp-lang 1.16.0 + mujoco/mujoco-warp **3.11.0** — one minor behind
-the 3.12.0 we run, confirming docs/47's version-lag row). **All five
++ warp-lang 1.16.0 + mujoco/mujoco-warp **3.11.0** — matching the
+3.11.0 the repo's lock actually runs — see docs/49's postscript for
+the correction; 3.12.0 is upstream latest). **All five
 stable solvers step a box-on-plane scene on Warp's CPU backend,
 including SolverMuJoCo** — the 36-report's "presumably needs CUDA"
 worry was wrong. Measured (1000 steps, warm cache, one machine, one

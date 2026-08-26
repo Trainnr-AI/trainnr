@@ -1,11 +1,23 @@
-"""Physics: CPU MuJoCo, the only engine the identification stage supports
-(`mujoco.sysid` is CPU MuJoCo, and MJCF stays the canonical robot
-format). GPU engines — MJX-Warp, Newton — would arrive as another
-gymnasium env over the same tasks (rq_pipeline.envs), which is the seam
-that keeps every stage independent of the engine underneath.
+"""Physics: CPU MuJoCo is the metrology instrument (`mujoco.sysid` is
+CPU MuJoCo, MJCF stays the canonical robot format); MJX-Warp is the
+throughput instrument (`MJXWarpBackend`, docs/e2e-research/49) — same
+compiled mjModel, batched on the device, float32, admitted through the
+acceptance gauntlet in tests/test_mjx_backend.py. Engines surface to
+policies as gymnasium envs over the same tasks (rq_pipeline.envs);
+that seam keeps every stage independent of the engine underneath.
 """
 
 from rq_pipeline.physics.backend import ModelCounts
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 
-__all__ = ["ModelCounts", "MuJoCoBackend", "Stepper"]
+__all__ = ["MJXWarpBackend", "ModelCounts", "MuJoCoBackend", "Stepper"]
+
+
+def __getattr__(name: str):
+    # Lazy: the mjx extra is optional, and importing it eagerly would
+    # break every sim-only environment.
+    if name == "MJXWarpBackend":
+        from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
+
+        return MJXWarpBackend
+    raise AttributeError(name)

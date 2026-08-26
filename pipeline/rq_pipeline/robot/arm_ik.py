@@ -69,10 +69,14 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if joint_id < 0:
             raise ValueError(f"no joint named {name!r}")
-        if model.jnt_type[joint_id] not in (
-            mujoco.mjtJoint.mjJNT_HINGE,
-            mujoco.mjtJoint.mjJNT_SLIDE,
+        if int(model.jnt_type[joint_id]) not in (
+            int(mujoco.mjtJoint.mjJNT_HINGE),
+            int(mujoco.mjtJoint.mjJNT_SLIDE),
         ):
+            # int() on both sides: numpy-scalar-vs-pybind-enum equality
+            # silently became False on mujoco 3.12 — a hinge stopped
+            # looking like a hinge (caught 2026-08-27 by the accidental
+            # 3.11->3.12 lock bump).
             # A free or ball joint has multi-dof addressing; the scalar
             # dq indexing below would write plausible-looking garbage.
             raise ValueError(
