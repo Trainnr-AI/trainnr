@@ -116,6 +116,14 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     for episode in episodes:
         trajectory = np.load(episode / "trajectory.npz")
         sensors, actions = trajectory["sensors"], trajectory["actions"]
+        # Sensors are per PHYSICS step, actions per CONTROL tick (measured:
+        # 14000 rows against 1400); frames are named by physics step.
+        steps_per_control = len(sensors) // len(actions)
+        if steps_per_control * len(actions) != len(sensors):
+            raise ValueError(
+                f"{episode}: {len(sensors)} sensor rows are not a whole "
+                f"multiple of {len(actions)} action rows"
+            )
         frames = sorted((episode / "frames").glob("*.jpg"))
         if not frames:
             raise ValueError(f"{episode} has no frames")
@@ -127,7 +135,9 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
                     "observation.state": np.asarray(
                         sensors[tick, :STATE_WIDTH], dtype=np.float32
                     ),
-                    "action": np.asarray(actions[tick], dtype=np.float32),
+                    "action": np.asarray(
+                        actions[tick // steps_per_control], dtype=np.float32
+                    ),
                     "task": task,
                 }
             )

@@ -14,7 +14,8 @@ from pathlib import Path
 LEROBOT_PRESENT = importlib.util.find_spec("lerobot") is not None
 NUMPY_PRESENT = importlib.util.find_spec("numpy") is not None
 
-STEPS = 60
+STEPS = 60  # physics steps; the generator writes sensors per physics step
+CONTROL_TICKS = 6  # and actions per control tick (10 physics steps each)
 FRAME_TICKS = (0, 10, 20, 30, 40, 50)  # frame_every=1 at 500 Hz physics / 50 Hz control
 
 
@@ -31,7 +32,7 @@ def synthetic_batch(root: Path, episodes: int = 2, frame_every: int = 1) -> Path
             episode / "trajectory.npz",
             states=rng.normal(size=(STEPS, 40)).astype(np.float32),
             sensors=rng.normal(size=(STEPS, 34)).astype(np.float32),
-            actions=rng.normal(size=(STEPS, 14)).astype(np.float32),
+            actions=rng.normal(size=(CONTROL_TICKS, 14)).astype(np.float32),
         )
         for tick in FRAME_TICKS:
             Image.fromarray(rng.integers(0, 255, (48, 64, 3), dtype=np.uint8)).save(
@@ -96,12 +97,17 @@ class RoundTrip(unittest.TestCase):
             self.assertEqual(
                 tuple(sample["observation.images.top"].shape)[-2:], (48, 64)
             )
-            # The state is the sensor block at the frame's tick, verbatim.
+            # The state is the sensor block at the frame's physics tick and
+            # the action the control tick that contains it, verbatim.
             trajectory = np.load(demos / "episode_0000" / "trajectory.npz")
             np.testing.assert_allclose(
                 sample["observation.state"].numpy(),
                 trajectory["sensors"][0, :STATE_WIDTH],
                 rtol=1e-6,
+            )
+            last = dataset[len(FRAME_TICKS) - 1]  # frame at physics tick 50
+            np.testing.assert_allclose(
+                last["action"].numpy(), trajectory["actions"][5], rtol=1e-6
             )
 
 
