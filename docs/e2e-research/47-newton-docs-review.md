@@ -208,16 +208,40 @@ Three conclusions, each load-bearing for the GPU-path decision:
    measurement (4.7 mm penetration and a lost grasp), agreeing with the
    engine docs' own grasping guidance ("prefer elliptic + impratio for
    stick-slip").
-3. **implicitfast is behaviorally equivalent here** (PASS, ~equal cost)
-   — so Newton (engine)'s silent integrator flip would not by itself
-   break these scenes, and implicitfast is available as a stiffness
-   headroom lever if identified gains ever need it.
+3. **implicitfast passes the referee at ~equal cost — but it is NOT
+   behaviorally equivalent** (revised 2026-08-27 when the sweep gained
+   the docs/48 §3 diagnostics): peak pad normal force is **318 N vs
+   Euler's 22.6 N** — a 14x spike at the fingertips the verdict column
+   cannot see. Referee-equivalent, contact-dynamics different; the
+   integrator decision needs the force trace, not just the outcome.
 
 Caveat, stated honestly: one trial per config, and the scripted
 choreography's closed-loop corrections partially adapt to whatever
 physics they get — so "fail" measures the pipeline outcome (the thing
 we ship), not solver accuracy in isolation. The penetration column is
 the solver-only signal.
+
+**Second pass, same day — the sweep grew the docs/48 §3 diagnostics**
+(peak tangential pad-part slip from the elliptic efc_vel rows; peak
+pad normal force via mj_contactForce) plus an impratio sweep:
+
+| solver | cone | integ | impratio | verdict | pen mm | slip mm/s | grip N |
+|---|---|---|---|---|---|---|---|
+| newton | elliptic | euler | 10 | PASS | 1.5 | 130 | 22.6 |
+| newton | elliptic | implicitfast | 10 | PASS | 1.8 | 136 | **318.5** |
+| cg | elliptic | euler | 10 | fail | 11.4 | **5166** | 169.0 |
+| newton | elliptic | euler | 1 | PASS | **5.1** | 140 | 23.6 |
+| newton | elliptic | euler | 3 | PASS | 1.4 | 118 | 21.1 |
+| newton | elliptic | euler | 30 | PASS | 2.6 | 164 | 23.3 |
+
+Three refinements: (a) CG's failure is now legible — 5.2 m/s of pad
+scrubbing across the part, the grasp never holds; (b) **impratio=1
+still passes this trial** — the anti-slip knob's effect here shows up
+as penetration (5.1 mm at 1 vs 1.4-1.5 mm at 3-10), not as slip, so
+the recipe's value on THIS task is contact hardness at the pads
+rather than slip suppression (one trial; the DR band may differ);
+(c) the implicitfast force spike above. Peak — not mean — forces;
+a mean-force trace is the follow-up before any integrator decision.
 
 ### 7.1 Re-measured on the second machine (WSL, x86-64, 2026-08-27 — the merge review)
 
