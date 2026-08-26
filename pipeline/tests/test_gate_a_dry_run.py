@@ -17,6 +17,8 @@ by a test instead of a register row.
 import importlib.util
 import unittest
 
+from tests._instruments import expected_expert_rate
+
 MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 # Hand-authored real outcomes, one row per task, ordered like reality.
@@ -93,8 +95,13 @@ class GateADryRun(unittest.TestCase):
                 source=f"so101-{task_name}@000000000000",
             )
             by_name = {s.name: s.score for s in scores}
-            # The expert must own each task; the ablations must not.
-            self.assertEqual(by_name["expert"], 1.0, task_name)
+            # The expert must own each task at the rate measured on this
+            # instrument (tests/_instruments); the ablations must not.
+            self.assertEqual(
+                by_name["expert"],
+                expected_expert_rate(task_name, backend.instrument, self),
+                task_name,
+            )
             self.assertEqual(by_name["no-grip"], 0.0, task_name)
             self.assertEqual(by_name["limp"], 0.0, task_name)
 

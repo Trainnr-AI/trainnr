@@ -408,6 +408,20 @@ sweep found 60 findings (magic numbers, `zip` without `strict`,
 215 sim tests, 3 plugin tests, the kitting-export round trip, and the
 layer chain all green.
 
+### The chain after the review, run whole (2026-08-26, late night)
+
+Demo batch (±30% DR, 4 of 5 kept) → `kitting_export` → `lerobot-train`
+with `--env.type=robotiq --env_eval_freq=600 --env.record_to=…` (the
+trainer's own in-loop eval wrote two of our records) → `lerobot-eval`
+with records (0/4, CP95 [0, 0.602], funnel `part_moved 2/4`) →
+`train-watch --play` on the checkpoint → 216/216 in both venvs. Twenty
+minutes on the WSL card. Found by running the full suite under the
+train venv's MuJoCo 3.12 for the first time: a cross-version enum
+comparison in `arm_ik` (the review's joint-type guard refused every
+hinge), draccus's top-level `tests` package shadowing ours, and the
+SO-101 experts at 3/4 on 3.12 against 4/4 on 3.11 — now pinned per
+instrument in `tests/_instruments.py`. Details: docs/07.
+
 ## 11. Open questions (carried from 45 §4 and 46 §5)
 
 1. Async vector envs under WSL: LIBERO defers simulator creation to the

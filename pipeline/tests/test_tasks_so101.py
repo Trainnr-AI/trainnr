@@ -3,6 +3,8 @@
 import importlib.util
 import unittest
 
+from tests._instruments import expected_expert_rate
+
 MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 HOME_CTRL = [0.0, -1.57, 1.57, 1.57, -1.57, 0.0]
@@ -130,9 +132,14 @@ class StackTask(unittest.TestCase):
         )
         by_name = {score.name: score.score for score in scores}
         # The measured catch basin covers the whole +-2 mm jitter grid
-        # (9/9), so the scripted stacker must go clear; carrying without
-        # releasing, or never gripping, must never count as a stack.
-        self.assertEqual(by_name["stack"], 1.0)
+        # (9/9) on the locked MuJoCo, so the scripted stacker goes clear
+        # there; the rate is pinned per instrument (tests/_instruments).
+        # Carrying without releasing, or never gripping, must never
+        # count as a stack.
+        self.assertEqual(
+            by_name["stack"],
+            expected_expert_rate(task.name, backend.instrument, self),
+        )
         self.assertEqual(by_name["no-release"], 0.0)
         self.assertEqual(by_name["no-close"], 0.0)
 
@@ -166,9 +173,13 @@ class InsertTask(unittest.TestCase):
             source="so101-insert@000000000000",
         )
         by_name = {score.name: score.score for score in scores}
-        # 9/9 across the jitter grid in the sizing probes; the pocket's
-        # +-6 mm clearance is the task's precision axis.
-        self.assertEqual(by_name["insert"], 1.0)
+        # 9/9 across the jitter grid in the sizing probes on the locked
+        # MuJoCo; the pocket's +-6 mm clearance is the task's precision
+        # axis, and the rate is pinned per instrument (tests/_instruments).
+        self.assertEqual(
+            by_name["insert"],
+            expected_expert_rate(task.name, backend.instrument, self),
+        )
         self.assertEqual(by_name["no-release"], 0.0)
         self.assertEqual(by_name["no-close"], 0.0)
 

@@ -55,6 +55,10 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
+    single_dof_joint_types = {
+        int(mujoco.mjtJoint.mjJNT_HINGE),
+        int(mujoco.mjtJoint.mjJNT_SLIDE),
+    }
     site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site)
     if site_id < 0:
         raise ValueError(f"no site named {site!r}")
@@ -69,10 +73,11 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if joint_id < 0:
             raise ValueError(f"no joint named {name!r}")
-        if model.jnt_type[joint_id] not in (
-            mujoco.mjtJoint.mjJNT_HINGE,
-            mujoco.mjtJoint.mjJNT_SLIDE,
-        ):
+        # Compared as ints: MuJoCo 3.12's enum no longer equals a numpy
+        # integer inside a tuple membership test (3.11 did), and the two
+        # venvs run different MuJoCo versions (caught 2026-08-26 when the
+        # generator refused every hinge in the train venv).
+        if int(model.jnt_type[joint_id]) not in single_dof_joint_types:
             # A free or ball joint has multi-dof addressing; the scalar
             # dq indexing below would write plausible-looking garbage.
             raise ValueError(
