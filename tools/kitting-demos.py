@@ -43,6 +43,7 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     PART_STATE_SLICE,
     KittingStats,
     build_kitting,
+    scale_dynamics,
     scripted_kitting_episode,
 )
 
@@ -69,11 +70,10 @@ parser.add_argument(
     type=float,
     default=0.30,
     help="domain-randomisation half-width around the bundle's values (0.30 ="
-    " +-30%%). The scripted expert only works at NOMINAL dynamics: measured"
-    " 2026-08-26 without rendering, 8/10 kept at 0, 2/10 at 0.10 (both"
-    " keepers within 2%% of nominal gain), 0/10 at 0.30 — the Mac's 3-of-8"
-    " smoke at 0.30 was a lucky draw. T5's batch ran at 0; DR data needs a"
-    " gain-aware choreography (open item)",
+    " +-30%%). Measured 2026-08-26 with the gain scaled correctly (both kp"
+    " terms): the scripted expert keeps 8/10 at 0.10 and 10/10 at 0.30, no"
+    " retries. (An earlier one-sided gain scale moved the setpoints and"
+    " read as 'nominal only'; T5's first batch ran at 0 because of it.)",
 )
 args = parser.parse_args()
 EPISODES, OUT = args.episodes, args.out
@@ -97,14 +97,13 @@ while kept < EPISODES:
         sys.exit(1)
     attempt += 1
     # Domain randomization: recompile the scene with scaled dynamics.
+    # (`scale_dynamics` scales BOTH kp terms of a position servo; this
+    # tool once scaled gainprm[0] alone, which moves the setpoint, not
+    # the stiffness — the "expert only works at nominal" artifact.)
     spec = build_kitting().spec
     damping_scale = float(1.0 + rng.uniform(-DR_SPAN, DR_SPAN))
     gain_scale = float(1.0 + rng.uniform(-DR_SPAN, DR_SPAN))
-    for joint in spec.joints:
-        if joint.name.startswith(("left/", "right/")):
-            joint.damping[0] = joint.damping[0] * damping_scale
-    for actuator in spec.actuators:
-        actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
+    scale_dynamics(spec, damping_scale=damping_scale, gain_scale=gain_scale)
     model = spec.compile()
 
     initial = keyframe_state(model, "neutral_pose")

@@ -38,6 +38,7 @@ from lerobot.envs.configs import EnvConfig
 from lerobot.utils.constants import ACTION, OBS_IMAGES, OBS_STATE
 
 from rq_pipeline.envs.robotiq import RGB_CHANNELS, TASKS, make_env
+from rq_pipeline.evaluate.variations import parse_variation
 
 DEFAULT_TASK = "kitting"
 CONTROL_HZ = 50  # the ALOHA protocols: 500 Hz physics, control every 10 steps
@@ -55,6 +56,11 @@ class RobotiqEnvConfig(EnvConfig):
     # eval_info.json lacks.
     record_to: str | None = None
     policy_name: str = "policy"
+    # `--env.variations='["joints.damping_scale=0.7:1.3",
+    #                     "top.offset_m=-0.03,-0.03,-0.03:0.03,0.03,0.03"]'`
+    # — each drawn by trial index (paired across policies), applied at
+    # reset, written into the row.
+    variations: list[str] = field(default_factory=list)
     features: dict[str, PolicyFeature] = field(default_factory=dict)
     features_map: dict[str, str] = field(default_factory=dict)
 
@@ -85,6 +91,7 @@ class RobotiqEnvConfig(EnvConfig):
             "task": self.task,
             "record_to": self.record_to,
             "policy_name": self.policy_name,
+            "variations": tuple(parse_variation(text) for text in self.variations),
         }
 
     def create_envs(

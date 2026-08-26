@@ -152,6 +152,29 @@ def ctrl_from_act_sim_action(action: Any) -> Any:
     return ctrl
 
 
+def scale_dynamics(spec: Any, *, damping_scale: float, gain_scale: float) -> None:
+    """Domain randomisation on an UNCOMPILED spec: every arm joint's
+    damping and every actuator's stiffness, scaled in place.
+
+    The one way to scale a position servo's gain: `gainprm[0]` (kp on
+    the command) and `biasprm[1]` (-kp on the position) TOGETHER.
+    Scaling `gainprm[0]` alone multiplies the SETPOINT, not the
+    stiffness — force = kp'*ctrl - kp*q settles at q = (kp'/kp)*ctrl —
+    and the demo generator did exactly that until 2026-08-26: a 5%
+    "gain" change moved every joint target 5% (3° on the elbow), and
+    the scripted expert "only worked at nominal" (2/10 at ±10%, 0/10 at
+    ±30%). With both terms scaled it keeps 8/10 at ±10% and 10/10 at
+    ±30% with no retries. One function, so a tool cannot get it wrong
+    again (tools/show-many.py had it right all along).
+    """
+    for joint in spec.joints:
+        if joint.name.startswith(("left/", "right/")):
+            joint.damping[0] = joint.damping[0] * damping_scale
+    for actuator in spec.actuators:
+        actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
+        actuator.biasprm[1] = actuator.biasprm[1] * gain_scale
+
+
 def _rig_scene(name: str, bundle_xml: Path) -> Any:
     import mujoco  # noqa: PLC0415 - sim extra
 

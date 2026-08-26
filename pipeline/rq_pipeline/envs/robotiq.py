@@ -57,7 +57,9 @@ from rq_pipeline.evaluate.records import (
     EpisodeRecord,
     append_records,
     protocol_fields,
+    protocol_hash,
 )
+from rq_pipeline.evaluate.variations import Variation, describe, draw_all
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.robot.model_checks import assert_model_alive
 from rq_pipeline.tasks.aloha2 import BUNDLE_XML, build_kitting, build_transfer_cube
@@ -73,6 +75,78 @@ RGB_CHANNELS = 3
 PIXEL_MAX = 255
 GYM_ID_PREFIX = "robotiq"  # gym.make("robotiq/<task>-v0")
 GYM_ID_VERSION = "v0"
+OFFSET_COMPONENTS = 3
+
+
+class _Nominal:
+    """The model's identified values, copied once, restored every reset
+    — so a variation is always nominal x draw and never compounds
+    (Arena's snapshot-then-write rule)."""
+
+    def __init__(self, model: Any) -> None:
+        self.dof_damping = model.dof_damping.copy()
+        self.gain = model.actuator_gainprm[:, 0].copy()
+        self.bias = model.actuator_biasprm[:, 1].copy()
+        self.body_mass = model.body_mass.copy()
+        self.body_inertia = model.body_inertia.copy()
+        self.cam_pos = model.cam_pos.copy()
+        self.light_diffuse = model.light_diffuse.copy()
+
+    def restore(self, model: Any) -> None:
+        model.dof_damping[:] = self.dof_damping
+        model.actuator_gainprm[:, 0] = self.gain
+        model.actuator_biasprm[:, 1] = self.bias
+        model.body_mass[:] = self.body_mass
+        model.body_inertia[:] = self.body_inertia
+        model.cam_pos[:] = self.cam_pos
+        model.light_diffuse[:] = self.light_diffuse
+
+
+def _named(model: Any, kind: Any, name: str, what: str) -> int:
+    import mujoco  # noqa: PLC0415 - sim extra, present if we got here
+
+    index = mujoco.mj_name2id(model, kind, name)
+    if index < 0:
+        raise ValueError(f"variation names {what} {name!r}, which the model lacks")
+    return index
+
+
+def apply_variation(model: Any, nominal: _Nominal, key: str, value: Any) -> None:
+    """Write one drawn value into the compiled model, from its nominal.
+
+    The vocabulary: `joints.damping_scale`, `actuators.gain_scale`
+    (BOTH kp terms of a position servo — scaling `gainprm[0]` alone
+    moves the setpoint, the 2026-08-26 lesson in `scale_dynamics`),
+    `<body>.mass_scale` (inertia scaled with it), `<camera>.offset_m`
+    (three components, metres), `lights.diffuse_scale`. Anything else
+    is refused, at construction, before a trial is spent.
+    """
+    import mujoco  # noqa: PLC0415 - sim extra, present if we got here
+
+    host, _, name = key.rpartition(".")
+    if key == "joints.damping_scale":
+        model.dof_damping[:] = nominal.dof_damping * float(value)
+    elif key == "actuators.gain_scale":
+        model.actuator_gainprm[:, 0] = nominal.gain * float(value)
+        model.actuator_biasprm[:, 1] = nominal.bias * float(value)
+    elif key == "lights.diffuse_scale":
+        model.light_diffuse[:] = nominal.light_diffuse * float(value)
+    elif name == "mass_scale":
+        body = _named(model, mujoco.mjtObj.mjOBJ_BODY, host, "body")
+        model.body_mass[body] = nominal.body_mass[body] * float(value)
+        model.body_inertia[body] = nominal.body_inertia[body] * float(value)
+    elif name == "offset_m":
+        camera = _named(model, mujoco.mjtObj.mjOBJ_CAMERA, host, "camera")
+        offset = np.asarray(value, dtype=float)
+        if offset.shape != (OFFSET_COMPONENTS,):
+            raise ValueError(f"{key} needs three components, got {value!r}")
+        model.cam_pos[camera] = nominal.cam_pos[camera] + offset
+    else:
+        raise ValueError(
+            f"unknown variation {key!r}; the env knows joints.damping_scale, "
+            "actuators.gain_scale, lights.diffuse_scale, <body>.mass_scale, "
+            "<camera>.offset_m"
+        )
 
 
 @dataclass(frozen=True)
@@ -119,7 +193,7 @@ class RobotiqEnv(gym.Env):
         "render_fps": 0,  # per instance, from the model's timestep
     }
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - keyword-only identity, each part of the row
         self,
         task: Any,
         *,
@@ -127,6 +201,7 @@ class RobotiqEnv(gym.Env):
         render_mode: str = "rgb_array",
         record_to: Path | None = None,
         policy_name: str = "policy",
+        variations: tuple[Variation, ...] = (),
     ) -> None:
         state_width = task.state_width
         instruction = task.instruction
@@ -194,7 +269,22 @@ class RobotiqEnv(gym.Env):
         self._last_pixels: dict[str, Any] = {}
         self._record_to = Path(record_to) if record_to is not None else None
         self._policy_name = policy_name
-        self._protocol_fields = protocol_fields(task.protocol)
+        # The variation space is part of the protocol's identity: its
+        # description enters the fields, so the hash — and every draw —
+        # changes when a knob does.
+        self.variations = tuple(variations)
+        self._protocol_fields = {
+            **protocol_fields(task.protocol),
+            "variations": describe(self.variations),
+        }
+        self._protocol_hash = protocol_hash(self._protocol_fields)
+        self._nominal = _Nominal(self._model)
+        self._values: dict[str, Any] = {}
+        # Every key must be applicable NOW: a misspelt body or camera is
+        # refused before a trial is spent, not at the first reset.
+        for key, value in draw_all(self.variations, 0, self._protocol_hash).items():
+            apply_variation(self._model, self._nominal, key, value)
+        self._nominal.restore(self._model)
         import mujoco  # noqa: PLC0415 - sim extra, present if we got here
 
         # One MjData for the env's whole life: a passive viewer binds to
@@ -235,6 +325,12 @@ class RobotiqEnv(gym.Env):
         self._trial = index % self.protocol.trials
         self._seed = seed
         self._episodes += 1
+        # Nominal first, then this trial's draw: identical for every
+        # policy on trial k, never compounding across resets.
+        self._nominal.restore(self._model)
+        self._values = draw_all(self.variations, self._trial, self._protocol_hash)
+        for key, value in self._values.items():
+            apply_variation(self._model, self._nominal, key, value)
         initial = self.protocol.perturb(self._trial, self._home)
         self._stepper = Stepper(
             self._model, initial, self.protocol.steps, data=self._data
@@ -266,6 +362,7 @@ class RobotiqEnv(gym.Env):
                             protocol=self._protocol_fields,
                             seed=self._seed,
                             events=events_for(self.protocol, states, sensors),
+                            variations=dict(self._values),
                         )
                     ],
                 )
@@ -286,6 +383,11 @@ class RobotiqEnv(gym.Env):
 
     def _info(self, ok: bool) -> dict[str, Any]:
         return {"is_success": ok, "success": ok, "trial": self._trial}
+
+    @property
+    def drawn(self) -> dict[str, Any]:
+        """This episode's variation values, keyed `host.name`."""
+        return dict(self._values)
 
     def _renderer(self, height: int, width: int) -> Any:
         key = (height, width)
@@ -320,8 +422,9 @@ def make_env(
     render_mode: str = "rgb_array",
     record_to: Path | str | None = None,
     policy_name: str = "policy",
+    variations: tuple[Variation, ...] = (),
 ) -> RobotiqEnv:
-    """`gym.make`'s entry point: a task by name on the nominal ALOHA 2 bundle."""
+    """`gym.make`'s entry point: a task by name on its nominal bundle."""
     if task not in TASKS:
         raise KeyError(f"no task {task!r}; the env knows {sorted(TASKS)}")
     entry = TASKS[task]
@@ -331,6 +434,7 @@ def make_env(
         render_mode=render_mode,
         record_to=Path(record_to) if record_to is not None else None,
         policy_name=policy_name,
+        variations=variations,
     )
 
 

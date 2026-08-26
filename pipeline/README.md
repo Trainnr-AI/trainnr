@@ -17,13 +17,13 @@ Architecture, stage roadmap and the design decisions behind them:
 
 | Package | What it is |
 |---|---|
-| `rq_pipeline/stats` | The honesty layer: exact binomial intervals, Fisher-z rank-correlation intervals, top-pick probability. Dependency-free — a signed report must be recomputable anywhere. |
+| `rq_pipeline/stats` | The honesty layer: exact binomial intervals, Fisher-z rank-correlation intervals, top-pick probability, and per-factor main effects by Fisher's exact test (`effects`). Dependency-free — a signed report must be recomputable anywhere. |
 | `rq_pipeline/bundles` | Hash-stamped artifact identity (`name@hash`). Calibration is device state; nothing is nameable without its hash. |
 | `rq_pipeline/physics` | CPU MuJoCo: load, census, keyframes, batched sysid rollouts, and `Stepper` — the one stepping loop every episode runs on. A GPU engine would arrive as another env over the same tasks. |
 | `rq_pipeline/robot` | Fail-loudly model gates, fit records with spread verdicts, damped-least-squares arm IK, `mujoco.sysid` identification. A USD import that silently drops actuators is refused, not discovered in week three. |
 | `rq_pipeline/collect` | The wire in: status-line parsing, frame assembly, CSV/excitation ingest, LeRobot dataset export. |
 | `rq_pipeline/tasks` | Scene builders + episode protocols: SO-101 (reach/lift/stack/insert), ALOHA 2 (transfer, kitting + its scripted demo generator), the mobile-manipulator rig. |
-| `rq_pipeline/evaluate` | The harnesses: paired-trial scoring over sensors or pixels, ArmnetBench camera rig, sim↔real certificates. |
+| `rq_pipeline/evaluate` | The judge: paired-trial protocols with milestone chains, the per-trial record and its fold, variations drawn by trial index, camera rigs as data, sim↔real certificates. |
 | `rq_pipeline/envs` | The ecosystem's door: every task as a gymnasium env (`gym.make("robotiq/kitting-v0")`) with paired starts through the seed, plus the LeRobot `EnvConfig` that lets `lerobot-eval` and `lerobot-train` run our rollouts (`--env.type=robotiq --env.discover_packages_path=rq_pipeline.envs`). The judge stays in `evaluate`. |
 
 ## Develop

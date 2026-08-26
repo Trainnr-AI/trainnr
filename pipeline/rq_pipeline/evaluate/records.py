@@ -17,6 +17,7 @@ the trial count survives into every downstream statistic.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -59,6 +60,7 @@ class EpisodeRecord:
     protocol: Mapping[str, Any]  # the scalar protocol fields
     seed: int | None = None
     events: tuple[Mapping[str, Any], ...] = ()
+    variations: Mapping[str, Any] = field(default_factory=dict)  # key -> drawn value
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -70,6 +72,18 @@ class EpisodeRecord:
             raise ValueError(
                 f"trial must be >= 0 and steps > 0, got {self.trial}, {self.steps}"
             )
+
+    @property
+    def protocol_hash(self) -> str:
+        return protocol_hash(self.protocol)
+
+
+def protocol_hash(fields: Mapping[str, Any]) -> str:
+    """Twelve hex digits over the protocol's scalar fields (and its
+    variation space, when the env adds one): the seed of every draw, so
+    two sweeps that differ in any declared knob draw different values."""
+    encoded = json.dumps(dict(fields), sort_keys=True, default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()[:12]
 
 
 def protocol_fields(protocol: Any) -> dict[str, Any]:

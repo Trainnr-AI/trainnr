@@ -302,8 +302,35 @@ needed for step 3's checkpoint.
   one string read by the exporter and the task. All six tasks — the
   four SO-101 and the two ALOHA 2 — register as `robotiq/<task>-v0` on
   their own bundles' stamps. 199 sim tests.
-- Not yet: the variation schema with `draw(trial)` and the main-effects
-  table; `train-watch` re-verified on screen after its rewrite.
+- **The variation schema and the sensitivity table** (docs/30 §7 row
+  41): `evaluate/variations.py` — `Variation(host, name, sampler,
+  enabled)` with `Uniform` boxes and `Choice` labels, `draw(trial,
+  protocol_hash)` from a SHA-256 of (protocol, key, trial, component)
+  so every policy sees the same factor vector on trial *k* and choices
+  go round-robin (exact balance), `describe` for a `--list-variations`
+  view, `parse_variation` for the CLI form, and `sensitivity_table`
+  over records. `stats/effects.py` — `fisher_exact` (hypergeometric on
+  `lgamma`, pinned to the tea-tasting table), `main_effect` with
+  Clopper-Pearson on both sides and three verdicts (SENSITIVE below
+  `alpha`; INSENSITIVE when the intervals bound the difference inside
+  ±`delta`; UNRESOLVED otherwise — `alpha` and `delta` have no
+  defaults), `format_table` for the certificate line a customer reads.
+  The env snapshots the model's nominal values once, restores them
+  every reset, applies the trial's draw (`joints.damping_scale`,
+  `actuators.gain_scale` on BOTH kp terms, `<body>.mass_scale` with
+  inertia, `<camera>.offset_m`, `lights.diffuse_scale`), refuses an
+  unknown or misspelt key at construction, and writes the values into
+  the row; the variation space's description enters the protocol
+  fields, so its hash — and every draw — changes when a knob does.
+  `--env.variations='["joints.damping_scale=0.7:1.3", …]'` on
+  `lerobot-eval`. Found on the way, and retracted in the log: the
+  demo generator's one-sided gain scale was a setpoint scale.
+- Done on screen: `train-watch --play … --task kitting` on the T5
+  checkpoint, both viewers (the train venv needs `.venv/bin` on `PATH`
+  for the Rerun viewer binary).
+- docs/32 is complete. What follows is docs/30 §7's remaining order:
+  placement validators, the scheduler/adapter split and the remote
+  client for π0.5, the task spec and critic loop.
 
 ## 10. Open questions (carried from 45 §4 and 46 §5)
 

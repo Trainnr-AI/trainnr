@@ -50,11 +50,16 @@ from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     CUBE_Z_STATE_INDEX,
     act_sim_state,
+    build_kitting,
     build_transfer_cube,
     ctrl_from_act_sim_action,
 )
 
 from _rig3d import RigMirror  # noqa: E402
+
+# Both take `look`; the first free body's z sits at CUBE_Z_STATE_INDEX in
+# either scene (the cube, or the right arm's part).
+ALOHA_TASKS = {"transfer_cube": build_transfer_cube, "kitting": build_kitting}
 
 LOG_LINE = re.compile(r"step:(\d+).*?loss:([\d.]+).*?grdn:([\d.]+).*?lr:([\d.e+-]+)")
 EXTRA = re.compile(r"(l1_loss|kld_loss):([\d.]+)")
@@ -92,6 +97,12 @@ def parse_args():
         choices=("act_sim", "aloha2"),
         help="scene appearance for the played episodes: the ACT simulator's "
         "(what the public demos look like) or the bundle's own",
+    )
+    parser.add_argument(
+        "--task",
+        default="transfer_cube",
+        choices=sorted(ALOHA_TASKS),
+        help="which ALOHA 2 task the checkpoint plays (kitting for T5's)",
     )
     parser.add_argument(
         "--action-space",
@@ -182,8 +193,8 @@ def load_checkpoint(
 class Watcher:
     """The env, the viewer, the mirror: plays one episode per checkpoint."""
 
-    def __init__(self, look: str):
-        self.env = RobotiqEnv(build_transfer_cube(look=look), source=bundle_source())
+    def __init__(self, look: str, task: str = "transfer_cube"):
+        self.env = RobotiqEnv(ALOHA_TASKS[task](look=look), source=bundle_source())
         self.env.model.vis.quality.shadowsize = LIVE_SHADOWSIZE
         self.mirror = RigMirror(
             self.env.model, model_colors=True, skip_groups=(COLLISION_GROUP,)
@@ -213,7 +224,7 @@ class Watcher:
             )
             self.mirror.log(env.data, path="world/rig")
             rr.log(
-                f"{prefix}/cube_z",
+                f"{prefix}/object_z",
                 rr.Scalars(float(env.states[env.physics_step - 1, CUBE_Z_STATE_INDEX])),
             )
             if not self.viewer.is_running():
@@ -303,7 +314,7 @@ def play_only(args) -> None:
     checkpoint = Path(args.play)
     rr_session(f"robotiq-play-{checkpoint.parent.name}", mode="spawn")
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
-    watcher = Watcher(args.look)
+    watcher = Watcher(args.look, args.task)
     act, reset = load_checkpoint(
         checkpoint, args.action_space, watcher.env.task_description
     )
@@ -353,7 +364,7 @@ def main() -> None:
         target=tail_training, args=(process, seen_steps), daemon=True
     ).start()
 
-    watcher = Watcher(args.look)
+    watcher = Watcher(args.look, args.task)
     checkpoints = output_dir / "checkpoints"
     try:
         for episode in range(args.replay_demos):

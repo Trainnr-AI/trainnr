@@ -80,6 +80,36 @@ class KittingScene(unittest.TestCase):
         self.assertEqual(actions.shape[1], 14)
         self.assertEqual(len(actions), task.protocol.steps // 10)
 
+    def test_scripted_demo_survives_scaled_dynamics(self) -> None:
+        """±30% on damping and stiffness, kp scaled on BOTH servo terms.
+
+        Pins the 2026-08-26 correction: scaling gainprm[0] alone moved
+        every setpoint by the factor and the same draw failed with both
+        retries burnt. Damping x1.25, stiffness x0.80 — a far corner of
+        the ±30% box the generator samples.
+        """
+        from rq_pipeline.evaluate.harness import events_for  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: PLC0415
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            KittingStats,
+            build_kitting,
+            scale_dynamics,
+            scripted_kitting_episode,
+        )
+
+        task = build_kitting()
+        spec = build_kitting().spec
+        scale_dynamics(spec, damping_scale=1.25, gain_scale=0.80)
+        model = spec.compile()
+        home = keyframe_state(model, task.protocol.home)
+        stats = KittingStats()
+        states, sensors, _actions = scripted_kitting_episode(
+            model, task.protocol.perturb(0, home), stats=stats
+        )
+        self.assertTrue(task.protocol.success(states, sensors), stats)
+        self.assertEqual(stats.retries, [])
+        self.assertEqual(len(events_for(task.protocol, states, sensors)), 4)
+
     def test_referee_slice_reads_the_left_pad(self) -> None:
         """Pin the sensor LAYOUT the success predicate assumes.
 

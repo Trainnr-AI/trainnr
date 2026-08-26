@@ -183,6 +183,71 @@ class GymnasiumContract(unittest.TestCase):
         with self.assertRaises(ValueError):
             RobotiqEnv(build_transfer_cube(), source="unstamped")
 
+    def test_variations_are_drawn_by_trial_applied_and_recorded(self) -> None:
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
+        from rq_pipeline.evaluate.records import read_records  # noqa: PLC0415
+        from rq_pipeline.evaluate.variations import (  # noqa: PLC0415
+            Uniform,
+            Variation,
+        )
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            NEUTRAL_CTRL,
+            build_transfer_cube,
+        )
+
+        task = build_transfer_cube()
+        task = dataclasses.replace(
+            task, protocol=dataclasses.replace(task.protocol, steps=SHORT_STEPS)
+        )
+        sweep = (
+            Variation("joints", "damping_scale", Uniform((0.7,), (1.3,))),
+            Variation("actuators", "gain_scale", Uniform((0.8,), (1.2,))),
+            Variation("cube", "mass_scale", Uniform((0.5,), (2.0,))),
+            Variation("top", "offset_m", Uniform((-0.03,) * 3, (0.03,) * 3)),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "episodes.jsonl"
+            env = RobotiqEnv(task, source=SOURCE, record_to=path, variations=sweep)
+            nominal_damping = env.model.dof_damping.copy()
+            nominal_gain = env.model.actuator_gainprm[:, 0].copy()
+            nominal_bias = env.model.actuator_biasprm[:, 1].copy()
+            env.reset(seed=2)
+            drawn = env.drawn
+            scale = drawn["joints.damping_scale"]
+            self.assertTrue(np.allclose(env.model.dof_damping, nominal_damping * scale))
+            gain = drawn["actuators.gain_scale"]
+            # BOTH kp terms, so the setpoint stays put (docs/07, the gain
+            # that was a setpoint).
+            self.assertTrue(
+                np.allclose(env.model.actuator_gainprm[:, 0], nominal_gain * gain)
+            )
+            self.assertTrue(
+                np.allclose(env.model.actuator_biasprm[:, 1], nominal_bias * gain)
+            )
+            env.reset(seed=3)
+            self.assertNotEqual(env.drawn["joints.damping_scale"], scale)
+            env.reset(seed=2)  # pairing: trial 2 draws the same again
+            self.assertEqual(env.drawn, drawn)
+            limp = np.asarray(NEUTRAL_CTRL, dtype=np.float32)
+            for _ in range(env._max_episode_steps):
+                env.step(limp)
+            env.close()
+            (row,) = read_records(path)
+        self.assertEqual(row.variations["joints.damping_scale"], scale)
+        self.assertEqual(len(row.variations["top.offset_m"]), 3)
+        self.assertEqual(len(row.protocol["variations"]), 4)
+        with self.assertRaises(ValueError):
+            RobotiqEnv(
+                task,
+                source=SOURCE,
+                variations=(Variation("nobody", "mass_scale", Uniform((1,), (2,))),),
+            )
+
     def test_every_registered_task_makes_by_gym_id(self) -> None:
         import gymnasium as gym  # noqa: PLC0415
 
