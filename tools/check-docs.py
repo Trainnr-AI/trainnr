@@ -25,8 +25,8 @@ it is *supposed* to name things that were later removed.
 Usage:  python3 tools/check-docs.py
 """
 
-import re
 import posixpath
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -43,7 +43,13 @@ PLACEHOLDERS = {
     "run.perc",
 }
 
-docs = sorted(list((ROOT / "docs").rglob("*.md")) + list(ROOT.glob("*.md")))
+docs = sorted(
+    list((ROOT / "docs").rglob("*.md"))
+    + list(ROOT.glob("*.md"))
+    # The two READMEs that name tools and modules by file — ungated until
+    # 2026-08-27, when a review found rows describing tools that had moved on.
+    + [ROOT / "tools" / "README.md", ROOT / "pipeline" / "README.md"]
+)
 
 # The universe of files a doc may name is what GIT TRACKS, not what this
 # laptop's filesystem holds. The filesystem version passed locally while
@@ -52,7 +58,12 @@ docs = sorted(list((ROOT / "docs").rglob("*.md")) + list(ROOT.glob("*.md")))
 # first ever run.)
 tracked = set(
     subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True
+        ["git", "ls-files"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
     ).stdout.splitlines()
 )
 tracked_basenames = {Path(p).name for p in tracked}
@@ -62,7 +73,11 @@ source = subprocess.run(
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    check=True,
 ).stdout
+if not source:  # a silent empty grep would pass check 3 vacuously
+    raise SystemExit("check-docs: git grep returned no source text")
 
 # Types this workspace defines. Anything else in a `Foo::bar` is somebody
 # else's crate and not ours to police.
@@ -78,7 +93,7 @@ for doc in docs:
     rel = doc.relative_to(ROOT)
     if doc.name == HISTORY:
         continue
-    body = doc.read_text()
+    body = doc.read_text(encoding="utf-8")
 
     # ---- 1. file paths ----
     for path in set(
@@ -126,8 +141,10 @@ for doc in docs:
 # "very late") is a human judgement and stays one.
 log = ROOT / "docs" / HISTORY
 if log.exists():
-    dates = re.findall(r"^## (\d{4}-\d{2}-\d{2})", log.read_text(), re.M)
-    for older, newer in zip(dates[1:], dates):
+    dates = re.findall(
+        r"^## (\d{4}-\d{2}-\d{2})", log.read_text(encoding="utf-8"), re.M
+    )
+    for older, newer in zip(dates[1:], dates, strict=False):  # pairwise, by design
         if older > newer:
             problems.append(
                 f"docs/{HISTORY}: {older} appears below {newer}, but the log "

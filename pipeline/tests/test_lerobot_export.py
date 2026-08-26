@@ -43,7 +43,9 @@ class ExportRoundtrip(unittest.TestCase):
             root = Path(directory) / "dataset"
             export_episode(episode, root, RIG)
 
-            provenance = json.loads((root / PROVENANCE_FILE).read_text())
+            provenance = json.loads(
+                (root / PROVENANCE_FILE).read_text(encoding="utf-8")
+            )
             self.assertEqual(provenance["source"], episode.source)
             self.assertEqual(provenance["robot_profile"], RIG.name)
             self.assertEqual(provenance["frames"], EXPECTED_FRAMES)

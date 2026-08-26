@@ -5,6 +5,7 @@ contract itself is pinned in test_envs.py with the sim extra alone.
 """
 
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 
@@ -15,7 +16,13 @@ TRAIN_PRESENT = (
 SERVOS = 14
 TOP_CAMERA_HW = (480, 640)
 ALOHA_TICKS = 400  # 4000 physics steps / control every 10
-T5_CHECKPOINT = Path("runs/t5-act-kitting/checkpoints/020000/pretrained_model")
+# A per-machine artifact: the WSL card's T5 checkpoint. Point elsewhere with
+# the env var; absent, the checkpoint-backed test skips and says so.
+T5_CHECKPOINT = Path(
+    os.environ.get(
+        "RQ_T5_CHECKPOINT", "runs/t5-act-kitting/checkpoints/020000/pretrained_model"
+    )
+)
 
 
 @unittest.skipUnless(TRAIN_PRESENT, "train extra not installed (use .venv-train)")
@@ -96,6 +103,21 @@ class ThroughLeRobot(unittest.TestCase):
             self.assertTrue(env.action_space.contains(action.astype("float32")))
         finally:
             env.close()
+
+    def test_cli_flags_spell_the_plugin_once(self) -> None:
+        """A tool that drives lerobot-train/eval takes the --env.* flags
+        from the plugin, never from its own string."""
+        from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+
+        flags = RobotiqEnvConfig.cli_flags(
+            "kitting", record_to="runs/x/episodes.jsonl", policy_name="smoke"
+        )
+        self.assertEqual(flags[0], "--env.type=robotiq")
+        self.assertEqual(flags[1], "--env.task=kitting")
+        self.assertEqual(flags[2], "--env.discover_packages_path=rq_pipeline.envs")
+        self.assertIn("--env.record_to=runs/x/episodes.jsonl", flags)
+        self.assertIn("--env.policy_name=smoke", flags)
+        self.assertEqual(len(RobotiqEnvConfig.cli_flags("kitting")), 3)
 
     def test_fps_comes_from_the_task(self) -> None:
         from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415

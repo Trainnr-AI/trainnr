@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Run a command with BOTH logging gates open, so ONNX Runtime execution
 # provider diagnostics are actually visible.
 #

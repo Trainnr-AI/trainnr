@@ -153,8 +153,9 @@ MuJoCo scenes verbatim (the semantics are MuJoCo's own):
 MJX/mujoco_warp for GPU rollouts" survives this review strengthened:
 the docs themselves show that going through Newton (engine) buys us a
 conversion layer that drops keyframes and sensors (the two things our
-evaluation stack is built on), lags the MuJoCo version lock
-(`~=3.11.0` vs our 3.12), and adds a solref/actuator translation whose
+evaluation stack is built on), pins the same MuJoCo as our
+lock (`~=3.11.0`; our train venv runs 3.12.0 on purpose, as a second
+instrument), and adds a solref/actuator translation whose
 fidelity we would have to re-verify — all to reach the same
 mujoco_warp we can call through MJX with the identified `mjModel`
 intact. What Newton (engine) uniquely offers — cloth/MPM/cables,

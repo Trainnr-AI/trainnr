@@ -1,19 +1,15 @@
 """The ALOHA 2 bundle in both viewers: rig, servos, contacts, cameras.
 
-    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan \
-        uv run --extra sim --extra viz python ../tools/show-aloha2.py
+    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \
+        python ../tools/show-aloha2.py
 
-The two environment variables are the WSL GPU story: Rerun renders
-through Vulkan (Dozen, over D3D12) and the MuJoCo viewer through
-OpenGL — and Mesa's default OpenGL pick under WSLg is llvmpipe, the
-software rasterizer, even with Dozen installed. GALLIUM_DRIVER=d3d12
-routes GL to the Windows NVIDIA driver too (measured 2026-08-26:
-"llvmpipe" -> "D3D12 (NVIDIA GeForce RTX 3090 Ti)"). Harmless on a
-native Linux box or a Mac.
+`wsl.env` is the WSL GPU story (Rerun through Vulkan over D3D12, the
+MuJoCo viewer through OpenGL routed to the NVIDIA driver instead of
+llvmpipe); harmless on a native Linux box, unnecessary on a Mac.
 
 Three laps, each narrated as a stage note:
 
-    NEUTRAL   hold the bundle's neutral_pose keyframe under gravity
+    NEUTRAL_CTRL   hold the bundle's neutral_pose keyframe under gravity
     TRAVEL    both arms to the contract test's offset pose and back
     JAM       the finding: reset to qpos=0 (arms straight up), command
               neutral, watch the grippers meet at the top centre
@@ -31,20 +27,29 @@ under plain python; macOS needs mjpython.
 """
 
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, rr_session
+from _lab import bootstrap, hold_until_closed, rr_session
 
 bootstrap()
+from rq_pipeline.tasks.aloha2 import (  # noqa: E402
+    ARM_NAMES,
+    BUNDLE_XML,
+    NEUTRAL_CTRL,
+)
+from rq_pipeline.tasks.scene import (  # noqa: E402
+    GeomGroup,
+    NominalOptions,
+    RenderBudget,
+)
+
 from _rig3d import RigMirror  # noqa: E402
 
-BUNDLE = Path(__file__).resolve().parents[1] / "robots" / "aloha2-nominal"
-NEUTRAL = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084] * 2
+BUNDLE = BUNDLE_XML.parent
 OFFSET = [0.2, -0.7, 0.9, 0.0, -0.5, 0.3, 0.02] * 2
 SERVOS = [
     "waist",
@@ -55,14 +60,11 @@ SERVOS = [
     "wrist_rotate",
     "gripper",
 ]
-ARMS = ["left", "right"]
 CAMERAS = ["overhead_cam", "worms_eye_cam", "wrist_cam_left", "wrist_cam_right"]
 CAM_W, CAM_H = 480, 270
-SIM_HZ = 500
+SIM_HZ = round(1 / NominalOptions.TIMESTEP)
 LOG_EVERY = 10  # 50 Hz plots and mirror
 CAM_EVERY = 50  # 10 Hz images
-COLLISION_GROUP = 3
-LIVE_SHADOWSIZE = 2048  # upstream scene.xml says 8192
 
 
 def max_contact_force(model, data):
@@ -81,7 +83,7 @@ class Session:
         self.model, self.data, self.viewer = model, data, viewer
         self.renderer = mujoco.Renderer(model, CAM_H, CAM_W)
         self.mirror = RigMirror(
-            model, model_colors=True, skip_groups=(COLLISION_GROUP,)
+            model, model_colors=True, skip_groups=(GeomGroup.COLLISION,)
         )
         self.clock = 0.0
         self.steps = 0
@@ -115,7 +117,7 @@ class Session:
     def _plots(self):
         data = self.data
         self.mirror.log(data, path="world/rig")
-        for a, arm in enumerate(ARMS):
+        for a, arm in enumerate(ARM_NAMES):
             for j, servo in enumerate(SERVOS):
                 k = a * len(SERVOS) + j
                 rr.log(f"servo/{arm}/{servo}/measured", rr.Scalars(data.sensordata[k]))
@@ -135,7 +137,7 @@ def main() -> None:
     # Menagerie's scene asks for an 8192x8192 shadow map — a screenshot
     # setting, and a per-frame cost that makes the interactive viewer
     # crawl. 2048 is plenty for a live window. The physics is untouched.
-    model.vis.quality.shadowsize = LIVE_SHADOWSIZE
+    model.vis.quality.shadowsize = RenderBudget.SHADOWSIZE
     data = mujoco.MjData(model)
 
     rr_session("robotiq-aloha2", mode="spawn")
@@ -147,19 +149,18 @@ def main() -> None:
         viewer.cam.elevation = -20
         viewer.cam.lookat[:] = [0.0, 0.0, 0.2]
         session = Session(model, data, viewer)
-        session.run(1.5, NEUTRAL, "NEUTRAL: hold neutral_pose under gravity")
+        session.run(1.5, NEUTRAL_CTRL, "NEUTRAL_CTRL: hold neutral_pose under gravity")
         session.run(2.0, OFFSET, "TRAVEL: both arms to the offset pose")
-        session.run(2.0, NEUTRAL, "TRAVEL: back to neutral")
+        session.run(2.0, NEUTRAL_CTRL, "TRAVEL: back to neutral")
 
         mujoco.mj_resetData(model, data)  # qpos = 0: both arms straight up
         viewer.sync()
-        session.run(3.0, NEUTRAL, "JAM: from qpos=0 to neutral - grippers meet")
+        session.run(3.0, NEUTRAL_CTRL, "JAM: from qpos=0 to neutral - grippers meet")
         peak = max_contact_force(model, data)
         session.note(
             f"JAM: contact force now {peak:.0f} N - close the MuJoCo window to finish"
         )
-        while viewer.is_running():
-            time.sleep(0.2)
+        hold_until_closed(viewer)
 
 
 if __name__ == "__main__":

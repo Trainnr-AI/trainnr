@@ -72,7 +72,7 @@ class EpisodeRecord:
     trial: int
     success: bool
     steps: int
-    instrument: str  # backend and version, e.g. "mujoco-3.11.0"
+    instrument: str  # physics/backend.py::instrument_stamp, e.g. "mujoco-3.11.0+x86_64"
     protocol: Mapping[str, Any]  # the scalar protocol fields
     seed: int | None = None
     events: tuple[Mapping[str, Any], ...] = ()

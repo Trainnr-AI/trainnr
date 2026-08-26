@@ -27,7 +27,10 @@ sim = ["mujoco[sysid]~=3.11.0", "gymnasium>=1.1.1,<2"]
 # out on purpose: its dm_control dependency pins exact MuJoCo versions and
 # the harness is our evaluation environment anyway.
 train = ["lerobot[dataset,smolvla,training]>=0.6.1; python_version >= '3.12'"]
-gpu = ["mujoco-warp; sys_platform != 'darwin'"]  # CUDA only; the Mac resolves cleanly without it
+# CUDA only; the Mac resolves cleanly without it. Pinned like sim and mjx:
+# mujoco-warp tracks MuJoCo release for release, so an open floor here would
+# drag the engine version with it.
+gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # The batched GPU rollout path (docs/e2e-research/49): MJX with the Warp
 # implementation. Runs on Warp's CPU backend too (measured on the Mac),
 # so the adapter's tests run anywhere; only speed needs the NVIDIA card.
@@ -64,7 +67,7 @@ select = [
     "F",   # pyflakes
     "I",   # import order
     "N",   # naming
-    "UP",  # pyupgrade (respects py39 floor)
+    "UP",  # pyupgrade (respects the py310 floor)
     "B",   # bugbear
     "SIM", # simplification
     "RUF", # ruff-native checks

@@ -167,7 +167,7 @@ class SpreadRecord(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             bundle = self._bundle_with_two_runs(directory)
             path = write_spread_record(bundle)
-            payload = json.loads(path.read_text())
+            payload = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(len(payload["summarizes"]), 2)
             self.assertIn("left_damping", payload["spread"])
             # SPREAD.json must never come back as a fit record.
@@ -262,7 +262,9 @@ class SpreadRecord(unittest.TestCase):
                 ],
                 "created_utc": "2026-08-23T00:00:00+00:00",
             }
-            (fits / "sweep-x@cccccccccccc.json").write_text(json.dumps(legacy))
+            (fits / "sweep-x@cccccccccccc.json").write_text(
+                json.dumps(legacy), encoding="utf-8"
+            )
             records = load_fit_records(Path(directory))
             self.assertIsNone(records[0].profile)
             self.assertIsNone(records[0].units)
@@ -274,7 +276,8 @@ class SpreadRecord(unittest.TestCase):
             fits = Path(directory) / "fits"
             fits.mkdir()
             (fits / "weird@dddddddddddd.json").write_text(
-                json.dumps({"robot": "x", "parameters": [], "from_the_future": 1})
+                json.dumps({"robot": "x", "parameters": [], "from_the_future": 1}),
+                encoding="utf-8",
             )
             with self.assertRaises(ValueError) as caught:
                 load_fit_records(Path(directory))

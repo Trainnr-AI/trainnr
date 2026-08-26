@@ -2,6 +2,7 @@
 name = "pca9685-driver"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 # Same shape as `mpu6050-driver`: no_std on the chip, tested on the Mac
 # against a mock bus. The arithmetic that decides where a servo points is

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # LEVEL 3 — hardware-in-the-loop.
 #
 # The firmware (on an emulated RP2040) is the robot's brain; hil-host is its
@@ -9,6 +9,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source "$HOME/.cargo/env" 2>/dev/null || true
+source tools/_firmware.sh
 
 # Ensure the emulator is set up (clone + patch + harnesses).
 if [ ! -d tools/rp2040js/node_modules ]; then
@@ -17,8 +18,6 @@ if [ ! -d tools/rp2040js/node_modules ]; then
 fi
 cp tools/harness/*.ts tools/rp2040js/demo/
 
-(cd firmware/pico-robot \
-  && cargo build --release \
-  && elf2uf2-rs target/thumbv6m-none-eabi/release/pico-robot pico-robot.uf2)
+build_uf2 pico-robot thumbv6m-none-eabi
 
 cargo run -q -p hil-host -- firmware/pico-robot/pico-robot.uf2

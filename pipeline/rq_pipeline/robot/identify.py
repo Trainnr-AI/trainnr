@@ -19,6 +19,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from rq_pipeline.stats.intervals import DEFAULT_CONFIDENCE
+
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
 
@@ -163,7 +165,7 @@ def identify(
     data: ExcitationData,
     parameters: Sequence[ParameterSpec],
     *,
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
     pinned_fraction: float = DEFAULT_PINNED_FRACTION,
 ) -> IdentificationResult:
     """Fit `parameters` so the model reproduces `data.measurements` under

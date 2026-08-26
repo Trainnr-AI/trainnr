@@ -243,7 +243,9 @@ def parse_recording(path: Path) -> Recording:
     recording = Recording()
     open_image: tuple[int, int, list[tuple[int, ...]]] | None = None
 
-    for raw_line in Path(path).read_text(errors="replace").splitlines():
+    for raw_line in (
+        Path(path).read_text(errors="replace", encoding="utf-8").splitlines()
+    ):
         stripped = _strip_direction(raw_line.strip(), recording)
         if not stripped:
             continue

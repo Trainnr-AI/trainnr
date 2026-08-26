@@ -9,7 +9,7 @@ from rq_pipeline.collect.csv_data import excitation_from_csv
 
 def _write(directory: str, text: str) -> Path:
     path = Path(directory) / "run.csv"
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     return path
 
 

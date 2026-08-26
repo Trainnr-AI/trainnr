@@ -11,6 +11,9 @@ Standard library only.
 
 from __future__ import annotations
 
+# Re-exported: the env's consumers read the channel count here, the
+# exporters (a tier below envs) from protocol, and it is one number.
+from rq_pipeline.protocol import RGB_CHANNELS  # noqa: F401
 from rq_pipeline.tasks.registry import BUILTIN_NAMESPACE
 
 
@@ -29,7 +32,6 @@ ENV_TYPE = BUILTIN_NAMESPACE  # `--env.type=robotiq`; also the gym id namespace
 GYM_ID_VERSION = "v0"
 RENDER_MODE = "rgb_array"
 DEFAULT_POLICY_NAME = "policy"  # what a row calls a policy the env never sees
-RGB_CHANNELS = 3
 PIXEL_MAX = 255
 XYZ = 3
 

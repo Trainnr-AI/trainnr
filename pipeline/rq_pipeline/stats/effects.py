@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import exp, lgamma
 
-from rq_pipeline.stats.intervals import clopper_pearson
+from rq_pipeline.stats.intervals import DEFAULT_CONFIDENCE, clopper_pearson
 
 _ONE_TOLERANCE = 1e-9  # a p summed over every table may overshoot 1 by noise
 _TIE_TOLERANCE = 1e-7  # tables with the observed probability count as ties
@@ -115,7 +115,7 @@ def main_effect(  # noqa: PLR0913 - the two sides and two thresholds, all requir
     *,
     alpha: float,
     delta: float,
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> FactorEffect:
     """The 2x2 reading for one factor from its two sides' outcomes.
     `alpha` and `delta` have no defaults: they are the protocol's claim."""

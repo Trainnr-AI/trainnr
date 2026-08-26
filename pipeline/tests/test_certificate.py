@@ -25,7 +25,7 @@ GATE_THRESHOLD = 0.5
 
 def _stamped_bundle(root: Path, name: str) -> str:
     root.mkdir()
-    (root / "model.xml").write_text(f"<mujoco model='{name}'/>")
+    (root / "model.xml").write_text(f"<mujoco model='{name}'/>", encoding="utf-8")
     return stamp(name, root)
 
 

@@ -6,8 +6,6 @@ so the live dashboard, the replay and the sim prediction all draw the
 same shapes the physics uses, and none of them invents a skeleton.
 """
 
-import math
-
 import mujoco
 import numpy as np
 import rerun as rr

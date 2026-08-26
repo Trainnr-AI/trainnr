@@ -24,9 +24,21 @@ from dataclasses import dataclass
 from typing import Any
 
 from rq_pipeline.stats.effects import SplitLabel, main_effect, split_continuous
+from rq_pipeline.stats.intervals import DEFAULT_CONFIDENCE
 
 _HASH_BITS = 53  # a float's mantissa: the largest exact integer fraction
+_HASH_BYTES = 8  # the digest prefix the bits are taken from
 KEY_SEPARATOR = "."
+
+
+class CliGrammar:
+    """`host.name=low:high` / `host.name=a|b` — the CLI form, spelled once
+    for `parse_variation` and `describe`."""
+
+    ASSIGN = "="
+    RANGE = ":"
+    COMPONENT = ","
+    CHOICE = "|"
 
 
 class VariationKeys:
@@ -106,9 +118,9 @@ def _unit(protocol_hash: str, key: str, trial: int, component: int) -> float:
     digest = hashlib.sha256(
         f"{protocol_hash}|{key}|{trial}|{component}".encode()
     ).digest()
-    return (int.from_bytes(digest[:8], "big") >> (64 - _HASH_BITS)) / float(
-        1 << _HASH_BITS
-    )
+    return (
+        int.from_bytes(digest[:_HASH_BYTES], "big") >> (8 * _HASH_BYTES - _HASH_BITS)
+    ) / float(1 << _HASH_BITS)
 
 
 def draw(variation: Variation, trial: int, protocol_hash: str) -> Any:
@@ -142,7 +154,7 @@ def describe(variations: Sequence[Variation]) -> list[str]:
     for v in variations:
         state = "on" if v.enabled else "off"
         if isinstance(v.sampler, Choice):
-            span = "choice " + "|".join(v.sampler.labels)
+            span = "choice " + CliGrammar.CHOICE.join(v.sampler.labels)
         else:
             span = f"uniform {list(v.sampler.low)}..{list(v.sampler.high)}"
         lines.append(f"{v.key} [{state}] {span}")
@@ -156,17 +168,18 @@ def by_key(variations: Sequence[Variation]) -> Mapping[str, Variation]:
 def parse_variation(text: str) -> Variation:
     """`host.name=low:high` (comma-separated components for vectors) or
     `host.name=a|b|c` — the CLI form (`--env.variations=...`)."""
-    key, _, spec = text.partition("=")
-    host, dot, name = key.strip().rpartition(".")
-    if not dot or not host or not name or not spec:
+    key, _, spec = text.partition(CliGrammar.ASSIGN)
+    host, name = VariationKeys.split(key.strip())
+    if not host or not name or not spec:
         raise ValueError(f"expected host.name=low:high or host.name=a|b, got {text!r}")
-    if "|" in spec:
-        return Variation(host, name, Choice(tuple(s.strip() for s in spec.split("|"))))
-    low_text, colon, high_text = spec.partition(":")
+    if CliGrammar.CHOICE in spec:
+        labels = tuple(s.strip() for s in spec.split(CliGrammar.CHOICE))
+        return Variation(host, name, Choice(labels))
+    low_text, colon, high_text = spec.partition(CliGrammar.RANGE)
     if not colon:
         raise ValueError(f"a uniform variation needs low:high, got {text!r}")
-    low = tuple(float(x) for x in low_text.split(","))
-    high = tuple(float(x) for x in high_text.split(","))
+    low = tuple(float(x) for x in low_text.split(CliGrammar.COMPONENT))
+    high = tuple(float(x) for x in high_text.split(CliGrammar.COMPONENT))
     return Variation(host, name, Uniform(low, high))
 
 
@@ -176,7 +189,7 @@ def sensitivity_table(
     *,
     alpha: float,
     delta: float,
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> list[Any]:
     """One main effect per enabled factor (per component for vectors,
     per label for choices) over the records' recorded draws — the table

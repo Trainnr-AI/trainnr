@@ -15,7 +15,7 @@ It includes or builds on the following third-party material:
   SO-101 / SO-ARM100 model under robots/so101-nominal/ (Apache-2.0). Each
   bundle directory carries the upstream LICENSE and a README recording the
   repository, branch, commit and date; the upstream files are byte-identical
-  and our wrappers (aloha2.xml, so101.xml) add sensors and keyframes only.
+  and our wrappers (aloha2.xml, so101.xml) add sensors only.
 - gym-aloha / ACT (Tony Z. Zhao et al.; Hugging Face) — the transfer-cube
   task's spawn box, cube contact parameters and top-camera placement in
   pipeline/rq_pipeline/tasks/aloha2.py follow the original ACT simulator's

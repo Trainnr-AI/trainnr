@@ -23,15 +23,18 @@ seam it will drive.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from rq_pipeline.physics.backend import ModelCounts, instrument_stamp
+from rq_pipeline.physics.backend import (
+    FullPhysicsLayout,
+    ModelCounts,
+    check_rollout_shapes,
+    instrument_stamp,
+    no_model_message,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
-
-_STATE_BATCH_RANK = 2  # (nbatch, nstate)
-_CONTROL_RANK = 3  # (nbatch, nstep, nu)
 
 
 def _require_mjx() -> tuple[Any, Any, Any]:
@@ -51,24 +54,36 @@ def _require_mjx() -> tuple[Any, Any, Any]:
 class MJXWarpBackend:
     """Batched rollouts over the identified model, on MJX's Warp path.
 
-    Same doors as `MuJoCoBackend` (`load_spec`, `counts`), same
-    `rollout` contract — plus `naconmax`/`njmax`, the per-world contact
-    and constraint capacities MJX cannot infer for busy scenes (the
-    ALOHA bundle overflows the defaults; the warning names the numbers
-    to pass).
+    Of the harness's `Engine` doors it offers `instrument`, `counts`,
+    `default_initial_state` and `keyframe_state` (state rows are
+    engine-independent, so those come from the compiled model), and
+    the batched `rollout` contract — plus `naconmax`/`njmax`, the
+    per-world contact and constraint capacities MJX cannot infer for
+    busy scenes (the ALOHA bundle overflows the defaults; the warning
+    names the numbers to pass). `stepper` is the door it does not have
+    yet: the vectorized env over this backend (docs/32 §10).
     """
 
-    name = "mjx-warp"
+    NAME_PREFIX = "mjx"
+    DEFAULT_IMPL = "warp"
+    # Above this many geoms MJX's default contact/constraint capacities are
+    # not trusted: the ALOHA kitting scene (105 geoms) dumped core on the
+    # RTX 3090 Ti with the defaults and ran with naconmax=4096, njmax=8192
+    # (2026-08-27). A Python refusal that names the knobs beats a core dump.
+    SIZING_REQUIRED_ABOVE_GEOMS = 32
+    # The companion library each MJX implementation runs on, for the stamp.
+    COMPANIONS: ClassVar[dict[str, str]] = {"warp": "warp", "jax": "jax"}
 
     def __init__(
         self,
         *,
-        impl: str = "warp",
+        impl: str = DEFAULT_IMPL,
         naconmax: int | None = None,
         njmax: int | None = None,
     ) -> None:
         self._mujoco, self._mjx, self._jax = _require_mjx()
         self._impl = impl
+        self.name = f"{self.NAME_PREFIX}-{impl}"
         self._sizing = {
             key: value
             for key, value in (("naconmax", naconmax), ("njmax", njmax))
@@ -82,12 +97,15 @@ class MJXWarpBackend:
         """Engine + versions + device: float32 physics on a device with
         no bit-repeatability is a different instrument from CPU MuJoCo,
         and every certificate must say which one produced it."""
-        import warp  # noqa: PLC0415 - pulled in by the mjx extra
+        import importlib  # noqa: PLC0415
 
-        device = self._jax.devices()[0].platform
-        return instrument_stamp(
-            self.name, self._mujoco.__version__, f"warp-{warp.__version__}", device
-        )
+        qualifiers = []
+        companion = self.COMPANIONS.get(self._impl)
+        if companion is not None:
+            module = importlib.import_module(companion)
+            qualifiers.append(f"{companion}-{module.__version__}")
+        qualifiers.append(self._jax.devices()[0].platform)
+        return instrument_stamp(self.name, self._mujoco.__version__, *qualifiers)
 
     @property
     def model(self) -> Any:
@@ -107,8 +125,18 @@ class MJXWarpBackend:
 
     def _require_model(self) -> Any:
         if self._model is None:
-            raise RuntimeError("no model loaded — call load_spec first")
+            raise RuntimeError(no_model_message())
         return self._model
+
+    def default_initial_state(self) -> Any:
+        from rq_pipeline.physics.mujoco_backend import reset_state  # noqa: PLC0415
+
+        return reset_state(self._require_model())
+
+    def keyframe_state(self, name: str) -> Any:
+        from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: PLC0415
+
+        return keyframe_state(self._require_model(), name)
 
     def counts(self) -> ModelCounts:
         model = self._require_model()
@@ -136,25 +164,9 @@ class MJXWarpBackend:
         import numpy as np  # noqa: PLC0415
 
         model = self._require_model()
-        initial = np.asarray(initial_states, dtype=float)
-        control = np.asarray(controls, dtype=float)
-        if initial.ndim != _STATE_BATCH_RANK:
-            raise ValueError(
-                f"initial_states must be (nbatch, nstate), got {initial.shape}"
-            )
-        if control.ndim != _CONTROL_RANK or control.shape[0] != initial.shape[0]:
-            raise ValueError(
-                "controls must be (nbatch, nstep, nu) with the same nbatch "
-                f"as initial_states, got {control.shape}"
-            )
-        size = self._mujoco.mj_stateSize(
-            model, self._mujoco.mjtState.mjSTATE_FULLPHYSICS
+        initial, control = check_rollout_shapes(
+            initial_states, controls, state_width=FullPhysicsLayout(model).width
         )
-        if initial.shape[1] != size:
-            raise ValueError(
-                f"initial_states rows must be {size} wide (FULLPHYSICS), "
-                f"got {initial.shape[1]}"
-            )
         _, _, run = self._compiled()
         return np.asarray(run(jnp.asarray(initial), jnp.asarray(control)))
 
@@ -171,25 +183,29 @@ class MJXWarpBackend:
         import jax.numpy as jnp  # noqa: PLC0415
 
         model = self._require_model()
-        # FULLPHYSICS layout: [time(1), qpos(nq), qvel(nv), act(na)].
-        nq, nv, na = model.nq, model.nv, model.na
+        if model.ngeom > self.SIZING_REQUIRED_ABOVE_GEOMS and not self._sizing:
+            raise ValueError(
+                f"{model.ngeom} geoms: pass naconmax and njmax explicitly - the "
+                "GPU path dumps core, not a warning, when a busy scene overflows "
+                "MJX's default capacities (the kitting bundle ran with "
+                "naconmax=4096, njmax=8192)"
+            )
+        layout = FullPhysicsLayout(model)
         mx = mjx.put_model(model, impl=self._impl)
         template = mjx.make_data(model, impl=self._impl, **self._sizing)
 
         def seat(row: Any) -> Any:
             data = template.replace(
-                time=row[0],
-                qpos=row[1 : 1 + nq],
-                qvel=row[1 + nq : 1 + nq + nv],
+                time=row[layout.TIME], qpos=row[layout.qpos], qvel=row[layout.qvel]
             )
-            if na:
-                data = data.replace(act=row[1 + nq + nv :])
+            if layout.na:
+                data = data.replace(act=row[layout.act])
             return data
 
         def tick(data: Any, ctrl: Any) -> tuple[Any, Any]:
             data = mjx.step(mx, data.replace(ctrl=ctrl))
             parts = [jnp.reshape(data.time, (1,)), data.qpos, data.qvel]
-            if na:
+            if layout.na:
                 parts.append(data.act)
             return data, jnp.concatenate(parts)
 

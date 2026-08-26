@@ -7,6 +7,13 @@ model. The probe measured float32-scale divergence (2.7e-5 m on an
 impact scene); the bound here is 1e-3 — loose enough to never flake,
 tight enough that a conversion-layer bug (wrong state layout, dropped
 actuator, integrator mismatch) fails by orders of magnitude.
+
+Measured 2026-08-27 on the RTX 3090 Ti, the real scene: the kitting
+bundle, 2 worlds x 20 steps from the neutral pose, diverges from CPU
+MuJoCo by 9.6e-4 at step 9 (7 of 20 steps within 1e-6). The pendulum
+bound holds; a contact scene reaches it in ten steps — the GPU path is
+a different instrument, statistically not bitwise comparable (docs/49),
+and any certificate from it says so in its stamp.
 """
 
 import importlib.util
@@ -43,9 +50,8 @@ class MJXWarpGauntlet(unittest.TestCase):
 
         _, warp = self._both()
         stamp = warp.instrument
-        self.assertIn("mjx-warp", stamp)
-        self.assertIn(mujoco.__version__, stamp)
-        self.assertIn("warp-", stamp)
+        self.assertTrue(stamp.startswith(f"mjx-warp-{mujoco.__version__}+warp-"))
+        self.assertEqual(warp.name, "mjx-warp")  # the name follows the impl
 
     def test_divergence_from_the_reference_instrument_is_bounded(self) -> None:
         import numpy as np  # noqa: PLC0415
@@ -65,6 +71,18 @@ class MJXWarpGauntlet(unittest.TestCase):
         # float32 vs float64 on a smooth scene: measured ~1e-5 scale.
         # A layout or conversion bug is orders of magnitude, not this.
         self.assertLess(gap, 1e-3, f"divergence {gap} exceeds the bound")
+
+    def test_a_busy_scene_is_refused_without_explicit_sizing(self) -> None:
+        """The kitting bundle dumped core on the GPU with MJX's default
+        capacities (2026-08-27); the backend refuses before Warp runs."""
+        from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
+        from rq_pipeline.tasks.aloha2 import build_kitting  # noqa: PLC0415
+
+        warp = MJXWarpBackend()
+        warp.load_spec(build_kitting().spec)
+        self.assertGreater(warp.counts().geoms, warp.SIZING_REQUIRED_ABOVE_GEOMS)
+        with self.assertRaises(ValueError):
+            warp.rollout(warp.default_initial_state()[None, :], [[[0.0] * 14]])
 
     def test_shape_refusals_match_the_reference(self) -> None:
         import numpy as np  # noqa: PLC0415

@@ -19,8 +19,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.tasks.scene import pin_nominal_options
-from rq_pipeline.tasks.so101 import ARM_PREFIX, DEFAULT_ARM_XML
+from rq_pipeline.tasks.scene import FLOOR_GEOM, pin_nominal_options
+from rq_pipeline.tasks.so101 import (
+    ARM_PREFIX,
+    DEFAULT_ARM_XML,
+    JAW_CLOSED,
+    WRIST_FLAT,
+)
 
 # RobotSpec::REAL_BOT geometry (placeholders there, single-sourced here).
 WHEEL_RADIUS = 0.03
@@ -33,7 +38,7 @@ CAR_PREFIX = "car_"
 CAR_SENSOR_WIDTH = 2  # one wheel encoder per side
 
 
-def _base_scene(name: str) -> Any:
+def base_scene(name: str) -> Any:
     import mujoco  # noqa: PLC0415 - sim extra
 
     scene = mujoco.MjSpec()
@@ -48,11 +53,11 @@ def _base_scene(name: str) -> Any:
     # harmless for the car-only scene.
     pin_nominal_options(scene)
     scene.worldbody.add_geom(
-        name="floor",
+        name=FLOOR_GEOM,
         type=mujoco.mjtGeom.mjGEOM_PLANE,
         size=[4.0, 4.0, 0.1],
         friction=[1.0, 0.005, 0.0001],
-        rgba=[0.35, 0.35, 0.38, 1.0],
+        rgba=[0.35, 0.35, 0.38, DECK_JAW_OPEN],
     )
     return scene
 
@@ -76,7 +81,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=list(CHASSIS_SIZE),
         mass=1.8,
-        rgba=[0.15, 0.25, 0.5, 1.0],
+        rgba=[0.15, 0.25, 0.5, DECK_JAW_OPEN],
     )
     for side, sign in (("left", 1.0), ("right", -1.0)):
         wheel = chassis.add_body(
@@ -91,7 +96,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             quat=[0.7071068, 0.7071068, 0, 0],  # cylinder axis -> y (axle)
             mass=0.03,
             friction=[1.2, 0.005, 0.0001],
-            rgba=[0.1, 0.1, 0.1, 1.0],
+            rgba=[0.1, 0.1, 0.1, DECK_JAW_OPEN],
         )
     # FOUR corner casters. The design walked here one measured failure
     # at a time: a single rear caster let the arm's reach pull the CoM
@@ -118,7 +123,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             mass=0.01,
             priority=1,
             friction=[0.03, 0.001, 0.0001],
-            rgba=[0.6, 0.6, 0.6, 1.0],
+            rgba=[0.6, 0.6, 0.6, DECK_JAW_OPEN],
         )
     for side in ("left", "right"):
         scene.add_actuator(
@@ -126,7 +131,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             target=f"{CAR_PREFIX}{side}",
             trntype=mujoco.mjtTrn.mjTRN_JOINT,
             gainprm=[0.05] + [0.0] * 9,  # torque per unit ctrl — nominal
-            ctrlrange=[-1.0, 1.0],
+            ctrlrange=[-1.0, DECK_JAW_OPEN],
         )
         scene.add_sensor(
             name=f"{CAR_PREFIX}{side}_encoder",
@@ -177,15 +182,20 @@ CUBE_HALF = 0.012
 # the open fixed pad and the cube's +y face are 1 mm apart at best
 # (measured across three probe rounds; -4 mm tray offset grazes,
 # -7 mm cannot pinch).
-DECK_HOVER = [0.06, -2.45, 2.6, 1.4, -1.571, 1.0]
-DECK_DESCEND = [0.06, -2.613, 3.14, 1.166, -1.571, 1.0]
-DECK_ALIGN = [0.0, -2.613, 3.14, 1.166, -1.571, 1.0]
-DECK_GRIP = [0.0, -2.613, 3.14, 1.166, -1.571, -0.15]
+# The deck pick opens the jaw less than so101.JAW_OPEN: its pads start a
+# millimetre from the cube face (the probe rounds above).
+DECK_JAW_OPEN = 1.0
+# The arm folded over the deck for driving: the viewers' resting pose.
+CROUCH_POSE = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
+DECK_HOVER = [0.06, -2.45, 2.6, 1.4, WRIST_FLAT, DECK_JAW_OPEN]
+DECK_DESCEND = [0.06, -2.613, 3.14, 1.166, WRIST_FLAT, DECK_JAW_OPEN]
+DECK_ALIGN = [0.0, -2.613, 3.14, 1.166, WRIST_FLAT, DECK_JAW_OPEN]
+DECK_GRIP = [0.0, -2.613, 3.14, 1.166, WRIST_FLAT, JAW_CLOSED]
 # Carry lifts back ALONG the approach arc (the closed hover pose), then
 # presents modestly — the original wide swing to a far pose sheared the
 # cube out of the pinch.
-DECK_CARRY = [0.06, -2.45, 2.6, 1.4, -1.571, -0.15]
-DECK_PRESENT = [0.06, -2.1, 2.2, 1.35, -1.571, -0.15]
+DECK_CARRY = [0.06, -2.45, 2.6, 1.4, WRIST_FLAT, JAW_CLOSED]
+DECK_PRESENT = [0.06, -2.1, 2.2, 1.35, WRIST_FLAT, JAW_CLOSED]
 
 # The probed pick-present-stow cycle: ramp between waypoints in order.
 # Measured end-to-end 2026-08-24: cube lifts to z 0.135, returns to
@@ -231,7 +241,7 @@ def add_cargo(scene: Any) -> None:
             size=[sx, sy, sz],
             pos=[TRAY_CENTRE_X + dx, TRAY_CENTRE_Y + dy, CHASSIS_SIZE[2] + sz],
             mass=0.005,
-            rgba=[0.25, 0.4, 0.7, 1.0],
+            rgba=[0.25, 0.4, 0.7, DECK_JAW_OPEN],
         )
     _add_cargo_cube(
         scene,
@@ -262,7 +272,7 @@ def _add_cargo_cube(scene: Any, pos: Any) -> None:
         size=[CUBE_HALF, CUBE_HALF, 0.015],
         mass=0.02,
         friction=[2.0, 0.02, 0.001],
-        rgba=[0.85, 0.15, 0.15, 1.0],
+        rgba=[0.85, 0.15, 0.15, DECK_JAW_OPEN],
     )
 
 
@@ -272,12 +282,12 @@ def _add_cargo_cube(scene: Any, pos: Any) -> None:
 # sweep). Longer reach than the deck pick buys 6 mm of descent
 # clearance; the same base-swing approach aligns only at depth.
 GROUND_GRASP_POINT = (0.203, 0.005)
-GROUND_HOVER = [0.06, -1.5, 2.45, 0.55, -1.571, 1.0]
-GROUND_DESCEND = [0.06, -1.16, 2.247, 0.2, -1.571, 1.0]
-GROUND_ALIGN = [0.0, -1.16, 2.247, 0.2, -1.571, 1.0]
-GROUND_GRIP = [0.0, -1.16, 2.247, 0.2, -1.571, -0.15]
-GROUND_CARRY = [0.0, -1.6, 2.45, 0.55, -1.571, -0.15]
-GROUND_HOLDUP = [0.0, -1.9, 2.2, 0.9, -1.571, -0.15]
+GROUND_HOVER = [0.06, -1.5, 2.45, 0.55, WRIST_FLAT, DECK_JAW_OPEN]
+GROUND_DESCEND = [0.06, -1.16, 2.247, 0.2, WRIST_FLAT, DECK_JAW_OPEN]
+GROUND_ALIGN = [0.0, -1.16, 2.247, 0.2, WRIST_FLAT, DECK_JAW_OPEN]
+GROUND_GRIP = [0.0, -1.16, 2.247, 0.2, WRIST_FLAT, JAW_CLOSED]
+GROUND_CARRY = [0.0, -1.6, 2.45, 0.55, WRIST_FLAT, JAW_CLOSED]
+GROUND_HOLDUP = [0.0, -1.9, 2.2, 0.9, WRIST_FLAT, JAW_CLOSED]
 
 GROUND_PICK_SEQUENCE = (
     (GROUND_HOVER, 1.5),
@@ -321,7 +331,7 @@ def compose(
     }[(car, arm)]
     if cargo and not (car and arm):
         raise ValueError("cargo needs the mobile manipulator: car AND arm")
-    scene = _base_scene(name)
+    scene = base_scene(name)
     if car:
         chassis = add_car(scene)
         if arm:

@@ -30,10 +30,14 @@ from rq_pipeline.tasks.yellow import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
-SERVO_RS = (REPO / "firmware" / "pico-odom" / "src" / "servo.rs").read_text()
-MAIN_RS = (REPO / "firmware" / "pico-odom" / "src" / "main.rs").read_text()
-SIM_ERRAND = (REPO / "tools" / "sim-errand.py").read_text()
-BRIDGE = (REPO / "tools" / "udp-wire-bridge.py").read_text()
+SERVO_RS = (REPO / "firmware" / "pico-odom" / "src" / "servo.rs").read_text(
+    encoding="utf-8"
+)
+MAIN_RS = (REPO / "firmware" / "pico-odom" / "src" / "main.rs").read_text(
+    encoding="utf-8"
+)
+SIM_ERRAND = (REPO / "tools" / "sim-errand.py").read_text(encoding="utf-8")
+BRIDGE = (REPO / "tools" / "udp-wire-bridge.py").read_text(encoding="utf-8")
 
 
 def rust_fn(source: str, name: str) -> str:

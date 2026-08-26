@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 missing = []
 
 for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
-    body = manifest.read_text()
+    body = manifest.read_text(encoding="utf-8")
     inherits = re.search(r"^\[lints\]\s*\nworkspace\s*=\s*true", body, re.M)
     own = re.search(r'^unsafe_code\s*=\s*"forbid"', body, re.M)
     if not (inherits or own):
@@ -27,7 +27,9 @@ for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
 
 # The workspace block the inheriting crates rely on.
 if not re.search(
-    r'^unsafe_code\s*=\s*"forbid"', (ROOT / "Cargo.toml").read_text(), re.M
+    r'^unsafe_code\s*=\s*"forbid"',
+    (ROOT / "Cargo.toml").read_text(encoding="utf-8"),
+    re.M,
 ):
     missing.append("Cargo.toml: [workspace.lints.rust] no longer forbids unsafe")
 
@@ -50,7 +52,7 @@ firmware_roots = sorted(
     for p in (ROOT / "firmware").glob(pattern)
 )
 for root in firmware_roots:
-    text = root.read_text()
+    text = root.read_text(encoding="utf-8")
     # Must be a real attribute, not the words inside a doc comment.
     if not re.search(r"^#!\[forbid\(unsafe_code\)\]", text, re.M):
         missing.append(f"{root.relative_to(ROOT)}: no #![forbid(unsafe_code)]")

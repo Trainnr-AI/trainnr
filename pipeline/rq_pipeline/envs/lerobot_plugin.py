@@ -7,8 +7,8 @@
         --policy.path=runs/t5-act-kitting/checkpoints/020000/pretrained_model \\
         --seed=1000 --eval.n_episodes=4 --eval.batch_size=1 \\
         --eval.use_async_envs=false
-    # on WSL prefix: LD_LIBRARY_PATH=/usr/lib/wsl/lib GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl
-    # (docs/07 2026-08-26: llvmpipe otherwise renders at 317 ms a frame)
+    # on WSL, under pipeline/wsl.env (tools/wsl-run.sh): llvmpipe otherwise
+    # renders at 317 ms a frame (docs/07 2026-08-26)
 
 `--env.discover_packages_path` (lerobot/configs/parser.py) imports every
 module of the named PACKAGE before the CLI is parsed — a module path is
@@ -29,8 +29,11 @@ per-episode rows fold into paired counts.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
+from pathlib import Path
 
 import gymnasium as gym
 from gymnasium.vector import AutoresetMode
@@ -51,6 +54,10 @@ from rq_pipeline.tasks.registry import resolve, tasks
 # Worker processes must each build their own GL context; `spawn` exists
 # on every OS (`forkserver` does not on Windows) and gives that for free.
 WORKER_START_METHOD = "spawn"
+# LeRobot's CLI namespaces every env option under this prefix, and
+# discovers a plugin by importing the PACKAGE that registers it.
+ENV_FLAG_PREFIX = "--env."
+PLUGIN_PACKAGE = __name__.rsplit(".", 1)[0]
 
 
 @EnvConfig.register_subclass(ENV_TYPE)
@@ -104,6 +111,33 @@ class RobotiqEnvConfig(EnvConfig):
                 shape=(camera.height, camera.width, RGB_CHANNELS),
             )
             self.features_map[key] = f"{OBS_IMAGES}.{camera.key}"
+
+    @classmethod
+    def cli_flags(
+        cls,
+        task: str,
+        *,
+        record_to: str | Path | None = None,
+        policy_name: str | None = None,
+        variations: Sequence[str] = (),
+    ) -> list[str]:
+        """The `--env.*` arguments that select this plugin on LeRobot's
+        command lines (`lerobot-train`, `lerobot-eval`): the type, the
+        task, the package LeRobot must import to find the registration,
+        and the optional record / policy-name / variation knobs — spelled
+        here once, so no tool restates a flag name."""
+        flags = [
+            f"{ENV_FLAG_PREFIX}type={ENV_TYPE}",
+            f"{ENV_FLAG_PREFIX}task={task}",
+            f"{ENV_FLAG_PREFIX}discover_packages_path={PLUGIN_PACKAGE}",
+        ]
+        if record_to is not None:
+            flags.append(f"{ENV_FLAG_PREFIX}record_to={record_to}")
+        if policy_name is not None:
+            flags.append(f"{ENV_FLAG_PREFIX}policy_name={policy_name}")
+        if variations:
+            flags.append(f"{ENV_FLAG_PREFIX}variations={json.dumps(list(variations))}")
+        return flags
 
     @property
     def gym_kwargs(self) -> dict:

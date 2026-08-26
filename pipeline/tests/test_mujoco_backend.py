@@ -105,5 +105,18 @@ class Census(unittest.TestCase):
             )
 
 
+@unittest.skipUnless(
+    importlib.util.find_spec("mujoco") is not None, "sim extra not installed"
+)
+class SatisfiesTheHarness(unittest.TestCase):
+    def test_the_cpu_backend_is_an_engine(self) -> None:
+        """The harness declares `Engine`; the metrology instrument must
+        satisfy it structurally, checked here rather than trusted."""
+        from rq_pipeline.evaluate.harness import Engine  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        self.assertIsInstance(MuJoCoBackend(), Engine)
+
+
 if __name__ == "__main__":
     unittest.main()

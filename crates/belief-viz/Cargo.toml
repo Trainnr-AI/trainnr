@@ -2,6 +2,7 @@
 name = "belief-viz"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 # Drawing a robot's belief in Rerun, once.
 #

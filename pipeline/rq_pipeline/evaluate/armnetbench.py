@@ -69,7 +69,7 @@ def load_benchmark(path: Path) -> RealBenchmark:
     future re-aggregation must break loudly here, not be silently folded
     into someone's idea of success.
     """
-    raw = json.loads(Path(path).read_text())
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
     missing = {"provenance", "counts"} - set(raw)
     if missing:
         raise ValueError(f"{path} is missing top-level keys: {sorted(missing)}")

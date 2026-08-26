@@ -43,9 +43,13 @@ def classify(path):
             test += 1
             test_depth += line.count("{") - line.count("}")
             # Depth returns to 0 only after the mod block has opened and closed.
-            if test_depth <= 0 and "{" in "".join(lines[max(0, i - 1) : i + 1]):
-                if test_depth == 0 and "}" in line:
-                    in_test = False
+            if (
+                test_depth <= 0
+                and "{" in "".join(lines[max(0, i - 1) : i + 1])
+                and test_depth == 0
+                and "}" in line
+            ):
+                in_test = False
             continue
 
         if not line:
@@ -99,7 +103,7 @@ def main():
     rows = collect()
 
     crates = {}
-    for crate, rel, code, doc, blank, test, total in rows:
+    for crate, _rel, code, doc, blank, test, total in rows:
         agg = crates.setdefault(crate, [0, 0, 0, 0, 0, 0])
         agg[0] += code
         agg[1] += doc
@@ -113,8 +117,8 @@ def main():
 
     def emit(cells, widths):
         out = sep.join(
-            c.ljust(w) if i else c.ljust(w)
-            for i, (c, w) in enumerate(zip(cells, widths))
+            c.rjust(w) if i else c.ljust(w)
+            for i, (c, w) in enumerate(zip(cells, widths, strict=True))
         )
         print(f"{bar} {out} {bar}" if markdown else out)
 
@@ -175,7 +179,8 @@ def main():
     print(f"code:test ratio     1 : {test / code:.2f}" if code else "")
     print(f"doc:code ratio      1 : {code / doc:.2f}" if doc else "")
     print(
-        f"documentation       {100 * doc / (code + doc):.1f}% of non-blank non-test lines"
+        f"documentation       {100 * doc / (code + doc):.1f}% "
+        "of non-blank non-test lines"
     )
 
 

@@ -16,18 +16,25 @@ from collections.abc import Sequence
 from itertools import permutations
 from math import atanh, sqrt, tanh
 
-from rq_pipeline.stats.intervals import normal_quantile
+from rq_pipeline.stats.intervals import (
+    DEFAULT_CONFIDENCE,
+    check_counts,
+    normal_quantile,
+)
 
 # A correlation needs 3 points to be defined at all, a comparison needs
 # 2 — and an INTERVAL over rankings needs 4, because the Fisher standard
 # error has sqrt(n - 3) in its denominator.
 _MINIMUM_FOR_CORRELATION = 3
 _MINIMUM_FOR_COMPARISON = 2
-MINIMUM_POLICIES = 4
+# Fisher's z for Spearman has sqrt(n - FISHER_DOF) in its denominator, so a
+# comparison needs one policy more than that to have any resolution at all.
+FISHER_DOF = 3
+MINIMUM_POLICIES = FISHER_DOF + 1
 
 # Spearman's Fisher-z standard error carries a 1.03 adjustment
 # (Caruso & Cliff) relative to Pearson's 1.0.
-_SPEARMAN_Z_INFLATION = 1.03
+SPEARMAN_Z_INFLATION = 1.03
 
 # Up to 8 policies the full permutation distribution (8! = 40,320
 # orderings) is enumerable, so small-n significance needs no
@@ -49,7 +56,7 @@ _RHO_COMPARISON_SLACK = 1e-12
 _RHO_POLE_GUARD = 0.9999
 
 
-def _max_resolvable_rho(policy_count: int) -> float:
+def max_resolvable_rho(policy_count: int) -> float:
     one_swap = 1.0 - 12.0 / (policy_count * (policy_count**2 - 1))
     return min(one_swap, _RHO_POLE_GUARD)
 
@@ -101,7 +108,7 @@ def spearman(sim_scores: Sequence[float], real_scores: Sequence[float]) -> float
 def fisher_rank_ci(
     sim_scores: Sequence[float],
     real_scores: Sequence[float],
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> tuple[float, float, int]:
     """Fisher-z interval for Spearman r over n policies — the gate statistic.
 
@@ -118,13 +125,13 @@ def fisher_rank_ci(
         raise ValueError(
             f"need at least {MINIMUM_POLICIES} policies, got {policy_count}"
         )
-    resolvable = _max_resolvable_rho(policy_count)
+    resolvable = max_resolvable_rho(policy_count)
     clamped = max(-resolvable, min(resolvable, correlation))
     z_score = atanh(clamped)
     half_width = (
         normal_quantile(1.0 - (1.0 - confidence) / 2.0)
-        * _SPEARMAN_Z_INFLATION
-        / sqrt(policy_count - 3)
+        * SPEARMAN_Z_INFLATION
+        / sqrt(policy_count - FISHER_DOF)
     )
     return (
         tanh(z_score - half_width),
@@ -186,7 +193,7 @@ def exact_spearman_p(
 def bootstrap_rank_ci(
     sim_scores: Sequence[float],
     real_scores: Sequence[float],
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
     resamples: int = 10_000,
     seed: int = 0,
 ) -> tuple[float, float, int]:
@@ -245,10 +252,7 @@ def top_pick_probability(
             f"need at least {_MINIMUM_FOR_COMPARISON} policies, got {len(sim_scores)}"
         )
     for successes, trials in zip(real_successes, real_trials, strict=True):
-        if trials <= 0 or not 0 <= successes <= trials:
-            raise ValueError(
-                f"invalid counts: {successes}/{trials} is not a success rate"
-            )
+        check_counts("real", successes, trials)
     sim_best = max(range(len(sim_scores)), key=lambda i: sim_scores[i])
     rng = random.Random(seed)
     wins = 0

@@ -10,8 +10,8 @@ from rq_pipeline.bundles.hashing import bundle_hash, stamp
 class BundleHash(unittest.TestCase):
     def _make_bundle(self, root: Path) -> None:
         (root / "model").mkdir()
-        (root / "model" / "robot.xml").write_text("<mujoco/>")
-        (root / "calibration.json").write_text('{"shoulder": 12}')
+        (root / "model" / "robot.xml").write_text("<mujoco/>", encoding="utf-8")
+        (root / "calibration.json").write_text('{"shoulder": 12}', encoding="utf-8")
 
     def test_stable_across_locations(self) -> None:
         with (
@@ -29,7 +29,7 @@ class BundleHash(unittest.TestCase):
             before = bundle_hash(root)
             # One recalibrated joint must produce a different artifact:
             # calibration is device state.
-            (root / "calibration.json").write_text('{"shoulder": 13}')
+            (root / "calibration.json").write_text('{"shoulder": 13}', encoding="utf-8")
             self.assertNotEqual(before, bundle_hash(root))
 
     def test_rename_changes_identity(self) -> None:

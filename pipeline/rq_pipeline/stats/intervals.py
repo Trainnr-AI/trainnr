@@ -63,10 +63,21 @@ def regularized_incomplete_beta(a: float, b: float, x: float) -> float:
     return 1.0 - prefactor * _beta_continued_fraction(b, a, 1.0 - x) / b
 
 
+DEFAULT_CONFIDENCE = 0.95  # the report-level confidence, one decision
+_BISECTION_STEPS = 200  # halvings of [0, 1] or [-10, 10]: far past double precision
+
+
+def check_counts(label: str, successes: int, trials: int) -> None:
+    """Counts are valid or refused — the one rule for every side, every
+    tier: intervals, ranking, pooling and the certificate call this."""
+    if trials <= 0 or not 0 <= successes <= trials:
+        raise ValueError(f"invalid {label} counts: {successes}/{trials}")
+
+
 def _beta_quantile(probability: float, a: float, b: float) -> float:
     """Inverse of the Beta CDF by bisection — monotone, so always safe."""
     low, high = 0.0, 1.0
-    for _ in range(200):
+    for _ in range(_BISECTION_STEPS):
         mid = (low + high) / 2.0
         if regularized_incomplete_beta(a, b, mid) < probability:
             low = mid
@@ -76,7 +87,7 @@ def _beta_quantile(probability: float, a: float, b: float) -> float:
 
 
 def clopper_pearson(
-    successes: int, trials: int, confidence: float = 0.95
+    successes: int, trials: int, confidence: float = DEFAULT_CONFIDENCE
 ) -> tuple[float, float]:
     """Exact two-sided interval for a binomial success rate.
 
@@ -84,10 +95,7 @@ def clopper_pearson(
     (0.805, 0.959) — the worked example in NVIDIA's evaluation
     methodology post, reproduced in this package's tests.
     """
-    if trials <= 0:
-        raise ValueError(f"trials must be positive, got {trials}")
-    if not 0 <= successes <= trials:
-        raise ValueError(f"successes must be in [0, {trials}], got {successes}")
+    check_counts("binomial", successes, trials)
     if not 0.0 < confidence < 1.0:
         raise ValueError(f"confidence must be in (0, 1), got {confidence}")
     tail = (1.0 - confidence) / 2.0
@@ -105,17 +113,14 @@ def clopper_pearson(
 
 
 def wilson(
-    successes: int, trials: int, confidence: float = 0.95
+    successes: int, trials: int, confidence: float = DEFAULT_CONFIDENCE
 ) -> tuple[float, float]:
     """Wilson score interval — the cheap cross-check on Clopper-Pearson.
 
     Slightly narrower than the exact interval by construction; the tests
     use that known relationship to catch a broken quantile.
     """
-    if trials <= 0:
-        raise ValueError(f"trials must be positive, got {trials}")
-    if not 0 <= successes <= trials:
-        raise ValueError(f"successes must be in [0, {trials}], got {successes}")
+    check_counts("binomial", successes, trials)
     # Normal quantile via beta-quantile of the symmetric case would be
     # circular; use the Acklam-style rational approximation's simple cousin:
     # for the confidences used in reports (0.9, 0.95, 0.99) a bisection on
@@ -134,7 +139,7 @@ def wilson(
 
 def normal_quantile(probability: float) -> float:
     low, high = -10.0, 10.0
-    for _ in range(200):
+    for _ in range(_BISECTION_STEPS):
         mid = (low + high) / 2.0
         if (1.0 + erf(mid / sqrt(2.0))) / 2.0 < probability:
             low = mid

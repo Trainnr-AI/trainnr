@@ -9,11 +9,10 @@ both cube paths together. They separate by centimetres, which is why
 on the Mac and failed on the WSL box: it pinned a number the physics
 does not pin. (The test now asserts the deck landing, not the pocket.)
 
-    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan \
-        uv run --extra sim --extra viz python ../tools/show-cargo-chaos.py
+    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \
+        python ../tools/show-cargo-chaos.py
 
-(The two variables are WSL's GPU routing for the MuJoCo and Rerun
-windows respectively — see show-aloha2.py's header; harmless elsewhere.)
+(`wsl.env` is WSL's GPU routing for the two windows; harmless elsewhere.)
 
 Both viewers open: the MuJoCo window shows the live run (the second
 lap), Rerun collects both laps' cube trails on a shared timeline. Close
@@ -30,21 +29,22 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, rr_session
+from _lab import bootstrap, hold_until_closed, rr_session
 
 bootstrap()
 from rq_pipeline.tasks.components import (  # noqa: E402
+    CROUCH_POSE,
     DECK_PICK_SEQUENCE,
     TRAY_CENTRE_X,
     TRAY_CENTRE_Y,
     compose,
 )
+from rq_pipeline.tasks.scene import NominalOptions  # noqa: E402
 
 from _rig3d import RigMirror  # noqa: E402
 
-CROUCH = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
 CUBE_QPOS = 15  # free joint: cube x, y, z
-SIM_HZ = 500
+SIM_HZ = round(1 / NominalOptions.TIMESTEP)
 # The two starts. 1 nm is ~1/50th of a hydrogen atom's width across an
 # 18 mm cube: physically meaningless, numerically decisive.
 PERTURBATIONS = (0.0, 1e-9)
@@ -113,7 +113,7 @@ def run_lap(model, data, lap, mirror=None, viewer=None):
                     time.sleep(0.004)
         return pose
 
-    previous = ramp(CROUCH, 2.0, list(data.qpos[9:15]), "CROUCH")
+    previous = ramp(CROUCH_POSE, 2.0, list(data.qpos[9:15]), "CROUCH_POSE")
     names = (
         "HOVER",
         "DESCEND",
@@ -162,8 +162,7 @@ def main() -> None:
                 # Hold the window so the final poses can be inspected;
                 # close it (or Ctrl-C) to get the summary table.
                 print("laps done - close the MuJoCo window to finish")
-                while viewer.is_running():
-                    time.sleep(0.2)
+                hold_until_closed(viewer)
         else:
             landings.append(run_lap(model, data, lap))
 

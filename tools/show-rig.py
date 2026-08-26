@@ -20,8 +20,8 @@ import time
 import mujoco
 import mujoco.viewer
 import numpy as np
-
 from rq_pipeline.tasks.components import (
+    CROUCH_POSE,
     GROUND_GRASP_POINT,
     GROUND_HOLDUP,
     GROUND_PICK_SEQUENCE,
@@ -29,6 +29,7 @@ from rq_pipeline.tasks.components import (
     add_floor_cube,
     compose,
 )
+from rq_pipeline.tasks.scene import NominalOptions
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "both"
 scene = compose(car=mode in ("car", "both"), arm=mode in ("arm", "both"))
@@ -38,17 +39,16 @@ model = scene.compile()
 data = mujoco.MjData(model)
 mujoco.mj_forward(model, data)
 
-CROUCH = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
 HOME = [0.0, -1.57, 1.57, 1.57, -1.57, 0.0]
 WAVE = [0.6, -1.2, 1.2, 0.5, 1.2, 1.0]
-TIMESTEP = 0.002
+TIMESTEP = NominalOptions.TIMESTEP
 STEPS_PER_SYNC = 8
 GX, GY = GROUND_GRASP_POINT
 HAS_CAR = mode in ("car", "both")
 
 
 def chassis_pose():
-    w, qx, qy, qz = data.qpos[3:7]
+    w, _qx, _qy, qz = data.qpos[3:7]
     return data.qpos[0], data.qpos[1], 2 * math.atan2(qz, w)
 
 
@@ -63,8 +63,8 @@ class Fetch:
     def __init__(self):
         self.state = "seek"
         self.pulse_t = 0
-        self.arm_from = list(CROUCH)
-        self.arm_to = list(CROUCH)
+        self.arm_from = list(CROUCH_POSE)
+        self.arm_to = list(CROUCH_POSE)
         self.arm_started = 0.0
         self.seq = None
         self.seq_index = 0
@@ -104,7 +104,7 @@ class Fetch:
         gap, lat = cx - GX, cy - GY
 
         if self.state == "seek":
-            self._set_arm(t, CROUCH)
+            self._set_arm(t, CROUCH_POSE)
             bearing = math.atan2(data.qpos[16] - y, data.qpos[15] - x)
             err = (bearing - yaw + math.pi) % (2 * math.pi) - math.pi
             dist = math.hypot(data.qpos[15] - x, data.qpos[16] - y)
@@ -174,11 +174,11 @@ class Fetch:
             if self._run_sequence(t):
                 self.state = "backoff"
                 self.backoff_until = t + 2.0
-                self._set_arm(t, CROUCH)
+                self._set_arm(t, CROUCH_POSE)
             return (0.0, 0.0)
 
         # backoff: reverse clear of the cube, then seek again
-        self._set_arm(t, CROUCH)
+        self._set_arm(t, CROUCH_POSE)
         if t >= self.backoff_until:
             self.state = "seek"
             return (0.0, 0.0)
@@ -186,7 +186,7 @@ class Fetch:
 
 
 fetch = Fetch()
-ARM_SCRIPT = [(3.0, HOME), (2.5, WAVE), (2.5, CROUCH)]
+ARM_SCRIPT = [(3.0, HOME), (2.5, WAVE), (2.5, CROUCH_POSE)]
 ARM_TOTAL = sum(d for d, _ in ARM_SCRIPT)
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -211,7 +211,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
                         else ([0.5, -0.5] if cycle < 5.0 else [0.7, 0.7])
                     )
                 else:
-                    acc, target = 0.0, CROUCH
+                    acc, target = 0.0, CROUCH_POSE
                     cycle = t % ARM_TOTAL
                     for duration, pose in ARM_SCRIPT:
                         if cycle < acc + duration:

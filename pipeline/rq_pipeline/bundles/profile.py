@@ -89,7 +89,7 @@ def load_profile(bundle_dir: Path) -> RobotProfile:
     otherwise fall back to a default and lie quietly.
     """
     path = Path(bundle_dir) / PROFILE_FILE
-    raw = json.loads(path.read_text())
+    raw = json.loads(path.read_text(encoding="utf-8"))
     known = {entry.name for entry in fields(RobotProfile)}
     unknown = set(raw) - known
     if unknown:

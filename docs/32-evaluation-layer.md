@@ -422,6 +422,30 @@ hinge), draccus's top-level `tests` package shadowing ours, and the
 SO-101 experts at 3/4 on 3.12 against 4/4 on 3.11 — now pinned per
 instrument in `tests/_instruments.py`. Details: docs/07.
 
+### 10.1 The second review (2026-08-27) — what stayed deferred, and why
+
+Four read-only reviewers, one slice each, fifty-odd findings; what
+they found and what was fixed is in docs/07's entry of the same date.
+Still open after it, with the reason each one waits:
+
+| Item | Why it waits |
+|---|---|
+| `MJXWarpBackend.stepper` — the fifth `Engine` door | It is the vectorized gymnasium env over the GPU backend (docs/49); lands with the cloud run, where it can be measured at scale. Until then the backend says which doors it has. |
+| A `Stepper` Protocol with `sensordata` so the harness never reads `MjData` | The env already shares the `Stepper`; the harness's one `stepper.data.sensordata.copy()` is the last engine-specific touch. Small, but the seam belongs with the door above. |
+| Task-side FULLPHYSICS offsets (`CUBE_STATE_SLICE = slice(17, 20)`, `PART_STATE_SLICE`, `_QPOS_OFFSET`) adopting `physics.FullPhysicsLayout` | Every one is pinned by a test today; the adoption is a mechanical pass over two rigs, queued behind the kitting work. |
+| `show-rig.py`, `show-yellow.py` without a Rerun mirror (the house rule) | Older rig viewers; the mirror is `RigMirror` plumbing plus a yellow-twin reconstruction the two errand tools already carry twice — the next item. |
+| `YellowTwin` (replay-errand, rig-rerun, sim-errand carry ~30 lines of the yellow twin's pose reconstruction each) and `RerunPaths`/`Timelines` for the entity strings | A rig-tool refactor, not an evaluation-layer one; queued with the rig's port to a bundle (docs/24). |
+| `grid_scene` / `grid_model_from_xml` (show-many, rl-watch) into `_rig3d` | Same family; both tools work, both restate a ground plane and a pitch. |
+| `show-rig`'s sixteen tuned thresholds (`.ruff.toml` exempts the file, with the reason) | A hand-tuned demo controller; naming them is honest only with the desk to re-measure. |
+| `RatioParams`/`RigNames` in `robot/drivetrain_fit.py` | The car rig's identification code, off the training path; its fit records are test-pinned. |
+| `sim-errand.py`'s thirteen constants mirrored from `firmware/pico-odom/src/main.rs` without a test that reads them | The right test is a regex over `const X: T = v;` in that file; queued with the firmware's next change. |
+| `cli_flags` spelling its four field names as literals rather than `dataclasses.fields` | The test pins every flag; a field rename fails loudly. |
+| The GPU model in the MJX stamp (today: device class) | The architecture finding suggests it; measured on one GPU so far. |
+| `physics.__all__` listing the lazy `MJXWarpBackend` | A star import needs the extra; nobody star-imports. |
+| The tools' `qpos[15]` / `CUBE_QPOS` cube index by body lookup | Display-only; `show-many` and `show-yellow` show the pattern. |
+| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate cannot run on this box (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading `build-robot.sh`'s identical fix. |
+| From §10, still open: `EpisodeDesign` structs, typed `MilestoneEvent`/`ProtocolFields`, bundles as package data, the ALOHA joint-name lists derived once, the env's own `import mujoco` | Reasons unchanged. |
+
 ## 11. Open questions (carried from 45 §4 and 46 §5)
 
 1. Async vector envs under WSL: LIBERO defers simulator creation to the

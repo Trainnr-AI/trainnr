@@ -42,7 +42,9 @@ class RigBundleProfile(unittest.TestCase):
 class Validation(unittest.TestCase):
     def _load(self, raw: dict) -> RobotProfile:
         with tempfile.TemporaryDirectory() as directory:
-            (Path(directory) / PROFILE_FILE).write_text(json.dumps(raw))
+            (Path(directory) / PROFILE_FILE).write_text(
+                json.dumps(raw), encoding="utf-8"
+            )
             return load_profile(Path(directory))
 
     def test_valid_profile_loads(self) -> None:

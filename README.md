@@ -79,8 +79,8 @@ The instrument was tested on itself, and the misses are on the record:
   −88% errors — which is why fit records now spell out their pinning
   criterion and the residual-whiteness diagnostic is queued
   ([figure](data/sts3215-identifiability.html)).
-- ⚠️ **There is no CI.** The gate (`tools/verify.sh`, 42 steps, 354
-  tests) runs only when a human runs it, and one emulator step is RED —
+- ⚠️ **There is no CI.** The gate (`tools/verify.sh`; it counts its own steps, and the
+  Python suite alone is 220-odd tests) runs only when a human runs it, and one emulator step is RED —
   documented, not hidden: until it is fixed, "the full suite passes" is
   not a claim this repo can make
   ([details](docs/27-rig-tour.md)).
@@ -118,7 +118,7 @@ docs — is preserved in [`docs/27-rig-tour.md`](docs/27-rig-tour.md).
 robotiq/
 ├── pipeline/                # THE PRODUCT: bundles, identification, stats,
 │   │                        #   evaluation, collection (Python, uv)
-│   └── rq_pipeline/{bundles,robot,stats,evaluate,collect,tasks,physics}
+│   └── rq_pipeline/{bundles,robot,stats,evaluate,collect,tasks,physics,envs}
 ├── robots/                  # measurement bundles: profile.json + model.xml
 │   └── rig-drivetrain/      #   + fits/*.json + fits/SPREAD.json (real data)
 ├── data/                    # committed evidence (benchmarks, studies)
@@ -142,7 +142,7 @@ Product and research, first:
 - [`docs/28-quickstart-identify.md`](docs/28-quickstart-identify.md) — measure your robot from a CSV
 - [`docs/21-the-data-company.md`](docs/21-the-data-company.md) — the market read: the empty square is identification
 - [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — when a recording becomes training data
-- [`docs/e2e-research/`](docs/e2e-research/README.md) — the fleet research (13 documents; start at [29-the-company](docs/e2e-research/29-the-company.md) and [30-the-pipeline](docs/e2e-research/30-the-pipeline.md))
+- [`docs/e2e-research/`](docs/e2e-research/README.md) — the fleet research (32 documents; start at [29-the-company](docs/e2e-research/29-the-company.md) and [30-the-pipeline](docs/e2e-research/30-the-pipeline.md))
 - [`docs/07-progress-log.md`](docs/07-progress-log.md) — the dated log of everything done, decided, and gotten wrong
 
 How this instrument was built (the apprenticeship record):

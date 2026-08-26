@@ -2,6 +2,7 @@
 name = "teleop-web"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 # Drive the robot from a phone.
 #

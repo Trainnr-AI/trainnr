@@ -2,6 +2,7 @@
 name = "ov7670-driver"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 # no_std on the chip, tested on the Mac against a mock bus — the same
 # shape as `mpu6050-driver` and `pca9685-driver`. What is worth testing

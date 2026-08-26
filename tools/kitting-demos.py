@@ -1,16 +1,12 @@
 """Generate scripted kitting demonstrations — T5's data source.
 
-    cd pipeline && GALLIUM_DRIVER=d3d12 MUJOCO_GL=egl OMP_NUM_THREADS=1 \
-        uv run --extra sim python ../tools/kitting-demos.py \
+    cd pipeline && uv run --env-file wsl.env --extra sim \
+        python ../tools/kitting-demos.py \
         [episodes] [out] [--frame-every 1] [--dr-span 0.10] [--seed S]
 
-(On WSL the offscreen renderer needs GALLIUM_DRIVER=d3d12 to reach the
-GPU — Mesa's EGL default is llvmpipe at ~300 ms per frame, which
-turned a one-second episode into eight minutes; measured 2026-08-26.
-Harmless elsewhere. Even on the GPU the WSL readback round trip costs
-~40 ms per frame and serialises across processes: four generators in
-parallel each sat at 25% CPU waiting, ~150 s per attempt — parallel
-seeds do not buy throughput on this box.)
+(On WSL the offscreen renderer reaches the GPU only through the variables
+in pipeline/wsl.env — Mesa's EGL default is llvmpipe at ~300 ms per frame,
+which turned a 1 s scripted episode into a 460 s one on 2026-08-26.)
 
 Each episode: spawn both parts uniformly in the PROVEN band (the front
 half of the spawn box — the far band's closing-plane edge is a known

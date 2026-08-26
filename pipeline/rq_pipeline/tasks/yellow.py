@@ -26,7 +26,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rq_pipeline.tasks.components import CAR_PREFIX, _base_scene
+from rq_pipeline.tasks.components import CAR_PREFIX, base_scene
+
+YELLOW_RGBA = [0.95, 0.8, 0.1, 1.0]  # the rig's colour, once
 
 # Real car geometry, measured by ruler 2026-08-24. Self-consistent:
 # axle 75 mm from the rear of a 250 mm chassis = 50 mm behind centre;
@@ -162,7 +164,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         size=[0.035, BASE_TOP / 2, 0],
         pos=[0, 0, BASE_TOP / 2],
         mass=0.015,
-        rgba=[0.95, 0.8, 0.1, 1.0],
+        rgba=YELLOW_RGBA,
     )
     platform = base.add_body(name="yarm_platform", pos=[0, 0, BASE_TOP])
     platform.add_joint(
@@ -178,7 +180,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         size=[0.03, 0.004, 0],
         pos=[0, 0, 0.004],
         mass=0.008,
-        rgba=[0.95, 0.8, 0.1, 1.0],
+        rgba=YELLOW_RGBA,
     )
     upper = platform.add_body(name="yarm_upper", pos=[0, 0, WAIST_TO_SHOULDER])
     upper.add_joint(
@@ -194,7 +196,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         size=[0.008, 0.012, SHOULDER_TO_ELBOW / 2],
         pos=[0, 0, SHOULDER_TO_ELBOW / 2],
         mass=0.012,
-        rgba=[0.95, 0.8, 0.1, 1.0],
+        rgba=YELLOW_RGBA,
     )
     fore = upper.add_body(name="yarm_fore", pos=[0, 0, SHOULDER_TO_ELBOW])
     fore.add_joint(
@@ -210,7 +212,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         size=[0.008, 0.010, ELBOW_TO_WRIST / 2],
         pos=[0, 0, ELBOW_TO_WRIST / 2],
         mass=0.010,
-        rgba=[0.95, 0.8, 0.1, 1.0],
+        rgba=YELLOW_RGBA,
     )
     hand = fore.add_body(name="yarm_hand", pos=[0, 0, ELBOW_TO_WRIST])
     hand.add_joint(
@@ -226,7 +228,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
         size=[0.010, 0.012, 0.020],
         pos=[0, 0, 0.02],
         mass=0.010,
-        rgba=[0.95, 0.8, 0.1, 1.0],
+        rgba=YELLOW_RGBA,
     )
     # The claw: two jaws on mirrored hinges, gear-meshed in metal =
     # equality-coupled here. Jaw length reaches the measured tip.
@@ -250,7 +252,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
             pos=[0, sign * 0.004, jaw_len / 2],
             mass=0.004,
             friction=[1.5, 0.02, 0.001],
-            rgba=[0.95, 0.8, 0.1, 1.0],
+            rgba=YELLOW_RGBA,
         )
     equality = scene.add_equality(
         objtype=mujoco.mjtObj.mjOBJ_JOINT,
@@ -294,7 +296,7 @@ def add_yellow_arm(scene: Any, mount: Any) -> None:
 
 def compose_rig(*, car: bool = True) -> Any:
     """The REAL rig's twin: measured car + yellow arm, as on the desk."""
-    scene = _base_scene("yellow-rig" if car else "yellow-arm")
+    scene = base_scene("yellow-rig" if car else "yellow-arm")
     if car:
         chassis = add_real_car(scene)
         add_yellow_arm(scene, chassis)

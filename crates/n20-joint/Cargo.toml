@@ -2,6 +2,7 @@
 name = "n20-joint"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 # An arm joint made from a DC gearmotor, so the arm stack can be tested on
 # hardware that is already on the bench instead of waiting 4-8 weeks for

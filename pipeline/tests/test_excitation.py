@@ -151,7 +151,7 @@ class PaperZeroRehearsal(unittest.TestCase):
         )
 
         result = identify(
-            DRIVETRAIN_XML.read_text(),
+            DRIVETRAIN_XML.read_text(encoding="utf-8"),
             self._synthesize_sweep(),
             parameters=[
                 ParameterSpec(

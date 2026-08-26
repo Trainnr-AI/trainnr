@@ -2,6 +2,7 @@
 name = "sim-core"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 # Two build shapes from ONE source:
 #   default (std)          -> full simulator: world, camera, grid, A*

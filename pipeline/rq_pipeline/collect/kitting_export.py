@@ -28,10 +28,15 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
-from rq_pipeline.bundles.locate import robots_dir
-from rq_pipeline.tasks.aloha2 import KITTING_INSTRUCTION
-
-PROVENANCE_FILE = "provenance.json"
+from rq_pipeline.collect.provenance import IMAGE_AXES, PROVENANCE_FILE
+from rq_pipeline.protocol import RGB_CHANNELS
+from rq_pipeline.tasks.aloha2 import (
+    ALOHA_TOP_CAMERAS,
+    ARM_NAMES,
+    BUNDLE_XML,
+    KITTING_INSTRUCTION,
+    SERVOS,
+)
 
 
 class DemoLayout:
@@ -43,6 +48,7 @@ class DemoLayout:
     EPISODE_GLOB = "episode_*"
     FRAMES_DIR = "frames"
     FRAME_FILE = "{tick:06d}.jpg"
+    FRAME_GLOB = "*.jpg"
     TRAJECTORY_FILE = "trajectory.npz"
     MANIFEST_FILE = "manifest.json"
     STATES, SENSORS, ACTIONS = "states", "sensors", "actions"  # the npz keys
@@ -115,7 +121,7 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
 JPEG_QUALITY = 85
 SERVO_NAMES = [
     f"{arm}/{joint}"
-    for arm in ("left", "right")
+    for arm in ARM_NAMES
     for joint in (
         "waist",
         "shoulder",
@@ -126,8 +132,11 @@ SERVO_NAMES = [
         "gripper",
     )
 ]
-STATE_WIDTH = len(SERVO_NAMES)  # 14
-DEFAULT_BUNDLE = robots_dir() / "aloha2-nominal"
+STATE_WIDTH = SERVOS
+if len(SERVO_NAMES) != STATE_WIDTH:  # the name list and the rig must agree
+    raise AssertionError(f"{len(SERVO_NAMES)} servo names for {STATE_WIDTH} servos")
+DEFAULT_BUNDLE = BUNDLE_XML.parent
+TOP_CAMERA = ALOHA_TOP_CAMERAS[0]
 
 
 def episode_dirs(demos_dir: Path) -> list[Path]:
@@ -158,6 +167,11 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     try:
         import numpy as np  # noqa: PLC0415
         from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
+        from lerobot.utils.constants import (  # noqa: PLC0415
+            ACTION,
+            OBS_IMAGES,
+            OBS_STATE,
+        )
         from PIL import Image  # noqa: PLC0415
     except ImportError as error:
         raise ImportError(
@@ -178,21 +192,24 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     fps = control_hz // frame_every
 
     first_frame = next(
-        iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob("*.jpg")))
+        iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB)))
     )
     height, width = np.asarray(Image.open(first_frame)).shape[:2]
+    # The keys the env's plugin derives (envs/lerobot_plugin.py): training
+    # and evaluation observe the same thing under the same name.
+    image_key = f"{OBS_IMAGES}.{TOP_CAMERA.key}"
     features = {
-        "observation.images.top": {
+        image_key: {
             "dtype": "video" if use_videos else "image",
-            "shape": (height, width, 3),
-            "names": ["height", "width", "channels"],
+            "shape": (height, width, RGB_CHANNELS),
+            "names": list(IMAGE_AXES),
         },
-        "observation.state": {
+        OBS_STATE: {
             "dtype": "float32",
             "shape": (STATE_WIDTH,),
             "names": SERVO_NAMES,
         },
-        "action": {
+        ACTION: {
             "dtype": "float32",
             "shape": (STATE_WIDTH,),
             "names": SERVO_NAMES,
@@ -214,18 +231,18 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
                 f"{episode}: {len(sensors)} sensor rows are not a whole "
                 f"multiple of {len(actions)} action rows"
             )
-        frames = sorted((episode / DemoLayout.FRAMES_DIR).glob("*.jpg"))
+        frames = sorted((episode / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB))
         if not frames:
             raise ValueError(f"{episode} has no frames")
         for frame_path in frames:
             tick = int(frame_path.stem)  # the physics step the frame was taken at
             dataset.add_frame(
                 {
-                    "observation.images.top": np.asarray(Image.open(frame_path)),
-                    "observation.state": np.asarray(
+                    image_key: np.asarray(Image.open(frame_path)),
+                    OBS_STATE: np.asarray(
                         sensors[tick, :STATE_WIDTH], dtype=np.float32
                     ),
-                    "action": np.asarray(
+                    ACTION: np.asarray(
                         actions[tick // steps_per_control], dtype=np.float32
                     ),
                     "task": task,

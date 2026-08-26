@@ -20,14 +20,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from rq_pipeline.physics.backend import ModelCounts, instrument_stamp
+from rq_pipeline.physics.backend import (
+    FullPhysicsLayout,
+    ModelCounts,
+    check_rollout_shapes,
+    instrument_stamp,
+    no_model_message,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     import numpy
-
-# Array rank expectations for rollout inputs, named for the shape checks.
-_STATE_BATCH_RANK = 2  # (nbatch, nstate)
-_CONTROL_RANK = 3  # (nbatch, nstep, nu)
 
 
 def _require_mujoco() -> Any:
@@ -49,7 +51,6 @@ def keyframe_state(model: Any, name: str) -> numpy.ndarray:
     were each re-typing the reset-forward-getState ritual.
     """
     mujoco = _require_mujoco()
-    import numpy as np  # noqa: PLC0415
 
     key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, name)
     if key < 0:
@@ -61,10 +62,31 @@ def keyframe_state(model: Any, name: str) -> numpy.ndarray:
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, key)
     mujoco.mj_forward(model, data)
-    size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-    state = np.empty(size)
-    mujoco.mj_getState(model, data, state, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-    return state
+    return full_state(model, data)
+
+
+def full_state(
+    model: Any, data: Any, out: numpy.ndarray | None = None
+) -> numpy.ndarray:
+    """`data`'s FULLPHYSICS row — the getState ritual, spelled once.
+    Writes into `out` when given (the Stepper's preallocated rows)."""
+    mujoco = _require_mujoco()
+    import numpy as np  # noqa: PLC0415
+
+    if out is None:
+        out = np.empty(FullPhysicsLayout(model).width)
+    mujoco.mj_getState(model, data, out, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+    return out
+
+
+def reset_state(model: Any) -> numpy.ndarray:
+    """The model's own reset (`mj_resetData`, forward) as a state row —
+    the start every protocol without a keyframe uses."""
+    mujoco = _require_mujoco()
+    data = mujoco.MjData(model)
+    mujoco.mj_resetData(model, data)
+    mujoco.mj_forward(model, data)
+    return full_state(model, data)
 
 
 class Stepper:
@@ -144,8 +166,7 @@ class Stepper:
             # delays), never a side effect of the stepping loop.
             mujoco.mj_forward(model, self.data)
             self.sensors[self.step] = self.data.sensordata
-            full = mujoco.mjtState.mjSTATE_FULLPHYSICS
-            mujoco.mj_getState(model, self.data, self.states[self.step], full)
+            full_state(model, self.data, out=self.states[self.step])
             self.step += 1
 
 
@@ -196,7 +217,7 @@ class MuJoCoBackend:
 
     def _require_model(self) -> Any:
         if self._model is None:
-            raise RuntimeError("no model loaded — call load_mjcf first")
+            raise RuntimeError(no_model_message())
         return self._model
 
     def counts(self) -> ModelCounts:
@@ -238,14 +259,7 @@ class MuJoCoBackend:
         return keyframe_state(self._require_model(), name)
 
     def _state_of(self, data: Any) -> numpy.ndarray:
-        mujoco = self._mujoco
-        model = self._require_model()
-        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        import numpy as np  # noqa: PLC0415
-
-        state = np.empty(size)
-        mujoco.mj_getState(model, data, state, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        return state
+        return full_state(self._require_model(), data)
 
     def rollout(
         self,
@@ -255,21 +269,12 @@ class MuJoCoBackend:
         """Batched trajectories: (nbatch, nstate) x (nbatch, nstep, nu)
         → (nbatch, nstep, nstate). Deterministic given inputs."""
         mujoco = self._mujoco
-        import numpy as np  # noqa: PLC0415
         from mujoco import rollout as mj_rollout  # noqa: PLC0415
 
         model = self._require_model()
-        initial = np.asarray(initial_states, dtype=float)
-        control = np.asarray(controls, dtype=float)
-        if initial.ndim != _STATE_BATCH_RANK:
-            raise ValueError(
-                f"initial_states must be (nbatch, nstate), got {initial.shape}"
-            )
-        if control.ndim != _CONTROL_RANK or control.shape[0] != initial.shape[0]:
-            raise ValueError(
-                "controls must be (nbatch, nstep, nu) with the same nbatch "
-                f"as initial_states, got {control.shape}"
-            )
+        initial, control = check_rollout_shapes(
+            initial_states, controls, state_width=FullPhysicsLayout(model).width
+        )
         data = mujoco.MjData(model)
         state, _sensordata = mj_rollout.rollout(model, data, initial, control)
         return state

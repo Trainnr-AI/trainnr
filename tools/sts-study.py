@@ -77,7 +77,9 @@ def main() -> int:
         ),
         "conditions": rows,
     }
-    OUTPUT_FILE.write_text(json.dumps(payload, indent=1, allow_nan=False))
+    OUTPUT_FILE.write_text(
+        json.dumps(payload, indent=1, allow_nan=False), encoding="utf-8"
+    )
     print(f"wrote {OUTPUT_FILE}", file=sys.stderr)
     return 0
 

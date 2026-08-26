@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One-time setup for the local RP2040 emulator.
 #
 # Clones wokwi/rp2040js (MIT — the same engine behind Wokwi's web Pico

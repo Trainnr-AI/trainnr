@@ -2,3 +2,10 @@
 # in tools/ finds no config and falls back to ruff's own defaults, which
 # disagree with the rules the noqa markers here were written for.
 extend = "../pipeline/pyproject.toml"
+
+[lint.per-file-ignores]
+# show-rig.py's fetch controller is a hand-tuned demo: sixteen thresholds
+# measured on the desk, one branch each. Naming them is queued with the
+# rig's port to a bundle (docs/24); until then the rules that count them
+# stay off for this file only.
+"show-rig.py" = ["PLR2004", "PLR0911", "PLR0912", "PLR0915"]

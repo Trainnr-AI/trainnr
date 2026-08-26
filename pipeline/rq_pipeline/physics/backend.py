@@ -1,12 +1,17 @@
-"""What a loaded model reports about itself, for fail-loudly gates.
+"""What every engine shares: the census a loaded model reports (the
+fail-loudly gate), the rollout contract, the FULLPHYSICS state-row
+layout, and the one rule for naming an instrument.
 
-Until 2026-08-26 this module also declared a `PhysicsBackend` Protocol
-with one implementation ever; docs/32 step 5 removed it — the gymnasium
-env (rq_pipeline.envs) is the backend-agnostic seam now, and a second
-engine would arrive as another env, not another Protocol.
+The harness declares what it asks of an engine (`evaluate/harness.py::
+Engine`, consumer-side); the two engines here — CPU MuJoCo, the
+metrology instrument, and MJX-Warp, the throughput instrument — meet
+it over the same compiled model. Nothing in this module imports an
+engine.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 
 class ModelCounts:
@@ -47,3 +52,72 @@ def instrument_stamp(name: str, version: str, *qualifiers: str) -> str:
     return "+".join(
         [f"{name}-{version}", *qualifiers, _ARCH_ALIASES.get(machine, machine)]
     )
+
+
+ROLLOUT_STATE_RANK = 2  # (nbatch, nstate)
+ROLLOUT_CONTROL_RANK = 3  # (nbatch, nstep, nu)
+
+
+def check_rollout_shapes(
+    initial_states: Any, controls: Any, *, state_width: int | None = None
+) -> tuple[Any, Any]:
+    """The rollout contract every engine shares — (nbatch, nstate) x
+    (nbatch, nstep, nu) -> (nbatch, nstep, nstate) — checked once, here.
+    Returns the two arrays as float; refuses the wrong rank, a batch
+    mismatch and, when `state_width` is given, rows that are not that
+    wide (FULLPHYSICS). Both backends call this so a refusal reads the
+    same whichever instrument produced it."""
+    import numpy as np  # noqa: PLC0415
+
+    initial = np.asarray(initial_states, dtype=float)
+    control = np.asarray(controls, dtype=float)
+    if initial.ndim != ROLLOUT_STATE_RANK:
+        raise ValueError(
+            f"initial_states must be (nbatch, nstate), got {initial.shape}"
+        )
+    if control.ndim != ROLLOUT_CONTROL_RANK or control.shape[0] != initial.shape[0]:
+        raise ValueError(
+            "controls must be (nbatch, nstep, nu) with the same nbatch "
+            f"as initial_states, got {control.shape}"
+        )
+    if state_width is not None and initial.shape[1] != state_width:
+        raise ValueError(
+            f"initial_states rows must be {state_width} wide (FULLPHYSICS), "
+            f"got {initial.shape[1]}"
+        )
+    return initial, control
+
+
+class FullPhysicsLayout:
+    """MuJoCo's FULLPHYSICS state row, `[time, qpos, qvel, act]`, as
+    slices of one compiled model — the one place the layout is spelled
+    in library code (task modules that slice by offset are on docs/32
+    §10's list to adopt it)."""
+
+    TIME = 0
+
+    def __init__(self, model: Any) -> None:
+        self.nq, self.nv, self.na = int(model.nq), int(model.nv), int(model.na)
+
+    @property
+    def qpos(self) -> slice:
+        return slice(1, 1 + self.nq)
+
+    @property
+    def qvel(self) -> slice:
+        return slice(1 + self.nq, 1 + self.nq + self.nv)
+
+    @property
+    def act(self) -> slice:
+        return slice(1 + self.nq + self.nv, self.width)
+
+    @property
+    def width(self) -> int:
+        return 1 + self.nq + self.nv + self.na
+
+
+LOAD_DOORS = ("load_spec", "load_model", "load_mjcf_string")
+
+
+def no_model_message() -> str:
+    return f"no model loaded — call one of {', '.join(LOAD_DOORS)} first"

@@ -149,7 +149,7 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
     fits = Path(bundle_dir) / FITS_DIRECTORY
     fits.mkdir(parents=True, exist_ok=True)
     path = fits / f"{recording}.json"
-    path.write_text(record.to_json())
+    path.write_text(record.to_json(), encoding="utf-8")
     return path
 
 
@@ -162,7 +162,7 @@ def load_fit_records(bundle_dir: Path) -> tuple[FitRecord, ...]:
     for path in sorted(fits.glob("*.json")):
         if path.name == SPREAD_FILENAME:
             continue
-        raw = json.loads(path.read_text())
+        raw = json.loads(path.read_text(encoding="utf-8"))
         for parameter in raw["parameters"]:
             if parameter["half_width"] is None:
                 parameter["half_width"] = float("inf")
@@ -287,5 +287,5 @@ def write_spread_record(bundle_dir: Path) -> Path:
         "code": _code_version(),
     }
     path = Path(bundle_dir) / FITS_DIRECTORY / SPREAD_FILENAME
-    path.write_text(json.dumps(payload, indent=2, allow_nan=False))
+    path.write_text(json.dumps(payload, indent=2, allow_nan=False), encoding="utf-8")
     return path

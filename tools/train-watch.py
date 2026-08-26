@@ -1,9 +1,8 @@
 """Watch a policy learn: train in the background, play every checkpoint.
 
     # WSL / Linux (the train venv, with the Rerun viewer binary on PATH):
-    cd pipeline && PATH="$PWD/.venv/bin:$PATH" GALLIUM_DRIVER=d3d12 \\
-        WGPU_BACKEND=vulkan MUJOCO_GL=egl LD_LIBRARY_PATH=/usr/lib/wsl/lib \\
-        .venv-train/bin/python ../tools/train-watch.py \\
+    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \\
+        ../tools/train-watch.py \\
         --steps 20000 --save-freq 1000 --batch-size 8 --name t2-act
     # macOS: the passive viewer needs mjpython, and none of the GL variables:
     cd pipeline && mjpython ../tools/train-watch.py --steps 20000 --name t2-act
@@ -36,7 +35,6 @@ import argparse
 import re
 import signal
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -48,6 +46,7 @@ import rerun as rr
 from _lab import (
     PREVIEW_EVERY_TICKS,
     bootstrap,
+    lerobot_train_command,
     load_demo_actions,
     rr_session,
     verdict_word,
@@ -137,24 +136,16 @@ def parse_args():
 
 
 def train_command(args, output_dir, device):
-    return [
-        # The trainer runs in whatever interpreter launched this tool — no
-        # venv name, no POSIX bin/ layout baked in.
-        sys.executable,
-        "-m",
-        "lerobot.scripts.lerobot_train",
-        f"--policy.type={args.policy}",
-        f"--policy.device={device}",
-        "--policy.push_to_hub=false",
-        f"--dataset.repo_id={args.dataset}",
-        f"--output_dir={output_dir}",
-        f"--job_name={args.name}",
-        f"--steps={args.steps}",
-        f"--batch_size={args.batch_size}",
-        "--log_freq=50",
-        f"--save_freq={args.save_freq}",
-        "--wandb.enable=false",
-    ]
+    return lerobot_train_command(
+        policy=args.policy,
+        device=device,
+        dataset=args.dataset,
+        output_dir=output_dir,
+        job_name=args.name,
+        steps=args.steps,
+        batch_size=args.batch_size,
+        save_freq=args.save_freq,
+    )
 
 
 def tail_training(process, seen_steps):

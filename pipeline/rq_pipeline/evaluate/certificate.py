@@ -17,7 +17,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 from rq_pipeline.bundles.hashing import require_stamp
-from rq_pipeline.stats.intervals import clopper_pearson
+from rq_pipeline.stats.intervals import (
+    DEFAULT_CONFIDENCE,
+    check_counts,
+    clopper_pearson,
+)
 from rq_pipeline.stats.ranking import (
     EXACT_ENUMERATION_LIMIT,
     exact_spearman_p,
@@ -27,12 +31,6 @@ from rq_pipeline.stats.ranking import (
 
 # A certificate with no simulated side at all (real trials only).
 REAL_ONLY_INSTRUMENT = "real-only"
-
-
-def check_counts(label: str, successes: int, trials: int) -> None:
-    """Counts are valid or refused — the one rule for both sides."""
-    if trials <= 0 or not 0 <= successes <= trials:
-        raise ValueError(f"invalid {label} counts: {successes}/{trials}")
 
 
 @dataclass(frozen=True)
@@ -89,7 +87,7 @@ class Certificate:
     # The simulator IS part of the instrument: a certificate produced by a
     # different engine or version is a different instrument and needs its
     # own Gate A run — so the field carries name AND version
-    # (`MuJoCoBackend.instrument`, e.g. "mujoco-3.11.0").
+    # (physics/backend.py::instrument_stamp, e.g. "mujoco-3.11.0+x86_64").
     instrument: str
     confidence: float
     policies: tuple[PolicyResult, ...]
@@ -133,7 +131,7 @@ def certify(  # noqa: PLR0913 - keyword-only args, each part of the artifact's i
     *,
     gate_threshold: float,
     instrument: str = REAL_ONLY_INSTRUMENT,
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> Certificate:
     """Assemble a certificate from paired sim and real outcomes.
 

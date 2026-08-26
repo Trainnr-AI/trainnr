@@ -33,3 +33,6 @@ runs/
 
 # Per-user Claude Code settings (shared settings, if any, live in .claude/settings.json).
 .claude/settings.local.json
+
+# coverage databases carry absolute paths; per machine, never tracked
+.coverage*

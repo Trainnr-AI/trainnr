@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from rq_pipeline.bundles.hashing import require_stamp
 from rq_pipeline.evaluate.certificate import PolicyOutcome
@@ -61,13 +61,14 @@ __all__ = [
 ]
 
 
+@runtime_checkable
 class Engine(Protocol):
     """What the harness asks of a physics engine — declared here, where
     it is consumed, so `evaluate` names no engine. `MuJoCoBackend`
     satisfies it structurally; a second engine implements these five."""
 
     @property
-    def instrument(self) -> str: ...  # name and version, e.g. "mujoco-3.11.0"
+    def instrument(self) -> str: ...  # physics/backend.py::instrument_stamp
 
     def counts(self) -> Any: ...  # the census: actuators, sensors, geoms, cameras
 

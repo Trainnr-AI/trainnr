@@ -56,7 +56,7 @@ STATE_WIDTH = ARM_SENSOR_WIDTH // 2
 
 FINGERTIP_SLICE = slice(ARM_SENSOR_WIDTH, ARM_SENSOR_WIDTH + 3)
 
-# Episode design: 500 Hz physics (the model default), policies at 50 Hz —
+# Episode design: 500 Hz physics (scene.NominalOptions.TIMESTEP), policies at 50 Hz —
 # the same order of control rate the real bus sustains.
 _STEPS = 600
 _HOLD_STEPS = 50
@@ -69,6 +69,14 @@ RIG = "so101"
 _REACH_TOLERANCE_M = 0.03
 # FULLPHYSICS layout: [time, qpos(6), qvel(6)]; joint angles start at 1.
 _QPOS_OFFSET = 1
+# The gripper: the last servo; its open and closed setpoints, and the
+# wrist-flat angle every scripted pose holds (measured poses, one name).
+JAW_INDEX = STATE_WIDTH - 1
+JAW_OPEN = 1.3
+JAW_CLOSED = -0.15
+WRIST_FLAT = -1.571
+HOME_KEYFRAME = f"{ARM_PREFIX}home"  # the bundle's `home`, prefixed by attach
+JAW_BODY = f"{ARM_PREFIX}Fixed_Jaw"
 
 
 def _so101_task(
@@ -142,7 +150,7 @@ def _add_armnetbench_cameras(scene: Any) -> None:
         fovy=58,
     )
     # The wrist camera rides the jaw; the body exists only post-attach.
-    wrist_mount = scene.body(f"{ARM_PREFIX}Fixed_Jaw")
+    wrist_mount = scene.body(JAW_BODY)
     wrist_mount.add_camera(
         name="wrist",
         pos=[0.0, -0.06, 0.04],
@@ -163,7 +171,7 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-reach", arm_xml)
-    jaw = scene.body(f"{ARM_PREFIX}Fixed_Jaw")
+    jaw = scene.body(JAW_BODY)
     jaw.add_site(name="fingertip", pos=[0.012, -0.08, 0.0], size=[0.005] * 3)
     scene.add_sensor(
         name="fingertip_pos",
@@ -174,7 +182,10 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
 
     probe_model = scene.compile()
     probe_data = mujoco.MjData(probe_model)
-    mujoco.mj_resetDataKeyframe(probe_model, probe_data, 0)  # arm_home
+    key = mujoco.mj_name2id(probe_model, mujoco.mjtObj.mjOBJ_KEY, HOME_KEYFRAME)
+    if key < 0:
+        raise KeyError(f"no keyframe {HOME_KEYFRAME!r} in the probe model")
+    mujoco.mj_resetDataKeyframe(probe_model, probe_data, key)
     mujoco.mj_forward(probe_model, probe_data)
     target = tuple(float(v) for v in probe_data.sensordata[FINGERTIP_SLICE])
 
@@ -229,10 +240,10 @@ _DESCEND_AT_STEP = 500
 _GRIP_AT_STEP = 1100
 _LIFT_AT_STEP = 1400
 
-_HOVER = [0.0, -1.2, 2.0, 0.9, -1.571, 1.3]
-_DESCEND = [0.0, -1.411, 2.225, 0.682, -1.571, 1.3]
-_GRIP = [0.0, -1.411, 2.225, 0.682, -1.571, -0.15]
-_LIFT = [0.0, -1.57, 1.57, 1.57, -1.571, -0.15]
+_HOVER = [0.0, -1.2, 2.0, 0.9, WRIST_FLAT, JAW_OPEN]
+_DESCEND = [0.0, -1.411, 2.225, 0.682, WRIST_FLAT, JAW_OPEN]
+_GRIP = [0.0, -1.411, 2.225, 0.682, WRIST_FLAT, JAW_CLOSED]
+_LIFT = [0.0, -1.57, 1.57, 1.57, WRIST_FLAT, JAW_CLOSED]
 
 
 def scripted_pick(step: int, sensordata: Any) -> Any:
@@ -254,7 +265,7 @@ def scripted_pick(step: int, sensordata: Any) -> Any:
 def scripted_no_close(step: int, sensordata: Any) -> Any:
     """Approach without ever closing the jaw — the graded failure."""
     control = list(scripted_pick(step, sensordata))
-    control[5] = 1.3
+    control[JAW_INDEX] = JAW_OPEN
     return control
 
 
@@ -324,8 +335,8 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
-        initial[1] += -0.004 + 0.002 * trial
-        initial[2] += 0.004 - 0.002 * trial
+        initial[_QPOS_OFFSET + 0] += -0.004 + 0.002 * trial
+        initial[_QPOS_OFFSET + 1] += 0.004 - 0.002 * trial
         return initial
 
     def success(states: Any, sensors: Any) -> bool:
@@ -385,9 +396,9 @@ _STACK_SWING_FULL_AT = 2200
 _STACK_RELEASE_AT = 2600
 _STACK_RETURN_AT = 3200
 
-_STACK_CARRY = [0.0, -1.57, 1.57, 1.57, -1.571, -0.15]
-_STACK_RELEASE = [_STACK_PHI, -1.57, 1.57, 1.57, -1.571, 1.3]
-_STACK_RETURN = [0.0, -1.57, 1.57, 1.57, -1.571, 1.3]
+_STACK_CARRY = [0.0, -1.57, 1.57, 1.57, WRIST_FLAT, JAW_CLOSED]
+_STACK_RELEASE = [_STACK_PHI, -1.57, 1.57, 1.57, WRIST_FLAT, JAW_OPEN]
+_STACK_RETURN = [0.0, -1.57, 1.57, 1.57, WRIST_FLAT, JAW_OPEN]
 
 
 def scripted_stack(step: int, sensordata: Any) -> Any:
@@ -408,7 +419,7 @@ def scripted_stack(step: int, sensordata: Any) -> Any:
 def scripted_stack_no_release(step: int, sensordata: Any) -> Any:
     """Carries A over B but never opens — the graded near-miss."""
     control = list(scripted_stack(step, sensordata))
-    control[5] = -0.15
+    control[JAW_INDEX] = JAW_CLOSED
     return control
 
 

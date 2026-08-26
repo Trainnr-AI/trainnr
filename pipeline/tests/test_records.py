@@ -157,7 +157,7 @@ class RoundTrip(unittest.TestCase):
             path = Path(directory) / "episodes.jsonl"
             append_records(path, rows[:1])
             append_records(path, rows[1:])  # appended, not overwritten
-            lines = path.read_text().splitlines()
+            lines = path.read_text(encoding="utf-8").splitlines()
             back = read_records(path)
         self.assertEqual(len(lines), 2)
         self.assertEqual(json.loads(lines[0])["policy"], "a")

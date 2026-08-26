@@ -1,13 +1,12 @@
 """Watch reinforcement learning happen: thousands of worlds on the GPU,
 sixteen of them on screen.
 
-    cd pipeline && LD_LIBRARY_PATH=/usr/lib/wsl/lib GALLIUM_DRIVER=d3d12 \
-        WGPU_BACKEND=vulkan MUJOCO_GL=egl \
-        .venv-train/bin/python ../tools/rl-watch.py --timesteps 20000000
+    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \
+        ../tools/rl-watch.py --timesteps 20000000
 
-`LD_LIBRARY_PATH=/usr/lib/wsl/lib` is what lets Warp find the GPU under
-WSL (measured: without it Warp reports "no CUDA-capable device" and
-falls to the CPU, and the JAX->Warp FFI call fails). Warp is the only
+`wsl.env`'s `LD_LIBRARY_PATH` is what lets Warp find the GPU under WSL
+(measured: without it Warp reports "no CUDA-capable device" and falls
+to the CPU, and the JAX->Warp FFI call fails). Warp is the only
 backend fast enough for these mesh-contact environments: 36k
 env-steps/s at 2,048 worlds versus 1.8k on MJX-JAX.
 
@@ -57,11 +56,11 @@ import rerun as rr
 from _lab import bootstrap, rr_session
 
 bootstrap()
+from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
+
 from _rig3d import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
-COLLISION_GROUP = 3
-HIDDEN_GROUP = 4
 PITCH = 1.6
 MIRROR_EVERY = 10  # control steps at 50 Hz -> 5 Hz
 REALTIME_SLEEP = 0.02  # one control step
@@ -113,7 +112,7 @@ def grid_model_from_xml(xml_path, worlds: int):
         child = mujoco.MjSpec.from_file(str(xml_path))
         for geom in child.geoms:
             if geom.name == "floor":
-                geom.group = HIDDEN_GROUP
+                geom.group = GeomGroup.HIDDEN
         row, col = divmod(n, side)
         frame = scene.worldbody.add_frame(
             pos=[(col - (side - 1) / 2) * PITCH, (row - (side - 1) / 2) * PITCH, 0]
@@ -139,7 +138,7 @@ def stage_process(spec, queue, closed):
     model, side = grid_model_from_xml(xml_path, worlds)
     data = mujoco.MjData(model)
     mirror = RigMirror(
-        model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)
+        model, model_colors=True, skip_groups=(GeomGroup.COLLISION, GeomGroup.HIDDEN)
     )
     # mode="connect": the viewer the training process spawned exists.
     rr_session(

@@ -15,6 +15,10 @@ import sys
 from html import escape
 from pathlib import Path
 
+RAMP_MID = 0.5  # the colour ramp turns from green toward red here
+LYING_ERROR_PCT = 10.0  # a pinned parameter this far off is called out
+
+
 REPO = Path(__file__).resolve().parent.parent
 SOURCE = REPO / "data" / "sts3215-synthetic-identifiability.json"
 OUTPUT = REPO / "data" / "sts3215-identifiability.html"
@@ -26,7 +30,9 @@ def cell_color(error_pct: float) -> str:
     magnitude = min(abs(error_pct), 100.0) / 100.0
     # green (small error) -> red (large), via yellow
     red = int(80 + 175 * min(1.0, magnitude * 2))
-    green = int(190 - 150 * max(0.0, magnitude * 2 - 1)) if magnitude > 0.5 else 190
+    green = (
+        int(190 - 150 * max(0.0, magnitude * 2 - 1)) if magnitude > RAMP_MID else 190
+    )
     return f"rgb({red},{green},80)"
 
 
@@ -37,7 +43,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    study = json.loads(SOURCE.read_text())
+    study = json.loads(SOURCE.read_text(encoding="utf-8"))
     groups: dict[str, list[dict]] = {}
     for condition in study["conditions"]:
         rate, sensors, corruption = condition["label"].split(" ")
@@ -59,7 +65,7 @@ def main() -> int:
             for name in PARAMETERS:
                 parameter = condition["parameters"][name]
                 error = parameter["error_pct"]
-                lying = parameter["pinned"] and abs(error) > 10.0
+                lying = parameter["pinned"] and abs(error) > LYING_ERROR_PCT
                 classes = "lying" if lying else ""
                 title = (
                     f"{name}: {parameter['estimate']} "
@@ -97,7 +103,7 @@ data/sts3215-synthetic-identifiability.json ({escape(study["design_date"])}).</p
 {"".join(rows_html)}
 </table>
 """
-    OUTPUT.write_text(html)
+    OUTPUT.write_text(html, encoding="utf-8")
     print(f"wrote {OUTPUT}", file=sys.stderr)
     return 0
 

@@ -19,10 +19,11 @@ from pathlib import Path
 
 from rq_pipeline.bundles.profile import RobotProfile
 from rq_pipeline.collect.frames import AlignedEpisode
+from rq_pipeline.collect.provenance import IMAGE_AXES, PROVENANCE_FILE
+from rq_pipeline.protocol import RGB_CHANNELS
 
 STATE_NAMES = ["x", "y", "heading", "ticks_left", "ticks_right"]
 ACTION_NAMES = ["pan_us", "tilt_us", "grip_us", "duty_percent"]
-PROVENANCE_FILE = "provenance.json"
 
 
 def export_episode(
@@ -47,6 +48,11 @@ def export_episode(
         from lerobot.datasets.lerobot_dataset import (  # noqa: PLC0415
             LeRobotDataset,
         )
+        from lerobot.utils.constants import (  # noqa: PLC0415
+            ACTION,
+            OBS_IMAGES,
+            OBS_STATE,
+        )
     except ImportError as error:
         raise ImportError(
             "LeRobot export needs the 'train' extra: uv sync --extra train"
@@ -57,17 +63,17 @@ def export_episode(
 
     first = episode.frames[0]
     features = {
-        "observation.images.front": {
+        f"{OBS_IMAGES}.front": {
             "dtype": "image",
-            "shape": (first.height, first.width, 3),
-            "names": ["height", "width", "channels"],
+            "shape": (first.height, first.width, RGB_CHANNELS),
+            "names": list(IMAGE_AXES),
         },
-        "observation.state": {
+        OBS_STATE: {
             "dtype": "float32",
             "shape": (len(STATE_NAMES),),
             "names": STATE_NAMES,
         },
-        "action": {
+        ACTION: {
             "dtype": "float32",
             "shape": (len(ACTION_NAMES),),
             "names": ACTION_NAMES,
@@ -87,12 +93,12 @@ def export_episode(
     )
     for frame in episode.frames:
         image = np.frombuffer(frame.rgb888, dtype=np.uint8).reshape(
-            frame.height, frame.width, 3
+            frame.height, frame.width, RGB_CHANNELS
         )
         dataset.add_frame(
             {
-                "observation.images.front": image,
-                "observation.state": np.array(
+                f"{OBS_IMAGES}.front": image,
+                OBS_STATE: np.array(
                     [
                         frame.state.x,
                         frame.state.y,
@@ -102,7 +108,7 @@ def export_episode(
                     ],
                     dtype=np.float32,
                 ),
-                "action": np.array(frame.action, dtype=np.float32),
+                ACTION: np.array(frame.action, dtype=np.float32),
                 "wire_timestamp_s": np.array([frame.timestamp_s], dtype=np.float32),
                 "task": task,
             }
@@ -119,5 +125,7 @@ def export_episode(
             f"{profile.camera_fps} fps; real seq-clock time is wire_timestamp_s"
         ),
     }
-    (Path(root) / PROVENANCE_FILE).write_text(json.dumps(provenance, indent=2))
+    (Path(root) / PROVENANCE_FILE).write_text(
+        json.dumps(provenance, indent=2), encoding="utf-8"
+    )
     return Path(root)

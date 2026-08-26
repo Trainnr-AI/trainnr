@@ -2,6 +2,7 @@
 name = "arm"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 # Joint-space control for a serial-chain arm: limits, safety, and plans.
 #

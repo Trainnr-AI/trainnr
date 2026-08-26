@@ -29,7 +29,9 @@ class ReproduceCommittedFit(unittest.TestCase):
         self.assertIsNone(path)
         committed = {
             parameter["name"]: parameter
-            for parameter in json.loads(COMMITTED.read_text())["parameters"]
+            for parameter in json.loads(COMMITTED.read_text(encoding="utf-8"))[
+                "parameters"
+            ]
         }
         for parameter in result.parameters:
             if parameter.name == "scale_ref_damping":
@@ -43,7 +45,9 @@ class ReproduceCommittedFit(unittest.TestCase):
 
     def test_committed_records_are_strict_json_with_full_provenance(self) -> None:
         for record_path in sorted((BUNDLE / "fits").glob("sweep-*.json")):
-            raw = json.loads(record_path.read_text(), parse_constant=self._refuse)
+            raw = json.loads(
+                record_path.read_text(encoding="utf-8"), parse_constant=self._refuse
+            )
             for key in ("profile", "model", "code", "units", "pinned_criterion"):
                 self.assertIn(key, raw, f"{record_path.name} missing {key}")
                 self.assertIsNotNone(raw[key], f"{record_path.name} {key} is null")

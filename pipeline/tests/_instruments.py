@@ -29,22 +29,24 @@ from __future__ import annotations
 
 import unittest
 
-# Keys: the registry names (tasks.so101.LIFT / BLOCK_STACK / TOOL_INSERT)
-# and MuJoCoBackend.instrument ("mujoco-<version>+<arch>"). The arm64
+from rq_pipeline.tasks.so101 import BLOCK_STACK, LIFT, TOOL_INSERT
+
+# Keys: the registry names and MuJoCoBackend.instrument
+# ("mujoco-<version>+<arch>"). The arm64
 # rows are the Mac's: its suite asserted 1.0 on 3.11.0 and passed
 # (physics-newton branch, 2026-08-27).
 SO101_EXPERT_RATE: dict[str, dict[str, float]] = {
-    "lift": {
+    LIFT: {
         "mujoco-3.11.0+x86_64": 1.0,
         "mujoco-3.11.0+arm64": 1.0,
         "mujoco-3.12.0+x86_64": 1.0,
     },
-    "block_stack": {
+    BLOCK_STACK: {
         "mujoco-3.11.0+x86_64": 1.0,
         "mujoco-3.11.0+arm64": 1.0,
         "mujoco-3.12.0+x86_64": 0.75,
     },
-    "tool_insert": {
+    TOOL_INSERT: {
         "mujoco-3.11.0+x86_64": 1.0,
         "mujoco-3.11.0+arm64": 1.0,
         "mujoco-3.12.0+x86_64": 0.75,

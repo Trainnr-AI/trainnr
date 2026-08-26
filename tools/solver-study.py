@@ -26,20 +26,8 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     build_kitting,
     scripted_kitting_episode,
 )
+from rq_pipeline.tasks.scene import apply_options  # noqa: E402
 
-SOLVERS = {
-    "newton": mujoco.mjtSolver.mjSOL_NEWTON,
-    "cg": mujoco.mjtSolver.mjSOL_CG,
-    "pgs": mujoco.mjtSolver.mjSOL_PGS,
-}
-CONES = {
-    "elliptic": mujoco.mjtCone.mjCONE_ELLIPTIC,
-    "pyramidal": mujoco.mjtCone.mjCONE_PYRAMIDAL,
-}
-INTEGRATORS = {
-    "euler": mujoco.mjtIntegrator.mjINT_EULER,
-    "implicitfast": mujoco.mjtIntegrator.mjINT_IMPLICITFAST,
-}
 # The shipped baseline first, then one axis moved at a time, then the
 # full cross of solver x cone at the baseline integrator.
 CONFIGS = [
@@ -55,9 +43,7 @@ CONFIGS = [
 def run_config(solver: str, cone: str, integrator: str) -> dict:
     task = build_kitting()
     model = task.spec.compile()
-    model.opt.solver = SOLVERS[solver]
-    model.opt.cone = CONES[cone]
-    model.opt.integrator = INTEGRATORS[integrator]
+    apply_options(model.opt, solver=solver, cone=cone, integrator=integrator)
     initial = keyframe_state(model, "neutral_pose")
     initial = task.protocol.perturb(0, initial)
 

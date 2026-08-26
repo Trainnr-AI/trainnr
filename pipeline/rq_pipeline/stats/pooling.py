@@ -26,13 +26,18 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import atanh, log, sqrt, tanh
 
-from rq_pipeline.stats.intervals import chi_squared_survival, normal_quantile
+from rq_pipeline.stats.intervals import (
+    DEFAULT_CONFIDENCE,
+    chi_squared_survival,
+    normal_quantile,
+)
 from rq_pipeline.stats.ranking import (
-    _SPEARMAN_Z_INFLATION,
     EXACT_ENUMERATION_LIMIT,
+    FISHER_DOF,
     MINIMUM_POLICIES,
-    _max_resolvable_rho,
+    SPEARMAN_Z_INFLATION,
     exact_spearman_p,
+    max_resolvable_rho,
     spearman,
 )
 
@@ -89,7 +94,7 @@ class PooledCorrelation:
 
 def pool_rank_correlations(
     tasks: Mapping[str, tuple[Sequence[float], Sequence[float]]],
-    confidence: float = 0.95,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> PooledCorrelation:
     """Pool per-task (sim_scores, real_scores) into one certificate-grade
     cross-task correlation.
@@ -118,9 +123,9 @@ def pool_rank_correlations(
                 f"{MINIMUM_POLICIES} per task"
             )
         rho = spearman(sim_scores, real_scores)
-        resolvable = _max_resolvable_rho(count)
+        resolvable = max_resolvable_rho(count)
         z_score = atanh(max(-resolvable, min(resolvable, rho)))
-        weight = (count - 3) / (_SPEARMAN_Z_INFLATION**2)
+        weight = (count - FISHER_DOF) / (SPEARMAN_Z_INFLATION**2)
         weighted_z += weight * z_score
         total_weight += weight
         z_values.append((z_score, weight))

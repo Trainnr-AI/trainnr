@@ -37,13 +37,24 @@ from typing import Any, NamedTuple
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
 from rq_pipeline.tasks.registry import register
-from rq_pipeline.tasks.scene import pin_nominal_options, set_render_budget
+from rq_pipeline.tasks.scene import (
+    FLOOR_GEOM,
+    GeomGroup,
+    pin_nominal_options,
+    set_render_budget,
+)
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 BUNDLE_XML = bundle_file("aloha2-nominal", "aloha2.xml")
 HOME_KEYFRAME = "neutral_pose"
 
-ARMS = 2
+# The bundle names the arms and the pad geoms; the right arm's part is
+# declared first, which pins the state slices below.
+ARM_NAMES = ("left", "right")
+PART_ORDER = ("right", "left")
+ARM_PREFIXES = tuple(f"{arm}/" for arm in ARM_NAMES)
+FINGERS = ("left", "right")  # the pad geoms: <arm>/<finger>_g1
+ARMS = len(ARM_NAMES)
 SERVOS_PER_ARM = 7
 SERVOS = ARMS * SERVOS_PER_ARM
 ARM_SENSOR_WIDTH = 2 * SERVOS  # jointpos x14 then jointvel x14
@@ -93,7 +104,8 @@ _GRIPPER_INDICES = (SERVOS_PER_ARM - 1, SERVOS - 1)  # 6 and 13
 CUBE_STATE_SLICE = slice(17, 20)
 CUBE_Z_STATE_INDEX = 19
 
-# Episode design: 500 Hz physics, policies at 50 Hz (gym-aloha's DT=0.02),
+# Episode design: 500 Hz physics (scene.NominalOptions.TIMESTEP), policies
+# at 50 Hz (gym-aloha's DT=0.02),
 # 400 policy steps = 8 s like the public episodes, judged over the last
 # 0.5 s.
 _STEPS = 4000
@@ -169,7 +181,7 @@ def scale_dynamics(spec: Any, *, damping_scale: float, gain_scale: float) -> Non
     again (tools/show-many.py had it right all along).
     """
     for joint in spec.joints:
-        if joint.name.startswith(("left/", "right/")):
+        if joint.name.startswith(ARM_PREFIXES):
             joint.damping[0] = joint.damping[0] * damping_scale
     for actuator in spec.actuators:
         actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
@@ -222,7 +234,6 @@ class ActionSpace:
 
 _ACT_SIM_GREY = [0.2, 0.2, 0.2, 1.0]  # their tabletop rgba
 _ACT_SIM_ARM = [0.5, 0.5, 0.5, 1.0]  # their meshes carry no material: MuJoCo's default
-_HIDDEN_GROUP = 4  # renderers show geom groups 0-2 by default
 
 
 def _act_sim_cosmetics(scene: Any) -> None:
@@ -245,12 +256,12 @@ def _act_sim_cosmetics(scene: Any) -> None:
             material.rgba = _ACT_SIM_ARM
     for geom in scene.geoms:
         if geom.classname is not None and geom.classname.name == "frame":
-            geom.group = _HIDDEN_GROUP
+            geom.group = GeomGroup.HIDDEN
         elif geom.meshname in ("tabletop", "tablelegs"):
             geom.material = ""
             geom.rgba = _ACT_SIM_GREY
-        elif geom.name == "floor":
-            geom.group = _HIDDEN_GROUP
+        elif geom.name == FLOOR_GEOM:
+            geom.group = GeomGroup.HIDDEN
     # Their lighting: headlight ambient 0.4, three dim directional lights,
     # one of which casts shadows. Side by side (2026-08-26) our table and
     # arms rendered brighter than theirs; the dimmer headlight closes
@@ -317,7 +328,7 @@ def _add_top_camera_and_referees(scene: Any) -> None:
         xyaxes=[1, 0, 0, 0, 1, 0],
         fovy=TOP_CAMERA_FOVY,
     )
-    for arm in ("left", "right"):
+    for arm in ARM_NAMES:
         scene.add_sensor(
             name=f"referee/{arm}_gripper_pos",
             type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
@@ -326,12 +337,20 @@ def _add_top_camera_and_referees(scene: Any) -> None:
         )
 
 
+CORNERS = (
+    (0.0, 0.0),
+    (1.0, 0.0),
+    (0.0, 1.0),
+    (1.0, 1.0),
+)  # the spawn box, as fractions
+
+
 def _corner_fraction(trial: int, inset: float) -> tuple[float, float]:
     """Deterministic paired starts: the spawn box's four corners pulled
     in by `inset` (a fraction of each side), cycling with the trial
     index — gym-aloha's per-episode draw in spirit, identical across
     policies by construction."""
-    fx, fy = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0))[trial % 4]
+    fx, fy = CORNERS[trial % len(CORNERS)]
     span = 1.0 - 2.0 * inset
     return (inset + fx * span, inset + fy * span)
 
@@ -392,7 +411,7 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
         spec=scene,
         cameras=ALOHA_TOP_CAMERAS,
         state_width=SERVOS,
-        instruction="transfer the cube to the left gripper",
+        instruction=TRANSFER_CUBE_INSTRUCTION,
         bundle_dir=Path(bundle_xml).parent,
         protocol=EpisodeProtocol(
             trials=PAIRED_TRIALS,
@@ -458,6 +477,7 @@ _KITTING_STEPS = 14000
 _LIFT_CHECK_Z_M = 0.05
 # The sentence the dataset was exported with (collect/kitting_export.py)
 # and the policy is judged under — one string, both places read it.
+TRANSFER_CUBE_INSTRUCTION = "transfer the cube to the left gripper"
 KITTING_INSTRUCTION = "kit both parts into their slots"
 _CORRECTION_DONE_M = 0.008
 _PART_IN_SLOT_XY_M = 0.035
@@ -475,9 +495,30 @@ ARM_IK_JOINTS = {
             "wrist_rotate",
         )
     )
-    for arm in ("left", "right")
+    for arm in ARM_NAMES
 }
-ARM_CTRL_SLICES = {"left": slice(0, 7), "right": slice(7, 14)}
+ARM_CTRL_SLICES = {
+    arm: slice(i * SERVOS_PER_ARM, (i + 1) * SERVOS_PER_ARM)
+    for i, arm in enumerate(ARM_NAMES)
+}
+
+
+class KittingChoreography:
+    """The choreographer's measured knobs, in one place; the stories that
+    set them stay beside the calls. GRASP_TILT: near-horizontal, 45
+    degrees down, pointing inward (x flips with the arm)."""
+
+    GRASP_TILT = (0.7, 0.0, -0.71)
+    IK_DOWN_WEIGHT = 0.5
+    IK_POS_TOL_M = 0.008
+    IK_MAX_ITERS = 250
+    IK_DAMPING = 5e-3
+    CORRECTION_ROUNDS = 3
+    CORRECTION_BITE_M = 0.05  # linear correction only holds locally: 5 cm bites
+    PAD_FLOOR_Z_M = 0.02  # the pads never need to go under 2 cm
+    CORRECTION_SECONDS = 0.5
+
+
 # The grasp approach: near-horizontal, tilted 45 degrees down and
 # pointing inward (away from the arm's own base). A straight-down
 # approach is IMPOSSIBLE on this gripper: the base housing's collision
@@ -493,7 +534,8 @@ def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
     axis carried 2/4. target_xy stays in the signature for the day a
     smarter axis earns its way back with evidence."""
     del target_xy
-    return (-0.7, 0.0, -0.71) if arm == "right" else (0.7, 0.0, -0.71)
+    x, y, z = KittingChoreography.GRASP_TILT
+    return (-x if arm == "right" else x, y, z)
 
 
 @register(KITTING, rig=RIG)
@@ -523,14 +565,14 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
             )
 
     colors = {"right": (1, 0, 0, 1), "left": (0, 0.55, 1, 1)}
-    for arm in ("right", "left"):  # declaration order pins the state slices
+    for arm in PART_ORDER:
         _add_free_box(scene, f"part_{arm}", PART_HOME[arm], PART_HALF, colors[arm])
     _add_top_camera_and_referees(scene)
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
         fx, fy = _corner_fraction(trial, inset=0.2)
-        for arm in ("right", "left"):
+        for arm in PART_ORDER:
             (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
             part = PART_STATE_SLICE[arm]
             initial[part.start] = x_low + fx * (x_high - x_low)
@@ -703,13 +745,13 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 on_control(stepper.step, data)
             stepper.advance(ctrl, CONTROL_INTERVAL)
 
-    for arm in ("right", "left"):
+    for arm in PART_ORDER:
         part = data.qpos[
             PART_STATE_SLICE[arm].start - 1 : PART_STATE_SLICE[arm].stop - 1
         ].copy()
         ctrl_slice = ARM_CTRL_SLICES[arm]
         gripper_index = ctrl_slice.start + SERVOS_PER_ARM - 1
-        pad_names = tuple(f"{arm}/{finger}_g1" for finger in ("left", "right"))
+        pad_names = tuple(f"{arm}/{finger}_g1" for finger in FINGERS)
         pad_ids = [
             mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
             for name in pad_names
@@ -737,10 +779,10 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 grip_geoms=pad_names,
                 target_pos=target_xyz,
                 approach_axis=grasp_axis(arm, target_xyz[:2]),
-                down_weight=0.5,
-                pos_tol=0.008,
-                max_iters=250,
-                damping=5e-3,
+                down_weight=KittingChoreography.IK_DOWN_WEIGHT,
+                pos_tol=KittingChoreography.IK_POS_TOL_M,
+                max_iters=KittingChoreography.IK_MAX_ITERS,
+                damping=KittingChoreography.IK_DAMPING,
             )
             if not reached:
                 raise RuntimeError(
@@ -806,7 +848,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 # postures whose z steady-state error reached +4 cm and
                 # the pads closed above the cube (left arm, trial 2 —
                 # grip rose 3.2 cm during close, pinched air).
-                for _ in range(3):
+                for _ in range(KittingChoreography.CORRECTION_ROUNDS):
                     error = live_grip_error(target_xyz)
                     if float(np.linalg.norm(error)) < _CORRECTION_DONE_M:
                         break
@@ -816,16 +858,22 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                     # but SKIPPING big errors regressed a working trial
                     # whose place drifted 6 cm. Correct in 5 cm bites;
                     # three rounds converge either way.
-                    step_err = np.clip(error, -0.05, 0.05)
+                    bite = KittingChoreography.CORRECTION_BITE_M
+                    step_err = np.clip(error, -bite, bite)
                     corrected = [
                         target_xyz[0] - step_err[0],
                         target_xyz[1] - step_err[1],
                         # Floored: a +5 cm z error once corrected the
                         # target to BELOW the table and IK rightly
                         # refused. The pads never need to go under 2 cm.
-                        max(0.02, target_xyz[2] - step_err[2]),
+                        max(
+                            KittingChoreography.PAD_FLOOR_Z_M,
+                            target_xyz[2] - step_err[2],
+                        ),
                     ]
-                    command_reach(corrected, grip, 0.5)
+                    command_reach(
+                        corrected, grip, KittingChoreography.CORRECTION_SECONDS
+                    )
     if stats is not None:
         stats.steps_used_before_hold = stepper.step
     # Hold the final pose for the rest of the protocol window.

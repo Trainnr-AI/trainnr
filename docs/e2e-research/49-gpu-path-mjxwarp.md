@@ -113,3 +113,25 @@ drift cannot silently refuse hinges. Final stamp on this Mac:
 NOTE this also corrects the report above: the repo runs LOCKED
 mujoco 3.11.0 (3.12.0 is upstream latest) — the probes' 3.12 numbers
 came from a scratch venv resolving fresh.
+
+## Postscript 2 (2026-08-27, the WSL box: the RTX 3090 Ti, MJX 3.12 + Warp 1.16)
+
+The adapter's first run on a GPU and on a real scene, both the same
+night. The pendulum gauntlet passes on the card with the same
+divergence the Mac measured on Warp's CPU backend (3.52e-07). The
+kitting bundle (105 geoms, 23 bodies) with MJX's default contact and
+constraint capacities **dumped core** — not a warning, not an
+exception: the process died. With `naconmax=4096, njmax=8192` it runs:
+4.0 s to compile, 25 ms per call for 2 worlds × 20 steps from the
+neutral pose, and it diverges from CPU MuJoCo by **9.6e-4 at step 9**,
+only 7 of 20 steps within 1e-6. Two consequences, applied:
+`MJXWarpBackend` refuses any scene above 32 geoms without explicit
+sizing (a Python error naming the knobs, pinned on the kitting spec),
+and the gauntlet's docstring carries the real-scene number beside the
+pendulum bound. The "costs, named" above were right and are now
+measured: the GPU path is a different instrument (its stamp,
+`mjx-warp-3.12.0+warp-1.16.0+gpu+x86_64`, says so), and on a contact
+scene the difference is a millimetre within ten steps — certificates
+from it are statistical claims about the GPU instrument, never bitwise
+comparisons with the CPU reference.
+

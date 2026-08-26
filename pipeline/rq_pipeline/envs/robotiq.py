@@ -346,7 +346,7 @@ def register_gym_ids() -> tuple[str, ...]:
         if env_id not in gym.registry:
             gym.register(
                 id=env_id,
-                entry_point="rq_pipeline.envs.robotiq:make_env",
+                entry_point=f"{__name__}:{make_env.__name__}",
                 kwargs={"task": task_id},
             )
         ids.append(env_id)

@@ -118,7 +118,7 @@ def fit_drivetrain(
     bundle_dir = Path(bundle_dir)
     wire_path = Path(wire_path)
     profile = load_profile(bundle_dir)
-    model_xml = (bundle_dir / profile.model_file).read_text()
+    model_xml = (bundle_dir / profile.model_file).read_text(encoding="utf-8")
     data = drivetrain_data(bundle_dir, wire_path)
     result = identify(model_xml, data, ratio_parameters())
     if not write:

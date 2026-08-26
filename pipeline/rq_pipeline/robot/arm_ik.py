@@ -86,16 +86,14 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
                 "solve_arm_ik cannot drive it"
             )
         joint_ids.append(joint_id)
-    import numpy as _np  # noqa: PLC0415
-
     dof_columns = [int(model.jnt_dofadr[j]) for j in joint_ids]
     qpos_rows = [int(model.jnt_qposadr[j]) for j in joint_ids]
     # An UNLIMITED joint carries range (0, 0); clamping to that froze
     # every rangeless joint at zero — caught by this module's first
     # direct test (2026-08-26). Only declared limits clamp.
     limited = model.jnt_limited[joint_ids].astype(bool)
-    lower = _np.where(limited, model.jnt_range[joint_ids, 0], -_np.inf)
-    upper = _np.where(limited, model.jnt_range[joint_ids, 1], _np.inf)
+    lower = np.where(limited, model.jnt_range[joint_ids, 0], -np.inf)
+    upper = np.where(limited, model.jnt_range[joint_ids, 1], np.inf)
 
     target = np.asarray(target_pos, dtype=float)
     down = np.asarray(approach_axis, dtype=float)

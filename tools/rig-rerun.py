@@ -1,7 +1,8 @@
-"""Live Rerun view of a rig session: tail a growing .wire, plot everything —
-and draw the rig in realtime 3D, posed by odometry and the stage notes.
+"""Live Rerun view of a rig session: tail a growing .wire, plot everything
+— and draw the rig in realtime 3D, posed by odometry and the stage notes.
 
-    cd pipeline && uv run --extra sim --extra viz python ../tools/rig-rerun.py <file.wire>
+    cd pipeline && uv run --extra sim --extra viz \\
+        python ../tools/rig-rerun.py <file.wire>
 
 Tails the recording as `hil-host --record` writes it (works on finished
 files too — it replays then keeps watching). Logs, on the 50 Hz seq clock:
@@ -26,8 +27,8 @@ reconstruction, honest to the program if not the metal; putting arm
 pulses on the wire is the queued fix.
 """
 
+import argparse
 import math
-import sys
 import time
 from pathlib import Path
 
@@ -53,10 +54,12 @@ REPO = Path(__file__).resolve().parent.parent
 PROFILE = load_profile(REPO / "robots" / "rig-drivetrain")
 TICKS_PER_REV = PROFILE.ticks_per_revolution
 TICK = 1.0 / STATUS_HZ
+MISSING_FILE_WARN_S = 5.0
 
-if len(sys.argv) < 2:
-    sys.exit("usage: rig-rerun.py <file.wire>")
-path = Path(sys.argv[1])
+parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+parser.add_argument("wire", type=Path, help="the .wire recording")
+args = parser.parse_args()
+path = args.wire
 rr_session("rig-session")
 
 # --- the twin, posed kinematically from the wire ---
@@ -64,7 +67,11 @@ model = compose_rig(car=True).compile()
 data = mujoco.MjData(model)
 mujoco.mj_forward(model, data)
 mirror = RigMirror(model)
-free_j = next(j for j in range(model.njnt) if int(model.jnt_type[j]) == 0)
+free_j = next(
+    j
+    for j in range(model.njnt)
+    if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_FREE)
+)
 free_q = model.jnt_qposadr[free_j]
 z0 = float(data.qpos[free_q + 2])
 arm_adrs = [
@@ -100,8 +107,11 @@ try:
                 handle = path.open("r", errors="replace")
             else:
                 waited += 0.25
-                if waited == 5.0:
-                    print(f"warning: {path} has not appeared after 5 s — typo?")
+                if waited == MISSING_FILE_WARN_S:
+                    print(
+                        f"warning: {path} has not appeared after "
+                        f"{MISSING_FILE_WARN_S:.0f} s — typo?"
+                    )
                 time.sleep(0.25)
                 continue
         # Incremental read with a partial-line buffer: a read can land
@@ -155,7 +165,7 @@ try:
                     math.sin(half),
                 ]
                 pose = arm_pose_at(t, pick_t)
-                for adr, val in zip(arm_adrs, pose[:4]):
+                for adr, val in zip(arm_adrs, pose[:4], strict=True):
                     data.qpos[adr] = val
                 for adr in jaw_adrs:
                     data.qpos[adr] = pose[4]

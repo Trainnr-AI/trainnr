@@ -2,6 +2,7 @@
 name = "hil-host"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 
 # The laptop half of the hardware-in-the-loop rig: spawns the emulator,
 # simulates the robot's body, and visualizes both truth and the chip's

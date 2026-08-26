@@ -22,6 +22,7 @@ bootstrap()
 from rq_pipeline.tasks.yellow import (  # noqa: E402
     AIR_PICK_SEQUENCE,
     AIR_TUCK,
+    REAL_CAR,
     SLEW_RAD_PER_S,
     air_mime_pose,
     compose_rig,
@@ -34,7 +35,10 @@ from _rig3d import RigMirror  # noqa: E402
 def _mime_total_s() -> float:
     total, prev = 0.0, AIR_TUCK
     for pose, hold in AIR_PICK_SEQUENCE:
-        total += max(abs(a - b) for a, b in zip(prev, pose)) / SLEW_RAD_PER_S + hold
+        total += (
+            max(abs(a - b) for a, b in zip(prev, pose, strict=True)) / SLEW_RAD_PER_S
+            + hold
+        )
         prev = pose
     return total
 
@@ -60,7 +64,12 @@ CARRY_S = 1.500
 CREEP_DUTY = 0.12  # ~0.10 m/s
 TURN_DUTY = 0.50  # ~1.4 rad/s
 _M_PER_S_PER_DUTY = 0.93
-_HALF_TRACK = 0.0575
+_HALF_TRACK = REAL_CAR.track / 2
+# The errand's timing, mirrored from main.rs's fetch loop.
+ARRIVED_M = 0.05
+SETTLE_S = 0.3  # main.rs settles 300 ms
+DONE_HOLD_S = 4.0
+LOG_PERIOD_S = 0.04
 
 
 def duty_pair(v, w):
@@ -109,7 +118,7 @@ def synthetic_blob():
     if abs(bearing) > CAM_HALF_FOV:
         return None
     dist = math.hypot(dx, dy)
-    if dist < 0.05:
+    if dist < ARRIVED_M:
         return None
     # Pixel-x convention matches the real camera: POSITIVE = prop to the
     # RIGHT of centre = NEGATIVE bearing. (First cut had this backwards
@@ -130,7 +139,7 @@ def log_frame(t, pose, stage=None):
     trail.append([x, y, 0.005])
     rr.log("world/car/trail", rr.LineStrips3D([trail], colors=[[80, 220, 120]]))
     mirror.log(data)
-    for name, val in zip(JOINT_NAMES, pose):
+    for name, val in zip(JOINT_NAMES, pose, strict=True):
         rr.log(f"arm/{name}", rr.Scalars(val))
     rr.log("car/heading", rr.Scalars(yaw))
     if stage:
@@ -211,7 +220,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
                 duty = (0.0, 0.0)
         elif state == "arrive_settle":
             duty = (0.0, 0.0)
-            if t - state_since >= 0.3:  # main.rs settles 300 ms
+            if t - state_since >= SETTLE_S:
                 state, state_since = "spin", t
         elif state == "spin":
             duty = (-TURN_DUTY, TURN_DUTY)
@@ -220,7 +229,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
                 stage_note = "fetch SPUN, backing up (sim)"
         elif state == "spun_settle":
             duty = (0.0, 0.0)
-            if t - state_since >= 0.3:  # main.rs settles 300 ms
+            if t - state_since >= SETTLE_S:
                 state, state_since = "back", t
         elif state == "back":
             duty = (-CREEP_DUTY, -CREEP_DUTY)
@@ -242,7 +251,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
                 done_at = t
         elif state == "done":
             duty = (0.0, 0.0)
-            if done_at is not None and t - done_at > 4.0:
+            if done_at is not None and t - done_at > DONE_HOLD_S:
                 break
 
         if state not in ("pick", "carry", "done"):
@@ -255,7 +264,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         x, y, _ = chassis_pose()
         viewer.cam.lookat[:] = [x, y, 0.08]
         viewer.sync()
-        if t - last_log >= 0.04:
+        if t - last_log >= LOG_PERIOD_S:
             last_log = t
             note = stage_note
             stage_note = None

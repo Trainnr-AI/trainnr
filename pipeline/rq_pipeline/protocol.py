@@ -16,6 +16,9 @@ from typing import Any
 Milestone = tuple[str, Callable[[Any, Any, int], bool]]
 
 
+RGB_CHANNELS = 3  # every camera here renders RGB; the exporters and the env agree
+
+
 @dataclass(frozen=True)
 class CameraSpec:
     """One camera: the observation key it feeds and the render geometry."""

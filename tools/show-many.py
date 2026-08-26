@@ -1,8 +1,8 @@
 """Many worlds: N ALOHA 2 rigs in a grid, each with its own start and its
 own dynamics, stepping together in both viewers.
 
-    cd pipeline && GALLIUM_DRIVER=d3d12 WGPU_BACKEND=vulkan MUJOCO_GL=egl \
-        .venv-train/bin/python ../tools/show-many.py --worlds 16 --dr 0.3
+    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \
+        ../tools/show-many.py --worlds 16 --dr 0.3
 
 The Isaac-Lab picture on the MuJoCo stack: the bundle's transfer-cube
 scene is attached `--worlds` times into one MjSpec on a grid, every
@@ -31,7 +31,7 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, rr_session
+from _lab import bootstrap, hold_until_closed, load_demo_actions, rr_session
 
 bootstrap()
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
@@ -40,19 +40,25 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     CUBE_HOME,
     CUBE_SPAWN_X,
     CUBE_SPAWN_Y,
+    LOOKS,
+    PUBLIC_TRANSFER_CUBE_DEMOS,
     SERVOS,
     build_transfer_cube,
     ctrl_from_act_sim_action,
+)
+from rq_pipeline.tasks.scene import (  # noqa: E402
+    GeomGroup,
+    NominalOptions,
+    pin_nominal_options,
+    set_render_budget,
 )
 
 from _rig3d import RigMirror  # noqa: E402
 
 NEUTRAL_QPOS = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084, 0.0084] * 2
-COLLISION_GROUP = 3
-HIDDEN_GROUP = 4
 PITCH = 1.6  # metres between world origins; the rig is 1.22 m wide
 LIFTED_M = 0.05  # cube centre 3 cm above resting counts as lifted
-SIM_HZ = 500
+SIM_HZ = round(1 / NominalOptions.TIMESTEP)
 # The Rerun mirror costs one transform log per mesh per world (~900 for
 # 16 worlds); at 50 Hz that starves the physics loop (measured: the
 # MuJoCo window lagged seconds behind). 5 Hz keeps the grid live.
@@ -67,11 +73,9 @@ def parse_args():
         "--dr", type=float, default=0.3, help="+- fraction on damping/gains"
     )
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--dataset", default="lerobot/aloha_sim_transfer_cube_human")
+    parser.add_argument("--dataset", default=PUBLIC_TRANSFER_CUBE_DEMOS)
     parser.add_argument("--episode", type=int, default=0)
-    parser.add_argument(
-        "--look", default=ACT_SIM_LOOK, choices=(ACT_SIM_LOOK, "aloha2")
-    )
+    parser.add_argument("--look", default=ACT_SIM_LOOK, choices=LOOKS)
     return parser.parse_args()
 
 
@@ -79,11 +83,8 @@ def grid_scene(worlds: int, look: str):
     """One MjSpec holding `worlds` copies of the transfer-cube scene."""
     scene = mujoco.MjSpec()
     scene.modelname = f"aloha2-many-{worlds}"
-    scene.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
-    scene.option.impratio = 10
-    scene.visual.global_.offwidth = 1280
-    scene.visual.global_.offheight = 720
-    scene.visual.quality.shadowsize = 2048
+    pin_nominal_options(scene)
+    set_render_budget(scene)
     scene.visual.map.znear = 0.01
     scene.worldbody.add_light(
         pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
@@ -102,7 +103,7 @@ def grid_scene(worlds: int, look: str):
         # Each copy's own floor would coincide with the ground: hide it.
         for geom in template.geoms:
             if geom.name == "floor":
-                geom.group = HIDDEN_GROUP
+                geom.group = GeomGroup.HIDDEN
                 geom.contype = 0
                 geom.conaffinity = 0
         row, col = divmod(n, side)
@@ -144,18 +145,6 @@ def randomise(model, prefixes, dr: float, rng):
     return factors
 
 
-def load_demo(dataset_id: str, episode: int):
-    import torch  # noqa: PLC0415
-    from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
-
-    table = LeRobotDataset(dataset_id).hf_dataset
-    episodes = np.asarray([int(e) for e in table["episode_index"]])
-    rows = np.flatnonzero(episodes == episode)
-    return np.stack(
-        [np.asarray(torch.as_tensor(table[int(i)]["action"])) for i in rows]
-    )
-
-
 def place_worlds(model, data, prefixes, rng) -> None:
     """Every world: neutral arms, its own cube start inside the spawn box."""
     for prefix in prefixes:
@@ -185,12 +174,12 @@ def main() -> None:
     data = mujoco.MjData(model)
     place_worlds(model, data, prefixes, rng)
 
-    actions = load_demo(args.dataset, args.episode)
+    actions = load_demo_actions(args.dataset, args.episode)
     ctrl_per_step = [ctrl_from_act_sim_action(a) for a in actions]
 
     rr_session(f"robotiq-many-{args.worlds}", mode="spawn")
     mirror = RigMirror(
-        model, model_colors=True, skip_groups=(COLLISION_GROUP, HIDDEN_GROUP)
+        model, model_colors=True, skip_groups=(GeomGroup.COLLISION, GeomGroup.HIDDEN)
     )
     for n, (damping, gain) in enumerate(factors):
         rr.log(f"worlds/{n:02d}/damping_factor", rr.Scalars(damping), static=True)
@@ -238,8 +227,7 @@ def main() -> None:
             f"done: {lifted}/{args.worlds} cubes lifted - close the window to exit",
             flush=True,
         )
-        while viewer.is_running():
-            time.sleep(0.2)
+        hold_until_closed(viewer)
 
 
 JOINT_NAMES = [

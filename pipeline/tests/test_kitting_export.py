@@ -88,7 +88,9 @@ class RoundTrip(unittest.TestCase):
             demos = synthetic_batch(Path(tmp), episodes=2)
             root = Path(tmp) / "dataset"
             export_kitting_demos(demos, root, repo_id="test/kitting", use_videos=False)
-            provenance = json.loads((root / PROVENANCE_FILE).read_text())
+            provenance = json.loads(
+                (root / PROVENANCE_FILE).read_text(encoding="utf-8")
+            )
             self.assertEqual(provenance["fps"], 50)
             self.assertEqual(provenance["episodes"], 2)
             self.assertIn("@", provenance["bundle"])
