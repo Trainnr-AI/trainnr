@@ -102,6 +102,10 @@ _TRIALS = 4
 _HOLD_STEPS = 250
 _TRANSFERRED_HEIGHT_M = 0.06  # cube centre 4 cm above resting
 _HELD_RADIUS_M = 0.05  # cube centre within this of the left gripper referee
+# Milestone zero on both tasks: an object displaced this far from its
+# start was touched. Below the pad-jitter a settling box shows (<1 mm),
+# far below a nudge (1-2 cm measured when a close missed the part).
+MOVED_M = 0.01
 
 
 @dataclass(frozen=True)
@@ -340,6 +344,23 @@ def build_transfer_cube(
         )
         return lifted and held
 
+    # The chain the referee's own ingredients imply: touched, lifted,
+    # brought to the left gripper. The verdict stays the hold window.
+    def cube_moved(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        start = states[0, CUBE_STATE_SLICE][:2]
+        now = states[step, CUBE_STATE_SLICE][:2]
+        return bool(np.linalg.norm(now - start) > MOVED_M)
+
+    def cube_lifted(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        return bool(states[step, CUBE_STATE_SLICE][2] > _TRANSFERRED_HEIGHT_M)
+
+    def cube_at_left(states: Any, sensors: Any, step: int) -> bool:
+        cube = states[step, CUBE_STATE_SLICE]
+        left = sensors[step, LEFT_GRIPPER_POS_SLICE]
+        return bool(np.linalg.norm(cube - left) < _HELD_RADIUS_M)
+
     return ALOHA2Task(
         name="transfer_cube",
         spec=scene,
@@ -350,6 +371,11 @@ def build_transfer_cube(
             perturb=perturb,
             success=success,
             home=HOME_KEYFRAME,
+            milestones=(
+                ("cube_moved", cube_moved),
+                ("cube_lifted", cube_lifted),
+                ("cube_at_left", cube_at_left),
+            ),
         ),
         cameras=ALOHA_TOP_CAMERAS,
     )
@@ -478,18 +504,45 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
             initial[part.start + 1] = y_low + fy * (y_high - y_low)
         return initial
 
+    def in_slot(part: Any, arm: str) -> bool:
+        cx, cy = SLOT_CENTERS[arm]
+        return bool(
+            np.hypot(part[0] - cx, part[1] - cy) < _PART_IN_SLOT_XY_M
+            and part[2] < _PART_IN_SLOT_Z_M
+        )
+
     def success(states: Any, sensors: Any) -> bool:
         del sensors
         tail = states[-_HOLD_STEPS:]
-        for arm, (cx, cy) in SLOT_CENTERS.items():
-            part = tail[:, PART_STATE_SLICE[arm]]
-            xy_off = np.hypot(part[:, 0] - cx, part[:, 1] - cy)
-            if not (
-                bool(np.max(xy_off) < _PART_IN_SLOT_XY_M)
-                and bool(np.max(part[:, 2]) < _PART_IN_SLOT_Z_M)
-            ):
-                return False
-        return True
+        return all(
+            in_slot(row[PART_STATE_SLICE[arm]], arm)
+            for arm in SLOT_CENTERS
+            for row in tail
+        )
+
+    # Order-free by construction (either arm may go first): any part
+    # touched, any part lifted, one in its slot, both in their slots.
+    def parts(states: Any, step: int) -> dict[str, Any]:
+        return {arm: states[step, PART_STATE_SLICE[arm]] for arm in SLOT_CENTERS}
+
+    def part_moved(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        return any(
+            np.linalg.norm(part[:2] - states[0, PART_STATE_SLICE[arm]][:2]) > MOVED_M
+            for arm, part in parts(states, step).items()
+        )
+
+    def part_lifted(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        return any(part[2] > _LIFT_CHECK_Z_M for part in parts(states, step).values())
+
+    def one_in_slot(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        return any(in_slot(part, arm) for arm, part in parts(states, step).items())
+
+    def both_in_slot(states: Any, sensors: Any, step: int) -> bool:
+        del sensors
+        return all(in_slot(part, arm) for arm, part in parts(states, step).items())
 
     return ALOHA2Task(
         name="kitting",
@@ -501,6 +554,12 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> ALO
             perturb=perturb,
             success=success,
             home=HOME_KEYFRAME,
+            milestones=(
+                ("part_moved", part_moved),
+                ("part_lifted", part_lifted),
+                ("one_in_slot", one_in_slot),
+                ("both_in_slot", both_in_slot),
+            ),
         ),
         cameras=ALOHA_TOP_CAMERAS,
     )

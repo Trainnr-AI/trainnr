@@ -144,6 +144,47 @@ class GymnasiumContract(unittest.TestCase):
         self.assertEqual(reward, 0.0)
         env.close()
 
+    def test_env_writes_the_full_record_when_asked(self) -> None:
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
+        from rq_pipeline.evaluate.records import read_records  # noqa: PLC0415
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            NEUTRAL_CTRL,
+            build_transfer_cube,
+        )
+
+        task = build_transfer_cube()
+        task = dataclasses.replace(
+            task, protocol=dataclasses.replace(task.protocol, steps=SHORT_STEPS)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "episodes.jsonl"
+            env = RobotiqEnv(
+                task,
+                state_width=SERVOS,
+                instruction="transfer the cube",
+                source=SOURCE,
+                record_to=path,
+                policy_name="limp",
+            )
+            env.reset(seed=1001)
+            limp = np.asarray(NEUTRAL_CTRL, dtype=np.float32)
+            for _ in range(env._max_episode_steps):
+                env.step(limp)
+            env.close()
+            (row,) = read_records(path)
+        self.assertEqual((row.policy, row.seed, row.trial), ("limp", 1001, 1))
+        self.assertIs(row.success, False)
+        self.assertEqual(row.events, ())  # limp never touches the cube
+        self.assertEqual(
+            row.protocol["milestones"], ["cube_moved", "cube_lifted", "cube_at_left"]
+        )
+        self.assertTrue(row.instrument.startswith("mujoco-"))
+
     def test_unstamped_source_is_refused_before_any_episode(self) -> None:
         from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
         from rq_pipeline.tasks.aloha2 import build_transfer_cube  # noqa: PLC0415

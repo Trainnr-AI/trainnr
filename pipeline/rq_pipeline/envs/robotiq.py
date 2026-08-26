@@ -52,7 +52,12 @@ except ImportError as error:  # pragma: no cover - the helpful error
     ) from error
 
 from rq_pipeline.bundles.hashing import stamp
-from rq_pipeline.evaluate.harness import home_state
+from rq_pipeline.evaluate.harness import events_for, home_state
+from rq_pipeline.evaluate.records import (
+    EpisodeRecord,
+    append_records,
+    protocol_fields,
+)
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.robot.model_checks import assert_model_alive
 from rq_pipeline.tasks.aloha2 import (
@@ -101,7 +106,11 @@ class RobotiqEnv(gym.Env):
     for the SO-101, fourteen for ALOHA 2) — no default, a silent six on a
     fourteen-servo rig would feed a policy half its state with no error.
     `instruction` is the language the task is judged under, exposed as
-    `task_description` for evaluators that read it.
+    `task_description` for evaluators that read it. With `record_to`, the
+    env appends one `EpisodeRecord` per finished episode — verdict,
+    milestones, seed, stamps — so a runner that keeps only a success list
+    (LeRobot's) still leaves our full row behind; `policy_name` is what
+    the row calls the policy, since the env never sees it.
     """
 
     metadata: ClassVar[dict[str, Any]] = {
@@ -109,7 +118,7 @@ class RobotiqEnv(gym.Env):
         "render_fps": 0,  # per instance, from the model's timestep
     }
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - keyword-only identity, each part of the row
         self,
         task: Any,
         *,
@@ -117,6 +126,8 @@ class RobotiqEnv(gym.Env):
         instruction: str,
         source: str,
         render_mode: str = "rgb_array",
+        record_to: Path | None = None,
+        policy_name: str = "policy",
     ) -> None:
         if "@" not in source:
             raise ValueError(
@@ -177,8 +188,12 @@ class RobotiqEnv(gym.Env):
         self._renderers: dict[tuple[int, int], Any] = {}
         self._stepper: Stepper | None = None
         self._trial = 0
+        self._seed: int | None = None
         self._episodes = 0
         self._last_pixels: dict[str, Any] = {}
+        self._record_to = Path(record_to) if record_to is not None else None
+        self._policy_name = policy_name
+        self._protocol_fields = protocol_fields(task.protocol)
         import mujoco  # noqa: PLC0415 - sim extra, present if we got here
 
         # One MjData for the env's whole life: a passive viewer binds to
@@ -217,6 +232,7 @@ class RobotiqEnv(gym.Env):
         super().reset(seed=seed)
         index = self._episodes if seed is None else seed
         self._trial = index % self.protocol.trials
+        self._seed = seed
         self._episodes += 1
         initial = self.protocol.perturb(self._trial, self._home)
         self._stepper = Stepper(
@@ -231,9 +247,27 @@ class RobotiqEnv(gym.Env):
             raise RuntimeError("reset() before step()")
         self._stepper.advance(action, self.protocol.control_interval)
         done = self._stepper.done
-        ok = bool(
-            done and self.protocol.success(self._stepper.states, self._stepper.sensors)
-        )
+        ok = False
+        if done:
+            states, sensors = self._stepper.states, self._stepper.sensors
+            ok = bool(self.protocol.success(states, sensors))
+            if self._record_to is not None:
+                append_records(
+                    self._record_to,
+                    [
+                        EpisodeRecord(
+                            source=self.source,
+                            policy=self._policy_name,
+                            trial=self._trial,
+                            success=ok,
+                            steps=len(states),
+                            instrument=self.instrument,
+                            protocol=self._protocol_fields,
+                            seed=self._seed,
+                            events=events_for(self.protocol, states, sensors),
+                        )
+                    ],
+                )
         return self._observe(), float(ok), False, done, self._info(ok)
 
     def render(self) -> Any:
@@ -279,7 +313,13 @@ class RobotiqEnv(gym.Env):
         }
 
 
-def make_env(task: str, *, render_mode: str = "rgb_array") -> RobotiqEnv:
+def make_env(
+    task: str,
+    *,
+    render_mode: str = "rgb_array",
+    record_to: Path | str | None = None,
+    policy_name: str = "policy",
+) -> RobotiqEnv:
     """`gym.make`'s entry point: a task by name on the nominal ALOHA 2 bundle."""
     if task not in TASKS:
         raise KeyError(f"no task {task!r}; the env knows {sorted(TASKS)}")
@@ -290,6 +330,8 @@ def make_env(task: str, *, render_mode: str = "rgb_array") -> RobotiqEnv:
         instruction=entry.instruction,
         source=bundle_source(),
         render_mode=render_mode,
+        record_to=Path(record_to) if record_to is not None else None,
+        policy_name=policy_name,
     )
 
 

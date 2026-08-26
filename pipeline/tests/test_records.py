@@ -5,20 +5,35 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from rq_pipeline.evaluate.harness import EpisodeProtocol, events_for
 from rq_pipeline.evaluate.records import (
     EpisodeRecord,
     SimScore,
     append_records,
+    disagreements,
     fold,
     from_eval_info,
+    funnel,
     read_records,
 )
 
-PROTOCOL = {"trials": 4, "steps": 4000, "control_interval": 10, "home": "neutral"}
+STAGES = ["moved", "lifted", "placed"]
+TWO, FIVE = 2, 5  # the synthetic chain's thresholds
+PROTOCOL = {
+    "trials": 4,
+    "steps": 4000,
+    "control_interval": 10,
+    "home": "neutral",
+    "milestones": STAGES,
+}
 SOURCE = "aloha2-kitting@000000000000"
 
 
-def record(policy: str, trial: int, success: bool) -> EpisodeRecord:
+def record(policy: str, trial: int, success: bool, reached: int = 0) -> EpisodeRecord:
+    events = tuple(
+        {"index": index, "name": STAGES[index], "step": 100 * (index + 1)}
+        for index in range(reached)
+    )
     return EpisodeRecord(
         source=SOURCE,
         policy=policy,
@@ -27,7 +42,82 @@ def record(policy: str, trial: int, success: bool) -> EpisodeRecord:
         steps=4000,
         instrument="mujoco-3.11.0",
         protocol=PROTOCOL,
+        events=events,
     )
+
+
+class Milestones(unittest.TestCase):
+    def _protocol(self) -> EpisodeProtocol:
+        # A one-dimensional "episode": states[t] = (t,), the chain reads it.
+        return EpisodeProtocol(
+            trials=1,
+            steps=10,
+            control_interval=1,
+            perturb=lambda _trial, home: home,
+            success=lambda _states, _sensors: True,
+            milestones=(
+                ("past_two", lambda states, _s, t: states[t][0] > TWO),
+                ("past_five", lambda states, _s, t: states[t][0] > FIVE),
+                ("never", lambda _states, _s, _t: False),
+            ),
+        )
+
+    def test_walker_fires_each_milestone_once_in_order(self) -> None:
+        states = [(t,) for t in range(10)]
+        events = events_for(self._protocol(), states, None)
+        self.assertEqual(
+            events,
+            (
+                {"index": 0, "name": "past_two", "step": 3},
+                {"index": 1, "name": "past_five", "step": 6},
+            ),
+        )
+
+    def test_a_later_milestone_cannot_fire_before_an_earlier_one(self) -> None:
+        # Only the CURRENT milestone is evaluated: a state past five at
+        # step 0 still has to pass "past_two" first, and both fire on
+        # successive steps, never the same one.
+        states = [(9,)] * 4
+        events = events_for(self._protocol(), states, None)
+        self.assertEqual([e["name"] for e in events], ["past_two", "past_five"])
+        self.assertEqual([e["step"] for e in events], [0, 1])
+
+    def test_duplicate_milestone_names_are_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            EpisodeProtocol(
+                trials=1,
+                steps=1,
+                control_interval=1,
+                perturb=lambda _t, h: h,
+                success=lambda _s, _x: True,
+                milestones=(("a", lambda *_: True), ("a", lambda *_: True)),
+            )
+
+
+class Funnel(unittest.TestCase):
+    def test_counts_reached_per_stage_per_policy(self) -> None:
+        rows = [
+            record("expert", 0, True, reached=3),
+            record("expert", 1, True, reached=3),
+            record("grip", 0, False, reached=2),
+            record("grip", 1, False, reached=1),
+            record("limp", 0, False, reached=0),
+            record("limp", 1, False, reached=0),
+        ]
+        self.assertEqual(
+            funnel(rows), {"expert": [2, 2, 2], "grip": [2, 1, 0], "limp": [0, 0, 0]}
+        )
+        with self.assertRaises(ValueError):
+            funnel([])
+
+    def test_disagreements_flag_verdict_versus_chain(self) -> None:
+        rows = [
+            record("a", 0, True, reached=3),  # agree
+            record("a", 1, False, reached=3),  # complete chain, late drop
+            record("a", 2, True, reached=1),  # referee looser than the chain
+            record("a", 3, False, reached=0),  # agree
+        ]
+        self.assertEqual([r.trial for r in disagreements(rows)], [1, 2])
 
 
 class Fold(unittest.TestCase):

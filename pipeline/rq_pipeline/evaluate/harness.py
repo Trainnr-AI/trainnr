@@ -43,11 +43,15 @@ from rq_pipeline.robot.model_checks import assert_model_alive
 if TYPE_CHECKING:  # pragma: no cover
     from rq_pipeline.physics.mujoco_backend import MuJoCoBackend
 
+Milestone = tuple[str, Callable[[Any, Any, int], bool]]
+
 __all__ = [
     "EpisodeProtocol",
+    "Milestone",
     "SimPolicy",
     "SimScore",
     "evaluate_policies",
+    "events_for",
     "home_state",
     "join_with_real",
     "run_sensor_episode",
@@ -86,6 +90,12 @@ class EpisodeProtocol:
     perturb: Callable[[int, Any], Any]
     success: Callable[[Any, Any], bool]
     home: str | None = None
+    # Milestones: an ORDERED chain of (name, predicate(states, sensors,
+    # step) -> bool) — Arena's progress tracking (docs/30 §7 row 39),
+    # computed offline over the episode we already keep. Never a
+    # verdict: `success` alone decides; milestones say how far a
+    # failure got ("moved 4/4, lifted 0/4"), which a row of zeros hides.
+    milestones: tuple[Milestone, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name, value in (
@@ -95,6 +105,29 @@ class EpisodeProtocol:
         ):
             if value <= 0:
                 raise ValueError(f"{field_name} must be positive, got {value}")
+        names = [name for name, _ in self.milestones]
+        if len(set(names)) != len(names):
+            raise ValueError(f"milestone names must be unique, got {names}")
+
+
+def events_for(
+    protocol: EpisodeProtocol, states: Any, sensors: Any
+) -> tuple[dict, ...]:
+    """Walk the episode once: evaluate only the chain's current
+    milestone at each physics step, advance at most one per step, and
+    record the first step each fires (Arena's tracker rule, offline).
+    Returns the fired milestones in order — an empty tuple means the
+    policy never reached the first one."""
+    events: list[dict] = []
+    index = 0
+    for step in range(len(states)):
+        if index >= len(protocol.milestones):
+            break
+        name, predicate = protocol.milestones[index]
+        if predicate(states, sensors, step):
+            events.append({"index": index, "name": name, "step": step})
+            index += 1
+    return tuple(events)
 
 
 def home_state(backend: MuJoCoBackend, protocol: EpisodeProtocol) -> Any:
@@ -181,6 +214,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
                 steps=len(states),
                 instrument=instrument,
                 protocol=fields,
+                events=events_for(protocol, states, sensors),
             )
             records.append(record)
             if record_to is not None:

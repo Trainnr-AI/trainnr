@@ -50,9 +50,8 @@ class KittingScene(unittest.TestCase):
         close back-drives upward. The generator samples the proven
         band and filters by this same referee.
         """
-        import mujoco  # noqa: PLC0415
-        import numpy as np  # noqa: PLC0415
-
+        from rq_pipeline.evaluate.harness import events_for  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: PLC0415
         from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
             KittingStats,
             build_kitting,
@@ -61,18 +60,18 @@ class KittingScene(unittest.TestCase):
 
         task = build_kitting()
         model = task.spec.compile()
-        data = mujoco.MjData(model)
-        key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "neutral_pose")
-        mujoco.mj_resetDataKeyframe(model, data, key)
-        mujoco.mj_forward(model, data)
-        size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
-        home = np.empty(size)
-        mujoco.mj_getState(model, data, home, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        home = keyframe_state(model, task.protocol.home)
         stats = KittingStats()
         states, sensors, actions = scripted_kitting_episode(
             model, task.protocol.perturb(0, home), stats=stats
         )
         self.assertTrue(task.protocol.success(states, sensors), stats)
+        # The milestone chain agrees with the verdict, in order: touched,
+        # lifted, one placed, both placed — the funnel a policy is read by.
+        self.assertEqual(
+            [event["name"] for event in events_for(task.protocol, states, sensors)],
+            ["part_moved", "part_lifted", "one_in_slot", "both_in_slot"],
+        )
         # The proven band needs no retry and never truncates — if either
         # fires here, robustness regressed and the stats say where.
         self.assertEqual(stats.retries, [])

@@ -50,6 +50,11 @@ class RobotiqEnvConfig(EnvConfig):
 
     task: str | None = DEFAULT_TASK
     fps: int = CONTROL_HZ
+    # `--env.record_to=<file>.jsonl --env.policy_name=<name>`: the env
+    # appends our full per-episode row (verdict, milestones, seed) that
+    # eval_info.json lacks.
+    record_to: str | None = None
+    policy_name: str = "policy"
     features: dict[str, PolicyFeature] = field(default_factory=dict)
     features_map: dict[str, str] = field(default_factory=dict)
 
@@ -76,7 +81,11 @@ class RobotiqEnvConfig(EnvConfig):
 
     @property
     def gym_kwargs(self) -> dict:
-        return {"task": self.task}
+        return {
+            "task": self.task,
+            "record_to": self.record_to,
+            "policy_name": self.policy_name,
+        }
 
     def create_envs(
         self, n_envs: int, use_async_envs: bool = False
@@ -84,7 +93,7 @@ class RobotiqEnvConfig(EnvConfig):
         """`{suite: {task_id: VectorEnv}}`, the shape `lerobot.envs.make_env`
         documents. Async copies use forkserver so each worker builds its
         own renderer (the env defers renderer creation to first use)."""
-        factories = [partial(make_env, self.task)] * n_envs
+        factories = [partial(make_env, **self.gym_kwargs)] * n_envs
         if use_async_envs and n_envs > 1:
             vec: gym.vector.VectorEnv = gym.vector.AsyncVectorEnv(
                 factories,

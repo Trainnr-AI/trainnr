@@ -278,8 +278,23 @@ needed for step 3's checkpoint.
   ritual and the control rate defined once each. 190 sim tests + 2
   plugin tests green; the Stepper is now pinned against MuJoCo's own
   batched `rollout` bit for bit.
-- Not yet: step 6 (milestones + funnel), then the variation schema and
-  the main-effects table; the `Task` unification (§6) beyond `cameras`.
+- **Step 6, milestones**: `EpisodeProtocol.milestones` — an ordered
+  chain of `(name, predicate(states, sensors, step))`, unique names
+  enforced — and `events_for` (Arena's tracker rule, offline: only the
+  current milestone is evaluated, at most one advance per step, the
+  first firing step recorded). `records.funnel` counts trials reaching
+  each stage per policy; `records.disagreements` flags verdict ≠ chain.
+  Transfer cube: `cube_moved → cube_lifted → cube_at_left`; kitting,
+  order-free by construction: `part_moved → part_lifted → one_in_slot →
+  both_in_slot`, all from the referees' own constants (`MOVED_M` = 1 cm
+  is the one new number). The env writes the full row itself when given
+  `record_to`/`policy_name` (`--env.record_to=… --env.policy_name=…` on
+  `lerobot-eval`), so a runner that keeps only a success list still
+  leaves events, seed and stamps behind. Pinned: the kitting expert
+  walks all four; a limp policy leaves an empty chain. 196 sim tests.
+- Not yet: the variation schema with `draw(trial)` and the main-effects
+  table; the `Task` unification (§6) beyond `cameras`; `train-watch`
+  re-verified on screen after its rewrite.
 
 ## 10. Open questions (carried from 45 §4 and 46 §5)
 

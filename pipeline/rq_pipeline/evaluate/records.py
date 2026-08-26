@@ -73,13 +73,52 @@ class EpisodeRecord:
 
 
 def protocol_fields(protocol: Any) -> dict[str, Any]:
-    """The scalar half of an `EpisodeProtocol` — what a row can carry."""
+    """The scalar half of an `EpisodeProtocol` — what a row can carry,
+    including the milestone chain's names so a reader knows how long
+    a complete funnel is."""
     return {
         "trials": protocol.trials,
         "steps": protocol.steps,
         "control_interval": protocol.control_interval,
         "home": protocol.home,
+        "milestones": [name for name, _ in getattr(protocol, "milestones", ())],
     }
+
+
+def funnel(records: Sequence[EpisodeRecord]) -> dict[str, list[int]]:
+    """Per policy, how many trials reached each milestone: the reading
+    that separates "did nothing" from "grasped, then dropped". Stage
+    names come from the records' protocol and must agree across them."""
+    if not records:
+        raise ValueError("no records to funnel")
+    stages = list(records[0].protocol.get("milestones", []))
+    counts: dict[str, list[int]] = {}
+    for record in records:
+        if list(record.protocol.get("milestones", [])) != stages:
+            raise ValueError(
+                f"record {record.policy!r}/{record.trial} has milestones "
+                f"{record.protocol.get('milestones')}, expected {stages}"
+            )
+        reached = counts.setdefault(record.policy, [0] * len(stages))
+        for event in record.events:
+            reached[int(event["index"])] += 1
+    return counts
+
+
+def disagreements(records: Sequence[EpisodeRecord]) -> tuple[EpisodeRecord, ...]:
+    """Records whose verdict and chain disagree: success with the chain
+    incomplete means the referee is looser than the milestones (a
+    referee-bug detector); failure with the chain complete means the
+    hold window rejected a late drop. Either is worth a look; neither
+    changes a count."""
+    flagged = []
+    for record in records:
+        chain = record.protocol.get("milestones", [])
+        if not chain:
+            continue
+        if record.success != (len(record.events) == len(chain)):
+            flagged.append(record)
+    return tuple(flagged)
 
 
 def append_records(path: Path, records: Iterable[EpisodeRecord]) -> None:
