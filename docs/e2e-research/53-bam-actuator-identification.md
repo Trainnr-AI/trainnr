@@ -206,3 +206,47 @@ bundle currently models at all.
    purchase happens and identification on our own hardware begins.
 4. **Do nothing yet** — this is research, not a blocker; nothing here
    changes what's shippable today.
+
+## 7. Postscript (2026-08-28, same day): the library is landed, all 8 actuators
+
+Following the operator's direct question — "how can we use all the
+BAM servos and keep adding more?" — the answer is built, not just
+designed:
+
+- **`robots/actuators/`**: all 8 BAM actuators vendored (Dynamixel
+  MX-64/MX-106/XL-320/XL-330, eRob80:50/eRob80:100, Feetech STS3215
+  7.4V, Waveshare ST3025), all 6 model tiers each (48 JSON files), a
+  `PROVENANCE.json` per actuator naming source/citation/license — a
+  directory with none is refused at load time, not read as trustworthy.
+- **`rq_pipeline/robot/friction_budget.py`**: the M1→M6 equations as
+  ONE function, not six — the models are strictly nested (confirmed
+  by inspecting all 48 files' field sets: M3/M4 use an undirected
+  `load_friction_base`, M5/M6 replace it with the directional
+  `load_friction_motor`/`load_friction_external` pair, never both),
+  so which optional `FrictionParams` fields are populated selects the
+  tier. Pure numpy, lazily imported (not a core dependency) —
+  identical under `jax.numpy`, so it runs unchanged on CPU MuJoCo or
+  MJX-Warp with no engine import at all. 7 tests check it against
+  values hand-computed from the equations, independent of the code.
+- **`rq_pipeline/robot/actuator_library.py`**: `list_actuators`,
+  `list_models`, `load_actuator(slug, tier)` — the one door the data
+  enters through, provenance-checked, fail-loud on an unknown
+  actuator/tier/source. 10 tests, run against the real vendored
+  files, not fixtures — including a pin-both-ends check of STS3215's
+  published `kt` against the value cited in §2 above.
+- **`tools/sync-bam-actuators.py`**: reads either a BAM git checkout
+  or a repomix XML pack (the format used all session) and vendors
+  new/changed `params/*`, refusing a changed file with no `--version`
+  — verified against the actual pack: dry-run reports 0 changes
+  (idempotent), and a deliberately corrupted value is correctly
+  refused without `--version` and correctly accepted with it.
+
+**Deliberately NOT built this pass**: the per-step controller that
+would let M2-M6 (velocity- and torque-dependent) actually drive a
+running simulation — those terms need live `tau_m`/`tau_e` recomputed
+every physics step, the way BAM's own `MujocoController.update()`
+does, which is real design work (where does it hook into `Stepper`?)
+kept separate on purpose. M1 alone needs no such hook — it's exactly
+`dof_frictionloss`/`dof_damping` MuJoCo already applies natively, so a
+scene can adopt an M1 fit today as a static override with zero new
+runtime code. 320 tests green.
