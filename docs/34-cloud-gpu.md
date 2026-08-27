@@ -74,9 +74,12 @@ schema and the wire said:
   `bootstrap` (apt + uv + the train venv, 128 packages) took **5 min**;
   the smoke chain there: demos **45 s/episode** (the box: 95), the
   PNG → AV1 convert **223 s/episode** (the box: 38 — slower cores),
-  ACT training **11.3 steps/s with 4 dataloader workers — slower than
-  the 3090 Ti's 14.8**: the AV1 decode per sample is the bottleneck,
-  not the card, hence the cloud preset's 16 workers. The pod's volume
+  ACT training **11.3 steps/s with 4 dataloader workers and 11.4 with
+  16, the card at 17 % — slower than the 3090 Ti's 14.8**: the training
+  loop itself is CPU-bound at batch 8 (per-step Python and kernel
+  launches on slower server cores), so workers are not the lever and a
+  bigger batch is (`e2e-smoke --batch`; the preset keeps the recipe's
+  8 for comparability). The pod's volume
   refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
   UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
 - The account held a **stopped B200 pod** (`$6.79/h` when running; a

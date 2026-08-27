@@ -72,10 +72,15 @@ class Scale:
     checkpoint_every: int
     inloop_episodes: int
     eval_episodes: int
-    # Dataloader workers: the AV1 decode per sample is the trainer's
-    # bottleneck, not the card (measured 2026-08-27: a B200 at 11.3
-    # steps/s with four workers, slower than the 3090 Ti's 14.8).
+    # Dataloader workers and the batch. Measured 2026-08-27 on a B200:
+    # 11.3 steps/s at batch 8 with FOUR workers and 11.4 with SIXTEEN, the
+    # card at 17% — the training loop itself is CPU-bound at batch 8
+    # (the desktop 3090 Ti does 14.8 on faster cores). Workers are not
+    # the lever; the batch is: a bigger batch moves the same samples
+    # through the card in fewer steps. The cloud preset keeps the ACT sim
+    # recipe's batch 8 for comparability; `--batch` overrides it.
     workers: int
+    batch: int
 
 
 SCALES = {
@@ -87,6 +92,7 @@ SCALES = {
         inloop_episodes=1,
         eval_episodes=2,
         workers=4,
+        batch=BATCH_SIZE,
     ),
     # LeRobot's ACT sim recipe (50 episodes, 100k steps, batch 8) with a
     # checkpoint every 20k so a lost instance costs an hour, not a day,
@@ -101,6 +107,7 @@ SCALES = {
         inloop_episodes=4,
         eval_episodes=20,
         workers=16,
+        batch=BATCH_SIZE,
     ),
 }
 
@@ -197,7 +204,13 @@ def parse_args() -> argparse.Namespace:
         "--workers",
         type=positive_int,
         default=None,
-        help="the trainer's dataloader workers (the AV1 decode is the bottleneck)",
+        help="the trainer's dataloader workers (not the bottleneck; measured)",
+    )
+    parser.add_argument(
+        "--batch",
+        type=positive_int,
+        default=None,
+        help="the trainer's batch size: the lever when the card idles at batch 8",
     )
     parser.add_argument(
         "--device", default=None, help="torch device; default: the best present"
@@ -239,6 +252,7 @@ def parse_args() -> argparse.Namespace:
         "inloop_episodes",
         "eval_episodes",
         "workers",
+        "batch",
     ):
         if getattr(args, knob) is None:
             setattr(args, knob, getattr(scale, knob))
@@ -362,7 +376,7 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
             output_dir=layout.training,
             job_name=layout.training.name,
             steps=args.steps,
-            batch_size=BATCH_SIZE,
+            batch_size=args.batch,
             save_freq=args.checkpoint_every,
             num_workers=args.workers,
             eval_freq=args.checkpoint_every,
