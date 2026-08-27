@@ -12,6 +12,9 @@ OUT_OF_REACH_Y = 0.9  # the tray a metre from the arms' base line
 ANYWHERE_M = 10.0  # an in-slot radius that covers the whole table
 # The referee's milestones, in funnel order.
 MILESTONES = 4
+# A rejection is decided by the funnel, not the trial count: two paired
+# starts prove it in a third of the time (the suite's slowest tests, 2026-08-28).
+FEW = 2
 
 
 @unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
@@ -54,7 +57,7 @@ class TheCriticLoop(unittest.TestCase):
     def test_a_tray_out_of_reach_is_rejected_with_the_reason(self) -> None:
         from rq_pipeline.tasks.aloha2 import KITTING_SPEC  # noqa: PLC0415
 
-        far = replace(KITTING_SPEC, tray_center=(0.0, OUT_OF_REACH_Y))
+        far = replace(KITTING_SPEC, tray_center=(0.0, OUT_OF_REACH_Y), trials=FEW)
         task, verdict = self._accept(far)
         self.assertFalse(verdict.accepted)
         self.assertNotEqual(task.stamp, build_stamp())
@@ -69,7 +72,9 @@ class TheCriticLoop(unittest.TestCase):
     def test_a_referee_that_rewards_doing_nothing_is_rejected(self) -> None:
         from rq_pipeline.tasks.aloha2 import KITTING_SPEC  # noqa: PLC0415
 
-        lax = replace(KITTING_SPEC, in_slot_xy_m=ANYWHERE_M, in_slot_z_m=ANYWHERE_M)
+        lax = replace(
+            KITTING_SPEC, in_slot_xy_m=ANYWHERE_M, in_slot_z_m=ANYWHERE_M, trials=FEW
+        )
         _task, verdict = self._accept(lax)
         self.assertFalse(verdict.accepted)
         self.assertEqual(verdict.floor_successes, verdict.trials)

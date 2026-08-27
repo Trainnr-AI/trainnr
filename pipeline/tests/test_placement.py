@@ -100,7 +100,7 @@ class TheGate(unittest.TestCase):
 
         task, backend, home, slices = self._kitting()
         model = backend.model
-        wall = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "slot_right_wall0")
+        wall = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "slot_right_north")
         data = mujoco.MjData(model)
         mujoco.mj_forward(model, data)
         bad = task.protocol.perturb(0, home).copy()

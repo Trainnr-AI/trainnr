@@ -41,7 +41,13 @@ from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
 from rq_pipeline.physics.mujoco_backend import seat_at_keyframe
 from rq_pipeline.protocol import EpisodeProtocol, Placement
 from rq_pipeline.tasks.registry import register
-from rq_pipeline.tasks.scene import TABLE_GEOM, pin_nominal_options, set_render_budget
+from rq_pipeline.tasks.scene import (
+    TABLE_GEOM,
+    add_free_box,
+    add_slot_walls,
+    pin_nominal_options,
+    set_render_budget,
+)
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 ARM_PREFIX = "arm_"
@@ -274,18 +280,7 @@ def _add_free_cube(  # noqa: PLR0913 - a geom's facts, not knobs
     scene: Any, name: str, pos: Any, half: Any, *, mass: float, friction: Any, rgba: Any
 ) -> None:
     """A free-floating box on the table; every task object here is one."""
-    import mujoco  # noqa: PLC0415 - sim extra
-
-    body = scene.worldbody.add_body(name=name, pos=list(pos))
-    body.add_freejoint()
-    body.add_geom(
-        name=f"{name}_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=list(half),
-        mass=mass,
-        friction=list(friction),
-        rgba=list(rgba),
-    )
+    add_free_box(scene, name, pos, half, rgba=rgba, mass=mass, friction=list(friction))
 
 
 def _add_cube_a(scene: Any) -> None:
@@ -498,7 +493,6 @@ scripted_insert_no_release = scripted_stack_no_release
 @register(TOOL_INSERT, rig=RIG)
 def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     """tool_insert: cube A seated inside the pocket, flat on the table."""
-    import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-insert", arm_xml)
@@ -506,19 +500,16 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     centre_x, centre_y = _SLOT_CENTRE
     inner_x, inner_y = _SLOT_INNER
     thickness = _SLOT_WALL_THICKNESS
-    for label, dx, dy, sx, sy in (
-        ("north", 0.0, inner_y + thickness, inner_x + 2 * thickness, thickness),
-        ("south", 0.0, -(inner_y + thickness), inner_x + 2 * thickness, thickness),
-        ("east", inner_x + thickness, 0.0, thickness, inner_y),
-        ("west", -(inner_x + thickness), 0.0, thickness, inner_y),
-    ):
-        scene.worldbody.add_geom(
-            name=f"slot_{label}",
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            size=[sx, sy, _SLOT_WALL_HALF_HEIGHT],
-            pos=[centre_x + dx, centre_y + dy, _SLOT_WALL_HALF_HEIGHT],
-            rgba=[0.3, 0.3, 0.35, 1.0],
-        )
+    add_slot_walls(
+        scene,
+        "slot",
+        _SLOT_CENTRE,
+        offset=(inner_x + thickness, inner_y + thickness),
+        long_half=(inner_x + 2 * thickness, inner_y),
+        wall=thickness,
+        height=_SLOT_WALL_HALF_HEIGHT,
+        rgba=(0.3, 0.3, 0.35, 1.0),
+    )
 
     def success(states: Any, sensors: Any) -> bool:
         tail = states[-_HOLD_STEPS:, CUBE_A_STATE_SLICE]

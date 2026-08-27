@@ -15,13 +15,18 @@ expert is the critic, and the certificate machinery does the counting.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.evaluate.harness import SimPolicy, home_state, run_sensor_episode
-from rq_pipeline.evaluate.records import EpisodeRecord, append_records, funnel
+from rq_pipeline.evaluate.records import (
+    EpisodeRecord,
+    append_records,
+    funnel,
+    milestones,
+)
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend
 from rq_pipeline.protocol import events_for, protocol_fields
 from rq_pipeline.tasks.task import Task
@@ -31,6 +36,11 @@ from rq_pipeline.tasks.task import Task
 Expert = Callable[..., tuple]
 EXPERT_NAME = "expert"
 FLOOR_NAME = "floor"
+
+
+def funnel_text(names: Sequence[str], counts: Sequence[int], trials: int) -> str:
+    """`part_moved 4/4 · part_lifted 3/4 · …` — the funnel as one line."""
+    return " · ".join(f"{n} {c}/{trials}" for n, c in zip(names, counts, strict=True))
 
 
 @dataclass(frozen=True)
@@ -56,12 +66,8 @@ class Acceptance:
             f"floor {self.floor_successes}/{self.trials}",
         ]
         if stages:
-            names = list(self.records[0].protocol.get("milestones", []))
             lines.append(
-                "  funnel "
-                + " · ".join(
-                    f"{n} {c}/{self.trials}" for n, c in zip(names, stages, strict=True)
-                )
+                "  funnel " + funnel_text(milestones(self.records), stages, self.trials)
             )
         lines.extend(f"  - {reason}" for reason in self.reasons)
         return "\n".join(lines)
@@ -154,10 +160,7 @@ def accept(  # noqa: PLR0913 - the loop's knobs, each named
         names = [name for name, _ in protocol.milestones]
         counts = stages.get(EXPERT_NAME, [])
         where = (
-            " — funnel "
-            + " · ".join(
-                f"{n} {c}/{protocol.trials}" for n, c in zip(names, counts, strict=True)
-            )
+            " — funnel " + funnel_text(names, counts, protocol.trials)
             if names and counts
             else ""
         )

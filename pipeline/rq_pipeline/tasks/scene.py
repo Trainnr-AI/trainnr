@@ -152,3 +152,59 @@ def set_render_budget(spec: Any) -> None:
     spec.visual.global_.offwidth = RenderBudget.OFFSCREEN_WIDTH
     spec.visual.global_.offheight = RenderBudget.OFFSCREEN_HEIGHT
     spec.visual.quality.shadowsize = RenderBudget.SHADOWSIZE
+
+
+def add_free_box(
+    scene: Any, name: str, pos: Any, half: Any, *, rgba: Any, **geom: Any
+) -> Any:
+    """A free-floating box: a body with a free joint and one box geom
+    (`half` a scalar or a triple), any further geom attributes verbatim.
+    Every task object on both rigs is one of these. Returns the body."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    body = scene.worldbody.add_body(name=name, pos=list(pos))
+    body.add_freejoint()
+    size = [half] * 3 if isinstance(half, int | float) else list(half)
+    body.add_geom(
+        name=f"{name}_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        size=size,
+        rgba=list(rgba),
+        **geom,
+    )
+    return body
+
+
+def add_slot_walls(  # noqa: PLR0913 - a well's geometry, each dimension named
+    scene: Any,
+    prefix: str,
+    centre: tuple[float, float],
+    *,
+    offset: tuple[float, float],
+    long_half: tuple[float, float],
+    wall: float,
+    height: float,
+    rgba: Any,
+) -> None:
+    """Four static wall boxes around `centre`: north/south at ±offset_y
+    with half-length long_half_x, east/west at ±offset_x with half-length
+    long_half_y, each `wall` thick and `height` tall (half-heights, as
+    MuJoCo sizes boxes). The kitting tray's wells and the SO-101 insert
+    pocket are this, with their own offsets."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    cx, cy = centre
+    (ox, oy), (lx, ly) = offset, long_half
+    for label, dx, dy, sx, sy in (
+        ("north", 0.0, oy, lx, wall),
+        ("south", 0.0, -oy, lx, wall),
+        ("east", ox, 0.0, wall, ly),
+        ("west", -ox, 0.0, wall, ly),
+    ):
+        scene.worldbody.add_geom(
+            name=f"{prefix}_{label}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[sx, sy, height],
+            pos=[cx + dx, cy + dy, height],
+            rgba=list(rgba),
+        )
