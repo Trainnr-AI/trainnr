@@ -211,6 +211,19 @@ So the question is not "can this be done" but specifically: *does parametric
 identification converge on a machine with backlash, no torque feedback and a
 plastic gearbox?*
 
+**Answered, in part (2026-08-28, [53-bam-actuator-identification.md](53-bam-actuator-identification.md)).**
+[BAM](https://github.com/Rhoban/bam) (ICRA 2025, Apache-2.0) is a published
+identification pipeline — pendulum bench, CMA-ES fit, a six-model friction
+hierarchy beyond Coulomb-Viscous — that ships a working fit for **Feetech
+STS3215 (7.4V)** among six other servos, oscilloscope-measured firmware
+constants included, raw trajectories downloadable. It converges: real
+parameters, real convergence, on hardware in exactly this class. What it does
+NOT answer: whether identification converges on *our* arm, in *our* rig
+configuration, with *our* electronics — BAM's numbers are from their own
+bench, not ours. The narrower question (can OUR configuration be identified)
+stays open; the broader one (has anyone even tried, does it converge at all)
+is closed.
+
 **The nonlinearity budget now has numbers (added 2026-08-23).** From a
 third-party bench test of one STS3215-12V (operator-supplied video summary,
 not archived — re-grade when linked):
