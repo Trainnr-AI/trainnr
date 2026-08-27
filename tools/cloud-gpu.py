@@ -78,6 +78,8 @@ class Remote:
     # EGL is the offscreen renderer on a bare Linux GPU box; the WSL
     # variables (Mesa's D3D12 path) do not apply there.
     RUN_ENV = "MUJOCO_GL=egl OMP_NUM_THREADS=1"
+    # Where a detached `run` writes; `tail` reads it.
+    RUN_LOG = "/workspace/robotiq/run.log"
     APT = "libegl1 libgl1 libglib2.0-0 rsync"
 
     @classmethod
@@ -125,6 +127,9 @@ class Rsync:
         ".coverage",
     )
     PULL_SUBDIR = "pipeline/runs"
+    # What `push --with-runs NAME` ships from runs/: the dataset, not the
+    # demos it came from (4.5 GB of frames the machine has no use for).
+    RUNS_SUFFIX = "-lerobot"
 
 
 @dataclass(frozen=True)
@@ -175,7 +180,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     status.add_argument("--wait", action="store_true")
     for name, text in (
         ("ssh", "print the ssh commands"),
-        ("push", "rsync the repo onto the machine"),
         ("bootstrap", "apt + uv + the train venv, then a torch/CUDA/mujoco check"),
         ("logs", "the container's recent output"),
         ("stop", "stop (keeps the disk)"),
@@ -187,10 +191,27 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         one.add_argument("id")
         if name == "logs":
             one.add_argument("--tail", type=int, default=100)
+    push = sub.add_parser("push", help="rsync the repo onto the machine")
+    push.add_argument("id")
+    push.add_argument(
+        "--with-runs",
+        default=None,
+        metavar="NAME",
+        help=f"also ship runs/NAME{Rsync.RUNS_SUFFIX} (a converted dataset)",
+    )
+    tail = sub.add_parser("tail", help="the last lines of a detached run's log")
+    tail.add_argument("id")
+    tail.add_argument("--lines", type=int, default=40)
     run = sub.add_parser(
         "run", help="ssh: run a command in the repo's pipeline/ with the train venv"
     )
     run.add_argument("id")
+    run.add_argument(
+        "--detach",
+        action="store_true",
+        help=f"start it under nohup and return; it writes {Remote.RUN_LOG}, "
+        "which `tail` reads",
+    )
     run.add_argument(
         "--deadline-min",
         type=int,
@@ -334,90 +355,133 @@ def main(argv: list[str]) -> None:
         raise SystemExit(f"cloud-gpu: {error}") from None
 
 
-def dispatch(gpu: GpuProvider, args: argparse.Namespace) -> None:  # noqa: PLR0912 - one branch per subcommand
-    if args.command == "offers":
-        show_offers(gpu, args)
-    elif args.command == "launch":
-        spec = MachineSpec(
-            name=args.name,
-            gpu=args.gpu,
-            image=args.image,
-            count=args.count,
-            disk_gb=args.disk,
-            tier=args.tier,
-            data_centers=tuple(args.datacenter),
-        )
-        machine = gpu.launch(spec)
-        print(describe(machine))
-        if args.wait:
-            wait_running(gpu, machine.id)
-    elif args.command == "machines":
-        for machine in gpu.machines():
-            print(describe(machine))
-    elif args.command == "status":
+def launch_machine(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    spec = MachineSpec(
+        name=args.name,
+        gpu=args.gpu,
+        image=args.image,
+        count=args.count,
+        disk_gb=args.disk,
+        tier=args.tier,
+        data_centers=tuple(args.datacenter),
+    )
+    machine = gpu.launch(spec)
+    print(describe(machine))
+    if args.wait:
+        wait_running(gpu, machine.id)
+
+
+def show_status(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    print(describe(wait_running(gpu, args.id) if args.wait else gpu.machine(args.id)))
+
+
+def show_ssh(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    machine = gpu.machine(args.id)
+    for label, door in (("direct", machine.ssh_direct), ("proxy", machine.ssh_proxy)):
         print(
-            describe(wait_running(gpu, args.id) if args.wait else gpu.machine(args.id))
+            f"{label:7s}", (door.command + f" -i {args.ssh_key}") if door else "not yet"
         )
-    elif args.command == "ssh":
-        machine = gpu.machine(args.id)
-        for label, door in (
-            ("direct", machine.ssh_direct),
-            ("proxy", machine.ssh_proxy),
-        ):
-            print(
-                f"{label:7s}",
-                (door.command + f" -i {args.ssh_key}") if door else "not yet",
-            )
-    elif args.command == "push":
-        machine = direct_door(gpu, args.id)
-        run_remote(machine, args.ssh_key, f"mkdir -p {Remote.DIR}")
-        run_local(
-            rsync_argv(
-                machine,
-                args.ssh_key,
-                f"{REPO}/",
-                f"{machine.ssh_direct.username}@{machine.ssh_direct.host}:{Remote.DIR}/",
-                filters=push_filters(),
-            )
-        )
-    elif args.command == "bootstrap":
-        run_remote(direct_door(gpu, args.id), args.ssh_key, Remote.bootstrap_script())
-    elif args.command == "run":
-        words = [w for w in args.argv if w != "--"]
-        if not words:
-            raise SystemExit("cloud-gpu run: give the command after --")
-        command = " ".join(shlex.quote(w) for w in words)
-        clock = (
-            f"timeout --kill-after=60 {args.deadline_min * 60} "
-            if args.deadline_min
-            else ""
-        )
-        run_remote(
-            direct_door(gpu, args.id),
+
+
+def push_repo(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    machine = direct_door(gpu, args.id)
+    door = machine.ssh_direct
+    run_remote(machine, args.ssh_key, f"mkdir -p {Remote.DIR}")
+    run_local(
+        rsync_argv(
+            machine,
             args.ssh_key,
-            f"set -euo pipefail\ncd {Remote.DIR}/pipeline\n"
-            f"{clock}env {Remote.RUN_ENV} {Remote.VENV}/bin/python {command}",
+            f"{REPO}/",
+            f"{door.username}@{door.host}:{Remote.DIR}/",
+            filters=push_filters(),
         )
-    elif args.command == "pull":
-        machine = direct_door(gpu, args.id)
-        local = REPO / Rsync.PULL_SUBDIR
-        local.mkdir(parents=True, exist_ok=True)
-        door = machine.ssh_direct
-        remote = f"{door.username}@{door.host}:{Remote.DIR}/{Rsync.PULL_SUBDIR}/"
-        run_local(
-            rsync_argv(
-                machine,
-                args.ssh_key,
-                remote,
-                f"{local}/",
-                filters=pull_filters(args.name),
-            )
+    )
+    if not args.with_runs:
+        return
+    dataset = f"{Rsync.PULL_SUBDIR}/{args.with_runs}{Rsync.RUNS_SUFFIX}"
+    if not (REPO / dataset).is_dir():
+        raise SystemExit(f"cloud-gpu push: no dataset at {dataset}")
+    run_remote(machine, args.ssh_key, f"mkdir -p {Remote.DIR}/{dataset}")
+    run_local(
+        rsync_argv(
+            machine,
+            args.ssh_key,
+            f"{REPO}/{dataset}/",
+            f"{door.username}@{door.host}:{Remote.DIR}/{dataset}/",
+            filters=[],
         )
-    elif args.command == "logs":
-        print(gpu.logs(args.id, tail=args.tail))
-    else:  # stop / start / restart / terminate
-        gpu.act(args.id, Action(args.command))
-        print(f"{args.command}: {args.id}")
+    )
+
+
+def run_command(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    words = [w for w in args.argv if w != "--"]
+    if not words:
+        raise SystemExit("cloud-gpu run: give the command after --")
+    command = " ".join(shlex.quote(w) for w in words)
+    clock = (
+        f"timeout --kill-after=60 {args.deadline_min * 60} "
+        if args.deadline_min
+        else ""
+    )
+    line = f"{clock}env {Remote.RUN_ENV} {Remote.VENV}/bin/python {command}"
+    if args.detach:
+        line = f"nohup bash -c {shlex.quote(line)} > {Remote.RUN_LOG} 2>&1 &"
+    run_remote(
+        direct_door(gpu, args.id),
+        args.ssh_key,
+        f"set -euo pipefail\ncd {Remote.DIR}/pipeline\n{line}",
+    )
+    if args.detach:
+        print(f"detached; `tail {args.id}` reads {Remote.RUN_LOG}")
+
+
+def tail_log(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    run_remote(
+        direct_door(gpu, args.id),
+        args.ssh_key,
+        f"tail -n {args.lines} {Remote.RUN_LOG}; echo; "
+        "pgrep -fa 'e2e-smoke|lerobot' | head -3 || true",
+    )
+
+
+def pull_runs(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    machine = direct_door(gpu, args.id)
+    door = machine.ssh_direct
+    local = REPO / Rsync.PULL_SUBDIR
+    local.mkdir(parents=True, exist_ok=True)
+    remote = f"{door.username}@{door.host}:{Remote.DIR}/{Rsync.PULL_SUBDIR}/"
+    run_local(
+        rsync_argv(
+            machine, args.ssh_key, remote, f"{local}/", filters=pull_filters(args.name)
+        )
+    )
+
+
+def act(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    gpu.act(args.id, Action(args.command))
+    print(f"{args.command}: {args.id}")
+
+
+HANDLERS = {
+    "offers": show_offers,
+    "launch": launch_machine,
+    "machines": lambda gpu, _args: [print(describe(m)) for m in gpu.machines()],
+    "status": show_status,
+    "ssh": show_ssh,
+    "push": push_repo,
+    "bootstrap": lambda gpu, args: run_remote(
+        direct_door(gpu, args.id), args.ssh_key, Remote.bootstrap_script()
+    ),
+    "run": run_command,
+    "tail": tail_log,
+    "pull": pull_runs,
+    "logs": lambda gpu, args: print(gpu.logs(args.id, tail=args.tail)),
+    **{action.value: act for action in Action},
+}
+
+
+def dispatch(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    HANDLERS[args.command](gpu, args)
 
 
 if __name__ == "__main__":
