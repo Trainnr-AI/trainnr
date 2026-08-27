@@ -192,6 +192,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     run.add_argument("id")
     run.add_argument(
+        "--deadline-min",
+        type=int,
+        default=None,
+        help="the machine kills the command after this many minutes (`timeout`, "
+        "TERM then KILL a minute later); checkpoints written before survive",
+    )
+    run.add_argument(
         "argv", nargs=argparse.REMAINDER, help="after --: a tool and its flags"
     )
     pull = sub.add_parser("pull", help="rsync runs/<name>-* back")
@@ -380,11 +387,16 @@ def dispatch(gpu: GpuProvider, args: argparse.Namespace) -> None:  # noqa: PLR09
         if not words:
             raise SystemExit("cloud-gpu run: give the command after --")
         command = " ".join(shlex.quote(w) for w in words)
+        clock = (
+            f"timeout --kill-after=60 {args.deadline_min * 60} "
+            if args.deadline_min
+            else ""
+        )
         run_remote(
             direct_door(gpu, args.id),
             args.ssh_key,
             f"set -euo pipefail\ncd {Remote.DIR}/pipeline\n"
-            f"{Remote.RUN_ENV} {Remote.VENV}/bin/python {command}",
+            f"{clock}env {Remote.RUN_ENV} {Remote.VENV}/bin/python {command}",
         )
     elif args.command == "pull":
         machine = direct_door(gpu, args.id)

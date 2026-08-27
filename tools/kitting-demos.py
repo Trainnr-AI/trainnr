@@ -64,6 +64,14 @@ parser.add_argument(
 )
 parser.add_argument("--seed", type=int, default=20260826)
 parser.add_argument(
+    "--first-episode",
+    type=int,
+    default=0,
+    help="number kept episodes from here: N generators with disjoint ranges"
+    " and seeds fill ONE batch directory in parallel (the render is the"
+    " cost — 95 s/episode measured 2026-08-27 — and the box has cores)",
+)
+parser.add_argument(
     "--dr-span",
     type=float,
     default=0.30,
@@ -75,6 +83,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 EPISODES, OUT = args.episodes, args.out
+FIRST_EPISODE = args.first_episode
 MAX_ATTEMPTS = args.max_attempts if args.max_attempts is not None else 20 * EPISODES
 DR_SPAN = args.dr_span  # +-span around the bundle's identified/nominal values
 FRAME_EVERY = args.frame_every
@@ -160,7 +169,7 @@ while kept < EPISODES:
 
     write_episode(
         OUT,
-        kept,
+        FIRST_EPISODE + kept,
         states=states,
         sensors=sensors,
         actions=actions,
@@ -180,4 +189,8 @@ while kept < EPISODES:
     )
     kept += 1
 
-print(f"kept {kept}/{attempt} episodes -> {OUT}", file=sys.stderr)
+print(
+    f"kept {kept}/{attempt} episodes -> {OUT} "
+    f"(episodes {FIRST_EPISODE}..{FIRST_EPISODE + kept - 1})",
+    file=sys.stderr,
+)

@@ -59,6 +59,7 @@ BATCH_SIZE = 8
 # Runs/eval sizes small enough to stay inside the vector env's one pass.
 MAX_EVAL_BATCH = 4
 STEP_DIR_WIDTH = 6  # LeRobot names a checkpoint step as six digits
+STAGES = ("demos", "convert", "train", "eval")
 
 
 @dataclass(frozen=True)
@@ -186,9 +187,23 @@ def parse_args() -> argparse.Namespace:
         "--device", default=None, help="torch device; default: the best present"
     )
     parser.add_argument(
+        "--until",
+        choices=STAGES,
+        default=STAGES[-1],
+        help="stop after this stage: the CPU-bound stages (demos, convert) on "
+        "one box, the GPU-bound ones (train, eval) on another",
+    )
+    parser.add_argument(
         "--skip-demos",
         action="store_true",
         help="reuse the batch already under <runs>/<name>-demos",
+    )
+    parser.add_argument(
+        "--skip-convert",
+        action="store_true",
+        help="reuse the dataset already under <runs>/<name>-lerobot (implies "
+        "--skip-demos): the CPU-bound stages done elsewhere, the GPU-bound "
+        "ones here",
     )
     parser.add_argument(
         "--force",
@@ -198,6 +213,8 @@ def parse_args() -> argparse.Namespace:
         "inherit stale episodes)",
     )
     args = parser.parse_args()
+    if args.skip_convert:
+        args.skip_demos = True
     scale = SCALES[args.scale]
     for knob in (
         "episodes",
@@ -250,13 +267,22 @@ class StageFailed(SystemExit):
         )
 
 
-def prepare(layout: RunLayout, *, skip_demos: bool, force: bool) -> None:
+def prepare(
+    layout: RunLayout, *, skip_demos: bool, skip_convert: bool, force: bool
+) -> None:
     """Refuse to write over a named run: the trainer refuses an existing
     output directory after minutes of work, and a smaller batch would
-    inherit stale episodes. `--force` removes the earlier artifacts."""
+    inherit stale episodes. `--force` removes the earlier artifacts —
+    never the ones a --skip flag says to reuse."""
     if skip_demos and not layout.demos.is_dir():
         raise SystemExit(f"e2e-smoke: --skip-demos but no batch at {layout.demos}")
-    targets = [layout.dataset, layout.training, layout.evaluation]
+    if skip_convert and not layout.dataset.is_dir():
+        raise SystemExit(
+            f"e2e-smoke: --skip-convert but no dataset at {layout.dataset}"
+        )
+    targets = [layout.training, layout.evaluation]
+    if not skip_convert:
+        targets.insert(0, layout.dataset)
     if not skip_demos:
         targets.insert(0, layout.demos)
     existing = [path for path in targets if path.exists()]
@@ -366,25 +392,44 @@ def report(path: Path) -> None:
     print(f"  events {[(r.trial, [e['name'] for e in r.events]) for r in records]}")
 
 
+def stops_after(args: argparse.Namespace, stage_name: str) -> bool:
+    if args.until != stage_name:
+        return False
+    print(f"\n--until {stage_name}: stopping here, as asked", flush=True)
+    return True
+
+
 def main() -> None:
     args = parse_args()
     layout = RunLayout(args.runs, args.name)
     device = best_device(args.device)
-    prepare(layout, skip_demos=args.skip_demos, force=args.force)
+    prepare(
+        layout,
+        skip_demos=args.skip_demos,
+        skip_convert=args.skip_convert,
+        force=args.force,
+    )
     if not args.skip_demos:
         started = stage(
             f"demos: {args.episodes} kept at +-{DR_SPAN:.0%} DR -> {layout.demos}"
         )
         generate_demos(layout, args.episodes, args.seed)
         done(started)
-    started = stage(f"convert {layout.demos} -> {layout.dataset}")
-    convert(layout)
-    done(started)
+    if stops_after(args, "demos"):
+        return
+    if not args.skip_convert:
+        started = stage(f"convert {layout.demos} -> {layout.dataset}")
+        convert(layout)
+        done(started)
+    if stops_after(args, "convert"):
+        return
     started = stage(
         f"train {POLICY} {args.steps} steps on {device}, in-loop eval through our env"
     )
     train(layout, args, device)
     done(started)
+    if stops_after(args, "train"):
+        return
     started = stage(f"lerobot-eval: {args.eval_episodes} paired starts, records")
     evaluate(layout, args, device)
     done(started)

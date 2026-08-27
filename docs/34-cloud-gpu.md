@@ -88,9 +88,24 @@ $P terminate <id>                                # billing stops here
 ```
 
 `machines`, `status <id> [--wait]`, `ssh <id>` (both doors, with the
-key), `logs <id>`, `stop`/`start`/`restart` round it out. `--provider`
-selects the vendor (`runpod` is the default and the only one);
-`--dotenv` and `--ssh-key` move the two files it reads.
+key), `logs <id>`, `stop`/`start`/`restart` round it out; `--provider`
+selects the vendor (`runpod` is the default and the only one), `--dotenv`
+and `--ssh-key` move the two files it reads. `run
+--deadline-min N` wraps the remote command in `timeout` (TERM, then
+KILL a minute later): a budget the machine enforces, not a clock
+someone watches; checkpoints written before it survive.
+
+**Split the chain by what each box is good at.** The demos (a render
+per control tick, 95 s/episode) and the PNG → AV1 conversion (38
+s/episode) are CPU-bound and free on the WSL box; training and the
+evaluations are what a rented card is for. `kitting-demos.py
+--first-episode K` lets N generators with disjoint ranges and seeds
+fill one batch directory in parallel (six shards on the box's 24
+cores); `e2e-smoke.py --until convert` runs the chain up to the
+dataset; then `push` + an rsync of `runs/<name>-lerobot` and
+`e2e-smoke.py --scale cloud --skip-convert --name <name>` on the
+machine does only train + eval. The first run this way, 2026-08-27
+night, is in docs/07.
 
 The remote layout is `Remote` in the tool: the repo at
 `/workspace/robotiq`, the venv `pipeline/.venv-train` built with
