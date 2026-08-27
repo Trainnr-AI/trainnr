@@ -121,7 +121,7 @@ box rule now is a `timeout` on every probe.
 ### 5.1 The throughput number, same card, same scene
 
 `mjwarp-testspeed` (the wheel ships it; the repository's
-`benchmarks/run.py` does not) on our kitting bundle exported to XML
+*benchmarks/run.py* does not) on our kitting bundle exported to XML
 with its assets rerooted, 64 worlds × 100 steps at dt = 0.002, Newton
 solver, elliptic cone: **17,666 physics steps/s, 35× realtime,
 56.6 µs per step, 64/64 worlds converged** — after a 108 s cold JIT.
