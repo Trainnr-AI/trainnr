@@ -10,7 +10,10 @@ before mujoco_warp's kernels are imported, and an imported module
 keeps its setting for the life of the process.
 
 On a CPU device both modes should already be bit-equal (Warp CPU is
-sequential) — the Mac run is a plumbing smoke. The verdict that
+sequential) — the Mac run is a plumbing smoke. Budget: a COLD kernel
+compile for this scene is ~10 minutes on the WSL box (2026-08-27), and
+each mode compiles its own build; run it under `timeout` and in the
+background. The verdict that
 matters comes from the WSL box's CUDA device, where NOT_GUARANTEED is
 expected to differ across runs and RUN_TO_RUN to match; the wall-time
 column prices the mode (their 4090 data says contention-heavy scenes
@@ -67,7 +70,22 @@ def child(mode: str) -> None:
         states = warp_backend.rollout(initial, controls)
         return states, time.perf_counter() - start
 
-    first, _ = run()  # includes JIT
+    try:
+        first, _ = run()  # includes JIT
+    except Exception as error:
+        # Measured 2026-08-27 on the RTX 3090 Ti: RUN_TO_RUN cannot compile
+        # mujoco_warp 3.12.0 — its _sensor_tactile kernel mixes max and add
+        # reductions on sensordata_out, which deterministic codegen refuses.
+        # That is a verdict about the engine build, reported as one.
+        text = str(error)
+        marker = "Deterministic mode does not support"
+        reason = (
+            text[text.index(marker) :].split("\n", maxsplit=1)[0]
+            if marker in text
+            else text[-300:]
+        )
+        print(json.dumps({"mode": mode, "refused": reason}))
+        return
     second, t_second = run()
     print(
         json.dumps(

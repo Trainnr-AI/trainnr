@@ -94,3 +94,27 @@ the ALOHA bundle's first run through our own adapter
 - Warp's deterministic mode extends to Tape backward passes —
   irrelevant today (mjwarp has no autodiff) but it means the
   determinism story will survive if differentiability ever lands.
+
+## 5. Probed on the RTX 3090 Ti (2026-08-27, WSL, mujoco 3.12.0 + mujoco_warp 3.12.0 + warp 1.16.0)
+
+`tools/determinism-probe.py`, the kitting scene, 4 worlds × 1000
+physics steps, twice per mode:
+
+| mode | result |
+|---|---|
+| `NOT_GUARANTEED` (default) | two identical rollouts differ: `bit_equal=False`, max gap **6.68e-7**; 0.5 s warm per rollout — the GPU instrument is not repeatable, measured |
+| `RUN_TO_RUN` | **refused at compile**: *"Deterministic mode does not support mixing 'max' and 'add' reductions on array 'sensordata_out' in the same function or kernel"* — in mujoco_warp's `_sensor_tactile` kernel, which is compiled whether or not a scene has tactile sensors (a module-level build) |
+
+So §3's "structurally plausible" was one kernel short: the hot-path
+atomics are covered, but the tactile sensor kernel mixes a max and an
+add on one output array, and Warp's deterministic codegen will not
+take that. The verdict: **deterministic GPU certificates are blocked
+upstream**, in mujoco_warp 3.12.0, not in anything we control; the
+fix is theirs (split the kernel, or a build without the tactile
+sensor path) and is worth an issue. Until then docs/49's statistical
+treatment stands, and the stamp `mjx-warp-3.12.0+warp-1.16.0+gpu+x86_64`
+says exactly which non-repeatable instrument produced a number. Cost
+of learning it: the probe's first mode spent ~10 minutes compiling
+kernels cold for this sizing before running in half a second — the
+box rule now is a `timeout` on every probe.
+
