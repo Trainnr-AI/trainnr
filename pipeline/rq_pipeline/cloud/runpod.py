@@ -262,6 +262,8 @@ def _log_lines(text: str) -> list[str]:
     without an SSE `data:` prefix; anything else is passed through."""
     out: list[str] = []
     for raw in text.splitlines():
+        if raw.startswith(("id:", "event:", "retry:", ":")):
+            continue  # SSE bookkeeping, not log content
         line = raw.removeprefix("data:").strip()
         if not line:
             continue

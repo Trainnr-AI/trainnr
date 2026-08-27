@@ -180,7 +180,7 @@ class TheRunpodMapping(unittest.TestCase):
         stream = (
             'data: {"source":"system","line":"start container","ts":"T1"}\n\n'
             '{"source":"stdout","line":"step 200 loss 0.4","ts":"T2"}\n'
-            "data: step 300 loss 0.3\n\n"
+            "id: 42\nevent: log\ndata: step 300 loss 0.3\n\n"
         )
         asked = []
 
@@ -193,8 +193,12 @@ class TheRunpodMapping(unittest.TestCase):
         )
         text = runpod.logs("pod123", tail=2)
         self.assertEqual(
-            text,
-            "T1 system: start container\nT2 stdout: step 200 loss 0.4\nstep 300 loss 0.3",
+            text.splitlines(),
+            [
+                "T1 system: start container",
+                "T2 stdout: step 200 loss 0.4",
+                "step 300 loss 0.3",
+            ],
         )
         url, agent, seconds = asked[0]
         self.assertIn("/pods/pod123/logs?tail=2", url)
