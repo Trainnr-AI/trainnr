@@ -118,3 +118,17 @@ of learning it: the probe's first mode spent ~10 minutes compiling
 kernels cold for this sizing before running in half a second — the
 box rule now is a `timeout` on every probe.
 
+### 5.1 The throughput number, same card, same scene
+
+`mjwarp-testspeed` (the wheel ships it; the repository's
+`benchmarks/run.py` does not) on our kitting bundle exported to XML
+with its assets rerooted, 64 worlds × 100 steps at dt = 0.002, Newton
+solver, elliptic cone: **17,666 physics steps/s, 35× realtime,
+56.6 µs per step, 64/64 worlds converged** — after a 108 s cold JIT.
+It sized `naconmax` to 262,144 for 64 worlds by its own estimate (our
+backend refuses to guess and asks for the numbers; this is what the
+numbers look like at that batch). For scale: Playground's
+AlohaHandOver on Warp reached 36k env-steps/s at 2,048 worlds on this
+card (the box memory); our scene at 64 worlds is half that per step
+with 32× fewer worlds — the batch, not the scene, is the lever.
+
