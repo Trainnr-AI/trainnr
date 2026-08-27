@@ -77,6 +77,9 @@ class EpisodeRecord:
     seed: int | None = None
     events: tuple[Mapping[str, Any], ...] = ()
     variations: Mapping[str, Any] = field(default_factory=dict)  # key -> drawn value
+    # body -> check -> passed, for the protocol's declared placements
+    # (physics/placement.py); empty when the protocol declares none.
+    placement: Mapping[str, Mapping[str, bool]] = field(default_factory=dict)
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

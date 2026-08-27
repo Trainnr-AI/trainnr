@@ -282,3 +282,21 @@ the table; the keyframe is its placement. `RandomAroundSolution` is what
 5. **Reachability as gate or report.** Filtering unreachable starts lifts
    every policy equally but also defines the task. Required or optional —
    Arena allows either (`validation.rst:6067-6073`)?
+
+## Postscript (2026-08-27) — A1, A3 and A4 built
+
+`protocol.Placement(body, support, x, y, tolerance_m)` is the schema
+(positions only, one relation: on a support inside bands — smaller
+than A1's three, because no task needed `NextTo`). `physics/placement.py`
+is the validation layer: `in_limits`, `on_support` and `no_overlap`, all
+required, on `geom_aabb` and `mj_forward`'s contacts; `require_start`
+raises with the trial, body and check named. The harness precomputes
+every trial's start and validates all of them before the first episode
+(A4); the env does the same at `reset`; the verdicts are on every
+record. Measured while building it: a box resting on the table at
+exactly its half-height produces **no contact** in MuJoCo at margin 0,
+so "on support" had to be geometric (bottom within ±5 mm of the top, the
+footprint inside), not read from contacts. Skipped, as planned: the
+solver, the seeded sampler (A2), the optional expensive checks, the
+Rerun boxes.
+

@@ -93,7 +93,7 @@ class Engine(Protocol):
     """What the harness asks of a physics engine — declared here, where
     it is consumed, so `evaluate` names no engine. `MuJoCoBackend`
     satisfies it structurally (asserted in tests); a second engine
-    implements these six, and is admitted through the gauntlet
+    implements these seven, and is admitted through the gauntlet
     (tests/test_mjx_backend.py). `observables` names what the engine
     can expose beyond the FULLPHYSICS row; a protocol that needs more
     is refused before a trial is spent (`require_observables`). The
@@ -114,6 +114,10 @@ class Engine(Protocol):
     def keyframe_state(self, name: str) -> Any: ...
 
     def stepper(self, initial_state: Any, steps: int) -> Any: ...
+
+    def validate_start(
+        self, state: Any, placements: Sequence[Any], *, trial: int
+    ) -> Any: ...  # physics/placement.py: verdicts, or a refusal naming the culprit
 
 
 @dataclass(frozen=True)
@@ -203,10 +207,18 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     home = home_state(backend, protocol)
     instrument = backend.instrument
     fields = protocol_fields(protocol)
+    # Every trial's start exists and is admissible before any episode is
+    # spent (docs/42 §3 A4): a protocol that cannot place trial 3 fails
+    # here, with the culprit named, not after trials 0-2 ran.
+    starts = [protocol.perturb(trial, home) for trial in range(protocol.trials)]
+    placement = [
+        backend.validate_start(start, protocol.placements, trial=trial)
+        for trial, start in enumerate(starts)
+    ]
     records: list[EpisodeRecord] = []
     for policy in policies:
-        for trial in range(protocol.trials):
-            states, sensors = run_episode(policy, protocol.perturb(trial, home))
+        for trial, start in enumerate(starts):
+            states, sensors = run_episode(policy, start)
             record = EpisodeRecord(
                 source=source,
                 policy=policy.name,
@@ -216,6 +228,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
                 instrument=instrument,
                 protocol=fields,
                 events=events_for(protocol, states, sensors),
+                placement=placement[trial],
             )
             records.append(record)
             if record_to is not None:

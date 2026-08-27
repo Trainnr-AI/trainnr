@@ -17,7 +17,7 @@ precisely so it can raise the helpful error.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -250,6 +250,15 @@ class MuJoCoBackend:
         if self._model is None:
             raise RuntimeError(no_model_message(self.LOAD_DOORS))
         return self._model
+
+    def validate_start(
+        self, state: Any, placements: Sequence[Any], *, trial: int
+    ) -> Any:
+        """A trial's declared start, checked on this model before the
+        trial is spent (`physics/placement.py`); refuses with the culprit."""
+        from rq_pipeline.physics.placement import require_start  # noqa: PLC0415
+
+        return require_start(self._require_model(), state, placements, trial=trial)
 
     def counts(self) -> ModelCounts:
         return census(self._require_model())

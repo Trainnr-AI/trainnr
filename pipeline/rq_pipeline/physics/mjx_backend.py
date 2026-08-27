@@ -30,7 +30,7 @@ worlds at once — the seam the vectorized gymnasium env drives (docs/49).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -189,6 +189,14 @@ class MJXWarpBackend:
         from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: PLC0415
 
         return keyframe_state(self._require_model(), name)
+
+    def validate_start(
+        self, state: Any, placements: Sequence[Any], *, trial: int
+    ) -> Any:
+        """Same compiled model, same check as the CPU engine."""
+        from rq_pipeline.physics.placement import require_start  # noqa: PLC0415
+
+        return require_start(self._require_model(), state, placements, trial=trial)
 
     def counts(self) -> ModelCounts:
         return census(self._require_model())

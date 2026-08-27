@@ -39,9 +39,9 @@ from typing import Any
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
 from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS
 from rq_pipeline.physics.mujoco_backend import seat_at_keyframe
-from rq_pipeline.protocol import EpisodeProtocol
+from rq_pipeline.protocol import EpisodeProtocol, Placement
 from rq_pipeline.tasks.registry import register
-from rq_pipeline.tasks.scene import pin_nominal_options, set_render_budget
+from rq_pipeline.tasks.scene import TABLE_GEOM, pin_nominal_options, set_render_budget
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
 ARM_PREFIX = "arm_"
@@ -76,6 +76,10 @@ JAW_INDEX = STATE_WIDTH - 1
 JAW_OPEN = 1.3
 JAW_CLOSED = -0.15
 WRIST_FLAT = -1.571
+# The task objects, by body name: the lift's cube, and the stack/insert pair.
+CUBE_BODY = "cube"
+CUBE_A_BODY = "cube_a"
+CUBE_B_BODY = "cube_b"
 HOME_KEYFRAME = f"{ARM_PREFIX}home"  # the bundle's `home`, prefixed by attach
 JAW_BODY = f"{ARM_PREFIX}Fixed_Jaw"
 
@@ -111,7 +115,7 @@ def _scene_with_arm(name: str, arm_xml: Path) -> Any:
     # Restore what attach drops — see module docstring.
     pin_nominal_options(scene)
     scene.worldbody.add_geom(
-        name="table",
+        name=TABLE_GEOM,
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=[0.4, 0.4, 0.02],
         pos=[0.0, -0.2, -0.02],
@@ -290,7 +294,7 @@ def _add_cube_a(scene: Any) -> None:
     tasks cannot drift apart."""
     _add_free_cube(
         scene,
-        "cube_a",
+        CUBE_A_BODY,
         _CUBE_HOME,
         _CUBE_HALF,
         mass=0.02,
@@ -322,7 +326,7 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     scene = _scene_with_arm("so101-lift", arm_xml)
     _add_free_cube(
         scene,
-        "cube",
+        CUBE_BODY,
         _CUBE_HOME,
         _CUBE_HALF,
         mass=0.02,
@@ -349,6 +353,7 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
             control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
+            placements=(Placement(CUBE_BODY, TABLE_GEOM),),
         ),
         "lift the cube out of the pocket and hold it clear",
         arm_xml,
@@ -429,7 +434,7 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     _add_cube_a(scene)
     _add_free_cube(
         scene,
-        "cube_b",
+        CUBE_B_BODY,
         _CUBE_B_HOME,
         (_CUBE_B_HALF, _CUBE_B_HALF, 0.015),
         mass=0.06,
@@ -457,6 +462,10 @@ def build_stack(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
             control_interval=CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
+            placements=(
+                Placement(CUBE_A_BODY, TABLE_GEOM),
+                Placement(CUBE_B_BODY, TABLE_GEOM),
+            ),
         ),
         "stack cube A on cube B",
         arm_xml,
@@ -530,6 +539,7 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
             control_interval=CONTROL_INTERVAL,
             perturb=_jitter_cube_a,
             success=success,
+            placements=(Placement(CUBE_A_BODY, TABLE_GEOM),),
         ),
         "seat cube A inside the pocket",
         arm_xml,

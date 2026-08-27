@@ -29,6 +29,54 @@ class CameraSpec:
     height: int
 
 
+class PlacementChecks:
+    """The verdicts a start earns, by name — the keys of every
+    `EpisodeRecord.placement` entry. All three are REQUIRED today: a
+    start failing any one is refused before the trial is spent
+    (docs/e2e-research/42 §3, A3: cheap checks, no silent fallback)."""
+
+    IN_LIMITS = "in_limits"  # the body's centre inside the declared x/y bands
+    ON_SUPPORT = "on_support"  # footprint inside the support's, bottom on its top
+    NO_OVERLAP = "no_overlap"  # no penetration with anything but the support
+    ALL = (IN_LIMITS, ON_SUPPORT, NO_OVERLAP)
+
+
+@dataclass(frozen=True)
+class Placement:
+    """Where a free body must START: resting on `support` (a geom name),
+    its centre inside the optional `x`/`y` bands, penetrating nothing
+    else. Declared by the task beside `perturb`, so "where a part
+    starts" is protocol content — hashed, recorded, and checked on the
+    simulator's own geometry before an episode is spent. `tolerance_m`
+    is how far the body's bottom may sit above or below the support's
+    top and still count as resting (Arena's 5 mm; docs/42 §3 A3)."""
+
+    body: str
+    support: str
+    x: tuple[float, float] | None = None
+    y: tuple[float, float] | None = None
+    tolerance_m: float = 0.005
+
+    def __post_init__(self) -> None:
+        for axis, band in (("x", self.x), ("y", self.y)):
+            if band is not None and not band[0] < band[1]:
+                raise ValueError(
+                    f"{self.body}: {axis} band must be (low, high), got {band}"
+                )
+        if self.tolerance_m <= 0:
+            raise ValueError(f"{self.body}: tolerance_m must be positive")
+
+
+def placement_fields(placement: Placement) -> dict[str, Any]:
+    return {
+        "body": placement.body,
+        "support": placement.support,
+        "x": list(placement.x) if placement.x else None,
+        "y": list(placement.y) if placement.y else None,
+        "tolerance_m": placement.tolerance_m,
+    }
+
+
 @dataclass(frozen=True)
 class EpisodeProtocol:
     """The episode recipe every policy is scored under, identically.
@@ -66,6 +114,9 @@ class EpisodeProtocol:
     # gate is all that exists: the referee call gains the extras with the
     # first engine that has any (harness.Engine).
     observables: tuple[str, ...] = ()
+    # Where each free body must start (`Placement`); the engine checks
+    # every trial's start against these before any episode is spent.
+    placements: tuple[Placement, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name, value in (
@@ -75,6 +126,9 @@ class EpisodeProtocol:
         ):
             if value <= 0:
                 raise ValueError(f"{field_name} must be positive, got {value}")
+        bodies = [placement.body for placement in self.placements]
+        if len(set(bodies)) != len(bodies):
+            raise ValueError(f"a body is placed twice: {sorted(bodies)}")
         names = [name for name, _ in self.milestones]
         if len(set(names)) != len(names):
             raise ValueError(f"milestone names must be unique, got {names}")
@@ -119,4 +173,6 @@ def protocol_fields(protocol: EpisodeProtocol) -> dict[str, Any]:
     }
     if protocol.observables:  # absent when empty: every existing hash stands
         fields["observables"] = list(protocol.observables)
+    if protocol.placements:  # likewise
+        fields["placements"] = [placement_fields(p) for p in protocol.placements]
     return fields

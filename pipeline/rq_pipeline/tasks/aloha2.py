@@ -35,10 +35,11 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
-from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
+from rq_pipeline.protocol import CameraSpec, EpisodeProtocol, Placement
 from rq_pipeline.tasks.registry import register
 from rq_pipeline.tasks.scene import (
     FLOOR_GEOM,
+    TABLE_GEOM,
     GeomGroup,
     pin_nominal_options,
     set_render_budget,
@@ -69,6 +70,7 @@ NEUTRAL_CTRL = [0.0, -0.96, 1.16, 0.0, -0.3, 0.0, 0.0084] * ARMS
 ACT_SIM_Y_SHIFT = -0.519
 # gym-aloha's sample_box_pose: x in [0, 0.2], y in [0.4, 0.6], dropped from
 # z=0.05. Translated, and resting on the table instead of dropped.
+CUBE_BODY = "cube"  # the transfer task's object
 CUBE_HALF = 0.02
 CUBE_SPAWN_X = (0.0, 0.2)
 CUBE_SPAWN_Y = (0.4 + ACT_SIM_Y_SHIFT, 0.6 + ACT_SIM_Y_SHIFT)
@@ -366,7 +368,7 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
 
     scene = _task_scene("transfer-cube", bundle_xml, look)
     # gym-aloha's red_box, verbatim: 2 cm half-size, red.
-    _add_free_box(scene, "cube", CUBE_HOME, CUBE_HALF, (1, 0, 0, 1))
+    _add_free_box(scene, CUBE_BODY, CUBE_HOME, CUBE_HALF, (1, 0, 0, 1))
     _add_top_camera_and_referees(scene)
 
     def perturb(trial: int, home: Any) -> Any:
@@ -419,6 +421,9 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
             control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
+            placements=(
+                Placement(CUBE_BODY, TABLE_GEOM, x=CUBE_SPAWN_X, y=CUBE_SPAWN_Y),
+            ),
             home=HOME_KEYFRAME,
             milestones=(
                 ("cube_moved", cube_moved),
@@ -453,6 +458,13 @@ SLOT_CENTERS = {
     "left": (TRAY_CENTER[0] - _SLOT_OFFSET_X, TRAY_CENTER[1]),
 }
 PART_HALF = 0.02
+
+
+def part_body(arm: str) -> str:
+    """The kitting part each arm places, by body name."""
+    return f"part_{arm}"
+
+
 # Spawn bands, one per arm side, inside the proven reach envelope
 # (transfer_cube's spawn box, mirrored for the left arm).
 PART_SPAWN = {
@@ -566,7 +578,7 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
 
     colors = {"right": (1, 0, 0, 1), "left": (0, 0.55, 1, 1)}
     for arm in PART_ORDER:
-        _add_free_box(scene, f"part_{arm}", PART_HOME[arm], PART_HALF, colors[arm])
+        _add_free_box(scene, part_body(arm), PART_HOME[arm], PART_HALF, colors[arm])
     _add_top_camera_and_referees(scene)
 
     def perturb(trial: int, home: Any) -> Any:
@@ -632,6 +644,15 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
             control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
+            placements=tuple(
+                Placement(
+                    part_body(arm),
+                    TABLE_GEOM,
+                    x=PART_SPAWN[arm][0],
+                    y=PART_SPAWN[arm][1],
+                )
+                for arm in PART_ORDER
+            ),
             home=HOME_KEYFRAME,
             milestones=(
                 ("part_moved", part_moved),

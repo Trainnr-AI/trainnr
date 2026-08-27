@@ -36,6 +36,7 @@ the same reason).
 from __future__ import annotations
 
 import functools
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -64,6 +65,7 @@ from rq_pipeline.evaluate.harness import home_state
 from rq_pipeline.evaluate.records import EpisodeRecord, append_records, protocol_hash
 from rq_pipeline.evaluate.variations import Variation, describe, draw_all
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
+from rq_pipeline.physics.placement import require_start
 from rq_pipeline.physics.variations import apply_key, restore_all, snapshot_all
 from rq_pipeline.protocol import events_for, protocol_fields
 from rq_pipeline.robot.model_checks import assert_model_alive
@@ -162,6 +164,7 @@ class RobotiqEnv(gym.Env):
         )
         self._renderers: dict[tuple[int, int], Any] = {}
         self._stepper: Stepper | None = None
+        self._placement: Mapping[str, Mapping[str, bool]] = {}
         self._trial = 0
         self._seed: int | None = None
         self._episodes = 0
@@ -234,6 +237,9 @@ class RobotiqEnv(gym.Env):
         for key, value in self._values.items():
             apply_key(self._model, self._nominal, key, value)
         initial = self.protocol.perturb(self._trial, self._home)
+        self._placement = require_start(
+            self._model, initial, self.protocol.placements, trial=self._trial
+        )
         self._stepper = Stepper(
             self._model, initial, self.protocol.steps, data=self._data
         )
@@ -286,6 +292,7 @@ class RobotiqEnv(gym.Env):
             seed=self._seed,
             events=events_for(self.protocol, states, sensors),
             variations=dict(self._values),
+            placement=self._placement,
         )
 
     def _renderer(self, height: int, width: int) -> Any:

@@ -115,6 +115,10 @@ def apply_options(  # noqa: PLR0913 - the five knobs of one condition, each name
 
 
 FLOOR_GEOM = "floor"
+# The geom every task object starts on, in both rigs: the SO-101 scenes
+# add it by this name; the ALOHA bundle's table compiles under it too
+# (pinned by tests/test_placement.py).
+TABLE_GEOM = "table"
 
 
 class GeomGroup:
