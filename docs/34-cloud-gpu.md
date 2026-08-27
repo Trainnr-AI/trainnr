@@ -78,8 +78,11 @@ schema and the wire said:
   16, the card at 17 % — slower than the 3090 Ti's 14.8**: the training
   loop itself is CPU-bound at batch 8 (per-step Python and kernel
   launches on slower server cores), so workers are not the lever and a
-  bigger batch is (`e2e-smoke --batch`; the preset keeps the recipe's
-  8 for comparability). The pod's volume
+  bigger batch is: **batch 64 ran at 9.26 steps/s, 58 % GPU, 17 GB** —
+  81 % of the batch-8 step rate with eight times the samples per step,
+  6.5× the throughput (`e2e-smoke --batch`, with `--lr` scaled by the
+  square root of the batch ratio; the preset keeps the recipe's 8 for
+  comparability, the operator's call on the night was 64). The pod's volume
   refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
   UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
 - The account held a **stopped B200 pod** (`$6.79/h` when running; a
