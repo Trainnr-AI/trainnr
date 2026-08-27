@@ -78,7 +78,9 @@ class Remote:
     # EGL is the offscreen renderer on a bare Linux GPU box; the WSL
     # variables (Mesa's D3D12 path) do not apply there.
     RUN_ENV = "MUJOCO_GL=egl OMP_NUM_THREADS=1"
-    # Where a detached `run` writes; `tail` reads it.
+    # A detached `run` writes its command here and its output there;
+    # `tail` reads the log. The script file is the record of what ran.
+    RUN_SH = "/workspace/robotiq/run.sh"
     RUN_LOG = "/workspace/robotiq/run.log"
     APT = "libegl1 libgl1 libglib2.0-0 rsync"
 
@@ -139,6 +141,13 @@ class Ssh:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    # Everything after `--` is the remote command, verbatim. Split by
+    # hand: argparse's REMAINDER swallows this tool's own flags after the
+    # machine id (measured 2026-08-27: `--detach` reached python on the pod).
+    remote: list[str] = []
+    if "--" in argv:
+        cut = argv.index("--")
+        argv, remote = argv[:cut], argv[cut + 1 :]
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument(
         "--provider", default=DEFAULT_PROVIDER, help=f"one of {sorted(providers())}"
@@ -219,13 +228,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="the machine kills the command after this many minutes (`timeout`, "
         "TERM then KILL a minute later); checkpoints written before survive",
     )
-    run.add_argument(
-        "argv", nargs=argparse.REMAINDER, help="after --: a tool and its flags"
-    )
     pull = sub.add_parser("pull", help="rsync runs/<name>-* back")
     pull.add_argument("id")
     pull.add_argument("name", help="the run name (the --name of the chain)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    args.argv = remote
+    return args
 
 
 # ---- the steps ---------------------------------------------------------
@@ -414,7 +422,7 @@ def push_repo(gpu: GpuProvider, args: argparse.Namespace) -> None:
 
 
 def run_command(gpu: GpuProvider, args: argparse.Namespace) -> None:
-    words = [w for w in args.argv if w != "--"]
+    words = args.argv
     if not words:
         raise SystemExit("cloud-gpu run: give the command after --")
     command = " ".join(shlex.quote(w) for w in words)
@@ -425,12 +433,19 @@ def run_command(gpu: GpuProvider, args: argparse.Namespace) -> None:
     )
     line = f"{clock}env {Remote.RUN_ENV} {Remote.VENV}/bin/python {command}"
     if args.detach:
-        line = f"nohup bash -c {shlex.quote(line)} > {Remote.RUN_LOG} 2>&1 &"
-    run_remote(
-        direct_door(gpu, args.id),
-        args.ssh_key,
-        f"set -euo pipefail\ncd {Remote.DIR}/pipeline\n{line}",
-    )
+        # The command goes into a file and nohup runs the file: no nested
+        # quoting through the ssh stdin pipe (which broke a backgrounded
+        # `bash -c` on the pod, 2026-08-27), and the file stays as the
+        # record of what ran.
+        script = (
+            f"cat > {Remote.RUN_SH} <<'RQ_RUN'\n"
+            f"cd {Remote.DIR}/pipeline\n{line}\nRQ_RUN\n"
+            f"nohup bash {Remote.RUN_SH} > {Remote.RUN_LOG} 2>&1 < /dev/null &\n"
+            f"echo started: $(cat {Remote.RUN_SH} | tail -n 1)"
+        )
+    else:
+        script = f"set -euo pipefail\ncd {Remote.DIR}/pipeline\n{line}"
+    run_remote(direct_door(gpu, args.id), args.ssh_key, script)
     if args.detach:
         print(f"detached; `tail {args.id}` reads {Remote.RUN_LOG}")
 
