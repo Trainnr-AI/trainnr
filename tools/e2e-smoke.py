@@ -81,6 +81,10 @@ class Scale:
     # recipe's batch 8 for comparability; `--batch` overrides it.
     workers: int
     batch: int
+    # The policy's learning rate; None keeps LeRobot's default (ACT: 1e-5,
+    # tuned for batch 8). A bigger batch wants a bigger rate — the
+    # conservative rule for AdamW is the square root of the batch ratio.
+    lr: float | None = None
 
 
 SCALES = {
@@ -213,6 +217,12 @@ def parse_args() -> argparse.Namespace:
         help="the trainer's batch size: the lever when the card idles at batch 8",
     )
     parser.add_argument(
+        "--lr",
+        type=float,
+        default=None,
+        help="the policy's learning rate (default: LeRobot's; scale it with the batch)",
+    )
+    parser.add_argument(
         "--device", default=None, help="torch device; default: the best present"
     )
     parser.add_argument(
@@ -253,6 +263,7 @@ def parse_args() -> argparse.Namespace:
         "eval_episodes",
         "workers",
         "batch",
+        "lr",
     ):
         if getattr(args, knob) is None:
             setattr(args, knob, getattr(scale, knob))
@@ -379,6 +390,7 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
             batch_size=args.batch,
             save_freq=args.checkpoint_every,
             num_workers=args.workers,
+            lr=args.lr,
             eval_freq=args.checkpoint_every,
             eval_episodes=episodes,
             eval_batch=episodes,

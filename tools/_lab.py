@@ -149,6 +149,7 @@ def lerobot_train_command(  # noqa: PLR0913 - every knob of one command line, na
     dataset_root: Path | str | None = None,
     log_freq: int = LeRobotDefaults.LOG_FREQ,
     num_workers: int | None = None,
+    lr: float | None = None,
     eval_freq: int | None = None,
     eval_episodes: int | None = None,
     eval_batch: int | None = None,
@@ -173,6 +174,7 @@ def lerobot_train_command(  # noqa: PLR0913 - every knob of one command line, na
         f"--batch_size={batch_size}",
         f"--log_freq={log_freq}",
         *([f"--num_workers={num_workers}"] if num_workers is not None else []),
+        *([f"--policy.optimizer_lr={lr}"] if lr is not None else []),
         f"--save_freq={save_freq}",
         "--wandb.enable=false",
     ]
