@@ -72,12 +72,21 @@ class Scale:
     checkpoint_every: int
     inloop_episodes: int
     eval_episodes: int
+    # Dataloader workers: the AV1 decode per sample is the trainer's
+    # bottleneck, not the card (measured 2026-08-27: a B200 at 11.3
+    # steps/s with four workers, slower than the 3090 Ti's 14.8).
+    workers: int
 
 
 SCALES = {
     # Minutes on the WSL card; the smallest run that exercises every stage.
     "smoke": Scale(
-        episodes=2, steps=300, checkpoint_every=300, inloop_episodes=1, eval_episodes=2
+        episodes=2,
+        steps=300,
+        checkpoint_every=300,
+        inloop_episodes=1,
+        eval_episodes=2,
+        workers=4,
     ),
     # LeRobot's ACT sim recipe (50 episodes, 100k steps, batch 8) with a
     # checkpoint every 20k so a lost instance costs an hour, not a day,
@@ -91,6 +100,7 @@ SCALES = {
         checkpoint_every=20_000,
         inloop_episodes=4,
         eval_episodes=20,
+        workers=16,
     ),
 }
 
@@ -184,6 +194,12 @@ def parse_args() -> argparse.Namespace:
         help="lerobot-eval paired starts",
     )
     parser.add_argument(
+        "--workers",
+        type=positive_int,
+        default=None,
+        help="the trainer's dataloader workers (the AV1 decode is the bottleneck)",
+    )
+    parser.add_argument(
         "--device", default=None, help="torch device; default: the best present"
     )
     parser.add_argument(
@@ -222,6 +238,7 @@ def parse_args() -> argparse.Namespace:
         "checkpoint_every",
         "inloop_episodes",
         "eval_episodes",
+        "workers",
     ):
         if getattr(args, knob) is None:
             setattr(args, knob, getattr(scale, knob))
@@ -343,6 +360,7 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
             steps=args.steps,
             batch_size=BATCH_SIZE,
             save_freq=args.checkpoint_every,
+            num_workers=args.workers,
             eval_freq=args.checkpoint_every,
             eval_episodes=episodes,
             eval_batch=episodes,

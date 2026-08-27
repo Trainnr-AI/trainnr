@@ -322,7 +322,18 @@ def rsync_argv(
         shlex.quote(p)
         for p in ["ssh", "-i", str(key), "-p", str(door.port), *Ssh.OPTIONS]
     )
-    return ["rsync", "-az", "--info=progress2", "-e", ssh, *filters, source, target]
+    # -a minus owner/group: the pod's volume refuses chown (rsync exit 23,
+    # measured 2026-08-27), and the machine is root's anyway.
+    return [
+        "rsync",
+        "-rlptDz",
+        "--info=progress2",
+        "-e",
+        ssh,
+        *filters,
+        source,
+        target,
+    ]
 
 
 def push_filters() -> list[str]:
