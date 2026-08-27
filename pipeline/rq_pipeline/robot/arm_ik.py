@@ -30,6 +30,8 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     grip_geoms: Sequence[str] | None = None,
     approach_axis: Sequence[float] = (0.0, 0.0, -1.0),
     down_weight: float = 0.3,
+    closing_axis: Sequence[float] | None = None,
+    closing_weight: float = 0.3,
     pos_tol: float = 0.005,
     max_iters: int = 100,
     damping: float = 1e-2,
@@ -48,9 +50,17 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     air 12 cm above the part). Position what you mean to place.
 
     Returns True when the position error is within `pos_tol` metres.
-    The orientation term aligns the site's z-axis with world -z at
-    weight `down_weight` — a bias, not a constraint. `step_limit`
-    (rad) clamps each iteration's joint step; joint ranges respected.
+    The orientation term aligns the site's z-axis with `approach_axis`
+    at weight `down_weight` — a bias, not a constraint. That leaves the
+    rotation ABOUT the approach axis to the solver's nullspace, and on
+    a gripper that is the closing plane: measured 2026-08-27, the ALOHA
+    expert's pads closed 19 degrees out of the horizontal at the spawn
+    band's near-base corners, so the lower pad went under the part and
+    the close lifted the gripper instead of the part (docs/31's "known
+    edge"). `closing_axis` pins it: the site's y-axis — the line the
+    fingers close along — is pulled toward it (either sign, whichever
+    is nearer) at `closing_weight`. `step_limit` (rad) clamps each
+    iteration's joint step; joint ranges respected.
     """
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
@@ -98,6 +108,10 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     target = np.asarray(target_pos, dtype=float)
     down = np.asarray(approach_axis, dtype=float)
     down = down / np.linalg.norm(down)
+    closing = None
+    if closing_axis is not None:
+        closing = np.asarray(closing_axis, dtype=float)
+        closing = closing / np.linalg.norm(closing)
     jacp = np.zeros((3, model.nv))
     jacr = np.zeros((3, model.nv))
     geom_jac = np.zeros((3, model.nv))
@@ -110,10 +124,8 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     for _ in range(max_iters):
         mujoco.mj_forward(model, data)
         pos_err = target - positioned_point()
-        site_z = data.site_xmat[site_id].reshape(3, 3)[:, 2]
-        # Rotation error that drives site_z toward `down`: the cross
-        # product is the axis*sin(angle) of the needed rotation.
-        rot_err = np.cross(site_z, down)
+        rotation = data.site_xmat[site_id].reshape(3, 3)
+        orientation = _orientation_errors(rotation, down, closing)
         if np.linalg.norm(pos_err) < pos_tol:
             return True
         if geom_ids:
@@ -124,8 +136,11 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
             mujoco.mj_jacSite(model, data, geom_jac, jacr, site_id)
         else:
             mujoco.mj_jacSite(model, data, jacp, jacr, site_id)
-        jac = np.vstack([jacp[:, dof_columns], down_weight * jacr[:, dof_columns]])
-        err = np.concatenate([pos_err, down_weight * rot_err])
+        weights = (down_weight, closing_weight)[: len(orientation)]
+        jac = np.vstack(
+            [jacp[:, dof_columns], *(w * jacr[:, dof_columns] for w in weights)]
+        )
+        err = np.concatenate([pos_err, *(w * e for w, e in zip(weights, orientation))])
         # Damped least squares: dq = J^T (J J^T + lambda I)^-1 err
         gram = jac @ jac.T + damping * np.eye(jac.shape[0])
         dq = jac.T @ np.linalg.solve(gram, err)
@@ -136,3 +151,18 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
             )
     mujoco.mj_forward(model, data)
     return bool(np.linalg.norm(target - positioned_point()) < pos_tol)
+
+
+def _orientation_errors(rotation: Any, down: Any, closing: Any) -> list[Any]:
+    """The rotation errors, each `cross(current axis, wanted axis)` — the
+    axis*sin(angle) of the rotation that would align them: the site's
+    z toward the approach axis, and, when a closing axis is given, the
+    site's y toward it (either sign, whichever is nearer)."""
+    import numpy as np  # noqa: PLC0415
+
+    errors = [np.cross(rotation[:, 2], down)]
+    if closing is not None:
+        site_y = rotation[:, 1]
+        wanted = closing if float(site_y @ closing) >= 0 else -closing
+        errors.append(np.cross(site_y, wanted))
+    return errors

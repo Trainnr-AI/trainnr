@@ -569,7 +569,26 @@ class KittingChoreography:
     degrees down, pointing inward (x flips with the arm)."""
 
     GRASP_TILT = (0.7, 0.0, -0.71)
+    # The fingers close along world y: the parts are axis-aligned boxes,
+    # so the pads meet their y faces squarely. Without it the closing
+    # plane pitched 19 degrees at the near-base corners (docs/07 2026-08-27).
+    GRASP_CLOSING_AXIS = (0.0, 1.0, 0.0)
+    # Where the closing plane is pinned: the GRASP beats, where the pads
+    # must meet the part's faces squarely. Not the hovers (pinned there,
+    # the far corner's 12 cm hover is out of reach: trial 0 refused) and
+    # not the place over the slot (the part is already in the gripper,
+    # and the left slot beside its own base is unreachable with the
+    # finger axis pinned) — both measured 2026-08-27.
+    CLOSING_PLANE_SEGMENTS = ("descend", "close", "lift")
+    # After its place, an arm PARKS: it folds back to the neutral pose,
+    # out of the shared workspace, before the other arm works. Without
+    # it the right arm's retreat pose left its forearm mid-table across
+    # the left arm's path, and the left gripper shoved it — measured
+    # 2026-08-27: -55 N.m of constraint torque on the left shoulder, the
+    # pads stalled 6 cm above the part, and not one finger contact.
+    PARK_SECONDS = 1.5
     IK_DOWN_WEIGHT = 0.5
+    IK_CLOSING_WEIGHT = 0.5
     IK_POS_TOL_M = 0.008
     IK_MAX_ITERS = 250
     IK_DAMPING = 5e-3
@@ -849,6 +868,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
             grip: float,
             secs: float,
             *,
+            closing: bool = False,
             arm: str = arm,
             ctrl_slice: Any = ctrl_slice,
             gripper_index: int = gripper_index,
@@ -867,6 +887,10 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 target_pos=target_xyz,
                 approach_axis=grasp_axis(arm, target_xyz[:2]),
                 down_weight=KittingChoreography.IK_DOWN_WEIGHT,
+                closing_axis=(
+                    KittingChoreography.GRASP_CLOSING_AXIS if closing else None
+                ),
+                closing_weight=KittingChoreography.IK_CLOSING_WEIGHT,
                 pos_tol=KittingChoreography.IK_POS_TOL_M,
                 max_iters=KittingChoreography.IK_MAX_ITERS,
                 damping=KittingChoreography.IK_DAMPING,
@@ -907,8 +931,9 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                     stats.truncated = True
                 break
             name, target_xyz, grip, secs = plan[segment_index]
+            closing = name in KittingChoreography.CLOSING_PLANE_SEGMENTS
             segment_index += 1
-            command_reach(target_xyz, grip, secs)
+            command_reach(target_xyz, grip, secs, closing=closing)
             if name == "lift" and part_z() < spec.lift_check_z_m and not grasp_retried:
                 if stats is not None:
                     stats.retries.append((arm, stepper.step, round(part_z(), 3)))
@@ -959,8 +984,16 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                         ),
                     ]
                     command_reach(
-                        corrected, grip, KittingChoreography.CORRECTION_SECONDS
+                        corrected,
+                        grip,
+                        KittingChoreography.CORRECTION_SECONDS,
+                        closing=closing,
                     )
+        if not stepper.done:
+            parked = ctrl.copy()
+            parked[ctrl_slice] = np.asarray(NEUTRAL_CTRL, dtype=float)[ctrl_slice]
+            parked[gripper_index] = gripper_ctrl_from_normalized(1.0)
+            advance(KittingChoreography.PARK_SECONDS, parked)
     if stats is not None:
         stats.steps_used_before_hold = stepper.step
     # Hold the final pose for the rest of the protocol window.
