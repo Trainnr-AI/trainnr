@@ -7,10 +7,9 @@ order, and the joined certificate must behave the way the statistics
 promise at n=4: honest FAIL on the interval gate, small exact p.
 """
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 PENDULUM = """
 <mujoco>
@@ -78,7 +77,7 @@ def _settled_near_target(states, sensors):
     return bool(abs(tail.mean() - TARGET_ANGLE) < TOLERANCE)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class GateAInSimulation(unittest.TestCase):
     def _scores(self):
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415

@@ -8,10 +8,9 @@ resting in its spawn box, and the `top` camera a gym-aloha checkpoint
 consumes renders a real frame at the checkpoint's resolution.
 """
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 BLACK_FRAME_MEAN = 5.0
 
@@ -72,7 +71,7 @@ class GripperRemap(unittest.TestCase):
         self.assertAlmostEqual(float(ctrl[13]), 0.0195)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class TransferCubeScene(unittest.TestCase):
     def _loaded(self):
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415

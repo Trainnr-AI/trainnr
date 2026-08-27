@@ -7,18 +7,15 @@ every policy 0% with no error, the silent-failure shape the census gate
 exists to catch.
 """
 
-import importlib.util
 import unittest
 
-SIM_PRESENT = (
-    importlib.util.find_spec("mujoco") is not None
-    and importlib.util.find_spec("gymnasium") is not None
-)
+from tests._extras import needs_envs
+
 SO101_JOINTS = 6
 NOT_BLACK = 20
 
 
-@unittest.skipUnless(SIM_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_envs
 class ArmnetBenchRig(unittest.TestCase):
     def test_observation_matches_the_armnetbench_contract(self) -> None:
         import numpy as np  # noqa: PLC0415

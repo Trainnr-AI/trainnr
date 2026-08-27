@@ -3,12 +3,11 @@ it, their chunk executed on our horizon — against a fake server that
 speaks their protocol (metadata first, msgpack-numpy, a string on error).
 Runs where the `remote` extra is installed (the train venv)."""
 
-import importlib.util
 import threading
 import unittest
 
-REMOTE_PRESENT = importlib.util.find_spec("openpi_client") is not None
-SIM_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_remote
+
 HORIZON, NU = 8, 14
 EXECUTED = 3
 LOCALHOST = "127.0.0.1"
@@ -25,7 +24,7 @@ def _serve(handler):
     return port, server.shutdown
 
 
-@unittest.skipUnless(REMOTE_PRESENT and SIM_PRESENT, "needs the remote and sim extras")
+@needs_remote
 class ThroughOpenpi(unittest.TestCase):
     def test_a_chunk_round_trips_and_is_executed_on_our_horizon(self) -> None:
         import numpy as np  # noqa: PLC0415

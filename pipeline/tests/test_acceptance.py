@@ -2,11 +2,11 @@
 variant the expert cannot do is rejected with the funnel as the reason;
 a variant that rewards doing nothing is rejected as no test at all."""
 
-import importlib.util
 import unittest
 from dataclasses import replace
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
+
 STAMP = "aloha2-nominal@000000000000"
 OUT_OF_REACH_Y = 0.9  # the tray a metre from the arms' base line
 ANYWHERE_M = 10.0  # an in-slot radius that covers the whole table
@@ -17,7 +17,7 @@ MILESTONES = 4
 FEW = 2
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class TheCriticLoop(unittest.TestCase):
     def _accept(self, spec):
         from rq_pipeline.tasks.acceptance import accept  # noqa: PLC0415

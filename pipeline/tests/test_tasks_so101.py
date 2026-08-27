@@ -1,17 +1,15 @@
 """The reach task end-to-end: composition, census, and graded policies."""
 
-import importlib.util
 import unittest
 
+from tests._extras import needs_sim
 from tests._instruments import expected_expert_rate
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 HOME_CTRL = [0.0, -1.57, 1.57, 1.57, -1.57, 0.0]
 REST_CTRL = [0.0, -3.32, 3.11, 1.18, 0.0, -0.174]
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class ReachTask(unittest.TestCase):
     def _task_and_backend(self):
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
@@ -58,7 +56,7 @@ class ReachTask(unittest.TestCase):
         self.assertEqual(by_name["limp"], 0.0)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class LiftTask(unittest.TestCase):
     def test_graded_pick_ladder(self) -> None:
         import numpy as np  # noqa: PLC0415
@@ -102,7 +100,7 @@ class LiftTask(unittest.TestCase):
         self.assertEqual(by_name["limp"], 0.0)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class StackTask(unittest.TestCase):
     def test_graded_stack_ladder(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
@@ -144,7 +142,7 @@ class StackTask(unittest.TestCase):
         self.assertEqual(by_name["no-close"], 0.0)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class InsertTask(unittest.TestCase):
     def test_graded_insert_ladder(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415

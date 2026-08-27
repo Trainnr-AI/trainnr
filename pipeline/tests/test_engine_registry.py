@@ -1,7 +1,6 @@
 """The engine registry: engines by name, plugins by entry point, and the
 rule that a missing extra fails at construction, never at listing."""
 
-import importlib.util
 import unittest
 
 from rq_pipeline.physics.registry import (
@@ -11,9 +10,7 @@ from rq_pipeline.physics.registry import (
     engines,
     resolve,
 )
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
-MJX_PRESENT = MUJOCO_PRESENT and importlib.util.find_spec("mujoco.mjx") is not None
+from tests._extras import MJX, needs_sim
 
 
 class EngineRegistry(unittest.TestCase):
@@ -24,7 +21,7 @@ class EngineRegistry(unittest.TestCase):
         for entry in known.values():
             self.assertTrue(entry.doc, entry.name)
 
-    @unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed")
+    @needs_sim
     def test_the_cpu_engine_resolves_to_an_engine(self) -> None:
         from rq_pipeline.evaluate.harness import Engine  # noqa: PLC0415
 
@@ -35,7 +32,7 @@ class EngineRegistry(unittest.TestCase):
             resolve("juggling")
         self.assertIn(CPU_ENGINE, str(caught.exception))
 
-    @unittest.skipIf(MJX_PRESENT, "the mjx extra is installed here")
+    @unittest.skipIf(MJX, "the mjx extra is installed here")
     def test_a_missing_extra_fails_at_construction_not_at_listing(self) -> None:
         entry = resolve(GPU_ENGINE)  # listing is free
         with self.assertRaises(ImportError) as caught:

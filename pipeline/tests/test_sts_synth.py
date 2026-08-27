@@ -8,13 +8,12 @@ convention-identity guarantee), and the recommended protocol
 rate the TTL reality allows.
 """
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class SyntheticSts(unittest.TestCase):
     def test_clean_condition_recovers_truth_exactly(self) -> None:
         """All 12 clean cells recovered truth to machine precision; pin one.

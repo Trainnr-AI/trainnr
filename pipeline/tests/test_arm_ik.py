@@ -1,9 +1,8 @@
 """solve_arm_ik's own pins — the grip-centre mode earned them twice over."""
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 # A planar 3-hinge arm with two "pad" geoms on the last link — enough
 # to pin both target modes without a robot bundle.
@@ -51,7 +50,7 @@ ROLL_START_DEG = 40.0
 DESCEND_M = 0.10  # the kitting descend's length
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class SolveArmIk(unittest.TestCase):
     def _model_data(self):
         import mujoco  # noqa: PLC0415

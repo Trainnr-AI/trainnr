@@ -5,13 +5,10 @@ half lives in the train venv and is pinned there.
 """
 
 import dataclasses
-import importlib.util
 import unittest
 
-SIM_PRESENT = (
-    importlib.util.find_spec("mujoco") is not None
-    and importlib.util.find_spec("gymnasium") is not None
-)
+from tests._extras import needs_envs
+
 SHORT_STEPS = 40  # four control ticks of the ALOHA protocol, enough to truncate
 SOURCE = "aloha2-transfer@testhash"
 SERVOS = 14
@@ -31,7 +28,7 @@ def pixels_match(a, b) -> bool:
     return bool(beyond.sum() <= NOISE_PIXELS)
 
 
-@unittest.skipUnless(SIM_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_envs
 class StepperIsTheOneLoop(unittest.TestCase):
     def test_stepper_agrees_with_mujoco_rollout(self) -> None:
         # Two integrators, one trajectory: the harness's tick-by-tick
@@ -67,7 +64,7 @@ class StepperIsTheOneLoop(unittest.TestCase):
             stepper.advance(np.zeros(2), 3)  # wrong width is loud
 
 
-@unittest.skipUnless(SIM_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_envs
 class GymnasiumContract(unittest.TestCase):
     def _env(self, steps: int | None = None):
         from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415

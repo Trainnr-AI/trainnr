@@ -1,15 +1,15 @@
 """Kitting: the T5 scene, its pins, and the scripted demo's proof."""
 
-import importlib.util
 import unittest
 from dataclasses import replace
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
+
 SHORT_STEPS = 400  # 0.8 s: the first hover never ends
 CONTROL_TICK = 10  # physics steps per control tick (aloha2.CONTROL_INTERVAL)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class KittingScene(unittest.TestCase):
     def test_census_and_state_slices(self) -> None:
         import mujoco  # noqa: PLC0415

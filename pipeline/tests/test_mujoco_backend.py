@@ -3,12 +3,10 @@
 Runs only with the `sim` extra; the fast gate skips it loudly.
 """
 
-import importlib.util
 import unittest
 
 from rq_pipeline.robot.model_checks import DeadModelError, assert_model_alive
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 # A minimal but complete robot: one hinge pendulum with a motor and a
 # joint-position sensor. Enough to satisfy the census and to fall under
@@ -39,7 +37,7 @@ INERT_SCENE = """
 """
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class Census(unittest.TestCase):
     def _backend(self, xml: str):
         from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
@@ -105,9 +103,7 @@ class Census(unittest.TestCase):
             )
 
 
-@unittest.skipUnless(
-    importlib.util.find_spec("mujoco") is not None, "sim extra not installed"
-)
+@needs_sim
 class SatisfiesTheHarness(unittest.TestCase):
     def test_the_cpu_backend_is_an_engine(self) -> None:
         """The harness declares `Engine`; the metrology instrument must

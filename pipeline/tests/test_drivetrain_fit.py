@@ -7,12 +7,11 @@ always reproduce its own deliverable. Tolerance is optimizer-noise wide
 (different initial guesses, same optimum), not physics wide.
 """
 
-import importlib.util
 import json
 import unittest
 from pathlib import Path
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 REPO = Path(__file__).resolve().parents[2]
 BUNDLE = REPO / "robots" / "rig-drivetrain"
@@ -20,7 +19,7 @@ RECORDING = REPO / "recordings" / "sweep-2026-08-24-b.wire"
 COMMITTED = BUNDLE / "fits" / "sweep-2026-08-24-b@1f1e7cd6f0bf.json"
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class ReproduceCommittedFit(unittest.TestCase):
     def test_sweep_b_estimates_match_the_committed_record(self) -> None:
         from rq_pipeline.robot.drivetrain_fit import fit_drivetrain  # noqa: PLC0415

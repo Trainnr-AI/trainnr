@@ -4,10 +4,9 @@ say honestly when a parameter cannot be recovered.
 Runs only with the `sim` extra (mujoco[sysid]).
 """
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 # A pendulum whose damping we will pretend not to know. The jointpos +
 # jointvel sensors are the measurements a real robot's encoder provides.
@@ -42,7 +41,7 @@ def _set_unused_friction(spec, parameter):
     spec.geom("rod").friction[0] = parameter.value[0]
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class StagedExcitation(unittest.TestCase):
     def test_amplitude_stages_rise_and_respect_peak(self) -> None:
         import numpy as np  # noqa: PLC0415
@@ -61,7 +60,7 @@ class StagedExcitation(unittest.TestCase):
         self.assertLessEqual(peaks[2], 2.0 + 1e-9)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class Identify(unittest.TestCase):
     def _synthesize(self):
         """Roll out the TRUE model to manufacture 'measured' data."""

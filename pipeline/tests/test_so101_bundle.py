@@ -6,11 +6,10 @@ loads, the census matches the real arm's topology, the wrapper's added
 sensors report, and a closed-loop hold through the harness path holds.
 """
 
-import importlib.util
 import unittest
 from pathlib import Path
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = REPO_ROOT / "robots" / "so101-nominal"
@@ -20,7 +19,7 @@ SENSORS = 12  # jointpos + jointvel per joint, added by our wrapper
 HOME_QPOS = [0.0, -1.57, 1.57, 1.57, -1.57, 0.0]
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class BundleContract(unittest.TestCase):
     def _backend(self):
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415

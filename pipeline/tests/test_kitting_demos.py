@@ -2,20 +2,20 @@
 numbering — on a short protocol where the referee cannot pass (the
 give-up path) and on one kept episode (the keep path)."""
 
-import importlib.util
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
+
 SHORT_STEPS = (
     400  # the parts never reach the slots in 0.8 s: every attempt is a discard
 )
 SPARSE_FRAMES = 100  # one frame per 100 control ticks: 14 frames per kept episode
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class TheGenerator(unittest.TestCase):
     def test_gives_up_after_max_attempts_and_writes_nothing(self) -> None:
         from rq_pipeline.collect.kitting_demos import generate_demos  # noqa: PLC0415

@@ -16,7 +16,8 @@ the trainer's simulator — in both viewers:
 
     MuJoCo window            the rig, live, every checkpoint's episode
     Rerun  train/*           loss, l1, kld, grad norm, lr  (train_step)
-           eval/<step>/...   the top camera the policy sees, 10 Hz;
+           play/<step>/...   the top camera the policy sees, 10 Hz
+                             (play/trial<k>/... under --play);
                              object height; the referee's verdict
            world/rig         the mesh-true mirror during each episode
            stage             which checkpoint is playing, and how it did
@@ -66,6 +67,7 @@ import rerun.blueprint as rrb
 
 from _lab import (
     PREVIEW_EVERY_TICKS,
+    PREVIEW_JPEG_QUALITY,
     bootstrap,
     frame_viewer,
     hold_until_closed,
@@ -184,7 +186,7 @@ def parse_args() -> argparse.Namespace:
         "--rrd",
         type=Path,
         default=None,
-        help="with --follow: also save the stream to this .rrd file — the run "
+        help="any mode: also save the stream to this .rrd file — the run "
         "as one portable record anyone with the Rerun viewer can open",
     )
     parser.add_argument(
@@ -418,7 +420,10 @@ class Watcher:
             rr.set_time(Timelines.SIM, duration=tick * dt)
             if tick % PREVIEW_EVERY_TICKS == 0:
                 rr.log(
-                    f"{prefix}/top", rr.Image(observation[ObservationKeys.PIXELS][top])
+                    f"{prefix}/top",
+                    rr.Image(observation[ObservationKeys.PIXELS][top]).compress(
+                        jpeg_quality=PREVIEW_JPEG_QUALITY
+                    ),
                 )
             observation, _reward, _terminated, _truncated, info = env.step(
                 np.asarray(controller(tick, observation), dtype=float)
@@ -474,7 +479,7 @@ class Watcher:
         reset()
         success = self.episode(
             lambda _tick, observation: act(observation),
-            f"eval/{step:06d}",
+            f"play/{step:06d}",
             f"checkpoint {step}: playing trial 0",
         )
         at_step(step)
@@ -650,17 +655,21 @@ class Follower:
             self.watcher.poll(self.layout, self.action_space)
 
 
-def dashboard_blueprint(play: bool) -> rrb.Blueprint:
+def dashboard_blueprint(*, training: bool, play: bool) -> rrb.Blueprint:
     """The panels in the order a reader wants them: what the run IS
     (manifest, trainer config, the stage log); how it is going (loss,
     learning rate, gradient norm, throughput; the evaluations; the
     machine; the eval videos); and, when checkpoints are played, what
     the policy sees, the rig and the object height."""
-    top = rrb.Horizontal(
-        rrb.TextDocumentView(origin="config/run", name="run"),
-        rrb.TextDocumentView(origin="config/trainer", name="trainer config"),
-        rrb.TextLogView(origin="stage", name="stage"),
+    about = (
+        [
+            rrb.TextDocumentView(origin="config/run", name="run"),
+            rrb.TextDocumentView(origin="config/trainer", name="trainer config"),
+        ]
+        if training
+        else []
     )
+    rows = [rrb.Horizontal(*about, rrb.TextLogView(origin="stage", name="stage"))]
     curves = rrb.Horizontal(
         rrb.TimeSeriesView(
             origin="train",
@@ -693,33 +702,39 @@ def dashboard_blueprint(play: bool) -> rrb.Blueprint:
         rrb.Spatial2DView(origin="eval/video", name="in-loop eval videos"),
         rrb.Spatial2DView(origin="eval/final/video", name="paired eval videos"),
     )
-    rows = [top, curves, evaluation, videos]
+    if training:
+        rows += [curves, evaluation, videos]
     if play:
-        played = [
-            "+ eval/**",
-            "- eval/inloop/**",
-            "- eval/final/**",
-            "- eval/video/**",
-            "- eval/success",
-        ]
+        # Played episodes live under their own root, so the views need no
+        # filter (a played checkpoint's `eval/<step>` under the records'
+        # `eval/` took a five-line exclusion list — and `--play` logged
+        # elsewhere, so its camera and height panels stayed empty).
         rows.append(
             rrb.Horizontal(
-                rrb.Spatial2DView(
-                    origin="eval", contents=played, name="the policy's camera"
-                ),
+                rrb.Spatial2DView(origin="play", name="the policy's camera"),
                 rrb.Spatial3DView(origin="world", name="the rig"),
-                rrb.TimeSeriesView(
-                    origin="eval", contents=played, name="object height"
-                ),
+                rrb.TimeSeriesView(origin="play", name="object height"),
             )
         )
     # The training dimension is the default timeline; every series also
-    # carries the wall clock, so the other choice reads too.
+    # carries the wall clock, so the other choice reads too. A replay has
+    # no training: its ticks all sit at one step, and only the simulated
+    # clock spreads them into a curve.
     return rrb.Blueprint(
         rrb.Vertical(*rows),
-        rrb.TimePanel(timeline=Timelines.STEP),
+        rrb.TimePanel(timeline=Timelines.STEP if training else Timelines.SIM),
         collapse_panels=False,
     )
+
+
+def open_sinks(rrd: Path | None) -> None:
+    """Keep the viewer AND write `rrd` when asked: `rr.save()` alone
+    REPLACES the viewer connection, and the window stays empty while
+    the file fills (measured 2026-08-28). Before the blueprint, so the
+    file carries the layout too."""
+    if rrd is not None:
+        rrd.parent.mkdir(parents=True, exist_ok=True)
+        rr.set_sinks(rr.GrpcSink(), rr.FileSink(str(rrd)))
 
 
 # ---- the modes ---------------------------------------------------------------
@@ -730,12 +745,8 @@ def follow(args: argparse.Namespace) -> None:
     rr_session(
         f"robotiq-follow-{layout.name}", mode="spawn", world_up=args.play_checkpoints
     )
-    rr.send_blueprint(dashboard_blueprint(args.play_checkpoints))
-    if args.rrd is not None:
-        # Both sinks: `rr.save()` alone REPLACES the viewer connection, and
-        # the window stays empty while the file fills (measured 2026-08-28).
-        args.rrd.parent.mkdir(parents=True, exist_ok=True)
-        rr.set_sinks(rr.GrpcSink(), rr.FileSink(str(args.rrd)))
+    open_sinks(args.rrd)
+    rr.send_blueprint(dashboard_blueprint(training=True, play=args.play_checkpoints))
     watcher = None
     if args.play_checkpoints:
         from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
@@ -767,7 +778,8 @@ def play_only(args: argparse.Namespace) -> None:
         else Path(args.play).parent.name
     )
     rr_session(f"robotiq-play-{name}", mode="spawn")
-    rr.send_blueprint(dashboard_blueprint(play=True))
+    open_sinks(args.rrd)
+    rr.send_blueprint(dashboard_blueprint(training=False, play=True))
     watcher = Watcher(args.look, args.task, device, args.executed_horizon)
     act, reset = (
         openpi_controller(args.openpi, watcher.env, args.executed_horizon)
@@ -809,7 +821,8 @@ def train_and_watch(args: argparse.Namespace) -> None:
     layout = RunLayout.of(Path(args.runs) / args.name)
     device = best_device(args.device)
     rr_session(f"robotiq-train-watch-{layout.name}", mode="spawn")
-    rr.send_blueprint(dashboard_blueprint(play=True))
+    open_sinks(args.rrd)
+    rr.send_blueprint(dashboard_blueprint(training=True, play=True))
     process = subprocess.Popen(
         lerobot_train_command(
             policy=args.policy,

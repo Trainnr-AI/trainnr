@@ -14,12 +14,10 @@ that says Paper 2 needs 6-7 retrained policies per task, now asserted
 by a test instead of a register row.
 """
 
-import importlib.util
 import unittest
 
+from tests._extras import needs_sim
 from tests._instruments import expected_expert_rate
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 # Hand-authored real outcomes, one row per task, ordered like reality.
 REAL = {
@@ -44,7 +42,7 @@ REAL = {
 }
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class GateADryRun(unittest.TestCase):
     def test_the_full_paper_two_shape(self) -> None:
         from rq_pipeline.evaluate.certificate import certify  # noqa: PLC0415

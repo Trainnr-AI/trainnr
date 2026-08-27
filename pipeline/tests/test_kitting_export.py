@@ -5,14 +5,12 @@ manifest) is checked without LeRobot; the conversion itself needs the
 `train` extra and runs in the train venv.
 """
 
-import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-LEROBOT_PRESENT = importlib.util.find_spec("lerobot") is not None
-NUMPY_PRESENT = importlib.util.find_spec("numpy") is not None
+from tests._extras import needs_numpy, needs_train
 
 STEPS = 60  # physics steps; the generator writes sensors per physics step
 CONTROL_TICKS = 6  # and actions per control tick (10 physics steps each)
@@ -66,7 +64,7 @@ class DemosDirectoryContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
             episode_dirs(Path(tmp))
 
-    @unittest.skipUnless(NUMPY_PRESENT, "sim extra not installed")
+    @needs_numpy
     def test_episodes_are_found_in_order(self) -> None:
         from rq_pipeline.collect.kitting_export import episode_dirs  # noqa: PLC0415
 
@@ -75,7 +73,7 @@ class DemosDirectoryContract(unittest.TestCase):
             names = [p.name for p in episode_dirs(demos)]
         self.assertEqual(names, ["episode_0000", "episode_0001", "episode_0002"])
 
-    @unittest.skipUnless(NUMPY_PRESENT, "sim extra not installed")
+    @needs_numpy
     def test_a_manifest_carries_the_expert_and_an_old_one_reads(self) -> None:
         from rq_pipeline.collect.kitting_export import (  # noqa: PLC0415
             UNSTAMPED_EXPERT,
@@ -98,7 +96,7 @@ class DemosDirectoryContract(unittest.TestCase):
             self.assertEqual(Manifest.read_from(episode).expert, UNSTAMPED_EXPERT)
 
 
-@unittest.skipUnless(LEROBOT_PRESENT, "train extra not installed (use .venv-train)")
+@needs_train
 class RoundTrip(unittest.TestCase):
     def test_export_then_reload(self) -> None:
         import numpy as np  # noqa: PLC0415

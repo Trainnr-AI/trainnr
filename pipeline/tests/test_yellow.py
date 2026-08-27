@@ -1,12 +1,11 @@
 """The real rig's twin: measured geometry, exact servos, no tipping."""
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class YellowRigTwin(unittest.TestCase):
     def test_census_and_servo_fidelity(self) -> None:
         import mujoco  # noqa: PLC0415
@@ -53,7 +52,7 @@ class YellowRigTwin(unittest.TestCase):
         self.assertLess(abs(pitch), 2.0)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class RearPick(unittest.TestCase):
     def _lift(self, dx, dy, close=True):
         import mujoco  # noqa: PLC0415

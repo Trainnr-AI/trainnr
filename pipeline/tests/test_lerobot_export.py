@@ -4,7 +4,6 @@ Runs only when the `train` extra is installed (`uv sync --extra train`);
 the fast pre-commit gate skips it, the full verify should not.
 """
 
-import importlib.util
 import json
 import tempfile
 import unittest
@@ -15,19 +14,17 @@ from rq_pipeline.bundles.profile import load_profile
 from rq_pipeline.collect.frames import AlignedEpisode, align
 from rq_pipeline.collect.lerobot_export import PROVENANCE_FILE, export_episode
 from rq_pipeline.collect.wire import parse_recording
+from tests._extras import needs_train
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHASE_RECORDING = REPO_ROOT / "recordings" / "chase-arm-2026-08-17.wire"
 RIG = load_profile(REPO_ROOT / "robots" / "rig-drivetrain")
 
-LEROBOT_PRESENT = importlib.util.find_spec("lerobot") is not None
 EXPECTED_FRAMES = 27
 ACTION_DIMENSIONS = 4
 
 
-@unittest.skipUnless(
-    LEROBOT_PRESENT, "train extra not installed (uv sync --extra train)"
-)
+@needs_train
 class ExportRoundtrip(unittest.TestCase):
     def test_chase_recording_roundtrips_through_lerobot(self) -> None:
         # In-test import is load-bearing: a top-level lerobot import would

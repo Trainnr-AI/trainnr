@@ -6,7 +6,6 @@ identify() → truth recovered with honest intervals. When the rig session
 happens, only the data source changes.
 """
 
-import importlib.util
 import unittest
 from math import tau
 from pathlib import Path
@@ -15,8 +14,7 @@ from rq_pipeline.bundles.profile import load_profile
 from rq_pipeline.collect.excitation import drivetrain_excitation
 from rq_pipeline.collect.frames import STATUS_HZ
 from rq_pipeline.collect.wire import Recording, StatusFrame, parse_recording
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RIG_BUNDLE = REPO_ROOT / "robots" / "rig-drivetrain"
@@ -71,7 +69,7 @@ class AdapterOnTheChaseFixture(unittest.TestCase):
             drivetrain_excitation(Recording(), RIG)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class PaperZeroRehearsal(unittest.TestCase):
     def _synthesize_sweep(self):
         """Simulate the bench sweep on a TRUE drivetrain, then degrade to

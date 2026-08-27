@@ -4,15 +4,12 @@ Runs only in the train venv (`lerobot` + `mujoco` present); the gymnasium
 contract itself is pinned in test_envs.py with the sim extra alone.
 """
 
-import importlib.util
 import os
 import unittest
 from pathlib import Path
 
-TRAIN_PRESENT = (
-    importlib.util.find_spec("lerobot") is not None
-    and importlib.util.find_spec("mujoco") is not None
-)
+from tests._extras import needs_train_sim
+
 SERVOS = 14
 TOP_CAMERA_HW = (480, 640)
 ALOHA_TICKS = 400  # 4000 physics steps / control every 10
@@ -26,7 +23,7 @@ T5_CHECKPOINT = Path(
 )
 
 
-@unittest.skipUnless(TRAIN_PRESENT, "train extra not installed (use .venv-train)")
+@needs_train_sim
 class ThroughLeRobot(unittest.TestCase):
     def test_make_env_and_preprocess_observation(self) -> None:
         import torch  # noqa: PLC0415

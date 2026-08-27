@@ -21,6 +21,11 @@ REPO = Path(__file__).resolve().parent.parent
 TOOLS = Path(__file__).resolve().parent
 # Frame decimation the tools share: a 50 Hz control loop previewed at 10 Hz.
 PREVIEW_EVERY_TICKS = 5
+# Camera frames go to the viewer JPEG-encoded: a raw 640x480 RGB frame is
+# 0.9 MB, ten a second is 9 MB/s down a pod's SSH tunnel and 200 MB per
+# played episode in a saved .rrd (measured 2026-08-28); 85 keeps the
+# pads and the parts legible at ~1/15 the bytes.
+PREVIEW_JPEG_QUALITY = 85
 
 
 class LeRobotScripts:

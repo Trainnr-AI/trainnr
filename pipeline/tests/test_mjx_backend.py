@@ -16,15 +16,12 @@ a different instrument, statistically not bitwise comparable (docs/49),
 and any certificate from it says so in its stamp.
 """
 
-import importlib.util
 import unittest
 
-MJX_PRESENT = importlib.util.find_spec("mujoco") is not None and (
-    importlib.util.find_spec("mujoco.mjx") is not None
-)
+from tests._extras import needs_mjx
 
 
-@unittest.skipUnless(MJX_PRESENT, "mjx extra not installed (uv sync --extra mjx)")
+@needs_mjx
 class MJXWarpGauntlet(unittest.TestCase):
     def _both(self):
         from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415

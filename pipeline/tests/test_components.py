@@ -1,15 +1,14 @@
 """The assembly menu: car, arm, mobile manipulator — composed and driven."""
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 CROUCH = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
 HOME = [0.0, -1.57, 1.57, 1.57, -1.57, 0.0]
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class AssemblyMenu(unittest.TestCase):
     def test_every_combination_composes_with_the_expected_census(self) -> None:
         from rq_pipeline.tasks.components import compose  # noqa: PLC0415
@@ -30,7 +29,7 @@ class AssemblyMenu(unittest.TestCase):
             compose(car=False, arm=False)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class MobileManipulatorDrives(unittest.TestCase):
     def _settled(self, arm_target):
         import mujoco  # noqa: PLC0415
@@ -76,7 +75,7 @@ class MobileManipulatorDrives(unittest.TestCase):
         self.assertLess(abs(2 * (w * y - z * x)), 0.05)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class CargoPick(unittest.TestCase):
     def test_pick_present_stow_cycle(self) -> None:
         import mujoco  # noqa: PLC0415
@@ -130,7 +129,7 @@ class CargoPick(unittest.TestCase):
             compose(car=True, arm=False, cargo=True)
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class GroundPick(unittest.TestCase):
     def test_pick_from_floor_and_place_back(self) -> None:
         import mujoco  # noqa: PLC0415

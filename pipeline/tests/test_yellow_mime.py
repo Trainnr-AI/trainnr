@@ -6,10 +6,7 @@ every sim/real overlay — the original sin was a guessed 1.2 s blend
 that finished ~14 s before the metal.
 """
 
-import importlib.util
 import unittest
-
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 
 
 class Salute(unittest.TestCase):

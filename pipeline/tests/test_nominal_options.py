@@ -11,13 +11,12 @@ referee on both arm64 and x86_64 (tools/solver-study.py, docs/47 §7 —
 PGS passes on x86_64 alone, at 28x the iterations).
 """
 
-import importlib.util
 import unittest
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
+from tests._extras import needs_sim
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class NominalOptions(unittest.TestCase):
     def test_every_task_scene_resolves_to_the_pinned_block(self) -> None:
         import mujoco  # noqa: PLC0415

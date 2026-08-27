@@ -2,7 +2,6 @@
 engine refuses a start that is not admissible — before a trial is spent,
 naming the trial, the body and the check (docs/e2e-research/42 §3)."""
 
-import importlib.util
 import unittest
 
 from rq_pipeline.protocol import (
@@ -11,8 +10,8 @@ from rq_pipeline.protocol import (
     PlacementChecks,
     protocol_fields,
 )
+from tests._extras import needs_sim
 
-MUJOCO_PRESENT = importlib.util.find_spec("mujoco") is not None
 KITTING_TRIALS = 4
 LIFT_M = 0.03  # a part held this far above the table is not resting on it
 STAMP = "test@000000000000"
@@ -47,7 +46,7 @@ class TheDeclaration(unittest.TestCase):
             _protocol(placements=(Placement("a", "t"), Placement("a", "t")))
 
 
-@unittest.skipUnless(MUJOCO_PRESENT, "sim extra not installed (uv sync --extra sim)")
+@needs_sim
 class TheGate(unittest.TestCase):
     def _kitting(self):
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
