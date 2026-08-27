@@ -17,6 +17,7 @@ TIER = {
     "stats": 0,
     "bundles": 1,
     "protocol": 1,
+    "plugins": 1,
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
     "physics": 3,

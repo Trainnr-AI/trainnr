@@ -16,14 +16,22 @@ CPU MuJoCo stays the metrology reference. The acceptance gauntlet
 divergence bound against the reference before anything downstream
 trusts a trajectory.
 
-`MJXBatchedStepper` gives the same `reset`/`step` shape as the CPU
-`Stepper` over a batch of worlds at once — the seam the gymnasium env
-would vectorize over once it's measured on the GPU card.
+Sizing, stated the way MJX means it: `naconmax` is the contact capacity
+for the WHOLE batch (every world together) and `njmax` the constraint
+capacity per world. On overflow mujoco_warp skips the remaining
+contacts silently — wrong physics and no error (its collision driver:
+"the remaining contacts will be skipped") — so every program here also
+reports the contact count, and the backend refuses to hand back a
+trajectory that touched the ceiling.
+
+`MJXBatchedStepper` is the CPU `Stepper`'s contract over a batch of
+worlds at once — the seam the vectorized gymnasium env drives (docs/49).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from rq_pipeline.physics.backend import (
@@ -55,6 +63,23 @@ def _require_mjx() -> tuple[Any, Any, Any]:
     return mujoco, mjx, jax
 
 
+@dataclass
+class _DevicePrograms:
+    """The device model, the data template and the row layout of one
+    loaded model, and the jitted programs built over them — held on the
+    backend, once per loaded model, so a new episode or a new stepper
+    never recompiles. JAX keys its cache on the function object: a
+    fresh closure per call cost 0.8 s per call, measured (docs/07
+    2026-08-27), before this cache."""
+
+    mx: Any
+    template: Any
+    layout: FullPhysicsLayout
+    rollout: Any = None
+    seat_forward: Any = None
+    holds: dict[int, Any] = field(default_factory=dict)
+
+
 @engine(GPU_ENGINE, doc="MJX-Warp: batched worlds on the device, float32")
 class MJXWarpBackend:
     """Batched rollouts over the identified model, on MJX's Warp path.
@@ -64,22 +89,23 @@ class MJXWarpBackend:
     come from the compiled model), the batched `rollout` contract, and
     `stepper` — BATCHED, every world in lockstep: controls are
     `(nbatch, nu)`, states `(nbatch, steps, width)`; a single world is a
-    batch of one. Plus `naconmax`/`njmax`, the per-world contact and
-    constraint capacities MJX cannot infer for busy scenes (the kitting
-    bundle dumps core on the GPU without them).
+    batch of one (`row[None, :]`). The harness's single-world loop is
+    the CPU engine's; the vectorized env is this one's.
     """
-
-    observables: frozenset[str] = frozenset()  # the row and the sensors
 
     NAME_PREFIX = "mjx"
     DEFAULT_IMPL = "warp"
-    # Above this many geoms MJX's default contact/constraint capacities are
-    # not trusted: the ALOHA kitting scene (105 geoms) dumped core on the
-    # RTX 3090 Ti with the defaults and ran with naconmax=4096, njmax=8192
-    # (2026-08-27). A Python refusal that names the knobs beats a core dump.
-    SIZING_REQUIRED_ABOVE_GEOMS = 32
     # The companion library each MJX implementation runs on, for the stamp.
     COMPANIONS: ClassVar[dict[str, str]] = {"warp": "warp", "jax": "jax"}
+    # Above this many geoms MJX's default capacities are not trusted: a
+    # HEURISTIC, set well below the one measurement — the ALOHA kitting
+    # scene (105 geoms) dumped core on the RTX 3090 Ti with the defaults
+    # and ran with naconmax=4096, njmax=8192 (2026-08-27). A Python
+    # refusal that names the knobs beats a core dump.
+    SIZING_REQUIRED_ABOVE_GEOMS = 32
+    SIZING_KNOBS = ("naconmax", "njmax")
+    LOAD_DOORS = ("load_spec", "load_model")
+    observables: frozenset[str] = frozenset()  # the row and the sensors
 
     def __init__(
         self,
@@ -88,33 +114,41 @@ class MJXWarpBackend:
         naconmax: int | None = None,
         njmax: int | None = None,
     ) -> None:
+        if impl not in self.COMPANIONS:
+            raise ValueError(
+                f"unknown MJX implementation {impl!r}; known: {sorted(self.COMPANIONS)}"
+            )
         self._mujoco, self._mjx, self._jax = _require_mjx()
         self._impl = impl
         self.name = f"{self.NAME_PREFIX}-{impl}"
         self._sizing = {
             key: value
-            for key, value in (("naconmax", naconmax), ("njmax", njmax))
+            for key, value in zip(self.SIZING_KNOBS, (naconmax, njmax), strict=True)
             if value is not None
         }
+        if len(self._sizing) == 1:
+            raise ValueError(
+                "pass naconmax and njmax together: naconmax is the contact capacity "
+                "for the whole batch, njmax the constraint capacity per world"
+            )
         self._model: Any = None
-        # (mx, template, layout, run-or-None): the device model once per
-        # loaded model; the whole-episode program when first asked for.
-        self._program: tuple[Any, Any, Any, Any] | None = None
+        self._programs: _DevicePrograms | None = None
 
     @property
     def instrument(self) -> str:
-        """Engine + versions + device: float32 physics on a device with
-        no bit-repeatability is a different instrument from CPU MuJoCo,
-        and every certificate must say which one produced it."""
+        """Engine + versions + device + architecture: float32 physics on
+        a device with no bit-repeatability is a different instrument
+        from CPU MuJoCo, and every certificate must say which one
+        produced it (`physics/backend.py::instrument_stamp`)."""
         import importlib  # noqa: PLC0415
 
-        qualifiers = []
-        companion = self.COMPANIONS.get(self._impl)
-        if companion is not None:
-            module = importlib.import_module(companion)
-            qualifiers.append(f"{companion}-{module.__version__}")
-        qualifiers.append(self._jax.devices()[0].platform)
-        return instrument_stamp(self.name, self._mujoco.__version__, *qualifiers)
+        module = importlib.import_module(self.COMPANIONS[self._impl])
+        return instrument_stamp(
+            self.name,
+            self._mujoco.__version__,
+            f"{self.COMPANIONS[self._impl]}-{module.__version__}",
+            self._jax.devices()[0].platform,
+        )
 
     @property
     def model(self) -> Any:
@@ -123,18 +157,27 @@ class MJXWarpBackend:
     def load_spec(self, spec: Any) -> None:
         """Compile here — the backend stays the one door models come
         alive through, and the census gate the door they enter by."""
-        self._model = spec.compile()
-        self._program = None
+        self._adopt(spec.compile())
 
     def load_model(self, model: Any) -> None:
         """Adopt a model the CPU backend already compiled — the paired
         use: one compile, two instruments, divergence measured."""
+        self._adopt(model)
+
+    def _adopt(self, model: Any) -> None:
+        if model.ngeom > self.SIZING_REQUIRED_ABOVE_GEOMS and not self._sizing:
+            raise ValueError(
+                f"{model.ngeom} geoms: pass naconmax and njmax explicitly - the "
+                "GPU path dumps core, not a warning, when a busy scene overflows "
+                "MJX's default capacities (the kitting bundle ran with "
+                "naconmax=4096, njmax=8192 for two worlds)"
+            )
         self._model = model
-        self._program = None
+        self._programs = None
 
     def _require_model(self) -> Any:
         if self._model is None:
-            raise RuntimeError(no_model_message())
+            raise RuntimeError(no_model_message(self.LOAD_DOORS))
         return self._model
 
     def default_initial_state(self) -> Any:
@@ -161,7 +204,8 @@ class MJXWarpBackend:
         — every world steps in lockstep on the device.
 
         Deterministic ON A CPU DEVICE only; on GPU, kernel ordering
-        makes runs statistically — not bitwise — repeatable (docs/49).
+        makes runs statistically — not bitwise — repeatable (docs/49,
+        measured docs/52 §5).
         """
         import jax.numpy as jnp  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
@@ -170,60 +214,107 @@ class MJXWarpBackend:
         initial, control = check_rollout_shapes(
             initial_states, controls, state_width=FullPhysicsLayout(model).width
         )
-        _, _, run = self._compiled()
-        return np.asarray(run(jnp.asarray(initial), jnp.asarray(control)))
+        states, contacts = self._rollout_program()(
+            jnp.asarray(initial), jnp.asarray(control)
+        )
+        self._check_capacity(contacts)
+        return np.asarray(states)
 
     def stepper(self, initial_states: Any, steps: int) -> MJXBatchedStepper:
         """The batched stepping loop over the loaded model: the door the
         vectorized env and a batched harness drive (see the class)."""
         return MJXBatchedStepper(self, initial_states, steps)
 
-    def _device(self) -> tuple[Any, Any, FullPhysicsLayout]:
-        """The device model and the data template, built once per loaded
-        model; refuses a busy scene without explicit sizing."""
-        if self._program is not None:
-            return self._program[:3]
+    # ---- the programs, once per loaded model ---------------------------
+
+    def _device(self) -> _DevicePrograms:
+        if self._programs is not None:
+            return self._programs
         mjx = self._mjx
         model = self._require_model()
-        if model.ngeom > self.SIZING_REQUIRED_ABOVE_GEOMS and not self._sizing:
-            raise ValueError(
-                f"{model.ngeom} geoms: pass naconmax and njmax explicitly - the "
-                "GPU path dumps core, not a warning, when a busy scene overflows "
-                "MJX's default capacities (the kitting bundle ran with "
-                "naconmax=4096, njmax=8192)"
-            )
         layout = FullPhysicsLayout(model)
         mx = mjx.put_model(model, impl=self._impl)
         template = mjx.make_data(model, impl=self._impl, **self._sizing)
-        self._program = (mx, template, layout, None)
-        return mx, template, layout
+        self._programs = _DevicePrograms(mx=mx, template=template, layout=layout)
+        return self._programs
 
-    def _compiled(self) -> tuple[Any, Any, Any]:
-        """The device model, the data template and the jitted batched
-        episode — built once per loaded model and reused. Measured
-        before this cache (RTX 3090 Ti, 3 worlds x 50 steps): every
-        `rollout` call re-traced and recompiled, 0.8 s per call after
-        an 8.6 s first; a cached program re-specialises only when the
-        batch or step shape changes."""
-        mx, template, layout = self._device()
-        if self._program[3] is not None:
-            return mx, template, self._program[3]
+    def _rollout_program(self) -> Any:
+        programs = self._device()
+        if programs.rollout is not None:
+            return programs.rollout
         mjx, jax = self._mjx, self._jax
         import jax.numpy as jnp  # noqa: PLC0415
 
-        seat = _seat(template, layout)
+        mx, layout = programs.mx, programs.layout
+        seat = _seat(programs.template, layout)
 
-        def tick(data: Any, ctrl: Any) -> tuple[Any, Any]:
+        def tick(data: Any, ctrl: Any) -> tuple[Any, tuple[Any, Any]]:
             data = mjx.step(mx, data.replace(ctrl=ctrl))
-            return data, _row(data, layout, jnp)
+            return data, (_row(data, layout, jnp), jnp.max(data.nacon))
 
-        def episode(row: Any, ctrls: Any) -> Any:
-            _, states = jax.lax.scan(tick, seat(row), ctrls)
-            return states
+        def episode(row: Any, ctrls: Any) -> tuple[Any, Any]:
+            _, (states, contacts) = jax.lax.scan(tick, seat(row), ctrls)
+            return states, jnp.max(contacts)
 
-        run = jax.jit(jax.vmap(episode))
-        self._program = (mx, template, layout, run)
-        return mx, template, run
+        programs.rollout = jax.jit(jax.vmap(episode))
+        return programs.rollout
+
+    def _seat_forward_program(self) -> Any:
+        programs = self._device()
+        if programs.seat_forward is not None:
+            return programs.seat_forward
+        mjx, jax = self._mjx, self._jax
+        mx = programs.mx
+        seat = _seat(programs.template, programs.layout)
+        programs.seat_forward = jax.jit(
+            jax.vmap(lambda row: mjx.forward(mx, seat(row)))
+        )
+        return programs.seat_forward
+
+    def _hold_program(self, count: int) -> Any:
+        """Advance `count` physics steps under one control, per world:
+        the stepper's tick, specialised per substep count and cached."""
+        programs = self._device()
+        if count in programs.holds:
+            return programs.holds[count]
+        mjx, jax = self._mjx, self._jax
+        import jax.numpy as jnp  # noqa: PLC0415
+
+        mx, layout = programs.mx, programs.layout
+
+        def tick(data: Any, _: Any) -> tuple[Any, tuple[Any, Any, Any]]:
+            # R7: the forward pass after the step, so sensors, poses and
+            # the row describe ONE instant — the CPU stepper's rule.
+            data = mjx.forward(mx, mjx.step(mx, data))
+            return data, (_row(data, layout, jnp), data.sensordata, jnp.max(data.nacon))
+
+        def hold(data: Any, ctrl: Any) -> tuple[Any, Any, Any, Any]:
+            data, (rows, sensor_rows, contacts) = jax.lax.scan(
+                tick, data.replace(ctrl=ctrl), None, length=count
+            )
+            return data, rows, sensor_rows, jnp.max(contacts)
+
+        programs.holds[count] = jax.jit(jax.vmap(hold))
+        return programs.holds[count]
+
+    def _check_capacity(self, contacts: Any) -> None:
+        """Refuse a trajectory that touched the contact ceiling: past it
+        mujoco_warp skips contacts silently, and the rows would be
+        physics nobody asked for."""
+        import numpy as np  # noqa: PLC0415
+
+        programs = self._device()
+        capacity = getattr(programs.template, "naconmax", None)
+        if capacity is None:
+            return
+        peak = int(np.max(np.asarray(contacts)))
+        if peak >= int(capacity):
+            raise RuntimeError(
+                f"contact capacity reached: naconmax={int(capacity)} is the total "
+                f"across the whole batch and a step generated {peak} contacts - "
+                "mujoco_warp skips the rest silently; raise naconmax (the kitting "
+                "bundle ran at 4096 for two worlds)"
+            )
 
 
 def _seat(template: Any, layout: FullPhysicsLayout) -> Any:
@@ -252,12 +343,15 @@ class MJXBatchedStepper:
     """The GPU engine's stepping loop, batched: every world advances in
     lockstep under its own control. The same contract as the CPU
     `Stepper` with a leading batch axis — `advance((nbatch, nu), k)`,
-    `sensordata (nbatch, nsensordata)`, `states (nbatch, steps, width)`.
-    After each physics step the forward pass is recomputed so sensors,
-    poses and the row describe ONE instant (the CPU stepper's R7 rule);
-    the whole-episode `rollout` skips that, so it is the faster path
-    when nobody observes mid-episode. One program per substep count,
-    cached; a busy scene is refused without explicit sizing."""
+    `sensordata (nbatch, nsensordata)`, `states (nbatch, steps, width)`
+    — and, like the CPU stepper, host arrays preallocated for the whole
+    budget and filled as it advances (one device-to-host copy per
+    `advance`). After each physics step the forward pass is recomputed
+    so sensors, poses and the row describe ONE instant (the CPU
+    stepper's R7 rule); the whole-episode `rollout` skips that and is
+    the faster path when nobody observes mid-episode. The programs live
+    on the backend, cached per substep count: a new stepper never
+    recompiles. A step that touches the contact ceiling is refused."""
 
     def __init__(
         self, backend: MJXWarpBackend, initial_states: Any, steps: int
@@ -267,25 +361,23 @@ class MJXBatchedStepper:
 
         if steps <= 0:
             raise ValueError(f"steps must be positive, got {steps}")
-        mx, template, layout = backend._device()
+        programs = backend._device()
+        layout = programs.layout
         initial = np.asarray(initial_states, dtype=float)
         if initial.ndim != ROLLOUT_STATE_RANK or initial.shape[1] != layout.width:
             raise ValueError(
-                f"initial_states must be (nbatch, {layout.width}), got {initial.shape}"
+                "MJX is a batched engine: initial_states must be "
+                f"(nbatch, {layout.width}), got {initial.shape} - a single world "
+                "is row[None, :]"
             )
-        self._mjx, self._jax, self._jnp = backend._mjx, backend._jax, jnp
-        self._mx, self._layout = mx, layout
+        self._backend = backend
+        self._jnp = jnp
         self.model = backend.model
         self.nbatch, self.steps, self.step = int(initial.shape[0]), steps, 0
-        jax, mjx = self._jax, self._mjx
-        seat = _seat(template, layout)
-        self._data = jax.jit(jax.vmap(lambda row: mjx.forward(mx, seat(row))))(
-            jnp.asarray(initial)
-        )
-        self._programs: dict[int, Any] = {}
-        self._rows: list[Any] = []
-        self._sensor_rows: list[Any] = []
-        self.extras: Mapping[str, Any] = {}
+        self._data = backend._seat_forward_program()(jnp.asarray(initial))
+        self.states = np.empty((self.nbatch, steps, layout.width))
+        self.sensors = np.empty((self.nbatch, steps, int(self.model.nsensordata)))
+        self.extras: Mapping[str, Any] = {}  # nothing beyond the row and the sensors
 
     @property
     def done(self) -> bool:
@@ -297,23 +389,6 @@ class MJXBatchedStepper:
         import numpy as np  # noqa: PLC0415
 
         return np.asarray(self._data.sensordata)
-
-    @property
-    def states(self) -> numpy.ndarray:
-        """(nbatch, step, width): every physics step so far."""
-        return self._stack(self._rows, self._layout.width)
-
-    @property
-    def sensors(self) -> numpy.ndarray:
-        """(nbatch, step, nsensordata): every physics step so far."""
-        return self._stack(self._sensor_rows, int(self.model.nsensordata))
-
-    def _stack(self, chunks: list[Any], width: int) -> numpy.ndarray:
-        import numpy as np  # noqa: PLC0415
-
-        if not chunks:
-            return np.empty((self.nbatch, 0, width))
-        return np.asarray(self._jnp.concatenate(chunks, axis=1))
 
     def advance(self, controls: Any, substeps: int) -> None:
         """Hold `controls` (nbatch, nu) for `substeps` physics steps —
@@ -331,33 +406,11 @@ class MJXBatchedStepper:
         if self.done:
             return
         count = min(substeps, self.steps - self.step)
-        self._data, rows, sensor_rows = self._program(count)(
+        self._data, rows, sensor_rows, contacts = self._backend._hold_program(count)(
             self._data, self._jnp.asarray(control)
         )
-        self._rows.append(rows)
-        self._sensor_rows.append(sensor_rows)
-        self.step += count
-
-    def _program(self, count: int) -> Any:
-        if count in self._programs:
-            return self._programs[count]
-        mjx, jax, jnp, mx, layout = (
-            self._mjx,
-            self._jax,
-            self._jnp,
-            self._mx,
-            self._layout,
-        )
-
-        def tick(data: Any, _: Any) -> tuple[Any, tuple[Any, Any]]:
-            data = mjx.forward(mx, mjx.step(mx, data))  # R7: one instant
-            return data, (_row(data, layout, jnp), data.sensordata)
-
-        def hold(data: Any, ctrl: Any) -> tuple[Any, Any, Any]:
-            data, (rows, sensor_rows) = jax.lax.scan(
-                tick, data.replace(ctrl=ctrl), None, length=count
-            )
-            return data, rows, sensor_rows
-
-        self._programs[count] = jax.jit(jax.vmap(hold))
-        return self._programs[count]
+        self._backend._check_capacity(contacts)
+        stop = self.step + count
+        self.states[:, self.step : stop] = np.asarray(rows)
+        self.sensors[:, self.step : stop] = np.asarray(sensor_rows)
+        self.step = stop

@@ -141,9 +141,15 @@ for doc in docs:
 # "very late") is a human judgement and stays one.
 log = ROOT / "docs" / HISTORY
 if log.exists():
-    dates = re.findall(
-        r"^## (\d{4}-\d{2}-\d{2})", log.read_text(encoding="utf-8"), re.M
-    )
+    body = log.read_text(encoding="utf-8")
+    dates = re.findall(r"^## (\d{4}-\d{2}-\d{2})", body, re.M)
+    # A heading that misses the date shape would fall out of the ordering
+    # check below without a word; name it instead.
+    for heading in re.findall(r"^## (.*)$", body, re.M):
+        if not re.match(r"\d{4}-\d{2}-\d{2}\b", heading):
+            problems.append(
+                f"docs/{HISTORY}: heading '{heading[:40]}' does not start with a date"
+            )
     # pairwise by index — zip's strict kwarg needs Python 3.10 and the
     # Mac's system python3 is 3.9; the gate must run on both boxes.
     for index in range(1, len(dates)):

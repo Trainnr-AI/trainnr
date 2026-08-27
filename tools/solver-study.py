@@ -50,6 +50,10 @@ PADS = tuple(
 PARTS = ("part_left_geom", "part_right_geom")
 
 
+NORMAL_FORCE = 0  # mj_contactForce's wrench: [normal, tangent, tangent, torques]
+MM_PER_M = 1000.0
+
+
 def run_config(solver: str, cone: str, integrator: str, impratio: float) -> dict:
     task = build_kitting()
     model = task.spec.compile()
@@ -81,7 +85,7 @@ def run_config(solver: str, cone: str, integrator: str, impratio: float) -> dict
             if not (pair & pad_ids and pair & part_ids):
                 continue
             mujoco.mj_contactForce(model, live, i, wrench)
-            peak_force = max(peak_force, float(wrench[0]))
+            peak_force = max(peak_force, float(wrench[NORMAL_FORCE]))
             addr = int(live.contact.efc_address[i])
             # Elliptic rows are constraint-space VELOCITIES: rows
             # addr+1, addr+2 are the two sliding directions. Pyramidal
@@ -102,29 +106,36 @@ def run_config(solver: str, cone: str, integrator: str, impratio: float) -> dict
     return {
         "verdict": verdict,
         "wall_s": wall,
-        "worst_pen_mm": -1000.0 * worst_pen,
+        "worst_pen_mm": -MM_PER_M * worst_pen,
         "mean_niter": float(np.mean(niters)) if niters else float("nan"),
-        "slip_mm_s": 1000.0 * peak_slip if elliptic else float("nan"),
+        "slip_mm_s": MM_PER_M * peak_slip if elliptic else float("nan"),
         "grip_n": peak_force,
     }
 
 
-print(
-    f"{'solver':<8}{'cone':<11}{'integrator':<14}{'impr':>5}{'verdict':<10}"
-    f"{'wall_s':>7}{'pen_mm':>8}{'niter':>7}{'slip':>8}{'grip_N':>8}"
-)
-for solver, cone, integrator, impratio in CONFIGS:
-    r = run_config(solver, cone, integrator, impratio)
-    slip = f"{r['slip_mm_s']:>8.0f}" if np.isfinite(r["slip_mm_s"]) else f"{'-':>8}"
+def main() -> None:
     print(
-        f"{solver:<8}{cone:<11}{integrator:<14}{impratio:>5g}{'':<1}{r['verdict']:<9}"
-        f"{r['wall_s']:>7.1f}{r['worst_pen_mm']:>8.2f}{r['mean_niter']:>7.1f}"
-        f"{slip}{r['grip_n']:>8.2f}",
-        flush=True,
+        f"{'solver':<8}{'cone':<11}{'integrator':<14}{'impr':>5} {'verdict':<9}"
+        f"{'wall_s':>7}{'pen_mm':>8}{'niter':>7}{'slip_mm_s':>10}{'grip_N':>8}"
     )
-print(
-    "\npen_mm = worst interpenetration; niter = mean solver iterations per"
-    "\ntick; slip = peak tangential pad-part slip (mm/s, elliptic rows only);"
-    "\ngrip_N = peak pad normal force. Baseline row first; the referee judges.",
-    file=sys.stderr,
-)
+    for solver, cone, integrator, impratio in CONFIGS:
+        r = run_config(solver, cone, integrator, impratio)
+        slip = (
+            f"{r['slip_mm_s']:>10.0f}" if np.isfinite(r["slip_mm_s"]) else f"{'-':>10}"
+        )
+        print(
+            f"{solver:<8}{cone:<11}{integrator:<14}{impratio:>5g}{'':<1}{r['verdict']:<9}"
+            f"{r['wall_s']:>7.1f}{r['worst_pen_mm']:>8.2f}{r['mean_niter']:>7.1f}"
+            f"{slip}{r['grip_n']:>8.2f}",
+            flush=True,
+        )
+    print(
+        "\npen_mm = worst interpenetration; niter = mean solver iterations per"
+        "\ntick; slip = peak tangential pad-part slip (mm/s, elliptic rows only);"
+        "\ngrip_N = peak pad normal force. Baseline row first; the referee judges.",
+        file=sys.stderr,
+    )
+
+
+if __name__ == "__main__":
+    main()

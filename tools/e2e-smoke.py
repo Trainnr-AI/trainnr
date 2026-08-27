@@ -20,6 +20,7 @@ interval, the milestone funnel, the events.
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -97,25 +98,37 @@ class RunLayout:
         )
 
 
+def positive_int(text: str) -> int:
+    value = int(text)
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive count, got {text}")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--name", default="smoke", help="prefix of the four runs/ dirs")
     parser.add_argument("--runs", type=Path, default=Path("runs"))
     parser.add_argument(
-        "--episodes", type=int, default=2, help="demonstrations to keep"
+        "--episodes", type=positive_int, default=2, help="demonstrations to keep"
     )
     parser.add_argument(
         "--seed", type=int, default=20260828, help="the generator's seed"
     )
-    parser.add_argument("--steps", type=int, default=300, help="training steps")
+    parser.add_argument(
+        "--steps", type=positive_int, default=300, help="training steps"
+    )
     parser.add_argument(
         "--inloop-episodes",
-        type=int,
+        type=positive_int,
         default=1,
         help="episodes of lerobot-train's own in-loop eval at the last step",
     )
     parser.add_argument(
-        "--eval-episodes", type=int, default=2, help="lerobot-eval paired starts"
+        "--eval-episodes",
+        type=positive_int,
+        default=2,
+        help="lerobot-eval paired starts",
     )
     parser.add_argument(
         "--device", default=None, help="torch device; default: the best present"
@@ -125,10 +138,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="reuse the batch already under <runs>/<name>-demos",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="remove this name's earlier artifacts first (the trainer refuses "
+        "an existing output directory, and a smaller batch would otherwise "
+        "inherit stale episodes)",
+    )
     return parser.parse_args()
 
 
+_CURRENT_STAGE = "start"
+
+
 def stage(title: str) -> float:
+    global _CURRENT_STAGE  # noqa: PLW0603 - the one line a failure names
+    _CURRENT_STAGE = title
     print(f"\n=== {title} ({time.strftime('%H:%M:%S')}) ===", flush=True)
     return time.perf_counter()
 
@@ -139,7 +164,41 @@ def done(started: float) -> None:
 
 def run(command: list[str]) -> None:
     print("$", " ".join(str(part) for part in command), flush=True)
-    subprocess.run([str(part) for part in command], check=True)
+    try:
+        subprocess.run([str(part) for part in command], check=True)
+    except subprocess.CalledProcessError as error:
+        raise StageFailed(_CURRENT_STAGE, error.returncode) from None
+
+
+class StageFailed(SystemExit):
+    """A stage's subprocess failed: say which, and what is on disk."""
+
+    def __init__(self, title: str, code: int) -> None:
+        super().__init__(
+            f"e2e-smoke: stage '{title}' failed (exit {code}); its own output is "
+            "above. Earlier stages' artifacts stay on disk under runs/<name>-*; "
+            "rerun with --skip-demos to keep the batch, or --force to start over."
+        )
+
+
+def prepare(layout: RunLayout, *, skip_demos: bool, force: bool) -> None:
+    """Refuse to write over a named run: the trainer refuses an existing
+    output directory after minutes of work, and a smaller batch would
+    inherit stale episodes. `--force` removes the earlier artifacts."""
+    if skip_demos and not layout.demos.is_dir():
+        raise SystemExit(f"e2e-smoke: --skip-demos but no batch at {layout.demos}")
+    targets = [layout.dataset, layout.training, layout.evaluation]
+    if not skip_demos:
+        targets.insert(0, layout.demos)
+    existing = [path for path in targets if path.exists()]
+    if existing and not force:
+        raise SystemExit(
+            "e2e-smoke: this name already has artifacts: "
+            + ", ".join(str(path) for path in existing)
+            + " — pass --force to remove them, or --name something new"
+        )
+    for path in existing:
+        shutil.rmtree(path)
 
 
 def generate_demos(layout: RunLayout, episodes: int, seed: int) -> None:
@@ -176,6 +235,7 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
     inloop = RobotiqEnvConfig.cli_flags(
         KITTING, record_to=layout.inloop_records, policy_name=f"{layout.name}-inloop"
     )
+    episodes = min(args.inloop_episodes, MAX_EVAL_BATCH)
     run(
         lerobot_train_command(
             policy=POLICY,
@@ -187,21 +247,24 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
             steps=args.steps,
             batch_size=BATCH_SIZE,
             save_freq=args.steps,
-            extra=[
-                *inloop,
-                f"--env_eval_freq={args.steps}",
-                f"--eval.n_episodes={args.inloop_episodes}",
-                f"--eval.batch_size={args.inloop_episodes}",
-                "--eval.use_async_envs=false",
-            ],
+            eval_freq=args.steps,
+            eval_episodes=episodes,
+            eval_batch=episodes,
+            extra=inloop,
         )
     )
 
 
 def evaluate(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
+    checkpoint = layout.checkpoint(args.steps)
+    if not checkpoint.is_dir():
+        saved = sorted(p.name for p in (layout.training / "checkpoints").glob("*"))
+        raise SystemExit(
+            f"e2e-smoke: no checkpoint at {checkpoint}; the trainer saved {saved}"
+        )
     run(
         lerobot_eval_command(
-            policy_path=layout.checkpoint(args.steps),
+            policy_path=checkpoint,
             device=device,
             output_dir=layout.evaluation,
             seed=EVAL_SEED,
@@ -237,6 +300,7 @@ def main() -> None:
     args = parse_args()
     layout = RunLayout(args.runs, args.name)
     device = best_device(args.device)
+    prepare(layout, skip_demos=args.skip_demos, force=args.force)
     if not args.skip_demos:
         started = stage(
             f"demos: {args.episodes} kept at +-{DR_SPAN:.0%} DR -> {layout.demos}"

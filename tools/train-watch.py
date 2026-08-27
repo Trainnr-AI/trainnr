@@ -46,6 +46,7 @@ import rerun as rr
 from _lab import (
     PREVIEW_EVERY_TICKS,
     bootstrap,
+    hold_until_closed,
     lerobot_train_command,
     load_demo_actions,
     rr_session,
@@ -328,8 +329,7 @@ def play_only(args) -> None:
         f"[play] {successes}/{args.trials} - close the MuJoCo window to exit",
         flush=True,
     )
-    while watcher.viewer.is_running():
-        time.sleep(0.2)
+    hold_until_closed(watcher.viewer)
 
 
 def main() -> None:
@@ -368,8 +368,7 @@ def main() -> None:
         watcher.poll(checkpoints, args.action_space)  # the final checkpoint
         rr.log("stage", rr.TextLog(f"training exited with {process.returncode}"))
         print("[watch] training finished - close the MuJoCo window to exit", flush=True)
-        while watcher.viewer.is_running():
-            time.sleep(0.2)
+        hold_until_closed(watcher.viewer)
     finally:
         if process.poll() is None:
             process.terminate()

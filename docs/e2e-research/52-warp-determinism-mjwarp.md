@@ -116,7 +116,8 @@ treatment stands, and the stamp `mjx-warp-3.12.0+warp-1.16.0+gpu+x86_64`
 says exactly which non-repeatable instrument produced a number. Cost
 of learning it: the probe's first mode spent ~10 minutes compiling
 kernels cold for this sizing before running in half a second — the
-box rule now is a `timeout` on every probe.
+probe now carries `--budget-s` (default 900 s) and says so before it
+starts, and reports a compile refusal as a verdict row.
 
 ### 5.1 The throughput number, same card, same scene
 

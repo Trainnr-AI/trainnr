@@ -25,6 +25,18 @@ class LeRobotScripts:
     EVAL = "lerobot.scripts.lerobot_eval"
 
 
+class LeRobotDefaults:
+    """The knobs every LeRobot command line from this bench shares."""
+
+    LOG_FREQ = 50  # trainer log lines, in steps
+    # Synchronous vector envs: the rollouts are render-bound and `spawn`
+    # workers buy nothing on one renderer.
+    SYNC_ENVS = "--eval.use_async_envs=false"
+
+
+VIEWER_HOLD_PERIOD_S = 0.2  # how often a held viewer window is polled
+
+
 def bootstrap() -> None:
     """Put <repo>/pipeline and <repo>/tools at the front of sys.path."""
     for root in (str(REPO / "tools"), str(REPO / "pipeline")):
@@ -112,12 +124,17 @@ def lerobot_train_command(  # noqa: PLR0913 - every knob of one command line, na
     batch_size: int,
     save_freq: int,
     dataset_root: Path | str | None = None,
-    log_freq: int = 50,
+    log_freq: int = LeRobotDefaults.LOG_FREQ,
+    eval_freq: int | None = None,
+    eval_episodes: int | None = None,
+    eval_batch: int | None = None,
     extra: Sequence[str] = (),
 ) -> list[str]:
     """`lerobot-train` as an argv, the one place its flags are spelled
-    for tools (train-watch's run, e2e-smoke's chain). `extra` carries
-    the `--env.*` flags a plugin supplies for in-loop evaluation."""
+    for tools (train-watch's run, e2e-smoke's chain). `eval_freq` turns
+    on the trainer's own in-loop evaluation every that many steps with
+    `eval_episodes` episodes over `eval_batch` synchronous envs; `extra`
+    carries the `--env.*` flags a plugin supplies for it."""
     command = [
         sys.executable,
         "-m",
@@ -136,6 +153,14 @@ def lerobot_train_command(  # noqa: PLR0913 - every knob of one command line, na
     ]
     if dataset_root is not None:
         command.append(f"--dataset.root={dataset_root}")
+    if eval_freq is not None:
+        episodes = 1 if eval_episodes is None else eval_episodes
+        command += [
+            f"--env_eval_freq={eval_freq}",
+            f"--eval.n_episodes={episodes}",
+            f"--eval.batch_size={episodes if eval_batch is None else eval_batch}",
+            LeRobotDefaults.SYNC_ENVS,
+        ]
     return [*command, *extra]
 
 
@@ -162,12 +187,12 @@ def lerobot_eval_command(  # noqa: PLR0913 - every knob of one command line, nam
         f"--seed={seed}",
         f"--eval.n_episodes={episodes}",
         f"--eval.batch_size={batch_size}",
-        "--eval.use_async_envs=false",
+        LeRobotDefaults.SYNC_ENVS,
         *extra,
     ]
 
 
-def hold_until_closed(viewer: Any, period_s: float = 0.2) -> None:
+def hold_until_closed(viewer: Any, period_s: float = VIEWER_HOLD_PERIOD_S) -> None:
     """Keep a passive MuJoCo viewer's window open until the operator
     closes it — the three-line hold every viewer tool used to carry."""
     import time  # noqa: PLC0415

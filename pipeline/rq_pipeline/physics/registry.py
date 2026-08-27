@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from importlib import import_module
-from importlib.metadata import entry_points
 from typing import Any
+
+from rq_pipeline.plugins import load_group
 
 ENTRY_POINT_GROUP = "rq_pipeline.engines"
 # The modules that register the built-in engines; imported by `engines()`
@@ -66,10 +66,7 @@ def engine(name: str, *, doc: str = ""):
 
 def engines() -> Mapping[str, EngineEntry]:
     """Every registered engine: the built-ins plus installed plugins."""
-    for module in BUILTIN_MODULES:
-        import_module(module)
-    for entry in entry_points(group=ENTRY_POINT_GROUP):
-        entry.load()
+    load_group(ENTRY_POINT_GROUP, BUILTIN_MODULES)
     return dict(_REGISTRY)
 
 

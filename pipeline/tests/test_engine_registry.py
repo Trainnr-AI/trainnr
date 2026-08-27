@@ -42,6 +42,20 @@ class EngineRegistry(unittest.TestCase):
             entry.build()
         self.assertIn("mjx", str(caught.exception))
 
+    def test_a_plugin_that_fails_to_import_is_named(self) -> None:
+        from rq_pipeline.plugins import load_entries  # noqa: PLC0415
+
+        class Broken:
+            name, value = "acme-sim", "acme.sim:register"
+
+            def load(self):
+                raise ModuleNotFoundError("No module named 'acme'")
+
+        with self.assertRaises(ImportError) as caught:
+            load_entries("rq_pipeline.engines", [Broken()])
+        self.assertIn("rq_pipeline.engines:acme-sim", str(caught.exception))
+        self.assertIn("acme.sim:register", str(caught.exception))
+
     def test_a_duplicate_name_is_refused(self) -> None:
         with self.assertRaises(ValueError):
             engine(CPU_ENGINE)(object)

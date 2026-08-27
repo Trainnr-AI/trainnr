@@ -276,3 +276,27 @@ outright" does not. And the instrument stamp learned from it: every
 (`mujoco-3.11.0+x86_64`, `physics/backend.py::instrument_stamp`),
 because a version alone did not name the thing the verdict depends
 on.
+
+### 7.3 The second pass, re-measured on x86-64 (WSL, 2026-08-27, the same sweep with the diagnostics)
+
+| solver | cone | integ | impratio | verdict | pen mm (arm64 → x86) | slip mm/s (arm64 → x86) | grip N (arm64 → x86) |
+|---|---|---|---|---|---|---|---|
+| newton | elliptic | euler | 10 | PASS · PASS | 1.5 → 2.39 | 130 → 151 | 22.6 → 26.6 |
+| newton | elliptic | implicitfast | 10 | PASS · PASS | 1.8 → 2.30 | 136 → 149 | **318.5 → 21.5** |
+| cg | elliptic | euler | 10 | fail · fail | 11.4 → 11.02 | **5166 → 2135** | 169 → 275 |
+| newton | elliptic | euler | 1 | PASS · PASS | **5.1 → 5.22** | 140 → 161 | 23.6 → 21.1 |
+| newton | elliptic | euler | 3 | PASS · PASS | 1.4 → 2.05 | 118 → 106 | 21.1 → 21.1 |
+| newton | elliptic | euler | 30 | PASS · PASS | 2.6 → 2.97 | 164 → 165 | 23.3 → 24.7 |
+
+The reading, machine by machine: **the 318 N implicitfast spike is an
+arm64 transient** — on x86-64 the same configuration peaks at 21.5 N,
+below Euler's 26.6 — so the second pass's first reversal ("implicitfast
+is NOT behaviorally equivalent") is an instrument-specific measurement,
+not a property of the integrator on this scene; the integrator decision
+still needs the force trace, on the instrument the decision is for. What
+survives both architectures: impratio=1 hardens nothing and lets the pads
+sink 5 mm (5.1 / 5.22 — the second reversal holds), CG fails with
+metre-per-second scrubbing on both (5.2 / 2.1 m/s — the failure is
+robust, its number is not), and Newton + elliptic passes at 21–27 N of
+grip everywhere. Every row's verdict agrees across the two machines
+except PGS (§7.1); every row's *number* differs.

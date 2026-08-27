@@ -68,7 +68,11 @@ class Stepper(Protocol):
     holds a control for some physics steps, `sensordata` is what the
     policy sees now, `states`/`sensors` are the rows the referees read,
     `extras` is anything the engine exposes beyond the row (a deformable
-    engine's particles), keyed as `EpisodeProtocol.observables` names."""
+    engine's particles), keyed as `EpisodeProtocol.observables` names.
+    Shapes are the engine's: the CPU stepper is one world (`control
+    (nu,)`, `states (steps, width)`), the GPU stepper a batch (`(nbatch,
+    nu)`, `(nbatch, steps, width)`); `run_sensor_episode` is the
+    single-world loop and drives the CPU engine."""
 
     step: int
     states: Any
@@ -92,7 +96,10 @@ class Engine(Protocol):
     implements these six, and is admitted through the gauntlet
     (tests/test_mjx_backend.py). `observables` names what the engine
     can expose beyond the FULLPHYSICS row; a protocol that needs more
-    is refused before a trial is spent (`require_observables`)."""
+    is refused before a trial is spent (`require_observables`). The
+    gate is built; the delivery — `Stepper.extras` reaching a referee —
+    lands with the first engine that exposes anything, so it is designed
+    against a real consumer."""
 
     @property
     def instrument(self) -> str: ...  # physics/backend.py::instrument_stamp

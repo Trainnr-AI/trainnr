@@ -116,17 +116,15 @@ class FullPhysicsLayout:
         return 1 + self.nq + self.nv + self.na
 
 
-LOAD_DOORS = ("load_spec", "load_model", "load_mjcf_string")
-
-
-def no_model_message() -> str:
-    return f"no model loaded — call one of {', '.join(LOAD_DOORS)} first"
+def no_model_message(doors: tuple[str, ...]) -> str:
+    """Each engine names its own load doors; the message lists them."""
+    return f"no model loaded — call one of {', '.join(doors)} first"
 
 
 def census(model: Any) -> ModelCounts:
-    """The fail-loudly census, read the same way off any compiled
-    mjModel — MuJoCo's and MJX's share the field names, so both
-    backends' `counts()` is this one call."""
+    """The fail-loudly census, read off the compiled mjModel every
+    engine here loads (MJX adopts the same object), so both backends'
+    `counts()` is this one call."""
     return ModelCounts(
         actuators=model.nu,
         sensors=model.nsensor,

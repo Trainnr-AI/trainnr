@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from importlib import import_module
-from importlib.metadata import entry_points
 from typing import Any
+
+from rq_pipeline.plugins import load_group
 
 BUILTIN_NAMESPACE = "robotiq"
 ENTRY_POINT_GROUP = "rq_pipeline.tasks"
@@ -65,10 +65,7 @@ def register(name: str, *, rig: str, namespace: str = BUILTIN_NAMESPACE):
 
 def tasks() -> Mapping[str, TaskEntry]:
     """Every registered task: the built-ins plus installed plugins."""
-    for module in BUILTIN_MODULES:
-        import_module(module)
-    for entry in entry_points(group=ENTRY_POINT_GROUP):
-        entry.load()
+    load_group(ENTRY_POINT_GROUP, BUILTIN_MODULES)
     return dict(_REGISTRY)
 
 

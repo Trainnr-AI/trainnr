@@ -199,6 +199,7 @@ class MuJoCoBackend:
     keyframes, and the batched rollout sysid uses."""
 
     name = CPU_ENGINE
+    LOAD_DOORS = ("load_spec", "load_model", "load_mjcf", "load_mjcf_string")
     observables: frozenset[str] = frozenset()  # the row and the sensors, nothing more
 
     def __init__(self) -> None:
@@ -224,6 +225,11 @@ class MuJoCoBackend:
         harness and the env drive; a second engine offers the same method."""
         return Stepper(self._require_model(), initial_state, steps, data=data)
 
+    def load_model(self, model: Any) -> None:
+        """Adopt an already compiled model — the same door the GPU engine
+        offers, so a registry caller can hand one compile to both."""
+        self._model = model
+
     def load_mjcf(self, path: Path) -> None:
         self._model = self._mujoco.MjModel.from_xml_path(str(path))
 
@@ -242,7 +248,7 @@ class MuJoCoBackend:
 
     def _require_model(self) -> Any:
         if self._model is None:
-            raise RuntimeError(no_model_message())
+            raise RuntimeError(no_model_message(self.LOAD_DOORS))
         return self._model
 
     def counts(self) -> ModelCounts:
@@ -257,11 +263,7 @@ class MuJoCoBackend:
         need a real pose name a keyframe (`EpisodeProtocol.home`) and
         get it through `keyframe_state`.
         """
-        mujoco = self._mujoco
-        model = self._require_model()
-        data = mujoco.MjData(model)
-        mujoco.mj_resetData(model, data)
-        return self._state_of(data)
+        return reset_state(self._require_model())
 
     def keyframe_state(self, name: str) -> numpy.ndarray:
         """The named keyframe as a full-physics state vector.
@@ -276,9 +278,6 @@ class MuJoCoBackend:
         measures a collision, not a policy.
         """
         return keyframe_state(self._require_model(), name)
-
-    def _state_of(self, data: Any) -> numpy.ndarray:
-        return full_state(self._require_model(), data)
 
     def rollout(
         self,

@@ -298,7 +298,7 @@ class RobotiqEnv(gym.Env):
 
     def _observe(self) -> dict[str, Any]:
         assert self._stepper is not None
-        data = self._stepper.data
+        data = self._data  # the MjData the env seated the stepper into
         pixels: dict[str, Any] = {}
         for camera in self.cameras:
             renderer = self._renderer(camera.height, camera.width)

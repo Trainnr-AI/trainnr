@@ -145,3 +145,19 @@ whole-episode `rollout` to 1e-4 and with the CPU stepper to the
 gauntlet's 1e-3, world by world. The vectorized gymnasium env over it
 is the remaining piece of this report's plan.
 
+## Postscript 4 (2026-08-27) — the ceiling, and no recompile per episode
+
+Two corrections from the third review, verified in the installed
+mujoco_warp: `naconmax` is the contact capacity for the WHOLE batch
+(`njmax` is per world), and past it the collision driver skips the
+remaining contacts without a word. `MJXWarpBackend` now reads the peak
+contact count out of every program and refuses a trajectory that
+touched the ceiling, naming the knob; sizing is passed as a pair and
+checked when the model is loaded. And the programs — the whole-episode
+rollout, the seat-and-forward, one hold per substep count — live on
+the backend per loaded model, so a new stepper or a new episode never
+recompiles (the batched stepper had been jitting fresh closures per
+instance). `mjwarp-testspeed`'s own estimate for 64 worlds of kitting
+was 262,144 contacts (docs/52 §5.1): that is the order the knob takes
+at batch.
+

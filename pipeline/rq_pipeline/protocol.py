@@ -62,7 +62,9 @@ class EpisodeProtocol:
     # What the referee needs beyond the FULLPHYSICS row and the sensors —
     # e.g. ("particle_q",) for a deformable object. An engine declares what
     # it exposes (`Engine.observables`); the harness refuses a mismatch
-    # before a trial is spent. Empty for every rigid task today.
+    # before a trial is spent. Empty for every rigid task today, and the
+    # gate is all that exists: the referee call gains the extras with the
+    # first engine that has any (harness.Engine).
     observables: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:

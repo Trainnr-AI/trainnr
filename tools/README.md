@@ -51,7 +51,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 |---|---|
 | `e2e-smoke.py` | The T5 chain at smoke scale in one command: demos → LeRobot v3 → `lerobot-train` with in-loop eval through our env → `lerobot-eval` with records → the fold |
 | `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? Subprocess-per-mode (compile option); the verdict needs the WSL CUDA device |
-| `solver-study.py` | Constraint-solver sweep on the kitting scene: solver x cone x integrator, judged by the referee |
+| `solver-study.py` | Constraint-solver sweep on the kitting scene: solver × cone × integrator plus an impratio sweep, judged by the referee, with penetration, solver iterations, peak pad slip and peak grip force per row |
 | `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |

@@ -78,11 +78,14 @@ class MJXWarpGauntlet(unittest.TestCase):
         from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
         from rq_pipeline.tasks.aloha2 import build_kitting  # noqa: PLC0415
 
-        warp = MJXWarpBackend()
-        warp.load_spec(build_kitting().spec)
-        self.assertGreater(warp.counts().geoms, warp.SIZING_REQUIRED_ABOVE_GEOMS)
-        with self.assertRaises(ValueError):
-            warp.rollout(warp.default_initial_state()[None, :], [[[0.0] * 14]])
+        spec = build_kitting().spec
+        with self.assertRaises(ValueError):  # refused at the door, before Warp
+            MJXWarpBackend().load_spec(spec)
+        with self.assertRaises(ValueError):  # the knobs are a pair
+            MJXWarpBackend(naconmax=4096)
+        sized = MJXWarpBackend(naconmax=4096, njmax=8192)
+        sized.load_spec(spec)
+        self.assertGreater(sized.counts().geoms, sized.SIZING_REQUIRED_ABOVE_GEOMS)
 
     def test_the_gpu_engine_is_registered(self) -> None:
         from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
@@ -130,6 +133,13 @@ class MJXWarpGauntlet(unittest.TestCase):
             self.assertLess(gap, 1e-3, f"world {world} vs the reference {gap}")
         stepper.advance(controls[:, 0], substeps)  # past the budget: a no-op
         self.assertEqual(stepper.step, ticks * substeps)
+        # A second stepper shares the backend's programs: no recompile.
+        again = warp.stepper(initial, substeps)
+        again.advance(controls[:, 0], substeps)
+        self.assertEqual(len(warp._device().holds), 1)
+        with self.assertRaises(ValueError) as caught:  # one world is a batch of one
+            warp.stepper(initial[0], substeps)
+        self.assertIn("row[None, :]", str(caught.exception))
 
     def test_shape_refusals_match_the_reference(self) -> None:
         import numpy as np  # noqa: PLC0415
