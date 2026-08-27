@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -325,19 +326,39 @@ class RobotiqEnv(gym.Env):
         }
 
 
-def make_env(
+def make_env(  # noqa: PLR0913 - gym.make's keywords, each a knob of one env
     task: str,
     *,
     render_mode: str = RENDER_MODE,
     record_to: Path | str | None = None,
     policy_name: str = DEFAULT_POLICY_NAME,
     variations: tuple[Variation, ...] = (),
+    trials: int | None = None,
     **builder_kwargs: Any,
 ) -> RobotiqEnv:
     """`gym.make`'s entry point: a registered task by id (`robotiq/kitting`,
     or bare `kitting` for a built-in); extra keywords reach the builder
-    (`look=...`)."""
-    built = resolve(task).build(**builder_kwargs)
+    (`look=...`).
+
+    `trials` sizes the protocol's paired starts to the evaluation: an
+    evaluator that asks for N episodes gets N DISTINCT starts (the task's
+    spec rebuilt with `trials=N`, so its stamp says so). Without it the
+    spec's own count stands, and `reset(seed=k)` wraps — measured
+    2026-08-27: `lerobot-eval` with ten episodes on the shipped four-trial
+    kitting spec evaluated the same four starts two and a half times,
+    and its "3/10" was one start succeeding three times.
+    """
+    entry = resolve(task)
+    built = entry.build(**builder_kwargs)
+    if trials is not None and trials != built.protocol.trials:
+        if built.task_spec is None:
+            raise ValueError(
+                f"task {task!r} has no spec to size: it declares "
+                f"{built.protocol.trials} paired trials and cannot take {trials}"
+            )
+        built = entry.build(
+            spec=replace(built.task_spec, trials=trials), **builder_kwargs
+        )
     return RobotiqEnv(
         built,
         source=bundle_source(built.bundle_dir),

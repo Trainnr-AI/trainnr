@@ -379,10 +379,13 @@ def convert(layout: RunLayout) -> None:
 
 
 def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
-    inloop = RobotiqEnvConfig.cli_flags(
-        KITTING, record_to=layout.inloop_records, policy_name=f"{layout.name}-inloop"
-    )
     episodes = min(args.inloop_episodes, MAX_EVAL_BATCH)
+    inloop = RobotiqEnvConfig.cli_flags(
+        KITTING,
+        record_to=layout.inloop_records,
+        policy_name=f"{layout.name}-inloop",
+        trials=episodes,
+    )
     run(
         lerobot_train_command(
             policy=POLICY,
@@ -423,6 +426,7 @@ def evaluate(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
                 KITTING,
                 record_to=layout.eval_records,
                 policy_name=f"{layout.name}-{POLICY}-{args.steps}",
+                trials=args.eval_episodes,
             ),
         )
     )

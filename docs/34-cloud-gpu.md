@@ -85,6 +85,13 @@ schema and the wire said:
   comparability, the operator's call on the night was 64). The pod's volume
   refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
   UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
+- **An evaluation of N episodes needs N distinct starts.** The env
+  maps `reset(seed=k)` to trial `k % trials`; the first cloud run asked
+  `lerobot-eval` for ten episodes on the four-trial kitting spec and got
+  the same four starts two and a half times (LeRobot's "3/10" was one
+  start three times). `--env.trials=N` rebuilds the spec with N paired
+  trials — the chain does it for every evaluation it launches — and
+  LeRobot's padded last batch falls into a second pass of the fold.
 - The account held a **stopped B200 pod** (`$6.79/h` when running; a
   stopped pod bills its disk) when the tool first listed it. The tool
   reports; it never terminates on anyone's behalf.
@@ -169,6 +176,7 @@ pipeline depends on, and it needs only the API key.
 |---|---|
 | A second vendor | The seam is the deliverable; a vendor is added when a run needs one (price, stock, a region). Lambda, Vast, or a hyperscaler each fit the Protocol as written |
 | Network volumes / a shared dataset store | The T5 batch is ~4.5 GB at 50 episodes and travels by rsync in minutes; a volume earns its keep when batches are reused across pods |
+| Several runs on one card | The way to load a B200 with a small model (ACT at batch 64 used 58 % of it): N seeds or variants at once, each its own name — what a sweep and the certificate's seed variance both want. The tool launches one run per machine today |
 | Multi-GPU / multi-node | ACT at batch 8 fits one card; LeRobot's trainer is single-process. The `count` field is there; the distributed launcher is not |
 | Spot / interruptible pricing | Runpod's v2 pods are on-demand; a checkpoint every 20k steps (docs/31 §5) already bounds what an interruption costs |
 | Automatic terminate on completion | Nothing here terminates on the operator's behalf: a finished run is pulled and inspected first, then the machine is released by hand |

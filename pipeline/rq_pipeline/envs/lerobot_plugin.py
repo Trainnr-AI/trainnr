@@ -74,6 +74,9 @@ class RobotiqEnvConfig(EnvConfig):
     # eval_info.json lacks.
     record_to: str | None = None
     policy_name: str = DEFAULT_POLICY_NAME
+    # Distinct paired starts; None keeps the task spec's count. An
+    # evaluation of N episodes wants N (see `make_env`).
+    trials: int | None = None
     # `--env.variations='["joints.damping_scale=0.7:1.3",
     #                     "top.offset_m=-0.03,-0.03,-0.03:0.03,0.03,0.03"]'`
     # — each drawn by trial index (paired across policies), applied at
@@ -120,6 +123,7 @@ class RobotiqEnvConfig(EnvConfig):
         record_to: str | Path | None = None,
         policy_name: str | None = None,
         variations: Sequence[str] = (),
+        trials: int | None = None,
     ) -> list[str]:
         """The `--env.*` arguments that select this plugin on LeRobot's
         command lines (`lerobot-train`, `lerobot-eval`): the type, the
@@ -137,6 +141,8 @@ class RobotiqEnvConfig(EnvConfig):
             flags.append(f"{ENV_FLAG_PREFIX}policy_name={policy_name}")
         if variations:
             flags.append(f"{ENV_FLAG_PREFIX}variations={json.dumps(list(variations))}")
+        if trials is not None:
+            flags.append(f"{ENV_FLAG_PREFIX}trials={trials}")
         return flags
 
     @property
@@ -146,6 +152,7 @@ class RobotiqEnvConfig(EnvConfig):
             "record_to": self.record_to,
             "policy_name": self.policy_name,
             "variations": tuple(parse_variation(text) for text in self.variations),
+            "trials": self.trials,
         }
 
     def create_envs(

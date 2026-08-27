@@ -134,6 +134,15 @@ class ThroughLeRobot(unittest.TestCase):
         self.assertIn("--env.policy_name=smoke", flags)
         self.assertEqual(len(RobotiqEnvConfig.cli_flags("kitting")), 3)
 
+    def test_cli_flags_carry_the_trials(self) -> None:
+        from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+
+        flags = RobotiqEnvConfig.cli_flags("kitting", trials=10)
+        self.assertIn("--env.trials=10", flags)
+        self.assertNotIn(
+            "--env.trials", " ".join(RobotiqEnvConfig.cli_flags("kitting"))
+        )
+
     def test_fps_comes_from_the_task(self) -> None:
         from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
 

@@ -107,6 +107,28 @@ class GymnasiumContract(unittest.TestCase):
         self.assertEqual(env.task_description, "transfer the cube to the left gripper")
         env.close()
 
+    def test_trials_size_the_paired_starts_to_the_evaluation(self) -> None:
+        """An evaluator asking for N episodes gets N distinct starts: the
+        spec is rebuilt with trials=N and the stamp says so. Measured
+        2026-08-27: ten lerobot-eval episodes on the four-trial spec
+        were the same four starts two and a half times."""
+        from rq_pipeline.envs.robotiq import InfoKeys, make_env  # noqa: PLC0415
+        from rq_pipeline.protocol import protocol_fields  # noqa: PLC0415
+
+        shipped = make_env("kitting")
+        sized = make_env("kitting", trials=6)
+        self.assertEqual(shipped.protocol.trials, 4)
+        self.assertEqual(sized.protocol.trials, 6)
+        self.assertNotEqual(
+            protocol_fields(sized.protocol), protocol_fields(shipped.protocol)
+        )
+        _obs, info = sized.reset(seed=5)
+        self.assertEqual(info[InfoKeys.TRIAL], 5)
+        _obs, info = shipped.reset(seed=5)
+        self.assertEqual(info[InfoKeys.TRIAL], 1)  # the wrap, when nobody sized it
+        shipped.close()
+        sized.close()
+
     def test_seed_is_the_trial_so_starts_pair(self) -> None:
         import numpy as np  # noqa: PLC0415
 
