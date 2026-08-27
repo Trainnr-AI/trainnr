@@ -8,7 +8,10 @@ location on disk does not.
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 # 12 hex characters: short enough for a filename, long enough that a
 # collision inside one project's artifact store is not a realistic event.
@@ -68,3 +71,17 @@ def require_stamp(value: str, what: str = "source") -> str:
             "stamp it with rq_pipeline.bundles.stamp first"
         )
     return value
+
+
+def fields_hash(fields: Mapping[str, Any]) -> str:
+    """STAMP_LENGTH hex digits over a JSON-serialisable mapping, keys
+    sorted: the content half of a stamp for anything that is data — a
+    protocol's fields, a task spec. Non-JSON values are stringified."""
+    encoded = json.dumps(dict(fields), sort_keys=True, default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()[:STAMP_LENGTH]
+
+
+def content_stamp(name: str, fields: Mapping[str, Any]) -> str:
+    """`name@hash` over `fields` — the same shape as a bundle's stamp, so
+    a task spec is nameable the way a bundle is (`require_stamp` accepts it)."""
+    return f"{name}{STAMP_SEPARATOR}{fields_hash(fields)}"

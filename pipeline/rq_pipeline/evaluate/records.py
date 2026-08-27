@@ -17,7 +17,6 @@ the trial count survives into every downstream statistic.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -25,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.hashing import STAMP_LENGTH, require_stamp
+from rq_pipeline.bundles.hashing import fields_hash, require_stamp
 from rq_pipeline.protocol import protocol_fields
 
 __all__ = [
@@ -100,8 +99,7 @@ def protocol_hash(fields: Mapping[str, Any]) -> str:
     """Twelve hex digits over the protocol's scalar fields (and its
     variation space, when the env adds one): the seed of every draw, so
     two sweeps that differ in any declared knob draw different values."""
-    encoded = json.dumps(dict(fields), sort_keys=True, default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()[:STAMP_LENGTH]
+    return fields_hash(fields)
 
 
 def funnel(records: Sequence[EpisodeRecord]) -> dict[str, list[int]]:

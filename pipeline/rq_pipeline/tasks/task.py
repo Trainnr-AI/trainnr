@@ -12,10 +12,11 @@ certificate read them from one place.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.hashing import content_stamp
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
 
 # Episode design shared by every rig's tasks: 500 Hz physics (the
@@ -49,6 +50,10 @@ class Task:
     instruction: str
     bundle_dir: Path
     target: tuple[float, float, float] | None = None
+    # The task's DATA — what an agent may write and a hash names (a
+    # frozen dataclass per task kind, e.g. `aloha2.KittingSpec`); None for
+    # a task that is code only. `stamp` is its `name@hash`.
+    task_spec: Any = None
 
     def __post_init__(self) -> None:
         if self.state_width <= 0:
@@ -57,6 +62,14 @@ class Task:
             raise ValueError("instruction must not be empty")
         if not self.cameras:
             raise ValueError(f"task {self.name!r} declares no cameras")
+
+    @property
+    def stamp(self) -> str | None:
+        """`name@hash` over the task spec's fields — the identity a
+        certificate cites beside the bundle's; None without a spec."""
+        if self.task_spec is None:
+            return None
+        return content_stamp(self.name, asdict(self.task_spec))
 
     @property
     def control_hz(self) -> int:

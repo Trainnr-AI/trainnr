@@ -30,6 +30,7 @@ the table at the end.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -445,19 +446,83 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
 # 6 cm-height target failed at 69 mm where the same target approached
 # from 10 cm above converges).
 
-TRAY_CENTER = (0.0, -0.02)
-SLOT_HALF = 0.045
-SLOT_WALL = 0.008
-SLOT_WALL_HEIGHT = 0.015
-_SLOT_OFFSET_X = 0.09
-# One slot per arm, mirrored about the tray centre; the part that
-# starts on the RIGHT goes into the right slot. Derived, not restated —
-# the tray centre existed beside hand-copied slot y values once.
-SLOT_CENTERS = {
-    "right": (TRAY_CENTER[0] + _SLOT_OFFSET_X, TRAY_CENTER[1]),
-    "left": (TRAY_CENTER[0] - _SLOT_OFFSET_X, TRAY_CENTER[1]),
-}
-PART_HALF = 0.02
+
+@dataclass(frozen=True)
+class KittingSpec:
+    """The kitting task as DATA: the tray, the parts, where they start,
+    what counts as placed, how long an episode is, and the sentence a
+    policy is judged under. Today's numbers are the defaults; a variant
+    is `replace(KITTING_SPEC, ...)`, named by `Task.stamp`, and admitted
+    only by `tasks/acceptance.py` — the scripted expert must pass its
+    referee and the do-nothing floor must not. The scene's structure
+    (arms, table, cameras, the parts' state slices) stays code."""
+
+    tray_center: tuple[float, float] = (0.0, -0.02)
+    slot_offset_x: float = 0.09  # one slot per arm, mirrored about the tray centre
+    slot_half: float = 0.045
+    slot_wall: float = 0.008
+    slot_wall_height: float = 0.015
+    part_half: float = 0.02
+    # Spawn bands, one per arm side, inside the proven reach envelope
+    # (transfer_cube's spawn box, mirrored for the left arm).
+    part_spawn: Mapping[str, tuple[tuple[float, float], tuple[float, float]]] = field(
+        default_factory=lambda: {
+            "right": ((0.14, 0.24), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
+            "left": ((-0.24, -0.14), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
+        }
+    )
+    # 28 s at 500 Hz: two sequential pick-places PLUS the closed-loop
+    # corrections and one grasp retry per arm. The budget was 18 s and
+    # every robustness fix shifted which trial's endgame got truncated —
+    # the whack-a-mole was the clock, not the choreography.
+    steps: int = 14000
+    trials: int = PAIRED_TRIALS
+    # The paired starts: the spawn box's corners pulled in by this fraction
+    # of each side (`_corner_fraction`).
+    spawn_inset: float = 0.2
+    # The referee: a part is in its slot within this radius of the slot
+    # centre and below this height (resting on the tray floor).
+    in_slot_xy_m: float = 0.035
+    in_slot_z_m: float = 0.045
+    # A lift that left the part below this never lifted it.
+    lift_check_z_m: float = 0.05
+    # The sentence the dataset was exported with (collect/kitting_export.py)
+    # and the policy is judged under — one string, both places read it.
+    instruction: str = "kit both parts into their slots"
+
+    @property
+    def slot_centers(self) -> dict[str, tuple[float, float]]:
+        """The part that starts on the RIGHT goes into the right slot.
+        Derived, not restated — the tray centre once sat beside
+        hand-copied slot y values."""
+        cx, cy = self.tray_center
+        return {
+            "right": (cx + self.slot_offset_x, cy),
+            "left": (cx - self.slot_offset_x, cy),
+        }
+
+    @property
+    def part_home(self) -> dict[str, tuple[float, float, float]]:
+        """Each part's authored resting pose: the middle of its band."""
+        return {
+            arm: (
+                (x_low + x_high) / 2,
+                (y_low + y_high) / 2,
+                self.part_half,
+            )
+            for arm, ((x_low, x_high), (y_low, y_high)) in self.part_spawn.items()
+        }
+
+
+KITTING_SPEC = KittingSpec()
+# The shipped spec's facts under their historical names, for the readers
+# that predate the spec (the demo generator, the exporter, the tests).
+TRAY_CENTER = KITTING_SPEC.tray_center
+SLOT_HALF = KITTING_SPEC.slot_half
+SLOT_WALL = KITTING_SPEC.slot_wall
+SLOT_WALL_HEIGHT = KITTING_SPEC.slot_wall_height
+SLOT_CENTERS = KITTING_SPEC.slot_centers
+PART_HALF = KITTING_SPEC.part_half
 
 
 def part_body(arm: str) -> str:
@@ -465,35 +530,18 @@ def part_body(arm: str) -> str:
     return f"part_{arm}"
 
 
-# Spawn bands, one per arm side, inside the proven reach envelope
-# (transfer_cube's spawn box, mirrored for the left arm).
-PART_SPAWN = {
-    "right": ((0.14, 0.24), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
-    "left": ((-0.24, -0.14), (0.28 + ACT_SIM_Y_SHIFT, 0.44 + ACT_SIM_Y_SHIFT)),
-}
-PART_HOME = {
-    "right": (0.19, 0.36 + ACT_SIM_Y_SHIFT, PART_HALF),
-    "left": (-0.19, 0.36 + ACT_SIM_Y_SHIFT, PART_HALF),
-}
+PART_SPAWN = KITTING_SPEC.part_spawn
+PART_HOME = KITTING_SPEC.part_home
 # FULLPHYSICS: qpos = 16 arm + 7 right part + 7 left part; positions at
 # 17..19 and 24..26. Pinned by test.
 PART_STATE_SLICE = {"right": slice(17, 20), "left": slice(24, 27)}
-# 28 s at 500 Hz: two sequential pick-places PLUS the closed-loop
-# corrections and one grasp retry per arm. The budget was 18 s and
-# every robustness fix shifted which trial's endgame got truncated —
-# the whack-a-mole was the clock, not the choreography.
-_KITTING_STEPS = 14000
-# The choreographer's judgement thresholds, named for the lint and the
-# reader alike: a lift that left the part below this never lifted it,
-# and closed-loop grip corrections stop inside this radius.
-_LIFT_CHECK_Z_M = 0.05
-# The sentence the dataset was exported with (collect/kitting_export.py)
-# and the policy is judged under — one string, both places read it.
+_KITTING_STEPS = KITTING_SPEC.steps
+_LIFT_CHECK_Z_M = KITTING_SPEC.lift_check_z_m
 TRANSFER_CUBE_INSTRUCTION = "transfer the cube to the left gripper"
-KITTING_INSTRUCTION = "kit both parts into their slots"
+KITTING_INSTRUCTION = KITTING_SPEC.instruction
+# The choreographer's judgement threshold: closed-loop grip corrections
+# stop inside this radius.
 _CORRECTION_DONE_M = 0.008
-_PART_IN_SLOT_XY_M = 0.035
-_PART_IN_SLOT_Z_M = 0.045
 
 ARM_IK_JOINTS = {
     arm: tuple(
@@ -551,51 +599,61 @@ def grasp_axis(arm: str, target_xy: Any) -> tuple[float, float, float]:
 
 
 @register(KITTING, rig=RIG)
-def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Task:
-    """Kitting: each arm places its side's part into its slot."""
+def build_kitting(
+    bundle_xml: Path = BUNDLE_XML,
+    look: str = ALOHA2_LOOK,
+    *,
+    spec: KittingSpec = KITTING_SPEC,
+) -> Task:
+    """Kitting: each arm places its side's part into its slot. `spec`
+    is the task's data (the shipped one by default); a variant composes
+    the same scene structure around different numbers."""
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
     scene = _task_scene("kitting", bundle_xml, look)
 
     # The tray: two shallow square wells built from wall boxes, static.
-    for arm, (cx, cy) in SLOT_CENTERS.items():
+    slot_centers = spec.slot_centers
+    for arm, (cx, cy) in slot_centers.items():
         for index, (dx, dy, sx, sy) in enumerate(
             (
-                (0.0, SLOT_HALF, SLOT_HALF + SLOT_WALL, SLOT_WALL),
-                (0.0, -SLOT_HALF, SLOT_HALF + SLOT_WALL, SLOT_WALL),
-                (SLOT_HALF, 0.0, SLOT_WALL, SLOT_HALF),
-                (-SLOT_HALF, 0.0, SLOT_WALL, SLOT_HALF),
+                (0.0, spec.slot_half, spec.slot_half + spec.slot_wall, spec.slot_wall),
+                (0.0, -spec.slot_half, spec.slot_half + spec.slot_wall, spec.slot_wall),
+                (spec.slot_half, 0.0, spec.slot_wall, spec.slot_half),
+                (-spec.slot_half, 0.0, spec.slot_wall, spec.slot_half),
             )
         ):
             scene.worldbody.add_geom(
                 name=f"slot_{arm}_wall{index}",
                 type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[sx, sy, SLOT_WALL_HEIGHT],
-                pos=[cx + dx, cy + dy, SLOT_WALL_HEIGHT],
+                size=[sx, sy, spec.slot_wall_height],
+                pos=[cx + dx, cy + dy, spec.slot_wall_height],
                 rgba=[0.35, 0.25, 0.15, 1.0],
             )
 
     colors = {"right": (1, 0, 0, 1), "left": (0, 0.55, 1, 1)}
     for arm in PART_ORDER:
-        _add_free_box(scene, part_body(arm), PART_HOME[arm], PART_HALF, colors[arm])
+        _add_free_box(
+            scene, part_body(arm), spec.part_home[arm], spec.part_half, colors[arm]
+        )
     _add_top_camera_and_referees(scene)
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
-        fx, fy = _corner_fraction(trial, inset=0.2)
+        fx, fy = _corner_fraction(trial, inset=spec.spawn_inset)
         for arm in PART_ORDER:
-            (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
+            (x_low, x_high), (y_low, y_high) = spec.part_spawn[arm]
             part = PART_STATE_SLICE[arm]
             initial[part.start] = x_low + fx * (x_high - x_low)
             initial[part.start + 1] = y_low + fy * (y_high - y_low)
         return initial
 
     def in_slot(part: Any, arm: str) -> bool:
-        cx, cy = SLOT_CENTERS[arm]
+        cx, cy = slot_centers[arm]
         return bool(
-            np.hypot(part[0] - cx, part[1] - cy) < _PART_IN_SLOT_XY_M
-            and part[2] < _PART_IN_SLOT_Z_M
+            np.hypot(part[0] - cx, part[1] - cy) < spec.in_slot_xy_m
+            and part[2] < spec.in_slot_z_m
         )
 
     def success(states: Any, sensors: Any) -> bool:
@@ -603,14 +661,14 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
         tail = states[-_HOLD_STEPS:]
         return all(
             in_slot(row[PART_STATE_SLICE[arm]], arm)
-            for arm in SLOT_CENTERS
+            for arm in slot_centers
             for row in tail
         )
 
     # Order-free by construction (either arm may go first): any part
     # touched, any part lifted, one in its slot, both in their slots.
     def parts(states: Any, step: int) -> dict[str, Any]:
-        return {arm: states[step, PART_STATE_SLICE[arm]] for arm in SLOT_CENTERS}
+        return {arm: states[step, PART_STATE_SLICE[arm]] for arm in slot_centers}
 
     def part_moved(states: Any, sensors: Any, step: int) -> bool:
         del sensors
@@ -621,7 +679,9 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
 
     def part_lifted(states: Any, sensors: Any, step: int) -> bool:
         del sensors
-        return any(part[2] > _LIFT_CHECK_Z_M for part in parts(states, step).values())
+        return any(
+            part[2] > spec.lift_check_z_m for part in parts(states, step).values()
+        )
 
     def one_in_slot(states: Any, sensors: Any, step: int) -> bool:
         del sensors
@@ -636,11 +696,12 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
         spec=scene,
         cameras=ALOHA_TOP_CAMERAS,
         state_width=SERVOS,
-        instruction=KITTING_INSTRUCTION,
+        instruction=spec.instruction,
         bundle_dir=Path(bundle_xml).parent,
+        task_spec=spec,
         protocol=EpisodeProtocol(
-            trials=PAIRED_TRIALS,
-            steps=_KITTING_STEPS,
+            trials=spec.trials,
+            steps=spec.steps,
             control_interval=CONTROL_INTERVAL,
             perturb=perturb,
             success=success,
@@ -648,8 +709,8 @@ def build_kitting(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) -> Tas
                 Placement(
                     part_body(arm),
                     TABLE_GEOM,
-                    x=PART_SPAWN[arm][0],
-                    y=PART_SPAWN[arm][1],
+                    x=spec.part_spawn[arm][0],
+                    y=spec.part_spawn[arm][1],
                 )
                 for arm in PART_ORDER
             ),
@@ -699,18 +760,22 @@ class Waypoint(NamedTuple):
     seconds: float
 
 
-def kitting_waypoints(arm: str, part_xy: Any) -> list[Waypoint]:
+def kitting_waypoints(
+    arm: str, part_xy: Any, *, spec: KittingSpec = KITTING_SPEC
+) -> list[Waypoint]:
     """The Cartesian choreography for one arm.
 
     Targets before `above_slot` track the PART's spawn position;
     from `above_slot` on they track the slot. The demo generator turns
     each into a joint waypoint via chained IK.
     """
-    slot = SLOT_CENTERS[arm]
+    slot = spec.slot_centers[arm]
     plan = []
     for name, dz, grip, secs in _PICK_PLACE_SEGMENTS:
         anchor = slot if name in ("above_slot", "lower", "open", "retreat") else part_xy
-        plan.append(Waypoint(name, [anchor[0], anchor[1], PART_HALF + dz], grip, secs))
+        plan.append(
+            Waypoint(name, [anchor[0], anchor[1], spec.part_half + dz], grip, secs)
+        )
     return plan
 
 
@@ -720,6 +785,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
     *,
     on_control: Any = None,
     stats: KittingStats | None = None,
+    spec: KittingSpec = KITTING_SPEC,
 ) -> tuple[Any, Any, Any]:
     """One scripted kitting demonstration, privileged, R7-correct.
 
@@ -742,7 +808,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
     # The stepping discipline (seating, the R7 same-instant rule, the
     # per-physics-step rows) is the Stepper's; this function only
     # decides what to command.
-    stepper = Stepper(model, initial_state, _KITTING_STEPS)
+    stepper = Stepper(model, initial_state, spec.steps)
     data = stepper.data
     scratch = mujoco.MjData(model)
 
@@ -828,7 +894,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
         def part_z(*, arm: str = arm) -> float:
             return float(data.qpos[PART_STATE_SLICE[arm].start - 1 + 2])
 
-        plan = kitting_waypoints(arm, part[:2])
+        plan = kitting_waypoints(arm, part[:2], spec=spec)
         segment_index = 0
         grasp_retried = False
         while segment_index < len(plan):
@@ -843,7 +909,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
             name, target_xyz, grip, secs = plan[segment_index]
             segment_index += 1
             command_reach(target_xyz, grip, secs)
-            if name == "lift" and part_z() < _LIFT_CHECK_Z_M and not grasp_retried:
+            if name == "lift" and part_z() < spec.lift_check_z_m and not grasp_retried:
                 if stats is not None:
                     stats.retries.append((arm, stepper.step, round(part_z(), 3)))
                 # The referee's cheapest service: a lift that lifted
@@ -854,7 +920,7 @@ def scripted_kitting_episode(  # noqa: PLR0915 - a choreographer narrates
                 here = data.qpos[
                     PART_STATE_SLICE[arm].start - 1 : PART_STATE_SLICE[arm].stop - 1
                 ]
-                plan = kitting_waypoints(arm, here[:2])
+                plan = kitting_waypoints(arm, here[:2], spec=spec)
                 segment_index = 0
                 continue
             if name in ("descend", "lower"):
