@@ -36,6 +36,8 @@ from rq_pipeline.cloud.provider import (
 
 # transport(method, url, headers, body_bytes_or_None) -> (status, body_text)
 Transport = Callable[[str, str, Mapping[str, str], bytes | None], tuple[int, str]]
+# stream(url, headers, seconds) -> the text that arrived within `seconds`
+Stream = Callable[[str, Mapping[str, str], float], str]
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,10 @@ class RunpodApi:
     PRODUCT_POD = "POD"
     INCLUDE_AVAILABILITY = "AVAILABILITY"
     TIMEOUT_S = 60.0
+    # The logs endpoint is an event stream that never closes: read it
+    # for this long, then return what arrived (measured 2026-08-27: a
+    # reader waiting for EOF hung the tool).
+    LOG_READ_S = 5.0
     # Cloudflare fronts the API and answers urllib's default agent string
     # with 403 "Error 1010: Access denied — browser signature" (measured
     # 2026-08-27; curl and any named product token pass). Every request
@@ -80,15 +86,43 @@ def https_transport(
         return error.code, error.read().decode("utf-8", errors="replace")
 
 
+def https_stream(url: str, headers: Mapping[str, str], seconds: float) -> str:
+    """Read an event stream for `seconds` of silence at most, then return
+    the text so far — a stream has no EOF to wait for."""
+    request = urllib.request.Request(url, headers=dict(headers))
+    chunks: list[str] = []
+    try:
+        with urllib.request.urlopen(request, timeout=seconds) as response:
+            if response.status >= 400:  # noqa: PLR2004 - HTTP's own line
+                return response.read().decode("utf-8", errors="replace")
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                chunks.append(line.decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as error:
+        return error.read().decode("utf-8", errors="replace")
+    except TimeoutError:
+        pass  # the stream went quiet: what arrived is the answer
+    return "".join(chunks)
+
+
 @provider(RunpodApi.NAME, doc="Runpod pods over REST API v2 (RUNPOD_API_KEY)")
 class RunpodProvider:
     """Runpod pods over REST API v2."""
 
     name = RunpodApi.NAME
 
-    def __init__(self, *, key: str | None = None, transport: Transport | None = None):
+    def __init__(
+        self,
+        *,
+        key: str | None = None,
+        transport: Transport | None = None,
+        stream: Stream | None = None,
+    ):
         self._key = key or credential(RunpodApi.KEY_ENV, provider=self.name)
         self._transport = transport or https_transport
+        self._stream = stream or https_stream
 
     # ---- the seam -------------------------------------------------------
 
@@ -138,19 +172,13 @@ class RunpodProvider:
         )
 
     def logs(self, machine_id: str, *, tail: int = 100) -> str:
-        # An event stream; each event's data line is one log line.
-        text = self._request(
-            "GET",
-            f"{RunpodApi.PODS}/{machine_id}/logs",
-            params={"tail": str(tail)},
-            raw=True,
+        # An event stream that never closes; each event's data line is
+        # one log line. Read for a bounded time, then return.
+        url = f"{RunpodApi.BASE_URL}{RunpodApi.PODS}/{machine_id}/logs?" + (
+            urllib.parse.urlencode({"tail": str(tail)})
         )
-        lines = [
-            line[len("data:") :].strip()
-            for line in text.splitlines()
-            if line.startswith("data:")
-        ]
-        return "\n".join(lines) if lines else text
+        text = self._stream(url, self._headers(), RunpodApi.LOG_READ_S)
+        return "\n".join(_log_lines(text)) or text
 
     # ---- the wire -------------------------------------------------------
 
@@ -166,11 +194,7 @@ class RunpodProvider:
         url = RunpodApi.BASE_URL + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
-        headers = {
-            "Authorization": f"Bearer {self._key}",
-            "Accept": "application/json",
-            "User-Agent": RunpodApi.USER_AGENT,
-        }
+        headers = self._headers()
         payload = None
         if body is not None:
             headers["Content-Type"] = "application/json"
@@ -181,6 +205,13 @@ class RunpodProvider:
         if raw or not text.strip():
             return text
         return json.loads(text)
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._key}",
+            "Accept": "application/json",
+            "User-Agent": RunpodApi.USER_AGENT,
+        }
 
     # ---- the mapping ----------------------------------------------------
 
@@ -223,6 +254,29 @@ class RunpodProvider:
             ssh_direct=_endpoint(ssh.get("direct")),
             ssh_proxy=_endpoint(ssh.get("proxy")),
         )
+
+
+def _log_lines(text: str) -> list[str]:
+    """The stream's lines as `ts source: line`. Measured 2026-08-27: each
+    event's payload is a JSON object `{"source", "line", "ts"}`, with or
+    without an SSE `data:` prefix; anything else is passed through."""
+    out: list[str] = []
+    for raw in text.splitlines():
+        line = raw.removeprefix("data:").strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            out.append(line)
+            continue
+        if isinstance(event, dict) and "line" in event:
+            out.append(
+                f"{event.get('ts', '')} {event.get('source', '')}: {event['line']}"
+            )
+        else:
+            out.append(line)
+    return out
 
 
 def _endpoint(raw: Mapping[str, Any] | None) -> SshEndpoint | None:

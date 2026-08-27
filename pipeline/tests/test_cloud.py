@@ -176,13 +176,30 @@ class TheRunpodMapping(unittest.TestCase):
         self.assertEqual(json.loads(transport.calls[0][3]), {"action": "stop"})
         self.assertEqual(transport.calls[1][0], "DELETE")
 
-    def test_logs_are_read_out_of_the_event_stream(self) -> None:
-        stream = "event: log\ndata: step 100 loss 0.5\n\ndata: step 200 loss 0.4\n\n"
-        transport = CannedTransport(
-            {("GET", f"{RunpodApi.PODS}/pod123/logs"): (200, stream)}
+    def test_logs_are_read_out_of_the_event_stream_for_a_bounded_time(self) -> None:
+        stream = (
+            'data: {"source":"system","line":"start container","ts":"T1"}\n\n'
+            '{"source":"stdout","line":"step 200 loss 0.4","ts":"T2"}\n'
+            "data: step 300 loss 0.3\n\n"
         )
-        text = RunpodProvider(key=KEY, transport=transport).logs("pod123", tail=2)
-        self.assertEqual(text, "step 100 loss 0.5\nstep 200 loss 0.4")
+        asked = []
+
+        def canned_stream(url, headers, seconds):
+            asked.append((url, headers["User-Agent"], seconds))
+            return stream
+
+        runpod = RunpodProvider(
+            key=KEY, transport=CannedTransport({}), stream=canned_stream
+        )
+        text = runpod.logs("pod123", tail=2)
+        self.assertEqual(
+            text,
+            "T1 system: start container\nT2 stdout: step 200 loss 0.4\nstep 300 loss 0.3",
+        )
+        url, agent, seconds = asked[0]
+        self.assertIn("/pods/pod123/logs?tail=2", url)
+        self.assertEqual(agent, RunpodApi.USER_AGENT)
+        self.assertEqual(seconds, RunpodApi.LOG_READ_S)  # a stream has no EOF
 
     def test_a_problem_document_is_quoted_in_the_refusal(self) -> None:
         transport = CannedTransport({("POST", RunpodApi.PODS): (422, PROBLEM)})
