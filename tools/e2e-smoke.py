@@ -32,6 +32,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
@@ -41,6 +42,12 @@ bootstrap()
 from rq_pipeline.collect.kitting_export import export_kitting_demos  # noqa: E402
 from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
 from rq_pipeline.envs.lerobot_policy import best_device  # noqa: E402
+from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+    GPU_LOG_FILE,
+    TRAIN_LOG_FILE,
+    RunManifest,
+    watch_dir_for,
+)
 from rq_pipeline.evaluate.records import (  # noqa: E402
     fold,
     funnel,
@@ -143,6 +150,12 @@ class RunLayout:
     @property
     def evaluation(self) -> Path:
         return self.runs / f"{self.name}-eval"
+
+    @property
+    def watch(self) -> Path:
+        """The dashboard's sidecar: the run manifest, the trainer's log, the
+        GPU samples — beside the trainer's directory, never inside it."""
+        return watch_dir_for(self.training)
 
     @property
     def inloop_records(self) -> Path:
@@ -303,6 +316,61 @@ def run(command: list[str]) -> None:
         raise StageFailed(_CURRENT_STAGE, error.returncode) from None
 
 
+def run_teed(command: list[str], log_path: Path) -> None:
+    """Run it with its output on the terminal AND in `log_path`, line by
+    line as it happens — the file a dashboard follows (train-watch
+    --follow) on this box or, mirrored, from a rented one."""
+    argv = [str(part) for part in command]
+    print("$", " ".join(argv), f"| tee {log_path}", flush=True)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            log.write(line)
+            log.flush()
+        code = process.wait()
+    if code:
+        raise StageFailed(_CURRENT_STAGE, code)
+
+
+class GpuSampler:
+    """`nvidia-smi` every few seconds into a file the dashboard reads;
+    nothing where there is no nvidia-smi (a Mac, a CPU box)."""
+
+    QUERY = "timestamp,utilization.gpu,memory.used"
+    EVERY_S = 5
+
+    def __init__(self, log_path: Path) -> None:
+        self.process: subprocess.Popen | None = None
+        if shutil.which("nvidia-smi") is None:
+            return
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._handle = log_path.open("w", encoding="utf-8")
+        self.process = subprocess.Popen(
+            [
+                "nvidia-smi",
+                f"--query-gpu={self.QUERY}",
+                "--format=csv,noheader",
+                "-l",
+                str(self.EVERY_S),
+            ],
+            stdout=self._handle,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def stop(self) -> None:
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+            self.process.wait(timeout=10)
+        if self.process is not None:
+            self._handle.close()
+
+
 class StageFailed(SystemExit):
     """A stage's subprocess failed: say which, and what is on disk."""
 
@@ -331,7 +399,7 @@ def prepare(
         raise SystemExit(
             f"e2e-smoke: --skip-convert but no dataset at {layout.dataset}"
         )
-    targets = [layout.training, layout.evaluation]
+    targets = [layout.training, layout.watch, layout.evaluation]
     if not skip_convert:
         targets.insert(0, layout.dataset)
     if not skip_demos:
@@ -378,6 +446,42 @@ def convert(layout: RunLayout) -> None:
     )
 
 
+def run_manifest(
+    layout: RunLayout, args: argparse.Namespace, device: str, command: list[str]
+) -> RunManifest:
+    """Every parameter of the run, plus the dataset's provenance, as one
+    record the dashboard shows from step 0."""
+    provenance_path = layout.dataset / "provenance.json"
+    provenance = (
+        json.loads(provenance_path.read_text(encoding="utf-8"))
+        if provenance_path.exists()
+        else {}
+    )
+    return RunManifest(
+        name=layout.name,
+        policy=POLICY,
+        steps=args.steps,
+        batch_size=args.batch,
+        checkpoint_every=args.checkpoint_every,
+        inloop_episodes=args.inloop_episodes,
+        eval_episodes=args.eval_episodes,
+        workers=args.workers,
+        learning_rate=args.lr,
+        device=device,
+        dataset_root=str(layout.dataset),
+        dataset_repo_id=layout.repo_id,
+        command=" ".join(str(part) for part in command),
+        started=datetime.now(UTC).isoformat(timespec="seconds"),
+        provenance={
+            k: provenance[k]
+            for k in ("bundle", "expert", "episodes", "fps")
+            if k in provenance
+        },
+        task=KITTING,
+        scale=args.scale,
+    )
+
+
 def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
     episodes = min(args.inloop_episodes, MAX_EVAL_BATCH)
     inloop = RobotiqEnvConfig.cli_flags(
@@ -386,25 +490,30 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
         policy_name=f"{layout.name}-inloop",
         trials=episodes,
     )
-    run(
-        lerobot_train_command(
-            policy=POLICY,
-            device=device,
-            dataset=layout.repo_id,
-            dataset_root=layout.dataset,
-            output_dir=layout.training,
-            job_name=layout.training.name,
-            steps=args.steps,
-            batch_size=args.batch,
-            save_freq=args.checkpoint_every,
-            num_workers=args.workers,
-            lr=args.lr,
-            eval_freq=args.checkpoint_every,
-            eval_episodes=episodes,
-            eval_batch=episodes,
-            extra=inloop,
-        )
+    command = lerobot_train_command(
+        policy=POLICY,
+        device=device,
+        dataset=layout.repo_id,
+        dataset_root=layout.dataset,
+        output_dir=layout.training,
+        job_name=layout.training.name,
+        steps=args.steps,
+        batch_size=args.batch,
+        save_freq=args.checkpoint_every,
+        num_workers=args.workers,
+        lr=args.lr,
+        eval_freq=args.checkpoint_every,
+        eval_episodes=episodes,
+        eval_batch=episodes,
+        extra=inloop,
     )
+    manifest = run_manifest(layout, args, device, command).write(layout.watch)
+    print(f"run manifest: {manifest}", flush=True)
+    sampler = GpuSampler(layout.watch / GPU_LOG_FILE)
+    try:
+        run_teed(command, layout.watch / TRAIN_LOG_FILE)
+    finally:
+        sampler.stop()
 
 
 def evaluate(layout: RunLayout, args: argparse.Namespace, device: str) -> None:

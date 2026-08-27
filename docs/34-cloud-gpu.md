@@ -129,6 +129,21 @@ rest without incident. Until the driver path is understood, three
 shards is the box's ceiling; on a native-EGL Linux box with 192 cores
 the same split has no such ceiling in principle, but is unmeasured.
 
+**Watch it as it trains.** The chain's train stage writes a sidecar
+beside the trainer's directory — `runs/<name>-watch/` with the run
+manifest (every parameter, the dataset's bundle and expert stamps, the
+command line), the trainer's log teed as it happens, and `nvidia-smi`
+samples — because the trainer refuses an output directory that already
+exists. `train-watch.py --follow runs/<name>-act` streams those files
+into Rerun: the manifest as a text panel from step 0, the metrics
+lines as `train/*`, the in-loop and final records as `eval/*` (success
+rate and the milestone funnel per checkpoint, the eval videos), the
+GPU samples as `machine/*`, the trainer's resolved config at every
+checkpoint. For a rented card: `cloud-gpu follow <id> <name> --watch`
+mirrors the light files (never the weights) every 20 s and opens the
+dashboard on the mirror — same files, same panels, either box.
+`--rrd` saves the stream as one portable record.
+
 **Split the chain by what each box is good at.** The demos (a render
 per control tick, 95 s/episode) and the PNG → AV1 conversion (38
 s/episode) are CPU-bound and free on the WSL box; training and the

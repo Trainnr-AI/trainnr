@@ -28,19 +28,34 @@ harness's job, with all trials, after training ends — and
 `lerobot-train --env.type=robotiq` evaluates in-loop through the same
 env without this tool at all.
 
-Requires the train venv (LeRobot + torch) and the sim extras.
+    # a run that is ALREADY going — this box's chain, or a rented card's
+    # run mirrored here by `cloud-gpu follow` — as a dashboard, no torch needed:
+    cd pipeline && uv run --extra sim --extra viz python ../tools/train-watch.py \\
+        --follow runs/t5-cloud-act
+
+`--follow` streams a run from its files: the chain's run manifest (every
+parameter, the dataset's provenance) as a text panel at step 0, the
+trainer's metrics lines as `train/*`, its in-loop summaries and our
+per-episode records as `eval/*` (success rate and the milestone funnel
+per checkpoint), the eval videos, `nvidia-smi` samples as `machine/*`,
+and the trainer's resolved `train_config.json` when the first
+checkpoint lands. With `--play-checkpoints` (train venv) it also plays
+each checkpoint in both viewers as it appears, as the training mode
+does.
+
+Training mode requires the train venv (LeRobot + torch) and the sim
+extras; `--follow` needs only the sim and viz extras.
 """
 
 import argparse
-import re
+import json
 import signal
 import subprocess
 import threading
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-import mujoco.viewer
 import numpy as np
 import rerun as rr
 
@@ -49,22 +64,27 @@ from _lab import (
     bootstrap,
     hold_until_closed,
     lerobot_train_command,
-    load_demo_actions,
     rr_session,
     verdict_word,
 )
 
 bootstrap()
 from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
-from rq_pipeline.envs.lerobot_policy import best_device, load_policy  # noqa: E402
-from rq_pipeline.envs.openpi_policy import (  # noqa: E402
-    DEFAULT_PORT,
-    OpenpiKeys,
-    OpenpiRequest,
-    openpi_chunk_policy,
+from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+    GPU_LOG_FILE,
+    TRAIN_LOG_FILE,
+    FileFollower,
+    RunManifest,
+    parse_eval_line,
+    parse_train_line,
+    watch_dir_for,
 )
-from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: E402
-from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: E402
+from rq_pipeline.evaluate.records import (  # noqa: E402
+    fold,
+    funnel,
+    passes,
+    read_records,
+)
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     ACT_SIM_LOOK,
     CUBE_Z_STATE_INDEX,
@@ -79,17 +99,12 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
 from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
 
-from _rig3d import RigMirror  # noqa: E402
-
 # The ALOHA 2 tasks; every builder takes `look`, and the first free body's
 # z sits at CUBE_Z_STATE_INDEX in either scene (the cube, or the right
 # arm's part).
 ALOHA_TASKS = {
     entry.name: entry.build for entry in tasks().values() if entry.rig == RIG
 }
-
-LOG_LINE = re.compile(r"step:(\d+).*?loss:([\d.]+).*?grdn:([\d.]+).*?lr:([\d.e+-]+)")
-EXTRA = re.compile(r"(l1_loss|kld_loss):([\d.]+)")
 
 
 def parse_args():
@@ -108,6 +123,31 @@ def parse_args():
         "for --trials paired starts in both viewers, then hold",
     )
     parser.add_argument("--trials", type=int, default=4)
+    parser.add_argument(
+        "--follow",
+        default=None,
+        metavar="RUN_DIR",
+        help="no training: stream a run that is going (or went) from its files — "
+        "runs/<name>-act of the chain, here or mirrored by `cloud-gpu follow`",
+    )
+    parser.add_argument(
+        "--play-checkpoints",
+        action="store_true",
+        help="with --follow: also play each checkpoint in both viewers as it "
+        "appears (needs the weights and the train venv)",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="with --follow: stream what is there and exit instead of tailing",
+    )
+    parser.add_argument(
+        "--rrd",
+        type=Path,
+        default=None,
+        help="with --follow: also save the stream to this .rrd file — the run "
+        "as one portable record anyone with the Rerun viewer can open",
+    )
     parser.add_argument(
         "--replay-demos",
         type=int,
@@ -172,27 +212,56 @@ def train_command(args, output_dir, device):
     )
 
 
+def log_train_line(line: str) -> int | None:
+    """One trainer line to Rerun: a metrics line as `train/*` at its step
+    (returned), an in-loop summary as `eval/inloop/pc_success`; anything
+    else is not ours to parse."""
+    parsed = parse_train_line(line)
+    if parsed is not None:
+        rr.set_time("train_step", sequence=parsed.step)
+        for name, value in parsed.metrics.items():
+            rr.log(f"train/{METRIC_NAMES.get(name, name)}", rr.Scalars(value))
+        rr.log("train/samples", rr.Scalars(float(parsed.samples)))
+        rr.log("train/epochs", rr.Scalars(parsed.epochs))
+        return parsed.step
+    summary = parse_eval_line(line)
+    if summary is not None:
+        rr.log("eval/inloop/pc_success", rr.Scalars(summary.pc_success))
+        rr.log("eval/inloop/eval_s", rr.Scalars(summary.eval_s))
+        rr.log(
+            "stage",
+            rr.TextLog(
+                f"in-loop eval: {summary.pc_success:.0f}% of "
+                f"{summary.n_episodes} in {summary.eval_s:.0f} s"
+            ),
+        )
+    return None
+
+
+# LeRobot's abbreviations, spelled out for the panel.
+METRIC_NAMES = {
+    "grdn": "grad_norm",
+    "smp/s": "samples_per_s",
+    "updt_s": "update_s",
+    "data_s": "dataloading_s",
+}
+
+
 def tail_training(process, seen_steps):
-    """Stream lerobot-train's stdout: loss lines to Rerun, all else through."""
+    """Stream lerobot-train's stdout: metrics to Rerun, all else through."""
     for raw in process.stdout:
         line = raw.rstrip()
-        match = LOG_LINE.search(line)
-        if not match:
-            if "Training:" not in line and line:
-                print(f"[train] {line}", flush=True)
-            continue
-        step = int(match.group(1))
-        rr.set_time("train_step", sequence=step)
-        rr.log("train/loss", rr.Scalars(float(match.group(2))))
-        rr.log("train/grad_norm", rr.Scalars(float(match.group(3))))
-        rr.log("train/lr", rr.Scalars(float(match.group(4))))
-        for key, value in EXTRA.findall(line):
-            rr.log(f"train/{key}", rr.Scalars(float(value)))
-        seen_steps.append(step)
+        step = log_train_line(line)
+        if step is not None:
+            seen_steps.append(step)
+        elif "Training:" not in line and line:
+            print(f"[train] {line}", flush=True)
 
 
 def scheduled(policy, executed_horizon: int, nu: int):
     """A chunk policy executed on OUR horizon: `(act, reset)`."""
+    from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: PLC0415
+
     scheduler = ActionScheduler(policy, executed_horizon=executed_horizon, nu=nu)
     return scheduler.act, scheduler.reset
 
@@ -200,6 +269,13 @@ def scheduled(policy, executed_horizon: int, nu: int):
 def openpi_controller(address: str, env, executed_horizon: int | None):
     """A policy served by openpi, on the protocol's horizon; the first
     camera feeds their `cam_high`, the env's instruction is the prompt."""
+    from rq_pipeline.envs.openpi_policy import (  # noqa: PLC0415
+        DEFAULT_PORT,
+        OpenpiKeys,
+        OpenpiRequest,
+        openpi_chunk_policy,
+    )
+
     if executed_horizon is None:
         raise SystemExit(
             "--openpi needs --executed-horizon: the server's chunk is executed "
@@ -230,6 +306,8 @@ def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
     gym-aloha convention (normalised grippers) wrapped around the model
     call when the checkpoint speaks it. With `executed_horizon`, the
     checkpoint's chunk is executed on that horizon instead of its own."""
+    from rq_pipeline.envs.lerobot_policy import load_policy  # noqa: PLC0415
+
     loaded = load_policy(path, instruction=instruction, device=device)
     if executed_horizon is not None:
         if nu is None:
@@ -255,6 +333,11 @@ class Watcher:
     def __init__(
         self, look: str, task: str, device: str, executed_horizon: int | None = None
     ):
+        import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
+        from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: PLC0415
+
+        from _rig3d import RigMirror  # noqa: PLC0415
+
         self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)
         self.env = RobotiqEnv(built, source=bundle_source(built.bundle_dir))
@@ -307,6 +390,8 @@ class Watcher:
         cube sits at our paired start, not wherever theirs was, so the
         grasp itself need not land; the choreography is the point.
         """
+        from _lab import load_demo_actions  # noqa: PLC0415 - LeRobot's dataset
+
         actions = load_demo_actions(dataset_id, episode)
         rr.set_time("train_step", sequence=0)
 
@@ -366,6 +451,230 @@ class Watcher:
             self.play(pretrained, step, action_space)
 
 
+@dataclass
+class Follower:
+    """A run's files → Rerun: the manifest as a panel, the log's metrics,
+    the records' funnel per checkpoint, the eval videos, the GPU samples,
+    the trainer's resolved config. Idempotent per file: each call to
+    `poll()` logs only what is new."""
+
+    run_dir: Path
+    play: bool = False
+    watcher: "Watcher | None" = None
+    action_space: str = ActionSpace.BUNDLE
+    manifest_shown: bool = False
+    configs_shown: set = None
+    videos_shown: set = None
+    passes_shown: int = 0
+    final_shown: bool = False
+    last_step: int = 0
+
+    def __post_init__(self) -> None:
+        self.watch_dir = watch_dir_for(self.run_dir)
+        self.log = FileFollower(self.watch_dir / TRAIN_LOG_FILE)
+        self.gpu = FileFollower(self.watch_dir / GPU_LOG_FILE)
+        self.configs_shown = set()
+        self.videos_shown = set()
+
+    # -- pieces ---------------------------------------------------------
+
+    def manifest(self) -> None:
+        if self.manifest_shown or not (self.watch_dir / "run.json").exists():
+            return
+        manifest = RunManifest.read(self.watch_dir)
+        rr.set_time("train_step", sequence=0)
+        rr.log(
+            "config/run",
+            rr.TextDocument(manifest.as_markdown(), media_type=rr.MediaType.MARKDOWN),
+            static=True,
+        )
+        rr.log(
+            "stage",
+            rr.TextLog(
+                f"{manifest.name}: {manifest.policy}, {manifest.steps} steps, "
+                f"batch {manifest.batch_size}, started {manifest.started}"
+            ),
+        )
+        self.manifest_shown = True
+
+    def trainer_lines(self) -> None:
+        for line in self.log.new_lines():
+            step = log_train_line(line)
+            if step is not None:
+                self.last_step = step
+
+    def gpu_samples(self) -> None:
+        for line in self.gpu.new_lines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < GPU_SAMPLE_FIELDS:
+                continue
+            try:
+                stamp = parts[0].replace("/", "-")
+                util = float(parts[1].split()[0])
+                mem = float(parts[2].split()[0])
+            except (ValueError, IndexError):
+                continue
+            rr.set_time("wall", timestamp=np.datetime64(stamp.replace(" ", "T")[:26]))
+            rr.log("machine/gpu_util_pct", rr.Scalars(util))
+            rr.log("machine/gpu_mem_mib", rr.Scalars(mem))
+
+    def checkpoints(self) -> list[int]:
+        checkpoints = self.run_dir / "checkpoints"
+        if not checkpoints.exists():
+            return []
+        steps = sorted(int(e.name) for e in checkpoints.iterdir() if e.name.isdigit())
+        for step in steps:
+            config = (
+                checkpoints / f"{step:06d}" / "pretrained_model" / "train_config.json"
+            )
+            if step in self.configs_shown or not config.exists():
+                continue
+            rr.set_time("train_step", sequence=step)
+            rr.log(
+                "config/trainer",
+                rr.TextDocument(
+                    json.dumps(
+                        json.loads(config.read_text(encoding="utf-8")), indent=1
+                    ),
+                    media_type=rr.MediaType.TEXT,
+                ),
+            )
+            rr.log("stage", rr.TextLog(f"checkpoint {step}: written"))
+            self.configs_shown.add(step)
+        return steps
+
+    def inloop_records(self, steps: list[int]) -> None:
+        path = self.run_dir / "inloop-episodes.jsonl"
+        if not path.exists():
+            return
+        chunks = passes(read_records(path))
+        for index, chunk in enumerate(
+            chunks[self.passes_shown :], start=self.passes_shown
+        ):
+            if index >= len(steps):
+                return  # the checkpoint this pass belongs to is not here yet
+            step = steps[index]
+            rr.set_time("train_step", sequence=step)
+            for score in fold(chunk):
+                rr.log(
+                    "eval/inloop/success_rate",
+                    rr.Scalars(score.successes / score.trials),
+                )
+                rr.log(
+                    "stage",
+                    rr.TextLog(
+                        f"checkpoint {step}: in-loop {score.successes}/{score.trials}"
+                    ),
+                )
+            for counts in funnel(chunk).values():
+                for milestone, count in zip(MILESTONES, counts, strict=False):
+                    rr.log(
+                        f"eval/inloop/funnel/{milestone}",
+                        rr.Scalars(count / len(chunk)),
+                    )
+            self.passes_shown = index + 1
+
+    def videos(self, steps: list[int]) -> None:
+        for step in steps:
+            # LeRobot nests the suite (`robotiq_0/`) under the step directory.
+            for video in sorted(
+                (self.run_dir / "eval" / f"videos_step_{step:06d}").rglob("*.mp4")
+            ):
+                if video in self.videos_shown:
+                    continue
+                rr.set_time("train_step", sequence=step)
+                rr.log(f"eval/video/{video.stem}", rr.AssetVideo(path=video))
+                self.videos_shown.add(video)
+
+    def final_eval(self) -> None:
+        """The paired evaluation beside the run (`<name>-eval`), once it is there."""
+        eval_dir = self.run_dir.parent / self.run_dir.name.replace("-act", "-eval")
+        path = eval_dir / "episodes.jsonl"
+        if self.final_shown or not path.exists():
+            return
+        records = read_records(path)
+        chunks = passes(records)
+        rr.set_time(
+            "train_step",
+            sequence=max(self.last_step, max(self.configs_shown, default=0)),
+        )
+        for score in fold(chunks[0]):
+            rr.log(
+                "eval/final/success_rate", rr.Scalars(score.successes / score.trials)
+            )
+            rr.log(
+                "stage",
+                rr.TextLog(
+                    f"{score.name}: {score.successes}/{score.trials} distinct starts"
+                    + (
+                        f" (+{sum(len(c) for c in chunks[1:])} padding episodes)"
+                        if len(chunks) > 1
+                        else ""
+                    )
+                ),
+            )
+        for counts in funnel(chunks[0]).values():
+            for milestone, count in zip(MILESTONES, counts, strict=False):
+                rr.log(
+                    f"eval/final/funnel/{milestone}", rr.Scalars(count / len(chunks[0]))
+                )
+        for video in sorted(eval_dir.glob("videos/**/*.mp4")):
+            rr.log(f"eval/final/video/{video.stem}", rr.AssetVideo(path=video))
+        self.final_shown = True
+
+    # -- the loop ----------------------------------------------------------
+
+    def poll(self) -> None:
+        self.manifest()
+        self.trainer_lines()
+        self.gpu_samples()
+        steps = self.checkpoints()
+        self.inloop_records(steps)
+        self.videos(steps)
+        self.final_eval()
+        if self.play and self.watcher is not None:
+            self.watcher.poll(self.run_dir / "checkpoints", self.action_space)
+
+
+MILESTONES = ("part_moved", "part_lifted", "one_in_slot", "both_in_slot")
+GPU_SAMPLE_FIELDS = 3  # nvidia-smi: timestamp, utilization.gpu, memory.used
+
+
+def follow(args) -> None:
+    run_dir = Path(args.follow)
+    rr_session(
+        f"robotiq-follow-{run_dir.name}", mode="spawn", world_up=args.play_checkpoints
+    )
+    if args.rrd is not None:
+        args.rrd.parent.mkdir(parents=True, exist_ok=True)
+        rr.save(str(args.rrd))
+    watcher = None
+    if args.play_checkpoints:
+        from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+
+        watcher = Watcher(
+            args.look, args.task, best_device(args.device), args.executed_horizon
+        )
+    follower = Follower(
+        run_dir,
+        play=args.play_checkpoints,
+        watcher=watcher,
+        action_space=args.action_space,
+    )
+    print(f"[follow] {run_dir}: streaming to Rerun; Ctrl-C to stop", flush=True)
+    try:
+        while True:
+            follower.poll()
+            if args.once:
+                break
+            if watcher is not None and not watcher.viewer.is_running():
+                break
+            time.sleep(2.0)
+    except KeyboardInterrupt:
+        pass
+    print(f"[follow] last step seen: {follower.last_step}", flush=True)
+
+
 def _exit_on_sigterm(signum, frame):
     # A plain SIGTERM would skip `finally` and orphan the trainer.
     raise SystemExit(128 + signum)
@@ -373,6 +682,8 @@ def _exit_on_sigterm(signum, frame):
 
 def play_only(args) -> None:
     """Watch one checkpoint: every paired start, both viewers, no training."""
+    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+
     device = best_device(args.device)
     if args.openpi:
         name = f"openpi-{args.openpi.replace(':', '-')}"
@@ -417,9 +728,14 @@ def play_only(args) -> None:
 def main() -> None:
     signal.signal(signal.SIGTERM, _exit_on_sigterm)
     args = parse_args()
+    if args.follow:
+        follow(args)
+        return
     if args.play or args.openpi:
         play_only(args)
         return
+    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+
     output_dir = Path(args.runs) / args.name
     device = best_device(args.device)
     rr_session(f"robotiq-train-watch-{args.name}", mode="spawn")

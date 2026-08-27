@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parent.parent
+TOOLS = Path(__file__).resolve().parent
 # Frame decimation the tools share: a 50 Hz control loop previewed at 10 Hz.
 PREVIEW_EVERY_TICKS = 5
 

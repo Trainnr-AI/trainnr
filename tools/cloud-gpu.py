@@ -33,7 +33,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from _lab import REPO, bootstrap, load_dotenv
+from _lab import REPO, TOOLS, bootstrap, load_dotenv
 
 bootstrap()
 
@@ -129,6 +129,11 @@ class Rsync:
         ".coverage",
     )
     PULL_SUBDIR = "pipeline/runs"
+    # What `follow` mirrors while a run is going: its log, manifest, GPU
+    # samples, records, the trainer's resolved config and eval videos —
+    # never the weights (`pull` brings those when the run is done).
+    FOLLOW_EXCLUDES = ("model.safetensors", "training_state", "*.pt", "*.pth")
+    FOLLOW_EVERY_S = 20
     # What `push --with-runs NAME` ships from runs/: the dataset, not the
     # demos it came from (4.5 GB of frames the machine has no use for).
     RUNS_SUFFIX = "-lerobot"
@@ -207,6 +212,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         metavar="NAME",
         help=f"also ship runs/NAME{Rsync.RUNS_SUFFIX} (a converted dataset)",
+    )
+    follow = sub.add_parser(
+        "follow", help="mirror a run's light files every few seconds (for train-watch)"
+    )
+    follow.add_argument("id")
+    follow.add_argument("name", help="the run name (the --name of the chain)")
+    follow.add_argument("--every", type=int, default=Rsync.FOLLOW_EVERY_S)
+    follow.add_argument(
+        "--watch",
+        action="store_true",
+        help="also open the dashboard: train-watch --follow on the mirrored run",
     )
     tail = sub.add_parser("tail", help="the last lines of a detached run's log")
     tail.add_argument("id")
@@ -338,6 +354,14 @@ def rsync_argv(
 
 def push_filters() -> list[str]:
     return [f"--exclude={pattern}" for pattern in Rsync.EXCLUDES]
+
+
+def follow_filters(name: str) -> list[str]:
+    """This run's directories minus the weights."""
+    return [
+        *(f"--exclude={pattern}" for pattern in Rsync.FOLLOW_EXCLUDES),
+        *pull_filters(name),
+    ]
 
 
 def pull_filters(name: str) -> list[str]:
@@ -483,6 +507,43 @@ def pull_runs(gpu: GpuProvider, args: argparse.Namespace) -> None:
     )
 
 
+def follow_run(gpu: GpuProvider, args: argparse.Namespace) -> None:
+    """Mirror `runs/<name>-*` minus the weights every `--every` seconds
+    until interrupted; with --watch, the dashboard runs alongside on the
+    mirrored files (the sim venv suffices: it reads files, not torch)."""
+    machine = direct_door(gpu, args.id)
+    door = machine.ssh_direct
+    local = REPO / Rsync.PULL_SUBDIR
+    local.mkdir(parents=True, exist_ok=True)
+    remote = f"{door.username}@{door.host}:{Remote.DIR}/{Rsync.PULL_SUBDIR}/"
+    argv = rsync_argv(
+        machine, args.ssh_key, remote, f"{local}/", filters=follow_filters(args.name)
+    )
+    argv.remove("--info=progress2")  # a loop, not a transfer to watch
+    dashboard = None
+    if args.watch:
+        watch = [
+            sys.executable,
+            str(TOOLS / "train-watch.py"),
+            "--follow",
+            str(local / f"{args.name}-act"),
+        ]
+        print("$", " ".join(watch), flush=True)
+        dashboard = subprocess.Popen(watch)
+    print(f"following {args.name} on {args.id} every {args.every} s; Ctrl-C to stop")
+    try:
+        while True:
+            subprocess.run(argv, check=False)
+            if dashboard is not None and dashboard.poll() is not None:
+                break
+            time.sleep(args.every)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if dashboard is not None and dashboard.poll() is None:
+            dashboard.terminate()
+
+
 def act(gpu: GpuProvider, args: argparse.Namespace) -> None:
     gpu.act(args.id, Action(args.command))
     print(f"{args.command}: {args.id}")
@@ -500,6 +561,7 @@ HANDLERS = {
     ),
     "run": run_command,
     "tail": tail_log,
+    "follow": follow_run,
     "pull": pull_runs,
     "logs": lambda gpu, args: print(gpu.logs(args.id, tail=args.tail)),
     **{action.value: act for action in Action},
