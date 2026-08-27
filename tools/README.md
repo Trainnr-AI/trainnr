@@ -49,6 +49,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 
 | Tool | What it does |
 |---|---|
+| `cloud-gpu.py` | A rented GPU as a runbook: `offers` (priced, in stock, CUDA ≥ 13 hosts) → `launch` → `push` (rsync, never `.env`) → `bootstrap` (the train venv, the WSL recipe) → `run` → `pull` → `terminate`; every vendor behind `rq_pipeline/cloud`'s provider seam, Runpod first (docs/34) |
 | `e2e-smoke.py` | The T5 chain in one command: demos → LeRobot v3 → `lerobot-train` with in-loop eval through our env → `lerobot-eval` with records → the fold. `--scale smoke` (default: minutes on the WSL card) or `--scale cloud` (the ACT sim recipe: 50 demos, 100k steps, checkpoints every 20k, 20 paired starts); any knob overrides its preset |
 | `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? Subprocess-per-mode (compile option); the verdict needs the WSL CUDA device |
 | `accept-task.py` | The critic loop as a command: the scripted expert must pass a task's referee on every paired trial and the do-nothing floor must pass none; prints the verdict, the funnel and every reason, exits 1 on rejection (`--tray-y`, `--in-slot-xy` compose kitting variants) |

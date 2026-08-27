@@ -63,6 +63,11 @@ so101 = "rq_pipeline.tasks.so101"
 mujoco = "rq_pipeline.physics.mujoco_backend"
 mjx-warp = "rq_pipeline.physics.mjx_backend"
 
+# The GPU-provider registry's plugin door (rq_pipeline/cloud/provider.py):
+# a vendor module registers itself with @provider(name) and is listed here.
+[project.entry-points."rq_pipeline.gpu_providers"]
+runpod = "rq_pipeline.cloud.runpod"
+
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
 

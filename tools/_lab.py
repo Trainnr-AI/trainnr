@@ -37,6 +37,29 @@ class LeRobotDefaults:
 VIEWER_HOLD_PERIOD_S = 0.2  # how often a held viewer window is polled
 
 
+def load_dotenv(path: Path = REPO / ".env") -> list[str]:
+    """Read KEY=VALUE lines from `path` into the environment (existing
+    variables win) and return the NAMES set — never the values. The
+    repo's `.env` holds API credentials; tools load it, nothing prints
+    it, and `cloud-gpu push` never ships it."""
+    import os  # noqa: PLC0415
+
+    names: list[str] = []
+    if not path.is_file():
+        return names
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        value = value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+            names.append(key)
+    return names
+
+
 def bootstrap() -> None:
     """Put <repo>/pipeline and <repo>/tools at the front of sys.path."""
     for root in (str(REPO / "tools"), str(REPO / "pipeline")):

@@ -18,6 +18,7 @@ TIER = {
     "bundles": 1,
     "protocol": 1,
     "plugins": 1,
+    "cloud": 1,  # rented machines: stdlib HTTP over the plugin door, nothing above
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
     "physics": 3,
