@@ -57,7 +57,7 @@ def base_scene(name: str) -> Any:
         type=mujoco.mjtGeom.mjGEOM_PLANE,
         size=[4.0, 4.0, 0.1],
         friction=[1.0, 0.005, 0.0001],
-        rgba=[0.35, 0.35, 0.38, DECK_JAW_OPEN],
+        rgba=[0.35, 0.35, 0.38, OPAQUE],
     )
     return scene
 
@@ -81,7 +81,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=list(CHASSIS_SIZE),
         mass=1.8,
-        rgba=[0.15, 0.25, 0.5, DECK_JAW_OPEN],
+        rgba=[0.15, 0.25, 0.5, OPAQUE],
     )
     for side, sign in (("left", 1.0), ("right", -1.0)):
         wheel = chassis.add_body(
@@ -96,7 +96,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             quat=[0.7071068, 0.7071068, 0, 0],  # cylinder axis -> y (axle)
             mass=0.03,
             friction=[1.2, 0.005, 0.0001],
-            rgba=[0.1, 0.1, 0.1, DECK_JAW_OPEN],
+            rgba=[0.1, 0.1, 0.1, OPAQUE],
         )
     # FOUR corner casters. The design walked here one measured failure
     # at a time: a single rear caster let the arm's reach pull the CoM
@@ -123,7 +123,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             mass=0.01,
             priority=1,
             friction=[0.03, 0.001, 0.0001],
-            rgba=[0.6, 0.6, 0.6, DECK_JAW_OPEN],
+            rgba=[0.6, 0.6, 0.6, OPAQUE],
         )
     for side in ("left", "right"):
         scene.add_actuator(
@@ -131,7 +131,7 @@ def add_car(scene: Any, pos: tuple[float, float] = (0.0, 0.0)) -> Any:
             target=f"{CAR_PREFIX}{side}",
             trntype=mujoco.mjtTrn.mjTRN_JOINT,
             gainprm=[0.05] + [0.0] * 9,  # torque per unit ctrl — nominal
-            ctrlrange=[-1.0, DECK_JAW_OPEN],
+            ctrlrange=list(MOTOR_CTRL_RANGE),
         )
         scene.add_sensor(
             name=f"{CAR_PREFIX}{side}_encoder",
@@ -185,6 +185,10 @@ CUBE_HALF = 0.012
 # The deck pick opens the jaw less than so101.JAW_OPEN: its pads start a
 # millimetre from the cube face (the probe rounds above).
 DECK_JAW_OPEN = 1.0
+# Not the jaw: an opaque colour, and the wheel motors' normalised command
+# range — three facts that happened to share the value 1.0 (2026-08-28).
+OPAQUE = 1.0
+MOTOR_CTRL_RANGE = (-1.0, 1.0)
 # The arm folded over the deck for driving: the viewers' resting pose.
 CROUCH_POSE = [0.0, -1.9, 1.9, 1.3, 0.0, 0.3]
 DECK_HOVER = [0.06, -2.45, 2.6, 1.4, WRIST_FLAT, DECK_JAW_OPEN]
@@ -241,7 +245,7 @@ def add_cargo(scene: Any) -> None:
             size=[sx, sy, sz],
             pos=[TRAY_CENTRE_X + dx, TRAY_CENTRE_Y + dy, CHASSIS_SIZE[2] + sz],
             mass=0.005,
-            rgba=[0.25, 0.4, 0.7, DECK_JAW_OPEN],
+            rgba=[0.25, 0.4, 0.7, OPAQUE],
         )
     _add_cargo_cube(
         scene,
@@ -272,7 +276,7 @@ def _add_cargo_cube(scene: Any, pos: Any) -> None:
         size=[CUBE_HALF, CUBE_HALF, 0.015],
         mass=0.02,
         friction=[2.0, 0.02, 0.001],
-        rgba=[0.85, 0.15, 0.15, DECK_JAW_OPEN],
+        rgba=[0.85, 0.15, 0.15, OPAQUE],
     )
 
 

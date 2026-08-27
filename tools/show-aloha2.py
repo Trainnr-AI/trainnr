@@ -33,7 +33,7 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, hold_until_closed, rr_session
+from _lab import bootstrap, frame_viewer, hold_until_closed, rr_session
 
 bootstrap()
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
@@ -116,7 +116,7 @@ class Session:
 
     def _plots(self):
         data = self.data
-        self.mirror.log(data, path="world/rig")
+        self.mirror.log(data)
         for a, arm in enumerate(ARM_NAMES):
             for j, servo in enumerate(SERVOS):
                 k = a * len(SERVOS) + j
@@ -144,10 +144,7 @@ def main() -> None:
 
     mujoco.mj_resetDataKeyframe(model, data, 0)
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        viewer.cam.distance = 2.2
-        viewer.cam.azimuth = 90
-        viewer.cam.elevation = -20
-        viewer.cam.lookat[:] = [0.0, 0.0, 0.2]
+        frame_viewer(viewer, 2.2, elevation=-20, lookat=(0.0, 0.0, 0.2))
         session = Session(model, data, viewer)
         session.run(1.5, NEUTRAL_CTRL, "NEUTRAL_CTRL: hold neutral_pose under gravity")
         session.run(2.0, OFFSET, "TRAVEL: both arms to the offset pose")

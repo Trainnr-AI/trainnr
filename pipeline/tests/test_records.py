@@ -13,6 +13,7 @@ from rq_pipeline.evaluate.records import (
     disagreements,
     fold,
     funnel,
+    milestones,
     passes,
     read_records,
 )
@@ -148,6 +149,11 @@ class Fold(unittest.TestCase):
         self.assertEqual(fold(chunks[1]), (SimScore("inloop", 1, 2),))
         self.assertEqual(passes([]), ())
         self.assertEqual(len(passes(rows[:2])), 1)
+
+    def test_milestones_are_read_from_the_records(self) -> None:
+        self.assertEqual(milestones([record("a", 0, True)]), list(STAGES))
+        with self.assertRaises(ValueError):
+            milestones([])
 
     def test_duplicate_trial_is_refused(self) -> None:
         with self.assertRaises(ValueError):

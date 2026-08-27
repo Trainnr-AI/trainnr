@@ -9,6 +9,8 @@ Engines register by name (`registry.py`, the `rq_pipeline.engines`
 entry-point group): `resolve("mujoco").build()`.
 """
 
+from typing import Any
+
 from rq_pipeline.physics.backend import ModelCounts
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.physics.registry import engines, resolve
@@ -23,7 +25,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     # Lazy: the mjx extra is optional, and importing it eagerly would
     # break every sim-only environment.
     if name == "MJXWarpBackend":

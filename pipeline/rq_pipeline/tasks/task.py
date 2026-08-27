@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from rq_pipeline.bundles.hashing import content_stamp
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
@@ -26,6 +26,15 @@ from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
 # index. A task that needs another rate says so on its own protocol.
 CONTROL_INTERVAL = 10
 PAIRED_TRIALS = 4
+
+
+@runtime_checkable
+class TaskSpec(Protocol):
+    """A task's DATA: a frozen dataclass whose fields an agent may write
+    and a hash names; `trials` is the one field every spec declares, so an
+    evaluation can be sized to its starts (`envs.robotiq.make_env`)."""
+
+    trials: int
 
 
 @dataclass(frozen=True)
@@ -53,7 +62,7 @@ class Task:
     # The task's DATA — what an agent may write and a hash names (a
     # frozen dataclass per task kind, e.g. `aloha2.KittingSpec`); None for
     # a task that is code only. `stamp` is its `name@hash`.
-    task_spec: Any = None
+    task_spec: TaskSpec | None = None
 
     def __post_init__(self) -> None:
         if self.state_width <= 0:

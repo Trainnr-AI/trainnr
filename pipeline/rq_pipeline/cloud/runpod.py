@@ -19,7 +19,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from rq_pipeline.cloud.provider import (
@@ -40,7 +39,6 @@ Transport = Callable[[str, str, Mapping[str, str], bytes | None], tuple[int, str
 Stream = Callable[[str, Mapping[str, str], float], str]
 
 
-@dataclass(frozen=True)
 class RunpodApi:
     """The constants of Runpod's REST API v2, in one place."""
 
@@ -189,7 +187,6 @@ class RunpodProvider:
         *,
         params: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
-        raw: bool = False,
     ) -> Any:
         url = RunpodApi.BASE_URL + path
         if params:
@@ -202,8 +199,8 @@ class RunpodProvider:
         status, text = self._transport(method, url, headers, payload)
         if status >= 400:  # noqa: PLR2004 - HTTP's own line
             raise ProviderError(_problem(self.name, method, path, status, text))
-        if raw or not text.strip():
-            return text
+        if not text.strip():
+            return text  # 204, or an empty body
         return json.loads(text)
 
     def _headers(self) -> dict[str, str]:

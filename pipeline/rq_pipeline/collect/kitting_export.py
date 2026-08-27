@@ -21,13 +21,13 @@ imports cleanly without them so it can raise the helpful error.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.json_record import JsonRecord
 from rq_pipeline.collect.provenance import IMAGE_AXES, PROVENANCE_FILE
 from rq_pipeline.protocol import RGB_CHANNELS
 from rq_pipeline.tasks.aloha2 import (
@@ -58,7 +58,7 @@ UNSTAMPED_EXPERT = "unstamped (batch generated before 2026-08-27)"
 
 
 @dataclass(frozen=True)
-class Manifest:
+class Manifest(JsonRecord):
     """What a kept episode records about itself: the draw, the dynamics
     it ran under, the referee's verdict, and the rates the exporter
     needs. Written by the generator, read here; one shape."""
@@ -78,17 +78,32 @@ class Manifest:
     # default reads batches written before 2026-08-27, which carried none.
     expert: str = UNSTAMPED_EXPERT
 
-    def write(self, episode_dir: Path) -> None:
-        (episode_dir / DemoLayout.MANIFEST_FILE).write_text(
-            json.dumps(asdict(self), indent=1), encoding="utf-8"
-        )
+    def write_to(self, episode_dir: Path) -> Path:
+        return self.write(Path(episode_dir) / DemoLayout.MANIFEST_FILE)
 
     @classmethod
-    def read(cls, episode_dir: Path) -> Manifest:
-        raw = json.loads(
-            (episode_dir / DemoLayout.MANIFEST_FILE).read_text(encoding="utf-8")
-        )
-        return cls(**raw)
+    def read_from(cls, episode_dir: Path) -> Manifest:
+        return cls.read(Path(episode_dir) / DemoLayout.MANIFEST_FILE)
+
+
+@dataclass(frozen=True)
+class DatasetProvenance(JsonRecord):
+    """The dataset's sidecar: the bundle the demos were simulated on, the
+    expert that produced them, every episode's manifest — traceable to
+    the exact dynamics and draws, the same rule as the certificate."""
+
+    bundle: str
+    source: str  # the batch's NAME, never its absolute path
+    expert: str
+    episodes: int
+    frames: list[int]
+    fps: int
+    manifests: list[dict[str, Any]]
+    state_semantics: str = (
+        "sensordata[0:14]: the bundle's fourteen jointpos (radians; grippers in "
+        "metres) — what the harness's vision rollout observes with state_width=14"
+    )
+    action_semantics: str = "fourteen commanded actuator positions, ctrl order"
 
 
 def write_episode(  # noqa: PLR0913 - the whole episode, every part named
@@ -120,7 +135,7 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
         Image.fromarray(frame).save(
             frames_dir / DemoLayout.FRAME_FILE.format(tick=tick), quality=JPEG_QUALITY
         )
-    manifest.write(episode_dir)
+    manifest.write_to(episode_dir)
     return episode_dir
 
 
@@ -186,7 +201,7 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
         ) from error
 
     episodes = episode_dirs(demos_dir)
-    manifests = [Manifest.read(ep) for ep in episodes]
+    manifests = [Manifest.read_from(ep) for ep in episodes]
     rates = {(m.control_hz, m.frame_every_control_ticks) for m in manifests}
     if len(rates) != 1:
         raise ValueError(f"episodes disagree on frame rate: {sorted(rates)}")
@@ -265,22 +280,13 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     if hasattr(dataset, "finalize"):
         dataset.finalize()
 
-    provenance = {
-        "bundle": stamp(bundle_dir.name, bundle_dir),
-        # The batch's name, never its absolute path: the file ships inside
-        # the dataset, and a home directory is not provenance.
-        "source": Path(demos_dir).name,
-        "expert": expert,
-        "episodes": len(episodes),
-        "frames": frame_counts,
-        "fps": fps,
-        "state_semantics": "sensordata[0:14]: the bundle's fourteen jointpos "
-        "(radians; grippers in metres) — what the harness's vision rollout "
-        "observes with state_width=14",
-        "action_semantics": "fourteen commanded actuator positions, ctrl order",
-        "manifests": [asdict(m) for m in manifests],
-    }
-    Path(root, PROVENANCE_FILE).write_text(
-        json.dumps(provenance, indent=1), encoding="utf-8"
-    )
+    DatasetProvenance(
+        bundle=stamp(bundle_dir.name, bundle_dir),
+        source=Path(demos_dir).name,
+        expert=expert,
+        episodes=len(episodes),
+        frames=frame_counts,
+        fps=fps,
+        manifests=[asdict(m) for m in manifests],
+    ).write(Path(root) / PROVENANCE_FILE)
     return Path(root)

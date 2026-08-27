@@ -7,7 +7,12 @@ import (it is what puts <repo>/pipeline on sys.path), so callers keep
 `# noqa: E402` on the imports that follow the call.
 """
 
+import os
+import re
+import shutil
+import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -43,7 +48,6 @@ def load_dotenv(path: Path = REPO / ".env") -> list[str]:
     variables win) and return the NAMES set — never the values. The
     repo's `.env` holds API credentials; tools load it, nothing prints
     it, and `cloud-gpu push` never ships it."""
-    import os  # noqa: PLC0415
 
     names: list[str] = []
     if not path.is_file():
@@ -68,12 +72,27 @@ def bootstrap() -> None:
             sys.path.insert(0, root)
 
 
+def frame_viewer(
+    viewer: Any,
+    distance: float,
+    *,
+    azimuth: float = 90.0,
+    elevation: float = -40.0,
+    lookat: Sequence[float] = (0.0, 0.0, 0.0),
+) -> None:
+    """Point a passive MuJoCo viewer's camera — the four lines every rig
+    tool wrote for itself."""
+    viewer.cam.distance = distance
+    viewer.cam.azimuth = azimuth
+    viewer.cam.elevation = elevation
+    viewer.cam.lookat[:] = list(lookat)
+
+
 def viewer_executable() -> str | None:
     """Where the Rerun viewer binary is when it is not on PATH: the sim
     venv installs it beside the SDK (`rerun-sdk`), the train venv only the
     SDK — so tools launched from the train venv used to need
     `PATH="$PWD/.venv/bin:$PATH"` (2026-08-26). None means "on PATH"."""
-    import shutil  # noqa: PLC0415
 
     if shutil.which("rerun"):
         return None
@@ -99,10 +118,6 @@ def ffmpeg_on_path() -> str | None:
     static binary (in both venvs already, under its versioned name),
     exposed under the plain name in a directory prepended to PATH.
     Returns what the viewer will find, or None."""
-    import os  # noqa: PLC0415
-    import re  # noqa: PLC0415
-    import shutil  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
 
     system = shutil.which("ffmpeg")
     if system:
@@ -266,7 +281,6 @@ def lerobot_eval_command(  # noqa: PLR0913 - every knob of one command line, nam
 def hold_until_closed(viewer: Any, period_s: float = VIEWER_HOLD_PERIOD_S) -> None:
     """Keep a passive MuJoCo viewer's window open until the operator
     closes it — the three-line hold every viewer tool used to carry."""
-    import time  # noqa: PLC0415
 
     while viewer.is_running():
         time.sleep(period_s)

@@ -247,6 +247,80 @@ class TheRegistry(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "known: \\['runpod'\\]"):
             resolve("acme-gpus")
 
+    def test_a_duplicate_name_is_refused_and_every_entry_has_a_doc(self) -> None:
+        from rq_pipeline.cloud import GpuProvider, provider  # noqa: PLC0415
+
+        with self.assertRaisesRegex(ValueError, "registered twice"):
+            provider("runpod")(object)
+        self.assertIs(resolve("runpod").build, RunpodProvider)
+        self.assertTrue(all(entry.doc for entry in providers().values()))
+        self.assertIsInstance(
+            RunpodProvider(key=KEY, transport=CannedTransport({})), GpuProvider
+        )
+
+
+class TheWire(unittest.TestCase):
+    def test_http_errors_come_back_as_status_and_body(self) -> None:
+        import io  # noqa: PLC0415
+        import urllib.error  # noqa: PLC0415
+
+        from rq_pipeline.cloud.runpod import (  # noqa: PLC0415
+            https_stream,
+            https_transport,
+        )
+
+        def refused(*_args, **_kwargs):  # a fresh body each call: read() drains it
+            return urllib.error.HTTPError(
+                "https://x", 403, "Forbidden", {}, io.BytesIO(b"denied")
+            )
+
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=lambda *a, **k: (_ for _ in ()).throw(refused()),
+        ):
+            self.assertEqual(
+                https_transport("GET", "https://x", {}, None), (403, "denied")
+            )
+            self.assertEqual(https_stream("https://x", {}, 1.0), "denied")
+
+    def test_a_stream_that_goes_quiet_returns_what_arrived(self) -> None:
+        from rq_pipeline.cloud.runpod import https_stream  # noqa: PLC0415
+
+        class Quiet:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def __init__(self):
+                self.lines = [b"data: one\n", b"data: two\n"]
+
+            def readline(self):
+                if self.lines:
+                    return self.lines.pop(0)
+                raise TimeoutError
+
+        with mock.patch("urllib.request.urlopen", return_value=Quiet()):
+            self.assertEqual(
+                https_stream("https://x", {}, 1.0), "data: one\ndata: two\n"
+            )
+
+    def test_start_and_a_problem_without_json(self) -> None:
+        transport = CannedTransport(
+            {
+                ("POST", f"{RunpodApi.PODS}/pod123/action"): (200, ""),
+                ("GET", f"{RunpodApi.PODS}/gone"): (502, "<html>bad gateway</html>"),
+            }
+        )
+        runpod = RunpodProvider(key=KEY, transport=transport)
+        runpod.act("pod123", Action.START)
+        self.assertEqual(json.loads(transport.calls[0][3]), {"action": "start"})
+        with self.assertRaisesRegex(ProviderError, "502 request refused — <html>"):
+            runpod.machine("gone")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,12 +6,15 @@ so the live dashboard, the replay and the sim prediction all draw the
 same shapes the physics uses, and none of them invents a skeleton.
 """
 
+from collections.abc import Sequence
+from typing import Any
+
 import mujoco
 import numpy as np
 import rerun as rr
 
 
-def mat_to_xyzw(flat):
+def mat_to_xyzw(flat: Any) -> Any:
     """Rotation matrix -> xyzw quaternion, via MuJoCo's own routine.
 
     Twenty lines of hand-written Shepperd numerics lived here untested;
@@ -21,6 +24,9 @@ def mat_to_xyzw(flat):
     quat = np.empty(4)
     mujoco.mju_mat2Quat(quat, np.asarray(flat, dtype=float).reshape(9))
     return [quat[1], quat[2], quat[3], quat[0]]
+
+
+RIG_PATH = "world/rig"  # where every rig tool logs the mirror
 
 
 class RigMirror:
@@ -38,7 +44,13 @@ class RigMirror:
     palette the standing dashboards were tuned on.
     """
 
-    def __init__(self, model, skip=("floor",), model_colors=False, skip_groups=()):
+    def __init__(
+        self,
+        model: Any,
+        skip: Sequence[str] = ("floor",),
+        model_colors: bool = False,
+        skip_groups: Sequence[int] = (),
+    ) -> None:
         self.geoms, self.half_sizes, self.colors = [], [], []
         self.meshes = []  # (geom id, entity name, vertices, faces, rgba)
         self._mesh_logged: set[str] = set()
@@ -86,7 +98,7 @@ class RigMirror:
             else:
                 self.colors.append([90, 130, 220])
 
-    def log(self, data, path="world/rig"):
+    def log(self, data: Any, path: str = RIG_PATH) -> None:
         if self.geoms:
             rr.log(
                 path,

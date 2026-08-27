@@ -158,3 +158,11 @@ class TopPickProbability(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheDiscretenessCap(unittest.TestCase):
+    def test_five_policies_resolve_one_swap_at_point_nine(self) -> None:
+        from rq_pipeline.stats.ranking import max_resolvable_rho  # noqa: PLC0415
+
+        self.assertAlmostEqual(max_resolvable_rho(5), 0.9)
+        self.assertLess(max_resolvable_rho(3), max_resolvable_rho(10))

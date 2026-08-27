@@ -155,7 +155,7 @@ evaluations are what a rented card is for. `kitting-demos.py
 fill one batch directory in parallel (six shards on the box's 24
 cores); `e2e-smoke.py --until convert` runs the chain up to the
 dataset; then `push` + an rsync of `runs/<name>-lerobot` and
-`e2e-smoke.py --scale cloud --skip-convert --name <name>` on the
+`e2e-smoke.py --scale cloud --from train --name <name>` on the
 machine does only train + eval. The first run this way, 2026-08-27
 night, is in docs/07.
 

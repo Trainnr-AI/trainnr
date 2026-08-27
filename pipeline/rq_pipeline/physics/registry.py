@@ -48,7 +48,9 @@ class EngineEntry:
 _REGISTRY: dict[str, EngineEntry] = {}
 
 
-def engine(name: str, *, doc: str = ""):
+def engine(
+    name: str, *, doc: str = ""
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate an engine class (or factory); refuses a duplicate name."""
     if not name or "/" in name or " " in name:
         raise ValueError(f"engine names are single words, got {name!r}")

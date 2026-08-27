@@ -35,6 +35,8 @@ __all__ = [
     "fold",
     "from_success_list",
     "funnel",
+    "milestones",
+    "passes",
     "protocol_fields",
     "protocol_hash",
     "read_records",
@@ -102,13 +104,22 @@ def protocol_hash(fields: Mapping[str, Any]) -> str:
     return fields_hash(fields)
 
 
+def milestones(records: Sequence[EpisodeRecord]) -> list[str]:
+    """The milestone names the records were judged by — read from the
+    records, never restated (a fourth copy of the chain, in a tool,
+    silently mislabelled a funnel; 2026-08-28)."""
+    if not records:
+        raise ValueError("no records to read milestones from")
+    return list(records[0].protocol.get("milestones", []))
+
+
 def funnel(records: Sequence[EpisodeRecord]) -> dict[str, list[int]]:
     """Per policy, how many trials reached each milestone: the reading
     that separates "did nothing" from "grasped, then dropped". Stage
     names come from the records' protocol and must agree across them."""
     if not records:
         raise ValueError("no records to funnel")
-    stages = list(records[0].protocol.get("milestones", []))
+    stages = milestones(records)
     counts: dict[str, list[int]] = {}
     for record in records:
         if list(record.protocol.get("milestones", [])) != stages:

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 # Re-exported: the env's consumers read the channel count here, the
 # exporters (a tier below envs) from protocol, and it is one number.
-from rq_pipeline.protocol import RGB_CHANNELS  # noqa: F401
+from rq_pipeline.protocol import RGB_CHANNELS
 from rq_pipeline.tasks.registry import BUILTIN_NAMESPACE
+
+__all__ = ["BUILTIN_NAMESPACE", "RGB_CHANNELS", "InfoKeys", "ObservationKeys"]
 
 
 class ObservationKeys:

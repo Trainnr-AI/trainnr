@@ -94,7 +94,7 @@ def accept(  # noqa: PLR0913 - the loop's knobs, each named
     trial for paired trial, and decide. `source` is the bundle stamp the
     records cite (`require_stamp` applies); `record_to` keeps the rows."""
     backend = backend or MuJoCoBackend()
-    if backend._model is None:
+    if not backend.loaded:
         backend.load_spec(task.spec)
     protocol = task.protocol
     model = backend.model

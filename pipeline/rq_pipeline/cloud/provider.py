@@ -175,7 +175,9 @@ class ProviderEntry:
 _REGISTRY: dict[str, ProviderEntry] = {}
 
 
-def provider(name: str, *, doc: str = ""):
+def provider(
+    name: str, *, doc: str = ""
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate a provider class (or factory); refuses a duplicate name."""
     if not name or "/" in name or " " in name:
         raise ValueError(f"provider names are single words, got {name!r}")

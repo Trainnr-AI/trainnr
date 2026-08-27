@@ -128,6 +128,8 @@ class GymnasiumContract(unittest.TestCase):
         self.assertEqual(info[InfoKeys.TRIAL], 1)  # the wrap, when nobody sized it
         shipped.close()
         sized.close()
+        with self.assertRaisesRegex(ValueError, "no spec to size"):
+            make_env("transfer_cube", trials=6)  # code-only task: nothing to rebuild
 
     def test_seed_is_the_trial_so_starts_pair(self) -> None:
         import numpy as np  # noqa: PLC0415
@@ -231,6 +233,7 @@ class GymnasiumContract(unittest.TestCase):
             Variation("actuators", "gain_scale", Uniform((0.8,), (1.2,))),
             Variation("cube", "mass_scale", Uniform((0.5,), (2.0,))),
             Variation("top", "offset_m", Uniform((-0.03,) * 3, (0.03,) * 3)),
+            Variation("lights", "diffuse_scale", Uniform((0.5,), (1.5,))),
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "episodes.jsonl"
@@ -262,7 +265,7 @@ class GymnasiumContract(unittest.TestCase):
             (row,) = read_records(path)
         self.assertEqual(row.variations["joints.damping_scale"], scale)
         self.assertEqual(len(row.variations["top.offset_m"]), 3)
-        self.assertEqual(len(row.protocol["variations"]), 4)
+        self.assertEqual(len(row.protocol["variations"]), len(sweep))
         with self.assertRaises(ValueError):
             RobotiqEnv(
                 task,

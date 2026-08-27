@@ -47,7 +47,9 @@ class TaskEntry:
 _REGISTRY: dict[str, TaskEntry] = {}
 
 
-def register(name: str, *, rig: str, namespace: str = BUILTIN_NAMESPACE):
+def register(
+    name: str, *, rig: str, namespace: str = BUILTIN_NAMESPACE
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate a builder `build(**kwargs) -> Task`; refuses a duplicate id."""
     if "/" in name or "/" in namespace or not name or not namespace:
         raise ValueError(f"task ids are namespace/name, got {namespace!r}/{name!r}")

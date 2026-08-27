@@ -86,7 +86,7 @@ class DemosDirectoryContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             demos = synthetic_batch(Path(tmp), episodes=1)
             episode = demos / "episode_0000"
-            self.assertEqual(Manifest.read(episode).expert, EXPERT)
+            self.assertEqual(Manifest.read_from(episode).expert, EXPERT)
             # A batch written before the stamp existed: the field is absent.
             raw = json.loads(
                 (episode / DemoLayout.MANIFEST_FILE).read_text(encoding="utf-8")
@@ -95,7 +95,7 @@ class DemosDirectoryContract(unittest.TestCase):
             (episode / DemoLayout.MANIFEST_FILE).write_text(
                 json.dumps(raw), encoding="utf-8"
             )
-            self.assertEqual(Manifest.read(episode).expert, UNSTAMPED_EXPERT)
+            self.assertEqual(Manifest.read_from(episode).expert, UNSTAMPED_EXPERT)
 
 
 @unittest.skipUnless(LEROBOT_PRESENT, "train extra not installed (use .venv-train)")

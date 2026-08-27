@@ -69,3 +69,28 @@ class ClopperPearson(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheChiSquaredAndGammaPrimitives(unittest.TestCase):
+    """The honesty layer's pooling (Cochran's Q, Fisher's method) and the
+    Fisher-z ranking bounds rest on these; reference values from tables."""
+
+    def test_normal_quantile(self) -> None:
+        from rq_pipeline.stats.intervals import normal_quantile  # noqa: PLC0415
+
+        self.assertAlmostEqual(normal_quantile(0.975), 1.959964, places=5)
+        self.assertAlmostEqual(normal_quantile(0.5), 0.0, places=9)
+
+    def test_chi_squared_survival_at_the_five_percent_points(self) -> None:
+        from rq_pipeline.stats.intervals import chi_squared_survival  # noqa: PLC0415
+
+        self.assertAlmostEqual(chi_squared_survival(3.841, 1), 0.05, places=3)
+        self.assertAlmostEqual(chi_squared_survival(5.991, 2), 0.05, places=3)
+
+    def test_regularized_lower_gamma_on_both_sides_of_its_branch(self) -> None:
+        from rq_pipeline.stats.intervals import regularized_lower_gamma  # noqa: PLC0415
+
+        self.assertAlmostEqual(
+            regularized_lower_gamma(1.0, 1.0), 1 - 1 / 2.718281828, places=6
+        )
+        self.assertAlmostEqual(regularized_lower_gamma(10.0, 20.0), 0.99500, places=3)

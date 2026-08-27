@@ -11,7 +11,8 @@ registry, never retyped.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -20,6 +21,7 @@ from rq_pipeline.evaluate.variations import VariationKeys
 XYZ = 3
 
 
+@runtime_checkable
 class Applier(Protocol):
     def snapshot(self, model: Any) -> Any: ...
     def restore(self, model: Any, nominal: Any) -> None: ...
@@ -29,10 +31,10 @@ class Applier(Protocol):
 APPLIERS: dict[str, Applier] = {}
 
 
-def applier(name: str):
+def applier(name: str) -> Callable[[type[Applier]], type[Applier]]:
     """Register an `Applier` class under a knob name."""
 
-    def decorate(cls: type) -> type:
+    def decorate(cls: type[Applier]) -> type[Applier]:
         if name in APPLIERS:
             raise ValueError(f"applier {name!r} registered twice")
         APPLIERS[name] = cls()

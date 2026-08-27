@@ -34,30 +34,31 @@ env without this tool at all.
         --follow runs/t5-cloud-act
 
 `--follow` streams a run from its files: the chain's run manifest (every
-parameter, the dataset's provenance) as a text panel at step 0, the
-trainer's metrics lines as `train/*`, its in-loop summaries and our
+parameter, the dataset's provenance) as a text panel from step 0, every
+stage's line as `stage`, the trainer's metrics as `train/*`, our
 per-episode records as `eval/*` (success rate and the milestone funnel
-per checkpoint), the eval videos, `nvidia-smi` samples as `machine/*`,
-and the trainer's resolved `train_config.json` when the first
-checkpoint lands. With `--play-checkpoints` (train venv) it also plays
-each checkpoint in both viewers as it appears, as the training mode
-does.
+per checkpoint pass), the eval videos, `nvidia-smi` samples as
+`machine/*`, and the trainer's resolved `train_config.json` at every
+checkpoint. With `--play-checkpoints` (train venv) it also plays each
+checkpoint in both viewers as it appears, as the training mode does.
 
 Training mode requires the train venv (LeRobot + torch) and the sim
 extras; `--follow` needs only the sim and viz extras.
 """
 
+from __future__ import annotations
+
 import argparse
-import bisect
 import json
-import re
 import signal
 import subprocess
 import threading
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import rerun as rr
@@ -66,6 +67,7 @@ import rerun.blueprint as rrb
 from _lab import (
     PREVIEW_EVERY_TICKS,
     bootstrap,
+    frame_viewer,
     hold_until_closed,
     lerobot_train_command,
     rr_session,
@@ -77,16 +79,23 @@ from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
 from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
     CHAIN_LOG_FILE,
     GPU_LOG_FILE,
+    RUN_MANIFEST_FILE,
+    TRAINER_CONFIG,
     FileFollower,
+    RunLayout,
     RunManifest,
+    StepClock,
+    TrainLine,
     is_stage_line,
     parse_eval_line,
+    parse_gpu_line,
     parse_train_line,
-    watch_dir_for,
 )
 from rq_pipeline.evaluate.records import (  # noqa: E402
+    EpisodeRecord,
     fold,
     funnel,
+    milestones,
     passes,
     read_records,
 )
@@ -110,9 +119,34 @@ from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
 ALOHA_TASKS = {
     entry.name: entry.build for entry in tasks().values() if entry.rig == RIG
 }
+Controller = Callable[[int, dict[str, Any]], Any]  # (tick, observation) -> ctrl
+Act = Callable[[dict[str, Any]], Any]
+Reset = Callable[[], None]
+POLL_PERIOD_S = 2.0
+LEGACY_TRAIN_LOG_FILE = "train.log"  # the sidecar's trainer-only log before 2026-08-28
 
 
-def parse_args():
+class Timelines:
+    """The viewer picks one timeline, and a series that exists only on
+    another is invisible (the 2026-08-28 screenshot): every panel is
+    logged on STEP and WALL both; a played episode adds SIM."""
+
+    STEP = "train_step"
+    WALL = "wall"
+    SIM = "sim_time"
+    VIDEO = "video_time"
+
+
+# LeRobot's abbreviations, spelled out for the panel.
+METRIC_NAMES = {
+    "grdn": "grad_norm",
+    "smp/s": "samples_per_s",
+    "updt_s": "update_s",
+    "data_s": "dataloading_s",
+}
+
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--name", default="t2-act")
     parser.add_argument("--policy", default="act")
@@ -204,74 +238,75 @@ def parse_args():
     return parser.parse_args()
 
 
-def train_command(args, output_dir, device):
-    return lerobot_train_command(
-        policy=args.policy,
-        device=device,
-        dataset=args.dataset,
-        output_dir=output_dir,
-        job_name=args.name,
-        steps=args.steps,
-        batch_size=args.batch_size,
-        save_freq=args.save_freq,
-    )
+# ---- logging to Rerun -------------------------------------------------------
 
 
-def at_step(step: int) -> None:
-    """Every panel readable on either timeline: the step, and the wall
-    clock of its arrival (the viewer picks one timeline; a series that
-    exists on only the other is invisible — the 2026-08-28 screenshot)."""
-    rr.set_time("train_step", sequence=step)
-    rr.set_time("wall", timestamp=np.datetime64(int(time.time() * 1e6), "us"))
+def at_step(step: int, when: datetime | None = None) -> None:
+    """Both timelines: the step, and the wall clock — the line's own stamp
+    when it carries one, else now."""
+    rr.set_time(Timelines.STEP, sequence=step)
+    moment = when or datetime.now(UTC).replace(tzinfo=None)
+    rr.set_time(Timelines.WALL, timestamp=np.datetime64(moment))
 
 
-def log_train_line(line: str) -> int | None:
-    """One trainer line to Rerun: a metrics line as `train/*` at its step
-    (returned), an in-loop summary as `eval/inloop/pc_success`; anything
-    else is not ours to parse."""
+def note(text: str, echo: str | None = None) -> None:
+    """A line in the `stage` panel, and on the terminal when asked."""
+    rr.log("stage", rr.TextLog(text))
+    if echo is not None:
+        print(echo, flush=True)
+
+
+def log_train_line(line: str) -> TrainLine | None:
+    """One trainer line to Rerun: a metrics line as `train/*` at its step,
+    an in-loop summary as a `stage` note; anything else is not ours."""
     parsed = parse_train_line(line)
     if parsed is not None:
-        at_step(parsed.step)
+        at_step(parsed.step, parsed.stamp)
         for name, value in parsed.metrics.items():
             rr.log(f"train/{METRIC_NAMES.get(name, name)}", rr.Scalars(value))
         rr.log("train/samples", rr.Scalars(float(parsed.samples)))
         rr.log("train/epochs", rr.Scalars(parsed.epochs))
-        return parsed.step
+        return parsed
     summary = parse_eval_line(line)
     if summary is not None:
-        rr.log("eval/inloop/pc_success", rr.Scalars(summary.pc_success))
-        rr.log("eval/inloop/eval_s", rr.Scalars(summary.eval_s))
-        rr.log(
-            "stage",
-            rr.TextLog(
-                f"in-loop eval: {summary.pc_success:.0f}% of "
-                f"{summary.n_episodes} in {summary.eval_s:.0f} s"
-            ),
+        note(
+            f"in-loop eval: {summary.pc_success:.0f}% of {summary.n_episodes} "
+            f"in {summary.eval_s:.0f} s"
         )
     return None
 
 
-# LeRobot's abbreviations, spelled out for the panel.
-METRIC_NAMES = {
-    "grdn": "grad_norm",
-    "smp/s": "samples_per_s",
-    "updt_s": "update_s",
-    "data_s": "dataloading_s",
-}
+def log_video(entity: str, path: Path, step: int) -> None:
+    """A video the viewer can play: the asset, and one frame reference per
+    frame on its own timeline (an asset alone shows nothing)."""
+    asset = rr.AssetVideo(path=path)
+    rr.log(entity, asset)
+    stamps = np.asarray(asset.read_frame_timestamps_nanos())
+    if not len(stamps):
+        return
+    rr.send_columns(
+        entity,
+        indexes=[
+            rr.TimeColumn(Timelines.VIDEO, duration=stamps * 1e-9),
+            rr.TimeColumn(Timelines.STEP, sequence=np.full(len(stamps), step)),
+        ],
+        columns=rr.VideoFrameReference.columns_nanos(stamps),
+    )
 
 
-def tail_training(process, seen_steps):
+def tail_training(process: subprocess.Popen) -> None:
     """Stream lerobot-train's stdout: metrics to Rerun, all else through."""
+    assert process.stdout is not None
     for raw in process.stdout:
         line = raw.rstrip()
-        step = log_train_line(line)
-        if step is not None:
-            seen_steps.append(step)
-        elif "Training:" not in line and line:
+        if log_train_line(line) is None and "Training:" not in line and line:
             print(f"[train] {line}", flush=True)
 
 
-def scheduled(policy, executed_horizon: int, nu: int):
+# ---- controllers ------------------------------------------------------------
+
+
+def scheduled(policy: Any, executed_horizon: int, nu: int) -> tuple[Act, Reset]:
     """A chunk policy executed on OUR horizon: `(act, reset)`."""
     from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: PLC0415
 
@@ -279,7 +314,9 @@ def scheduled(policy, executed_horizon: int, nu: int):
     return scheduler.act, scheduler.reset
 
 
-def openpi_controller(address: str, env, executed_horizon: int | None):
+def openpi_controller(
+    address: str, env: Any, executed_horizon: int | None
+) -> tuple[Act, Reset]:
     """A policy served by openpi, on the protocol's horizon; the first
     camera feeds their `cam_high`, the env's instruction is the prompt."""
     from rq_pipeline.envs.openpi_policy import (  # noqa: PLC0415
@@ -314,7 +351,7 @@ def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
     *,
     executed_horizon: int | None = None,
     nu: int | None = None,
-):
+) -> tuple[Act, Reset]:
     """The checkpoint as `act(observation) -> ctrl` plus its reset; the
     gym-aloha convention (normalised grippers) wrapped around the model
     call when the checkpoint speaks it. With `executed_horizon`, the
@@ -330,7 +367,7 @@ def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
     if action_space != ActionSpace.ACT_SIM:
         return loaded.act, loaded.reset
 
-    def act(observation):
+    def act(observation: dict[str, Any]) -> Any:
         raw = dict(observation)
         raw[ObservationKeys.AGENT_POS] = act_sim_state(
             observation[ObservationKeys.AGENT_POS]
@@ -340,12 +377,15 @@ def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
     return act, loaded.reset
 
 
+# ---- the viewers -------------------------------------------------------------
+
+
 class Watcher:
     """The env, the viewer, the mirror: plays one episode per checkpoint."""
 
     def __init__(
         self, look: str, task: str, device: str, executed_horizon: int | None = None
-    ):
+    ) -> None:
         import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
         from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: PLC0415
 
@@ -359,13 +399,12 @@ class Watcher:
             self.env.model, model_colors=True, skip_groups=(GeomGroup.COLLISION,)
         )
         self.viewer = mujoco.viewer.launch_passive(self.env.model, self.env.data)
-        self.viewer.cam.distance = 1.6
-        self.viewer.cam.azimuth = 90
-        self.viewer.cam.elevation = -35
-        self.viewer.cam.lookat[:] = [0.05, 0.0, 0.1]
-        self.played = set()
+        frame_viewer(self.viewer, 1.6, elevation=-35, lookat=(0.05, 0.0, 0.1))
+        self.played: set[int] = set()
 
-    def _episode(self, controller, prefix: str, note: str, trial: int = 0):
+    def episode(
+        self, controller: Controller, prefix: str, text: str, trial: int = 0
+    ) -> bool:
         """One episode from paired start `trial`, driven by
         `controller(tick, observation) -> ctrl` over the env's raw
         observation; logs frames, mirror, object height; returns the
@@ -373,10 +412,10 @@ class Watcher:
         env = self.env
         dt = 1.0 / env.metadata["render_fps"]
         observation, info = env.reset(seed=trial)
-        rr.log("stage", rr.TextLog(note))
+        note(text)
         top = env.cameras[0].key
         for tick in range(env.max_episode_steps):
-            rr.set_time("sim_time", duration=tick * dt)
+            rr.set_time(Timelines.SIM, duration=tick * dt)
             if tick % PREVIEW_EVERY_TICKS == 0:
                 rr.log(
                     f"{prefix}/top", rr.Image(observation[ObservationKeys.PIXELS][top])
@@ -384,7 +423,7 @@ class Watcher:
             observation, _reward, _terminated, _truncated, info = env.step(
                 np.asarray(controller(tick, observation), dtype=float)
             )
-            self.mirror.log(env.data, path="world/rig")
+            self.mirror.log(env.data)
             rr.log(
                 f"{prefix}/object_z",
                 rr.Scalars(float(env.states[env.physics_step - 1, CUBE_Z_STATE_INDEX])),
@@ -394,7 +433,7 @@ class Watcher:
             self.viewer.sync()
         return bool(info[InfoKeys.IS_SUCCESS])
 
-    def replay_demo(self, dataset_id: str, episode: int):
+    def replay_demo(self, dataset_id: str, episode: int) -> None:
         """Play a human demonstration's actions open-loop through the bundle.
 
         The target behaviour, in our simulator, before any checkpoint
@@ -407,29 +446,23 @@ class Watcher:
 
         actions = load_demo_actions(dataset_id, episode)
         at_step(0)
-
-        def controller(tick, observation):
-            del observation
-            return ctrl_from_act_sim_action(actions[min(tick, len(actions) - 1)])
-
-        success = self._episode(
-            controller,
+        success = self.episode(
+            lambda tick, _obs: ctrl_from_act_sim_action(
+                actions[min(tick, len(actions) - 1)]
+            ),
             f"demo/{episode:03d}",
             f"human demo {episode} from {dataset_id}: replaying {len(actions)} actions",
         )
         verdict = verdict_word(success)
-        rr.log(
-            "stage",
-            rr.TextLog(
-                f"human demo {episode} replayed: {verdict} "
-                "(open-loop, cube at our paired start)"
-            ),
+        note(
+            f"human demo {episode} replayed: {verdict} "
+            "(open-loop, cube at our paired start)",
+            f"[watch] demo {episode}: {verdict}",
         )
-        print(f"[watch] demo {episode}: {verdict}", flush=True)
 
-    def play(self, checkpoint_dir: Path, step: int, action_space: str):
+    def play(self, checkpoint_dir: Path, step: int, action_space: str) -> None:
         at_step(step)
-        rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
+        note(f"checkpoint {step}: loading")
         act, reset = checkpoint_controller(
             checkpoint_dir,
             action_space,
@@ -439,7 +472,7 @@ class Watcher:
             nu=self.env.action_space.shape[0],
         )
         reset()
-        success = self._episode(
+        success = self.episode(
             lambda _tick, observation: act(observation),
             f"eval/{step:06d}",
             f"checkpoint {step}: playing trial 0",
@@ -447,136 +480,96 @@ class Watcher:
         at_step(step)
         rr.log("eval/success", rr.Scalars(1.0 if success else 0.0))
         verdict = verdict_word(success)
-        rr.log("stage", rr.TextLog(f"checkpoint {step}: {verdict}"))
-        print(f"[watch] checkpoint {step}: {verdict}", flush=True)
+        note(f"checkpoint {step}: {verdict}", f"[watch] checkpoint {step}: {verdict}")
         self.played.add(step)
 
-    def poll(self, checkpoints_dir: Path, action_space: str):
-        if not checkpoints_dir.exists():
-            return
-        for entry in sorted(checkpoints_dir.iterdir()):
-            if not entry.name.isdigit():
-                continue
-            step = int(entry.name)
-            pretrained = entry / "pretrained_model"
-            if step in self.played or not (pretrained / "model.safetensors").exists():
-                continue
-            self.play(pretrained, step, action_space)
+    def poll(self, layout: RunLayout, action_space: str) -> None:
+        for step in layout.checkpoint_steps(with_weights=True):
+            if step not in self.played:
+                self.play(layout.checkpoint(step), step, action_space)
 
 
 @dataclass
 class Follower:
-    """A run's files → Rerun: the manifest as a panel, the log's metrics,
-    the records' funnel per checkpoint, the eval videos, the GPU samples,
-    the trainer's resolved config. Idempotent per file: each call to
+    """A run's files → Rerun: the manifest as a panel, the log's metrics
+    and stage lines, the records' funnel per checkpoint pass, the eval
+    videos, the GPU samples, the trainer's resolved config. Each call to
     `poll()` logs only what is new."""
 
-    run_dir: Path
-    play: bool = False
-    watcher: "Watcher | None" = None
+    layout: RunLayout
+    watcher: Watcher | None = None
     action_space: str = ActionSpace.BUNDLE
-    configs_shown: set = field(default_factory=set)
-    videos_shown: set = field(default_factory=set)
-    marked: set = field(default_factory=set)
-    # (wall time, step) of every metrics line: a GPU sample is placed at
-    # the step whose line precedes its own timestamp, so a replay of a
-    # finished log does not pile every sample onto the final step.
-    step_times: list = field(default_factory=list)
+    configs_shown: set[int] = field(default_factory=set)
+    videos_shown: set[Path] = field(default_factory=set)
+    marked: set[str] = field(default_factory=set)
+    clock: StepClock = field(default_factory=StepClock)
+    manifest_mtime: float = 0.0
     passes_shown: int = 0
     final_shown: bool = False
     last_step: int = 0
 
     def __post_init__(self) -> None:
-        self.watch_dir = watch_dir_for(self.run_dir)
         # The chain log, or the trainer-only log a chain before 2026-08-28
         # wrote (a pod's mirror may still carry one).
-        self.log = FileFollower(self.watch_dir / CHAIN_LOG_FILE)
-        self.legacy_log = FileFollower(self.watch_dir / LEGACY_TRAIN_LOG_FILE)
-        self.manifest_mtime = 0.0
-        self.gpu = FileFollower(self.watch_dir / GPU_LOG_FILE)
+        self.log = FileFollower(self.layout.watch / CHAIN_LOG_FILE)
+        self.legacy_log = FileFollower(self.layout.watch / LEGACY_TRAIN_LOG_FILE)
+        self.gpu = FileFollower(self.layout.watch / GPU_LOG_FILE)
 
-    # -- pieces ---------------------------------------------------------
+    def mark(self, path: str) -> None:
+        """Point markers on a series that may hold one sample per
+        checkpoint — a line needs two points to be seen at all."""
+        if path not in self.marked:
+            rr.log(path, rr.SeriesPoints(markers="circle"), static=True)
+            self.marked.add(path)
+
+    def scalar(self, path: str, value: float) -> None:
+        self.mark(path)
+        rr.log(path, rr.Scalars(value))
 
     def manifest(self) -> None:
         """The chain writes it at its start and again at the train stage
         (with the command and the dataset's provenance): shown whenever
         it changes."""
-        path = self.watch_dir / "run.json"
+        path = self.layout.watch / RUN_MANIFEST_FILE
         if not path.exists() or path.stat().st_mtime == self.manifest_mtime:
             return
         self.manifest_mtime = path.stat().st_mtime
-        manifest = RunManifest.read(self.watch_dir)
+        manifest = RunManifest.read_from(self.layout.watch)
         at_step(0)
         rr.log(
             "config/run",
             rr.TextDocument(manifest.as_markdown(), media_type=rr.MediaType.MARKDOWN),
             static=True,
         )
-        rr.log(
-            "stage",
-            rr.TextLog(
-                f"{manifest.name}: {manifest.policy}, {manifest.steps} steps, "
-                f"batch {manifest.batch_size}, started {manifest.started}"
-            ),
+        note(
+            f"{manifest.name}: {manifest.policy}, {manifest.steps} steps, "
+            f"batch {manifest.batch_size}, started {manifest.started}"
         )
 
     def trainer_lines(self) -> None:
         for line in self.log.new_lines() + self.legacy_log.new_lines():
-            step = log_train_line(line)
-            if step is not None:
-                self.last_step = step
-                stamp = LOGGER_STAMP.search(line)
-                if stamp:
-                    self.step_times.append(
-                        (datetime.fromisoformat(stamp.group(1)), step)
-                    )
+            parsed = log_train_line(line)
+            if parsed is not None:
+                self.last_step = parsed.step
+                if parsed.stamp:
+                    self.clock.add(parsed.stamp, parsed.step)
             elif is_stage_line(line):
                 at_step(self.last_step)
-                rr.log("stage", rr.TextLog(line.strip()))
+                note(line.strip())
 
     def gpu_samples(self) -> None:
         for line in self.gpu.new_lines():
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) < GPU_SAMPLE_FIELDS:
+            sample = parse_gpu_line(line)
+            if sample is None:
                 continue
-            try:
-                stamp = parts[0].replace("/", "-")
-                util = float(parts[1].split()[0])
-                mem = float(parts[2].split()[0])
-            except (ValueError, IndexError):
-                continue
-            # The sample's own clock, and the step it was taken during.
-            taken = datetime.fromisoformat(stamp.replace(" ", "T")[:26])
-            rr.set_time("train_step", sequence=self.step_at(taken))
-            rr.set_time("wall", timestamp=np.datetime64(taken))
-            for name, value in (("gpu_util_pct", util), ("gpu_mem_mib", mem)):
-                self.mark(f"machine/{name}")
-                rr.log(f"machine/{name}", rr.Scalars(value))
-
-    def step_at(self, moment: datetime) -> int:
-        """The step of the last metrics line logged before `moment`."""
-        if not self.step_times:
-            return 0
-        index = bisect.bisect_right([when for when, _ in self.step_times], moment)
-        return self.step_times[index - 1][1] if index else 0
-
-    def mark(self, path: str) -> None:
-        """Point markers on a series that may hold one sample per
-        checkpoint — a line needs two points to be seen at all."""
-        if path in self.marked:
-            return
-        rr.log(path, rr.SeriesPoints(markers="circle"), static=True)
-        self.marked.add(path)
+            at_step(self.clock.at(sample.taken), sample.taken)
+            self.scalar("machine/gpu_util_pct", sample.util_pct)
+            self.scalar("machine/gpu_mem_mib", sample.mem_mib)
 
     def checkpoints(self) -> list[int]:
-        checkpoints = self.run_dir / "checkpoints"
-        if not checkpoints.exists():
-            return []
-        steps = sorted(int(e.name) for e in checkpoints.iterdir() if e.name.isdigit())
+        steps = self.layout.checkpoint_steps()
         for step in steps:
-            config = (
-                checkpoints / f"{step:06d}" / "pretrained_model" / "train_config.json"
-            )
+            config = self.layout.checkpoint(step) / TRAINER_CONFIG
             if step in self.configs_shown or not config.exists():
                 continue
             at_step(step)
@@ -589,94 +582,61 @@ class Follower:
                     media_type=rr.MediaType.TEXT,
                 ),
             )
-            rr.log("stage", rr.TextLog(f"checkpoint {step}: written"))
+            note(f"checkpoint {step}: written")
             self.configs_shown.add(step)
         return steps
 
+    def log_pass(
+        self, prefix: str, chunk: Sequence[EpisodeRecord], step: int, padding: int = 0
+    ) -> None:
+        """One evaluation's records: the rate and the milestone funnel at
+        `step`, under `eval/<prefix>/`."""
+        at_step(step)
+        for score in fold(chunk):
+            self.scalar(f"eval/{prefix}/success_rate", score.successes / score.trials)
+            note(
+                f"{score.name}: {score.successes}/{score.trials} at step {step}"
+                + (f" (+{padding} padding episodes)" if padding else "")
+            )
+        for counts in funnel(chunk).values():
+            for milestone, count in zip(milestones(chunk), counts, strict=True):
+                self.scalar(f"eval/{prefix}/funnel/{milestone}", count / len(chunk))
+
     def inloop_records(self, steps: list[int]) -> None:
-        path = self.run_dir / "inloop-episodes.jsonl"
+        path = self.layout.inloop_records
         if not path.exists():
             return
         chunks = passes(read_records(path))
-        for index, chunk in enumerate(
-            chunks[self.passes_shown :], start=self.passes_shown
-        ):
-            if index >= len(steps):
-                return  # the checkpoint this pass belongs to is not here yet
-            step = steps[index]
-            at_step(step)
-            for score in fold(chunk):
-                self.mark("eval/inloop/success_rate")
-                rr.log(
-                    "eval/inloop/success_rate",
-                    rr.Scalars(score.successes / score.trials),
-                )
-                rr.log(
-                    "stage",
-                    rr.TextLog(
-                        f"checkpoint {step}: in-loop {score.successes}/{score.trials}"
-                    ),
-                )
-            for counts in funnel(chunk).values():
-                for milestone, count in zip(MILESTONES, counts, strict=False):
-                    self.mark(f"eval/inloop/funnel/{milestone}")
-                    rr.log(
-                        f"eval/inloop/funnel/{milestone}",
-                        rr.Scalars(count / len(chunk)),
-                    )
+        for index in range(self.passes_shown, min(len(chunks), len(steps))):
+            self.log_pass("inloop", chunks[index], steps[index])
             self.passes_shown = index + 1
 
     def videos(self, steps: list[int]) -> None:
         for step in steps:
             # LeRobot nests the suite (`robotiq_0/`) under the step directory.
             for video in sorted(
-                (self.run_dir / "eval" / f"videos_step_{step:06d}").rglob("*.mp4")
+                (self.layout.training / "eval" / f"videos_step_{step:06d}").rglob(
+                    "*.mp4"
+                )
             ):
-                if video in self.videos_shown:
-                    continue
-                at_step(step)
-                log_video(f"eval/video/{video.stem}", video, step)
-                self.videos_shown.add(video)
+                if video not in self.videos_shown:
+                    at_step(step)
+                    log_video(f"eval/video/{video.stem}", video, step)
+                    self.videos_shown.add(video)
 
     def final_eval(self) -> None:
-        """The paired evaluation beside the run (`<name>-eval`), once it is there."""
-        eval_dir = self.run_dir.parent / self.run_dir.name.replace("-act", "-eval")
-        path = eval_dir / "episodes.jsonl"
+        """The paired evaluation beside the run, once its records are there."""
+        path = self.layout.eval_records
         if self.final_shown or not path.exists():
             return
-        records = read_records(path)
-        chunks = passes(records)
-        rr.set_time(
-            "train_step",
-            sequence=max(self.last_step, max(self.configs_shown, default=0)),
-        )
-        for score in fold(chunks[0]):
-            self.mark("eval/final/success_rate")
-            rr.log(
-                "eval/final/success_rate", rr.Scalars(score.successes / score.trials)
-            )
-            rr.log(
-                "stage",
-                rr.TextLog(
-                    f"{score.name}: {score.successes}/{score.trials} distinct starts"
-                    + (
-                        f" (+{sum(len(c) for c in chunks[1:])} padding episodes)"
-                        if len(chunks) > 1
-                        else ""
-                    )
-                ),
-            )
-        for counts in funnel(chunks[0]).values():
-            for milestone, count in zip(MILESTONES, counts, strict=False):
-                self.mark(f"eval/final/funnel/{milestone}")
-                rr.log(
-                    f"eval/final/funnel/{milestone}", rr.Scalars(count / len(chunks[0]))
-                )
-        for video in sorted(eval_dir.glob("videos/**/*.mp4")):
-            log_video(f"eval/final/video/{video.stem}", video, self.last_step)
+        chunks = passes(read_records(path))
+        if not chunks:
+            return  # the file exists before its first row
+        step = max(self.last_step, *self.configs_shown, 0)
+        self.log_pass("final", chunks[0], step, sum(len(c) for c in chunks[1:]))
+        for video in sorted(self.layout.evaluation.glob("videos/**/*.mp4")):
+            log_video(f"eval/final/video/{video.stem}", video, step)
         self.final_shown = True
-
-    # -- the loop ----------------------------------------------------------
 
     def poll(self) -> None:
         self.manifest()
@@ -686,41 +646,16 @@ class Follower:
         self.inloop_records(steps)
         self.videos(steps)
         self.final_eval()
-        if self.play and self.watcher is not None:
-            self.watcher.poll(self.run_dir / "checkpoints", self.action_space)
-
-
-MILESTONES = ("part_moved", "part_lifted", "one_in_slot", "both_in_slot")
-LOGGER_STAMP = re.compile(r"INFO (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
-
-
-def log_video(entity: str, path: Path, step: int) -> None:
-    """A video the viewer can play: the asset, and one frame reference per
-    frame on its own `video_time` timeline (an asset alone shows nothing)."""
-    asset = rr.AssetVideo(path=path)
-    rr.log(entity, asset)
-    stamps = np.asarray(asset.read_frame_timestamps_nanos())
-    if not len(stamps):
-        return
-    rr.send_columns(
-        entity,
-        indexes=[
-            rr.TimeColumn("video_time", duration=stamps * 1e-9),
-            rr.TimeColumn("train_step", sequence=np.full(len(stamps), step)),
-        ],
-        columns=rr.VideoFrameReference.columns_nanos(stamps),
-    )
-
-
-LEGACY_TRAIN_LOG_FILE = "train.log"  # the sidecar's trainer-only log before 2026-08-28
-GPU_SAMPLE_FIELDS = 3  # nvidia-smi: timestamp, utilization.gpu, memory.used
+        if self.watcher is not None:
+            self.watcher.poll(self.layout, self.action_space)
 
 
 def dashboard_blueprint(play: bool) -> rrb.Blueprint:
     """The panels in the order a reader wants them: what the run IS
     (manifest, trainer config, the stage log); how it is going (loss,
-    learning rate, gradient norm; the evaluations; the machine); and,
-    when checkpoints are played, what the policy sees and the rig."""
+    learning rate, gradient norm, throughput; the evaluations; the
+    machine; the eval videos); and, when checkpoints are played, what
+    the policy sees, the rig and the object height."""
     top = rrb.Horizontal(
         rrb.TextDocumentView(origin="config/run", name="run"),
         rrb.TextDocumentView(origin="config/trainer", name="trainer config"),
@@ -782,15 +717,18 @@ def dashboard_blueprint(play: bool) -> rrb.Blueprint:
     # carries the wall clock, so the other choice reads too.
     return rrb.Blueprint(
         rrb.Vertical(*rows),
-        rrb.TimePanel(timeline="train_step"),
+        rrb.TimePanel(timeline=Timelines.STEP),
         collapse_panels=False,
     )
 
 
-def follow(args) -> None:
-    run_dir = Path(args.follow)
+# ---- the modes ---------------------------------------------------------------
+
+
+def follow(args: argparse.Namespace) -> None:
+    layout = RunLayout.of(Path(args.follow))
     rr_session(
-        f"robotiq-follow-{run_dir.name}", mode="spawn", world_up=args.play_checkpoints
+        f"robotiq-follow-{layout.name}", mode="spawn", world_up=args.play_checkpoints
     )
     rr.send_blueprint(dashboard_blueprint(args.play_checkpoints))
     if args.rrd is not None:
@@ -805,59 +743,49 @@ def follow(args) -> None:
         watcher = Watcher(
             args.look, args.task, best_device(args.device), args.executed_horizon
         )
-    follower = Follower(
-        run_dir,
-        play=args.play_checkpoints,
-        watcher=watcher,
-        action_space=args.action_space,
-    )
-    print(f"[follow] {run_dir}: streaming to Rerun; Ctrl-C to stop", flush=True)
+    follower = Follower(layout, watcher=watcher, action_space=args.action_space)
+    print(f"[follow] {layout.training}: streaming to Rerun; Ctrl-C to stop", flush=True)
     try:
         while True:
             follower.poll()
-            if args.once:
+            if args.once or (watcher is not None and not watcher.viewer.is_running()):
                 break
-            if watcher is not None and not watcher.viewer.is_running():
-                break
-            time.sleep(2.0)
+            time.sleep(POLL_PERIOD_S)
     except KeyboardInterrupt:
         pass
     print(f"[follow] last step seen: {follower.last_step}", flush=True)
 
 
-def _exit_on_sigterm(signum, frame):
-    # A plain SIGTERM would skip `finally` and orphan the trainer.
-    raise SystemExit(128 + signum)
-
-
-def play_only(args) -> None:
+def play_only(args: argparse.Namespace) -> None:
     """Watch one checkpoint: every paired start, both viewers, no training."""
     from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     device = best_device(args.device)
-    if args.openpi:
-        name = f"openpi-{args.openpi.replace(':', '-')}"
-        rr_session(f"robotiq-play-{name}", mode="spawn")
-        watcher = Watcher(args.look, args.task, device, args.executed_horizon)
-        act, reset = openpi_controller(args.openpi, watcher.env, args.executed_horizon)
-    else:
-        checkpoint = Path(args.play)
-        name = checkpoint.parent.name
-        rr_session(f"robotiq-play-{name}", mode="spawn")
-        watcher = Watcher(args.look, args.task, device, args.executed_horizon)
-        act, reset = checkpoint_controller(
-            checkpoint,
+    name = (
+        f"openpi-{args.openpi.replace(':', '-')}"
+        if args.openpi
+        else Path(args.play).parent.name
+    )
+    rr_session(f"robotiq-play-{name}", mode="spawn")
+    rr.send_blueprint(dashboard_blueprint(play=True))
+    watcher = Watcher(args.look, args.task, device, args.executed_horizon)
+    act, reset = (
+        openpi_controller(args.openpi, watcher.env, args.executed_horizon)
+        if args.openpi
+        else checkpoint_controller(
+            Path(args.play),
             args.action_space,
             watcher.env.task_description,
             device,
             executed_horizon=args.executed_horizon,
             nu=watcher.env.action_space.shape[0],
         )
+    )
     successes = 0
     for trial in range(args.trials):
         reset()
-        rr.set_time("train_step", sequence=trial)
-        success = watcher._episode(
+        at_step(trial)
+        success = watcher.episode(
             lambda _tick, observation: act(observation),
             f"play/trial{trial}",
             f"{name}: trial {trial}",
@@ -865,14 +793,64 @@ def play_only(args) -> None:
         )
         successes += int(success)
         verdict = verdict_word(success)
-        rr.log("stage", rr.TextLog(f"{name}: trial {trial} {verdict}"))
-        print(f"[play] trial {trial}: {verdict}", flush=True)
-    rr.log("stage", rr.TextLog(f"{name}: {successes}/{args.trials}"))
-    print(
+        note(f"{name}: trial {trial} {verdict}", f"[play] trial {trial}: {verdict}")
+    note(
+        f"{name}: {successes}/{args.trials}",
         f"[play] {successes}/{args.trials} - close the MuJoCo window to exit",
-        flush=True,
     )
     hold_until_closed(watcher.viewer)
+
+
+def train_and_watch(args: argparse.Namespace) -> None:
+    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+
+    # `runs/<name>` names the run the way the chain does: `--name t2-act`
+    # trains into runs/t2-act, and every reader of the layout agrees.
+    layout = RunLayout.of(Path(args.runs) / args.name)
+    device = best_device(args.device)
+    rr_session(f"robotiq-train-watch-{layout.name}", mode="spawn")
+    rr.send_blueprint(dashboard_blueprint(play=True))
+    process = subprocess.Popen(
+        lerobot_train_command(
+            policy=args.policy,
+            device=device,
+            dataset=args.dataset,
+            output_dir=layout.training,
+            job_name=layout.training.name,
+            steps=args.steps,
+            batch_size=args.batch_size,
+            save_freq=args.save_freq,
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    threading.Thread(target=tail_training, args=(process,), daemon=True).start()
+    watcher = Watcher(args.look, args.task, device, args.executed_horizon)
+    try:
+        for episode in range(args.replay_demos):
+            watcher.replay_demo(args.dataset, episode)
+        while process.poll() is None:
+            watcher.poll(layout, args.action_space)
+            if not watcher.viewer.is_running():
+                process.terminate()
+                break
+            time.sleep(POLL_PERIOD_S)
+        watcher.poll(layout, args.action_space)  # the final checkpoint
+        note(
+            f"training exited with {process.returncode}",
+            "[watch] training finished - close the MuJoCo window to exit",
+        )
+        hold_until_closed(watcher.viewer)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+
+
+def _exit_on_sigterm(signum: int, frame: object) -> None:
+    # A plain SIGTERM would skip `finally` and orphan the trainer.
+    raise SystemExit(128 + signum)
 
 
 def main() -> None:
@@ -880,46 +858,10 @@ def main() -> None:
     args = parse_args()
     if args.follow:
         follow(args)
-        return
-    if args.play or args.openpi:
+    elif args.play or args.openpi:
         play_only(args)
-        return
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
-
-    output_dir = Path(args.runs) / args.name
-    device = best_device(args.device)
-    rr_session(f"robotiq-train-watch-{args.name}", mode="spawn")
-
-    process = subprocess.Popen(
-        train_command(args, output_dir, device),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    seen_steps: list[int] = []
-    threading.Thread(
-        target=tail_training, args=(process, seen_steps), daemon=True
-    ).start()
-
-    watcher = Watcher(args.look, args.task, device, args.executed_horizon)
-    checkpoints = output_dir / "checkpoints"
-    try:
-        for episode in range(args.replay_demos):
-            watcher.replay_demo(args.dataset, episode)
-        while process.poll() is None:
-            watcher.poll(checkpoints, args.action_space)
-            if not watcher.viewer.is_running():
-                process.terminate()
-                break
-            time.sleep(2.0)
-        watcher.poll(checkpoints, args.action_space)  # the final checkpoint
-        rr.log("stage", rr.TextLog(f"training exited with {process.returncode}"))
-        print("[watch] training finished - close the MuJoCo window to exit", flush=True)
-        hold_until_closed(watcher.viewer)
-    finally:
-        if process.poll() is None:
-            process.terminate()
+    else:
+        train_and_watch(args)
 
 
 if __name__ == "__main__":

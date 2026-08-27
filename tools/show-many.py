@@ -31,7 +31,13 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, hold_until_closed, load_demo_actions, rr_session
+from _lab import (
+    bootstrap,
+    frame_viewer,
+    hold_until_closed,
+    load_demo_actions,
+    rr_session,
+)
 
 bootstrap()
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
@@ -195,10 +201,7 @@ def main() -> None:
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         side = int(np.ceil(np.sqrt(args.worlds)))
-        viewer.cam.distance = 2.2 * side
-        viewer.cam.azimuth = 90
-        viewer.cam.elevation = -40
-        viewer.cam.lookat[:] = [0, 0, 0]
+        frame_viewer(viewer, 2.2 * side)
         clock = 0.0
         for k in range(len(ctrl_per_step) * 10):
             if k % 10 == 0:
@@ -209,7 +212,7 @@ def main() -> None:
             clock += 1.0 / SIM_HZ
             if k % LOG_EVERY == 0:
                 rr.set_time("sim_time", duration=clock)
-                mirror.log(data, path="world/rig")
+                mirror.log(data)
                 for n, adr in enumerate(cube_z_adr):
                     rr.log(f"worlds/{n:02d}/cube_z", rr.Scalars(float(data.qpos[adr])))
             if k % SYNC_EVERY == 0:

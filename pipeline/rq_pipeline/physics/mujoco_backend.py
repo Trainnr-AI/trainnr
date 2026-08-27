@@ -207,6 +207,12 @@ class MuJoCoBackend:
         self._model: Any = None
 
     @property
+    def loaded(self) -> bool:
+        """Whether `load_*` has run — the question a caller may ask without
+        reaching into the backend's state."""
+        return self._model is not None
+
+    @property
     def model(self) -> Any:
         """The compiled model, for callers that step it themselves
         (`Stepper`, renderers). Loading stays the backend's job."""

@@ -4,15 +4,23 @@ was appended."""
 
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from rq_pipeline.envs.lerobot_train_log import (
+    SCALES,
     FileFollower,
+    GpuSample,
+    RunLayout,
     RunManifest,
+    Scale,
+    StepClock,
     is_stage_line,
     parse_big_number,
     parse_eval_line,
+    parse_gpu_line,
     parse_train_line,
+    resolve_scale,
     watch_dir_for,
 )
 
@@ -51,6 +59,7 @@ class TheMetricsLine(unittest.TestCase):
         self.assertAlmostEqual(line.metrics["lr"], 3e-5)
         self.assertAlmostEqual(line.metrics["updt_s"], 0.081)
         self.assertNotIn("step", line.metrics)
+        self.assertEqual(line.stamp, datetime(2026, 8, 27, 17, 20, 3))
         # Not metrics: the logger's `ot_train.py:597` and the clock's `17:20:03`
         # (the first dashboard logged `train/py` = 597, 2026-08-28).
         self.assertEqual(
@@ -120,8 +129,41 @@ class TheRunManifest(unittest.TestCase):
             scale="cloud",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            manifest.write(Path(tmp))
-            self.assertEqual(RunManifest.read(Path(tmp)), manifest)
+            layout = RunLayout(Path(tmp), "t5-cloud")
+            layout.dataset.mkdir()
+            (layout.dataset / "provenance.json").write_text(
+                '{"bundle": "b@1", "expert": "e@2", "episodes": 3, "fps": 50, "x": 1}',
+                encoding="utf-8",
+            )
+            built = RunManifest.build(
+                layout,
+                resolve_scale("cloud", steps=10000, checkpoint_every=5000),
+                device="cuda",
+                command=["lerobot-train", "--steps=10000"],
+                scale_name="cloud",
+                task="kitting",
+                started=datetime(2026, 8, 27, 17, 18),
+            )
+            self.assertEqual(
+                built.provenance,
+                {"bundle": "b@1", "expert": "e@2", "episodes": 3, "fps": 50},
+            )
+            self.assertEqual(
+                (built.steps, built.batch_size, built.workers), (10000, 8, 16)
+            )
+            self.assertEqual(built.command, "lerobot-train --steps=10000")
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest.write_to(Path(tmp))
+            self.assertEqual(RunManifest.read_from(Path(tmp)), manifest)
+            # A manifest from a newer or older tool: unknown keys are ignored.
+            path = Path(tmp) / "run.json"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    '"name"', '"future_field": 1, "name"'
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(RunManifest.read_from(Path(tmp)), manifest)
         table = manifest.as_markdown()
         for needle in (
             "| batch size | 64 |",
@@ -130,6 +172,65 @@ class TheRunManifest(unittest.TestCase):
             "| dataset episodes | 29 |",
         ):
             self.assertIn(needle, table)
+
+
+class TheRunLayout(unittest.TestCase):
+    def test_one_naming_scheme_and_its_inverse(self) -> None:
+        layout = RunLayout(Path("runs"), "t5")
+        self.assertEqual(layout.training, Path("runs/t5-act"))
+        self.assertEqual(layout.watch, Path("runs/t5-watch"))
+        self.assertEqual(layout.dataset, Path("runs/t5-lerobot"))
+        self.assertEqual(layout.evaluation, Path("runs/t5-eval"))
+        self.assertEqual(
+            layout.checkpoint(300),
+            Path("runs/t5-act/checkpoints/000300/pretrained_model"),
+        )
+        self.assertEqual(RunLayout.of(Path("runs/t5-act")), layout)
+        self.assertEqual(RunLayout.of(Path("runs/other")).name, "other")
+
+    def test_checkpoint_steps_with_and_without_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = RunLayout(Path(tmp), "t5")
+            self.assertEqual(layout.checkpoint_steps(), [])
+            for step in (200, 100):
+                layout.checkpoint(step).mkdir(parents=True)
+            (layout.checkpoint(100) / "model.safetensors").write_bytes(b"")
+            (layout.training / "checkpoints" / "last").mkdir()
+            self.assertEqual(layout.checkpoint_steps(), [100, 200])
+            self.assertEqual(layout.checkpoint_steps(with_weights=True), [100])
+
+
+class TheScales(unittest.TestCase):
+    def test_presets_override_and_the_checkpoint_rule(self) -> None:
+        self.assertEqual(resolve_scale("smoke"), SCALES["smoke"])
+        cloud = resolve_scale("cloud", steps=30000, checkpoint_every=10000, lr=3e-5)
+        self.assertEqual(
+            (cloud.steps, cloud.checkpoint_every, cloud.lr), (30000, 10000, 3e-5)
+        )
+        self.assertEqual(cloud.episodes, SCALES["cloud"].episodes)  # untouched
+        self.assertEqual(resolve_scale("smoke", batch=None).batch, 8)  # None = keep
+        with self.assertRaisesRegex(ValueError, "not a multiple"):
+            resolve_scale("smoke", steps=301)
+        self.assertIsInstance(SCALES["cloud"], Scale)
+
+
+class TheGpuSamples(unittest.TestCase):
+    def test_a_line_and_its_clock(self) -> None:
+        sample = parse_gpu_line("2026/08/28 00:33:40.123, 58 %, 17052 MiB")
+        self.assertEqual(
+            sample, GpuSample(datetime(2026, 8, 28, 0, 33, 40, 123000), 58.0, 17052.0)
+        )
+        self.assertIsNone(parse_gpu_line("nvidia-smi: command not found"))
+        self.assertIsNone(parse_gpu_line("2026/08/28 00:33:40.123, N/A, N/A"))
+
+    def test_the_step_clock_places_a_moment_at_the_line_before_it(self) -> None:
+        clock = StepClock()
+        self.assertEqual(clock.at(datetime(2026, 8, 28)), 0)
+        clock.add(datetime(2026, 8, 28, 0, 0, 10), 50)
+        clock.add(datetime(2026, 8, 28, 0, 0, 20), 100)
+        self.assertEqual(clock.at(datetime(2026, 8, 28, 0, 0, 5)), 0)
+        self.assertEqual(clock.at(datetime(2026, 8, 28, 0, 0, 15)), 50)
+        self.assertEqual(clock.at(datetime(2026, 8, 28, 1, 0, 0)), 100)
 
 
 class TheWatchDir(unittest.TestCase):

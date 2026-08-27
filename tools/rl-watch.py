@@ -53,7 +53,7 @@ import mujoco.viewer
 import numpy as np
 import rerun as rr
 
-from _lab import bootstrap, rr_session
+from _lab import bootstrap, frame_viewer, rr_session
 
 bootstrap()
 from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
@@ -146,10 +146,7 @@ def stage_process(spec, queue, closed):
     )
     history, env_steps = None, 0
     viewer = mujoco.viewer.launch_passive(model, data)
-    viewer.cam.distance = 2.2 * side
-    viewer.cam.azimuth = 90
-    viewer.cam.elevation = -40
-    viewer.cam.lookat[:] = [0, 0, 0]
+    frame_viewer(viewer, 2.2 * side)
     try:
         while viewer.is_running():
             try:
@@ -170,7 +167,7 @@ def stage_process(spec, queue, closed):
                 if t % MIRROR_EVERY == 0:
                     rr.set_time("env_steps", sequence=env_steps)
                     rr.set_time("sim_time", duration=t * 0.02)
-                    mirror.log(data, path="world/rig")
+                    mirror.log(data)
                     for n in range(worlds):
                         rr.log(
                             f"worlds/{n:02d}/box_z",

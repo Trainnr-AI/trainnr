@@ -30,7 +30,7 @@ worlds at once — the seam the vectorized gymnasium env drives (docs/49).
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -75,8 +75,8 @@ class _DevicePrograms:
     mx: Any
     template: Any
     layout: FullPhysicsLayout
-    rollout: Any = None
-    seat_forward: Any = None
+    rollout: Callable[..., Any] | None = None
+    seat_forward: Callable[..., Any] | None = None
     holds: dict[int, Any] = field(default_factory=dict)
 
 

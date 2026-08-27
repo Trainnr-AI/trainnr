@@ -26,6 +26,8 @@ from rq_pipeline.evaluate.records import (
     fold,
     from_success_list,
     funnel,
+    milestones,
+    passes,
     read_records,
 )
 
@@ -48,6 +50,8 @@ __all__ = [
     "funnel",
     "join_with_real",
     "load_benchmark",
+    "milestones",
+    "passes",
     "read_records",
     "real_outcomes",
 ]

@@ -8,6 +8,7 @@ from rq_pipeline.robot.fit_record import (
     cross_run_spread,
     load_fit_records,
     spread_summary,
+    spread_verdicts,
     write_fit_record,
 )
 from rq_pipeline.robot.identify import IdentificationResult, IdentifiedParameter
@@ -65,6 +66,12 @@ class WriteAndReload(unittest.TestCase):
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0].parameters[0].name, "left_gear")
         spread = cross_run_spread(records)
+        verdicts = spread_verdicts(records)
+        self.assertEqual(set(verdicts), set(spread))
+        for name, (low, high) in spread.items():
+            self.assertEqual(
+                (verdicts[name].lowest, verdicts[name].highest), (low, high)
+            )
         self.assertEqual(spread["left_gear"], (0.00023, 0.00024))
         # The rehearsal's second finding made this line the point: the
         # cross-run damping spread (4e-5) dwarfs the per-run half-width
