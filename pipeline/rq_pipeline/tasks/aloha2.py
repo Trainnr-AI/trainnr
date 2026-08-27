@@ -541,6 +541,7 @@ TRANSFER_CUBE_INSTRUCTION = "transfer the cube to the left gripper"
 KITTING_INSTRUCTION = KITTING_SPEC.instruction
 # The choreographer's judgement threshold: closed-loop grip corrections
 # stop inside this radius.
+KITTING_EXPERT = "kitting-expert"  # the stamp's name half
 _CORRECTION_DONE_M = 0.008
 
 ARM_IK_JOINTS = {
@@ -596,6 +597,19 @@ class KittingChoreography:
     CORRECTION_BITE_M = 0.05  # linear correction only holds locally: 5 cm bites
     PAD_FLOOR_Z_M = 0.02  # the pads never need to go under 2 cm
     CORRECTION_SECONDS = 0.5
+
+    @classmethod
+    def fields(cls) -> dict[str, Any]:
+        """The choreography as data — every constant above plus the
+        segment table — so `expert_stamp` can name it by content."""
+        constants = {
+            name: value
+            for name, value in vars(cls).items()
+            if name.isupper() and not name.startswith("_")
+        }
+        constants["SEGMENTS"] = _PICK_PLACE_SEGMENTS
+        constants["PART_ORDER"] = PART_ORDER
+        return constants
 
 
 # The grasp approach: near-horizontal, tilted 45 degrees down and
@@ -777,6 +791,18 @@ class Waypoint(NamedTuple):
     target: list[float]
     grip: float
     seconds: float
+
+
+def expert_stamp() -> str:
+    """`kitting-expert@<hash>`: the scripted expert named by its
+    choreography's content, the way a task is named by its spec and a
+    bundle by its files. A demo batch's manifests carry it, so a
+    choreography change (2026-08-27's closing plane and park beat)
+    shows in the provenance instead of hiding behind an unchanged task
+    stamp."""
+    from rq_pipeline.bundles.hashing import content_stamp  # noqa: PLC0415
+
+    return content_stamp(KITTING_EXPERT, KittingChoreography.fields())
 
 
 def kitting_waypoints(

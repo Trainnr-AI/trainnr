@@ -17,9 +17,12 @@ NUMPY_PRESENT = importlib.util.find_spec("numpy") is not None
 STEPS = 60  # physics steps; the generator writes sensors per physics step
 CONTROL_TICKS = 6  # and actions per control tick (10 physics steps each)
 FRAME_TICKS = (0, 10, 20, 30, 40, 50)  # frame_every=1 at 500 Hz physics / 50 Hz control
+EXPERT = "kitting-expert@0123456789ab"
 
 
-def synthetic_batch(root: Path, episodes: int = 2, frame_every: int = 1) -> Path:
+def synthetic_batch(
+    root: Path, episodes: int = 2, frame_every: int = 1, experts: tuple = (EXPERT,)
+) -> Path:
     import numpy as np  # noqa: PLC0415
 
     from rq_pipeline.collect.kitting_export import (  # noqa: PLC0415
@@ -50,6 +53,7 @@ def synthetic_batch(root: Path, episodes: int = 2, frame_every: int = 1) -> Path
                 retries=[],
                 control_hz=50,
                 frame_every_control_ticks=frame_every,
+                expert=experts[index % len(experts)],
             ),
         )
     return demos
@@ -70,6 +74,28 @@ class DemosDirectoryContract(unittest.TestCase):
             demos = synthetic_batch(Path(tmp), episodes=3)
             names = [p.name for p in episode_dirs(demos)]
         self.assertEqual(names, ["episode_0000", "episode_0001", "episode_0002"])
+
+    @unittest.skipUnless(NUMPY_PRESENT, "sim extra not installed")
+    def test_a_manifest_carries_the_expert_and_an_old_one_reads(self) -> None:
+        from rq_pipeline.collect.kitting_export import (  # noqa: PLC0415
+            UNSTAMPED_EXPERT,
+            DemoLayout,
+            Manifest,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            demos = synthetic_batch(Path(tmp), episodes=1)
+            episode = demos / "episode_0000"
+            self.assertEqual(Manifest.read(episode).expert, EXPERT)
+            # A batch written before the stamp existed: the field is absent.
+            raw = json.loads(
+                (episode / DemoLayout.MANIFEST_FILE).read_text(encoding="utf-8")
+            )
+            del raw["expert"]
+            (episode / DemoLayout.MANIFEST_FILE).write_text(
+                json.dumps(raw), encoding="utf-8"
+            )
+            self.assertEqual(Manifest.read(episode).expert, UNSTAMPED_EXPERT)
 
 
 @unittest.skipUnless(LEROBOT_PRESENT, "train extra not installed (use .venv-train)")
@@ -94,6 +120,7 @@ class RoundTrip(unittest.TestCase):
             self.assertEqual(provenance["fps"], 50)
             self.assertEqual(provenance["episodes"], 2)
             self.assertIn("@", provenance["bundle"])
+            self.assertEqual(provenance["expert"], EXPERT)
             dataset = LeRobotDataset("test/kitting", root=root)
             self.assertEqual(len(dataset), 2 * len(FRAME_TICKS))
             sample = dataset[0]
@@ -114,6 +141,20 @@ class RoundTrip(unittest.TestCase):
             np.testing.assert_allclose(
                 last["action"].numpy(), trajectory["actions"][5], rtol=1e-6
             )
+
+    def test_two_experts_in_one_batch_are_refused(self) -> None:
+        from rq_pipeline.collect.kitting_export import (  # noqa: PLC0415
+            export_kitting_demos,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            demos = synthetic_batch(
+                Path(tmp), episodes=2, experts=(EXPERT, "kitting-expert@ba9876543210")
+            )
+            with self.assertRaisesRegex(ValueError, "disagree on the expert"):
+                export_kitting_demos(
+                    demos, Path(tmp) / "dataset", repo_id="test/mixed", use_videos=False
+                )
 
 
 if __name__ == "__main__":

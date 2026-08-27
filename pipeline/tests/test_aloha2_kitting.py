@@ -38,17 +38,17 @@ class KittingScene(unittest.TestCase):
                 f"{arm}: {found} != {PART_HOME[arm]}",
             )
 
-    def test_scripted_demo_succeeds_in_the_proven_band(self) -> None:
-        """Trial 0 (the demo generator's band) must place both parts.
+    def test_scripted_demo_succeeds_at_trial_zero(self) -> None:
+        """Trial 0 of the declared band must place both parts.
 
         The scripted choreography is the T5 demo source; this run IS
         the proof that the whole chain — chained grip-centre IK with
-        tilted approach, closed-loop clamped correction, verify-and-
-        retry — carries two parts into their slots. The far spawn band
-        (parts near the arms' base line) is a KNOWN open edge: the
-        closing-plane orientation is IK-nullspace-random there and the
-        close back-drives upward. The generator samples the proven
-        band and filters by this same referee.
+        tilted approach and a pinned closing plane, closed-loop clamped
+        correction, verify-and-retry, the park between arms — carries
+        two parts into their slots. The whole band is the acceptance
+        test's business (test_acceptance: every paired corner, 12/12
+        on both engines 2026-08-27); the generator draws over it and
+        filters by this same referee.
         """
         from rq_pipeline.evaluate.harness import events_for  # noqa: PLC0415
         from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: PLC0415
@@ -72,7 +72,7 @@ class KittingScene(unittest.TestCase):
             [event["name"] for event in events_for(task.protocol, states, sensors)],
             ["part_moved", "part_lifted", "one_in_slot", "both_in_slot"],
         )
-        # The proven band needs no retry and never truncates — if either
+        # Trial 0 needs no retry and never truncates — if either
         # fires here, robustness regressed and the stats say where.
         self.assertEqual(stats.retries, [])
         self.assertFalse(stats.truncated)
@@ -136,6 +136,23 @@ class KittingScene(unittest.TestCase):
         self.assertTrue(
             np.allclose(data.sensordata[LEFT_GRIPPER_POS_SLICE], pad, atol=1e-9)
         )
+
+
+class TheExpertStamp(unittest.TestCase):
+    def test_the_expert_is_named_by_its_choreography(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.tasks.aloha2 import (  # noqa: PLC0415
+            KittingChoreography,
+            expert_stamp,
+        )
+
+        stamp = expert_stamp()
+        self.assertRegex(stamp, r"^kitting-expert@[0-9a-f]{12}$")
+        self.assertEqual(stamp, expert_stamp())
+        with mock.patch.object(KittingChoreography, "PARK_SECONDS", 2.0):
+            self.assertNotEqual(expert_stamp(), stamp)
+        self.assertIn("SEGMENTS", KittingChoreography.fields())
 
 
 if __name__ == "__main__":

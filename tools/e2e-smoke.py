@@ -1,13 +1,20 @@
-"""The T5 chain at smoke scale, one command: demos -> LeRobot v3 ->
-lerobot-train (in-loop eval through OUR env) -> lerobot-eval (paired
-starts, per-trial records) -> the fold. "Test everything end to end"
-on this repo, at a size the WSL card finishes in minutes.
+"""The T5 chain, one command: demos -> LeRobot v3 -> lerobot-train
+(in-loop eval through OUR env) -> lerobot-eval (paired starts, per-trial
+records) -> the fold. Two scales, one script: `--scale smoke` (the
+default) is "test everything end to end" at a size the WSL card
+finishes in minutes; `--scale cloud` is the real run — the ACT sim
+recipe's 50 demonstrations and 100k steps, twenty paired evaluation
+starts — for a rented GPU. Any knob overrides its scale's value.
 
     # WSL / Linux (train venv; the GPU renderer for the demos, the card for ACT):
     cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \\
         ../tools/e2e-smoke.py --episodes 2 --steps 300
     # macOS: none of the GL variables; the policy device is picked for you:
     cd pipeline && .venv-train/bin/python ../tools/e2e-smoke.py --episodes 2 --steps 300
+    # the cloud GPU (a Linux box with the train venv; EGL is the offscreen
+    # renderer there too, without WSL's Mesa variables):
+    cd pipeline && MUJOCO_GL=egl .venv-train/bin/python \\
+        ../tools/e2e-smoke.py --scale cloud --name t5-cloud
 
 Every stage writes what the next one reads, and every file is one a
 stranger can open: the batch's manifests (seeds, draws, verdicts), the
@@ -52,6 +59,39 @@ BATCH_SIZE = 8
 # Runs/eval sizes small enough to stay inside the vector env's one pass.
 MAX_EVAL_BATCH = 4
 STEP_DIR_WIDTH = 6  # LeRobot names a checkpoint step as six digits
+
+
+@dataclass(frozen=True)
+class Scale:
+    """One size of the chain: how many demonstrations, how long to
+    train, how often to checkpoint, how many starts to evaluate."""
+
+    episodes: int
+    steps: int
+    checkpoint_every: int
+    inloop_episodes: int
+    eval_episodes: int
+
+
+SCALES = {
+    # Minutes on the WSL card; the smallest run that exercises every stage.
+    "smoke": Scale(
+        episodes=2, steps=300, checkpoint_every=300, inloop_episodes=1, eval_episodes=2
+    ),
+    # LeRobot's ACT sim recipe (50 episodes, 100k steps, batch 8) with a
+    # checkpoint every 20k so a lost instance costs an hour, not a day,
+    # and twenty paired starts for an interval worth reading (CP95 on
+    # 20 trials is +-0.2 wide at 50%). Measured rates on the 3090 Ti
+    # (docs/31): ACT 14.8 steps/s at batch 8, the converter 38 s/episode,
+    # lerobot-eval 78 s/episode.
+    "cloud": Scale(
+        episodes=50,
+        steps=100_000,
+        checkpoint_every=20_000,
+        inloop_episodes=4,
+        eval_episodes=20,
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -110,24 +150,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", default="smoke", help="prefix of the four runs/ dirs")
     parser.add_argument("--runs", type=Path, default=Path("runs"))
     parser.add_argument(
-        "--episodes", type=positive_int, default=2, help="demonstrations to keep"
+        "--scale",
+        choices=sorted(SCALES),
+        default="smoke",
+        help="the preset every unset knob below takes its value from",
+    )
+    parser.add_argument(
+        "--episodes", type=positive_int, default=None, help="demonstrations to keep"
     )
     parser.add_argument(
         "--seed", type=int, default=20260828, help="the generator's seed"
     )
     parser.add_argument(
-        "--steps", type=positive_int, default=300, help="training steps"
+        "--steps", type=positive_int, default=None, help="training steps"
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=positive_int,
+        default=None,
+        help="the trainer saves every this many steps (and at the last)",
     )
     parser.add_argument(
         "--inloop-episodes",
         type=positive_int,
-        default=1,
-        help="episodes of lerobot-train's own in-loop eval at the last step",
+        default=None,
+        help="episodes of lerobot-train's own in-loop eval at every checkpoint",
     )
     parser.add_argument(
         "--eval-episodes",
         type=positive_int,
-        default=2,
+        default=None,
         help="lerobot-eval paired starts",
     )
     parser.add_argument(
@@ -145,7 +197,24 @@ def parse_args() -> argparse.Namespace:
         "an existing output directory, and a smaller batch would otherwise "
         "inherit stale episodes)",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    scale = SCALES[args.scale]
+    for knob in (
+        "episodes",
+        "steps",
+        "checkpoint_every",
+        "inloop_episodes",
+        "eval_episodes",
+    ):
+        if getattr(args, knob) is None:
+            setattr(args, knob, getattr(scale, knob))
+    if args.steps % args.checkpoint_every:
+        raise SystemExit(
+            f"e2e-smoke: --steps {args.steps} is not a multiple of "
+            f"--checkpoint-every {args.checkpoint_every}; the final checkpoint "
+            "is the one evaluated"
+        )
+    return args
 
 
 _CURRENT_STAGE = "start"
@@ -224,7 +293,8 @@ def convert(layout: RunLayout) -> None:
         (layout.dataset / "provenance.json").read_text(encoding="utf-8")
     )
     print(
-        f"provenance: {provenance['bundle']}, {provenance['episodes']} episodes, "
+        f"provenance: {provenance['bundle']}, expert {provenance['expert']}, "
+        f"{provenance['episodes']} episodes, "
         f"{sum(provenance['frames'])} frames at {provenance['fps']} fps; gain scales "
         f"{[round(m['gain_scale'], 2) for m in provenance['manifests']]}",
         flush=True,
@@ -246,8 +316,8 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
             job_name=layout.training.name,
             steps=args.steps,
             batch_size=BATCH_SIZE,
-            save_freq=args.steps,
-            eval_freq=args.steps,
+            save_freq=args.checkpoint_every,
+            eval_freq=args.checkpoint_every,
             eval_episodes=episodes,
             eval_batch=episodes,
             extra=inloop,

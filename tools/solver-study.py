@@ -2,7 +2,7 @@
 
     cd pipeline && uv run --extra sim python ../tools/solver-study.py
 
-One scripted kitting episode (trial 0, the proven band) per solver
+One scripted kitting episode (trial 0 of the declared band) per solver
 configuration, judged by the task's own referee. Columns: verdict,
 wall time, worst contact penetration, mean constraint-solver
 iterations — and the docs/48 §3 diagnostics: peak tangential SLIP at

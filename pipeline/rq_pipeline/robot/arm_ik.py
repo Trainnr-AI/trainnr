@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from typing import Any
 
 
-def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
+def solve_arm_ik(  # noqa: PLR0913 - the solver's knobs, each named
     model: Any,
     data: Any,
     *,
@@ -65,37 +65,7 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
 
-    single_dof_joint_types = {
-        int(mujoco.mjtJoint.mjJNT_HINGE),
-        int(mujoco.mjtJoint.mjJNT_SLIDE),
-    }
-    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site)
-    if site_id < 0:
-        raise ValueError(f"no site named {site!r}")
-    geom_ids = []
-    for name in grip_geoms or ():
-        geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
-        if geom_id < 0:
-            raise ValueError(f"no geom named {name!r}")
-        geom_ids.append(geom_id)
-    joint_ids = []
-    for name in joints:
-        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-        if joint_id < 0:
-            raise ValueError(f"no joint named {name!r}")
-        # Compared as ints: MuJoCo 3.12's pybind enum no longer equals a
-        # numpy integer in a membership test (3.11 did), so a hinge stopped
-        # looking like a hinge. Caught twice the same night: the WSL train
-        # venv's 3.12 refused every hinge in the demo generator (2026-08-26),
-        # and an accidental 3.11->3.12 lock bump on the Mac (2026-08-27).
-        if int(model.jnt_type[joint_id]) not in single_dof_joint_types:
-            # A free or ball joint has multi-dof addressing; the scalar
-            # dq indexing below would write plausible-looking garbage.
-            raise ValueError(
-                f"joint {name!r} is not single-dof (hinge/slide); "
-                "solve_arm_ik cannot drive it"
-            )
-        joint_ids.append(joint_id)
+    site_id, geom_ids, joint_ids = _resolve_names(model, site, grip_geoms, joints)
     dof_columns = [int(model.jnt_dofadr[j]) for j in joint_ids]
     qpos_rows = [int(model.jnt_qposadr[j]) for j in joint_ids]
     # An UNLIMITED joint carries range (0, 0); clamping to that froze
@@ -140,7 +110,9 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
         jac = np.vstack(
             [jacp[:, dof_columns], *(w * jacr[:, dof_columns] for w in weights)]
         )
-        err = np.concatenate([pos_err, *(w * e for w, e in zip(weights, orientation))])
+        err = np.concatenate(
+            [pos_err, *(w * e for w, e in zip(weights, orientation, strict=True))]
+        )
         # Damped least squares: dq = J^T (J J^T + lambda I)^-1 err
         gram = jac @ jac.T + damping * np.eye(jac.shape[0])
         dq = jac.T @ np.linalg.solve(gram, err)
@@ -151,6 +123,47 @@ def solve_arm_ik(  # noqa: PLR0913, PLR0915 - the solver: its knobs and its loop
             )
     mujoco.mj_forward(model, data)
     return bool(np.linalg.norm(target - positioned_point()) < pos_tol)
+
+
+def _resolve_names(
+    model: Any, site: str, grip_geoms: Sequence[str] | None, joints: Sequence[str]
+) -> tuple[int, list[int], list[int]]:
+    """The site, pad geoms and joints by id — every missing or unusable
+    name refused by name, before the solver touches `data`."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    single_dof_joint_types = {
+        int(mujoco.mjtJoint.mjJNT_HINGE),
+        int(mujoco.mjtJoint.mjJNT_SLIDE),
+    }
+    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site)
+    if site_id < 0:
+        raise ValueError(f"no site named {site!r}")
+    geom_ids = []
+    for name in grip_geoms or ():
+        geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+        if geom_id < 0:
+            raise ValueError(f"no geom named {name!r}")
+        geom_ids.append(geom_id)
+    joint_ids = []
+    for name in joints:
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint_id < 0:
+            raise ValueError(f"no joint named {name!r}")
+        # Compared as ints: MuJoCo 3.12's pybind enum no longer equals a
+        # numpy integer in a membership test (3.11 did), so a hinge stopped
+        # looking like a hinge. Caught twice the same night: the WSL train
+        # venv's 3.12 refused every hinge in the demo generator (2026-08-26),
+        # and an accidental 3.11->3.12 lock bump on the Mac (2026-08-27).
+        if int(model.jnt_type[joint_id]) not in single_dof_joint_types:
+            # A free or ball joint has multi-dof addressing; the scalar
+            # dq indexing in the solver would write plausible-looking garbage.
+            raise ValueError(
+                f"joint {name!r} is not single-dof (hinge/slide); "
+                "solve_arm_ik cannot drive it"
+            )
+        joint_ids.append(joint_id)
+    return site_id, geom_ids, joint_ids
 
 
 def _orientation_errors(rotation: Any, down: Any, closing: Any) -> list[Any]:

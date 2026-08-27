@@ -54,6 +54,9 @@ class DemoLayout:
     STATES, SENSORS, ACTIONS = "states", "sensors", "actions"  # the npz keys
 
 
+UNSTAMPED_EXPERT = "unstamped (batch generated before 2026-08-27)"
+
+
 @dataclass(frozen=True)
 class Manifest:
     """What a kept episode records about itself: the draw, the dynamics
@@ -71,6 +74,9 @@ class Manifest:
     frame_every_control_ticks: int
     action_semantics: str = "commanded actuator positions, ctrl order"
     verdict: str = "success (task referee)"
+    # The scripted expert's own stamp (`tasks.aloha2.expert_stamp`); the
+    # default reads batches written before 2026-08-27, which carried none.
+    expert: str = UNSTAMPED_EXPERT
 
     def write(self, episode_dir: Path) -> None:
         (episode_dir / DemoLayout.MANIFEST_FILE).write_text(
@@ -185,6 +191,12 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     if len(rates) != 1:
         raise ValueError(f"episodes disagree on frame rate: {sorted(rates)}")
     (control_hz, frame_every), *_ = rates
+    experts = {m.expert for m in manifests}
+    if len(experts) != 1:
+        # Two choreographies in one batch is two datasets; a stamp that
+        # names the expert exists so this cannot pass unnoticed.
+        raise ValueError(f"episodes disagree on the expert: {sorted(experts)}")
+    (expert,) = experts
     if control_hz % frame_every:
         raise ValueError(
             f"{control_hz} Hz is not divisible by frame_every={frame_every}"
@@ -258,6 +270,7 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
         # The batch's name, never its absolute path: the file ships inside
         # the dataset, and a home directory is not provenance.
         "source": Path(demos_dir).name,
+        "expert": expert,
         "episodes": len(episodes),
         "frames": frame_counts,
         "fps": fps,

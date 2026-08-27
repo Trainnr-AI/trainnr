@@ -134,3 +134,49 @@ by the left gripper clear of the table. Scripted reference policy,
 graded ladder (pick / no-close / limp), paired trials, through the
 harness to a certificate dry run — the same shape that proved the
 SO-101 tasks, one rig up. T1 above needs it; they land together.
+
+## 5. The cloud run — the command, and what it costs (2026-08-27)
+
+The T5 chain at recipe scale is the same tool as the smoke run with one
+flag (`tools/e2e-smoke.py`; presets in its `Scale` struct):
+
+```
+cd pipeline && MUJOCO_GL=egl .venv-train/bin/python \
+    ../tools/e2e-smoke.py --scale cloud --name t5-cloud
+```
+
+`--scale cloud` is LeRobot's ACT sim recipe — **50 demonstrations,
+100k steps, batch 8** — with a checkpoint and a four-episode in-loop
+evaluation every 20k steps (a lost instance costs an hour, not a day)
+and **twenty paired starts** at the end (CP95 on 20 trials is ±0.2 wide
+at 50%: an interval worth reading, not a smoke number). Any knob
+overrides its preset (`--steps`, `--episodes`, `--checkpoint-every`,
+`--inloop-episodes`, `--eval-episodes`).
+
+What it costs, from rates measured on the 3090 Ti (a cloud card of the
+same class scales one to one; a bigger one, better):
+
+| Stage | Measured rate | At cloud scale |
+|---|---|---|
+| demos (whole declared band, ±30% DR, referee-filtered) | 95 s/episode kept (3 of 3 in 284 s, 1,400 frames each, no retries) | 79 min at that keep rate (1.3 h) |
+| convert (single-threaded PNG → AV1) | 38 s/episode | 32 min |
+| train ACT, batch 8 | 14.8 steps/s (20k in 1,353 s) | 1.9 h |
+| in-loop eval, 4 episodes × 5 checkpoints | 78 s/episode | 26 min |
+| lerobot-eval, 20 paired starts | 78 s/episode | 26 min |
+
+About **four and a half hours** on a 3090-class card, demos included; the demos are the second-largest slice and embarrassingly parallel, should a run ever need them faster.
+
+What the run carries with it: every manifest names the expert
+(`kitting-expert@2daa0fcfba8a` tonight — the choreography by content,
+`tasks.aloha2.expert_stamp`) and the task (`kitting@72279ba7d215`); the
+dataset's provenance names the bundle and the expert; every evaluation
+row names the instrument. The 40-demo batch of 2026-08-26 was generated
+by an older expert (half-band draws, no park beat) and reads as a
+different dataset — which it is.
+
+Before renting anything: `--scale smoke` on the box at the same commit,
+which proves the chain; the cloud run adds only scale. The box's own
+GL variables (`pipeline/wsl.env`: Mesa's D3D12 path, the WSL library
+dir) are WSL's; a bare Linux GPU box needs `MUJOCO_GL=egl` and nothing
+else.
+

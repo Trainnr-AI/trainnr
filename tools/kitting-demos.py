@@ -8,15 +8,17 @@
 in pipeline/wsl.env — Mesa's EGL default is llvmpipe at ~300 ms per frame,
 which turned a 1 s scripted episode into a 460 s one on 2026-08-26.)
 
-Each episode: spawn both parts uniformly in the PROVEN band (the front
-half of the spawn box — the far band's closing-plane edge is a known
-open item, see test_aloha2_kitting), randomize joint damping and
+Each episode: spawn both parts uniformly over the task's DECLARED band
+(`KittingSpec.part_spawn`, the same band the harness evaluates on; until
+2026-08-27 this drew the front half only, a workaround for the near-base
+corners the expert could not grasp — fixed, docs/07), randomize joint damping and
 actuator gains within ±30% of the bundle's values (domain
 randomization centred on the identified parameters — the show-many
 pattern), run the scripted choreography, and keep the episode ONLY if
 the task's own referee scores it a success — the same judge policies
 will face. Saves per episode: states/actions/top-camera JPEG frames +
-a manifest with the draw, the DR scales, and the verdict. The WSL
+a manifest with the draw, the DR scales, the verdict and the expert's
+own stamp (`expert_stamp`, the choreography named by content). The WSL
 box's train venv converts the batch to a LeRobot dataset for T5
 training; this side stays torch-free.
 """
@@ -35,10 +37,10 @@ import numpy as np  # noqa: E402
 from rq_pipeline.collect.kitting_export import Manifest, write_episode  # noqa: E402
 from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
-    PART_SPAWN,
     PART_STATE_SLICE,
     KittingStats,
     build_kitting,
+    expert_stamp,
     scale_dynamics,
     scripted_kitting_episode,
 )
@@ -79,7 +81,9 @@ FRAME_EVERY = args.frame_every
 SEED = args.seed
 
 task = build_kitting()
+EXPERT = expert_stamp()
 rng = np.random.default_rng(SEED)
+print(f"expert {EXPERT}, task {task.stamp}", file=sys.stderr)
 OUT.mkdir(parents=True, exist_ok=True)
 
 kept = 0
@@ -105,10 +109,9 @@ while kept < EPISODES:
     initial = keyframe_state(model, task.protocol.home)
     draws = {}
     for arm in ("right", "left"):
-        (x_low, x_high), (y_low, y_high) = PART_SPAWN[arm]
-        # The proven band: the front HALF of the spawn box in y.
+        (x_low, x_high), (y_low, y_high) = task.task_spec.part_spawn[arm]
         x = float(rng.uniform(x_low, x_high))
-        y = float(rng.uniform(y_low, y_low + 0.5 * (y_high - y_low)))
+        y = float(rng.uniform(y_low, y_high))
         part = PART_STATE_SLICE[arm]
         initial[part.start] = x
         initial[part.start + 1] = y
@@ -172,6 +175,7 @@ while kept < EPISODES:
             retries=stats.retries,
             control_hz=task.control_hz,
             frame_every_control_ticks=FRAME_EVERY,
+            expert=EXPERT,
         ),
     )
     kept += 1
