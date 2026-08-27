@@ -7,7 +7,7 @@ Every claim cites `<repo path>:<line>`, the line in that bundle
 from memory of Isaac Lab in general. The field: how Arena decides an
 episode succeeded, scores partial progress, records episodes, and judges
 multi-stage tasks — mapped against our harness (`rq_pipeline/evaluate/`),
-task referees (`rq_pipeline/tasks/aloha2.py`) and the certificate
+task referees (`rq_pipeline/tasks/aloha2/kitting.py`) and the certificate
 (`rq_pipeline/stats/`, `evaluate/certificate.py`).*
 
 ---

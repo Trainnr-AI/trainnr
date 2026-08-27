@@ -7,7 +7,7 @@ LeRobot's evaluator, read from the INSTALLED package (`lerobot` 0.6.1 in
 venv's site-packages; gymnasium likewise. Secondary source: the NVIDIA/HF blog
 on the Environment Hub, by URL. Mapped against our harness
 (`pipeline/rq_pipeline/evaluate/`), backend and the ALOHA 2 tasks
-(`pipeline/rq_pipeline/tasks/aloha2.py`). Nothing below is from memory.*
+(`pipeline/rq_pipeline/tasks/aloha2/kitting.py`). Nothing below is from memory.*
 
 ---
 
@@ -188,7 +188,7 @@ silently leaves the denominator (the Arena pattern, docs/40 §1.4).
 | `{"pixels": {cam: uint8 HWC}, "agent_pos": float32}` per step | `closed_loop_vision_rollout` builds `{"observation.state": first state_width sensors, "observation.images.<key>": renderer.render()}` per control tick — the post-`preprocess_observation` shape, one rename away | `pipeline/rq_pipeline/physics/mujoco_backend.py:L293-303` |
 | `select_action` behind processors, `observation["task"]` | `lerobot_checkpoint_policy` does the same (`HWC→CHW/255`, `{"task": [instruction]}`, pre → `select_action` → post) | `pipeline/rq_pipeline/evaluate/vision.py:L148-164` |
 | `policy.reset()` per rollout | `VisionPolicy.reset` per trial — stricter | `vision.py:L52-62`, `L82-84` |
-| `render_fps`, `_max_episode_steps` | `steps=4000, control_interval=10` → 400 ticks; the bundle sets no `<option timestep>` (`robots/aloha2-nominal/aloha.xml:L4`), so MuJoCo's 0.002 s → **50 Hz** — the rate docs/31 T5 exported at and LeRobot's own `AlohaEnv` declares (`fps=50, episode_length=400`, `configs.py:L150-152`) | `pipeline/rq_pipeline/tasks/aloha2.py:L99-101` |
+| `render_fps`, `_max_episode_steps` | `steps=4000, control_interval=10` → 400 ticks; the bundle sets no `<option timestep>` (`robots/aloha2-nominal/aloha.xml:L4`), so MuJoCo's 0.002 s → **50 Hz** — the rate docs/31 T5 exported at and LeRobot's own `AlohaEnv` declares (`fps=50, episode_length=400`, `configs.py:L150-152`) | `pipeline/rq_pipeline/tasks/aloha2/kitting.py:L99-101` |
 | `reset(seed)` decides the start | `perturb(trial, home)` — deterministic corners by `trial % 4` | `aloha2.py:L313-320`, `L338-347`; `pipeline/rq_pipeline/evaluate/harness.py:L45-67` |
 | `info["is_success"]` per step | `success(states, sensors)` over the last `_HOLD_STEPS=250` physics steps (lifted AND held) — a tail predicate | `aloha2.py:L349-356`, `L102` |
 | `pc_success = nanmean` | `SimScore(successes, trials)` counts; `clopper_pearson`, `wilson`; `certify`, `fisher_rank_ci`, `top_pick_probability` | `harness.py:L79-90`; `pipeline/rq_pipeline/stats/intervals.py:L78`, `L107`; `pipeline/rq_pipeline/evaluate/certificate.py:L99`; `pipeline/rq_pipeline/stats/ranking.py:L101`, `L228` |
