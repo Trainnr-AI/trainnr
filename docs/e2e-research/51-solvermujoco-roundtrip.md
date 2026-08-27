@@ -44,9 +44,32 @@ control the servo response is a different actuator. The actuator
 damping is one of the parameters `mujoco.sysid` fits — the identified
 quantity most directly erased by the conversion.
 
-(Not verified: whether some import flag or the `mujoco:*`
-custom-attribute namespace can preserve kv — the emitted MJCF says the
-default path does not.)
+(Not verified at the time: whether some import flag or the `mujoco:*`
+custom-attribute namespace can preserve kv.)
+
+**Verified the next day, from the source** (the operator's pack of
+`newton` main, 1.6.0.dev0 — *newton/_src/utils/import_mjcf.py*
+`parse_actuators`, *newton/_src/solvers/mujoco/solver_mujoco.py*): the
+importer does read a `<position>` actuator's `kv` and stores it in
+`joint_target_kd` when `kv > 0`. Our servos never state one. Every
+SO-101 servo is authored `<position kp="50" dampratio="1"/>`, and
+**`dampratio` is resolved by MuJoCo's compiler** — `mj_setConst`
+computes `kd = dampratio · 2 √(kp · acc0)` from each joint's reflected
+inertia, which is why the compiled `biasprm[2]` reads −4.47…−5.13, six
+different numbers the XML never contains. Newton's importer takes the
+`dampratio` branch instead: it stores the ratio as a *positive
+placeholder* in `biasprm[2]` and leaves `joint_target_kd = 0`. On the
+way back, `SolverMuJoCo` recognises a positive `biasprm[2]` and calls
+`mj_setConst` to recompute it — but only for the `CTRL_DIRECT`
+actuator path; a `JOINT_TARGET` actuator is rebuilt from
+`joint_target_ke`/`joint_target_kd`, and `kd` is the zero. So the
+drop is specific and fixable upstream: the importer should resolve
+`dampratio` the way MuJoCo does (it has the compiled model to read
+`acc0` from) or carry the ratio through to the target-mode rebuild.
+`mujoco.rst`'s own "Unsupported MuJoCo features" list names sensors,
+cameras, lights, keyframes, composites, skins, plugins and user data —
+and not this; it is a bug, not a documented limit. Filed against
+nothing yet; the issue text is this paragraph.
 
 Combined verdict, sharpening docs/47 §3: crossing into Newton (engine)
 costs sensors, keyframes, visual geoms, the integrator choice, the

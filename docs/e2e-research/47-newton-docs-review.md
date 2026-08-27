@@ -96,7 +96,9 @@ Newton idioms — not an adapter, a port. MEASURED 2026-08-27
 round trip also drops all 13 visual meshes, rewrites the root body's
 mass, flips the integrator in the emitted file — and the importer
 zeroes the position servos' kv, so Newton simulates this robot with
-UNDAMPED servos: the very parameter sysid identifies.
+UNDAMPED servos: the very parameter sysid identifies. (Mechanism found
+2026-08-27 in their source: the importer reads an explicit `kv` but
+not MuJoCo's compiled `dampratio`, which our bundles author; docs/51.)
 
 ## 4. What is worth taking regardless: the tuning corpus
 
