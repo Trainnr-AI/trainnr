@@ -13,6 +13,7 @@ from rq_pipeline.evaluate.records import (
     disagreements,
     fold,
     funnel,
+    passes,
     read_records,
 )
 
@@ -130,6 +131,23 @@ class Fold(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             fold(rows)
         self.assertIn("'b'", str(caught.exception))
+
+    def test_passes_split_a_file_several_evaluations_appended_to(self) -> None:
+        """The trainer's in-loop eval appends one pass per checkpoint under
+        one policy name; a pass ends where a (policy, trial) recurs, and
+        each pass folds on its own (the first cloud run, 2026-08-27)."""
+        rows = [
+            record("inloop", 0, False),
+            record("inloop", 1, False),
+            record("inloop", 0, True),
+            record("inloop", 1, False),
+        ]
+        chunks = passes(rows)
+        self.assertEqual([len(c) for c in chunks], [2, 2])
+        self.assertEqual(fold(chunks[0]), (SimScore("inloop", 0, 2),))
+        self.assertEqual(fold(chunks[1]), (SimScore("inloop", 1, 2),))
+        self.assertEqual(passes([]), ())
+        self.assertEqual(len(passes(rows[:2])), 1)
 
     def test_duplicate_trial_is_refused(self) -> None:
         with self.assertRaises(ValueError):

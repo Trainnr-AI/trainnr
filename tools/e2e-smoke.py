@@ -41,7 +41,12 @@ bootstrap()
 from rq_pipeline.collect.kitting_export import export_kitting_demos  # noqa: E402
 from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
 from rq_pipeline.envs.lerobot_policy import best_device  # noqa: E402
-from rq_pipeline.evaluate.records import fold, funnel, read_records  # noqa: E402
+from rq_pipeline.evaluate.records import (  # noqa: E402
+    fold,
+    funnel,
+    passes,
+    read_records,
+)
 from rq_pipeline.stats.intervals import clopper_pearson  # noqa: E402
 from rq_pipeline.tasks.aloha2 import KITTING  # noqa: E402
 
@@ -424,20 +429,27 @@ def evaluate(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
 
 
 def report(path: Path) -> None:
+    """Counts, intervals, funnel, events — per pass, when the file holds
+    several (the trainer's in-loop eval appends one pass per checkpoint)."""
     records = read_records(path)
     print(
         f"{path}: {len(records)} records; "
         f"instrument {sorted({r.instrument for r in records})}; "
         f"source {sorted({r.source for r in records})}"
     )
-    for score in fold(records):
-        low, high = clopper_pearson(score.successes, score.trials)
+    chunks = passes(records)
+    for number, chunk in enumerate(chunks, start=1):
+        label = f"  pass {number}/{len(chunks)}: " if len(chunks) > 1 else "  "
+        for score in fold(chunk):
+            low, high = clopper_pearson(score.successes, score.trials)
+            print(
+                f"{label}{score.name}: {score.successes}/{score.trials}  "
+                f"CP95 [{low:.3f}, {high:.3f}]"
+            )
+        print(f"{label}funnel {funnel(chunk)}")
         print(
-            f"  {score.name}: {score.successes}/{score.trials}  CP95 [{low:.3f}, "
-            f"{high:.3f}]"
+            f"{label}events {[(r.trial, [e['name'] for e in r.events]) for r in chunk]}"
         )
-    print(f"  funnel {funnel(records)}")
-    print(f"  events {[(r.trial, [e['name'] for e in r.events]) for r in records]}")
 
 
 def stops_after(args: argparse.Namespace, stage_name: str) -> bool:

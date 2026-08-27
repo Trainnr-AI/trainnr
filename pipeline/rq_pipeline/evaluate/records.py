@@ -156,6 +156,31 @@ def read_records(path: Path) -> tuple[EpisodeRecord, ...]:
     return tuple(rows)
 
 
+def passes(records: Sequence[EpisodeRecord]) -> tuple[tuple[EpisodeRecord, ...], ...]:
+    """A file that several evaluations appended to, split back into them.
+
+    LeRobot's trainer evaluates at every checkpoint and our env appends
+    every episode to ONE file under one policy name, so trial 0 recurs
+    once per checkpoint — and `fold` rightly refuses a repeated
+    (policy, trial). A pass ends where a (policy, trial) is seen again;
+    each pass folds on its own (measured 2026-08-27: the first cloud
+    run's fold crashed on its own in-loop file).
+    """
+    out: list[list[EpisodeRecord]] = []
+    seen: set[tuple[str, int]] = set()
+    current: list[EpisodeRecord] = []
+    for record in records:
+        key = (record.policy, record.trial)
+        if key in seen:
+            out.append(current)
+            current, seen = [], set()
+        seen.add(key)
+        current.append(record)
+    if current:
+        out.append(current)
+    return tuple(tuple(chunk) for chunk in out)
+
+
 def fold(records: Sequence[EpisodeRecord]) -> tuple[SimScore, ...]:
     """Records → one `SimScore` per policy, in first-seen order.
 
