@@ -66,6 +66,19 @@ schema and the wire said:
   Hub, 2026-08-27) — CUDA 13, Ubuntu 24.04, sshd. The image's torch is
   irrelevant: the bootstrap builds our own `.venv-train` from the
   lockfile, exactly the WSL box's recipe.
+- **The first session, on the account's own B200** (`sqhor60yskfutj`,
+  secure, US-NC-2, 192 CPU cores, driver 580.126.09 / CUDA 13.0, a 50 GB
+  persistent volume at `/workspace`), 2026-08-27 night, measured:
+  the pod sat in "initializing" for **52 minutes** after `start` before
+  its container ran (billing started at the container, 22:04 IST);
+  `bootstrap` (apt + uv + the train venv, 128 packages) took **5 min**;
+  the smoke chain there: demos **45 s/episode** (the box: 95), the
+  PNG → AV1 convert **223 s/episode** (the box: 38 — slower cores),
+  ACT training **11.3 steps/s with 4 dataloader workers — slower than
+  the 3090 Ti's 14.8**: the AV1 decode per sample is the bottleneck,
+  not the card, hence the cloud preset's 16 workers. The pod's volume
+  refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
+  UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
 - The account held a **stopped B200 pod** (`$6.79/h` when running; a
   stopped pod bills its disk) when the tool first listed it. The tool
   reports; it never terminates on anyone's behalf.
@@ -94,6 +107,14 @@ and `--ssh-key` move the two files it reads. `run
 --deadline-min N` wraps the remote command in `timeout` (TERM, then
 KILL a minute later): a budget the machine enforces, not a clock
 someone watches; checkpoints written before it survive.
+
+**Six EGL renderers on WSL livelock.** Six parallel `kitting-demos`
+shards on the box's card each finished five episodes and then all
+parked in `futex_do_wait` at the same minute (2026-08-27, 29 of 50
+kept, nothing for 30 minutes at 98 % GPU). Three shards completed the
+rest without incident. Until the driver path is understood, three
+shards is the box's ceiling; on a native-EGL Linux box with 192 cores
+the same split has no such ceiling in principle, but is unmeasured.
 
 **Split the chain by what each box is good at.** The demos (a render
 per control tick, 95 s/episode) and the PNG → AV1 conversion (38
