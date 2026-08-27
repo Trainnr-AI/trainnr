@@ -43,8 +43,8 @@ from rq_pipeline.collect.kitting_export import export_kitting_demos  # noqa: E40
 from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
 from rq_pipeline.envs.lerobot_policy import best_device  # noqa: E402
 from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+    CHAIN_LOG_FILE,
     GPU_LOG_FILE,
-    TRAIN_LOG_FILE,
     RunManifest,
     watch_dir_for,
 )
@@ -295,47 +295,64 @@ def parse_args() -> argparse.Namespace:
 
 
 _CURRENT_STAGE = "start"
+_CHAIN_LOG: Path | None = None
+
+
+def open_chain_log(path: Path) -> None:
+    """From here on, every line this tool says and every line a stage's
+    subprocess prints also lands in `path` — the file the dashboard
+    follows, from the chain's first second."""
+    global _CHAIN_LOG  # noqa: PLW0603 - one file for the whole chain
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+    _CHAIN_LOG = path
+
+
+def say(text: str) -> None:
+    print(text, flush=True)
+    if _CHAIN_LOG is not None:
+        with _CHAIN_LOG.open("a", encoding="utf-8") as log:
+            log.write(text + "\n")
 
 
 def stage(title: str) -> float:
     global _CURRENT_STAGE  # noqa: PLW0603 - the one line a failure names
     _CURRENT_STAGE = title
-    print(f"\n=== {title} ({time.strftime('%H:%M:%S')}) ===", flush=True)
+    say(f"\n=== {title} ({time.strftime('%H:%M:%S')}) ===")
     return time.perf_counter()
 
 
 def done(started: float) -> None:
-    print(f"--- {time.perf_counter() - started:.0f} s", flush=True)
+    say(f"--- {time.perf_counter() - started:.0f} s")
 
 
 def run(command: list[str]) -> None:
-    print("$", " ".join(str(part) for part in command), flush=True)
-    try:
-        subprocess.run([str(part) for part in command], check=True)
-    except subprocess.CalledProcessError as error:
-        raise StageFailed(_CURRENT_STAGE, error.returncode) from None
-
-
-def run_teed(command: list[str], log_path: Path) -> None:
-    """Run it with its output on the terminal AND in `log_path`, line by
-    line as it happens — the file a dashboard follows (train-watch
-    --follow) on this box or, mirrored, from a rented one."""
+    """A stage's subprocess: its output on the terminal AND in the chain
+    log, line by line as it happens."""
     argv = [str(part) for part in command]
-    print("$", " ".join(argv), f"| tee {log_path}", flush=True)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-        )
-        assert process.stdout is not None
+    say("$ " + " ".join(argv))
+    process = subprocess.Popen(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+    )
+    assert process.stdout is not None
+    with _CHAIN_LOG.open("a", encoding="utf-8") if _CHAIN_LOG else _nowhere() as log:
         for line in process.stdout:
             sys.stdout.write(line)
             sys.stdout.flush()
-            log.write(line)
-            log.flush()
-        code = process.wait()
+            if log is not None:
+                log.write(line)
+                log.flush()
+    code = process.wait()
     if code:
         raise StageFailed(_CURRENT_STAGE, code)
+
+
+class _nowhere:  # noqa: N801 - a context manager standing in for no file
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *exc):
+        return False
 
 
 class GpuSampler:
@@ -437,17 +454,16 @@ def convert(layout: RunLayout) -> None:
     provenance = json.loads(
         (layout.dataset / "provenance.json").read_text(encoding="utf-8")
     )
-    print(
+    say(
         f"provenance: {provenance['bundle']}, expert {provenance['expert']}, "
         f"{provenance['episodes']} episodes, "
         f"{sum(provenance['frames'])} frames at {provenance['fps']} fps; gain scales "
-        f"{[round(m['gain_scale'], 2) for m in provenance['manifests']]}",
-        flush=True,
+        f"{[round(m['gain_scale'], 2) for m in provenance['manifests']]}"
     )
 
 
 def run_manifest(
-    layout: RunLayout, args: argparse.Namespace, device: str, command: list[str]
+    layout: RunLayout, args: argparse.Namespace, device: str, command: list[str] = ()
 ) -> RunManifest:
     """Every parameter of the run, plus the dataset's provenance, as one
     record the dashboard shows from step 0."""
@@ -508,12 +524,8 @@ def train(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
         extra=inloop,
     )
     manifest = run_manifest(layout, args, device, command).write(layout.watch)
-    print(f"run manifest: {manifest}", flush=True)
-    sampler = GpuSampler(layout.watch / GPU_LOG_FILE)
-    try:
-        run_teed(command, layout.watch / TRAIN_LOG_FILE)
-    finally:
-        sampler.stop()
+    say(f"run manifest: {manifest}")
+    run(command)
 
 
 def evaluate(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
@@ -568,7 +580,7 @@ def report(path: Path) -> None:
 def stops_after(args: argparse.Namespace, stage_name: str) -> bool:
     if args.until != stage_name:
         return False
-    print(f"\n--until {stage_name}: stopping here, as asked", flush=True)
+    say(f"\n--until {stage_name}: stopping here, as asked")
     return True
 
 
@@ -582,6 +594,18 @@ def main() -> None:
         skip_convert=args.skip_convert,
         force=args.force,
     )
+    # The sidecar opens before the first stage: the dashboard follows the
+    # demos and the convert too, not only the trainer.
+    open_chain_log(layout.watch / CHAIN_LOG_FILE)
+    say(f"run manifest: {run_manifest(layout, args, device).write(layout.watch)}")
+    sampler = GpuSampler(layout.watch / GPU_LOG_FILE)
+    try:
+        chain(layout, args, device)
+    finally:
+        sampler.stop()
+
+
+def chain(layout: RunLayout, args: argparse.Namespace, device: str) -> None:
     if not args.skip_demos:
         started = stage(
             f"demos: {args.episodes} kept at +-{DR_SPAN:.0%} DR -> {layout.demos}"
@@ -609,11 +633,9 @@ def main() -> None:
     stage("fold: counts, intervals, funnel")
     report(layout.inloop_records)
     report(layout.eval_records)
-    print(
+    say(
         f"\nplay it: train-watch --play {layout.checkpoint(args.steps)} --task "
-        f"{KITTING} "
-        "--action-space bundle --look aloha2",
-        flush=True,
+        f"{KITTING} --action-space bundle --look aloha2"
     )
 
 

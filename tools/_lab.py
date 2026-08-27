@@ -86,6 +86,48 @@ def viewer_executable() -> str | None:
     return None
 
 
+# The Rerun viewer decodes H.264 (LeRobot's eval videos) through an
+# external `ffmpeg` and wants at least this version; Ubuntu 22.04 ships
+# 4.4.2, and the viewer showed "Failed to decode" (2026-08-28).
+VIEWER_FFMPEG_MIN = (5, 1)
+VIEWER_BIN = REPO / "pipeline" / "runs" / ".viewer-bin"  # runs/ is git-ignored
+
+
+def ffmpeg_on_path() -> str | None:
+    """A modern `ffmpeg` on PATH for a viewer this process spawns: the
+    system one when it is new enough, else imageio-ffmpeg's bundled
+    static binary (in both venvs already, under its versioned name),
+    exposed under the plain name in a directory prepended to PATH.
+    Returns what the viewer will find, or None."""
+    import os  # noqa: PLC0415
+    import re  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    system = shutil.which("ffmpeg")
+    if system:
+        banner = subprocess.run(
+            [system, "-version"], capture_output=True, text=True, check=False
+        ).stdout
+        found = re.search(r"ffmpeg version (\d+)\.(\d+)", banner)
+        if found and (int(found.group(1)), int(found.group(2))) >= VIEWER_FFMPEG_MIN:
+            return system
+    try:
+        import imageio_ffmpeg  # noqa: PLC0415
+    except ImportError:
+        return system
+    bundled = Path(imageio_ffmpeg.get_ffmpeg_exe())
+    VIEWER_BIN.mkdir(parents=True, exist_ok=True)
+    exposed = VIEWER_BIN / ("ffmpeg.exe" if bundled.suffix == ".exe" else "ffmpeg")
+    if not exposed.exists():
+        try:
+            exposed.symlink_to(bundled)
+        except OSError:  # a filesystem without symlinks: copy the binary
+            shutil.copy2(bundled, exposed)
+    os.environ["PATH"] = str(VIEWER_BIN) + os.pathsep + os.environ.get("PATH", "")
+    return str(exposed)
+
+
 def rr_session(
     app_id: str,
     *,
@@ -102,6 +144,7 @@ def rr_session(
 
     kwargs = {"recording_id": recording_id} if recording_id is not None else {}
     rr.init(app_id, spawn=False, **kwargs)
+    ffmpeg_on_path()  # before the viewer is spawned: it inherits PATH
     spawn = {"executable_path": viewer_executable()}
     if mode == "spawn":
         rr.spawn(**spawn)

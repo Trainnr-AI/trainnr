@@ -41,8 +41,24 @@ EVAL_MARKER = "Suite overall aggregated:"
 _EVAL_FIELD = re.compile(r"'(pc_success|n_episodes|eval_s|avg_sum_reward)': ([\d.]+)")
 COUNT_FIELDS = ("step", "smpl", "ep")
 RUN_MANIFEST_FILE = "run.json"
-TRAIN_LOG_FILE = "train.log"
+# Every stage of the chain, teed as it happens — the demo attempts, the
+# convert, the trainer's lines, the evaluations — one file from the
+# chain's first second (a dashboard that opens at the train stage shows
+# an empty grid for minutes; measured 2026-08-28).
+CHAIN_LOG_FILE = "chain.log"
 GPU_LOG_FILE = "gpu.log"
+# The chain's own narration in that log: stage headers and timings, the
+# generator's verdicts, the batch's provenance line.
+STAGE_LINE = re.compile(
+    r"^(=== |--- \d+ s|attempt \d+: |kept \d+/|gave up|provenance: |run manifest: |"
+    r"--until |e2e-smoke: |play it: )"
+)
+
+
+def is_stage_line(line: str) -> bool:
+    return bool(STAGE_LINE.match(line))
+
+
 # The trainer refuses an output directory that already exists, so what
 # the chain writes BEFORE the trainer starts lives beside the run:
 # `runs/<name>-act` ↔ `runs/<name>-watch` (measured 2026-08-27).

@@ -48,16 +48,20 @@ extras; `--follow` needs only the sim and viz extras.
 """
 
 import argparse
+import bisect
 import json
+import re
 import signal
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 
 from _lab import (
     PREVIEW_EVERY_TICKS,
@@ -71,10 +75,11 @@ from _lab import (
 bootstrap()
 from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
 from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+    CHAIN_LOG_FILE,
     GPU_LOG_FILE,
-    TRAIN_LOG_FILE,
     FileFollower,
     RunManifest,
+    is_stage_line,
     parse_eval_line,
     parse_train_line,
     watch_dir_for,
@@ -212,13 +217,21 @@ def train_command(args, output_dir, device):
     )
 
 
+def at_step(step: int) -> None:
+    """Every panel readable on either timeline: the step, and the wall
+    clock of its arrival (the viewer picks one timeline; a series that
+    exists on only the other is invisible — the 2026-08-28 screenshot)."""
+    rr.set_time("train_step", sequence=step)
+    rr.set_time("wall", timestamp=np.datetime64(int(time.time() * 1e6), "us"))
+
+
 def log_train_line(line: str) -> int | None:
     """One trainer line to Rerun: a metrics line as `train/*` at its step
     (returned), an in-loop summary as `eval/inloop/pc_success`; anything
     else is not ours to parse."""
     parsed = parse_train_line(line)
     if parsed is not None:
-        rr.set_time("train_step", sequence=parsed.step)
+        at_step(parsed.step)
         for name, value in parsed.metrics.items():
             rr.log(f"train/{METRIC_NAMES.get(name, name)}", rr.Scalars(value))
         rr.log("train/samples", rr.Scalars(float(parsed.samples)))
@@ -393,7 +406,7 @@ class Watcher:
         from _lab import load_demo_actions  # noqa: PLC0415 - LeRobot's dataset
 
         actions = load_demo_actions(dataset_id, episode)
-        rr.set_time("train_step", sequence=0)
+        at_step(0)
 
         def controller(tick, observation):
             del observation
@@ -415,7 +428,7 @@ class Watcher:
         print(f"[watch] demo {episode}: {verdict}", flush=True)
 
     def play(self, checkpoint_dir: Path, step: int, action_space: str):
-        rr.set_time("train_step", sequence=step)
+        at_step(step)
         rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
         act, reset = checkpoint_controller(
             checkpoint_dir,
@@ -431,7 +444,7 @@ class Watcher:
             f"eval/{step:06d}",
             f"checkpoint {step}: playing trial 0",
         )
-        rr.set_time("train_step", sequence=step)
+        at_step(step)
         rr.log("eval/success", rr.Scalars(1.0 if success else 0.0))
         verdict = verdict_word(success)
         rr.log("stage", rr.TextLog(f"checkpoint {step}: {verdict}"))
@@ -462,27 +475,38 @@ class Follower:
     play: bool = False
     watcher: "Watcher | None" = None
     action_space: str = ActionSpace.BUNDLE
-    manifest_shown: bool = False
-    configs_shown: set = None
-    videos_shown: set = None
+    configs_shown: set = field(default_factory=set)
+    videos_shown: set = field(default_factory=set)
+    marked: set = field(default_factory=set)
+    # (wall time, step) of every metrics line: a GPU sample is placed at
+    # the step whose line precedes its own timestamp, so a replay of a
+    # finished log does not pile every sample onto the final step.
+    step_times: list = field(default_factory=list)
     passes_shown: int = 0
     final_shown: bool = False
     last_step: int = 0
 
     def __post_init__(self) -> None:
         self.watch_dir = watch_dir_for(self.run_dir)
-        self.log = FileFollower(self.watch_dir / TRAIN_LOG_FILE)
+        # The chain log, or the trainer-only log a chain before 2026-08-28
+        # wrote (a pod's mirror may still carry one).
+        self.log = FileFollower(self.watch_dir / CHAIN_LOG_FILE)
+        self.legacy_log = FileFollower(self.watch_dir / LEGACY_TRAIN_LOG_FILE)
+        self.manifest_mtime = 0.0
         self.gpu = FileFollower(self.watch_dir / GPU_LOG_FILE)
-        self.configs_shown = set()
-        self.videos_shown = set()
 
     # -- pieces ---------------------------------------------------------
 
     def manifest(self) -> None:
-        if self.manifest_shown or not (self.watch_dir / "run.json").exists():
+        """The chain writes it at its start and again at the train stage
+        (with the command and the dataset's provenance): shown whenever
+        it changes."""
+        path = self.watch_dir / "run.json"
+        if not path.exists() or path.stat().st_mtime == self.manifest_mtime:
             return
+        self.manifest_mtime = path.stat().st_mtime
         manifest = RunManifest.read(self.watch_dir)
-        rr.set_time("train_step", sequence=0)
+        at_step(0)
         rr.log(
             "config/run",
             rr.TextDocument(manifest.as_markdown(), media_type=rr.MediaType.MARKDOWN),
@@ -495,13 +519,20 @@ class Follower:
                 f"batch {manifest.batch_size}, started {manifest.started}"
             ),
         )
-        self.manifest_shown = True
 
     def trainer_lines(self) -> None:
-        for line in self.log.new_lines():
+        for line in self.log.new_lines() + self.legacy_log.new_lines():
             step = log_train_line(line)
             if step is not None:
                 self.last_step = step
+                stamp = LOGGER_STAMP.search(line)
+                if stamp:
+                    self.step_times.append(
+                        (datetime.fromisoformat(stamp.group(1)), step)
+                    )
+            elif is_stage_line(line):
+                at_step(self.last_step)
+                rr.log("stage", rr.TextLog(line.strip()))
 
     def gpu_samples(self) -> None:
         for line in self.gpu.new_lines():
@@ -514,9 +545,28 @@ class Follower:
                 mem = float(parts[2].split()[0])
             except (ValueError, IndexError):
                 continue
-            rr.set_time("wall", timestamp=np.datetime64(stamp.replace(" ", "T")[:26]))
-            rr.log("machine/gpu_util_pct", rr.Scalars(util))
-            rr.log("machine/gpu_mem_mib", rr.Scalars(mem))
+            # The sample's own clock, and the step it was taken during.
+            taken = datetime.fromisoformat(stamp.replace(" ", "T")[:26])
+            rr.set_time("train_step", sequence=self.step_at(taken))
+            rr.set_time("wall", timestamp=np.datetime64(taken))
+            for name, value in (("gpu_util_pct", util), ("gpu_mem_mib", mem)):
+                self.mark(f"machine/{name}")
+                rr.log(f"machine/{name}", rr.Scalars(value))
+
+    def step_at(self, moment: datetime) -> int:
+        """The step of the last metrics line logged before `moment`."""
+        if not self.step_times:
+            return 0
+        index = bisect.bisect_right([when for when, _ in self.step_times], moment)
+        return self.step_times[index - 1][1] if index else 0
+
+    def mark(self, path: str) -> None:
+        """Point markers on a series that may hold one sample per
+        checkpoint — a line needs two points to be seen at all."""
+        if path in self.marked:
+            return
+        rr.log(path, rr.SeriesPoints(markers="circle"), static=True)
+        self.marked.add(path)
 
     def checkpoints(self) -> list[int]:
         checkpoints = self.run_dir / "checkpoints"
@@ -529,7 +579,7 @@ class Follower:
             )
             if step in self.configs_shown or not config.exists():
                 continue
-            rr.set_time("train_step", sequence=step)
+            at_step(step)
             rr.log(
                 "config/trainer",
                 rr.TextDocument(
@@ -554,8 +604,9 @@ class Follower:
             if index >= len(steps):
                 return  # the checkpoint this pass belongs to is not here yet
             step = steps[index]
-            rr.set_time("train_step", sequence=step)
+            at_step(step)
             for score in fold(chunk):
+                self.mark("eval/inloop/success_rate")
                 rr.log(
                     "eval/inloop/success_rate",
                     rr.Scalars(score.successes / score.trials),
@@ -568,6 +619,7 @@ class Follower:
                 )
             for counts in funnel(chunk).values():
                 for milestone, count in zip(MILESTONES, counts, strict=False):
+                    self.mark(f"eval/inloop/funnel/{milestone}")
                     rr.log(
                         f"eval/inloop/funnel/{milestone}",
                         rr.Scalars(count / len(chunk)),
@@ -582,8 +634,8 @@ class Follower:
             ):
                 if video in self.videos_shown:
                     continue
-                rr.set_time("train_step", sequence=step)
-                rr.log(f"eval/video/{video.stem}", rr.AssetVideo(path=video))
+                at_step(step)
+                log_video(f"eval/video/{video.stem}", video, step)
                 self.videos_shown.add(video)
 
     def final_eval(self) -> None:
@@ -599,6 +651,7 @@ class Follower:
             sequence=max(self.last_step, max(self.configs_shown, default=0)),
         )
         for score in fold(chunks[0]):
+            self.mark("eval/final/success_rate")
             rr.log(
                 "eval/final/success_rate", rr.Scalars(score.successes / score.trials)
             )
@@ -615,11 +668,12 @@ class Follower:
             )
         for counts in funnel(chunks[0]).values():
             for milestone, count in zip(MILESTONES, counts, strict=False):
+                self.mark(f"eval/final/funnel/{milestone}")
                 rr.log(
                     f"eval/final/funnel/{milestone}", rr.Scalars(count / len(chunks[0]))
                 )
         for video in sorted(eval_dir.glob("videos/**/*.mp4")):
-            rr.log(f"eval/final/video/{video.stem}", rr.AssetVideo(path=video))
+            log_video(f"eval/final/video/{video.stem}", video, self.last_step)
         self.final_shown = True
 
     # -- the loop ----------------------------------------------------------
@@ -637,7 +691,100 @@ class Follower:
 
 
 MILESTONES = ("part_moved", "part_lifted", "one_in_slot", "both_in_slot")
+LOGGER_STAMP = re.compile(r"INFO (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)")
+
+
+def log_video(entity: str, path: Path, step: int) -> None:
+    """A video the viewer can play: the asset, and one frame reference per
+    frame on its own `video_time` timeline (an asset alone shows nothing)."""
+    asset = rr.AssetVideo(path=path)
+    rr.log(entity, asset)
+    stamps = np.asarray(asset.read_frame_timestamps_nanos())
+    if not len(stamps):
+        return
+    rr.send_columns(
+        entity,
+        indexes=[
+            rr.TimeColumn("video_time", duration=stamps * 1e-9),
+            rr.TimeColumn("train_step", sequence=np.full(len(stamps), step)),
+        ],
+        columns=rr.VideoFrameReference.columns_nanos(stamps),
+    )
+
+
+LEGACY_TRAIN_LOG_FILE = "train.log"  # the sidecar's trainer-only log before 2026-08-28
 GPU_SAMPLE_FIELDS = 3  # nvidia-smi: timestamp, utilization.gpu, memory.used
+
+
+def dashboard_blueprint(play: bool) -> rrb.Blueprint:
+    """The panels in the order a reader wants them: what the run IS
+    (manifest, trainer config, the stage log); how it is going (loss,
+    learning rate, gradient norm; the evaluations; the machine); and,
+    when checkpoints are played, what the policy sees and the rig."""
+    top = rrb.Horizontal(
+        rrb.TextDocumentView(origin="config/run", name="run"),
+        rrb.TextDocumentView(origin="config/trainer", name="trainer config"),
+        rrb.TextLogView(origin="stage", name="stage"),
+    )
+    curves = rrb.Horizontal(
+        rrb.TimeSeriesView(
+            origin="train",
+            contents=["train/loss", "train/l1_loss", "train/kld_loss"],
+            name="loss",
+        ),
+        rrb.TimeSeriesView(origin="train", contents="train/lr", name="learning rate"),
+        rrb.TimeSeriesView(
+            origin="train", contents="train/grad_norm", name="gradient norm"
+        ),
+        rrb.TimeSeriesView(
+            origin="train",
+            contents=["train/samples_per_s", "train/update_s", "train/dataloading_s"],
+            name="throughput",
+        ),
+    )
+    # Rerun's filters take `path/**` at the END of a path and `- path` to
+    # exclude; `eval/**/top` matches nothing (measured 2026-08-28).
+    rates = ["+ $origin/success_rate", "+ $origin/funnel/**"]
+    evaluation = rrb.Horizontal(
+        rrb.TimeSeriesView(
+            origin="eval/inloop", contents=rates, name="in-loop eval (rate, funnel)"
+        ),
+        rrb.TimeSeriesView(
+            origin="eval/final", contents=rates, name="paired eval (rate, funnel)"
+        ),
+        rrb.TimeSeriesView(origin="machine", name="machine (nvidia-smi)"),
+    )
+    videos = rrb.Horizontal(
+        rrb.Spatial2DView(origin="eval/video", name="in-loop eval videos"),
+        rrb.Spatial2DView(origin="eval/final/video", name="paired eval videos"),
+    )
+    rows = [top, curves, evaluation, videos]
+    if play:
+        played = [
+            "+ eval/**",
+            "- eval/inloop/**",
+            "- eval/final/**",
+            "- eval/video/**",
+            "- eval/success",
+        ]
+        rows.append(
+            rrb.Horizontal(
+                rrb.Spatial2DView(
+                    origin="eval", contents=played, name="the policy's camera"
+                ),
+                rrb.Spatial3DView(origin="world", name="the rig"),
+                rrb.TimeSeriesView(
+                    origin="eval", contents=played, name="object height"
+                ),
+            )
+        )
+    # The training dimension is the default timeline; every series also
+    # carries the wall clock, so the other choice reads too.
+    return rrb.Blueprint(
+        rrb.Vertical(*rows),
+        rrb.TimePanel(timeline="train_step"),
+        collapse_panels=False,
+    )
 
 
 def follow(args) -> None:
@@ -645,9 +792,12 @@ def follow(args) -> None:
     rr_session(
         f"robotiq-follow-{run_dir.name}", mode="spawn", world_up=args.play_checkpoints
     )
+    rr.send_blueprint(dashboard_blueprint(args.play_checkpoints))
     if args.rrd is not None:
+        # Both sinks: `rr.save()` alone REPLACES the viewer connection, and
+        # the window stays empty while the file fills (measured 2026-08-28).
         args.rrd.parent.mkdir(parents=True, exist_ok=True)
-        rr.save(str(args.rrd))
+        rr.set_sinks(rr.GrpcSink(), rr.FileSink(str(args.rrd)))
     watcher = None
     if args.play_checkpoints:
         from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415

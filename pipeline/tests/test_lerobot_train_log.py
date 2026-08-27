@@ -9,6 +9,7 @@ from pathlib import Path
 from rq_pipeline.envs.lerobot_train_log import (
     FileFollower,
     RunManifest,
+    is_stage_line,
     parse_big_number,
     parse_eval_line,
     parse_train_line,
@@ -71,6 +72,26 @@ class TheMetricsLine(unittest.TestCase):
         self.assertEqual(summary.pc_success, 50.0)
         self.assertEqual(summary.n_episodes, 2)
         self.assertAlmostEqual(summary.eval_s, 85.54, places=2)
+
+
+class TheStageLines(unittest.TestCase):
+    def test_the_chains_narration_is_recognised(self) -> None:
+        for line in (
+            "=== demos: 1 kept at +-30% DR -> runs/x-demos (00:21:05) ===",
+            "--- 91 s",
+            "attempt 1: KEEP (damping x1.21, gain x0.93, retries 0)",
+            "kept 1/1 episodes -> runs/x-demos (episodes 0..0)",
+            "provenance: aloha2-nominal@80ee6fd7ef99, expert kitting-expert@2d",
+            "play it: train-watch --play runs/x-act/checkpoints/000300/pretrained",
+        ):
+            self.assertTrue(is_stage_line(line), line)
+        for line in (
+            METRICS_LINE,
+            "Training:  12%|  | 50/400",
+            "$ lerobot-train …",
+            "",
+        ):
+            self.assertFalse(is_stage_line(line), line)
 
 
 class TheRunManifest(unittest.TestCase):

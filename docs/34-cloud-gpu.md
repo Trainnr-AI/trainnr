@@ -129,12 +129,15 @@ rest without incident. Until the driver path is understood, three
 shards is the box's ceiling; on a native-EGL Linux box with 192 cores
 the same split has no such ceiling in principle, but is unmeasured.
 
-**Watch it as it trains.** The chain's train stage writes a sidecar
-beside the trainer's directory — `runs/<name>-watch/` with the run
-manifest (every parameter, the dataset's bundle and expert stamps, the
-command line), the trainer's log teed as it happens, and `nvidia-smi`
-samples — because the trainer refuses an output directory that already
-exists. `train-watch.py --follow runs/<name>-act` streams those files
+**Watch it as it trains.** The chain writes a sidecar beside the
+trainer's directory from its first second — `runs/<name>-watch/` with
+the run manifest (every parameter, the dataset's bundle and expert
+stamps, the command line; written at the start and again at the train
+stage), every stage's output teed into `chain.log` as it happens (the
+demo attempts and the convert included — a dashboard that opened at the
+train stage showed an empty grid for minutes, 2026-08-28), and
+`nvidia-smi` samples — beside, because the trainer refuses an output
+directory that already exists. `train-watch.py --follow runs/<name>-act` streams those files
 into Rerun: the manifest as a text panel from step 0, the metrics
 lines as `train/*`, the in-loop and final records as `eval/*` (success
 rate and the milestone funnel per checkpoint, the eval videos), the
