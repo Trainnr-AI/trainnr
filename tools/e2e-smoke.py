@@ -291,7 +291,11 @@ def prepare(
     output directory after minutes of work, and a smaller batch would
     inherit stale episodes. `--force` removes the earlier artifacts —
     never the ones a --skip flag says to reuse."""
-    if skip_demos and not layout.demos.is_dir():
+    # A reused dataset needs no batch beside it: the dataset carries every
+    # manifest in its provenance, and the machine that trains never
+    # needs the frames (measured 2026-08-27: a refusal on the pod, which
+    # held the dataset and not the demos, by design).
+    if skip_demos and not skip_convert and not layout.demos.is_dir():
         raise SystemExit(f"e2e-smoke: --skip-demos but no batch at {layout.demos}")
     if skip_convert and not layout.dataset.is_dir():
         raise SystemExit(
