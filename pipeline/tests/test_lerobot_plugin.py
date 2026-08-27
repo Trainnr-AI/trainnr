@@ -16,6 +16,7 @@ TRAIN_PRESENT = (
 SERVOS = 14
 TOP_CAMERA_HW = (480, 640)
 ALOHA_TICKS = 400  # 4000 physics steps / control every 10
+EXECUTED_HORIZON = 10  # 0.2 s of a 2 s chunk before the policy is asked again
 # A per-machine artifact: the WSL card's T5 checkpoint. Point elsewhere with
 # the env var; absent, the checkpoint-backed test skips and says so.
 T5_CHECKPOINT = Path(
@@ -101,6 +102,20 @@ class ThroughLeRobot(unittest.TestCase):
             action = loaded.act(observation)
             self.assertEqual(action.shape, (SERVOS,))
             self.assertTrue(env.action_space.contains(action.astype("float32")))
+            # The chunk path: the whole prediction, de-normalised, and the
+            # scheduler executing it on the protocol's horizon.
+            from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: PLC0415
+
+            chunk = loaded.predict(observation)
+            self.assertEqual(chunk.shape[1], SERVOS)
+            self.assertGreaterEqual(chunk.shape[0], 1)
+            scheduler = ActionScheduler(
+                loaded.as_chunk_policy(), executed_horizon=EXECUTED_HORIZON, nu=SERVOS
+            )
+            scheduler.reset()
+            first = scheduler.act(observation)
+            self.assertEqual(first.shape, (SERVOS,))
+            self.assertTrue(env.action_space.contains(first.astype("float32")))
         finally:
             env.close()
 

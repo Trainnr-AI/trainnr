@@ -72,6 +72,7 @@ from rq_pipeline.robot.model_checks import assert_model_alive
 from rq_pipeline.tasks.registry import resolve, tasks
 
 PROTOCOL_VARIATIONS_FIELD = "variations"
+PROTOCOL_INSTRUCTION_FIELD = "instruction"
 
 
 @functools.cache
@@ -175,8 +176,12 @@ class RobotiqEnv(gym.Env):
         # description enters the fields, so the hash — and every draw —
         # changes when a knob does.
         self.variations = tuple(variations)
+        # The instruction a language-conditioned policy is given is part
+        # of the protocol's identity too (docs/e2e-research/43 §3 item 4):
+        # two evaluations that differ only in wording are two protocols.
         self._protocol_fields = {
             **protocol_fields(task.protocol),
+            PROTOCOL_INSTRUCTION_FIELD: task.instruction,
             PROTOCOL_VARIATIONS_FIELD: describe(self.variations),
         }
         self._protocol_hash = protocol_hash(self._protocol_fields)

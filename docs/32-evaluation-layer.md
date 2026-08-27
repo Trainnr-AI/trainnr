@@ -453,7 +453,7 @@ Still open after it, with the reason each one waits:
    first `reset` inside the worker to dodge stale EGL contexts under
    `forkserver`; our `mujoco.Renderer` needs the same deferral before
    `batch_size > 1` is trusted on this box.
-2. Executed action horizon: inside the env (GR00T's `MultiStepWrapper`
+2. Executed action horizon: inside the env (GR00T's `MultiStepWrapper` — **built 2026-08-27** (`executed_horizon`, `evaluate/scheduler.py`).
    shape, visible to every client) or in `EpisodeProtocol` (report 43)?
    Decide before the record schema freezes — it is a field either way.
 3. Hub publishing: does a pinned `@<commit>` satisfy the `source@hash`

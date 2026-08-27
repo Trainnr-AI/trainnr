@@ -117,8 +117,18 @@ class EpisodeProtocol:
     # Where each free body must start (`Placement`); the engine checks
     # every trial's start against these before any episode is spent.
     placements: tuple[Placement, ...] = ()
+    # How many control ticks of a policy's predicted chunk are executed
+    # before it is asked again (`evaluate/scheduler.py`). None: the policy
+    # replans on its own terms (a LeRobot checkpoint's `n_action_steps`),
+    # and the record says so by its absence. A number here is hashed with
+    # the trials: two runs differing only in replan rate are two protocols.
+    executed_horizon: int | None = None
 
     def __post_init__(self) -> None:
+        if self.executed_horizon is not None and self.executed_horizon <= 0:
+            raise ValueError(
+                f"executed_horizon must be positive, got {self.executed_horizon}"
+            )
         for field_name, value in (
             ("trials", self.trials),
             ("steps", self.steps),
@@ -175,4 +185,6 @@ def protocol_fields(protocol: EpisodeProtocol) -> dict[str, Any]:
         fields["observables"] = list(protocol.observables)
     if protocol.placements:  # likewise
         fields["placements"] = [placement_fields(p) for p in protocol.placements]
+    if protocol.executed_horizon is not None:  # likewise
+        fields["executed_horizon"] = protocol.executed_horizon
     return fields

@@ -41,6 +41,13 @@ gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # moves by decision, never as a dependency side effect.
 mjx = ["mujoco-mjx[warp]~=3.11.0"]
 viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+# openpi's own websocket client (rq_pipeline/envs/openpi_policy.py): pi0 /
+# pi0.5 served from their process, evaluated through our env. Pinned to the
+# commit it was read at (docs/e2e-research/43); not on PyPI. Its numpy<2 pin
+# is overridden below - measured working on numpy 2.2 (2026-08-27).
+remote = [
+    "openpi-client @ git+https://github.com/Physical-Intelligence/openpi.git@215abfb217dbac7d5f1273282331b9b1866c0479#subdirectory=packages/openpi-client",
+]
 
 # The task registry's plugin door (rq_pipeline/tasks/registry.py): a third
 # party lists its task module here under its own name and `lerobot-eval
@@ -63,6 +70,12 @@ include = ["rq_pipeline*"]
 # the crates, and the pre-commit gate runs it the same way. Rules mirror
 # docs/18-code-quality.md: no unused anything, no shadowed builtins,
 # modern syntax for the real floor, complexity kept visible.
+[tool.uv]
+# openpi-client declares numpy<2 (its pyproject, 2026-08-27); the client's
+# msgpack-numpy codec round-trips on numpy 2.2 (measured) and the train
+# venv's torch/mujoco/jax need numpy 2, so the pin is overridden here, once.
+override-dependencies = ["numpy>=1.26"]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 88

@@ -24,8 +24,8 @@ Architecture, stage roadmap and the design decisions behind them:
 | `rq_pipeline/robot` | Fail-loudly model gates, fit records with spread verdicts, damped-least-squares arm IK, `mujoco.sysid` identification. A USD import that silently drops actuators is refused, not discovered in week three. |
 | `rq_pipeline/collect` | The wire in: status-line parsing, frame assembly, CSV/excitation ingest, LeRobot dataset export. |
 | `rq_pipeline/tasks` | Scene builders + episode protocols, self-registering (`@register`, the `rq_pipeline.tasks` entry-point group for plugins): SO-101 (reach/lift/stack/insert), ALOHA 2 (transfer, kitting + its scripted demo generator), the mobile-manipulator rig. |
-| `rq_pipeline/evaluate` | The judge: paired-trial protocols with milestone chains, the per-trial record and its fold, variations drawn by trial index, camera rigs as data, sim↔real certificates. |
-| `rq_pipeline/envs` | The ecosystem's door: every registered task as a gymnasium env (`gym.make("robotiq/kitting-v0")`) with paired starts through the seed and its contract strings in one place (`contract.py`), plus the LeRobot `EnvConfig` that lets `lerobot-eval` and `lerobot-train` run our rollouts (`--env.type=robotiq --env.task=<id> --env.discover_packages_path=rq_pipeline.envs`) and LeRobot's policy loader for tools. The judge stays in `evaluate`. |
+| `rq_pipeline/evaluate` | The judge: paired-trial protocols with milestone chains, the per-trial record and its fold, variations drawn by trial index, camera rigs as data, sim↔real certificates. `scheduler.py`: a chunk-predicting policy executed on the protocol's own horizon, every fetch checked. |
+| `rq_pipeline/envs` | The ecosystem's door: every registered task as a gymnasium env (`gym.make("robotiq/kitting-v0")`) with paired starts through the seed and its contract strings in one place (`contract.py`), plus the LeRobot `EnvConfig` that lets `lerobot-eval` and `lerobot-train` run our rollouts (`--env.type=robotiq --env.task=<id> --env.discover_packages_path=rq_pipeline.envs`) and LeRobot's policy loader for tools. The judge stays in `evaluate`. `openpi_policy.py`: a policy served by openpi as a chunk policy, over their own client. |
 
 The layer chain — `stats ← bundles, protocol, robot.model_checks ←
 evaluate ← physics, tasks, collect, robot (sysid) ← envs ← tools` — is
@@ -47,8 +47,9 @@ Optional extras pull the heavy stages when a machine can carry them:
 the identified artifact, docs/e2e-research/49 — and gymnasium), `--extra train`
 (LeRobot, needs Python ≥ 3.12), `--extra mjx` (MJX-Warp, the batched second
 engine; runs on Warp's CPU backend anywhere, fast on an NVIDIA GPU),
-`--extra gpu` (MuJoCo Warp itself, NVIDIA only), `--extra viz` (the Rerun
-viewer the tools log to).
+`--extra gpu` (MuJoCo Warp itself, NVIDIA only), `--extra remote` (openpi's
+websocket client, for pi0 / pi0.5 served from their process), `--extra viz`
+(the Rerun viewer the tools log to).
 
 Two environment facts that cost an afternoon each, recorded so they
 cost nothing again:

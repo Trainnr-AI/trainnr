@@ -37,6 +37,7 @@ import signal
 import subprocess
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import mujoco.viewer
@@ -56,7 +57,14 @@ from _lab import (
 bootstrap()
 from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
 from rq_pipeline.envs.lerobot_policy import best_device, load_policy  # noqa: E402
+from rq_pipeline.envs.openpi_policy import (  # noqa: E402
+    DEFAULT_PORT,
+    OpenpiKeys,
+    OpenpiRequest,
+    openpi_chunk_policy,
+)
 from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: E402
+from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: E402
 from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     ACT_SIM_LOOK,
     CUBE_Z_STATE_INDEX,
@@ -127,6 +135,21 @@ def parse_args():
         help="which ALOHA 2 task the checkpoint plays (kitting for T5's)",
     )
     parser.add_argument(
+        "--executed-horizon",
+        type=int,
+        default=None,
+        help="execute this many control ticks of each predicted chunk before "
+        "asking the policy again (the protocol's horizon, hashed); default: "
+        "the checkpoint's own n_action_steps",
+    )
+    parser.add_argument(
+        "--openpi",
+        default=None,
+        metavar="HOST[:PORT]",
+        help="play a policy served by openpi (pi0 / pi0.5) instead of a "
+        "checkpoint; needs --executed-horizon and the 'remote' extra",
+    )
+    parser.add_argument(
         "--action-space",
         default=ActionSpace.ACT_SIM,
         choices=(ActionSpace.ACT_SIM, ActionSpace.BUNDLE),
@@ -168,11 +191,51 @@ def tail_training(process, seen_steps):
         seen_steps.append(step)
 
 
-def checkpoint_controller(path: Path, action_space: str, instruction: str, device: str):
+def scheduled(policy, executed_horizon: int, nu: int):
+    """A chunk policy executed on OUR horizon: `(act, reset)`."""
+    scheduler = ActionScheduler(policy, executed_horizon=executed_horizon, nu=nu)
+    return scheduler.act, scheduler.reset
+
+
+def openpi_controller(address: str, env, executed_horizon: int | None):
+    """A policy served by openpi, on the protocol's horizon; the first
+    camera feeds their `cam_high`, the env's instruction is the prompt."""
+    if executed_horizon is None:
+        raise SystemExit(
+            "--openpi needs --executed-horizon: the server's chunk is executed "
+            "on OUR horizon"
+        )
+    host, _, port = address.partition(":")
+    policy = openpi_chunk_policy(
+        host,
+        int(port) if port else DEFAULT_PORT,
+        request=OpenpiRequest(
+            cameras={env.cameras[0].key: OpenpiKeys.ALOHA_CAMERAS[0]},
+            prompt=env.task_description,
+        ),
+    )
+    return scheduled(policy, executed_horizon, env.action_space.shape[0])
+
+
+def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
+    path: Path,
+    action_space: str,
+    instruction: str,
+    device: str,
+    *,
+    executed_horizon: int | None = None,
+    nu: int | None = None,
+):
     """The checkpoint as `act(observation) -> ctrl` plus its reset; the
     gym-aloha convention (normalised grippers) wrapped around the model
-    call when the checkpoint speaks it."""
+    call when the checkpoint speaks it. With `executed_horizon`, the
+    checkpoint's chunk is executed on that horizon instead of its own."""
     loaded = load_policy(path, instruction=instruction, device=device)
+    if executed_horizon is not None:
+        if nu is None:
+            raise ValueError("executed_horizon needs nu")
+        act, reset = scheduled(loaded.as_chunk_policy(), executed_horizon, nu)
+        loaded = replace(loaded, act=act, reset=reset)
     if action_space != ActionSpace.ACT_SIM:
         return loaded.act, loaded.reset
 
@@ -189,7 +252,10 @@ def checkpoint_controller(path: Path, action_space: str, instruction: str, devic
 class Watcher:
     """The env, the viewer, the mirror: plays one episode per checkpoint."""
 
-    def __init__(self, look: str, task: str, device: str):
+    def __init__(
+        self, look: str, task: str, device: str, executed_horizon: int | None = None
+    ):
+        self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)
         self.env = RobotiqEnv(built, source=bundle_source(built.bundle_dir))
         self.device = device
@@ -267,7 +333,12 @@ class Watcher:
         rr.set_time("train_step", sequence=step)
         rr.log("stage", rr.TextLog(f"checkpoint {step}: loading"))
         act, reset = checkpoint_controller(
-            checkpoint_dir, action_space, self.env.task_description, self.device
+            checkpoint_dir,
+            action_space,
+            self.env.task_description,
+            self.device,
+            executed_horizon=self.executed_horizon,
+            nu=self.env.action_space.shape[0],
         )
         reset()
         success = self._episode(
@@ -302,14 +373,25 @@ def _exit_on_sigterm(signum, frame):
 
 def play_only(args) -> None:
     """Watch one checkpoint: every paired start, both viewers, no training."""
-    checkpoint = Path(args.play)
-    rr_session(f"robotiq-play-{checkpoint.parent.name}", mode="spawn")
     device = best_device(args.device)
-    watcher = Watcher(args.look, args.task, device)
-    act, reset = checkpoint_controller(
-        checkpoint, args.action_space, watcher.env.task_description, device
-    )
-    name = checkpoint.parent.name
+    if args.openpi:
+        name = f"openpi-{args.openpi.replace(':', '-')}"
+        rr_session(f"robotiq-play-{name}", mode="spawn")
+        watcher = Watcher(args.look, args.task, device, args.executed_horizon)
+        act, reset = openpi_controller(args.openpi, watcher.env, args.executed_horizon)
+    else:
+        checkpoint = Path(args.play)
+        name = checkpoint.parent.name
+        rr_session(f"robotiq-play-{name}", mode="spawn")
+        watcher = Watcher(args.look, args.task, device, args.executed_horizon)
+        act, reset = checkpoint_controller(
+            checkpoint,
+            args.action_space,
+            watcher.env.task_description,
+            device,
+            executed_horizon=args.executed_horizon,
+            nu=watcher.env.action_space.shape[0],
+        )
     successes = 0
     for trial in range(args.trials):
         reset()
@@ -335,7 +417,7 @@ def play_only(args) -> None:
 def main() -> None:
     signal.signal(signal.SIGTERM, _exit_on_sigterm)
     args = parse_args()
-    if args.play:
+    if args.play or args.openpi:
         play_only(args)
         return
     output_dir = Path(args.runs) / args.name
@@ -354,7 +436,7 @@ def main() -> None:
         target=tail_training, args=(process, seen_steps), daemon=True
     ).start()
 
-    watcher = Watcher(args.look, args.task, device)
+    watcher = Watcher(args.look, args.task, device, args.executed_horizon)
     checkpoints = output_dir / "checkpoints"
     try:
         for episode in range(args.replay_demos):
