@@ -22,12 +22,14 @@ license = "FSL-1.1-ALv2"
 # re-export egui, so this repo states the match explicitly rather than
 # relying on Cargo to resolve it silently. Bump all three together.
 [dependencies]
+agent-client-protocol = "2.0.0"
 eframe = { version = "0.36.1", default-features = false, features = [
     "wgpu",
     "default_fonts",
 ] }
 egui = "0.36.1"
 re_ui = "0.36.3"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 # This standalone workspace has no [workspace.lints] to inherit from (see
 # firmware/Cargo.toml — same shape, same absence). Restated directly instead
