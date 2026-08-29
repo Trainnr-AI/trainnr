@@ -133,6 +133,7 @@ robotiq/
 
 Product and research, first:
 
+- [`docs/35-the-studio.md`](docs/35-the-studio.md) — the app: a GPU-first, agentic, sim2real native platform, phased
 - [`docs/29-the-platform.md`](docs/29-the-platform.md) — the destination: the two-sided platform, mapped and fenced
 - [`docs/25-strategy-review-2026-08-24.md`](docs/25-strategy-review-2026-08-24.md) — the strategy: verdict, critical path, operator's list
 - [`docs/22-pipeline-architecture.md`](docs/22-pipeline-architecture.md) — the codebase map and its contracts
