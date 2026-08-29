@@ -1,0 +1,37 @@
+# Its own workspace, deliberately not a member of the repo root's — see the
+# root Cargo.toml's `exclude` comment for why (rerun 0.35 vs re_ui 0.36.x
+# wasm-bindgen conflict). Own Cargo.lock, same fix `firmware/Cargo.toml`
+# already uses for an analogous reason.
+[workspace]
+
+[package]
+name = "studio-shell"
+version = "0.1.0"
+edition = "2021"
+license = "FSL-1.1-ALv2"
+
+# The empty shell for docs/35-the-studio.md: a native window, styled with
+# Rerun's own theme, with two placeholder panels standing in for the two
+# real subsystems that land later — a MuJoCo-rendered 3D viewport and an
+# agent-client-protocol session panel. Neither exists yet; this crate only
+# proves the window opens, looks right, and runs on both machines this repo
+# is built on (Mac arm64, WSL x86_64) before either is wired in.
+#
+# egui/eframe pinned to match re_ui 0.36.3's own pin (checked 2026-08-30
+# against re_ui's Cargo.toml: egui ^0.36.1, eframe ^0.36.1) — re_ui does not
+# re-export egui, so this repo states the match explicitly rather than
+# relying on Cargo to resolve it silently. Bump all three together.
+[dependencies]
+eframe = { version = "0.36.1", default-features = false, features = [
+    "wgpu",
+    "default_fonts",
+] }
+egui = "0.36.1"
+re_ui = "0.36.3"
+
+# This standalone workspace has no [workspace.lints] to inherit from (see
+# firmware/Cargo.toml — same shape, same absence). Restated directly instead
+# of silently dropped: no unsafe code in this crate, `forbid` so it can't be
+# switched off locally with an `#[allow]`.
+[lints.rust]
+unsafe_code = "forbid"

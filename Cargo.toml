@@ -19,7 +19,15 @@ members = [
 # Firmware builds for a different CPU (ARM Cortex-M) with no_std — it lives
 # outside this workspace so `cargo test` here never tries to build it for
 # the Mac.
-exclude = ["firmware"]
+#
+# studio-shell depends on re_ui 0.36.x (eframe/egui 0.36.1, wasm-bindgen
+# =0.2.126), which conflicts with this workspace's `rerun = "0.35"` pin
+# (re_viewer 0.35.0 exact-pins wasm-bindgen =0.2.117 — checked 2026-08-30,
+# `cargo build` fails to resolve both in one lock file). It carries its own
+# `[workspace]` and `Cargo.lock`, same fix as firmware's, for the same
+# reason: one crate on a different dependency generation than everyone
+# else. Build it with `cd crates/studio-shell && cargo build`.
+exclude = ["firmware", "crates/studio-shell"]
 
 [workspace.package]
 edition = "2021"
