@@ -35,6 +35,10 @@ const AGENT_PANEL_DEFAULT_WIDTH: f32 = 360.0;
 /// A permission prompt's tool title can be a full multi-line shell
 /// command; past this height it scrolls instead of pushing the layout.
 const PERMISSION_TITLE_MAX_HEIGHT: f32 = 120.0;
+/// Width of the macOS traffic-light cluster the brand bar must clear
+/// (the window uses a fullsize content view).
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
 /// The MuJoCo viewport's starting height above the Rerun viewer, and the
 /// floor it can be dragged down to — a panel that can collapse to an
 /// invisible sliver looks like a missing feature, not a closed panel
@@ -58,7 +62,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut native_options = re_viewer::native::eframe_options(None);
-    native_options.viewport = native_options.viewport.with_app_id("robotiq_studio");
+    // Our own dock/window icon in place of the Rerun logo the viewer's
+    // eframe options install. Raw RGBA committed beside a generator with
+    // provenance (tools/gen-app-icon.py) — no PNG decoder in the tree.
+    let icon = egui::IconData {
+        rgba: include_bytes!("../assets/icon-256.rgba").to_vec(),
+        width: 256,
+        height: 256,
+    };
+    native_options.viewport = native_options
+        .viewport
+        .with_app_id("robotiq_studio")
+        .with_icon(std::sync::Arc::new(icon));
 
     eframe::run_native(
         "robotiq studio",
@@ -66,11 +81,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(move |cc| {
             re_viewer::customize_eframe_and_setup_renderer(cc)?;
 
+            // The viewer's own top bar is hidden via its sanctioned
+            // override: painting our wordmark OVER its logo was tried
+            // and looked exactly like the patch it was (the wordmark
+            // peeked out beneath the overlay). One header, ours — the
+            // brand bar below carries the panel toggles the viewer's bar
+            // would have offered.
+            let mut startup_options = re_viewer::StartupOptions::default();
+            startup_options.panel_state_overrides.top =
+                Some(rerun::external::re_sdk_types::blueprint::components::PanelState::Hidden);
+
             let mut rerun_app = re_viewer::App::new(
                 main_thread_token,
                 re_viewer::build_info(),
                 re_viewer::AppEnvironment::Custom("robotiq studio".to_owned()),
-                re_viewer::StartupOptions::default(),
+                startup_options,
                 cc,
                 None,
                 re_viewer::AsyncRuntimeHandle::from_current_tokio_runtime_or_wasmbindgen()?,
@@ -126,17 +151,37 @@ impl eframe::App for StudioShell {
         self.agent.drain_into(&mut self.transcript);
         let pending = self.agent.pending_permission();
 
-        // The app's own identity strip. The dock icon needs .app bundle
-        // packaging on macOS (a distribution step, not a runtime call),
-        // and the viewer pane's "rerun" wordmark honestly labels the
-        // embedded viewer — this bar is the part that is ours to brand.
+        // The window's one header: wordmark left, the viewer's panel
+        // toggles right (its own top bar is hidden — see the startup
+        // override). Same icons, same commands as the native bar.
         egui::Panel::top("brand_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
+                #[cfg(target_os = "macos")]
+                ui.add_space(TRAFFIC_LIGHTS_INSET);
                 ui.add_space(4.0);
-                let accent = ui.tokens().alert_warning.icon;
+                let accent = ui.tokens().alert_info.icon;
                 ui.label(egui::RichText::new("●").color(accent));
                 ui.label(egui::RichText::new("robotiq studio").strong().size(15.0));
                 ui.weak("· measure, don't guess");
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    use re_ui::{UICommand, UICommandSender as _};
+                    let sender = &self.rerun_app.command_sender;
+                    if ui
+                        .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
+                        .clicked()
+                    {
+                        sender.send_ui(UICommand::ToggleSelectionPanel);
+                    }
+                    // No ToggleTimePanel command exists — the time panel
+                    // carries its own collapse control at its left edge.
+                    if ui
+                        .small_icon_button(&re_ui::icons::LEFT_PANEL_TOGGLE, "Blueprint panel")
+                        .clicked()
+                    {
+                        sender.send_ui(UICommand::ToggleBlueprintPanel);
+                    }
+                });
             });
         });
 

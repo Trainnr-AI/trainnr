@@ -48,6 +48,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 | `mcp-server.py` | The instrument's MCP surface over stdio: bundles (name@hash, fit records, SPREAD), the actuator library, task/engine registries, run manifests — read-only tools for any MCP client; the Studio's agent panel and `.mcp.json` both point here |
 | `studio-data.py` | One instrument query as JSON on stdout — the same `mcp_server` functions the MCP tools serve, for any process that can't link Python in |
 | `studio-instrument-view.py` | The instrument's records into the Studio's embedded Rerun viewer, one shot with a blueprint: eval funnels as bar charts with readings, fit parameters as estimate+interval series per sweep with SPREAD verdicts, the STS3215 M1-vs-M6 friction budget on a real velocity axis |
+| `gen-app-icon.py` | Generates the Studio's dock icon (`crates/studio-shell/assets/icon-256.rgba` + PNG preview) — the committed asset's provenance; re-run and commit both together if the mark changes |
 
 ## Fitting and studies
 
