@@ -64,11 +64,32 @@ bootstrap()
 import mujoco  # noqa: E402
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
 
-BUILDERS = {
-    entry.name: entry.build for entry in tasks().values() if entry.rig == "so101"
-}
+BUILDERS = {entry.name: entry for entry in tasks().values()}
+# Tasks whose accepted scripted expert drives the sim for real; anything
+# else gets the idle sinusoid. Grows as experts land (the SO-101 ones
+# live on the rl-engineering branch until its merge).
+TASKS_WITH_EXPERTS = ("kitting",)
+DEFAULT_TASK = "kitting"
 WIDTH, HEIGHT = 1024, 576
 TARGET_HZ = 30.0
+
+# Free-camera framing per rig, seeded from each rig's own viewer tools
+# (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
+# a starting pose the operator immediately corrects by dragging.
+RIG_CAMERAS = {
+    "so101": {
+        "azimuth": 90.0,
+        "elevation": -20.0,
+        "distance": 1.0,
+        "lookat": (0.0, 0.0, 0.15),
+    },
+    "aloha2": {
+        "azimuth": 90.0,
+        "elevation": -20.0,
+        "distance": 2.2,
+        "lookat": (0.0, 0.0, 0.2),
+    },
+}
 
 # The physics narration into the Studio's embedded Rerun viewer: the same
 # `mj_step` loop that renders the pixels also logs the twin, every named
@@ -158,9 +179,12 @@ class PhysicsNarrator:
             collapse_panels=True,
         )
 
-    def log(self, data: "mujoco.MjData") -> None:
+    def log(self, data: "mujoco.MjData", sim_time: float) -> None:
+        """`sim_time` is monotonic across episodes (the caller adds an
+        offset) — `data.time` alone rewinds at every episode reset and a
+        timeline must not."""
         rr = self.rr
-        rr.set_time("sim", duration=data.time)
+        rr.set_time("sim", duration=sim_time)
         self.mirror.log(data)
         for name, qpos_adr, dof_adr in self.joints:
             rr.log(f"joints/position/{name}", rr.Scalars(float(data.qpos[qpos_adr])))
@@ -214,11 +238,12 @@ class OrbitCamera:
     lock-protected — read by the render loop, written by
     `_read_camera_updates`'s thread."""
 
-    def __init__(self) -> None:
+    def __init__(self, defaults: dict) -> None:
         self._lock = threading.Lock()
-        self.azimuth = 90.0
-        self.elevation = -20.0
-        self.distance = 1.0
+        self.azimuth = defaults["azimuth"]
+        self.elevation = defaults["elevation"]
+        self.distance = defaults["distance"]
+        self.lookat = defaults["lookat"]
         self.width = WIDTH
         self.height = HEIGHT
 
@@ -251,8 +276,115 @@ def _read_camera_updates(camera: OrbitCamera) -> None:
         camera._set(*struct.unpack("<fffII", raw))
 
 
+class RenderPump:
+    """Everything one observed physics step needs: resize, orbit, render,
+    frame out, narration — shared by the expert's `on_control` hook and
+    the no-expert idle loop, so both paths behave identically."""
+
+    def __init__(self, model: "mujoco.MjModel", orbit: OrbitCamera, narrator) -> None:
+        self.model = model
+        self.orbit = orbit
+        self.narrator = narrator
+        self.width, self.height = WIDTH, HEIGHT
+        self.renderer = mujoco.Renderer(model, height=self.height, width=self.width)
+        self.cam = mujoco.MjvCamera()
+        self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        self.cam.lookat = list(orbit.lookat)
+        self.out = sys.stdout.buffer
+        self.last_rendered = 0.0
+        self.last_narrated = 0.0
+        # Episodes reset `data.time` to zero; the narration timeline must
+        # not rewind with them, so it runs on an offset the episode loop
+        # advances at each boundary.
+        self.time_offset = 0.0
+
+    def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
+        """Observe one step: narrate and render (each rate-limited), then
+        sleep toward real time — `pace_seconds` is how much simulated
+        time this step advanced."""
+        now = time.monotonic()
+        if self.narrator is not None and now - self.last_narrated >= 1.0 / NARRATE_HZ:
+            self.last_narrated = now
+            self.narrator.log(data, self.time_offset + data.time)
+
+        if now - self.last_rendered >= 1.0 / TARGET_HZ:
+            self.last_rendered = now
+            want_width, want_height = self.orbit.size()
+            # Clamp to the compiled framebuffer no matter what the viewer
+            # asked: `mujoco.Renderer` refuses (raises) beyond it, and an
+            # exception here kills the whole stream.
+            want_width = min(want_width, int(self.model.vis.global_.offwidth))
+            want_height = min(want_height, int(self.model.vis.global_.offheight))
+            if (want_width, want_height) != (self.width, self.height):
+                # `Renderer` is fixed-size once constructed — a size
+                # change means a rebuild, not a resize.
+                self.renderer.close()
+                self.width, self.height = want_width, want_height
+                self.renderer = mujoco.Renderer(
+                    self.model, height=self.height, width=self.width
+                )
+            self.orbit.apply_to(self.cam)
+            self.renderer.update_scene(data, camera=self.cam)
+            frame = self.renderer.render()  # HxWx3 uint8, C-contiguous
+            self.out.write(struct.pack("<II", self.width, self.height))
+            self.out.write(frame.tobytes())
+            self.out.flush()
+
+        # Pace toward real time: sleep off whatever of this step's
+        # simulated duration wall time hasn't already consumed.
+        remaining = pace_seconds - (time.monotonic() - now)
+        if remaining > 0:
+            time.sleep(remaining)
+
+
+def run_expert_forever(task: "object", pump: RenderPump) -> None:
+    """The real thing: the task's accepted scripted expert drives the sim,
+    cycling the protocol's own paired trial starts — the same
+    `perturb(trial, home)` draws the acceptance verdict ran on. The pump
+    rides `on_control` (the hook the expert grew for exactly this), so
+    the pixels and the narration show a genuine pick-and-place, contact
+    events and grasp forces included."""
+    from rq_pipeline.evaluate.harness import home_state  # noqa: PLC0415
+    from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+    from rq_pipeline.tasks.aloha2 import scripted_kitting_episode  # noqa: PLC0415
+
+    backend = MuJoCoBackend()
+    backend.load_model(pump.model)
+    protocol = task.protocol
+    home = home_state(backend, protocol)
+    tick_seconds = pump.model.opt.timestep * protocol.control_interval
+
+    trial = 0
+    while True:
+        start = protocol.perturb(trial, home)
+
+        def on_control(step: int, data: "mujoco.MjData") -> None:
+            pump.tick(data, tick_seconds)
+
+        _states, _sensors, _actions = scripted_kitting_episode(
+            pump.model, start, on_control=on_control, spec=task.task_spec
+        )
+        pump.time_offset += protocol.steps * pump.model.opt.timestep
+        trial = (trial + 1) % protocol.trials
+
+
+def run_idle_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+    """No expert registered for this task: a slow sinusoid on every
+    actuator — visible, harmless placeholder motion so 'streaming' and
+    'stalled' can be told apart at a glance."""
+    data = mujoco.MjData(model)
+    period = 0.0
+    dt = model.opt.timestep
+    while True:
+        period += dt
+        data.ctrl[:] = 0.2 * math.sin(period)
+        mujoco.mj_step(model, data)
+        pump.tick(data, dt)
+
+
 def stream(task_name: str) -> None:
-    task = BUILDERS[task_name]()
+    entry = BUILDERS[task_name]
+    task = entry.build()
     # Raise (never lower) the offscreen budget to the viewer's cap — see
     # MAX_RENDER_SIDE's comment for the measured failure without this.
     task.spec.visual.global_.offwidth = max(
@@ -262,70 +394,19 @@ def stream(task_name: str) -> None:
         task.spec.visual.global_.offheight, MAX_RENDER_SIDE
     )
     model = task.spec.compile()
-    data = mujoco.MjData(model)
-    width, height = WIDTH, HEIGHT
-    renderer = mujoco.Renderer(model, height=height, width=width)
 
-    cam = mujoco.MjvCamera()
-    cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-    cam.lookat = [0.0, 0.0, 0.15]  # roughly the SO-101's own working height
-
-    orbit = OrbitCamera()
+    orbit = OrbitCamera(RIG_CAMERAS.get(entry.rig, RIG_CAMERAS["so101"]))
     threading.Thread(target=_read_camera_updates, args=(orbit,), daemon=True).start()
+    pump = RenderPump(model, orbit, narrator_for(model, task_name))
 
-    narrator = narrator_for(model, task_name)
-    out = sys.stdout.buffer
-
-    # A visible, harmless motion — not the task's real controller — so a
-    # viewer can tell "streaming" apart from "stalled" at a glance. Every
-    # actuator gets the same slow sinusoid; amplitude is small enough that
-    # a small-hobby-servo model's joint limits are never in question.
-    period = 0.0
-    dt = model.opt.timestep
-    frame_interval = 1.0 / TARGET_HZ
-    narrate_interval = 1.0 / NARRATE_HZ
-    last_narrated = 0.0
-
-    while True:
-        started = time.monotonic()
-        period += dt
-        data.ctrl[:] = 0.2 * math.sin(period)
-        mujoco.mj_step(model, data)
-        if narrator is not None and started - last_narrated >= narrate_interval:
-            last_narrated = started
-            narrator.log(data)
-
-        want_width, want_height = orbit.size()
-        # Clamp to the compiled framebuffer no matter what the viewer
-        # asked: `mujoco.Renderer` refuses (raises) beyond it, and an
-        # exception here kills the whole stream. Belt to the budget
-        # raise's braces — even a viewer with a different cap degrades to
-        # a smaller render instead of a frozen viewport.
-        want_width = min(want_width, int(model.vis.global_.offwidth))
-        want_height = min(want_height, int(model.vis.global_.offheight))
-        if (want_width, want_height) != (width, height):
-            # `Renderer` is fixed-size once constructed — a size change
-            # from the viewer means throw it away and build a new one, not
-            # resize it in place.
-            renderer.close()
-            width, height = want_width, want_height
-            renderer = mujoco.Renderer(model, height=height, width=width)
-
-        orbit.apply_to(cam)
-        renderer.update_scene(data, camera=cam)
-        frame = renderer.render()  # HxWx3 uint8, C-contiguous
-
-        out.write(struct.pack("<II", width, height))
-        out.write(frame.tobytes())
-        out.flush()
-
-        elapsed = time.monotonic() - started
-        if elapsed < frame_interval:
-            time.sleep(frame_interval - elapsed)
+    if task_name in TASKS_WITH_EXPERTS:
+        run_expert_forever(task, pump)
+    else:
+        run_idle_forever(model, pump)
 
 
 if __name__ == "__main__":
-    task_name = sys.argv[1] if len(sys.argv) > 1 else "block_stack"
+    task_name = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TASK
     if task_name not in BUILDERS:
         sys.exit(f"unknown task {task_name!r}; one of {sorted(BUILDERS)}")
     stream(task_name)

@@ -28,7 +28,10 @@ use viewport::ViewportFeed;
 static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
     re_memory::AccountingAllocator::new(mimalloc::MiMalloc);
 
-const DEFAULT_TASK: &str = "block_stack";
+// The task whose ACCEPTED scripted expert drives the viewport for real —
+// a genuine dual-arm pick-and-place cycling the protocol's own paired
+// trial starts, not placeholder motion (tools/studio-render-stream.py).
+const DEFAULT_TASK: &str = "kitting";
 
 /// Agent panel layout, sized by eye against this window's default size.
 const AGENT_PANEL_DEFAULT_WIDTH: f32 = 360.0;
