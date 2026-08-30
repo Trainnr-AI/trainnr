@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use egui::{ColorImage, TextureHandle, TextureOptions};
+use re_ui::UiExt as _;
 
 struct RawFrame {
     width: usize,
@@ -145,9 +146,9 @@ impl ViewportFeed {
 
         let Some(texture) = &self.texture else {
             if let Some(err) = &self.spawn_error {
-                ui.colored_label(egui::Color32::RED, err);
+                ui.error_label(err);
             } else {
-                ui.label("Waiting for the first frame from MuJoCo…");
+                ui.info_label("Waiting for the first frame from MuJoCo…");
             }
             return;
         };

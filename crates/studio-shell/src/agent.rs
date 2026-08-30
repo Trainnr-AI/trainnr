@@ -42,16 +42,22 @@ pub enum AgentLine {
     /// richly yet — Debug-formatted rather than dropped, so nothing this
     /// early client doesn't specifically handle goes silently missing.
     Other(String),
+    /// Routine state ("starting…", "connected") — `re_ui::Alert::info`.
     Status(String),
+    /// A real failure (spawn failure, connection dropped with an error) —
+    /// `re_ui::Alert::error`, not lumped in with routine `Status` text.
+    Error(String),
 }
 
 impl AgentLine {
     /// Plain text for lines where two in a row with identical text are
-    /// noise, not information — `Other`/`Status` only. `User`/`AgentText`
-    /// are real conversation and can legitimately repeat.
+    /// noise, not information — `Other`/`Status`/`Error` only.
+    /// `User`/`AgentText` are real conversation and can legitimately repeat.
     fn dedup_key(&self) -> Option<&str> {
         match self {
-            AgentLine::Other(text) | AgentLine::Status(text) => Some(text),
+            AgentLine::Other(text) | AgentLine::Status(text) | AgentLine::Error(text) => {
+                Some(text)
+            }
             AgentLine::User(_) | AgentLine::AgentText(_) => None,
         }
     }
@@ -96,7 +102,7 @@ impl AgentSession {
                     push(
                         &transcript_for_thread,
                         &ctx_for_thread,
-                        AgentLine::Status(format!("could not start a tokio runtime: {err}")),
+                        AgentLine::Error(format!("could not start a tokio runtime: {err}")),
                     );
                     return;
                 }
@@ -150,9 +156,10 @@ impl AgentSession {
 
 fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: AgentLine) {
     let mut guard = transcript.lock().expect("not poisoned");
-    if line.dedup_key().is_some() && line.dedup_key() == guard.last().and_then(AgentLine::dedup_key)
-    {
-        return; // identical status/other line as last time — nothing new to show
+    if let Some(key) = line.dedup_key() {
+        if Some(key) == guard.last().and_then(AgentLine::dedup_key) {
+            return; // identical status/other line as last time — nothing new to show
+        }
     }
     guard.push(line);
     drop(guard);
@@ -177,12 +184,21 @@ async fn run_session(
         }
     });
 
+    // Read the real command back from the agent rather than restating it —
+    // `claude_agent()` is the crate's own black-box convenience
+    // constructor, and a literal copy of what it happens to run today
+    // would silently go stale the moment that changes upstream.
+    let command_line = {
+        let config = agent.config();
+        std::iter::once(config.command().display().to_string())
+            .chain(config.arguments().iter().cloned())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
     push(
         &transcript,
         &ctx,
-        AgentLine::Status(
-            "starting npx -y @agentclientprotocol/claude-agent-acp@latest…".to_string(),
-        ),
+        AgentLine::Status(format!("starting {command_line}…")),
     );
 
     let notify_transcript = Arc::clone(&transcript);
@@ -295,7 +311,7 @@ async fn run_session(
         push(
             &transcript,
             &ctx,
-            AgentLine::Status(format!("ACP connection ended: {err}")),
+            AgentLine::Error(format!("ACP connection ended: {err}")),
         );
     }
 }

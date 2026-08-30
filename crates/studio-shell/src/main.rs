@@ -10,9 +10,18 @@ mod agent;
 mod viewport;
 
 use agent::{AgentLine, AgentSession};
+use re_ui::UiExt as _;
 use viewport::ViewportFeed;
 
 const DEFAULT_TASK: &str = "block_stack";
+
+/// Agent panel layout, sized by eye against this window's default size,
+/// not measured. Named rather than inlined so a future pass tuning the
+/// panel doesn't have to first figure out which bare number means what.
+const AGENT_PANEL_DEFAULT_WIDTH: f32 = 360.0;
+const INPUT_ROW_RESERVED_HEIGHT: f32 = 40.0;
+const PERMISSION_OPTION_ROW_HEIGHT: f32 = 30.0;
+const PERMISSION_BLOCK_PADDING: f32 = 30.0;
 
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions::default();
@@ -47,14 +56,16 @@ impl eframe::App for StudioShell {
         let pending = self.agent.pending_permission();
 
         egui::Panel::right("agent_panel")
-            .default_size(360.0)
+            .default_size(AGENT_PANEL_DEFAULT_WIDTH)
             .show(ui, |ui| {
                 ui.heading("Agent");
 
                 // Reserve room below the scroll area for the input row,
-                // plus the permission block when one is waiting — sized by
-                // eye per option, not measured.
-                let reserved = 40.0 + pending.as_ref().map_or(0.0, |(_, opts)| 30.0 * opts.len() as f32 + 30.0);
+                // plus the permission block when one is waiting.
+                let reserved = INPUT_ROW_RESERVED_HEIGHT
+                    + pending.as_ref().map_or(0.0, |(_, opts)| {
+                        PERMISSION_OPTION_ROW_HEIGHT * opts.len() as f32 + PERMISSION_BLOCK_PADDING
+                    });
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .stick_to_bottom(true)
@@ -71,7 +82,10 @@ impl eframe::App for StudioShell {
                                     ui.label(text);
                                 }
                                 AgentLine::Status(text) => {
-                                    ui.colored_label(egui::Color32::GRAY, text);
+                                    ui.info_label(text);
+                                }
+                                AgentLine::Error(text) => {
+                                    ui.error_label(text);
                                 }
                                 AgentLine::Other(text) => {
                                     ui.colored_label(egui::Color32::DARK_GRAY, text);
@@ -82,13 +96,17 @@ impl eframe::App for StudioShell {
 
                 if let Some((tool_title, options)) = pending {
                     ui.separator();
-                    ui.label(format!("Allow: {tool_title}?"));
-                    ui.horizontal_wrapped(|ui| {
-                        for (option_id, label) in options {
-                            if ui.button(label).clicked() {
-                                self.agent.resolve_permission(option_id);
-                            }
-                        }
+                    re_ui::alert::Alert::warning().show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(format!("Allow: {tool_title}?"));
+                            ui.horizontal_wrapped(|ui| {
+                                for (option_id, label) in options {
+                                    if ui.button(label).clicked() {
+                                        self.agent.resolve_permission(option_id);
+                                    }
+                                }
+                            });
+                        });
                     });
                 }
 

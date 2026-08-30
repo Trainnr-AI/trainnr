@@ -43,10 +43,19 @@ the render loop just reads whatever the thread last decoded.
 """
 
 import math
+import os
 import struct
 import sys
 import threading
 import time
+
+# Must run before `import mujoco` — this repo's own convention everywhere
+# else offscreen rendering happens on Linux (tools/e2e-smoke.py,
+# tools/cloud-gpu.py): EGL is the GPU-accelerated offscreen backend there.
+# macOS's default (CGL) already works without it; `setdefault` still lets
+# an operator override either platform's choice via their own environment.
+if sys.platform.startswith("linux"):
+    os.environ.setdefault("MUJOCO_GL", "egl")
 
 from _lab import bootstrap
 
