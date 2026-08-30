@@ -10,7 +10,10 @@
 //!
 //! Orbit and zoom work the same way in reverse: a drag/scroll on the image
 //! updates `Orbit` here, which gets written back to the subprocess's stdin
-//! in the script's 3-`f32` wire format. There is no pan yet — see `Orbit`.
+//! in the script's wire format (3 `f32`s, then 2 `u32`s). There is no pan
+//! yet — see `Orbit`. The same message also carries the panel's current
+//! pixel size, so the render resolution tracks the window instead of
+//! staying a fixed 1024x576 letterboxed into whatever shape the panel is.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -26,15 +29,18 @@ struct RawFrame {
     rgb: Vec<u8>,
 }
 
-/// Azimuth/elevation/distance around a fixed look-at point. Matches
-/// `studio-render-stream.py`'s `OrbitCamera` field-for-field and default-
-/// for-default — the two are duplicated, not shared, because they cross a
-/// language boundary; if one changes, change the other.
+/// Azimuth/elevation/distance around a fixed look-at point, plus the
+/// render's pixel size. Matches `studio-render-stream.py`'s `OrbitCamera`
+/// and `WIDTH`/`HEIGHT` defaults field-for-field — the two are duplicated,
+/// not shared, because they cross a language boundary; if one changes,
+/// change the other.
 #[derive(Clone, Copy, PartialEq)]
 struct Orbit {
     azimuth_deg: f32,
     elevation_deg: f32,
     distance_m: f32,
+    width_px: u32,
+    height_px: u32,
 }
 
 impl Default for Orbit {
@@ -43,6 +49,8 @@ impl Default for Orbit {
             azimuth_deg: 90.0,
             elevation_deg: -20.0,
             distance_m: 1.0,
+            width_px: 1024,
+            height_px: 576,
         }
     }
 }
@@ -54,6 +62,12 @@ const ZOOM_METRES_PER_SCROLL_POINT: f32 = 0.004;
 const MIN_DISTANCE_M: f32 = 0.15;
 const MAX_DISTANCE_M: f32 = 4.0;
 const MAX_ELEVATION_DEG: f32 = 89.0;
+
+/// Render resolution bounds: below this a panel sliver isn't worth a
+/// render call, above this the render cost isn't worth the extra pixels
+/// on a viewport this size.
+const MIN_RENDER_SIDE: u32 = 128;
+const MAX_RENDER_SIDE: u32 = 1920;
 
 /// Owns the render-stream subprocess, the latest decoded frame, and the
 /// orbit state the user is driving by dragging/scrolling over the image.
@@ -143,9 +157,10 @@ impl ViewportFeed {
         // `maintain_aspect_ratio` keeps MuJoCo's frame from stretching to
         // match a panel of a different aspect ratio (it will letterbox
         // instead, which is correct when the two aspect ratios differ).
+        let available = ui.available_size();
         let response = ui.add(
             egui::Image::new(texture)
-                .fit_to_exact_size(ui.available_size())
+                .fit_to_exact_size(available)
                 .maintain_aspect_ratio(true)
                 .sense(egui::Sense::click_and_drag()),
         );
@@ -165,6 +180,11 @@ impl ViewportFeed {
                     .clamp(MIN_DISTANCE_M, MAX_DISTANCE_M);
             }
         }
+        // Track the panel's actual size so the render resolution follows
+        // the window instead of staying a fixed 1024x576 letterboxed into
+        // whatever shape the panel happens to be.
+        self.orbit.width_px = (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
+        self.orbit.height_px = (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
 
         if self.orbit != before {
             self.send_orbit();
@@ -175,10 +195,12 @@ impl ViewportFeed {
         let Some(stdin) = &mut self.stdin else {
             return;
         };
-        let mut bytes = [0u8; 12];
+        let mut bytes = [0u8; 20];
         bytes[0..4].copy_from_slice(&self.orbit.azimuth_deg.to_le_bytes());
         bytes[4..8].copy_from_slice(&self.orbit.elevation_deg.to_le_bytes());
         bytes[8..12].copy_from_slice(&self.orbit.distance_m.to_le_bytes());
+        bytes[12..16].copy_from_slice(&self.orbit.width_px.to_le_bytes());
+        bytes[16..20].copy_from_slice(&self.orbit.height_px.to_le_bytes());
         // A closed pipe here means the render subprocess died; `show`'s
         // next call will already be reporting `spawn_error`-shaped state
         // via an absent texture, so silently dropping this write is fine.

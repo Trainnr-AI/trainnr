@@ -23,17 +23,23 @@ No length-of-message prefix beyond that — width/height give the reader
 everything needed to know how many pixel bytes follow. A reader that reads
 short must retry; this script does not resend a partial frame.
 
-Wire format, stdin, per camera update — 3 little-endian f32, no header
-(fixed size, nothing to frame):
+Wire format, stdin, per camera+size update — 3 little-endian f32 then 2
+little-endian u32, no header (fixed size, nothing to frame):
 
     azimuth   : degrees, MuJoCo's own convention
     elevation : degrees
     distance  : metres from `LOOKAT`
+    width     : pixels the renderer should produce
+    height    : pixels the renderer should produce
 
 `LOOKAT` itself is not sent — this is orbit-and-zoom, not pan, matching what
-studio-shell's viewport currently offers. A dedicated thread reads these off
-stdin so a slow/absent controller never blocks rendering; the render loop
-just reads whatever the thread last decoded.
+studio-shell's viewport currently offers. width/height let the render
+resolution track the viewer's actual panel size instead of staying a fixed
+1024x576 letterboxed into whatever shape the panel is; the render loop
+recreates `mujoco.Renderer` only when they actually change, since the
+`Renderer` object itself is fixed-size once constructed. A dedicated thread
+reads updates off stdin so a slow/absent controller never blocks rendering;
+the render loop just reads whatever the thread last decoded.
 """
 
 import math
@@ -59,18 +65,21 @@ TARGET_HZ = 30.0
 # (pos=[0, -0.85, 0.25], rq_pipeline/tasks/so101.py) so the free camera's
 # first frame looks close to that fixed one — approximate by eye, not
 # derived, since the viewer immediately lets a human correct it.
-CAMERA_UPDATE_BYTES = 12  # 3 x f32
+CAMERA_UPDATE_BYTES = 20  # 3 x f32, 2 x u32
 
 
 class OrbitCamera:
-    """The latest azimuth/elevation/distance from stdin, lock-protected —
-    read by the render loop, written by `_read_camera_updates`'s thread."""
+    """The latest azimuth/elevation/distance/width/height from stdin,
+    lock-protected — read by the render loop, written by
+    `_read_camera_updates`'s thread."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self.azimuth = 90.0
         self.elevation = -20.0
         self.distance = 1.0
+        self.width = WIDTH
+        self.height = HEIGHT
 
     def apply_to(self, cam: "mujoco.MjvCamera") -> None:
         with self._lock:
@@ -80,9 +89,16 @@ class OrbitCamera:
                 self.distance,
             )
 
-    def _set(self, azimuth: float, elevation: float, distance: float) -> None:
+    def size(self) -> tuple[int, int]:
+        with self._lock:
+            return self.width, self.height
+
+    def _set(
+        self, azimuth: float, elevation: float, distance: float, width: int, height: int
+    ) -> None:
         with self._lock:
             self.azimuth, self.elevation, self.distance = azimuth, elevation, distance
+            self.width, self.height = width, height
 
 
 def _read_camera_updates(camera: OrbitCamera) -> None:
@@ -91,14 +107,15 @@ def _read_camera_updates(camera: OrbitCamera) -> None:
         raw = stdin.read(CAMERA_UPDATE_BYTES)
         if len(raw) < CAMERA_UPDATE_BYTES:
             return  # controller closed stdin — keep rendering at the last pose
-        camera._set(*struct.unpack("<fff", raw))
+        camera._set(*struct.unpack("<fffII", raw))
 
 
 def stream(task_name: str) -> None:
     task = BUILDERS[task_name]()
     model = task.spec.compile()
     data = mujoco.MjData(model)
-    renderer = mujoco.Renderer(model, height=HEIGHT, width=WIDTH)
+    width, height = WIDTH, HEIGHT
+    renderer = mujoco.Renderer(model, height=height, width=width)
 
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_FREE
@@ -123,11 +140,20 @@ def stream(task_name: str) -> None:
         data.ctrl[:] = 0.2 * math.sin(period)
         mujoco.mj_step(model, data)
 
+        want_width, want_height = orbit.size()
+        if (want_width, want_height) != (width, height):
+            # `Renderer` is fixed-size once constructed — a size change
+            # from the viewer means throw it away and build a new one, not
+            # resize it in place.
+            renderer.close()
+            width, height = want_width, want_height
+            renderer = mujoco.Renderer(model, height=height, width=width)
+
         orbit.apply_to(cam)
         renderer.update_scene(data, camera=cam)
         frame = renderer.render()  # HxWx3 uint8, C-contiguous
 
-        out.write(struct.pack("<II", WIDTH, HEIGHT))
+        out.write(struct.pack("<II", width, height))
         out.write(frame.tobytes())
         out.flush()
 
