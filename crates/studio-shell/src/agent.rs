@@ -73,16 +73,27 @@ pub struct PendingPermission {
     reply: oneshot::Sender<PermissionOptionId>,
 }
 
+/// How long `Drop` waits for the connection thread to tear the agent
+/// subprocess down. The ACP crate kills the agent's process group when
+/// the connection drops, with its own ~1 s shutdown grace — 3 s covers
+/// that with room. Past it, the close proceeds anyway (see `Drop`).
+const SHUTDOWN_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Owns the background thread running the ACP connection, the shared
 /// transcript it appends to, and any permission request currently waiting
-/// on the user. Dropping this does not currently tear down the subprocess
-/// cleanly — see the module's open item in the commit that introduces it;
-/// today it relies on the OS reclaiming an orphaned `npx` child, same risk
-/// `ViewportFeed` explicitly closes for the render side.
+/// on the user. Dropping this tears the agent subprocess down: closing
+/// `outgoing` ends `run_session`'s prompt loop, which drops the
+/// connection, which is what makes the ACP crate kill the agent's whole
+/// process group (`npx` wrapper included). `Drop` waits for that —
+/// same no-orphans guarantee `ViewportFeed` gives the render side.
 pub struct AgentSession {
     transcript: Arc<Mutex<Vec<AgentLine>>>,
-    outgoing: UnboundedSender<String>,
+    /// `Option` so `Drop` can close the channel while `&mut self`.
+    outgoing: Option<UnboundedSender<String>>,
     pending: Arc<Mutex<Option<PendingPermission>>>,
+    /// Signalled by the connection thread after `run_session` returns —
+    /// i.e. after the crate's teardown of the agent subprocess has run.
+    done: std::sync::mpsc::Receiver<()>,
 }
 
 impl AgentSession {
@@ -90,6 +101,7 @@ impl AgentSession {
         let transcript = Arc::new(Mutex::new(Vec::new()));
         let pending = Arc::new(Mutex::new(None));
         let (outgoing, rx) = mpsc::unbounded_channel::<String>();
+        let (done_tx, done) = std::sync::mpsc::channel();
 
         let transcript_for_thread = Arc::clone(&transcript);
         let pending_for_thread = Arc::clone(&pending);
@@ -115,12 +127,16 @@ impl AgentSession {
                 rx,
                 ctx_for_thread,
             ));
+            // After run_session: the connection (and with it the agent
+            // subprocess) is torn down. Tell Drop it can stop waiting.
+            let _ = done_tx.send(());
         });
 
         Self {
             transcript,
-            outgoing,
+            outgoing: Some(outgoing),
             pending,
+            done,
         }
     }
 
@@ -128,7 +144,9 @@ impl AgentSession {
     /// dropped if the connection thread has already ended — the next
     /// `drain_into` call will show why, via its own `AgentLine::Status`.
     pub fn send(&self, text: String) {
-        let _ = self.outgoing.send(text);
+        if let Some(outgoing) = &self.outgoing {
+            let _ = outgoing.send(text);
+        }
     }
 
     /// Moves every transcript line accumulated since the last call into
@@ -152,6 +170,29 @@ impl AgentSession {
     pub fn resolve_permission(&self, option_id: PermissionOptionId) {
         if let Some(pending) = self.pending.lock().expect("not poisoned").take() {
             let _ = pending.reply.send(option_id);
+        }
+    }
+}
+
+impl Drop for AgentSession {
+    fn drop(&mut self) {
+        // Cancel any permission request still waiting on a click —
+        // dropping its oneshot sender makes the handler answer Cancelled,
+        // unblocking a turn that would otherwise wait forever and keep
+        // the prompt loop (below) from ever noticing the closed channel.
+        drop(self.pending.lock().expect("not poisoned").take());
+
+        // Closing the channel ends run_session's prompt loop; the
+        // connection then drops, and the ACP crate kills the agent's
+        // process group. Wait for the thread to confirm.
+        drop(self.outgoing.take());
+        if self.done.recv_timeout(SHUTDOWN_WAIT).is_err() {
+            // A turn was mid-flight (the loop only checks the channel
+            // between prompts), so teardown hasn't run yet. Proceeding
+            // means the agent subprocess may outlive us — the one case
+            // this Drop doesn't close, accepted over hanging the window
+            // close indefinitely.
+            eprintln!("agent session did not shut down within {SHUTDOWN_WAIT:?}; proceeding");
         }
     }
 }
