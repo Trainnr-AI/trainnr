@@ -19,9 +19,9 @@ const DEFAULT_TASK: &str = "block_stack";
 /// not measured. Named rather than inlined so a future pass tuning the
 /// panel doesn't have to first figure out which bare number means what.
 const AGENT_PANEL_DEFAULT_WIDTH: f32 = 360.0;
-const INPUT_ROW_RESERVED_HEIGHT: f32 = 40.0;
-const PERMISSION_OPTION_ROW_HEIGHT: f32 = 30.0;
-const PERMISSION_BLOCK_PADDING: f32 = 30.0;
+/// A permission prompt's tool title can be a full multi-line shell
+/// command; past this height it scrolls instead of pushing the layout.
+const PERMISSION_TITLE_MAX_HEIGHT: f32 = 120.0;
 
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions::default();
@@ -72,16 +72,55 @@ impl eframe::App for StudioShell {
             .show(ui, |ui| {
                 ui.heading("Agent");
 
-                // Reserve room below the scroll area for the input row,
-                // plus the permission block when one is waiting.
-                let reserved = INPUT_ROW_RESERVED_HEIGHT
-                    + pending.as_ref().map_or(0.0, |(_, opts)| {
-                        PERMISSION_OPTION_ROW_HEIGHT * opts.len() as f32 + PERMISSION_BLOCK_PADDING
+                // The input row and any permission prompt live in a
+                // bottom panel INSIDE this side panel, so egui carves
+                // their space out before the transcript takes the rest.
+                // The earlier hand-computed `reserved` height assumed a
+                // one-line permission title; a real session's title was a
+                // ten-line shell command and the buttons landed below the
+                // window edge — layout arithmetic by hand is how that
+                // class of bug happens, so no more of it.
+                egui::Panel::bottom("agent_panel_input").show(ui, |ui| {
+                    if let Some((tool_title, options)) = pending {
+                        re_ui::alert::Alert::warning().show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.label("Allow this tool call?");
+                                // Buttons BEFORE the command text: a tool
+                                // title can be arbitrarily long (it was a
+                                // full multi-line `ls -R` once), and the
+                                // answer must never scroll out of reach.
+                                ui.horizontal_wrapped(|ui| {
+                                    for (option_id, label) in options {
+                                        if ui.button(label).clicked() {
+                                            self.agent.resolve_permission(option_id);
+                                        }
+                                    }
+                                });
+                                egui::ScrollArea::vertical()
+                                    .id_salt("permission_title")
+                                    .max_height(PERMISSION_TITLE_MAX_HEIGHT)
+                                    .show(ui, |ui| {
+                                        ui.label(tool_title);
+                                    });
+                            });
+                        });
+                    }
+                    ui.horizontal(|ui| {
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.draft).hint_text("Ask Claude…"),
+                        );
+                        let sent = (response.lost_focus()
+                            && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                            || ui.button("Send").clicked();
+                        if sent && !self.draft.trim().is_empty() {
+                            self.agent.send(std::mem::take(&mut self.draft));
+                        }
                     });
+                });
+
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .stick_to_bottom(true)
-                    .max_height((ui.available_height() - reserved).max(0.0))
                     .show(ui, |ui| {
                         for line in &self.transcript {
                             match line {
@@ -105,34 +144,6 @@ impl eframe::App for StudioShell {
                             }
                         }
                     });
-
-                if let Some((tool_title, options)) = pending {
-                    ui.separator();
-                    re_ui::alert::Alert::warning().show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.label(format!("Allow: {tool_title}?"));
-                            ui.horizontal_wrapped(|ui| {
-                                for (option_id, label) in options {
-                                    if ui.button(label).clicked() {
-                                        self.agent.resolve_permission(option_id);
-                                    }
-                                }
-                            });
-                        });
-                    });
-                }
-
-                ui.separator();
-                ui.horizontal(|ui| {
-                    let response = ui
-                        .add(egui::TextEdit::singleline(&mut self.draft).hint_text("Ask Claude…"));
-                    let sent = (response.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                        || ui.button("Send").clicked();
-                    if sent && !self.draft.trim().is_empty() {
-                        self.agent.send(std::mem::take(&mut self.draft));
-                    }
-                });
             });
 
         egui::CentralPanel::default().show(ui, |ui| {

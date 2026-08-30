@@ -153,8 +153,30 @@ impl AgentSession {
     /// Moves every transcript line accumulated since the last call into
     /// `out`, in order. Draining rather than cloning keeps the panel from
     /// re-walking an ever-growing `Vec` every frame.
+    ///
+    /// The merge/dedup rules run HERE too, across the drain boundary —
+    /// not only in `push`. `push` merges against the shared buffer, but
+    /// this method empties that buffer every frame, so a slow-streaming
+    /// turn (one chunk per frame) always found it empty and every chunk
+    /// opened a fresh "claude" bubble. Seen live on the first long
+    /// subagent report; the fast-chunk case that tested green earlier
+    /// had simply been batching between frames.
     pub fn drain_into(&self, out: &mut Vec<AgentLine>) {
-        out.append(&mut self.transcript.lock().expect("not poisoned"));
+        let mut shared = self.transcript.lock().expect("not poisoned");
+        for line in shared.drain(..) {
+            if let AgentLine::AgentText(text) = &line {
+                if let Some(AgentLine::AgentText(last)) = out.last_mut() {
+                    last.push_str(text);
+                    continue;
+                }
+            }
+            if let Some(key) = line.dedup_key() {
+                if Some(key) == out.last().and_then(AgentLine::dedup_key) {
+                    continue;
+                }
+            }
+            out.push(line);
+        }
     }
 
     /// The tool title and button labels for a pending permission request,
