@@ -18,6 +18,7 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -70,6 +71,14 @@ const MAX_ELEVATION_DEG: f32 = 89.0;
 const MIN_RENDER_SIDE: u32 = 128;
 const MAX_RENDER_SIDE: u32 = 1920;
 
+/// A size change makes the Python side throw away and rebuild its
+/// `mujoco.Renderer` (fixed-size once constructed), so during a live
+/// window drag — where the panel size changes every frame — new sizes
+/// are held back until this long has passed since the last one sent.
+/// Orbit/zoom are exempt: they're cheap per-frame camera fields, and
+/// holding them back would make dragging feel laggy.
+const RESIZE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+
 /// Owns the render-stream subprocess, the latest decoded frame, and the
 /// orbit state the user is driving by dragging/scrolling over the image.
 pub struct ViewportFeed {
@@ -79,6 +88,14 @@ pub struct ViewportFeed {
     texture: Option<TextureHandle>,
     spawn_error: Option<String>,
     orbit: Orbit,
+    /// When the last size change went out — see `RESIZE_DEBOUNCE`.
+    last_resize_sent: Option<std::time::Instant>,
+    /// Set by the reader thread when the frame stream ends. A dead
+    /// subprocess used to leave its last frame frozen on screen with no
+    /// indication anything was wrong (measured: an oversized resize
+    /// request killed the renderer and the panel just... stopped) —
+    /// `show` turns this into a visible error instead.
+    stream_ended: Arc<AtomicBool>,
 }
 
 impl ViewportFeed {
@@ -102,12 +119,18 @@ impl ViewportFeed {
             .spawn();
 
         let latest = Arc::new(Mutex::new(None));
+        let stream_ended = Arc::new(AtomicBool::new(false));
 
         match spawned {
             Ok(mut child) => {
                 let stdout = child.stdout.take().expect("piped stdout, always present");
                 let stdin = child.stdin.take().expect("piped stdin, always present");
-                spawn_reader(stdout, Arc::clone(&latest), ctx.clone());
+                spawn_reader(
+                    stdout,
+                    Arc::clone(&latest),
+                    Arc::clone(&stream_ended),
+                    ctx.clone(),
+                );
                 Self {
                     child: Some(child),
                     stdin: Some(stdin),
@@ -115,6 +138,8 @@ impl ViewportFeed {
                     texture: None,
                     spawn_error: None,
                     orbit: Orbit::default(),
+                    last_resize_sent: None,
+                    stream_ended,
                 }
             }
             Err(err) => Self {
@@ -127,6 +152,8 @@ impl ViewportFeed {
                     script.display()
                 )),
                 orbit: Orbit::default(),
+                last_resize_sent: None,
+                stream_ended,
             },
         }
     }
@@ -142,6 +169,13 @@ impl ViewportFeed {
                 image,
                 TextureOptions::LINEAR,
             ));
+        }
+
+        if self.stream_ended.load(Ordering::Relaxed) {
+            ui.error_label(
+                "The MuJoCo render stream ended — the frame below is the last one \
+                 received. Restart the app; the cause is in its terminal output.",
+            );
         }
 
         let Some(texture) = &self.texture else {
@@ -184,9 +218,26 @@ impl ViewportFeed {
         }
         // Track the panel's actual size so the render resolution follows
         // the window instead of staying a fixed 1024x576 letterboxed into
-        // whatever shape the panel happens to be.
-        self.orbit.width_px = (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
-        self.orbit.height_px = (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
+        // whatever shape the panel happens to be — but debounced (see
+        // RESIZE_DEBOUNCE): mid-drag the size changes every frame, and
+        // each change costs a Renderer rebuild on the Python side. The
+        // final size always lands, because the panel keeps rendering
+        // frames after the drag ends and the ripe check passes then.
+        let want_width = (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
+        let want_height = (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
+        let size_changed = (want_width, want_height) != (self.orbit.width_px, self.orbit.height_px);
+        let resize_ripe = self
+            .last_resize_sent
+            .is_none_or(|at| at.elapsed() >= RESIZE_DEBOUNCE);
+        if size_changed && resize_ripe {
+            self.orbit.width_px = want_width;
+            self.orbit.height_px = want_height;
+            self.last_resize_sent = Some(std::time::Instant::now());
+        } else if size_changed {
+            // Not ripe yet — repaint again soon so the settled size goes
+            // out even if nothing else triggers a frame.
+            ui.ctx().request_repaint_after(RESIZE_DEBOUNCE);
+        }
 
         if self.orbit != before {
             self.send_orbit();
@@ -223,12 +274,17 @@ impl Drop for ViewportFeed {
     }
 }
 
-fn spawn_reader(mut stdout: ChildStdout, latest: Arc<Mutex<Option<RawFrame>>>, ctx: egui::Context) {
+fn spawn_reader(
+    mut stdout: ChildStdout,
+    latest: Arc<Mutex<Option<RawFrame>>>,
+    stream_ended: Arc<AtomicBool>,
+    ctx: egui::Context,
+) {
     thread::spawn(move || {
         let mut header = [0u8; 8];
         loop {
             if stdout.read_exact(&mut header).is_err() {
-                break; // subprocess exited or pipe closed — stop quietly
+                break; // subprocess exited or pipe closed
             }
             let width = u32::from_le_bytes([header[0], header[1], header[2], header[3]]) as usize;
             let height = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
@@ -241,6 +297,10 @@ fn spawn_reader(mut stdout: ChildStdout, latest: Arc<Mutex<Option<RawFrame>>>, c
             *latest.lock().expect("not poisoned") = Some(RawFrame { width, height, rgb });
             ctx.request_repaint();
         }
+        // Loud, not quiet: a dead stream shows as an error in the panel
+        // rather than a frame silently frozen mid-motion.
+        stream_ended.store(true, Ordering::Relaxed);
+        ctx.request_repaint();
     });
 }
 

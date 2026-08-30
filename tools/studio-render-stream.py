@@ -70,6 +70,18 @@ BUILDERS = {
 WIDTH, HEIGHT = 1024, 576
 TARGET_HZ = 30.0
 
+# The task's own offscreen budget is sized to its cameras (1280x720, the
+# ArmnetBench wrist camera) — a full-screen viewer asks for more, and
+# `mujoco.Renderer` REFUSES a size beyond the model's framebuffer rather
+# than clamping (measured live: "Image width 1376 > framebuffer width
+# 1280", the stream died, the viewport froze on its last frame). The
+# budget is raised to the viewer's own cap before compile, and requests
+# are clamped to the compiled framebuffer regardless, so no size a viewer
+# sends can kill the stream. 1920 matches MAX_RENDER_SIDE in
+# crates/studio-shell/src/viewport.rs — duplicated across the language
+# boundary like the rest of this wire contract; change both together.
+MAX_RENDER_SIDE = 1920
+
 # Seeded from the `front` ArmnetBench camera's own placement
 # (pos=[0, -0.85, 0.25], rq_pipeline/tasks/so101.py) so the free camera's
 # first frame looks close to that fixed one — approximate by eye, not
@@ -121,6 +133,14 @@ def _read_camera_updates(camera: OrbitCamera) -> None:
 
 def stream(task_name: str) -> None:
     task = BUILDERS[task_name]()
+    # Raise (never lower) the offscreen budget to the viewer's cap — see
+    # MAX_RENDER_SIDE's comment for the measured failure without this.
+    task.spec.visual.global_.offwidth = max(
+        task.spec.visual.global_.offwidth, MAX_RENDER_SIDE
+    )
+    task.spec.visual.global_.offheight = max(
+        task.spec.visual.global_.offheight, MAX_RENDER_SIDE
+    )
     model = task.spec.compile()
     data = mujoco.MjData(model)
     width, height = WIDTH, HEIGHT
@@ -150,6 +170,13 @@ def stream(task_name: str) -> None:
         mujoco.mj_step(model, data)
 
         want_width, want_height = orbit.size()
+        # Clamp to the compiled framebuffer no matter what the viewer
+        # asked: `mujoco.Renderer` refuses (raises) beyond it, and an
+        # exception here kills the whole stream. Belt to the budget
+        # raise's braces — even a viewer with a different cap degrades to
+        # a smaller render instead of a frozen viewport.
+        want_width = min(want_width, int(model.vis.global_.offwidth))
+        want_height = min(want_height, int(model.vis.global_.offheight))
         if (want_width, want_height) != (width, height):
             # `Renderer` is fixed-size once constructed — a size change
             # from the viewer means throw it away and build a new one, not

@@ -233,10 +233,16 @@ async fn run_session(
     mut prompts: mpsc::UnboundedReceiver<String>,
     ctx: egui::Context,
 ) {
+    // The adapter's stderr in the transcript was bring-up diagnostics
+    // (it's how the stale package name and the session ids were seen);
+    // with the connection stable it's noise in a product panel. Off by
+    // default, one env var to bring it back when diagnosing:
+    //     STUDIO_ACP_DEBUG=1 cargo run
+    let show_stderr = std::env::var_os("STUDIO_ACP_DEBUG").is_some();
     let debug_transcript = Arc::clone(&transcript);
     let debug_ctx = ctx.clone();
     let agent = AcpAgent::claude_agent().with_debug(move |line, direction| {
-        if direction == LineDirection::Stderr {
+        if show_stderr && direction == LineDirection::Stderr {
             push(
                 &debug_transcript,
                 &debug_ctx,
