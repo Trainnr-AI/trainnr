@@ -183,12 +183,22 @@ impl ViewportFeed {
         // match a panel of a different aspect ratio (it will letterbox
         // instead, which is correct when the two aspect ratios differ).
         let available = ui.available_size();
-        let response = ui.add(
-            egui::Image::new(texture)
-                .fit_to_exact_size(available)
-                .maintain_aspect_ratio(true)
-                .sense(egui::Sense::click_and_drag()),
-        );
+        // Centered: when aspects differ the fitted image is smaller than
+        // the panel, and a left-hugging frame reads as broken (seen live
+        // when a clamp bug made the mismatch large).
+        let response = ui
+            .with_layout(
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                |ui| {
+                    ui.add(
+                        egui::Image::new(texture)
+                            .fit_to_exact_size(available)
+                            .maintain_aspect_ratio(true)
+                            .sense(egui::Sense::click_and_drag()),
+                    )
+                },
+            )
+            .inner;
 
         // Camera input as deltas — the Python side integrates and clamps.
         let mut d_azimuth = 0.0f32;
@@ -216,12 +226,7 @@ impl ViewportFeed {
         // let egui upscale the difference — visibly soft next to the
         // Rerun viewer beside it.
         let pixels_per_point = ui.ctx().pixels_per_point();
-        let want = (
-            ((available.x * pixels_per_point).round() as u32)
-                .clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
-            ((available.y * pixels_per_point).round() as u32)
-                .clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
-        );
+        let want = render_size(available * pixels_per_point);
         let size_changed = want != self.sent_size;
         let resize_ripe = self
             .last_resize_sent
@@ -303,6 +308,27 @@ fn spawn_reader(
     });
 }
 
+/// Desired physical pixels → the render size to request, bounds applied
+/// by SCALING BOTH dimensions together, never clamping one alone: the
+/// first Retina pass clamped per-dimension, a wide panel hit the 1920
+/// width cap with its height untouched, and the requested aspect no
+/// longer matched the panel's — the frame letterboxed to a strip
+/// (seen live). Aspect is the invariant; resolution is the variable.
+fn render_size(desired: egui::Vec2) -> (u32, u32) {
+    let (w, h) = (desired.x.max(1.0), desired.y.max(1.0));
+    let max = MAX_RENDER_SIDE as f32;
+    let min = MIN_RENDER_SIDE as f32;
+    let mut scale = (max / w).min(max / h).min(1.0);
+    scale = scale.max(min / w).max(min / h);
+    // The final per-dimension clamp only bites on degenerate aspects
+    // (a sliver so extreme both bounds can't hold at once) — there,
+    // staying inside the compiled framebuffer wins over exact aspect.
+    (
+        ((w * scale).round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+        ((h * scale).round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+    )
+}
+
 /// One camera+size update in the script's stdin wire format — Python's
 /// `struct.unpack("<fffII", …)` exactly: three little-endian f32 deltas,
 /// two little-endian u32 absolute pixels. Tested below against bytes
@@ -339,6 +365,32 @@ mod tests {
             0x40, 0x02, 0x00, 0x00, // 576u32 LE
         ];
         assert_eq!(encode_camera_update(1.0, -2.5, 0.25, (1024, 576)), expected);
+    }
+
+    #[test]
+    fn oversized_requests_scale_both_dimensions_preserving_aspect() {
+        // The regression this exists for: a 3000×380 Retina request was
+        // clamped to 1920×380 — aspect 7.9:1 became 5.05:1 and the
+        // frame letterboxed to a strip. Scaling keeps the ratio.
+        let (w, h) = render_size(egui::vec2(3000.0, 380.0));
+        assert_eq!((w, h), (1920, 243));
+        let requested = 3000.0 / 380.0;
+        let got = f64::from(w) / f64::from(h);
+        assert!(
+            (got - requested).abs() / requested < 0.01,
+            "{got} vs {requested}"
+        );
+    }
+
+    #[test]
+    fn small_and_degenerate_sizes_stay_inside_bounds() {
+        // A sliver scales UP to the floor…
+        let (w, h) = render_size(egui::vec2(64.0, 40.0));
+        assert!(w >= MIN_RENDER_SIDE && h >= MIN_RENDER_SIDE);
+        // …and an aspect too extreme for both bounds still lands inside
+        // them (framebuffer safety beats exact aspect there).
+        let (w, h) = render_size(egui::vec2(10_000.0, 10.0));
+        assert!(w <= MAX_RENDER_SIDE && h >= MIN_RENDER_SIDE);
     }
 
     #[test]
