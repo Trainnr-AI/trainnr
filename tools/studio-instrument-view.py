@@ -108,7 +108,12 @@ def log_fits() -> list[str]:
     return param_origins
 
 
-def log_friction() -> list[str]:
+def log_friction(recording: rr.RecordingStream) -> list[str]:
+    """Into its OWN recording: a Rerun recording displays one active
+    timeline at a time, and friction's clock is velocity — mixed into the
+    fits' `sweep` recording, these views rendered as a single vertical
+    line until the operator found the timeline dropdown. Each recording
+    gets its natural clock instead."""
     origins = []
     for tier in FRICTION_TIERS:
         curve = friction_curve(FRICTION_SERVO, tier)
@@ -116,15 +121,17 @@ def log_friction() -> list[str]:
         for velocity, unloaded, loaded in zip(
             curve["velocity"], curve["unloaded"], curve["loaded"], strict=True
         ):
-            rr.set_time("velocity_mrad_s", sequence=int(velocity * 1000))
-            rr.log(f"{origin}/unloaded", rr.Scalars(unloaded))
-            rr.log(f"{origin}/under_{curve['tau_external']}Nm_load", rr.Scalars(loaded))
+            recording.set_time("velocity_mrad_s", sequence=int(velocity * 1000))
+            recording.log(f"{origin}/unloaded", rr.Scalars(unloaded))
+            recording.log(
+                f"{origin}/under_{curve['tau_external']}Nm_load", rr.Scalars(loaded)
+            )
         origins.append(origin)
     return origins
 
 
-def blueprint(
-    eval_origins: list[str], fit_origins: list[str], friction_origins: list[str]
+def instrument_blueprint(
+    eval_origins: list[str], fit_origins: list[str]
 ) -> rrb.Blueprint:
     eval_views = [
         view
@@ -138,17 +145,26 @@ def blueprint(
         rrb.TimeSeriesView(origin=origin, name=origin.rsplit("/", 1)[1])
         for origin in fit_origins
     ] + [rrb.TextDocumentView(origin="fits/rig-drivetrain/verdicts", name="verdicts")]
+    # Panels stay OPEN: this recording is reached by picking it in the
+    # Sources list, and a blueprint that collapses the left panel hides
+    # that list — the operator hunted for it on the first run.
+    return rrb.Blueprint(
+        rrb.Vertical(
+            rrb.Horizontal(*eval_views, name="evaluations"),
+            rrb.Horizontal(*fit_views, name="fit records"),
+        ),
+        collapse_panels=False,
+    )
+
+
+def friction_blueprint(friction_origins: list[str]) -> rrb.Blueprint:
     friction_views = [
         rrb.TimeSeriesView(origin=origin, name=f"{origin.rsplit('/', 1)[1]} model")
         for origin in friction_origins
     ]
     return rrb.Blueprint(
-        rrb.Vertical(
-            rrb.Horizontal(*eval_views, name="evaluations"),
-            rrb.Horizontal(*fit_views, name="fit records"),
-            rrb.Horizontal(*friction_views, name="friction (x: velocity, mrad/s)"),
-        ),
-        collapse_panels=True,
+        rrb.Horizontal(*friction_views, name="friction (x: velocity, mrad/s)"),
+        collapse_panels=False,
     )
 
 
@@ -157,8 +173,20 @@ def main() -> None:
     rr.connect_grpc()  # the Studio's embedded viewer on the standard port
     eval_origins = log_evals()
     fit_origins = log_fits()
-    friction_origins = log_friction()
-    rr.send_blueprint(blueprint(eval_origins, fit_origins, friction_origins))
+    rr.send_blueprint(instrument_blueprint(eval_origins, fit_origins))
+
+    actuators = rr.RecordingStream("robotiq-actuators")
+    actuators.connect_grpc()
+    friction_origins = log_friction(actuators)
+    actuators.send_blueprint(friction_blueprint(friction_origins))
+    actuators.flush(timeout_sec=10.0)
+
+    # A one-shot that exits right after logging can beat its own gRPC
+    # queue — the first live run printed success while the viewer never
+    # received a byte. Block until everything is actually delivered.
+    recording = rr.get_global_data_recording()
+    if recording is not None:
+        recording.flush(timeout_sec=10.0)
     print(
         f"logged {len(eval_origins)} eval funnel(s), "
         f"{len(fit_origins)} fit parameter(s), "

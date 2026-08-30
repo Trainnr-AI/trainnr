@@ -126,6 +126,20 @@ impl eframe::App for StudioShell {
         self.agent.drain_into(&mut self.transcript);
         let pending = self.agent.pending_permission();
 
+        // The app's own identity strip. The dock icon needs .app bundle
+        // packaging on macOS (a distribution step, not a runtime call),
+        // and the viewer pane's "rerun" wordmark honestly labels the
+        // embedded viewer — this bar is the part that is ours to brand.
+        egui::Panel::top("brand_bar").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(4.0);
+                let accent = ui.tokens().alert_warning.icon;
+                ui.label(egui::RichText::new("●").color(accent));
+                ui.label(egui::RichText::new("robotiq studio").strong().size(15.0));
+                ui.weak("· measure, don't guess");
+            });
+        });
+
         egui::Panel::right("agent_panel")
             .default_size(AGENT_PANEL_DEFAULT_WIDTH)
             .show(ui, |ui| {

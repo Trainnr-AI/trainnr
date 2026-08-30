@@ -78,7 +78,15 @@ TARGET_HZ = 30.0
 # Strictly best-effort: viz must never kill rendering (the same doctrine
 # the resize clamp bought), so a missing SDK or an absent viewer just
 # means no narration.
-NARRATE_HZ = 30.0  # every rendered frame; ~20 scalar series is cheap
+# Measured the hard way: at 30 Hz this narration is ~750 log calls/s,
+# which outran the embedded viewer's ingest (debug build), filled its
+# 128 MiB / 1024-message quota channel one minute after launch, and
+# WEDGED it — the viewer kept drawing stale data while every later
+# connection's messages (probes, the instrument one-shots) queued behind
+# the block forever, delivered at the TCP level and never displayed.
+# 10 Hz is ample for glanceable telemetry and stays far under the drain
+# rate; the pixels keep their full frame rate regardless.
+NARRATE_HZ = 10.0
 
 
 class PhysicsNarrator:
@@ -275,13 +283,16 @@ def stream(task_name: str) -> None:
     period = 0.0
     dt = model.opt.timestep
     frame_interval = 1.0 / TARGET_HZ
+    narrate_interval = 1.0 / NARRATE_HZ
+    last_narrated = 0.0
 
     while True:
         started = time.monotonic()
         period += dt
         data.ctrl[:] = 0.2 * math.sin(period)
         mujoco.mj_step(model, data)
-        if narrator is not None:
+        if narrator is not None and started - last_narrated >= narrate_interval:
+            last_narrated = started
             narrator.log(data)
 
         want_width, want_height = orbit.size()
