@@ -61,6 +61,22 @@ already typed.
 **New work**: the MCP server itself (§9 has it first in the
 roadmap — it's useful standalone, before any native app exists).
 
+**Built (2026-08-30)**: all of the above is now running in
+`crates/studio-shell` — the ACP session against Claude Code's adapter
+(the package name moved to `@agentclientprotocol/claude-agent-acp`;
+the `@zed-industries` name in the paragraph above is its dead earlier
+org), the MCP server handed to it at session creation, and a
+first-class panel on top: tool calls as live cards keyed by
+`ToolCallId` (spinner → ✓/✗ mutating in place, expandable to output
+and real ± diffs), agent replies as rendered markdown, a Stop button
+wired to ACP `session/cancel`, prompt queueing mid-turn, and the
+seven pipeline specialists (`.claude/agents/`) as stage chips that
+route prompts via Claude Code's own subagent dispatch. Every
+specialist's definition carries the Studio streaming contract: render
+into the embedded viewer on :9876, `flush(timeout_sec=10.0)` for
+one-shots, one recording per clock, ~10 Hz narration — so agents'
+evidence lands in the running window, not in terminal scrollback.
+
 ## 2. The native app shell — GPUI, not a fork of Zed
 
 **What**: Zed's *editor* (the crates worth reusing for text editing)

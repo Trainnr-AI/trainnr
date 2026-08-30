@@ -10214,9 +10214,11 @@ dependencies = [
  "agent-client-protocol",
  "eframe",
  "egui",
+ "egui_commonmark",
  "mimalloc",
  "re_ui",
  "rerun",
+ "similar",
  "tokio",
 ]
 

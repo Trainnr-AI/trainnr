@@ -15,11 +15,13 @@
 //! replaced it with the wheel.
 
 mod agent;
+mod transcript;
 mod viewport;
 
-use agent::{AgentLine, AgentSession};
+use agent::{AgentSession, TranscriptItem};
 use re_ui::UiExt as _;
 use rerun::external::{re_crash_handler, re_grpc_server, re_log, re_memory, re_viewer};
+use transcript::TranscriptView;
 use viewport::ViewportFeed;
 
 // Rerun's own allocator setup, verbatim: the accounting wrapper is what
@@ -32,6 +34,22 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 // a genuine dual-arm pick-and-place cycling the protocol's own paired
 // trial starts, not placeholder motion (tools/studio-render-stream.py).
 const DEFAULT_TASK: &str = "kitting";
+
+/// The robot-development pipeline as the panel's first-class entry
+/// points — (chip label, subagent name in `.claude/agents/`), in
+/// pipeline order. Picking one routes the prompt to that specialist via
+/// Claude Code's own subagent dispatch; the specialists' definitions
+/// carry the Studio streaming contract (Rerun on :9876 + the MuJoCo
+/// pipeline tools), so their evidence lands in THIS window live.
+const SPECIALISTS: &[(&str, &str)] = &[
+    ("onboard", "robot-onboarding"),
+    ("identify", "system-identification"),
+    ("tasks", "task-designer"),
+    ("data", "data-generator"),
+    ("train", "policy-trainer"),
+    ("eval", "evaluator"),
+    ("deploy", "deploy-engineer"),
+];
 
 /// Agent panel layout, sized by eye against this window's default size.
 const AGENT_PANEL_DEFAULT_WIDTH: f32 = 360.0;
@@ -48,6 +66,9 @@ const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 420.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 160.0;
+/// Transcript prose size — re_ui's inspector-density default reads as a
+/// small grey wall in a conversation (seen live).
+const TRANSCRIPT_BODY_SIZE: f32 = 14.0;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -112,7 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 viewport,
                 agent,
                 transcript: Vec::new(),
+                transcript_view: TranscriptView::new(),
                 draft: String::new(),
+                specialist: None,
             }))
         }),
     )?;
@@ -123,8 +146,25 @@ struct StudioShell {
     rerun_app: re_viewer::App,
     viewport: ViewportFeed,
     agent: AgentSession,
-    transcript: Vec<AgentLine>,
+    transcript: Vec<TranscriptItem>,
+    transcript_view: TranscriptView,
     draft: String,
+    /// Index into `SPECIALISTS` — which pipeline stage the next prompt
+    /// is addressed to. `None` is the plain generalist session.
+    specialist: Option<usize>,
+}
+
+/// "17.1k" / "1.0M" instead of "17102" / "1000000" — the footer states a
+/// magnitude, not a ledger ("1000.0k" shipped once; a unit that never
+/// rolls over isn't a unit).
+fn compact_count(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1000 {
+        format!("{:.1}k", n as f64 / 1000.0)
+    } else {
+        n.to_string()
+    }
 }
 
 /// `crates/studio-shell` is always two directories under the repo root —
@@ -191,7 +231,19 @@ impl eframe::App for StudioShell {
         egui::Panel::right("agent_panel")
             .default_size(AGENT_PANEL_DEFAULT_WIDTH)
             .show(ui, |ui| {
-                ui.heading("Agent");
+                // Compact header: who this is, and one line of session
+                // state (starting…/connected/the session's own title) —
+                // which used to open the transcript as debris rows.
+                ui.horizontal(|ui| {
+                    ui.strong("claude");
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(self.agent.status_line()).weak().small(),
+                        )
+                        .truncate(),
+                    );
+                });
+                ui.separator();
 
                 egui::Panel::bottom("agent_panel_input").show(ui, |ui| {
                     if let Some((tool_title, options)) = pending {
@@ -217,44 +269,122 @@ impl eframe::App for StudioShell {
                             });
                         });
                     }
-                    ui.horizontal(|ui| {
-                        let response = ui.add(
-                            egui::TextEdit::singleline(&mut self.draft).hint_text("Ask Claude…"),
-                        );
-                        let sent = (response.lost_focus()
-                            && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                            || ui.button("Send").clicked();
-                        if sent && !self.draft.trim().is_empty() {
-                            self.agent.send(std::mem::take(&mut self.draft));
+                    // The robot-development pipeline as chips: pick a
+                    // stage and the prompt goes to that specialist (the
+                    // agents in .claude/agents/, dispatched by Claude
+                    // Code itself). This panel is an agentic workbench
+                    // for building robots, not raw chat access.
+                    ui.horizontal_wrapped(|ui| {
+                        for (index, (label, agent_name)) in SPECIALISTS.iter().enumerate() {
+                            let selected = self.specialist == Some(index);
+                            let response = ui
+                                .selectable_label(selected, *label)
+                                .on_hover_text(*agent_name);
+                            if response.clicked() {
+                                // Click again to drop back to generalist.
+                                self.specialist = if selected { None } else { Some(index) };
+                            }
                         }
                     });
+
+                    // Enter sends, Shift+Enter breaks the line — consumed
+                    // BEFORE the editor sees the key, or the editor would
+                    // insert the newline first (the standard egui order
+                    // for stealing a key from a focused TextEdit).
+                    let draft_id = egui::Id::new("agent_draft");
+                    let enter_sends = ui.memory(|m| m.has_focus(draft_id))
+                        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                    let hint = match self.specialist {
+                        Some(index) => format!("Ask the {} agent…", SPECIALISTS[index].1),
+                        None => "Ask Claude…  (Enter sends, Shift+Enter for a new line)".to_owned(),
+                    };
+                    egui::Frame::group(ui.style())
+                        .fill(ui.visuals().extreme_bg_color)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.draft)
+                                    .id(draft_id)
+                                    // The composer's outer group frame is
+                                    // the chrome; the editor itself draws
+                                    // none (an empty Frame — 0.36's way to
+                                    // say "no frame").
+                                    .frame(egui::Frame::new())
+                                    .desired_rows(2)
+                                    .desired_width(f32::INFINITY)
+                                    .hint_text(hint),
+                            );
+                            // Bottom row of the composer, actions on the
+                            // right where every chat app puts them; the
+                            // context-window usage sits quietly on the
+                            // left (Zed keeps it near the editor too —
+                            // the stream of per-chunk token counts was
+                            // pure noise as transcript rows).
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let turn_active = self.agent.turn_active();
+                                    // Mid-turn a prompt QUEUES behind the
+                                    // running one (it shows in the
+                                    // transcript immediately) — the label
+                                    // says so instead of pretending to
+                                    // interrupt.
+                                    let send_label = if turn_active { "Queue" } else { "Send" };
+                                    if (ui.button(send_label).clicked() || enter_sends)
+                                        && !self.draft.trim().is_empty()
+                                    {
+                                        let text = std::mem::take(&mut self.draft);
+                                        let specialist =
+                                            self.specialist.map(|index| SPECIALISTS[index].1);
+                                        self.agent.send(text, specialist);
+                                    }
+                                    if turn_active {
+                                        if ui.button("Stop").clicked() {
+                                            self.agent.cancel();
+                                        }
+                                        ui.add(egui::Spinner::new().size(12.0));
+                                    }
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            if let Some((used, size)) = self.agent.usage() {
+                                                ui.weak(
+                                                    egui::RichText::new(format!(
+                                                        "{} / {} tokens",
+                                                        compact_count(used),
+                                                        compact_count(size)
+                                                    ))
+                                                    .small(),
+                                                );
+                                            }
+                                        },
+                                    );
+                                },
+                            );
+                        });
                 });
 
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .stick_to_bottom(true)
                     .show(ui, |ui| {
-                        for line in &self.transcript {
-                            match line {
-                                AgentLine::User(text) => {
-                                    ui.strong("you");
-                                    ui.label(text);
-                                }
-                                AgentLine::AgentText(text) => {
-                                    ui.strong("claude");
-                                    ui.label(text);
-                                }
-                                AgentLine::Status(text) => {
-                                    ui.info_label(text);
-                                }
-                                AgentLine::Error(text) => {
-                                    ui.error_label(text);
-                                }
-                                AgentLine::Other(text) => {
-                                    ui.colored_label(egui::Color32::DARK_GRAY, text);
-                                }
-                            }
+                        // Conversation type: re_ui's default body text is
+                        // sized for dense inspector panels; a transcript
+                        // is read as prose and needs the step up (the
+                        // small grey wall was the first live complaint).
+                        if let Some(body) =
+                            ui.style_mut().text_styles.get_mut(&egui::TextStyle::Body)
+                        {
+                            body.size = TRANSCRIPT_BODY_SIZE;
                         }
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        // Breathing room at the panel edges.
+                        egui::Frame::new()
+                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .show(ui, |ui| {
+                                for (index, item) in self.transcript.iter().enumerate() {
+                                    self.transcript_view.show(ui, index, item);
+                                }
+                            });
                     });
             });
 

@@ -38,3 +38,29 @@ Hard-won facts you must not re-learn the expensive way:
 
 What you do NOT do: hand-tune an episode past the referee, or ship a
 dataset whose manifest lacks the expert stamp.
+
+## The Studio: render and stream, always
+
+The operator usually has the Studio open — a native window whose
+embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
+then `rr.connect_grpc()` lands there) and whose viewport is a live
+MuJoCo render. Evidence that exists only in your terminal output does
+not count as shown: every sim run, fit, sweep or eval you produce must
+stream into that window while it runs, or be logged there when it
+completes. One-shot scripts MUST call
+`recording.flush(timeout_sec=10.0)` before exit, or the process exits
+before the gRPC queue drains and the viewer shows nothing (measured
+failure, not a guess).
+
+- Working examples to copy: `tools/studio-instrument-view.py` (evals,
+  fits, friction curves), `tools/studio-render-stream.py` (a MuJoCo
+  loop narrating joints/actuators/contacts live),
+  `tools/rig-rerun.py`, `tools/train-watch.py`.
+- The proven visual grammar (what reads well, what wedged the viewer):
+  `docs/e2e-research/55-rerun-viz-catalog.md`. Two hard rules from it:
+  one recording per clock (never mix timelines in one recording), and
+  cap live narration near 10 Hz (30 Hz filled the ingest quota and
+  wedged the viewer for good).
+- MuJoCo and the pipeline run through the pipeline venv:
+  `uv run --directory pipeline --extra sim python …` — never a bare
+  `python`.
