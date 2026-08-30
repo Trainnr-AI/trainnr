@@ -71,6 +71,11 @@ const VIEWPORT_MIN_HEIGHT: f32 = 160.0;
 /// Transcript prose size — re_ui's inspector-density default reads as a
 /// small grey wall in a conversation (seen live).
 const TRANSCRIPT_BODY_SIZE: f32 = 14.0;
+/// Vertical rhythm between transcript items, and the panel-edge margins
+/// around them.
+const TRANSCRIPT_ITEM_SPACING: f32 = 6.0;
+const TRANSCRIPT_MARGIN_X: i8 = 8;
+const TRANSCRIPT_MARGIN_Y: i8 = 4;
 /// The code editor's starting width when toggled on (file tree + a
 /// readable column of code).
 const CODE_PANEL_DEFAULT_WIDTH: f32 = 640.0;
@@ -202,11 +207,40 @@ impl eframe::App for StudioShell {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.agent.drain_into(&mut self.transcript);
-        let pending = self.agent.pending_permission();
 
-        // The window's one header: wordmark left, the viewer's panel
-        // toggles right (its own top bar is hidden — see the startup
-        // override). Same icons, same commands as the native bar.
+        self.brand_bar(ui);
+        self.agent_panel(ui);
+
+        // The code editor claims the left side when toggled on — laid
+        // out before the viewport so it runs full height and the
+        // sim/viewer split shares what remains.
+        if self.show_code {
+            egui::Panel::left("code_panel")
+                .resizable(true)
+                .default_size(CODE_PANEL_DEFAULT_WIDTH)
+                .show(ui, |ui| self.code.show(ui));
+        }
+
+        // The MuJoCo sim viewport on top; the whole rest of the window IS
+        // the Rerun viewer — blueprint panel, timeline, views, exactly as
+        // the standalone app renders them.
+        egui::Panel::top("sim_viewport")
+            .resizable(true)
+            .default_size(VIEWPORT_DEFAULT_HEIGHT)
+            .min_size(VIEWPORT_MIN_HEIGHT)
+            .show(ui, |ui| {
+                self.viewport.show(ui);
+            });
+        self.rerun_app.ui(ui, frame);
+    }
+}
+
+impl StudioShell {
+    /// The window's one header: wordmark left, the viewer's panel
+    /// toggles and the code toggle right (the viewer's own top bar is
+    /// hidden — see the startup override). Same icons, same commands as
+    /// the native bar.
+    fn brand_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("brand_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 #[cfg(target_os = "macos")]
@@ -247,7 +281,12 @@ impl eframe::App for StudioShell {
                 });
             });
         });
+    }
 
+    /// The agent panel: session header, transcript, and the composer
+    /// with its pipeline-stage chips.
+    fn agent_panel(&mut self, ui: &mut egui::Ui) {
+        let pending = self.agent.pending_permission();
         egui::Panel::right("agent_panel")
             .default_size(AGENT_PANEL_DEFAULT_WIDTH)
             .show(ui, |ui| {
@@ -361,7 +400,7 @@ impl eframe::App for StudioShell {
                                         if ui.button("Stop").clicked() {
                                             self.agent.cancel();
                                         }
-                                        ui.add(egui::Spinner::new().size(12.0));
+                                        ui.add(egui::Spinner::new().size(transcript::SPINNER_SIZE));
                                     }
                                     ui.with_layout(
                                         egui::Layout::left_to_right(egui::Align::Center),
@@ -396,10 +435,13 @@ impl eframe::App for StudioShell {
                         {
                             body.size = TRANSCRIPT_BODY_SIZE;
                         }
-                        ui.spacing_mut().item_spacing.y = 6.0;
+                        ui.spacing_mut().item_spacing.y = TRANSCRIPT_ITEM_SPACING;
                         // Breathing room at the panel edges.
                         egui::Frame::new()
-                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .inner_margin(egui::Margin::symmetric(
+                                TRANSCRIPT_MARGIN_X,
+                                TRANSCRIPT_MARGIN_Y,
+                            ))
                             .show(ui, |ui| {
                                 for (index, item) in self.transcript.iter().enumerate() {
                                     self.transcript_view.show(ui, index, item);
@@ -407,27 +449,36 @@ impl eframe::App for StudioShell {
                             });
                     });
             });
+    }
+}
 
-        // The code editor claims the left side when toggled on — laid
-        // out before the viewport so it runs full height and the
-        // sim/viewer split shares what remains.
-        if self.show_code {
-            egui::Panel::left("code_panel")
-                .resizable(true)
-                .default_size(CODE_PANEL_DEFAULT_WIDTH)
-                .show(ui, |ui| self.code.show(ui));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counts_roll_over_their_units() {
+        // "1000.0k tokens" shipped once — a unit that never rolls over
+        // isn't a unit.
+        assert_eq!(compact_count(999), "999");
+        assert_eq!(compact_count(17_102), "17.1k");
+        assert_eq!(compact_count(1_000_000), "1.0M");
+    }
+
+    #[test]
+    fn every_specialist_chip_names_a_real_agent_definition() {
+        // The chips dispatch by NAME over the wire; a renamed agent file
+        // would break routing silently — the prompt just wouldn't find
+        // its specialist.
+        for (chip, agent_name) in SPECIALISTS {
+            let path = repo_root()
+                .join(".claude/agents")
+                .join(format!("{agent_name}.md"));
+            assert!(
+                path.is_file(),
+                "chip '{chip}' routes to a missing agent definition: {}",
+                path.display()
+            );
         }
-
-        // The MuJoCo sim viewport on top; the whole rest of the window IS
-        // the Rerun viewer — blueprint panel, timeline, views, exactly as
-        // the standalone app renders them.
-        egui::Panel::top("sim_viewport")
-            .resizable(true)
-            .default_size(VIEWPORT_DEFAULT_HEIGHT)
-            .min_size(VIEWPORT_MIN_HEIGHT)
-            .show(ui, |ui| {
-                self.viewport.show(ui);
-            });
-        self.rerun_app.ui(ui, frame);
     }
 }

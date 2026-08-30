@@ -16,6 +16,7 @@
 use std::path::{Path, PathBuf};
 
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
+use re_ui::UiExt as _;
 
 /// Directories the tree never descends into — build output, VCS
 /// internals, caches. Everything else is the product.
@@ -116,15 +117,30 @@ impl CodePanel {
             } else {
                 let open = self.open.as_ref().is_some_and(|f| f.path == path);
                 if ui.selectable_label(open, &name).clicked() {
-                    self.load(path);
+                    self.open_file(path);
                 }
             }
         }
     }
 
+    /// Switch to `path` from the tree — REFUSED while the open file has
+    /// unsaved edits, by name: a tree click silently discarding a dirty
+    /// buffer is data loss dressed as navigation.
+    fn open_file(&mut self, path: PathBuf) {
+        if let Some(file) = &self.open {
+            if file.dirty && file.path != path {
+                self.error = Some(format!(
+                    "unsaved changes in {} — Save or Reload it first",
+                    file_name(&file.path)
+                ));
+                return;
+            }
+        }
+        self.load(path);
+    }
+
     fn editor(&mut self, ui: &mut egui::Ui) {
         if let Some(error) = &self.error {
-            use re_ui::UiExt as _;
             ui.error_label(error);
         }
         let Some(file) = &self.open else {

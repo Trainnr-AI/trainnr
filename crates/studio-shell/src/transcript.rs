@@ -31,6 +31,15 @@ const DIFF_MAX_LINES: usize = 120;
 const TURN_GAP: f32 = 8.0;
 const ROW_GAP: f32 = 2.0;
 
+/// The one in-progress spinner size, shared with the composer's
+/// turn-active spinner in `main.rs` — it was 12.0 in three places once.
+pub const SPINNER_SIZE: f32 = 12.0;
+
+/// The user card's shape — filled, strokeless (a stroked version read
+/// as an editable text field on screen).
+const USER_CARD_CORNER_RADIUS: f32 = 6.0;
+const USER_CARD_MARGIN: f32 = 8.0;
+
 /// Draws transcript items. Owns the markdown cache (`egui_commonmark`
 /// keys its layout state by content, one cache for the whole panel).
 pub struct TranscriptView {
@@ -56,8 +65,8 @@ impl TranscriptView {
                 // sent message (seen live).
                 egui::Frame::new()
                     .fill(ui.visuals().code_bg_color)
-                    .corner_radius(6.0)
-                    .inner_margin(8.0)
+                    .corner_radius(USER_CARD_CORNER_RADIUS)
+                    .inner_margin(USER_CARD_MARGIN)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         if let Some(name) = specialist {
@@ -73,11 +82,10 @@ impl TranscriptView {
             }
             TranscriptItem::Thought(text) => {
                 collapsing_row(ui, ("thought", index), |ui| {
-                    ui.add(egui::Spinner::new().size(12.0).color(
-                        // A thought that's still streaming vs one long past
-                        // isn't tracked; the dimmed label carries the tone.
-                        ui.visuals().weak_text_color(),
-                    ));
+                    // No spinner here, deliberately: whether a thought is
+                    // still streaming isn't tracked, and an animated
+                    // spinner is both a guess AND a permanent repaint
+                    // loop (egui spinners repaint every frame, forever).
                     ui.weak(egui::RichText::new("thinking…").italics());
                 })
                 .body_unindented(|ui| {
@@ -163,7 +171,8 @@ fn indented(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui)) {
     ui.indent("row_body", body);
 }
 
-/// The one frame style filled cards share (user messages, the plan).
+/// The plan card's frame (user messages carry their own filled,
+/// strokeless frame — see `show`; this one keeps the group stroke).
 fn card_frame(ui: &egui::Ui) -> egui::Frame {
     egui::Frame::group(ui.style()).inner_margin(6.0)
 }
@@ -184,7 +193,7 @@ fn status_glyph(ui: &mut egui::Ui, status: ToolCallStatus) {
         // Pending, InProgress, and whatever the protocol adds later:
         // still running as far as this panel knows.
         _ => {
-            ui.add(egui::Spinner::new().size(12.0));
+            ui.add(egui::Spinner::new().size(SPINNER_SIZE));
         }
     }
 }
