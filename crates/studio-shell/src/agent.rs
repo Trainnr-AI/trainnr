@@ -36,12 +36,13 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot;
 
 /// One entry in the transcript shown in the panel.
+#[derive(Debug, PartialEq)]
 pub enum AgentLine {
     User(String),
-    /// The agent's reply text. `push` grows this line in place as more
-    /// chunks stream in (adjacency-based, see `push`'s comment) rather
-    /// than starting a new "claude" bubble every few words — a real
-    /// session showed exactly that fragmentation before this existed.
+    /// The agent's reply text. Grown in place as more chunks stream in
+    /// (adjacency-based — see `coalesce`) rather than starting a new
+    /// "claude" bubble every few words; a real session showed exactly
+    /// that fragmentation before this existed.
     AgentText(String),
     /// A tool call, plan update, or anything else this pass doesn't render
     /// richly yet — Debug-formatted rather than dropped, so nothing this
@@ -151,36 +152,17 @@ impl AgentSession {
     }
 
     /// Moves every transcript line accumulated since the last call into
-    /// `out`, in order. Draining rather than cloning keeps the panel from
-    /// re-walking an ever-growing `Vec` every frame.
-    ///
-    /// The merge/dedup rules run HERE too, across the drain boundary —
-    /// not only in `push`. `push` merges against the shared buffer, but
-    /// this method empties that buffer every frame, so a slow-streaming
-    /// turn (one chunk per frame) always found it empty and every chunk
-    /// opened a fresh "claude" bubble. Seen live on the first long
-    /// subagent report; the fast-chunk case that tested green earlier
-    /// had simply been batching between frames.
+    /// `out`, applying `coalesce`'s rules on the way. Draining rather
+    /// than cloning keeps the panel from re-walking an ever-growing
+    /// `Vec` every frame — and the rules MUST run on this side of the
+    /// boundary: the shared buffer empties every frame, so merging there
+    /// only ever covered chunks that batched between frames (a
+    /// slow-streaming turn fragmented into dozens of bubbles until this
+    /// moved).
     pub fn drain_into(&self, out: &mut Vec<AgentLine>) {
         let mut shared = self.transcript.lock().expect("not poisoned");
         for line in shared.drain(..) {
-            // Adjacent agent-text chunks are one reply growing — merge by
-            // ADJACENCY, not `message_id` equality: this adapter doesn't
-            // set `message_id` on every chunk (measured live), while a
-            // real turn boundary always has a tool call, user message or
-            // status line in between, never silence.
-            if let AgentLine::AgentText(text) = &line {
-                if let Some(AgentLine::AgentText(last)) = out.last_mut() {
-                    last.push_str(text);
-                    continue;
-                }
-            }
-            if let Some(key) = line.dedup_key() {
-                if Some(key) == out.last().and_then(AgentLine::dedup_key) {
-                    continue;
-                }
-            }
-            out.push(line);
+            coalesce(out, line);
         }
     }
 
@@ -223,6 +205,32 @@ impl Drop for AgentSession {
             eprintln!("agent session did not shut down within {SHUTDOWN_WAIT:?}; proceeding");
         }
     }
+}
+
+/// Appends `line` to `out` under the transcript's rules — THE single
+/// home for them (tested below):
+///
+/// - Adjacent agent-text chunks are one reply growing — merged by
+///   ADJACENCY, not `message_id` equality: this adapter doesn't set
+///   `message_id` on every chunk (measured live), while a real turn
+///   boundary always has a tool call, user message or status line in
+///   between, never silence.
+/// - A `Status`/`Other`/`Error` line identical to the previous one is
+///   noise, not information, and is dropped; `User`/`AgentText` can
+///   legitimately repeat and never are.
+fn coalesce(out: &mut Vec<AgentLine>, line: AgentLine) {
+    if let AgentLine::AgentText(text) = &line {
+        if let Some(AgentLine::AgentText(last)) = out.last_mut() {
+            last.push_str(text);
+            return;
+        }
+    }
+    if let Some(key) = line.dedup_key() {
+        if Some(key) == out.last().and_then(AgentLine::dedup_key) {
+            return;
+        }
+    }
+    out.push(line);
 }
 
 fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: AgentLine) {
@@ -460,5 +468,78 @@ fn describe_update(update: SessionUpdate) -> AgentLine {
             _ => AgentLine::Other(String::new()), // unset/cleared — nothing to show
         },
         other => AgentLine::Other(format!("{other:?}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn drain(lines: Vec<AgentLine>) -> Vec<AgentLine> {
+        let mut out = Vec::new();
+        for line in lines {
+            coalesce(&mut out, line);
+        }
+        out
+    }
+
+    #[test]
+    fn adjacent_agent_text_chunks_grow_one_bubble() {
+        let out = drain(vec![
+            AgentLine::AgentText("Builds clean".into()),
+            AgentLine::AgentText(" (the crate is its own workspace).".into()),
+        ]);
+        assert_eq!(
+            out,
+            vec![AgentLine::AgentText(
+                "Builds clean (the crate is its own workspace).".into()
+            )]
+        );
+    }
+
+    #[test]
+    fn a_tool_call_between_chunks_is_a_turn_boundary() {
+        let out = drain(vec![
+            AgentLine::AgentText("first reply".into()),
+            AgentLine::Other("tool: Read File".into()),
+            AgentLine::AgentText("second reply".into()),
+        ]);
+        assert_eq!(
+            out.len(),
+            3,
+            "the tool line must split the bubbles: {out:?}"
+        );
+    }
+
+    #[test]
+    fn repeated_status_noise_collapses_but_conversation_never_does() {
+        let out = drain(vec![
+            AgentLine::Other("tokens: 17050 / 200000".into()),
+            AgentLine::Other("tokens: 17050 / 200000".into()),
+            AgentLine::User("hi".into()),
+            AgentLine::User("hi".into()),
+        ]);
+        // One status line survives; BOTH user lines do — a person may
+        // genuinely say the same thing twice.
+        assert_eq!(
+            out,
+            vec![
+                AgentLine::Other("tokens: 17050 / 200000".into()),
+                AgentLine::User("hi".into()),
+                AgentLine::User("hi".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn non_adjacent_duplicate_status_lines_both_survive() {
+        // Dedup is last-line-only by design: the same token count an
+        // hour later is real information again.
+        let out = drain(vec![
+            AgentLine::Other("46 slash commands available".into()),
+            AgentLine::Status("connected".into()),
+            AgentLine::Other("46 slash commands available".into()),
+        ]);
+        assert_eq!(out.len(), 3);
     }
 }

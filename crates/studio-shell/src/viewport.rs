@@ -239,16 +239,15 @@ impl ViewportFeed {
         let Some(stdin) = &mut self.stdin else {
             return;
         };
-        let mut bytes = [0u8; 20];
-        bytes[0..4].copy_from_slice(&d_azimuth.to_le_bytes());
-        bytes[4..8].copy_from_slice(&d_elevation.to_le_bytes());
-        bytes[8..12].copy_from_slice(&d_distance.to_le_bytes());
-        bytes[12..16].copy_from_slice(&self.sent_size.0.to_le_bytes());
-        bytes[16..20].copy_from_slice(&self.sent_size.1.to_le_bytes());
         // A closed pipe here means the render subprocess died; `show`'s
         // next call will already be reporting `spawn_error`-shaped state
         // via an absent texture, so silently dropping this write is fine.
-        let _ = stdin.write_all(&bytes);
+        let _ = stdin.write_all(&encode_camera_update(
+            d_azimuth,
+            d_elevation,
+            d_distance,
+            self.sent_size,
+        ));
     }
 }
 
@@ -293,4 +292,51 @@ fn spawn_reader(
         stream_ended.store(true, Ordering::Relaxed);
         ctx.request_repaint();
     });
+}
+
+/// One camera+size update in the script's stdin wire format — Python's
+/// `struct.unpack("<fffII", …)` exactly: three little-endian f32 deltas,
+/// two little-endian u32 absolute pixels. Tested below against bytes
+/// Python's own struct module would produce.
+fn encode_camera_update(
+    d_azimuth: f32,
+    d_elevation: f32,
+    d_distance: f32,
+    size: (u32, u32),
+) -> [u8; 20] {
+    let mut bytes = [0u8; 20];
+    bytes[0..4].copy_from_slice(&d_azimuth.to_le_bytes());
+    bytes[4..8].copy_from_slice(&d_elevation.to_le_bytes());
+    bytes[8..12].copy_from_slice(&d_distance.to_le_bytes());
+    bytes[12..16].copy_from_slice(&size.0.to_le_bytes());
+    bytes[16..20].copy_from_slice(&size.1.to_le_bytes());
+    bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_wire_matches_pythons_struct_format() {
+        // struct.pack("<fffII", 1.0, -2.5, 0.25, 1024, 576) — computed
+        // with CPython and pinned here, so both ends of the wire are
+        // held to the same bytes.
+        let expected: [u8; 20] = [
+            0x00, 0x00, 0x80, 0x3f, // 1.0f32 LE
+            0x00, 0x00, 0x20, 0xc0, // -2.5f32 LE
+            0x00, 0x00, 0x80, 0x3e, // 0.25f32 LE
+            0x00, 0x04, 0x00, 0x00, // 1024u32 LE
+            0x40, 0x02, 0x00, 0x00, // 576u32 LE
+        ];
+        assert_eq!(encode_camera_update(1.0, -2.5, 0.25, (1024, 576)), expected);
+    }
+
+    #[test]
+    fn a_no_op_update_still_carries_the_size() {
+        let bytes = encode_camera_update(0.0, 0.0, 0.0, (1920, 128));
+        assert_eq!(&bytes[0..12], &[0u8; 12]);
+        assert_eq!(u32::from_le_bytes(bytes[12..16].try_into().unwrap()), 1920);
+        assert_eq!(u32::from_le_bytes(bytes[16..20].try_into().unwrap()), 128);
+    }
 }
