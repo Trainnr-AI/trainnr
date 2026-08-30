@@ -37,6 +37,10 @@ use tokio::sync::oneshot;
 /// One entry in the transcript shown in the panel.
 pub enum AgentLine {
     User(String),
+    /// The agent's reply text. `push` grows this line in place as more
+    /// chunks stream in (adjacency-based, see `push`'s comment) rather
+    /// than starting a new "claude" bubble every few words — a real
+    /// session showed exactly that fragmentation before this existed.
     AgentText(String),
     /// A tool call, plan update, or anything else this pass doesn't render
     /// richly yet — Debug-formatted rather than dropped, so nothing this
@@ -156,6 +160,24 @@ impl AgentSession {
 
 fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: AgentLine) {
     let mut guard = transcript.lock().expect("not poisoned");
+
+    // Consecutive chunks grow one line in place instead of starting a new
+    // "claude" bubble every few words. Adjacency, not `message_id`
+    // equality: a live session showed this adapter doesn't set
+    // `message_id` on every chunk, so a strict-equality check missed real
+    // mid-sentence continuations. Two `AgentText` chunks with nothing
+    // else between them are, in practice, always the same reply — a real
+    // turn boundary has a tool call, a user message, or a status line in
+    // between, never silence.
+    if let AgentLine::AgentText(text) = &line {
+        if let Some(AgentLine::AgentText(last_text)) = guard.last_mut() {
+            last_text.push_str(text);
+            drop(guard);
+            ctx.request_repaint();
+            return;
+        }
+    }
+
     if let Some(key) = line.dedup_key() {
         if Some(key) == guard.last().and_then(AgentLine::dedup_key) {
             return; // identical status/other line as last time — nothing new to show
