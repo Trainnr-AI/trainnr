@@ -107,8 +107,10 @@ impl ViewportFeed {
         let pipeline_dir = repo_root.join("pipeline");
         let script = repo_root.join("tools").join("studio-render-stream.py");
 
+        // `viz` brings rerun-sdk: the script narrates the physics into
+        // the app's own embedded viewer (best-effort — see the script).
         let spawned = Command::new("uv")
-            .args(["run", "--extra", "sim", "python"])
+            .args(["run", "--extra", "sim", "--extra", "viz", "python"])
             .arg(&script)
             .arg(task_name)
             .current_dir(&pipeline_dir)

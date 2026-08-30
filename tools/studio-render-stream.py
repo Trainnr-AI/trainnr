@@ -70,6 +70,118 @@ BUILDERS = {
 WIDTH, HEIGHT = 1024, 576
 TARGET_HZ = 30.0
 
+# The physics narration into the Studio's embedded Rerun viewer: the same
+# `mj_step` loop that renders the pixels also logs the twin, every named
+# joint, every actuator and the contacts — one clock, so the plots can
+# never drift from the picture. Everything the MuJoCo viewer's own panels
+# show, but as named, legible Rerun views a blueprint lays out.
+# Strictly best-effort: viz must never kill rendering (the same doctrine
+# the resize clamp bought), so a missing SDK or an absent viewer just
+# means no narration.
+NARRATE_HZ = 30.0  # every rendered frame; ~20 scalar series is cheap
+
+
+class PhysicsNarrator:
+    """The sim's state into Rerun, per step, on the `sim` timeline."""
+
+    def __init__(self, model: "mujoco.MjModel", task_name: str) -> None:
+        import rerun as rr  # noqa: PLC0415 - viz extra
+        import rerun.blueprint as rrb  # noqa: PLC0415
+
+        from _rig3d import RigMirror  # noqa: PLC0415
+
+        self.rr = rr
+        rr.init(f"robotiq-sim-{task_name}", spawn=False)
+        rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
+        self.mirror = RigMirror(model, model_colors=True)
+
+        # Hinges and slides get scalar series; a free joint's 7-wide qpos
+        # is pose, not a signal, and the mirror already shows it.
+        scalar_types = (
+            int(mujoco.mjtJoint.mjJNT_HINGE),
+            int(mujoco.mjtJoint.mjJNT_SLIDE),
+        )
+        self.joints = [
+            (
+                model.joint(j).name or f"joint{j}",
+                model.jnt_qposadr[j],
+                model.jnt_dofadr[j],
+            )
+            for j in range(model.njnt)
+            if int(model.jnt_type[j]) in scalar_types
+        ]
+        self.actuators = [
+            (model.actuator(a).name or f"actuator{a}", a) for a in range(model.nu)
+        ]
+        rr.send_blueprint(self._blueprint(rrb))
+
+    def _blueprint(self, rrb: "object") -> "object":
+        """One curated layout: the twin beside four small-multiple views,
+        each a single unit family (positions, velocities, commands,
+        forces) so no axis ever mixes rad with N·m."""
+        # Origin-only views: the entity paths themselves split by unit
+        # family (`joints/position/<name>`), because a `contents` path
+        # filter silently matched nothing on first live contact while the
+        # filterless contacts view worked — structure beats query.
+        return rrb.Blueprint(
+            rrb.Horizontal(
+                rrb.Spatial3DView(origin="world", name="physics twin"),
+                rrb.Vertical(
+                    rrb.Horizontal(
+                        rrb.TimeSeriesView(
+                            origin="joints/position", name="joint positions (rad)"
+                        ),
+                        rrb.TimeSeriesView(
+                            origin="joints/velocity", name="joint velocities (rad/s)"
+                        ),
+                    ),
+                    rrb.Horizontal(
+                        rrb.TimeSeriesView(
+                            origin="actuators/command", name="actuator commands"
+                        ),
+                        rrb.TimeSeriesView(
+                            origin="actuators/force", name="actuator forces (N·m)"
+                        ),
+                    ),
+                    rrb.TimeSeriesView(origin="contacts", name="contacts in scene"),
+                ),
+                column_shares=[3, 2],
+            ),
+            collapse_panels=True,
+        )
+
+    def log(self, data: "mujoco.MjData") -> None:
+        rr = self.rr
+        rr.set_time("sim", duration=data.time)
+        self.mirror.log(data)
+        for name, qpos_adr, dof_adr in self.joints:
+            rr.log(f"joints/position/{name}", rr.Scalars(float(data.qpos[qpos_adr])))
+            rr.log(f"joints/velocity/{name}", rr.Scalars(float(data.qvel[dof_adr])))
+        for name, index in self.actuators:
+            rr.log(f"actuators/command/{name}", rr.Scalars(float(data.ctrl[index])))
+            rr.log(
+                f"actuators/force/{name}", rr.Scalars(float(data.actuator_force[index]))
+            )
+        rr.log("contacts/count", rr.Scalars(float(data.ncon)))
+        if data.ncon:
+            rr.log(
+                "world/contacts",
+                rr.Points3D(data.contact.pos[: data.ncon], radii=0.004),
+            )
+        else:
+            rr.log("world/contacts", rr.Clear(recursive=False))
+
+
+def narrator_for(model: "mujoco.MjModel", task_name: str) -> "PhysicsNarrator | None":
+    if "--no-rerun" in sys.argv:
+        return None
+    try:
+        return PhysicsNarrator(model, task_name)
+    except Exception as err:
+        print(f"physics narration disabled: {err}", file=sys.stderr)
+        return None
+
+
 # The task's own offscreen budget is sized to its cameras (1280x720, the
 # ArmnetBench wrist camera) — a full-screen viewer asks for more, and
 # `mujoco.Renderer` REFUSES a size beyond the model's framebuffer rather
@@ -153,6 +265,7 @@ def stream(task_name: str) -> None:
     orbit = OrbitCamera()
     threading.Thread(target=_read_camera_updates, args=(orbit,), daemon=True).start()
 
+    narrator = narrator_for(model, task_name)
     out = sys.stdout.buffer
 
     # A visible, harmless motion — not the task's real controller — so a
@@ -168,6 +281,8 @@ def stream(task_name: str) -> None:
         period += dt
         data.ctrl[:] = 0.2 * math.sin(period)
         mujoco.mj_step(model, data)
+        if narrator is not None:
+            narrator.log(data)
 
         want_width, want_height = orbit.size()
         # Clamp to the compiled framebuffer no matter what the viewer
