@@ -24,12 +24,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, NewSessionRequest, PermissionOptionId, PromptRequest,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
     SelectedPermissionOutcome, SessionNotification, SessionUpdate, TextContent,
 };
+use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo, LineDirection, Responder};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot;
@@ -59,9 +59,7 @@ impl AgentLine {
     /// `User`/`AgentText` are real conversation and can legitimately repeat.
     fn dedup_key(&self) -> Option<&str> {
         match self {
-            AgentLine::Other(text) | AgentLine::Status(text) | AgentLine::Error(text) => {
-                Some(text)
-            }
+            AgentLine::Other(text) | AgentLine::Status(text) | AgentLine::Error(text) => Some(text),
             AgentLine::User(_) | AgentLine::AgentText(_) => None,
         }
     }
@@ -282,11 +280,9 @@ async fn run_session(
                         // dropped sender (the window closed mid-request)
                         // falls back to cancelling rather than hanging.
                         let outcome = match answer.await {
-                            Ok(option_id) => {
-                                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
-                                    option_id,
-                                ))
-                            }
+                            Ok(option_id) => RequestPermissionOutcome::Selected(
+                                SelectedPermissionOutcome::new(option_id),
+                            ),
                             Err(_) => RequestPermissionOutcome::Cancelled,
                         };
                         responder.respond(RequestPermissionResponse::new(outcome))
@@ -312,7 +308,11 @@ async fn run_session(
                     .await?;
                 let session_id = session.session_id;
 
-                push(&transcript, &ctx, AgentLine::Status("connected".to_string()));
+                push(
+                    &transcript,
+                    &ctx,
+                    AgentLine::Status("connected".to_string()),
+                );
 
                 while let Some(text) = prompts.recv().await {
                     push(&transcript, &ctx, AgentLine::User(text.clone()));
@@ -359,9 +359,10 @@ fn describe_update(update: SessionUpdate) -> AgentLine {
             // back is the same content twice, not new information.
             AgentLine::Other(String::new())
         }
-        SessionUpdate::ToolCall(tool_call) => {
-            AgentLine::Other(format!("tool: {} [{:?}]", tool_call.title, tool_call.status))
-        }
+        SessionUpdate::ToolCall(tool_call) => AgentLine::Other(format!(
+            "tool: {} [{:?}]",
+            tool_call.title, tool_call.status
+        )),
         SessionUpdate::ToolCallUpdate(update) => {
             AgentLine::Other(format!("tool update: {:?}", update.tool_call_id))
         }

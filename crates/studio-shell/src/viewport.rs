@@ -170,7 +170,8 @@ impl ViewportFeed {
         if response.dragged() {
             let delta = response.drag_delta();
             self.orbit.azimuth_deg -= delta.x * DRAG_DEGREES_PER_POINT;
-            self.orbit.elevation_deg = (self.orbit.elevation_deg - delta.y * DRAG_DEGREES_PER_POINT)
+            self.orbit.elevation_deg = (self.orbit.elevation_deg
+                - delta.y * DRAG_DEGREES_PER_POINT)
                 .clamp(-MAX_ELEVATION_DEG, MAX_ELEVATION_DEG);
         }
         if response.hovered() {
