@@ -44,15 +44,21 @@ impl eframe::App for StudioShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.agent.drain_into(&mut self.transcript);
 
+        let pending = self.agent.pending_permission();
+
         egui::Panel::right("agent_panel")
             .default_size(360.0)
             .show(ui, |ui| {
                 ui.heading("Agent");
 
+                // Reserve room below the scroll area for the input row,
+                // plus the permission block when one is waiting — sized by
+                // eye per option, not measured.
+                let reserved = 40.0 + pending.as_ref().map_or(0.0, |(_, opts)| 30.0 * opts.len() as f32 + 30.0);
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .stick_to_bottom(true)
-                    .max_height(ui.available_height() - 40.0)
+                    .max_height((ui.available_height() - reserved).max(0.0))
                     .show(ui, |ui| {
                         for line in &self.transcript {
                             match line {
@@ -73,6 +79,18 @@ impl eframe::App for StudioShell {
                             }
                         }
                     });
+
+                if let Some((tool_title, options)) = pending {
+                    ui.separator();
+                    ui.label(format!("Allow: {tool_title}?"));
+                    ui.horizontal_wrapped(|ui| {
+                        for (option_id, label) in options {
+                            if ui.button(label).clicked() {
+                                self.agent.resolve_permission(option_id);
+                            }
+                        }
+                    });
+                }
 
                 ui.separator();
                 ui.horizontal(|ui| {

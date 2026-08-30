@@ -26,12 +26,13 @@ use std::thread;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, RequestPermissionOutcome,
-    RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome,
-    SessionNotification, SessionUpdate, TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PermissionOptionId, PromptRequest,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    SelectedPermissionOutcome, SessionNotification, SessionUpdate, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo, LineDirection, Responder};
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::oneshot;
 
 /// One entry in the transcript shown in the panel.
 pub enum AgentLine {
@@ -44,22 +45,46 @@ pub enum AgentLine {
     Status(String),
 }
 
-/// Owns the background thread running the ACP connection and the shared
-/// transcript it appends to. Dropping this does not currently tear down
-/// the subprocess cleanly — see the module's open item in the commit that
-/// introduces it; today it relies on the OS reclaiming an orphaned `npx`
-/// child, same risk `ViewportFeed` explicitly closes for the render side.
+impl AgentLine {
+    /// Plain text for lines where two in a row with identical text are
+    /// noise, not information — `Other`/`Status` only. `User`/`AgentText`
+    /// are real conversation and can legitimately repeat.
+    fn dedup_key(&self) -> Option<&str> {
+        match self {
+            AgentLine::Other(text) | AgentLine::Status(text) => Some(text),
+            AgentLine::User(_) | AgentLine::AgentText(_) => None,
+        }
+    }
+}
+
+/// A tool call awaiting a yes/no from the user, shown as buttons in the
+/// panel instead of decided automatically.
+pub struct PendingPermission {
+    pub tool_title: String,
+    pub options: Vec<(PermissionOptionId, String)>,
+    reply: oneshot::Sender<PermissionOptionId>,
+}
+
+/// Owns the background thread running the ACP connection, the shared
+/// transcript it appends to, and any permission request currently waiting
+/// on the user. Dropping this does not currently tear down the subprocess
+/// cleanly — see the module's open item in the commit that introduces it;
+/// today it relies on the OS reclaiming an orphaned `npx` child, same risk
+/// `ViewportFeed` explicitly closes for the render side.
 pub struct AgentSession {
     transcript: Arc<Mutex<Vec<AgentLine>>>,
     outgoing: UnboundedSender<String>,
+    pending: Arc<Mutex<Option<PendingPermission>>>,
 }
 
 impl AgentSession {
     pub fn spawn(ctx: &egui::Context) -> Self {
         let transcript = Arc::new(Mutex::new(Vec::new()));
+        let pending = Arc::new(Mutex::new(None));
         let (outgoing, rx) = mpsc::unbounded_channel::<String>();
 
         let transcript_for_thread = Arc::clone(&transcript);
+        let pending_for_thread = Arc::clone(&pending);
         let ctx_for_thread = ctx.clone();
         thread::spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -76,12 +101,18 @@ impl AgentSession {
                     return;
                 }
             };
-            runtime.block_on(run_session(transcript_for_thread, rx, ctx_for_thread));
+            runtime.block_on(run_session(
+                transcript_for_thread,
+                pending_for_thread,
+                rx,
+                ctx_for_thread,
+            ));
         });
 
         Self {
             transcript,
             outgoing,
+            pending,
         }
     }
 
@@ -98,15 +129,39 @@ impl AgentSession {
     pub fn drain_into(&self, out: &mut Vec<AgentLine>) {
         out.append(&mut self.transcript.lock().expect("not poisoned"));
     }
+
+    /// The tool title and button labels for a pending permission request,
+    /// if one is waiting — `None` means nothing to show right now.
+    pub fn pending_permission(&self) -> Option<(String, Vec<(PermissionOptionId, String)>)> {
+        let guard = self.pending.lock().expect("not poisoned");
+        guard
+            .as_ref()
+            .map(|p| (p.tool_title.clone(), p.options.clone()))
+    }
+
+    /// Answers the pending permission request with `option_id`. A no-op if
+    /// nothing is pending or it was already answered.
+    pub fn resolve_permission(&self, option_id: PermissionOptionId) {
+        if let Some(pending) = self.pending.lock().expect("not poisoned").take() {
+            let _ = pending.reply.send(option_id);
+        }
+    }
 }
 
 fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: AgentLine) {
-    transcript.lock().expect("not poisoned").push(line);
+    let mut guard = transcript.lock().expect("not poisoned");
+    if line.dedup_key().is_some() && line.dedup_key() == guard.last().and_then(AgentLine::dedup_key)
+    {
+        return; // identical status/other line as last time — nothing new to show
+    }
+    guard.push(line);
+    drop(guard);
     ctx.request_repaint();
 }
 
 async fn run_session(
     transcript: Arc<Mutex<Vec<AgentLine>>>,
+    pending: Arc<Mutex<Option<PendingPermission>>>,
     mut prompts: mpsc::UnboundedReceiver<String>,
     ctx: egui::Context,
 ) {
@@ -153,21 +208,51 @@ async fn run_session(
             agent_client_protocol::on_receive_notification!(),
         )
         .on_receive_request(
-            |request: RequestPermissionRequest,
-             responder: Responder<RequestPermissionResponse>,
-             _connection| async move {
-                // Auto-approve: this is a local dev shell with no untrusted
-                // multi-tenant boundary yet, matching the crate's own
-                // "yolo" example. Revisit before anyone but the operator
-                // runs this.
-                let option_id = request.options.first().map(|opt| opt.option_id.clone());
-                match option_id {
-                    Some(id) => responder.respond(RequestPermissionResponse::new(
-                        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(id)),
-                    )),
-                    None => responder.respond(RequestPermissionResponse::new(
-                        RequestPermissionOutcome::Cancelled,
-                    )),
+            {
+                let pending = Arc::clone(&pending);
+                let ctx = ctx.clone();
+                move |request: RequestPermissionRequest,
+                      responder: Responder<RequestPermissionResponse>,
+                      _connection| {
+                    let pending = Arc::clone(&pending);
+                    let ctx = ctx.clone();
+                    async move {
+                        if request.options.is_empty() {
+                            return responder.respond(RequestPermissionResponse::new(
+                                RequestPermissionOutcome::Cancelled,
+                            ));
+                        }
+                        let tool_title = request
+                            .tool_call
+                            .fields
+                            .title
+                            .unwrap_or_else(|| "a tool call".to_string());
+                        let options = request
+                            .options
+                            .iter()
+                            .map(|opt| (opt.option_id.clone(), opt.name.clone()))
+                            .collect();
+                        let (reply, answer) = oneshot::channel();
+                        *pending.lock().expect("not poisoned") = Some(PendingPermission {
+                            tool_title,
+                            options,
+                            reply,
+                        });
+                        ctx.request_repaint();
+
+                        // The UI thread answers via `resolve_permission`; a
+                        // dropped sender (the window closed mid-request)
+                        // falls back to cancelling rather than hanging.
+                        let outcome = match answer.await {
+                            Ok(option_id) => {
+                                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                                    option_id,
+                                ))
+                            }
+                            Err(_) => RequestPermissionOutcome::Cancelled,
+                        };
+                        responder.respond(RequestPermissionResponse::new(outcome))
+                    }
                 }
             },
             agent_client_protocol::on_receive_request!(),
