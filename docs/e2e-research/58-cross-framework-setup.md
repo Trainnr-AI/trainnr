@@ -1,11 +1,14 @@
 # The cross-framework setup: three artifacts the whole ecosystem is missing, and who adopts each
 
-*2026-08-31. The design the mjlab ([56](56-mjlab.md)), BAM + microduck
-([57](57-bam-source-and-microduck.md)) reads add up to. Everything
-cited is evidence from those reads; design decisions are marked as
-such. Supersedes the narrower "rq_mjlab bridge" sketch discussed after
-56 — the two new reads showed the bridge half-exists and the real gap
-is one level up.*
+*2026-08-31. THE consolidated design of the four-read arc: mjlab
+([56](56-mjlab.md)), BAM + microduck
+([57](57-bam-source-and-microduck.md)), and Isaac Lab Arena
+([59](59-arena-composition-and-datagen.md), extending 39–46).
+Everything cited is evidence from those reads; design decisions are
+marked as such. Supersedes the narrower "rq_mjlab bridge" sketch
+discussed after 56 — the later reads showed the bridge half-exists and
+the real gap is one level up. §7–§8 (Arena, and the synthetic-data
+segue) added the same day the Arena read landed.*
 
 ## 0. The design constraint that names the shape
 
@@ -126,6 +129,7 @@ to our stats layer's declared alpha/delta.
 | mjlab core | the DR no-op linter; the RecorderTerm; nightly gates on their own harness | their recurring staleness-bug class; an empty API; a chart that asserts nothing (56) |
 | Rhoban/BAM | the bundle envelope (preserves the MAE they discard); the current-mjlab kernel | zero tests, no schema, a dead version wall (57 §3–4) |
 | Pollen-class users | bundles + `rq_mjlab` + manifests | all of 57 §5 — they already built a worse version of each by hand |
+| Arena/NVIDIA | certified bundles for their hand-entered gains; the manifest; certification behind their eval | their README asks for "sim-to-real validated evaluation methods"; `sysid` = 0 hits in 992 files ([59](59-arena-composition-and-datagen.md) §4) |
 | robotiq | owns the spec, the tools, the certification authority, the Studio view of all of it | the wedge: nobody else measures, and now the measurement has a portable artifact |
 
 Nothing requires anyone to adopt anything else; every piece is
@@ -164,12 +168,86 @@ real fits, a real production repo to diff against. If our setup can
 express *their* system with fewer laptop paths and zero silent no-ops,
 it works.
 
-## 7. What changed since 56 §7
+## 7. Arena joins the map: what the third pole adds ([59](59-arena-composition-and-datagen.md))
+
+Arena is NVIDIA's config compiler over Isaac Lab — the eval-and-data
+pole to mjlab's training pole. Four things it settles for this design:
+
+- **The manifest has a proven shape.** `ArenaEnvGraphSpec` is a typed,
+  simulator-import-free scene/task graph validated before any engine
+  boots. Our cross-framework manifest (artifact three, §3) adopts that
+  shape: pure-typed, validated cold, on a laptop — which Arena itself
+  cannot do for anything else (one sim-free test file in 992; Linux
+  x86-64 + RTX + EULA + a beta submodule to import a config).
+- **The plugin mechanics are half-solved twice.** Arena has typed
+  registries + a dotted external-class path but no entry points and no
+  pip package ("vendor as an unmodified git submodule"); mjlab has
+  import-side-effect registration and an unwritten plugin guide. Our
+  packages use `importlib.metadata` entry points from day one — the
+  boring, correct mechanism both ecosystems skipped.
+- **The portable seams are now ecosystem-consensus.** Both poles
+  independently arrived at the same boundary: out-of-process policy
+  servers (websocket/zmq), ONNX with embedded metadata, LeRobot
+  datasets out. That is where certification plugs in with zero
+  framework adoption — Arena's remote policies and mjlab's exported
+  ONNX both walk through our door unchanged.
+- **The solver is converging under everyone.** Arena runs MuJoCo-Warp
+  via Newton inside Isaac Lab (`MJWarpSolverCfg`); mjlab runs it
+  natively; we instrumented it (49, 52). A solver-level identified
+  actuator (per-step dof writes, 57 §2) therefore has a path into BOTH
+  ecosystems — one measured artifact, two host frameworks. INFERENCE:
+  the Newton path needs its own port and its own verification (51
+  documented Newton's importer zeroing servo damping); do not claim it
+  until measured.
+
+And the thesis survives its third test: `sysid` has **zero hits in
+Arena's 992 files**, a shipped arm carries `stiffness = 1745.32922e3`
+with no source, their G1 fix for a gain-induced twitch was to copy
+training values rather than measure hardware, and their README lists
+"sim-to-real validated evaluation methods" under contributions they
+WANT. Three ecosystems, one absent layer, now vendor-acknowledged.
+
+## 8. The segue: synthetic data generation, using all of the above
+
+The next phase (sim + synthetic data) starts from these reads, not
+from zero. Borrow, with sources:
+
+- **The success-gated generation contract** (Arena/Mimic, 59 §5):
+  `generation_guarantee` + drop-failures + retry-to-N + abort-at-K.
+  "N demos" must always mean N *successful* demos. Our scripted
+  experts replace their teleop seeds — we can generate the source
+  demonstrations Mimic requires humans for.
+- **The augmentation unit**: per-subtask config (object ref,
+  termination signal, offset range, nearest-neighbor source selection,
+  bounded noise, interpolation) — the right granularity for
+  demo-multiplication, and it maps onto our milestone vocabulary
+  almost 1:1.
+- **The two-file recording split**: bulk trajectories (HDF5/LeRobot)
+  + an append-as-you-go per-episode JSONL of
+  {seed, success, length, variations} — plus everything Arena's
+  version omits and ours must refuse to run without: config
+  content-hash, engine stamp, code SHA, and the identified-dynamics
+  parameter vector actually sampled per episode.
+- **DR breadth from mjlab** (56 §4): the ~50 typed randomizers with
+  declared model fields; ranges generated from fit intervals
+  (`dr_from_bundle`, §2 above) instead of Arena's flat action noise
+  and microduck's hand-typed ±10%.
+- **The differentiator, stated once**: every other data factory's
+  realism knob is noise around a guess. Ours samples dynamics from the
+  identified confidence region and *refuses* variants outside it — the
+  dataset inherits the fit's provenance, and the eval layer refuses to
+  compare datasets whose stamps disagree. Nothing in mjlab, Arena,
+  BAM or microduck can currently say which dynamics produced a given
+  demonstration; every record of ours will.
+
+## 9. What changed since 56 §7
 
 56 rejected "adoption as substrate" and proposed a bridge robotiq
 would build alone. 57 showed the bridge half-exists (Rhoban's
-`bam.mjlab`) and is production-used (Pollen). The design therefore
-shifts one level up: from *building* the bridge to *owning the
-artifact layer* the existing bridge lacks — provenance, uncertainty,
-validation, currency with mjlab — and contributing the code where it
-belongs. The train-there/certify-here split from 56 stands unchanged.
+`bam.mjlab`) and is production-used (Pollen). 59 showed the third pole
+has the same absent layer and asks for it by name. The design
+therefore sits one level up: from *building* a bridge to *owning the
+artifact layer* every bridge lacks — provenance, uncertainty,
+validation, currency — with the code contributed where it belongs and
+certification behind it. The train-there/certify-here split from 56
+stands unchanged; Arena adds evaluate-anywhere/certify-here to it.
