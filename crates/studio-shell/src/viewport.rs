@@ -209,9 +209,18 @@ impl ViewportFeed {
         // on the Python side. The final size always lands, because the
         // panel keeps rendering frames after the drag ends and the ripe
         // check passes then.
+        //
+        // PHYSICAL pixels, not egui points: the wire's size field feeds
+        // `mujoco.Renderer`, which counts pixels. Requesting the point
+        // size rendered every Retina (2×) frame at half resolution and
+        // let egui upscale the difference — visibly soft next to the
+        // Rerun viewer beside it.
+        let pixels_per_point = ui.ctx().pixels_per_point();
         let want = (
-            (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
-            (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+            ((available.x * pixels_per_point).round() as u32)
+                .clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+            ((available.y * pixels_per_point).round() as u32)
+                .clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
         );
         let size_changed = want != self.sent_size;
         let resize_ripe = self

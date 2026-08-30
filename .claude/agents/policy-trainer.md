@@ -63,6 +63,8 @@ failure, not a guess).
   one recording per clock (never mix timelines in one recording), and
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
-- MuJoCo and the pipeline run through the pipeline venv:
-  `uv run --directory pipeline --extra sim python …` — never a bare
-  `python`.
+- MuJoCo and the pipeline run through the pipeline venv, from the
+  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  never a bare `python`, and `--project`, not `--directory`: the
+  latter changes the working directory and breaks repo-relative paths
+  (measured — the viz one-shot died on it verbatim).
