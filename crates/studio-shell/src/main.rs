@@ -15,10 +15,12 @@
 //! replaced it with the wheel.
 
 mod agent;
+mod code;
 mod transcript;
 mod viewport;
 
 use agent::{AgentSession, TranscriptItem};
+use code::CodePanel;
 use re_ui::UiExt as _;
 use rerun::external::{re_crash_handler, re_grpc_server, re_log, re_memory, re_viewer};
 use transcript::TranscriptView;
@@ -69,6 +71,9 @@ const VIEWPORT_MIN_HEIGHT: f32 = 160.0;
 /// Transcript prose size — re_ui's inspector-density default reads as a
 /// small grey wall in a conversation (seen live).
 const TRANSCRIPT_BODY_SIZE: f32 = 14.0;
+/// The code editor's starting width when toggled on (file tree + a
+/// readable column of code).
+const CODE_PANEL_DEFAULT_WIDTH: f32 = 640.0;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -136,6 +141,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 transcript_view: TranscriptView::new(),
                 draft: String::new(),
                 specialist: None,
+                code: CodePanel::new(repo_root()),
+                show_code: false,
             }))
         }),
     )?;
@@ -152,6 +159,9 @@ struct StudioShell {
     /// Index into `SPECIALISTS` — which pipeline stage the next prompt
     /// is addressed to. `None` is the plain generalist session.
     specialist: Option<usize>,
+    code: CodePanel,
+    /// Header toggle: when on, the left side is the code editor.
+    show_code: bool,
 }
 
 /// "17.1k" / "1.0M" instead of "17102" / "1000000" — the footer states a
@@ -223,6 +233,16 @@ impl eframe::App for StudioShell {
                         .clicked()
                     {
                         sender.send_ui(UICommand::ToggleBlueprintPanel);
+                    }
+                    // The code editor toggle — the left side becomes a
+                    // syntax-highlighted view of the repo (code.rs; NOT
+                    // an embedded Lapce, see that module's header).
+                    if ui
+                        .selectable_label(self.show_code, egui::RichText::new("code").small())
+                        .on_hover_text("Code editor")
+                        .clicked()
+                    {
+                        self.show_code = !self.show_code;
                     }
                 });
             });
@@ -387,6 +407,16 @@ impl eframe::App for StudioShell {
                             });
                     });
             });
+
+        // The code editor claims the left side when toggled on — laid
+        // out before the viewport so it runs full height and the
+        // sim/viewer split shares what remains.
+        if self.show_code {
+            egui::Panel::left("code_panel")
+                .resizable(true)
+                .default_size(CODE_PANEL_DEFAULT_WIDTH)
+                .show(ui, |ui| self.code.show(ui));
+        }
 
         // The MuJoCo sim viewport on top; the whole rest of the window IS
         // the Rerun viewer — blueprint panel, timeline, views, exactly as

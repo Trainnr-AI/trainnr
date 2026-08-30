@@ -33,6 +33,10 @@ egui = "0.36.1"
 # Rerun) at exactly these versions — the transcript's markdown rendering and
 # ± diffs cost zero new dependency weight (checked in Cargo.lock 2026-08-30).
 egui_commonmark = "0.25.0"
+# Already in the tree too (via re_ui); the `syntect` feature is the one
+# genuinely new dependency here — it upgrades the code panel from the
+# okish built-in highlighter to real grammars for Python/XML/TOML/etc.
+egui_extras = { version = "0.36.1", features = ["syntect"] }
 mimalloc = "0.1.52"
 re_ui = "0.36.3"
 rerun = { version = "0.36.3", default-features = false, features = ["native_viewer", "sdk", "server"] }
