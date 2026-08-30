@@ -143,7 +143,7 @@ Product and research, first:
 - [`docs/28-quickstart-identify.md`](docs/28-quickstart-identify.md) — measure your robot from a CSV
 - [`docs/21-the-data-company.md`](docs/21-the-data-company.md) — the market read: the empty square is identification
 - [`docs/20-video-to-vla-data.md`](docs/20-video-to-vla-data.md) — when a recording becomes training data
-- [`docs/e2e-research/`](docs/e2e-research/README.md) — the fleet research (32 documents; start at [29-the-company](docs/e2e-research/29-the-company.md) and [30-the-pipeline](docs/e2e-research/30-the-pipeline.md))
+- [`docs/e2e-research/`](docs/e2e-research/README.md) — the fleet research (37 documents; start at [29-the-company](docs/e2e-research/29-the-company.md) and [30-the-pipeline](docs/e2e-research/30-the-pipeline.md))
 - [`docs/07-progress-log.md`](docs/07-progress-log.md) — the dated log of everything done, decided, and gotten wrong
 
 How this instrument was built (the apprenticeship record):
