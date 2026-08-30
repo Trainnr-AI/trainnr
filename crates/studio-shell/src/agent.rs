@@ -164,6 +164,11 @@ impl AgentSession {
     pub fn drain_into(&self, out: &mut Vec<AgentLine>) {
         let mut shared = self.transcript.lock().expect("not poisoned");
         for line in shared.drain(..) {
+            // Adjacent agent-text chunks are one reply growing — merge by
+            // ADJACENCY, not `message_id` equality: this adapter doesn't
+            // set `message_id` on every chunk (measured live), while a
+            // real turn boundary always has a tool call, user message or
+            // status line in between, never silence.
             if let AgentLine::AgentText(text) = &line {
                 if let Some(AgentLine::AgentText(last)) = out.last_mut() {
                     last.push_str(text);
@@ -221,30 +226,12 @@ impl Drop for AgentSession {
 }
 
 fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: AgentLine) {
+    // Plain append: the merge and dedup rules live in ONE place —
+    // `drain_into`, on the UI side — because they must run there anyway
+    // (this shared buffer empties every frame, so any merging done here
+    // only ever covered chunks that happened to batch between frames;
+    // for a while the rules lived in both places, two copies drifting).
     let mut guard = transcript.lock().expect("not poisoned");
-
-    // Consecutive chunks grow one line in place instead of starting a new
-    // "claude" bubble every few words. Adjacency, not `message_id`
-    // equality: a live session showed this adapter doesn't set
-    // `message_id` on every chunk, so a strict-equality check missed real
-    // mid-sentence continuations. Two `AgentText` chunks with nothing
-    // else between them are, in practice, always the same reply — a real
-    // turn boundary has a tool call, a user message, or a status line in
-    // between, never silence.
-    if let AgentLine::AgentText(text) = &line {
-        if let Some(AgentLine::AgentText(last_text)) = guard.last_mut() {
-            last_text.push_str(text);
-            drop(guard);
-            ctx.request_repaint();
-            return;
-        }
-    }
-
-    if let Some(key) = line.dedup_key() {
-        if Some(key) == guard.last().and_then(AgentLine::dedup_key) {
-            return; // identical status/other line as last time — nothing new to show
-        }
-    }
     guard.push(line);
     drop(guard);
     ctx.request_repaint();

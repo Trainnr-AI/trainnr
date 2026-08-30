@@ -8,12 +8,14 @@
 //! module doc comment in the Python script for why (the FFI route needs a
 //! patched fork of `glutin` on macOS plus a second, older MuJoCo install).
 //!
-//! Orbit and zoom work the same way in reverse: a drag/scroll on the image
-//! updates `Orbit` here, which gets written back to the subprocess's stdin
-//! in the script's wire format (3 `f32`s, then 2 `u32`s). There is no pan
-//! yet — see `Orbit`. The same message also carries the panel's current
-//! pixel size, so the render resolution tracks the window instead of
-//! staying a fixed 1024x576 letterboxed into whatever shape the panel is.
+//! Orbit and zoom work the same way in reverse, as DELTAS: a drag/scroll
+//! becomes camera-angle/distance increments on the subprocess's stdin
+//! (3 `f32` deltas, then the panel's absolute pixel size as 2 `u32`s).
+//! Deltas, deliberately: the Python side owns every absolute camera fact
+//! — per-rig defaults, clamps — because an absolute-valued wire needed
+//! those facts duplicated here, and the copies drifted the day per-rig
+//! defaults landed (first drag in the kitting scene snapped the camera
+//! from its 2.2 m frame to this side's stale 1.0 m). No pan yet.
 
 use std::io::{Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -30,39 +32,17 @@ struct RawFrame {
     rgb: Vec<u8>,
 }
 
-/// Azimuth/elevation/distance around a fixed look-at point, plus the
-/// render's pixel size. Matches `studio-render-stream.py`'s `OrbitCamera`
-/// and `WIDTH`/`HEIGHT` defaults field-for-field — the two are duplicated,
-/// not shared, because they cross a language boundary; if one changes,
-/// change the other.
-#[derive(Clone, Copy, PartialEq)]
-struct Orbit {
-    azimuth_deg: f32,
-    elevation_deg: f32,
-    distance_m: f32,
-    width_px: u32,
-    height_px: u32,
-}
-
-impl Default for Orbit {
-    fn default() -> Self {
-        Self {
-            azimuth_deg: 90.0,
-            elevation_deg: -20.0,
-            distance_m: 1.0,
-            width_px: 1024,
-            height_px: 576,
-        }
-    }
-}
-
 /// Degrees of orbit per point of drag, and metres of distance per point of
 /// scroll — tuned by feel against a 1024x576 viewport, not measured.
+/// These stay HERE (pixel-domain input scaling is this side's fact);
+/// every absolute camera fact — defaults, clamps — lives Python-side.
 const DRAG_DEGREES_PER_POINT: f32 = 0.4;
 const ZOOM_METRES_PER_SCROLL_POINT: f32 = 0.004;
-const MIN_DISTANCE_M: f32 = 0.15;
-const MAX_DISTANCE_M: f32 = 4.0;
-const MAX_ELEVATION_DEG: f32 = 89.0;
+
+/// The render size the Python side starts at (its `WIDTH`/`HEIGHT`) —
+/// the one wire fact genuinely shared across the language boundary, so a
+/// resize message only fires when the panel actually differs from it.
+const INITIAL_RENDER_SIZE: (u32, u32) = (1024, 576);
 
 /// Render resolution bounds: below this a panel sliver isn't worth a
 /// render call, above this the render cost isn't worth the extra pixels
@@ -86,7 +66,9 @@ pub struct ViewportFeed {
     latest: Arc<Mutex<Option<RawFrame>>>,
     texture: Option<TextureHandle>,
     spawn_error: Option<String>,
-    orbit: Orbit,
+    /// The render size last sent (absolute — the Python `Renderer` is
+    /// rebuilt to match it).
+    sent_size: (u32, u32),
     /// When the last size change went out — see `RESIZE_DEBOUNCE`.
     last_resize_sent: Option<std::time::Instant>,
     /// Set by the reader thread when the frame stream ends. A dead
@@ -138,7 +120,7 @@ impl ViewportFeed {
                     latest,
                     texture: None,
                     spawn_error: None,
-                    orbit: Orbit::default(),
+                    sent_size: INITIAL_RENDER_SIZE,
                     last_resize_sent: None,
                     stream_ended,
                 }
@@ -152,7 +134,7 @@ impl ViewportFeed {
                     "could not start {}: {err} (is `uv` on PATH?)",
                     script.display()
                 )),
-                orbit: Orbit::default(),
+                sent_size: INITIAL_RENDER_SIZE,
                 last_resize_sent: None,
                 stream_ended,
             },
@@ -165,11 +147,18 @@ impl ViewportFeed {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         if let Some(frame) = self.latest.lock().expect("not poisoned").take() {
             let image = ColorImage::from_rgb([frame.width, frame.height], &frame.rgb);
-            self.texture = Some(ui.ctx().load_texture(
-                "studio-viewport",
-                image,
-                TextureOptions::LINEAR,
-            ));
+            match &mut self.texture {
+                // Update in place: `load_texture` allocates a brand-new
+                // texture every call, and this runs at frame rate.
+                Some(texture) => texture.set(image, TextureOptions::LINEAR),
+                None => {
+                    self.texture = Some(ui.ctx().load_texture(
+                        "studio-viewport",
+                        image,
+                        TextureOptions::LINEAR,
+                    ));
+                }
+            }
         }
 
         if self.stream_ended.load(Ordering::Relaxed) {
@@ -201,38 +190,35 @@ impl ViewportFeed {
                 .sense(egui::Sense::click_and_drag()),
         );
 
-        let before = self.orbit;
+        // Camera input as deltas — the Python side integrates and clamps.
+        let mut d_azimuth = 0.0f32;
+        let mut d_elevation = 0.0f32;
+        let mut d_distance = 0.0f32;
         if response.dragged() {
             let delta = response.drag_delta();
-            self.orbit.azimuth_deg -= delta.x * DRAG_DEGREES_PER_POINT;
-            self.orbit.elevation_deg = (self.orbit.elevation_deg
-                - delta.y * DRAG_DEGREES_PER_POINT)
-                .clamp(-MAX_ELEVATION_DEG, MAX_ELEVATION_DEG);
+            d_azimuth = -delta.x * DRAG_DEGREES_PER_POINT;
+            d_elevation = -delta.y * DRAG_DEGREES_PER_POINT;
         }
         if response.hovered() {
-            let scroll_y = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll_y != 0.0 {
-                self.orbit.distance_m = (self.orbit.distance_m
-                    - scroll_y * ZOOM_METRES_PER_SCROLL_POINT)
-                    .clamp(MIN_DISTANCE_M, MAX_DISTANCE_M);
-            }
+            d_distance = -ui.input(|i| i.smooth_scroll_delta.y) * ZOOM_METRES_PER_SCROLL_POINT;
         }
+
         // Track the panel's actual size so the render resolution follows
-        // the window instead of staying a fixed 1024x576 letterboxed into
-        // whatever shape the panel happens to be — but debounced (see
-        // RESIZE_DEBOUNCE): mid-drag the size changes every frame, and
-        // each change costs a Renderer rebuild on the Python side. The
-        // final size always lands, because the panel keeps rendering
-        // frames after the drag ends and the ripe check passes then.
-        let want_width = (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
-        let want_height = (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE);
-        let size_changed = (want_width, want_height) != (self.orbit.width_px, self.orbit.height_px);
+        // the window — debounced (see RESIZE_DEBOUNCE): mid-drag the size
+        // changes every frame, and each change costs a Renderer rebuild
+        // on the Python side. The final size always lands, because the
+        // panel keeps rendering frames after the drag ends and the ripe
+        // check passes then.
+        let want = (
+            (available.x.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+            (available.y.round() as u32).clamp(MIN_RENDER_SIDE, MAX_RENDER_SIDE),
+        );
+        let size_changed = want != self.sent_size;
         let resize_ripe = self
             .last_resize_sent
             .is_none_or(|at| at.elapsed() >= RESIZE_DEBOUNCE);
         if size_changed && resize_ripe {
-            self.orbit.width_px = want_width;
-            self.orbit.height_px = want_height;
+            self.sent_size = want;
             self.last_resize_sent = Some(std::time::Instant::now());
         } else if size_changed {
             // Not ripe yet — repaint again soon so the settled size goes
@@ -240,21 +226,25 @@ impl ViewportFeed {
             ui.ctx().request_repaint_after(RESIZE_DEBOUNCE);
         }
 
-        if self.orbit != before {
-            self.send_orbit();
+        if d_azimuth != 0.0
+            || d_elevation != 0.0
+            || d_distance != 0.0
+            || size_changed && resize_ripe
+        {
+            self.send_update(d_azimuth, d_elevation, d_distance);
         }
     }
 
-    fn send_orbit(&mut self) {
+    fn send_update(&mut self, d_azimuth: f32, d_elevation: f32, d_distance: f32) {
         let Some(stdin) = &mut self.stdin else {
             return;
         };
         let mut bytes = [0u8; 20];
-        bytes[0..4].copy_from_slice(&self.orbit.azimuth_deg.to_le_bytes());
-        bytes[4..8].copy_from_slice(&self.orbit.elevation_deg.to_le_bytes());
-        bytes[8..12].copy_from_slice(&self.orbit.distance_m.to_le_bytes());
-        bytes[12..16].copy_from_slice(&self.orbit.width_px.to_le_bytes());
-        bytes[16..20].copy_from_slice(&self.orbit.height_px.to_le_bytes());
+        bytes[0..4].copy_from_slice(&d_azimuth.to_le_bytes());
+        bytes[4..8].copy_from_slice(&d_elevation.to_le_bytes());
+        bytes[8..12].copy_from_slice(&d_distance.to_le_bytes());
+        bytes[12..16].copy_from_slice(&self.sent_size.0.to_le_bytes());
+        bytes[16..20].copy_from_slice(&self.sent_size.1.to_le_bytes());
         // A closed pipe here means the render subprocess died; `show`'s
         // next call will already be reporting `spawn_error`-shaped state
         // via an absent texture, so silently dropping this write is fine.

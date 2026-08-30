@@ -116,9 +116,13 @@ def main():
     sep = " | " if markdown else "  "
 
     def emit(cells, widths):
+        # Pairwise by index, not zip: `strict=` needs Python 3.10 and this
+        # tool runs under the system python3 (3.9 on this Mac) — the same
+        # break check-docs.py hit and fixed the same way on 2026-08-28.
+        assert len(cells) == len(widths)
         out = sep.join(
-            c.rjust(w) if i else c.ljust(w)
-            for i, (c, w) in enumerate(zip(cells, widths, strict=True))
+            cells[i].rjust(widths[i]) if i else cells[i].ljust(widths[i])
+            for i in range(len(cells))
         )
         print(f"{bar} {out} {bar}" if markdown else out)
 

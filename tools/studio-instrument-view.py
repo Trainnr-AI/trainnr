@@ -70,8 +70,9 @@ def log_evals() -> list[str]:
     return origins
 
 
-def log_fits() -> list[str]:
+def log_fits() -> tuple[list[str], list[str]]:
     param_origins: list[str] = []
+    verdict_origins: list[str] = []
     for bundle in describe_bundles():
         if not bundle["has_fits"]:
             continue
@@ -100,12 +101,13 @@ def log_fits() -> list[str]:
                 f"- **{param}**: {info['verdict']}"
                 for param, info in spread.get("spread", {}).items()
             ]
+            verdict_origins.append(f"fits/{name}/verdicts")
             rr.log(
                 f"fits/{name}/verdicts",
                 rr.TextDocument("\n".join(lines), media_type=rr.MediaType.MARKDOWN),
                 static=True,
             )
-    return param_origins
+    return param_origins, verdict_origins
 
 
 def log_friction(recording: rr.RecordingStream) -> list[str]:
@@ -131,7 +133,7 @@ def log_friction(recording: rr.RecordingStream) -> list[str]:
 
 
 def instrument_blueprint(
-    eval_origins: list[str], fit_origins: list[str]
+    eval_origins: list[str], fit_origins: list[str], verdict_origins: list[str]
 ) -> rrb.Blueprint:
     eval_views = [
         view
@@ -144,7 +146,12 @@ def instrument_blueprint(
     fit_views = [
         rrb.TimeSeriesView(origin=origin, name=origin.rsplit("/", 1)[1])
         for origin in fit_origins
-    ] + [rrb.TextDocumentView(origin="fits/rig-drivetrain/verdicts", name="verdicts")]
+    ] + [
+        # Derived from what log_fits actually wrote — a hardcoded bundle
+        # name here silently dropped every later bundle's verdicts.
+        rrb.TextDocumentView(origin=origin, name="verdicts")
+        for origin in verdict_origins
+    ]
     # Panels stay OPEN: this recording is reached by picking it in the
     # Sources list, and a blueprint that collapses the left panel hides
     # that list — the operator hunted for it on the first run.
@@ -172,8 +179,8 @@ def main() -> None:
     rr.init("robotiq-instrument", spawn=False)
     rr.connect_grpc()  # the Studio's embedded viewer on the standard port
     eval_origins = log_evals()
-    fit_origins = log_fits()
-    rr.send_blueprint(instrument_blueprint(eval_origins, fit_origins))
+    fit_origins, verdict_origins = log_fits()
+    rr.send_blueprint(instrument_blueprint(eval_origins, fit_origins, verdict_origins))
 
     actuators = rr.RecordingStream("robotiq-actuators")
     actuators.connect_grpc()

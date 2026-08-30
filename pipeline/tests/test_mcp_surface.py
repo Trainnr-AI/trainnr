@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _extras import needs_mcp, needs_sim
+from _extras import needs_mcp, needs_numpy, needs_sim
 
 from rq_pipeline.mcp_server import (
     bundle_names,
@@ -18,9 +18,12 @@ from rq_pipeline.mcp_server import (
     describe_bundle,
     describe_bundles,
     describe_engines,
+    describe_eval,
     describe_runs,
     describe_task,
     describe_tasks,
+    friction_curve,
+    list_eval_records,
 )
 
 
@@ -97,6 +100,45 @@ class Registries(unittest.TestCase):
                     self.assertIn("@", detail["stamp"])
                 else:
                     self.assertIsNone(detail["stamp"])
+
+
+class Evals(unittest.TestCase):
+    def test_the_real_smoke_records_fold_with_funnel_and_successes(self) -> None:
+        # Against the committed smoke runs — the same records the panel
+        # and the certificate read.
+        runs = {entry["run"] for entry in list_eval_records()}
+        self.assertIn("smoke-eval", runs)
+        detail = describe_eval("smoke-eval")
+        data = detail["files"]["episodes.jsonl"]
+        self.assertEqual(data["records"], 2)
+        self.assertLessEqual(data["successes"], data["records"])
+        for counts in data["funnel"].values():
+            self.assertEqual(len(counts), len(data["milestones"]))
+
+    def test_a_run_without_records_is_refused_naming_those_that_have_them(
+        self,
+    ) -> None:
+        with self.assertRaises(KeyError) as ctx:
+            describe_eval("no-such-run")
+        self.assertIn("smoke-eval", str(ctx.exception))
+
+    def test_an_empty_runs_root_lists_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(list_eval_records(Path(tmp)), [])
+
+
+class FrictionCurves(unittest.TestCase):
+    @needs_numpy
+    def test_the_curve_is_plottable_and_load_adds_friction(self) -> None:
+        curve = friction_curve("feetech_sts3215_7_4V", "m6", points=11)
+        self.assertEqual(len(curve["velocity"]), 11)
+        self.assertEqual(len(curve["unloaded"]), 11)
+        self.assertEqual(len(curve["loaded"]), 11)
+        self.assertEqual(curve["velocity"][0], 0.0)
+        # M6 carries load-dependent terms: under external torque the
+        # budget must exceed the unloaded budget at every velocity.
+        for unloaded, loaded in zip(curve["unloaded"], curve["loaded"], strict=True):
+            self.assertGreater(loaded, unloaded)
 
 
 class Runs(unittest.TestCase):

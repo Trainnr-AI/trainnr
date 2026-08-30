@@ -23,7 +23,22 @@ image = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
 draw = ImageDraw.Draw(image)
 draw.rounded_rectangle([0, 0, SIZE - 1, SIZE - 1], RADIUS, fill=BACKGROUND)
 
-font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 128)
+# First bold-ish sans available on this machine — macOS, then common
+# Linux paths; the mark is committed, so the generator only needs to run
+# where someone is redesigning it, but it shouldn't be macOS-only.
+FONTS = (
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+)
+for candidate in FONTS:
+    try:
+        font = ImageFont.truetype(candidate, 128)
+        break
+    except OSError:
+        continue
+else:
+    raise SystemExit(f"no usable font found; tried {FONTS}")
 box = draw.textbbox((0, 0), "rq", font=font)
 x = (SIZE - (box[2] - box[0])) / 2 - box[0]
 y = (SIZE - (box[3] - box[1])) / 2 - box[1] - 10

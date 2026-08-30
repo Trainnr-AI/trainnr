@@ -10,17 +10,18 @@ version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"
 
-# The empty shell for docs/35-the-studio.md: a native window, styled with
-# Rerun's own theme, with two placeholder panels standing in for the two
-# real subsystems that land later — a MuJoCo-rendered 3D viewport and an
-# agent-client-protocol session panel. Neither exists yet; this crate only
-# proves the window opens, looks right, and runs on both machines this repo
-# is built on (Mac arm64, WSL x86_64) before either is wired in.
+# The Studio (the-studio doc, phase 1): a native window where a MuJoCo
+# subprocess renders the sim viewport (real control: the kitting expert),
+# the ACTUAL Rerun viewer fills the data pane (embedded per Rerun's own
+# extend_viewer_ui example, fed by a gRPC server on :9876 inside the app),
+# and a live agent-client-protocol session to Claude Code's own adapter
+# sits in the side panel with the instrument's MCP server handed to it.
+# Run with `cargo run --release` — the debug viewer's slow ingest is a
+# measured hazard (it once wedged the log channel), not a style choice.
 #
 # egui/eframe pinned to match re_ui 0.36.3's own pin (checked 2026-08-30
-# against re_ui's Cargo.toml: egui ^0.36.1, eframe ^0.36.1) — re_ui does not
-# re-export egui, so this repo states the match explicitly rather than
-# relying on Cargo to resolve it silently. Bump all three together.
+# against re_ui's Cargo.toml: egui ^0.36.1, eframe ^0.36.1); rerun 0.36.3
+# rides the same tree. Bump all of them together.
 [dependencies]
 agent-client-protocol = "2.0.0"
 eframe = { version = "0.36.1", default-features = false, features = [

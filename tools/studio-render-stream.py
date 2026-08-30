@@ -26,20 +26,22 @@ short must retry; this script does not resend a partial frame.
 Wire format, stdin, per camera+size update — 3 little-endian f32 then 2
 little-endian u32, no header (fixed size, nothing to frame):
 
-    azimuth   : degrees, MuJoCo's own convention
-    elevation : degrees
-    distance  : metres from `LOOKAT`
-    width     : pixels the renderer should produce
-    height    : pixels the renderer should produce
+    d_azimuth   : degrees to ADD, MuJoCo's own convention
+    d_elevation : degrees to add (clamped here)
+    d_distance  : metres to add (clamped here)
+    width       : absolute pixels the renderer should produce
+    height      : absolute pixels the renderer should produce
 
-`LOOKAT` itself is not sent — this is orbit-and-zoom, not pan, matching what
-studio-shell's viewport currently offers. width/height let the render
-resolution track the viewer's actual panel size instead of staying a fixed
-1024x576 letterboxed into whatever shape the panel is; the render loop
-recreates `mujoco.Renderer` only when they actually change, since the
-`Renderer` object itself is fixed-size once constructed. A dedicated thread
-reads updates off stdin so a slow/absent controller never blocks rendering;
-the render loop just reads whatever the thread last decoded.
+Camera values arrive as DELTAS and this side integrates them: every
+absolute camera fact — the per-rig starting pose, the clamps — lives
+here and only here. The first wire carried absolutes, which required the
+viewer to duplicate the defaults, and the copies drifted the day per-rig
+framing landed (the viewer's first drag snapped a 2.2 m ALOHA frame to
+its stale 1.0 m). No pan yet — orbit-and-zoom only. Size is absolute;
+the render loop recreates `mujoco.Renderer` only when it actually
+changes, since a `Renderer` is fixed-size once constructed. A dedicated
+thread reads updates off stdin so a slow/absent controller never blocks
+rendering.
 """
 
 import math
@@ -233,9 +235,16 @@ MAX_RENDER_SIDE = 1920
 CAMERA_UPDATE_BYTES = 20  # 3 x f32, 2 x u32
 
 
+# The one home for every absolute camera fact (see the module docstring's
+# deltas-not-absolutes rationale).
+MAX_ELEVATION_DEG = 89.0
+MIN_DISTANCE_M = 0.15
+MAX_DISTANCE_M = 6.0
+
+
 class OrbitCamera:
-    """The latest azimuth/elevation/distance/width/height from stdin,
-    lock-protected — read by the render loop, written by
+    """The camera's absolute state, integrated from the viewer's deltas —
+    lock-protected: read by the render loop, written by
     `_read_camera_updates`'s thread."""
 
     def __init__(self, defaults: dict) -> None:
@@ -259,11 +268,22 @@ class OrbitCamera:
         with self._lock:
             return self.width, self.height
 
-    def _set(
-        self, azimuth: float, elevation: float, distance: float, width: int, height: int
+    def apply_deltas(
+        self,
+        d_azimuth: float,
+        d_elevation: float,
+        d_distance: float,
+        width: int,
+        height: int,
     ) -> None:
         with self._lock:
-            self.azimuth, self.elevation, self.distance = azimuth, elevation, distance
+            self.azimuth += d_azimuth
+            self.elevation = max(
+                -MAX_ELEVATION_DEG, min(MAX_ELEVATION_DEG, self.elevation + d_elevation)
+            )
+            self.distance = max(
+                MIN_DISTANCE_M, min(MAX_DISTANCE_M, self.distance + d_distance)
+            )
             self.width, self.height = width, height
 
 
@@ -273,7 +293,7 @@ def _read_camera_updates(camera: OrbitCamera) -> None:
         raw = stdin.read(CAMERA_UPDATE_BYTES)
         if len(raw) < CAMERA_UPDATE_BYTES:
             return  # controller closed stdin — keep rendering at the last pose
-        camera._set(*struct.unpack("<fffII", raw))
+        camera.apply_deltas(*struct.unpack("<fffII", raw))
 
 
 class RenderPump:
@@ -297,11 +317,13 @@ class RenderPump:
         # not rewind with them, so it runs on an offset the episode loop
         # advances at each boundary.
         self.time_offset = 0.0
+        self.last_sim_time = 0.0
 
     def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
         """Observe one step: narrate and render (each rate-limited), then
         sleep toward real time — `pace_seconds` is how much simulated
         time this step advanced."""
+        self.last_sim_time = data.time
         now = time.monotonic()
         if self.narrator is not None and now - self.last_narrated >= 1.0 / NARRATE_HZ:
             self.last_narrated = now
@@ -364,7 +386,10 @@ def run_expert_forever(task: "object", pump: RenderPump) -> None:
         _states, _sensors, _actions = scripted_kitting_episode(
             pump.model, start, on_control=on_control, spec=task.task_spec
         )
-        pump.time_offset += protocol.steps * pump.model.opt.timestep
+        # Advance the timeline by the episode's OBSERVED duration, not an
+        # assumed `protocol.steps * timestep` — the two agree today, but
+        # an early-ending expert would silently skew every later episode.
+        pump.time_offset += pump.last_sim_time
         trial = (trial + 1) % protocol.trials
 
 
