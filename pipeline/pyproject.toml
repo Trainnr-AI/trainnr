@@ -41,6 +41,11 @@ gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # moves by decision, never as a dependency side effect.
 mjx = ["mujoco-mjx[warp]~=3.11.0"]
 viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+# The instrument's MCP surface (rq_pipeline/mcp_server.py): bundles, tasks,
+# engines, actuators, runs as queryable tools for any MCP client — the
+# Studio's agent panel first. Official SDK, MIT; v2 is a rework of v1, so
+# the pin holds the major.
+mcp = ["mcp~=2.1"]
 # openpi's own websocket client (rq_pipeline/envs/openpi_policy.py): pi0 /
 # pi0.5 served from their process, evaluated through our env. Pinned to the
 # commit it was read at (docs/e2e-research/43); not on PyPI. Its numpy<2 pin

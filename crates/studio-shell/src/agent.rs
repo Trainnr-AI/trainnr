@@ -25,9 +25,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PermissionOptionId, PromptRequest,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionNotification, SessionUpdate, TextContent,
+    ContentBlock, InitializeRequest, McpServer, McpServerStdio, NewSessionRequest,
+    PermissionOptionId, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionNotification, SessionUpdate,
+    TextContent,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, Agent, ConnectionTo, LineDirection, Responder};
@@ -227,6 +228,26 @@ fn push(transcript: &Arc<Mutex<Vec<AgentLine>>>, ctx: &egui::Context, line: Agen
     ctx.request_repaint();
 }
 
+/// The instrument's own MCP server (tools/mcp-server.py), handed to the
+/// agent at session creation over ACP's `mcp_servers` — the panel's
+/// Claude queries bundles, actuators, tasks, engines and runs through
+/// the same seams the pipeline acts on, instead of grepping for them.
+/// Stdio transport: the one every ACP agent MUST support.
+fn robotiq_mcp_server() -> McpServer {
+    let repo_root = crate::repo_root();
+    McpServer::Stdio(McpServerStdio::new("robotiq", "uv").args(vec![
+        "run".to_string(),
+        "--directory".to_string(),
+        repo_root.join("pipeline").display().to_string(),
+        "--extra".to_string(),
+        "sim".to_string(),
+        "--extra".to_string(),
+        "mcp".to_string(),
+        "python".to_string(),
+        repo_root.join("tools/mcp-server.py").display().to_string(),
+    ]))
+}
+
 async fn run_session(
     transcript: Arc<Mutex<Vec<AgentLine>>>,
     pending: Arc<Mutex<Option<PendingPermission>>>,
@@ -348,9 +369,12 @@ async fn run_session(
                     .await?;
 
                 let session = connection
-                    .send_request(NewSessionRequest::new(
-                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
-                    ))
+                    .send_request(
+                        NewSessionRequest::new(
+                            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
+                        )
+                        .mcp_servers(vec![robotiq_mcp_server()]),
+                    )
                     .block_task()
                     .await?;
                 let session_id = session.session_id;

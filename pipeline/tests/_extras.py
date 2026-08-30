@@ -36,3 +36,5 @@ needs_mjx = unittest.skipUnless(MJX, "mjx extra not installed (uv sync --extra m
 needs_train = unittest.skipUnless(TRAIN, TRAIN_LINE)
 needs_train_sim = unittest.skipUnless(TRAIN and SIM, TRAIN_LINE)
 needs_remote = unittest.skipUnless(REMOTE, "needs the remote and sim extras")
+MCP = installed("mcp")
+needs_mcp = unittest.skipUnless(MCP, "mcp extra not installed (uv sync --extra mcp)")

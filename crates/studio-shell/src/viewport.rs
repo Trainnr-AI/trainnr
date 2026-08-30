@@ -16,7 +16,6 @@
 //! staying a fixed 1024x576 letterboxed into whatever shape the panel is.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -104,7 +103,7 @@ impl ViewportFeed {
     /// the UI (`request_repaint`) the moment a new frame lands — egui does
     /// not otherwise know that a background thread produced fresh pixels.
     pub fn spawn(ctx: &egui::Context, task_name: &str) -> Self {
-        let repo_root = repo_root();
+        let repo_root = crate::repo_root();
         let pipeline_dir = repo_root.join("pipeline");
         let script = repo_root.join("tools").join("studio-render-stream.py");
 
@@ -302,15 +301,4 @@ fn spawn_reader(
         stream_ended.store(true, Ordering::Relaxed);
         ctx.request_repaint();
     });
-}
-
-/// `crates/studio-shell` is always two directories under the repo root —
-/// true regardless of the shell's own current working directory, unlike
-/// relying on `std::env::current_dir()`.
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .expect("crates/studio-shell is two directories under the repo root")
-        .to_path_buf()
 }

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "robotiq": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "pipeline",
+        "--extra",
+        "sim",
+        "--extra",
+        "mcp",
+        "python",
+        "../tools/mcp-server.py"
+      ]
+    }
+  }
+}

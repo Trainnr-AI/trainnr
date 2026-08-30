@@ -45,6 +45,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 | `kitting-demos.py` | T5's data source: referee-filtered scripted kitting episodes drawn over the task's whole declared band with ±30% DR — trajectories + frames + manifests, each manifest carrying the expert's own stamp (`expert_stamp`); `--first-episode K` shards one batch across parallel generators |
 | `camera-match.py` | Sim renders beside released real frames — camera placement is calibration, not decoration |
 | `studio-render-stream.py` | MuJoCo's own render as a subprocess service for `crates/studio-shell`: frames out on stdout, orbit/zoom/size commands in on stdin — the app's 3D viewport without linking MuJoCo's C API into Rust |
+| `mcp-server.py` | The instrument's MCP surface over stdio: bundles (name@hash, fit records, SPREAD), the actuator library, task/engine registries, run manifests — read-only tools for any MCP client; the Studio's agent panel and `.mcp.json` both point here |
 
 ## Fitting and studies
 

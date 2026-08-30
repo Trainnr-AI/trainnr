@@ -49,6 +49,18 @@ struct StudioShell {
     draft: String,
 }
 
+/// `crates/studio-shell` is always two directories under the repo root —
+/// true regardless of the shell's own current working directory, unlike
+/// relying on `std::env::current_dir()`. One home; both the viewport's
+/// render subprocess and the agent's MCP server config build on it.
+fn repo_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/studio-shell is two directories under the repo root")
+        .to_path_buf()
+}
+
 impl eframe::App for StudioShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.agent.drain_into(&mut self.transcript);
