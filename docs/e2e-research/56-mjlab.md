@@ -282,3 +282,15 @@ Rejected, with reasons:
   format: an identified-artifact exporter targeting their loader is a
   small, legible upstream contribution — worth it only when a customer
   runs mjlab.
+
+---
+
+*Postscript 2026-08-31: §8's `<dcmotor>` question is resolved by the
+BAM source read ([57](57-bam-source-and-microduck.md) §2) — M6's
+load-dependent friction cannot be expressed as a native MuJoCo
+actuator (BAM's own deprecated exporter says so); the working
+mechanism is Rhoban's per-step `dof_frictionloss`/`dof_damping`
+writes, already production-tested by Pollen. §7's "rejected as
+substrate" stands, but the bridge plan it sketched is superseded by
+[58](58-cross-framework-setup.md): the bridge half-exists upstream;
+the gap is the artifact layer around it.*
