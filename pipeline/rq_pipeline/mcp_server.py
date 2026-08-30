@@ -161,7 +161,7 @@ def describe_engines() -> list[dict[str, Any]]:
 def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
     """Every run with a manifest under `pipeline/runs/` — the same
     `run.json` the dashboard follows, verbatim."""
-    root = runs_root if runs_root is not None else Path(__file__).parents[1] / "runs"
+    root = _runs_root(runs_root)
     if not root.is_dir():
         return []
     described = []
@@ -170,6 +170,100 @@ def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
             {"run": manifest.parent.name, "manifest": json.loads(manifest.read_text())}
         )
     return described
+
+
+def _runs_root(runs_root: Path | None) -> Path:
+    return runs_root if runs_root is not None else Path(__file__).parents[1] / "runs"
+
+
+def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
+    """Every episode-record file under `pipeline/runs/` — the JSONL the
+    evaluation layer writes, wherever a run keeps one."""
+    root = _runs_root(runs_root)
+    if not root.is_dir():
+        return []
+    found = []
+    for path in sorted(root.glob("*/*episodes.jsonl")):
+        found.append(
+            {
+                "run": path.parent.name,
+                "file": path.name,
+                "records": sum(1 for line in path.read_text().splitlines() if line),
+            }
+        )
+    return found
+
+
+def describe_eval(run: str, runs_root: Path | None = None) -> dict[str, Any]:
+    """One run's episode records, folded the way the certificate is:
+    trials, successes, the milestone funnel, and every trial's verdict —
+    through `rq_pipeline.evaluate.records`, never a private re-parse."""
+    from rq_pipeline.evaluate.records import (  # noqa: PLC0415 - keeps import cheap
+        funnel,
+        milestones,
+        read_records,
+    )
+
+    root = _runs_root(runs_root)
+    paths = sorted((root / run).glob("*episodes.jsonl"))
+    if not paths:
+        known = [entry["run"] for entry in list_eval_records(runs_root)]
+        raise KeyError(f"no episode records under {run!r}; runs with records: {known}")
+    detail: dict[str, Any] = {"run": run, "files": {}}
+    for path in paths:
+        records = read_records(path)
+        detail["files"][path.name] = {
+            "records": len(records),
+            "successes": sum(1 for r in records if r.success),
+            "milestones": milestones(records),
+            "funnel": funnel(records),
+            "trials": [
+                {
+                    "trial": r.trial,
+                    "policy": r.policy,
+                    "success": r.success,
+                    "steps": r.steps,
+                    "instrument": r.instrument,
+                    "events": [dict(event) for event in r.events],
+                }
+                for r in records
+            ],
+        }
+    return detail
+
+
+def friction_curve(
+    slug: str, tier: str = "m6", points: int = 101, tau_external: float = 0.3
+) -> dict[str, Any]:
+    """The actuator's friction-torque budget over its velocity range, as
+    plottable curves — computed by `friction_torque_budget` itself, so a
+    chart of this data is a chart of the model, not of a re-derivation.
+
+    Two curves: unloaded, and under `tau_external` N·m of external
+    torque (the load-dependent M3-M6 terms are invisible without load).
+    """
+    import numpy as np  # noqa: PLC0415 - sim/numpy extra
+
+    from rq_pipeline.robot.friction_budget import (  # noqa: PLC0415
+        friction_torque_budget,
+    )
+
+    model = load_actuator(slug, tier)
+    top = model.servo.max_velocity if model.servo.max_velocity is not None else 8.0
+    velocity = np.linspace(0.0, top, points)
+    zero = np.zeros_like(velocity)
+    unloaded = friction_torque_budget(model.friction, velocity, zero, zero)
+    loaded = friction_torque_budget(
+        model.friction, velocity, zero, np.full_like(velocity, tau_external)
+    )
+    return {
+        "slug": slug,
+        "tier": tier,
+        "tau_external": tau_external,
+        "velocity": velocity.tolist(),
+        "unloaded": np.asarray(unloaded).tolist(),
+        "loaded": np.asarray(loaded).tolist(),
+    }
 
 
 def build_server() -> Any:
@@ -215,6 +309,26 @@ def build_server() -> Any:
         name="describe_runs",
         description="Training-run manifests under pipeline/runs/",
     )(runs)
+
+    def evals() -> list[dict[str, Any]]:
+        """Every episode-record file under pipeline/runs/."""
+        return list_eval_records()
+
+    def eval_detail(run: str) -> dict[str, Any]:
+        """One run's records folded: successes, funnel, per-trial verdicts."""
+        return describe_eval(run)
+
+    server.tool(
+        name="list_eval_records",
+        description="Every episode-record file under pipeline/runs/",
+    )(evals)
+    server.tool(
+        name="describe_eval",
+        description="One run's episode records: successes, milestone funnel, trials",
+    )(eval_detail)
+    server.tool(
+        description="An actuator's friction-torque curves over velocity, from its model"
+    )(friction_curve)
     return server
 
 
