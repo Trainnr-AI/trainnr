@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _extras import needs_mcp, needs_numpy, needs_sim
+from tests._extras import needs_mcp, needs_numpy, needs_sim
 
 from rq_pipeline.mcp_server import (
     bundle_names,
