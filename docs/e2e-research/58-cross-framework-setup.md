@@ -65,7 +65,11 @@ Producer: `rq-bundle wrap` over a `bam.fit` output directory;
 `rq-bundle verify` recomputes metrics and checks integrity. Adoption
 path: usable by anyone with a BAM fit today; a natural PR to Rhoban
 (it preserves data they already compute); the artifact our own M1–M6
-library re-publishes in.
+library re-publishes in. *(SHIPPED 2026-08-31 as
+`rq_pipeline/robot/actuator_bundle.py` + `tools/actuator-bundle.py` +
+the 48 committed bundles under `robots/actuator-bundles/` — 6 rail
+flags and 9 floor flags found in BAM's published fits on day one;
+metrics/uncertainty sections await re-fitting from logs.)*
 
 ## 2. Artifact two: the maintained mjlab consumer
 

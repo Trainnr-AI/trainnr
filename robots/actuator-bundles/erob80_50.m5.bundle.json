@@ -1,0 +1,48 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": []
+  },
+  "params": {
+    "R": 0.8574854939440504,
+    "actuator": "erob80_50",
+    "alpha": 2.984725791735308,
+    "armature": 0.3310758428281228,
+    "dtheta_stribeck": 2.263893998051299,
+    "friction_base": 2.3673298244088454,
+    "friction_stribeck": 0.8379934972683746,
+    "friction_viscous": 1.6088820042966994,
+    "kt": 4.818322648039187,
+    "load_friction_external": 0.00026790940844419897,
+    "load_friction_external_stribeck": 0.08496269863014352,
+    "load_friction_motor": 0.03418184370369529,
+    "load_friction_motor_stribeck": 0.015404277930421264,
+    "model": "m5"
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "eRob80:50",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/erob/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/erob80_50",
+    "raw_data_archival_grade": false,
+    "raw_data_url": null,
+    "slug": "erob80_50",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "erob80_50-m5@4150b0833fdd"
+}

@@ -1,0 +1,48 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": []
+  },
+  "params": {
+    "R": 3.32574860585428,
+    "actuator": "waveshare_st3025",
+    "alpha": 1.0000014861957915,
+    "armature": 0.003990113390754919,
+    "dtheta_stribeck": 0.8293244819790591,
+    "error_gain_ratio": 1.2057919885596493,
+    "friction_base": 0.04232928047294896,
+    "friction_stribeck": 1.3937846317464452e-08,
+    "friction_viscous": 0.02314301128591746,
+    "kt": 1.6662368942151977,
+    "load_friction_base": 3.7153078910039e-08,
+    "load_friction_stribeck": 0.21086489476546272,
+    "model": "m4",
+    "q_offset": 0.0046733910310479965
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "Waveshare ST3025 (12V)",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/waveshare/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/waveshare_st3025",
+    "raw_data_archival_grade": false,
+    "raw_data_url": "https://github.com/i1Cps/duck_mini_pro_headless/releases/download/st3025-bam-data-v1/waveshare_st3025_raw.zip",
+    "slug": "waveshare_st3025",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "waveshare_st3025-m4@2fc6b7a08aa0"
+}

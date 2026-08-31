@@ -1,0 +1,54 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": [
+      "alpha"
+    ]
+  },
+  "params": {
+    "R": 2.74580169718352,
+    "actuator": "sts3215",
+    "alpha": 9.999957365013934,
+    "armature": 0.02160563221423854,
+    "command_delay": 0.005192230394620662,
+    "dtheta_stribeck": 0.3714206936630544,
+    "error_gain_ratio": 1.1558830785746244,
+    "friction_base": 0.05286249893910219,
+    "friction_stribeck": 7.453456393946817e-09,
+    "friction_viscous": 0.02875750675061869,
+    "kt": 1.2717402321162192,
+    "load_friction_external": 0.24078091046614414,
+    "load_friction_external_stribeck": 0.14920078266091807,
+    "load_friction_motor": 0.03890079636876726,
+    "load_friction_motor_stribeck": 1.103364634592961e-08,
+    "max_velocity": 5.1109355980623965,
+    "model": "m5",
+    "q_offset": -0.06816285987597887
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "Feetech STS3215 (7.4V)",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/feetech/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/feetech_sts3215_7_4V",
+    "raw_data_archival_grade": false,
+    "raw_data_url": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/feetech_sts3215_raw.zip?download=true",
+    "slug": "feetech_sts3215_7_4V",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "sts3215-m5@6e74c60c8dc3"
+}

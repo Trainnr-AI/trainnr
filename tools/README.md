@@ -60,6 +60,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 | `accept-task.py` | The critic loop as a command: the scripted expert must pass a task's referee on every paired trial and the do-nothing floor must pass none; prints the verdict, the funnel and every reason, exits 1 on rejection (`--tray-y`, `--in-slot-xy` compose kitting variants) |
 | `solver-study.py` | Constraint-solver sweep on the kitting scene: solver × cone × integrator plus an impratio sweep, judged by the referee, with penetration, solver iterations, peak pad slip and peak grip force per row |
 | `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts |
+| `actuator-bundle.py` | Wrap vendored BAM fits into certified bundles; verify anyone's (stamps, rail/floor checks, honesty advisories) |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
 | `sync-bam-actuators.py` | Vendor new/changed servos from a BAM checkout or repomix pack into `robots/actuators/` — refuses a changed file with no `--version` |

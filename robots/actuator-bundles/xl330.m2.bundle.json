@@ -1,0 +1,48 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": [
+      "alpha"
+    ]
+  },
+  "params": {
+    "R": 3.4607921639921706,
+    "actuator": "xl330",
+    "alpha": 9.999999996984423,
+    "armature": 0.0016107397798419273,
+    "command_delay": 0.005784629116525439,
+    "dtheta_stribeck": 0.20367772037814913,
+    "friction_base": 0.0184637066329491,
+    "friction_stribeck": 0.0010404620898488805,
+    "friction_viscous": 0.004171234462472723,
+    "kt": 0.3701305185617232,
+    "model": "m2",
+    "q_offset": 0.02444159829160375
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "ROBOTIS Dynamixel XL-330",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/dynamixel/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/xl330",
+    "raw_data_archival_grade": false,
+    "raw_data_url": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip?download=true",
+    "slug": "xl330",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "xl330-m2@3c008590be90"
+}

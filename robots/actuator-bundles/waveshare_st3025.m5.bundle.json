@@ -1,0 +1,53 @@
+{
+  "checks": {
+    "at_floor": [
+      "load_friction_external",
+      "load_friction_external_stribeck"
+    ],
+    "near_search_bound": []
+  },
+  "params": {
+    "R": 3.006900536064634,
+    "actuator": "waveshare_st3025",
+    "alpha": 1.1121113006098289,
+    "armature": 0.00456638141741483,
+    "dtheta_stribeck": 0.25259978815750816,
+    "error_gain_ratio": 1.2444999873427631,
+    "friction_base": 0.04647304555788115,
+    "friction_stribeck": 0.014548248868409303,
+    "friction_viscous": 0.022985781720028336,
+    "kt": 1.6365797999769682,
+    "load_friction_external": 3.931211063018664e-10,
+    "load_friction_external_stribeck": 5.80514483176916e-10,
+    "load_friction_motor": 0.24901077766339866,
+    "load_friction_motor_stribeck": 0.20277399055691167,
+    "model": "m5",
+    "q_offset": 0.004954197531212623
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "Waveshare ST3025 (12V)",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/waveshare/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/waveshare_st3025",
+    "raw_data_archival_grade": false,
+    "raw_data_url": "https://github.com/i1Cps/duck_mini_pro_headless/releases/download/st3025-bam-data-v1/waveshare_st3025_raw.zip",
+    "slug": "waveshare_st3025",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "waveshare_st3025-m5@a6dfb4f185fb"
+}

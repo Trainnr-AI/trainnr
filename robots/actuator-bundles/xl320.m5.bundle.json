@@ -1,0 +1,49 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": []
+  },
+  "params": {
+    "R": 31.59537719366117,
+    "actuator": "xl320",
+    "alpha": 1.7036615009066722,
+    "armature": 0.0011623832707017194,
+    "dtheta_stribeck": 2.3026673245198115,
+    "friction_base": 6.936756414963028e-09,
+    "friction_stribeck": 0.016288653470458467,
+    "friction_viscous": 0.007224488134308582,
+    "kt": 1.0089902629814915,
+    "load_friction_external": 0.15805798326702472,
+    "load_friction_external_stribeck": 0.24623407524685495,
+    "load_friction_motor": 3.027099212974675e-08,
+    "load_friction_motor_stribeck": 7.425588167327617e-09,
+    "model": "m5",
+    "q_offset": -0.021243741085637008
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "ROBOTIS Dynamixel XL-320",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/dynamixel/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/xl320",
+    "raw_data_archival_grade": false,
+    "raw_data_url": null,
+    "slug": "xl320",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "xl320-m5@6e6871275405"
+}

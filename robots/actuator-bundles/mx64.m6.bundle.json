@@ -1,0 +1,50 @@
+{
+  "checks": {
+    "at_floor": [],
+    "near_search_bound": []
+  },
+  "params": {
+    "R": 2.3164043271967447,
+    "actuator": "mx64",
+    "alpha": 0.8409018066017007,
+    "armature": 0.012265893049213158,
+    "dtheta_stribeck": 2.575277366960116,
+    "friction_base": 6.217919698787649e-07,
+    "friction_stribeck": 0.12269525980968875,
+    "friction_viscous": 0.02533701181690149,
+    "kt": 1.6016832750318712,
+    "load_friction_external": 2.0462014258729542e-08,
+    "load_friction_external_quad": 0.009999980627672081,
+    "load_friction_external_stribeck": 0.014065853481003015,
+    "load_friction_motor": 0.3114720375111298,
+    "load_friction_motor_quad": 0.006908512882777861,
+    "load_friction_motor_stribeck": 0.18774381222411038,
+    "model": "m6"
+  },
+  "provenance": {
+    "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. 2025 IEEE International Conference on Robotics and Automation (ICRA), pp. 12091-12097.",
+    "display_name": "ROBOTIS Dynamixel MX-64",
+    "license": "Apache-2.0",
+    "model_module": "https://github.com/Rhoban/bam/blob/main/bam/dynamixel/actuator.py",
+    "models_available": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "notes": "Identified on BAM's own pendulum test bench, not on an SO-101/ALOHA arm. See docs/e2e-research/53-bam-actuator-identification.md.",
+    "params_path": "https://github.com/Rhoban/bam/tree/main/bam/params/mx64",
+    "raw_data_archival_grade": false,
+    "raw_data_url": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/mx64_raw.tgz?download=true",
+    "slug": "mx64",
+    "source": "bam",
+    "source_repo": "https://github.com/Rhoban/bam",
+    "source_version": "1.0.2",
+    "vendored_date": "2026-08-28",
+    "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
+  },
+  "schema": "robotiq-actuator-bundle/1",
+  "stamp": "mx64-m6@8aa220ed49af"
+}
