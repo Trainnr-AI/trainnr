@@ -1,14 +1,19 @@
 # The paired study (C1): does identified-region DR beat guessed DR, measurably?
 
 *2026-08-31. The protocol for docs/00 Phase C1 — "the number the
-datasheet earns its claims with". Design and smoke tooling exist as of
-tonight; the real-scale run is a paid-GPU decision that stays with the
-operator. Status: ALL FOUR PHASES RAN END TO END 2026-08-31 (local
-smoke) — 8/8 demos kept per arm, both converted, both trained (ACT 800
-steps, batch 8, loss 2.49 → 1.63), both evaluated at the pinned truth
-on 4 matched trials: guessed 0/4, identified 0/4, CI [0, 0.602] each,
-p = 1.0, verdict UNRESOLVED — as §3 predicts for smoke scale. The
-protocol is proven plumbing; the number needs the sized run.*
+datasheet earns its claims with". Smoke ran end to end the same day
+(0/4 vs 0/4, UNRESOLVED, as §3 predicts). **The sized run ran the same
+night on a rented B200** (32 demos/arm on `lift-study`, ACT 10k steps
+batch 64, judged at the pinned truth on 40 matched trials/side — the
+§3 power table's own N): **guessed 40/40, identified 40/40, CI
+[0.912, 1.0] each, p = 1.0 → INSENSITIVE at α = 0.05, δ = 0.15.** A
+real verdict, published as §4 demands: at THIS truth distance —
+inside the ±30 % folklore span — with THIS open-loop-robust expert
+and 10k-step ACT at ceiling, guessed DR is measurably sufficient.
+§5's first risk materialized exactly as written. The knobs for the
+next run are the operator's: a truth OUTSIDE the guessed span, a
+brittler task (stack/insert), fewer demos, or a real robot's
+identified region in place of the declared stand-in.*
 
 ## 0. The claim under test
 
