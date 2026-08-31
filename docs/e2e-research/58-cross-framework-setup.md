@@ -152,13 +152,13 @@ for the service that produces trustworthy ones.
 1. **Bundle spec + `rq-bundle wrap/verify`** over our existing vendored
    BAM fits (no GPU needed; pure Python; can start now).
 2. **Kernel port to mjlab 1.6** + the refusing ActuatorCfg + auto
-   event registration (needs the GPU box → stacks on the standing
-   rl-engineering-merge-before-WSL gate).
+   event registration (needs the GPU box; the former
+   rl-engineering-merge gate was dissolved 2026-08-31 — see
+   docs/00-roadmap Act II — so this waits only on a WSL session).
 3. **DR linter + `dr_from_bundle` + `entity_from_bundle`.**
 4. **RecorderTerm → Studio**; the `train` specialist in the panel
    learns the mjlab commands.
-5. **Manifest + ONNX-certify adapter** (after the rl-engineering
-   merge, eval-side).
+5. **Manifest + ONNX-certify adapter** (eval-side).
 6. **Upstream offers**: bundle PR to Rhoban; linter + RecorderTerm
    PRs/issues to mjlab. Timed after 1–4 exist and are tested — code
    first, then the conversation.
