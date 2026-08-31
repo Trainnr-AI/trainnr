@@ -105,6 +105,36 @@ class ExportDemos(unittest.TestCase):
                 sample["action"].numpy(), trajectory["actions"][1], rtol=1e-6
             )
 
+    def test_constant_dims_get_unit_std(self) -> None:
+        import json  # noqa: PLC0415
+
+        from rq_pipeline.collect.demo_export import (  # noqa: PLC0415
+            export_demos,
+            guard_constant_dims,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            demos = _batch(tmp, bases=("declared span", "declared span"))
+            task = _Task()
+            task.bundle_dir = tmp / "demos"
+            root = tmp / "dataset"
+            export_demos(demos, root, task=task, repo_id="test/hold", use_videos=False)
+            stats = json.loads((root / "meta" / "stats.json").read_text())
+
+            def leaves(node):
+                if isinstance(node, list):
+                    for item in node:
+                        yield from leaves(item)
+                else:
+                    yield node
+
+            for feature in stats.values():
+                for value in leaves(feature.get("std", [])):
+                    self.assertGreater(abs(value), 1e-7)
+            # Idempotent: a second pass finds nothing left to patch.
+            self.assertEqual(guard_constant_dims(root), [])
+
     def test_two_bases_in_one_batch_are_refused(self) -> None:
         from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
 

@@ -28,6 +28,38 @@ if TYPE_CHECKING:
     from rq_pipeline.tasks.task import Task
 
 
+def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
+    """Clamp zero-variance feature dimensions in the dataset's stats to
+    std = 1. A dimension the expert holds CONSTANT (lift's base and
+    wrist) gets std = 0 from the stats pass, and LeRobot's
+    `(x - mean) / (std + 1e-8)` then turns the mean's own float32
+    rounding error into a hundreds-of-sigma training target — measured
+    2026-08-31: the wrist normalized to ±453 and ACT's L1 pinned at
+    ~73 for a whole run (docs/07). With std = 1 a constant dimension
+    normalizes to ~0 and unnormalizes to its constant, which is the
+    only honest reading of "no variance". Returns the patched keys."""
+    import json  # noqa: PLC0415
+
+    stats_path = Path(root) / "meta" / "stats.json"
+    stats = json.loads(stats_path.read_text())
+    patched: list[str] = []
+
+    def clamp(node: Any, label: str) -> Any:
+        if isinstance(node, list):
+            return [clamp(item, f"{label}[{i}]") for i, item in enumerate(node)]
+        if isinstance(node, (int, float)) and abs(node) < floor:
+            patched.append(label)
+            return 1.0
+        return node
+
+    for key, feature in stats.items():
+        if isinstance(feature, dict) and "std" in feature:
+            feature["std"] = clamp(feature["std"], f"{key}.std")
+    if patched:
+        stats_path.write_text(json.dumps(stats, indent=1))
+    return patched
+
+
 def episode_dirs(demos_dir: Path) -> list[Path]:
     dirs = sorted(Path(demos_dir).glob("episode_*"))
     if not dirs:
@@ -143,6 +175,7 @@ def export_demos(
         frame_counts.append(len(frames))
     if hasattr(dataset, "finalize"):
         dataset.finalize()
+    guard_constant_dims(Path(root))
 
     DatasetProvenance(
         bundle=stamp(task.bundle_dir.name, task.bundle_dir),
