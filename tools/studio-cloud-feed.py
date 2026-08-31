@@ -74,8 +74,15 @@ def parse_poll(
                 rr.log(f"{name}/stage", rr.TextLog(stage))
                 print(f"stage: {stage}", flush=True)
         metrics = parse_train_line(line)
-        if metrics is None or metrics.step <= last_step:
+        if metrics is None:
             continue
+        if metrics.step <= last_step:
+            # A counter that jumps far backward is a NEW training arm
+            # starting over, not a stale line - without this, the second
+            # arm of a paired run streams nothing (seen live 2026-09-01).
+            if metrics.step >= last_step - 1000:
+                continue
+            rr.log(f"{name}/stage", rr.TextLog("new arm: step counter restarted"))
         last_step = metrics.step
         latest = metrics
         rr.set_time("train_step", sequence=metrics.step)
