@@ -21,7 +21,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
 
 bootstrap()
 
@@ -60,9 +60,130 @@ def conditions(args: argparse.Namespace) -> dict[str, dict]:
     }
 
 
+def _checkpoint(training_dir: Path) -> Path:
+    """The newest checkpoint's pretrained_model directory."""
+    checkpoints = sorted((training_dir / "checkpoints").glob("[0-9]*"))
+    if not checkpoints:
+        raise FileNotFoundError(f"no checkpoints under {training_dir}")
+    return checkpoints[-1] / "pretrained_model"
+
+
+def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
+    """Phase 4: both checkpoints judged AT the truth on matched trials —
+    the dynamics pinned by degenerate variation ranges, so every trial
+    of every policy runs the same world (62 §2)."""
+    import subprocess  # noqa: PLC0415
+
+    from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from rq_pipeline.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
+    from rq_pipeline.stats.effects import main_effect  # noqa: PLC0415
+
+    study = json.loads((out / "study.json").read_text())
+    truth = study["truth"]
+    pins = [
+        f"joints.damping_scale={truth['damping']}:{truth['damping']}",
+        f"actuators.gain_scale={truth['gain']}:{truth['gain']}",
+    ]
+    device = best_device()
+    outcomes = {}
+    for name in study["conditions"]:
+        records_path = out / f"{name}-records.jsonl"
+        records_path.unlink(missing_ok=True)
+        command = lerobot_eval_command(
+            policy_path=_checkpoint(out / f"{name}-training"),
+            device=device,
+            output_dir=out / f"{name}-eval",
+            seed=1000,
+            episodes=trials,
+            batch_size=trials,
+            extra=RobotiqEnvConfig.cli_flags(
+                LIFT,
+                record_to=records_path,
+                policy_name=f"paired-{name}",
+                variations=pins,
+                trials=trials,
+            ),
+        )
+        print(f"== evaluating {name} at truth {truth} ({trials} paired trials)")
+        subprocess.run(command, check=True)
+        records = read_records(records_path)
+        (score,) = fold(records)
+        print(f"{name}: {score.successes}/{score.trials}; funnel {funnel(records)}")
+        outcomes[name] = [r.success for r in sorted(records, key=lambda r: r.trial)]
+
+    effect = main_effect(
+        "dr_basis",
+        "guessed",
+        "identified",
+        outcomes["guessed"],
+        outcomes["identified"],
+        alpha=alpha,
+        delta=delta,
+    )
+    verdict = {
+        "guessed": f"{effect.successes_a}/{effect.trials_a} CI {effect.interval_a}",
+        "identified": f"{effect.successes_b}/{effect.trials_b} CI {effect.interval_b}",
+        "difference": effect.difference,
+        "p": effect.p_value,
+        "verdict": effect.verdict,
+        "alpha": alpha,
+        "delta": delta,
+        "truth": truth,
+        "trials": trials,
+    }
+    (out / "verdict.json").write_text(json.dumps(verdict, indent=1))
+    print(json.dumps(verdict, indent=1))
+    print(f"verdict -> {out / 'verdict.json'}")
+    return 0
+
+
+def train(out: Path, *, steps: int, batch: int) -> int:
+    """Phase 3: the SAME trainer config on each arm's dataset — nothing
+    about the condition may leak into the config (62 §1). No in-loop
+    eval: the judging happens once, paired, at truth (phase 4)."""
+    import subprocess  # noqa: PLC0415
+
+    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+
+    study = json.loads((out / "study.json").read_text())
+    device = best_device()
+    for name in study["conditions"]:
+        output = out / f"{name}-training"
+        command = lerobot_train_command(
+            policy="act",
+            device=device,
+            dataset=f"rq-pipeline/paired-{name}",
+            dataset_root=out / f"{name}-lerobot",
+            output_dir=output,
+            job_name=f"paired-{name}",
+            steps=steps,
+            batch_size=batch,
+            save_freq=steps,
+        )
+        print(f"== training {name}: {steps} steps at batch {batch} on {device}")
+        subprocess.run(command, check=True)
+        print(f"{name}: checkpoint under {output}")
+    return 0
+
+
+def convert(out: Path) -> int:
+    """Phase 2: both arms to LeRobot datasets (train venv - the
+    converter needs the `train` extra)."""
+    from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
+
+    study = json.loads((out / "study.json").read_text())
+    task = build_lift()
+    for name in study["conditions"]:
+        root = out / f"{name}-lerobot"
+        export_demos(out / name, root, task=task, repo_id=f"rq-pipeline/paired-{name}")
+        print(f"{name}: dataset -> {root}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("phase", choices=["generate"])
+    parser.add_argument("phase", choices=["generate", "convert", "train", "evaluate"])
     parser.add_argument("out", type=Path)
     parser.add_argument("--episodes", type=int, default=8)
     parser.add_argument("--seed", type=int, default=17)
@@ -71,7 +192,21 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=0.05)
     parser.add_argument("--guessed-span", type=float, default=0.30)
     parser.add_argument("--frame-every", type=int, default=5)
+    parser.add_argument("--train-steps", type=int, default=800)
+    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--trials", type=int, default=4)
+    parser.add_argument("--alpha", type=float, default=0.05)
+    parser.add_argument("--delta", type=float, default=0.15)
     args = parser.parse_args()
+
+    if args.phase == "convert":
+        return convert(args.out)
+    if args.phase == "train":
+        return train(args.out, steps=args.train_steps, batch=args.batch)
+    if args.phase == "evaluate":
+        return evaluate(
+            args.out, trials=args.trials, alpha=args.alpha, delta=args.delta
+        )
 
     the_conditions = conditions(args)
     batches = {}
