@@ -9,8 +9,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._extras import needs_mcp, needs_numpy, needs_sim
-
 from rq_pipeline.mcp_server import (
     bundle_names,
     describe_actuator,
@@ -28,6 +26,7 @@ from rq_pipeline.mcp_server import (
     friction_curve,
     list_eval_records,
 )
+from tests._extras import needs_mcp, needs_numpy, needs_sim
 
 
 class Bundles(unittest.TestCase):
