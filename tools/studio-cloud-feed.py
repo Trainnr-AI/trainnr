@@ -36,6 +36,8 @@ bootstrap()
 
 from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: E402
 
+SEEN_LINES_CAP = 20000
+
 STAGE = re.compile(
     r"== training [a-z]+|== evaluating [a-z]+"
     r"|[a-z]+: checkpoint under \S+|verdict -> \S+"
@@ -235,7 +237,7 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             time.sleep(args.every * 5)
             continue
-        if len(seen_lines) > 20000:
+        if len(seen_lines) > SEEN_LINES_CAP:
             seen_lines.clear()  # bounded; re-logging identical points is harmless
         arm, gpu, latest, eval_progress, last_step = parse_poll(
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
