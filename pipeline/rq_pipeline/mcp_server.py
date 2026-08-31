@@ -31,11 +31,16 @@ from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.physics.registry import engines
 from rq_pipeline.robot.actuator_library import (
+    ACTUATORS_ROOT,
     list_actuators,
     list_models,
     load_actuator,
 )
 from rq_pipeline.tasks.registry import resolve, tasks
+
+# The committed store of certified actuator bundles (A1's artifacts —
+# tools/actuator-bundle.py wrap --all), beside the library they wrap.
+BUNDLE_STORE = ACTUATORS_ROOT.parent / "actuator-bundles"
 
 # robots/actuators is the actuator LIBRARY (per-servo friction models,
 # grown by tools/sync-bam-actuators.py), not a robot bundle — it has its
@@ -122,6 +127,49 @@ def describe_actuator(slug: str, tier: str = "m6") -> dict[str, Any]:
         "friction": asdict(model.friction),
         "provenance": asdict(model.provenance),
     }
+
+
+def describe_actuator_bundles() -> list[dict[str, Any]]:
+    """Every certified actuator bundle in the committed store — stamp,
+    check flags (optimizer rails/floors) and honesty advisories."""
+    from rq_pipeline.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
+
+    described = []
+    for path in sorted(BUNDLE_STORE.glob("*.bundle.json")):
+        bundle = read_bundle(path)  # verifies on read; a bad file raises by name
+        described.append(
+            {
+                "file": path.name,
+                "stamp": bundle["stamp"],
+                "checks": bundle["checks"],
+                "advisories": verify(bundle),
+            }
+        )
+    return described
+
+
+def describe_actuator_bundle(slug: str, tier: str = "m6") -> dict[str, Any]:
+    """One certified bundle in full — BAM's params verbatim plus the
+    envelope — with its advisories riding along."""
+    from rq_pipeline.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
+
+    path = BUNDLE_STORE / f"{slug}.{tier}.bundle.json"
+    if not path.exists():
+        available = sorted(p.name for p in BUNDLE_STORE.glob("*.bundle.json"))
+        raise KeyError(f"no bundle {path.name!r} in the store; have {available}")
+    bundle = read_bundle(path)
+    return {"bundle": bundle, "advisories": verify(bundle)}
+
+
+def describe_datasheet(demos_dir: str) -> dict[str, Any]:
+    """A demo batch's datasheet, as data: kept episodes, keep-rate
+    bound, stamps, dynamics spreads with their bases, warnings."""
+    from dataclasses import asdict  # noqa: PLC0415
+
+    from rq_pipeline.collect.datasheet import summarize  # noqa: PLC0415
+
+    summary = summarize(Path(demos_dir))
+    return {**asdict(summary), "keep_rate_bound": summary.keep_rate_bound}
 
 
 def describe_tasks() -> list[dict[str, Any]]:
@@ -292,6 +340,15 @@ def build_server() -> Any:
     server.tool(description="One servo at one friction tier (m1..m6): all parameters")(
         describe_actuator
     )
+    server.tool(
+        description="Certified actuator bundles: stamps, rail/floor checks, advisories"
+    )(describe_actuator_bundles)
+    server.tool(
+        description="One certified bundle in full (BAM params verbatim + envelope)"
+    )(describe_actuator_bundle)
+    server.tool(
+        description="A demo batch's datasheet: keep-rate bound, stamps, draw bases"
+    )(describe_datasheet)
     server.tool(description="The task registry: ids, names, rigs")(describe_tasks)
     server.tool(description="One task built for real: its spec and content stamp")(
         describe_task

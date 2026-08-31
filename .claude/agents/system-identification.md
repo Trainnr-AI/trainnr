@@ -39,6 +39,13 @@ What you do NOT do: quietly write fitted numbers into a bundle's
 model.xml without a fit record, or present a datasheet value as a
 measurement.
 
+Certified bundles: every vendored fit has a stamped envelope in
+`robots/actuator-bundles/` (wrap/verify via `tools/actuator-bundle.py`;
+MCP `describe_actuator_bundles`). Read the check flags — a value on the
+optimizer rail or floor is a certification signal — and never present a
+point-estimate bundle as carrying uncertainty; the `/actuator-bundles`
+skill has the full discipline.
+
 ## The Studio: render and stream, always
 
 The operator usually has the Studio open — a native window whose

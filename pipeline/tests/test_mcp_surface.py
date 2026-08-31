@@ -14,9 +14,12 @@ from _extras import needs_mcp, needs_numpy, needs_sim
 from rq_pipeline.mcp_server import (
     bundle_names,
     describe_actuator,
+    describe_actuator_bundle,
+    describe_actuator_bundles,
     describe_actuators,
     describe_bundle,
     describe_bundles,
+    describe_datasheet,
     describe_engines,
     describe_eval,
     describe_runs,
@@ -73,6 +76,56 @@ class Actuators(unittest.TestCase):
         detail = describe_actuator("feetech_sts3215_7_4V", "m1")
         self.assertAlmostEqual(detail["servo"]["kt"], 1.1776311631627974)
         self.assertEqual(detail["provenance"]["source"], "bam")
+
+
+class ActuatorBundles(unittest.TestCase):
+    def test_the_committed_store_lists_with_stamps_and_advisories(self) -> None:
+        described = describe_actuator_bundles()
+        self.assertEqual(len(described), 48)  # 8 motors x m1..m6
+        for entry in described:
+            with self.subTest(file=entry["file"]):
+                self.assertIn("@", entry["stamp"])
+                # Vendored point estimates: the honesty advisories ride
+                # on every listing, not just the deep view.
+                self.assertTrue(any("uncertainty" in a for a in entry["advisories"]))
+
+    def test_one_bundle_in_full_carries_bams_params_verbatim(self) -> None:
+        detail = describe_actuator_bundle("feetech_sts3215_7_4V", "m6")
+        self.assertEqual(detail["bundle"]["params"]["actuator"], "sts3215")
+        self.assertIn("alpha", detail["bundle"]["checks"]["near_search_bound"])
+
+    def test_an_unknown_bundle_is_refused_naming_the_store(self) -> None:
+        with self.assertRaises(KeyError) as ctx:
+            describe_actuator_bundle("no-such-servo", "m6")
+        self.assertIn("feetech_sts3215_7_4V.m6.bundle.json", str(ctx.exception))
+
+
+class Datasheets(unittest.TestCase):
+    def test_a_batch_summary_folds_with_its_keep_rate_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            episode = Path(tmp) / "episode_0000"
+            episode.mkdir()
+            (episode / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "seed": 1,
+                        "attempt": 4,
+                        "task": "t@1",
+                        "expert": "e@1",
+                        "instrument": "i",
+                        "dynamics": {"kt": 1.3},
+                        "dynamics_basis": "identified-interval",
+                        "draws": {},
+                        "retries": [],
+                        "control_hz": 50,
+                        "frame_every_control_ticks": 1,
+                    }
+                )
+            )
+            sheet = describe_datasheet(tmp)
+            self.assertEqual(sheet["episodes"], 1)
+            self.assertEqual(sheet["keep_rate_bound"], 0.25)
+            self.assertEqual(sheet["bases"], ("identified-interval",))
 
 
 class Registries(unittest.TestCase):

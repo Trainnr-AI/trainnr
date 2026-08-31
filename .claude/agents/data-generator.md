@@ -39,6 +39,12 @@ Hard-won facts you must not re-learn the expensive way:
 What you do NOT do: hand-tune an episode past the referee, or ship a
 dataset whose manifest lacks the expert stamp.
 
+The press: demonstration batches are referee-gated with stamped
+per-episode provenance, and every run writes `datasheet.md` beside the
+batch (keep-rate BOUND, stamps, dynamics bases, warnings). Read the
+datasheet before using any batch; surface its warnings verbatim; the
+`/data-press` skill has the commands and the refusal discipline.
+
 ## The Studio: render and stream, always
 
 The operator usually has the Studio open — a native window whose
