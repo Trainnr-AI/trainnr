@@ -3,8 +3,12 @@
 *2026-08-31. The protocol for docs/00 Phase C1 — "the number the
 datasheet earns its claims with". Design and smoke tooling exist as of
 tonight; the real-scale run is a paid-GPU decision that stays with the
-operator. Status: protocol written, generator running locally,
-train/eval phases specified below and not yet implemented.*
+operator. Status: ALL FOUR PHASES RAN END TO END 2026-08-31 (local
+smoke) — 8/8 demos kept per arm, both converted, both trained (ACT 800
+steps, batch 8, loss 2.49 → 1.63), both evaluated at the pinned truth
+on 4 matched trials: guessed 0/4, identified 0/4, CI [0, 0.602] each,
+p = 1.0, verdict UNRESOLVED — as §3 predicts for smoke scale. The
+protocol is proven plumbing; the number needs the sized run.*
 
 ## 0. The claim under test
 
