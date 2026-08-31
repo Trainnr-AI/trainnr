@@ -258,7 +258,7 @@ class MJXWarpBackend:
 
         def tick(data: Any, ctrl: Any) -> tuple[Any, tuple[Any, Any]]:
             data = mjx.step(mx, data.replace(ctrl=ctrl))
-            return data, (_row(data, layout, jnp), jnp.max(data.nacon))
+            return data, (_row(data, layout, jnp), contact_count(data, jnp))
 
         def episode(row: Any, ctrls: Any) -> tuple[Any, Any]:
             _, (states, contacts) = jax.lax.scan(tick, seat(row), ctrls)
@@ -294,7 +294,11 @@ class MJXWarpBackend:
             # R7: the forward pass after the step, so sensors, poses and
             # the row describe ONE instant — the CPU stepper's rule.
             data = mjx.forward(mx, mjx.step(mx, data))
-            return data, (_row(data, layout, jnp), data.sensordata, jnp.max(data.nacon))
+            return data, (
+                _row(data, layout, jnp),
+                data.sensordata,
+                contact_count(data, jnp),
+            )
 
         def hold(data: Any, ctrl: Any) -> tuple[Any, Any, Any, Any]:
             data, (rows, sensor_rows, contacts) = jax.lax.scan(
@@ -345,6 +349,17 @@ def _row(data: Any, layout: FullPhysicsLayout, jnp: Any) -> Any:
     if layout.na:
         parts.append(data.act)
     return jnp.concatenate(parts)
+
+
+def contact_count(data: Any, jnp: Any) -> Any:
+    """The live contact count of one world: Warp's `nacon` (the capacity
+    the backend refuses past), or the JAX implementation's `ncon` — the
+    two implementations name it differently (measured 2026-08-29 on the
+    law branch; the fix ported here 2026-08-31)."""
+    for name in ("nacon", "ncon"):
+        if hasattr(data, name):
+            return jnp.max(jnp.asarray(getattr(data, name)))
+    raise AttributeError("mjx.Data exposes neither nacon nor ncon")
 
 
 class MJXBatchedStepper:
