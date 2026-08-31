@@ -43,6 +43,18 @@ def entity_from_bundle(
             "file is named explicitly, never guessed"
         )
     bundle_stamp = stamp(robot_dir.name, robot_dir)
+    # mjlab's actuators field is an ORDERED tuple of cfgs, not a mapping.
+    # A dict here silently becomes a tuple of its KEY STRINGS — an entity
+    # with no actuator law at all. Caught 2026-09-01 by the walk cfg's
+    # linter showcase test (the entity brick's own test only compiled
+    # the raw spec, whose XML actuators masked it). Refused by name now.
+    bad = [type(a).__name__ for a in actuators if not hasattr(a, "target_names_expr")]
+    if bad:
+        raise TypeError(
+            f"actuators must be actuator CFGS in a tuple, got {bad} — "
+            "mjlab actuators are ordered, not named; pass (cfg,) not "
+            "{'name': cfg}"
+        )
     cfg = EntityCfg(
         spec_fn=lambda: mujoco.MjSpec.from_file(str(model_path)),
         articulation=EntityArticulationInfoCfg(

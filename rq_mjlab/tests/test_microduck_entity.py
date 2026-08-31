@@ -31,11 +31,19 @@ class MicroduckEntity(unittest.TestCase):
 
     def test_builds_from_stamped_bundles_and_compiles(self) -> None:
         actuator = self._actuator()
-        cfg, stamp = entity_from_bundle(ROBOT, "robot_walk.xml", {"servos": actuator})
+        cfg, stamp = entity_from_bundle(ROBOT, "robot_walk.xml", (actuator,))
         self.assertTrue(stamp.startswith("microduck@"))
         self.assertTrue(actuator.stamp.startswith("xl330-m6@"))
         model = cfg.spec_fn().compile()
         self.assertEqual(model.nu, SERVOS)
+
+    def test_a_dict_of_actuators_is_refused_not_silently_stringified(self) -> None:
+        # mjlab's actuators field is an ordered tuple; a dict used to
+        # become a tuple of its KEY STRINGS — an entity with no law at
+        # all (caught 2026-09-01 by the walk cfg's linter showcase).
+        with self.assertRaises(TypeError) as ctx:
+            entity_from_bundle(ROBOT, "robot_walk.xml", {"servos": self._actuator()})
+        self.assertIn("ordered, not named", str(ctx.exception))
 
     def test_point_estimate_dr_refuses_without_a_declared_span(self) -> None:
         # The store's m6 is a point estimate (advisories say so); asking
