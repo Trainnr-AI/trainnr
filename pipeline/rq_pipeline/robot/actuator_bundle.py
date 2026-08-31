@@ -225,6 +225,83 @@ def wrap_all(out_dir: Path, *, wrapped_on: str | None = None) -> list[Path]:
     ]
 
 
+def dr_ranges(bundle: Mapping[str, Any]) -> dict[str, tuple[float, float]]:
+    """The per-parameter sampling region this bundle DECLARES —
+    `uncertainty: {param: {"low": x, "high": y}}` — and nothing else.
+    A point-estimate bundle has no region; that is a refusal here, not
+    a fabricated ±10% (the microduck lesson, 57 §5: fitted-treated-as-
+    exact beside hand-guessed spans, with nothing marking which)."""
+    uncertainty = bundle.get("uncertainty")
+    if not uncertainty:
+        raise ValueError(
+            f"bundle {bundle.get('stamp', '<unstamped>')} carries no "
+            "'uncertainty' section (point estimates only) — there is no "
+            "identified region to sample; pass sample_dynamics a "
+            "fallback_span to DECLARE a span instead, and the basis will "
+            "say so"
+        )
+    return {
+        param: (float(region["low"]), float(region["high"]))
+        for param, region in uncertainty.items()
+    }
+
+
+def sample_dynamics(
+    bundle: Mapping[str, Any],
+    rng: Any,
+    *,
+    fallback_span: float | None = None,
+) -> tuple[dict[str, float], str]:
+    """One episode's dynamics draw from the bundle, with its BASIS —
+    the string a press manifest records so a dataset says whether its
+    randomisation was identified or declared (docs/e2e-research/60 §3).
+
+    With an `uncertainty` section: uniform over each parameter's
+    identified interval, basis "identified-interval". Without one, and
+    only with an explicit `fallback_span`: uniform over ±span around
+    the point estimates, basis naming the span as caller-declared.
+    `rng` is any numpy Generator — the press already owns one."""
+    numeric = {
+        key: float(value)
+        for key, value in bundle["params"].items()
+        if key not in PARAM_IDENTITY_KEYS and isinstance(value, (int, float))
+    }
+    try:
+        ranges = dr_ranges(bundle)
+        basis = "identified-interval"
+    except ValueError:
+        if fallback_span is None:
+            raise
+        # min/max, not (1-s, 1+s) order: a NEGATIVE parameter (q_offset
+        # is -0.068 in the shipped sts3215 fit) inverts the endpoints —
+        # caught by the first test that sampled a real bundle.
+        ranges = {
+            param: (
+                min(value * (1 - fallback_span), value * (1 + fallback_span)),
+                max(value * (1 - fallback_span), value * (1 + fallback_span)),
+            )
+            for param, value in numeric.items()
+        }
+        basis = f"caller-declared span ±{fallback_span:g} (bundle is point estimates)"
+    return {
+        param: float(rng.uniform(low, high)) for param, (low, high) in ranges.items()
+    }, basis
+
+
+def as_scales(
+    dynamics: Mapping[str, float], bundle: Mapping[str, Any]
+) -> dict[str, float]:
+    """A draw re-expressed as multipliers of the bundle's point
+    estimates — the shape scale-based randomisers (kitting's
+    `scale_dynamics`, mjlab's `operation="scale"` DR) consume."""
+    params = bundle["params"]
+    return {
+        param: value / float(params[param])
+        for param, value in dynamics.items()
+        if param in params and float(params[param]) != 0.0
+    }
+
+
 def _stamp(bundle: Mapping[str, Any]) -> str:
     """Stamp name and hash both derive from bundle CONTENT alone, so a
     bundle verifies self-contained — deliberately NOT the directory

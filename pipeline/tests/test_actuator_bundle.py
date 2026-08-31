@@ -11,8 +11,11 @@ from pathlib import Path
 from rq_pipeline.robot.actuator_bundle import (
     SCHEMA,
     _stamp,
+    as_scales,
+    dr_ranges,
     read_bundle,
     run_checks,
+    sample_dynamics,
     verify,
     wrap,
     wrap_all,
@@ -117,6 +120,62 @@ class Verifying(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             verify(bundle)
         self.assertIn("model", str(ctx.exception))
+
+
+class Sampling(unittest.TestCase):
+    def _with_uncertainty(self) -> dict:
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        bundle["uncertainty"] = {
+            "kt": {"low": 1.2, "high": 1.35},
+            "friction_base": {"low": 0.04, "high": 0.07},
+        }
+        bundle["stamp"] = _stamp(bundle)
+        return bundle
+
+    def test_a_point_estimate_bundle_refuses_to_invent_a_region(self) -> None:
+        # The microduck lesson (57 §5): fitted-treated-as-exact beside a
+        # hand-guessed span, with nothing marking which. Here the refusal
+        # names the stamp and the way out.
+        import numpy as np  # noqa: PLC0415
+
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        with self.assertRaises(ValueError) as ctx:
+            sample_dynamics(bundle, np.random.default_rng(0))
+        self.assertIn(bundle["stamp"], str(ctx.exception))
+        self.assertIn("fallback_span", str(ctx.exception))
+
+    def test_identified_intervals_bound_every_draw(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        bundle = self._with_uncertainty()
+        rng = np.random.default_rng(7)
+        for _ in range(50):
+            dynamics, basis = sample_dynamics(bundle, rng)
+            self.assertEqual(basis, "identified-interval")
+            self.assertEqual(set(dynamics), {"kt", "friction_base"})
+            for param, (low, high) in dr_ranges(bundle).items():
+                self.assertTrue(low <= dynamics[param] <= high, param)
+
+    def test_a_declared_fallback_span_says_so_in_its_basis(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        dynamics, basis = sample_dynamics(
+            bundle, np.random.default_rng(0), fallback_span=0.1
+        )
+        self.assertIn("caller-declared", basis)
+        self.assertIn("0.1", basis)
+        kt = bundle["params"]["kt"]
+        self.assertTrue(kt * 0.9 <= dynamics["kt"] <= kt * 1.1)
+        # The negative-parameter case that caught the inverted-endpoints
+        # bug: q_offset is -0.068 in the shipped fit.
+        q_offset = bundle["params"]["q_offset"]
+        self.assertTrue(q_offset * 1.1 <= dynamics["q_offset"] <= q_offset * 0.9)
+
+    def test_scales_are_multipliers_of_the_point_estimates(self) -> None:
+        bundle = self._with_uncertainty()
+        scales = as_scales({"kt": bundle["params"]["kt"] * 1.05}, bundle)
+        self.assertAlmostEqual(scales["kt"], 1.05)
 
 
 class Files(unittest.TestCase):
