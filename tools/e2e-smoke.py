@@ -45,6 +45,7 @@ from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
 
 bootstrap()
 
+from rq_pipeline.collect.datasheet import DATASHEET_FILE, summarize  # noqa: E402
 from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
 from rq_pipeline.collect.kitting_export import (  # noqa: E402
     DatasetProvenance,
@@ -187,6 +188,17 @@ class GpuSampler:
 
 
 def demos(chain: Chain) -> None:
+    # Preflight: the certified actuator-bundle store verifies before a
+    # single episode is pressed — a tampered or malformed bundle fails
+    # the chain here, by name, not in a training run three stages later.
+    from rq_pipeline.mcp_server import BUNDLE_STORE  # noqa: PLC0415
+    from rq_pipeline.robot.actuator_bundle import read_bundle  # noqa: PLC0415
+
+    store = sorted(BUNDLE_STORE.glob("*.bundle.json"))
+    for bundle_path in store:
+        read_bundle(bundle_path)  # verifies; raises naming the file
+    chain.say(f"preflight: {len(store)} certified actuator bundles verify")
+
     batch = generate_demos(
         chain.layout.demos,
         episodes=chain.scale.episodes,
@@ -197,6 +209,16 @@ def demos(chain: Chain) -> None:
     )
     if not batch.complete:
         raise StageFailed(chain.current, 1)
+    # The batch's own datasheet (written by the press): its warnings go
+    # into the chain log verbatim — surfaced, never smoothed over.
+    sheet = summarize(chain.layout.demos)
+    chain.say(
+        f"datasheet: {chain.layout.demos / DATASHEET_FILE} — "
+        f"{sheet.episodes} episodes, keep rate <= {sheet.keep_rate_bound:.0%}, "
+        f"bases {list(sheet.bases)}"
+    )
+    for warning in sheet.warnings:
+        chain.say(f"datasheet WARNING: {warning}")
 
 
 def convert(chain: Chain) -> None:
