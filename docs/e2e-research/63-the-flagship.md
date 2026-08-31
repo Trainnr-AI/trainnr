@@ -56,6 +56,31 @@ waits on docs/38):
    with its evidence — the outreach artifact C3's mjlab/Rhoban
    conversations lead with.
 
+## 2.1 The transcription source, pinned (2026-09-01, G2 recon)
+
+- Their walk recipe lives in
+  `microduck_rl:src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py`
+  (949 lines at `d424a0c`) — a delta-stack over **mjlab 1.3.0's**
+  velocity base (`pyproject` pin confirmed; three breaking minors
+  behind our 1.6, so their package cannot import in our venv — the
+  transcription route the scope assumed is the only route).
+- Key numbers already extracted: commands `lin_vel_x (-0.4, 0.4)`,
+  `lin_vel_y (-0.3, 0.3)`, `ang_vel_z (-1.0, 1.0)`; solver raised to
+  `nconmax 200, iterations 30, ls_iterations 50` for the duck; their
+  DR is the catalogued family (`randomize_delayed_actuator_gains`,
+  `randomize_bam_friction`, `randomize_dof_field_scaled`,
+  `randomize_base_orientation`, `push_by_setting_velocity`) plus the
+  curricula (`standing_envs`, `pose_command_range`, `com_range`,
+  ramped reward weights).
+- The G2 build therefore reads THREE sources side by side: mjlab
+  1.3's velocity base (their baseline), their delta file, and mjlab
+  1.6's velocity base (our target) — and re-expresses the recipe on
+  1.6 with our entity, the certified actuator, `dr_from_bundle`
+  ranges, and the linter refusing what their five no-ops did
+  silently. G1 and the entity brick are done (the tests beside
+  `rq_mjlab/tests/test_microduck_entity.py`); the cfg is the next
+  sitting's work.
+
 ## 3. Gates, in order
 
 - G1: microduck MJCF in a stamped bundle; scene compiles on both
