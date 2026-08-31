@@ -62,6 +62,10 @@ class PressResult:
     dynamics: dict[str, float] = field(default_factory=dict)
     draws: dict[str, Any] = field(default_factory=dict)
     retries: list[Retry] = field(default_factory=list)
+    # Where `dynamics` came from — A3's basis string ("identified-
+    # interval", or a caller-declared span that says so). Recorded on
+    # the sidecar; the datasheet groups episodes by it.
+    dynamics_basis: str = ""
     states: NDArray | None = None
     sensors: NDArray | None = None
     actions: NDArray | None = None
@@ -104,6 +108,7 @@ class EpisodeManifest(JsonRecord):
     retries: list[Retry]
     control_hz: int
     frame_every_control_ticks: int
+    dynamics_basis: str = ""
     action_semantics: str = "commanded actuator positions, ctrl order"
     verdict: str = "success (task referee)"
 
@@ -179,6 +184,7 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
                 retries=result.retries,
                 control_hz=control_hz,
                 frame_every_control_ticks=frame_every,
+                dynamics_basis=result.dynamics_basis,
             )
 
     limit = attempts_per_episode * episodes if max_attempts is None else max_attempts
@@ -206,6 +212,12 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
         )
         kept += 1
 
+    if kept:
+        # The batch describes itself before anyone asks (docs/
+        # e2e-research/60 §3: nobody in the arc ships a datasheet).
+        from rq_pipeline.collect.datasheet import write_datasheet  # noqa: PLC0415
+
+        say(f"datasheet -> {write_datasheet(out)}")
     batch = DemoBatch(out, episodes, kept, attempts, first_episode, expert, task)
     say(
         f"kept {kept}/{attempts} episodes -> {out} "

@@ -135,6 +135,8 @@ def _attempt(
         "damping": float(1.0 + rng.uniform(-dr_span, dr_span)),
         "gain": float(1.0 + rng.uniform(-dr_span, dr_span)),
     }
+    basis = f"caller-declared span ±{dr_span:g} (kitting DR, docs/31)"
+
     scale_dynamics(
         scene, damping_scale=dynamics["damping"], gain_scale=dynamics["gain"]
     )
@@ -169,7 +171,9 @@ def _attempt(
         # An unreachable draw under this DR sample is a discard, not a
         # crash — the library keeps its honesty (it raises), the
         # generator keeps its throughput (it filters).
-        return PressResult(False, dynamics, draws, stats.retries, note=f"IK: {error}")
+        return PressResult(
+            False, dynamics, draws, stats.retries, basis, note=f"IK: {error}"
+        )
     finally:
         renderer.close()
     succeeded = bool(task.protocol.success(states, sensors))
@@ -178,6 +182,7 @@ def _attempt(
         dynamics,
         draws,
         stats.retries,
+        basis,
         states,
         sensors,
         actions,
