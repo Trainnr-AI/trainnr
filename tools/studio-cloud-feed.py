@@ -67,6 +67,9 @@ def status_card(rr: Any, name: str, state: tuple) -> tuple[float, int] | None:
             f"- stages so far: {stages}\n",
             media_type=rr.MediaType.MARKDOWN,
         ),
+        # Static: the card answers "right now" regardless of where the
+        # operator has scrubbed the timeline.
+        static=True,
     )
     if last_step >= 0 and (last_seen is None or last_step > last_seen[1]):
         return (now, last_step)
