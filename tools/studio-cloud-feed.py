@@ -94,6 +94,9 @@ def parse_poll(
         # sequence timeline's end, invisibly).
         rr.set_time("wall", timestamp=time.time())
         rr.set_time("train_step", sequence=metrics.step)
+        # The step itself as a series: on the wall timeline this plot IS
+        # "which step are we at right now" (the operator's ask).
+        rr.log(f"{name}/train/step", rr.Scalars(float(metrics.step)))
         for key, value in metrics.metrics.items():
             rr.log(f"{name}/train/{key}", rr.Scalars(value))
     return arm, gpu, latest, eval_progress, last_step
