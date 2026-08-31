@@ -186,6 +186,10 @@ class BamActuatorCfg(ActuatorCfg):
             max_pwm=firmware.max_pwm,
             max_current=firmware.max_current or 0.0,
         )
+        # CEIL, not round: a delay that is not a whole number of physics
+        # steps becomes the next step UP — the sim's command is never
+        # fresher than the identified bus (21 ms at dt=5 ms -> 25 ms).
+        # Direction stated because it is a choice (review 2026-09-01).
         delay_steps = math.ceil(round(params.get("command_delay", 0.0) / physics_dt, 9))
         return cls(
             target_names_expr=target_names_expr,

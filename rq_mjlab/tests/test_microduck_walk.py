@@ -62,6 +62,20 @@ class TheWalkCfg(unittest.TestCase):
         # (docs/e2e-research/63 §2.2's named tension; G3 decides ramps).
         self.assertEqual(self.cfg.curriculum, {})
 
+    def test_play_mode_is_a_mode_not_an_inversion(self) -> None:
+        # play changes TWO things and says why: pushes come more often
+        # (a viewer sees recovery) and observation corruption goes off
+        # (a viewer wants the true state). The first cut only inverted
+        # the push interval (review 2026-09-01).
+        from rq_mjlab.microduck_walk import PLAY_PUSH_INTERVAL_S  # noqa: PLC0415
+
+        play_cfg, _stamps = microduck_walk_env_cfg(play=True)
+        self.assertEqual(
+            play_cfg.events["push_robot"].interval_range_s, PLAY_PUSH_INTERVAL_S
+        )
+        self.assertFalse(play_cfg.observations["actor"].enable_corruption)
+        self.assertTrue(self.cfg.observations["actor"].enable_corruption)
+
     def test_our_events_ride_along(self) -> None:
         for name in ("bam_expansion", "bam_param_dr", "mass_inertia", "armature"):
             self.assertIn(name, self.cfg.events)

@@ -68,6 +68,7 @@ class RerunRecorder(RecorderTerm):
             if int(mj_model.jnt_type[j]) not in scalar
         ]
         self._qpos = None  # torch view, bound lazily (data exists post-init)
+        self._said_no_reward = False
         self._began = time.time()
         rr.log(
             "recorder/config",
@@ -104,6 +105,14 @@ class RerunRecorder(RecorderTerm):
         reward = getattr(env, "reward_buf", None)
         if isinstance(reward, torch.Tensor) and reward.numel() > watched:
             rr.log("train/reward", rr.Scalars(float(reward[watched])))
+        elif not self._said_no_reward:
+            # Once, by name: a silently missing reward trace reads as a
+            # flat policy (review 2026-09-01).
+            self._said_no_reward = True
+            rr.log(
+                "recorder/notes",
+                rr.TextLog("no reward_buf on this env: reward trace omitted"),
+            )
         rr.log(
             "train/episode_length",
             rr.Scalars(float(env.episode_length_buf[watched])),

@@ -120,6 +120,7 @@ FOOT_FRICTION = (0.7, 1.3)  # "grippier footpad — narrowed from (0.3, 1.2)"
 RESET_Z = (0.12, 0.13)
 PUSH_VELOCITY = (-0.2, 0.2)
 PUSH_INTERVAL_S = (3.0, 6.0)
+PLAY_PUSH_INTERVAL_S = (0.5, 1.0)  # theirs: more often, so a viewer sees recovery
 TRUNK_COM_OFFSET = 0.003  # their audited stage-0 value (the ramp is a curriculum)
 MASS_INERTIA = (0.95, 1.05)
 ARMATURE = (0.9, 1.1)
@@ -277,7 +278,17 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     events["foot_friction"].params["asset_cfg"].geom_names = FOOT_GEOMS
     events["foot_friction"].params["ranges"] = FOOT_FRICTION
     events["reset_base"].params["pose_range"]["z"] = RESET_Z
-    events["push_robot"].interval_range_s = (0.5, 1.0) if play else PUSH_INTERVAL_S
+    if play:
+        # `play` is for WATCHING a policy, so the disturbances it must
+        # survive stay on and come more often (theirs: a viewer sees
+        # recovery), while observation corruption goes off — a viewer
+        # wants the true state, not the actor's noisy view. Stated
+        # because the first cut changed only the push interval, which
+        # reads as an inversion rather than a mode (review 2026-09-01).
+        events["push_robot"].interval_range_s = PLAY_PUSH_INTERVAL_S
+        cfg.observations["actor"].enable_corruption = False
+    else:
+        events["push_robot"].interval_range_s = PUSH_INTERVAL_S
     events["push_robot"].params["velocity_range"] = {
         "x": PUSH_VELOCITY,
         "y": PUSH_VELOCITY,

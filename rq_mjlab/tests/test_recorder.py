@@ -57,6 +57,7 @@ class TheRecorder(unittest.TestCase):
         # one slider is global joint 0, qpos 0.
         term._joints = [("slider", 0)]
         term._skipped_joints = []
+        term._said_no_reward = False
         term._qpos = None
         import time  # noqa: PLC0415
 
