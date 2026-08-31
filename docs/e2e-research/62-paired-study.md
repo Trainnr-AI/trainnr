@@ -10,10 +10,24 @@ batch 64, judged at the pinned truth on 40 matched trials/side — the
 real verdict, published as §4 demands: at THIS truth distance —
 inside the ±30 % folklore span — with THIS open-loop-robust expert
 and 10k-step ACT at ceiling, guessed DR is measurably sufficient.
-§5's first risk materialized exactly as written. The knobs for the
-next run are the operator's: a truth OUTSIDE the guessed span, a
-brittler task (stack/insert), fewer demos, or a real robot's
-identified region in place of the declared stand-in.*
+§5's first risk materialized exactly as written. **Run 2, same night,
+truth OUTSIDE the span both ways (damping ×1.50, gain ×0.60 — chosen
+by sweep, expert 8/8 there)**: guessed 23/40 [0.409, 0.730],
+identified 19/40 [0.315, 0.639], p = 0.50 → UNRESOLVED; paired
+discordance 18/40, near-symmetric (11 guessed-only vs 7
+identified-only). The load-bearing observation: the identified arm
+scored 47.5 % AT ITS OWN TRAINING CENTER — the recipe (ACT 10k steps,
+32 demos) caps at ~half at this difficulty, and when competence caps,
+no DR basis can show through it. Two runs, two honest nulls: at an
+easy truth both arms hit the ceiling; at a hard truth both hit the
+recipe's ceiling. **Protocol amendment for run 3: a competence gate —
+each arm is first judged under its own training center, and the
+cross-judgment is informative only if the identified arm passes high
+there.** Remaining knobs: more demos/steps at hard truths (raise the
+ceiling), a brittler-but-learnable task, the C2 flagship's RL
+locomotion (a different recipe with a real dynamics-sensitivity
+profile), or the real robot's region. This page publishes the nulls
+either way — the instrument reports what is, not what sells.*
 
 ## 0. The claim under test
 
