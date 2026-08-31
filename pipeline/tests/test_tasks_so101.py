@@ -101,6 +101,42 @@ class LiftTask(unittest.TestCase):
 
 
 @needs_sim
+@needs_sim
+class LiftStudyTask(unittest.TestCase):
+    def test_bounded_deterministic_starts_for_any_trial_count(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+        from rq_pipeline.tasks.so101 import (  # noqa: PLC0415
+            _STUDY_JITTER_RAD,
+            build_lift,
+            build_lift_study,
+        )
+
+        task = build_lift_study()
+        self.assertEqual(task.name, "lift-study")
+        self.assertEqual(task.protocol.trials, 40)
+        backend = MuJoCoBackend()
+        backend.load_spec(task.spec)
+        home = backend.default_initial_state()
+        starts = set()
+        for trial in range(60):
+            start = task.protocol.perturb(trial, home)
+            self.assertLessEqual(
+                float(np.abs(start - home).max()), _STUDY_JITTER_RAD + 1e-12
+            )
+            starts.add((float(start[1]), float(start[2])))
+        self.assertEqual(len(starts), 60)  # distinct forever, never out of band
+        # Determinism across calls: trial k is trial k, every time.
+        again = task.protocol.perturb(7, home)
+        np.testing.assert_array_equal(again, task.protocol.perturb(7, home))
+        # Same referee as lift: the study varies STARTS, nothing else.
+        self.assertIs(
+            task.protocol.success.__code__.co_code,
+            build_lift().protocol.success.__code__.co_code,
+        )
+
+
 class StackTask(unittest.TestCase):
     def test_graded_stack_ladder(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415

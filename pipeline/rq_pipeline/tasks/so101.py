@@ -33,6 +33,8 @@ worth measuring rather than assuming.
 
 from __future__ import annotations
 
+import hashlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +72,7 @@ _HOLD_STEPS = 50
 # Task names: the registry key, `Task.name`, and the gym id's last part.
 REACH = "reach"
 LIFT = "lift"
+LIFT_STUDY = "lift-study"
 BLOCK_STACK = "block_stack"
 TOOL_INSERT = "tool_insert"
 RIG = "so101"
@@ -352,6 +355,44 @@ def build_lift(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         ),
         "lift the cube out of the pocket and hold it clear",
         arm_xml,
+    )
+
+
+# The paired study's lift (docs/e2e-research/62): LIFT's own perturb is
+# a 4-trial ladder whose offsets grow LINEARLY with the trial index —
+# past trial 3 the start walks out of the intended band, so a sized
+# evaluation (62 §3: 23-39 paired trials per side) cannot use it. The
+# study variant keeps the scene, the referee and the expert, and draws
+# every trial's start from a BOUNDED deterministic band: hash the trial
+# index (the `evaluate/variations._unit` idea, spelled locally so the
+# task owns its own starts), so any two policies' trial k begin
+# identically and no trial count leaves the band.
+_STUDY_TRIALS = 40
+_STUDY_JITTER_RAD = 0.004
+
+
+def _study_jitter(trial: int, component: int) -> float:
+    digest = hashlib.sha256(f"{LIFT_STUDY}|{trial}|{component}".encode()).digest()
+    unit = int.from_bytes(digest[:8], "big") / 2**64
+    return (2.0 * unit - 1.0) * _STUDY_JITTER_RAD
+
+
+@register(LIFT_STUDY, rig=RIG)
+def build_lift_study(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
+    """Lift with study-grade starts: bounded, deterministic, unlimited
+    trials. Everything else is `build_lift`'s, by construction."""
+    task = build_lift(arm_xml)
+
+    def perturb(trial: int, home: Any) -> Any:
+        initial = home.copy()
+        initial[_QPOS_OFFSET + 0] += _study_jitter(trial, 0)
+        initial[_QPOS_OFFSET + 1] += _study_jitter(trial, 1)
+        return initial
+
+    return replace(
+        task,
+        name=LIFT_STUDY,
+        protocol=replace(task.protocol, trials=_STUDY_TRIALS, perturb=perturb),
     )
 
 
