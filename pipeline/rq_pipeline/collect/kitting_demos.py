@@ -27,7 +27,12 @@ imported when the function runs, so the package imports without it.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # library + task types as annotations only (sim extra)
+    from numpy.random import Generator
+
+    from rq_pipeline.tasks.task import Task
 
 from rq_pipeline.collect.kitting_export import Manifest
 from rq_pipeline.collect.press import (
@@ -77,7 +82,7 @@ def generate_demos(  # noqa: PLR0913 - every knob of the generator, named
 
     task = build_kitting(spec=spec)
 
-    def attempt_fn(rng: Any, *, frame_every: int) -> PressResult:
+    def attempt_fn(rng: Generator, *, frame_every: int) -> PressResult:
         return _attempt(task, spec, rng, dr_span=dr_span, frame_every=frame_every)
 
     def manifest_fn(result: PressResult, attempt: int) -> Manifest:
@@ -112,9 +117,9 @@ def generate_demos(  # noqa: PLR0913 - every knob of the generator, named
 
 
 def _attempt(
-    task: Any,
+    task: Task,
     spec: KittingSpec,
-    rng: Any,
+    rng: Generator,
     *,
     dr_span: float,
     frame_every: int,

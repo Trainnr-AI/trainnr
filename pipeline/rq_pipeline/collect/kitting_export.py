@@ -24,7 +24,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from rq_pipeline.collect.press import EpisodeSidecar
 
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.json_record import JsonRecord
@@ -114,13 +117,13 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
     sensors: Any,
     actions: Any,
     frames: Iterable[tuple[int, Any]],
-    manifest: Any,
+    manifest: EpisodeSidecar,
 ) -> Path:
     """One kept episode onto disk in `DemoLayout`; returns its directory.
 
-    `manifest` is anything with `write_to(episode_dir)` — this task's
-    legacy `Manifest` or the press's go-forward `EpisodeManifest`; the
-    layout does not care which sidecar schema rides in it."""
+    `manifest` is any `press.EpisodeSidecar` — this task's legacy
+    `Manifest` or the press's go-forward `EpisodeManifest`; the layout
+    does not care which sidecar schema rides in it."""
     import numpy as np  # noqa: PLC0415 - sim extra
     from PIL import Image  # noqa: PLC0415
 

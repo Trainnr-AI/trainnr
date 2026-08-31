@@ -29,10 +29,18 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from rq_pipeline.bundles.json_record import JsonRecord
 from rq_pipeline.collect.kitting_export import DemoLayout, write_episode
+
+if TYPE_CHECKING:  # library types as annotations only — the loop stays
+    # importable without the sim extra (numpy arrives with it).
+    from numpy.random import Generator
+    from numpy.typing import NDArray
+
+# One retry, as the kitting expert records it: (arm, physics_step, part_z).
+Retry = tuple[str, int, float]
 
 # The sampler can in principle draw only unreachable dynamics: give up
 # after this many draws per wanted episode (overridable per press run).
@@ -53,21 +61,30 @@ class PressResult:
     succeeded: bool
     dynamics: dict[str, float] = field(default_factory=dict)
     draws: dict[str, Any] = field(default_factory=dict)
-    retries: list = field(default_factory=list)
-    states: Any = None
-    sensors: Any = None
-    actions: Any = None
-    frames: list[tuple[int, Any]] | None = None
+    retries: list[Retry] = field(default_factory=list)
+    states: NDArray | None = None
+    sensors: NDArray | None = None
+    actions: NDArray | None = None
+    frames: list[tuple[int, NDArray]] | None = None
     note: str = ""
 
 
-# One attempt: draw everything, run the expert, judge with the referee.
-AttemptFn = Callable[..., PressResult]  # attempt_fn(rng, frame_every=int)
+class AttemptFn(Protocol):
+    """One attempt: draw everything, run the expert, judge with the
+    referee."""
 
-# Builds the sidecar record for a KEPT episode; anything with
-# `write_to(episode_dir)` qualifies (the kitting adapter passes its
-# legacy Manifest; the default builds EpisodeManifest below).
-ManifestFn = Callable[[PressResult, int], Any]
+    def __call__(self, rng: Generator, *, frame_every: int) -> PressResult: ...
+
+
+class EpisodeSidecar(Protocol):
+    """Anything that can write itself beside an episode — this task's
+    legacy `Manifest` or the go-forward `EpisodeManifest`."""
+
+    def write_to(self, episode_dir: Path) -> Path: ...
+
+
+# Builds the sidecar record for a KEPT episode.
+ManifestFn = Callable[[PressResult, int], EpisodeSidecar]
 
 
 @dataclass(frozen=True)
@@ -84,7 +101,7 @@ class EpisodeManifest(JsonRecord):
     instrument: str
     dynamics: dict[str, float]
     draws: dict[str, Any]
-    retries: list
+    retries: list[Retry]
     control_hz: int
     frame_every_control_ticks: int
     action_semantics: str = "commanded actuator positions, ctrl order"

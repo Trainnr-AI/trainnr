@@ -29,9 +29,12 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.bundles.hashing import STAMP_SEPARATOR, fields_hash
+
+if TYPE_CHECKING:  # annotation-only: this module stays stdlib-pure
+    from numpy.random import Generator
 from rq_pipeline.robot.actuator_library import (
     ACTUATORS_ROOT,
     PROVENANCE_FILE,
@@ -248,7 +251,7 @@ def dr_ranges(bundle: Mapping[str, Any]) -> dict[str, tuple[float, float]]:
 
 def sample_dynamics(
     bundle: Mapping[str, Any],
-    rng: Any,
+    rng: Generator,
     *,
     fallback_span: float | None = None,
 ) -> tuple[dict[str, float], str]:
