@@ -47,8 +47,9 @@ def parse_poll(
 ) -> tuple[str, str, Any, str, int]:
     """One ssh poll's lines into Rerun: sentinel-prefixed arm/GPU/eval
     lines, stages, per-trial eval records, and train metrics."""
-    seen_stages, seen_records, last_step = state
+    seen_stages, seen_records, seen_lines = state
     arm, gpu, latest = "?", "?", None
+    last_step = -1
     eval_progress, record_file = "", None
     for line in raw.splitlines():
         if line.startswith("RQEVAL "):
@@ -76,15 +77,22 @@ def parse_poll(
         metrics = parse_train_line(line)
         if metrics is None:
             continue
-        if metrics.step <= last_step:
-            # A counter that jumps far backward is a NEW training arm
-            # starting over, not a stale line - without this, the second
-            # arm of a paired run streams nothing (seen live 2026-09-01).
-            if metrics.step >= last_step - 1000:
-                continue
+        latest = metrics
+        if line in seen_lines:
+            last_step = metrics.step
+            continue
+        seen_lines.add(line)
+        if 0 <= metrics.step < last_step - 1000:
+            # The counter jumped far backward: a NEW arm starting over
+            # (the paired study trains twice) - mark it once.
             rr.log(f"{name}/stage", rr.TextLog("new arm: step counter restarted"))
         last_step = metrics.step
-        latest = metrics
+        # Two clocks on every point: train_step overlays the arms for
+        # comparison; wall keeps live data at the END of a timeline the
+        # operator can follow (the "it stops at 10000" lesson,
+        # 2026-09-01 - a restarted counter streams BEHIND a shared
+        # sequence timeline's end, invisibly).
+        rr.set_time("wall", timestamp=time.time())
         rr.set_time("train_step", sequence=metrics.step)
         for key, value in metrics.metrics.items():
             rr.log(f"{name}/train/{key}", rr.Scalars(value))
@@ -185,7 +193,7 @@ def main() -> int:
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
-    last_step = -1
+    seen_lines: set[str] = set()
     last_seen: tuple[float, int] | None = None  # (wall clock, step) for ETA
     while True:
         try:
@@ -224,10 +232,13 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             time.sleep(args.every * 5)
             continue
+        if len(seen_lines) > 20000:
+            seen_lines.clear()  # bounded; re-logging identical points is harmless
         arm, gpu, latest, eval_progress, last_step = parse_poll(
-            rr, args.name, raw, (seen_stages, seen_records, last_step)
+            rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
         if "%" in gpu:
+            rr.set_time("wall", timestamp=time.time())
             util, memory = (part.strip() for part in gpu.split(","))
             rr.log(f"{args.name}/gpu/utilization", rr.Scalars(float(util.split()[0])))
             rr.log(
