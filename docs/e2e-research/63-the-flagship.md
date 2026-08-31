@@ -81,6 +81,61 @@ waits on docs/38):
   `rq_mjlab/tests/test_microduck_entity.py`); the cfg is the next
   sitting's work.
 
+## 2.2 The deltas, read (2026-09-01, both sources local)
+
+mjlab 1.3.0's `velocity_env_cfg.py` (the wheel, extracted) beside
+their 949-line delta file. What the walk recipe actually is:
+
+**Timing/actions** (base values kept): `decimation 4`,
+`episode_length_s 20.0`; action = `JointPositionActionCfg` with
+`scale = 1.0` set EXPLICITLY (the value their deploy flag
+`--action-scale 0.8` contradicts — 57 §5's finding, confirmed at the
+source).
+
+**Rewards** (base term → their override; base weights in 1.3 noted
+where they differ):
+- `track_linear_velocity` w 2.0, std √0.1; `track_angular_velocity`
+  w 2.0, std √0.5 (base stds differ).
+- `upright` w 2.0 (base 1.0), body `trunk_base`, std √0.05.
+- `pose` w 1.0 with their split stds (`std_standing` tight /
+  `std_walking`), `walking_threshold 0.01`.
+- `air_time` w 3.0 (base 0.0 "override per-robot"), thresholds
+  0.125–0.300 s, command threshold 0.01.
+- `foot_slip` w −0.1; `foot_clearance` target 0.02 m (raised from
+  0.01, their comment: penalize dragging); `foot_swing_height`
+  target 0.02 m; `action_rate_l2` w −0.1; `body_ang_vel` w −0.05;
+  `angular_momentum` w −0.02; `dof_pos_limits` w −1.0 (base).
+- ADDED: `self_collisions` w −1.0 (`mdp.self_collision_cost`).
+
+**Commands**: `lin_vel_x (−0.4, 0.4)`, `lin_vel_y (−0.3, 0.3)`,
+`ang_vel_z (−1.0, 1.0)` (from §2.1).
+
+**Observations**: `base_lin_vel` DELETED from the actor (critic keeps
+it — privileged), `height_scan` deleted from both (flat terrain).
+
+**Terminations**: base plus `nan_state` (their NaN guard — keep,
+cited as theirs).
+
+**Events/DR** (the honesty frontier): `expand_bam_friction_fields`
+(their decorator-carrier no-op → OUR auto-registered
+`bam_expansion_event`), `reset_action_history`, `foot_friction
+(0.7, 1.3)`, `reset_base` z (0.12, 0.13), `push_robot`,
+`randomize_com` / `randomize_head_com` (audited ranges),
+`randomize_motor_gains` (delayed kp/kd), `randomize_mass_inertia`,
+`randomize_joint_friction` and `randomize_joint_damping` (TWO of the
+five silent no-ops — fields the BAM actuator overwrites every step;
+our linter REFUSES these by construction), `randomize_armature`,
+`randomize_base_orientation`. The G2 build re-expresses each: passives
+through mjlab's native events, law params through
+`bam_param_dr_event` with a declared basis, and the two no-ops become
+the linter's showcase refusal.
+
+**Curricula** (from §2.1): `standing_envs`, `pose_command_range`,
+`com_range`, ramped reward weights — 1.6 re-expression decided at
+build time (mjlab 1.6 curricula mutate cfg in place; ours must stay
+hashable — the one design tension the transcription must resolve,
+docs/33's "mjlab cannot hash a task" row cuts both ways).
+
 ## 3. Gates, in order
 
 - G1: microduck MJCF in a stamped bundle; scene compiles on both
