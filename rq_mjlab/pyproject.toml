@@ -30,6 +30,8 @@ dependencies = [
 # dependency (its mjlab extra is walled at mjlab 1.3; we depend on
 # nothing behind that wall).
 bam = ["better-actuator-models==1.0.2"]
+# The Rerun recorder's sink - pinned to the Studio's own tree (0.36.x).
+viz = ["rerun-sdk==0.36.*"]
 
 [tool.uv.sources]
 rq-pipeline = { path = "../pipeline", editable = true }

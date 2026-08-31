@@ -12,12 +12,15 @@ from rq_mjlab.entity import entity_from_bundle
 from rq_mjlab.events import bam_expansion_event, expand_bam_fields
 from rq_mjlab.kernel import LawParams, duty, external_torque, friction_budget, torque
 from rq_mjlab.linter import SilentNoOp, lint
+from rq_mjlab.recorder import RerunRecorder, RerunRecorderCfg
 
 __all__ = [
     "BamActuator",
     "BamActuatorCfg",
     "BundleRefused",
     "LawParams",
+    "RerunRecorder",
+    "RerunRecorderCfg",
     "SilentNoOp",
     "bam_expansion_event",
     "bam_param_dr_event",

@@ -29,6 +29,15 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "26.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548 },
+]
+
+[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1254,6 +1263,21 @@ wheels = [
 ]
 
 [[package]]
+name = "pyarrow"
+version = "25.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/e3/27f57f80141379d60defe6703eb50a707325706f07fedfd1312c7a751995/pyarrow-25.0.1.tar.gz", hash = "sha256:9150a83248bfed9813ea3c3af74c3856c1984d444aa28e58bf7733b9750ddf6a", size = 1201653 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/e2/9ab15b88cbfac28e16419ce5439ec29234c5172cb8259301b4ba639bdec0/pyarrow-25.0.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:df961f2e7ae9cf496459259d798652c70625f6c080650d6952f8c04053c58ee9", size = 35861559 },
+    { url = "https://files.pythonhosted.org/packages/58/79/a0036dbe1eabe1f73127427342f1d99982584c4a2cde2651d6c93499c6f6/pyarrow-25.0.1-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:cc4aa407fde9fc660be3939e49ea31f50f3e9fec17c0ec63159f7711edd3efc9", size = 37628383 },
+    { url = "https://files.pythonhosted.org/packages/13/49/d93a57d375f4bf0cf82913dd6bb54acafde83dd993be2282c81ac5616cad/pyarrow-25.0.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:4340f0ba6c1d2e13f21658de1d7c662ca2545018568d0030a1e9afca159d87e3", size = 46820190 },
+    { url = "https://files.pythonhosted.org/packages/60/c9/711ca85d79f1ec98f29a5eae2b051e25b4ecec5de3e3c0e2d5c5dcb15664/pyarrow-25.0.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:5389cdf79447ed1515c9e31620e6e1e2302249564d603f2ad727d4f6d313e4c3", size = 50102437 },
+    { url = "https://files.pythonhosted.org/packages/80/53/8fb8359ff17cfb6263a1cf3ebf7caec9fe197de118719e84fcb1d0618026/pyarrow-25.0.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:d51592cb7561e87877c506113e7adbf1342ab579e6c21f0ef44b8ba41cb74c80", size = 49942424 },
+    { url = "https://files.pythonhosted.org/packages/e8/83/4e5ae02a9341571b18a6fca380ac7a58ce6ddae7ab3c060208c0a1e79f02/pyarrow-25.0.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:6109c94d8b9f3b17a041daca16cacb2f651ad8f1ef70a4232c2c0f37a23da2a8", size = 53144206 },
+    { url = "https://files.pythonhosted.org/packages/65/ee/197cbf47e49f83e6ebeb946a5259a48a638dea27ac774db42fe78022179d/pyarrow-25.0.1-cp312-cp312-win_amd64.whl", hash = "sha256:8858d7bfc22e3f51529aeaa4077225029724623e4595dc9eff8c793935c34140", size = 27953934 },
+]
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1408,6 +1432,25 @@ wheels = [
 ]
 
 [[package]]
+name = "rerun-sdk"
+version = "0.36.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "psutil" },
+    { name = "pyarrow" },
+    { name = "typing-extensions" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/ff/e8ce81a4fa451f232abb10f0737c5fa8c812a4b2979bda2f655c58c478eb/rerun_sdk-0.36.3-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:804067d6e71747f8461104988be82543b318b583a2837935558a5e79a5e9befd", size = 147513390 },
+    { url = "https://files.pythonhosted.org/packages/47/0d/a44bccfa279d043929d595a97c220ce3151dd2ef39d6b0477abfa6abc5c0/rerun_sdk-0.36.3-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:954d8980e15e71245ac91ba7120bbaeb624df2bd7a47bbbb8856fd45174d2521", size = 157793360 },
+    { url = "https://files.pythonhosted.org/packages/54/30/3dae429550a667bc0536bd419864c8574de908557aaadcc136082cb6f17c/rerun_sdk-0.36.3-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:287059b7154bf3881f5b32035f5772d0556d55a0a894650fb74a2605fb39afbe", size = 163018185 },
+    { url = "https://files.pythonhosted.org/packages/35/97/3ea34c7e892474d940759fe18045fe29e245ac5c5b82e526088c388ba854/rerun_sdk-0.36.3-cp310-abi3-win_amd64.whl", hash = "sha256:f84441a3e1d1d679f6fe5a319cac86ccc3992f8f88bfa72517f76d8b45bf066c", size = 140659012 },
+]
+
+[[package]]
 name = "rich"
 version = "14.3.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1433,11 +1476,15 @@ dependencies = [
 bam = [
     { name = "better-actuator-models" },
 ]
+viz = [
+    { name = "rerun-sdk" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "better-actuator-models", marker = "extra == 'bam'", specifier = "==1.0.2" },
     { name = "mjlab", specifier = "==1.6.0" },
+    { name = "rerun-sdk", marker = "extra == 'viz'", specifier = "==0.36.*" },
     { name = "rq-pipeline", editable = "../pipeline" },
 ]
 

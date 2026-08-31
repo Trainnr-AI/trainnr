@@ -46,6 +46,20 @@ from rq_mjlab.kernel import LawParams, duty, external_torque, friction_budget, t
 # states it once; pinned against the enum by test.
 FRICTION_DOF = 1
 
+
+def as_torch(array: Any) -> torch.Tensor:
+    """A torch view of a raw `wp.array` — everything else passes through
+    untouched. Three shapes reach these seams: raw warp arrays (from
+    `mjwarp.put_data`, the tests' harness), real torch tensors, and
+    mjlab's `TorchArray` proxy ("behaves like a torch.Tensor with shared
+    memory", *mjlab/sim/sim_data.py*) — warp's own `to_torch` explodes
+    on the latter two, so only the genuine article is converted. Found
+    by the B4 demo, the first run inside mjlab's real manager stack."""
+    if isinstance(array, wp.array):
+        return wp.to_torch(array)
+    return array
+
+
 # The friction terms a bundle may carry beyond the base; absent means zero.
 _OPTIONAL_FRICTION = (
     "friction_stribeck",
@@ -186,13 +200,13 @@ class BamActuator(Actuator[BamActuatorCfg]):
         )
         self._nv = int(mj_model.nv)
         # Torch views over the live warp arrays — zero-copy, per world.
-        self._qfrc_actuator = wp.to_torch(data.qfrc_actuator)
-        self._qfrc_bias = wp.to_torch(data.qfrc_bias)
-        self._qfrc_constraint = wp.to_torch(data.qfrc_constraint)
-        self._efc_id = wp.to_torch(data.efc.id)
-        self._efc_type = wp.to_torch(data.efc.type)
-        self._efc_force = wp.to_torch(data.efc.force)
-        self._dof_frictionloss = wp.to_torch(model.dof_frictionloss)
+        self._qfrc_actuator = as_torch(data.qfrc_actuator)
+        self._qfrc_bias = as_torch(data.qfrc_bias)
+        self._qfrc_constraint = as_torch(data.qfrc_constraint)
+        self._efc_id = as_torch(data.efc.id)
+        self._efc_type = as_torch(data.efc.type)
+        self._efc_force = as_torch(data.efc.force)
+        self._dof_frictionloss = as_torch(model.dof_frictionloss)
         num_envs = int(self._qfrc_actuator.shape[0])
         if self._dof_frictionloss.shape[0] != num_envs:
             raise RuntimeError(MISSING_EXPANSION_MESSAGE)
