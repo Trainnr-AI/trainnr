@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 import mujoco
+import mujoco_warp as mjwarp
 import torch
 import warp as wp
 from mjlab.actuator.actuator import Actuator, ActuatorCfg, ActuatorCmd
@@ -59,6 +60,35 @@ def as_torch(array: Any) -> torch.Tensor:
         return wp.to_torch(array)
     return array
 
+
+# Every key this law consumes from a BAM fit. `from_bundle` reconciles
+# the bundle against this roster and REFUSES leftovers — the silent
+# cherry-pick that let a typo'd field zero a friction term is gone
+# (review, 2026-09-01). Rig-side keys (q_offset, command_delay) are
+# consumed for the cfg, never DR-sampled (they belong to the bench and
+# the bus, not the motor — BAM's own docs, 57 §7).
+_CONSUMED_KEYS = (
+    "model",
+    "actuator",
+    "kt",
+    "R",
+    "friction_base",
+    "friction_viscous",
+    "armature",
+    "q_offset",
+    "command_delay",
+    "max_velocity",
+    "error_gain_ratio",
+    "friction_stribeck",
+    "load_friction_motor",
+    "load_friction_external",
+    "load_friction_motor_stribeck",
+    "load_friction_external_stribeck",
+    "load_friction_motor_quad",
+    "load_friction_external_quad",
+    "dtheta_stribeck",
+    "alpha",
+)
 
 # The friction terms a bundle may carry beyond the base; absent means zero.
 _OPTIONAL_FRICTION = (
@@ -97,6 +127,18 @@ class BamActuatorCfg(ActuatorCfg):
         default_factory=lambda: LawParams(kt=1.0, R=1.0, friction_base=0.0)
     )
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The docstring forbids hand construction; nothing enforced it,
+        # so a default cfg RAN with the placeholder law above (kt=1,
+        # R=1 — invented physics). Refused since 2026-09-01's review.
+        if not self.bundle_path or not self.stamp:
+            raise ValueError(
+                "BamActuatorCfg must be built by from_bundle(...) — a "
+                "hand-constructed cfg carries a placeholder law, which is "
+                "exactly the guessing the certified store exists to end"
+            )
+
     @classmethod
     def from_bundle(
         cls,
@@ -110,6 +152,21 @@ class BamActuatorCfg(ActuatorCfg):
     ) -> BamActuatorCfg:
         bundle, advisories = verified_bundle(bundle_path)
         params = bundle["params"]
+        consumed = set(_CONSUMED_KEYS)
+        unknown = sorted(set(params) - consumed)
+        if unknown:
+            raise ValueError(
+                f"{Path(bundle_path).name}: fit key(s) {unknown} are not "
+                "consumed by this actuator's law — a typo'd or newer-schema "
+                "field would silently change the physics; teach the law the "
+                "key or fix the bundle"
+            )
+        if "command_delay" not in params:
+            advisories = (
+                *advisories,
+                "no command_delay in the fit: zero bus latency assumed "
+                "(some BAM motor families never record it — 57 §3)",
+            )
         firmware = firmware_for(params["actuator"])
         if firmware.max_velocity is not None:
             raise NotImplementedError(
@@ -187,17 +244,22 @@ class BamActuator(Actuator[BamActuatorCfg]):
     def initialize(
         self,
         mj_model: mujoco.MjModel,
-        model: Any,
-        data: Any,
+        model: mjwarp.Model,
+        data: mjwarp.Data,
         device: str,
     ) -> None:
         super().initialize(mj_model, model, data, device)
-        joint_ids = [int(i) for i in self._target_ids_list]
-        self._dof_ids = torch.tensor(
-            [int(mj_model.jnt_dofadr[j]) for j in joint_ids],
-            dtype=torch.long,
-            device=device,
-        )
+        # target ids are LOCAL indices into the entity's non-free
+        # joints (mjlab's contract: "Local target indices"); the global
+        # dof addresses come from the entity's own indexing — the same
+        # mapping mjlab's EntityData uses. Indexing them straight into
+        # mj_model.jnt_dofadr put the friction budget on the FREEJOINT's
+        # linear dof and dropped the last servo on any floating-base
+        # robot (found 2026-09-01 by review, invisible to the
+        # single-hinge test rigs).
+        local = torch.tensor(self._target_ids_list, dtype=torch.long)
+        joint_v_adr = self.entity.indexing.joint_v_adr
+        self._dof_ids = joint_v_adr.to("cpu")[local].to(dtype=torch.long, device=device)
         self._nv = int(mj_model.nv)
         # Torch views over the live warp arrays — zero-copy, per world.
         self._qfrc_actuator = as_torch(data.qfrc_actuator)

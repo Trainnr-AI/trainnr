@@ -48,7 +48,9 @@ def entity_from_bundle(
     # with no actuator law at all. Caught 2026-09-01 by the walk cfg's
     # linter showcase test (the entity brick's own test only compiled
     # the raw spec, whose XML actuators masked it). Refused by name now.
-    bad = [type(a).__name__ for a in actuators if not hasattr(a, "target_names_expr")]
+    from mjlab.actuator.actuator import ActuatorCfg  # noqa: PLC0415
+
+    bad = [type(a).__name__ for a in actuators if not isinstance(a, ActuatorCfg)]
     if bad:
         raise TypeError(
             f"actuators must be actuator CFGS in a tuple, got {bad} — "

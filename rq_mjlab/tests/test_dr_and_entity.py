@@ -62,7 +62,15 @@ class TheDraws(unittest.TestCase):
         wp.init()
         cfg = _cfg()
         spec = mujoco.MjSpec.from_string(XML)
-        entity = _Duck(indexing=_Duck(ctrl_ids=torch.tensor([0])))
+        entity = _Duck(
+            indexing=_Duck(
+                ctrl_ids=torch.tensor([0]),
+                # the honest global mapping for this rig: one hinge,
+                # global joint 0, dof 0 (the dof fix routes through
+                # entity.indexing — review, 2026-09-01).
+                joint_v_adr=torch.tensor([0]),
+            )
+        )
         actuator = cfg.build(entity, [0], ["j"])
         actuator.edit_spec(spec, ["j"])
         mj_model = spec.compile()
@@ -105,9 +113,14 @@ class TheDraws(unittest.TestCase):
         from rq_mjlab.dr import bam_param_dr_event  # noqa: PLC0415
 
         cfg, actuator = self._initialized_actuator()
-        term, basis = bam_param_dr_event(actuator, XL330_M6, fallback_span=SPAN)
+        # The event takes the CFG (one truth: the bundle path rides on
+        # it) and late-binds the LIVE actuator from the scene by stamp
+        # (review, 2026-09-01 — the old wiring closed over whatever it
+        # was handed and crashed on cfgs at first reset).
+        term, basis = bam_param_dr_event(cfg, fallback_span=SPAN)
         self.assertIn("caller-declared", basis)
-        term.func(_Duck(device="cpu"), torch.tensor([0, 1]))
+        scene = {"robot": _Duck(actuators=[actuator])}
+        term.func(_Duck(device="cpu", scene=scene), torch.tensor([0, 1]))
         law = actuator.effective_law()
         kt = law.kt
         self.assertEqual(tuple(kt.shape), (2, 1))

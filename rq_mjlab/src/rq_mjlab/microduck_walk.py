@@ -310,9 +310,7 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     # Ours: the expansion event (their decorator-carrier no-op, owned),
     # and law DR from the certified bundle with a declared basis.
     events["bam_expansion"] = bam_expansion_event()
-    law_dr, dr_basis = bam_param_dr_event(
-        actuator, XL330_BUNDLE, fallback_span=LAW_DR_SPAN
-    )
+    law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=LAW_DR_SPAN)
     events["bam_param_dr"] = law_dr
 
     # Curricula: none — see the module docstring's OMITTED list.

@@ -23,6 +23,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import mujoco
 import torch
 from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
@@ -49,9 +50,22 @@ class RerunRecorder(RecorderTerm):
         self._cfg = cfg
         rr.init(cfg.app_id, spawn=False)
         rr.connect_grpc(cfg.address)
-        self._joint_names = [
-            env.sim.mj_model.joint(j).name or f"joint{j}"
-            for j in range(env.sim.mj_model.njnt)
+        # (name, qpos address) per SCALAR joint — hinge/slide only. The
+        # first cut indexed qpos by JOINT index, which plots freejoint
+        # quaternion components as "joints" on any floating-base robot
+        # (review, 2026-09-01); a free/ball joint is named in the config
+        # card instead of silently mis-plotted.
+        mj_model = env.sim.mj_model
+        scalar = (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+        self._joints = [
+            (mj_model.joint(j).name or f"joint{j}", int(mj_model.jnt_qposadr[j]))
+            for j in range(mj_model.njnt)
+            if int(mj_model.jnt_type[j]) in scalar
+        ]
+        self._skipped_joints = [
+            mj_model.joint(j).name or f"joint{j}"
+            for j in range(mj_model.njnt)
+            if int(mj_model.jnt_type[j]) not in scalar
         ]
         self._qpos = None  # torch view, bound lazily (data exists post-init)
         self._began = time.time()
@@ -59,7 +73,12 @@ class RerunRecorder(RecorderTerm):
             "recorder/config",
             rr.TextDocument(
                 f"watched world {cfg.watched_env}, every {cfg.every} steps\n"
-                f"joints: {', '.join(self._joint_names)}"
+                f"joints: {', '.join(name for name, _ in self._joints)}"
+                + (
+                    f"\nskipped (multi-dof): {', '.join(self._skipped_joints)}"
+                    if self._skipped_joints
+                    else ""
+                )
             ),
             static=True,
         )
@@ -80,8 +99,8 @@ class RerunRecorder(RecorderTerm):
 
             self._qpos = as_torch(env.sim.data.qpos)
         qpos = self._qpos[watched]
-        for index, name in enumerate(self._joint_names):
-            rr.log(f"train/qpos/{name}", rr.Scalars(float(qpos[index])))
+        for name, qpos_adr in self._joints:
+            rr.log(f"train/qpos/{name}", rr.Scalars(float(qpos[qpos_adr])))
         reward = getattr(env, "reward_buf", None)
         if isinstance(reward, torch.Tensor) and reward.numel() > watched:
             rr.log("train/reward", rr.Scalars(float(reward[watched])))

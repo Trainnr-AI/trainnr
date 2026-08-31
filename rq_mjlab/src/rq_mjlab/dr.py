@@ -29,7 +29,7 @@ import torch
 from mjlab.managers.event_manager import EventTermCfg
 from rq_pipeline.robot.actuator_bundle import declared_ranges
 
-from rq_mjlab.actuator import BamActuator
+from rq_mjlab.actuator import BamActuator, BamActuatorCfg
 from rq_mjlab.bundle import verified_bundle
 
 Ranges = dict[str, tuple[float, float]]
@@ -44,24 +44,41 @@ def dr_from_bundle(
 
 
 def bam_param_dr_event(
-    actuator: BamActuator,
-    bundle_path: str | Path,
+    actuator_cfg: BamActuatorCfg,
     *,
+    entity_name: str = "robot",
     fallback_span: float | None = None,
     mode: str = "reset",
 ) -> tuple[EventTermCfg, str]:
     """An event term that redraws the actuator's law parameters per
-    world from the bundle's declared region — and the BASIS string the
+    world from ITS bundle's declared region — and the BASIS string the
     caller must put on the run's record (a datasheet, an artefact),
     because a draw whose provenance is not written down is a guess with
     better manners.
+
+    Takes the CFG, not an instance, and reads the bundle path from it —
+    one truth: DR from a different bundle than the actuator's is not
+    expressible. The live `BamActuator` does not exist at cfg-build
+    time (mjlab builds it later), so the event LOOKS IT UP at fire time
+    on `env.scene[entity_name]`, matched by the cfg's stamp — the first
+    wiring passed the cfg straight into `set_param_draws` and crashed
+    at the first reset (review, 2026-09-01).
 
     Only the parameters the law actually consumes are drawn
     (`BamActuator.SCALABLE`); the region's other entries — the passives,
     `q_offset`, `command_delay` — are for mjlab's native events and the
     cfg, and are ignored here by name.
     """
-    ranges, basis = dr_from_bundle(bundle_path, fallback_span=fallback_span)
+    if not isinstance(actuator_cfg, BamActuatorCfg):
+        raise TypeError(
+            f"bam_param_dr_event takes the BamActuatorCfg, got "
+            f"{type(actuator_cfg).__name__} — the live actuator does not "
+            "exist yet at cfg-build time; the event finds it by stamp"
+        )
+    stamp = actuator_cfg.stamp
+    ranges, basis = dr_from_bundle(
+        actuator_cfg.bundle_path, fallback_span=fallback_span
+    )
     drawable = {
         name: bounds for name, bounds in ranges.items() if name in BamActuator.SCALABLE
     }
@@ -72,12 +89,23 @@ def bam_param_dr_event(
         )
 
     def redraw(env: Any, env_ids: torch.Tensor) -> None:
+        live = [
+            act
+            for act in env.scene[entity_name].actuators
+            if isinstance(act, BamActuator) and act.cfg.stamp == stamp
+        ]
+        if len(live) != 1:
+            raise RuntimeError(
+                f"bam_param_dr: entity {entity_name!r} carries "
+                f"{len(live)} BamActuator(s) with stamp {stamp!r} — "
+                "the event must resolve exactly one"
+            )
         count = int(env_ids.shape[0]) if hasattr(env_ids, "shape") else len(env_ids)
         draws = {}
         for name, (low, high) in drawable.items():
             u = torch.rand(count, device=env.device if hasattr(env, "device") else None)
             draws[name] = low + (high - low) * u
-        actuator.set_param_draws(env_ids, draws)
+        live[0].set_param_draws(env_ids, draws)
 
     redraw.__name__ = "redraw_bam_params"
     return EventTermCfg(func=redraw, mode=mode), basis

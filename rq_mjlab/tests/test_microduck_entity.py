@@ -54,12 +54,19 @@ class MicroduckEntity(unittest.TestCase):
     def test_dr_with_declared_span_carries_its_basis(self) -> None:
         _ranges, basis = dr_from_bundle(ACTUATOR_BUNDLE, fallback_span=0.1)
         self.assertIn("declared", basis)
-        event, event_basis = bam_param_dr_event(
-            self._actuator(), ACTUATOR_BUNDLE, fallback_span=0.1
-        )
+        # The event takes the CFG (the live actuator does not exist at
+        # cfg-build time) and reads the bundle path FROM it — one truth.
+        event, event_basis = bam_param_dr_event(self._actuator(), fallback_span=0.1)
         self.assertEqual(basis, event_basis)
         events = {"dr": event, "expand": bam_expansion_event()}
-        lint(events, {"servos": self._actuator()})  # no refusal: blessed setup
+        lint(events, (self._actuator(),))  # no refusal: blessed setup
+
+    def test_lint_refuses_a_dict_instead_of_passing_vacuously(self) -> None:
+        # A dict iterates its KEY STRINGS: the old lint filtered them
+        # out and blessed anything (review, 2026-09-01).
+        with self.assertRaises(TypeError) as ctx:
+            lint({}, {"servos": self._actuator()})
+        self.assertIn("ordered tuple", str(ctx.exception))
 
 
 if __name__ == "__main__":

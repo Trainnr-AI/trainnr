@@ -62,7 +62,15 @@ class TheDevicePin(unittest.TestCase):
         import torch  # noqa: PLC0415
 
         spec = mujoco.MjSpec.from_string(XML)
-        entity = _Cmd(indexing=_Cmd(ctrl_ids=torch.tensor([0])))
+        entity = _Cmd(
+            indexing=_Cmd(
+                ctrl_ids=torch.tensor([0]),
+                # the honest global mapping for this rig: one hinge,
+                # global joint 0, dof 0 (the dof fix routes through
+                # entity.indexing — review, 2026-09-01).
+                joint_v_adr=torch.tensor([0]),
+            )
+        )
         actuator = cfg.build(entity, [0], ["j"])
         actuator.edit_spec(spec, ["j"])
         return spec, actuator

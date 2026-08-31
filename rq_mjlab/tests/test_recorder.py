@@ -53,7 +53,10 @@ class TheRecorder(unittest.TestCase):
         term._rr = rr
         term._cfg = cfg
         term._env = env
-        term._joint_names = ["slider"]
+        # (name, qpos address) pairs — the post-review shape; this rig's
+        # one slider is global joint 0, qpos 0.
+        term._joints = [("slider", 0)]
+        term._skipped_joints = []
         term._qpos = None
         import time  # noqa: PLC0415
 

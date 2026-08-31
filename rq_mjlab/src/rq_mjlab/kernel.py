@@ -93,7 +93,9 @@ def friction_budget(
     `friction_base` plus the state-dependent budget. The sign gate on the
     quadratic term is the CPU reference's (*bam/model.py* 172-192);
     BAM's own mjlab kernel drops it, and the fits ran through the
-    reference — we follow the fits."""
+    reference — we follow the fits. Pinned against the pipeline's numpy
+    transcription by `tests/test_kernel_parity.py` across the sign/tie
+    grid (the two copies disagreed until 2026-09-01's review)."""
     stribeck = torch.exp(-((qd.abs() / law.dtheta_stribeck) ** law.alpha))
     gearbox = (
         tau_ext * law.load_friction_external - tau_prev * law.load_friction_motor

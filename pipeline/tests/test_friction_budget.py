@@ -97,16 +97,28 @@ class TorqueBudget(unittest.TestCase):
             load_friction_motor_quad=7.0,
             load_friction_external_quad=3.0,
         )
-        # |tau_m| > |tau_e| -> Q = Keq * tau_e^2 (the EXTERNAL side quad term).
+        # BAM's reference (bam/model.py, read verbatim 2026-09-01): the
+        # quadratic pays ONLY when the torques OPPOSE in sign. This test
+        # once used same-sign torques and pinned the ungated variant —
+        # the drift the kernel-parity review caught.
+        # opposing, |tau_m| > |tau_e| -> Q = Keq * tau_e^2.
         got_motor_dominant = friction_torque_budget(
-            params, theta_dot=0.0, tau_m=10.0, tau_e=1.0
+            params, theta_dot=0.0, tau_m=10.0, tau_e=-1.0
         )
         self.assertAlmostEqual(got_motor_dominant, 3.0 * 1.0**2)
-        # |tau_e| > |tau_m| -> Q = Kmq * tau_m^2 (the MOTOR side quad term).
+        # opposing, |tau_e| > |tau_m| -> Q = Kmq * tau_m^2.
         got_external_dominant = friction_torque_budget(
-            params, theta_dot=0.0, tau_m=1.0, tau_e=10.0
+            params, theta_dot=0.0, tau_m=-1.0, tau_e=10.0
         )
         self.assertAlmostEqual(got_external_dominant, 7.0 * 1.0**2)
+        # SAME sign -> the gate zeroes the whole quadratic.
+        self.assertAlmostEqual(
+            friction_torque_budget(params, theta_dot=0.0, tau_m=10.0, tau_e=1.0), 0.0
+        )
+        # The tie pays nothing (neither strict inequality holds).
+        self.assertAlmostEqual(
+            friction_torque_budget(params, theta_dot=0.0, tau_m=5.0, tau_e=-5.0), 0.0
+        )
 
     def test_absent_terms_are_zero_not_a_silent_guess(self) -> None:
         from rq_pipeline.robot.friction_budget import (  # noqa: PLC0415

@@ -105,10 +105,23 @@ def friction_torque_budget(
                 - params.load_friction_external_stribeck * tau_e
             )
         if params.load_friction_motor_quad is not None:  # M6
-            stribeck_term = stribeck_term + np.where(
-                np.abs(tau_m) > np.abs(tau_e),
-                params.load_friction_external_quad * tau_e**2,
-                params.load_friction_motor_quad * tau_m**2,
+            # BAM's reference (bam/model.py 185-205, read verbatim
+            # 2026-09-01): the quadratic pays ONLY when motor and
+            # external torque oppose in sign, the |tau_e| < |tau_m|
+            # branch pays the EXTERNAL_quad coefficient on tau_e**2
+            # (the crossed naming is theirs), and the tie pays nothing.
+            # This transcription lacked the sign gate and paid the tie —
+            # it disagreed with the torch kernel the fits actually match
+            # (rq_mjlab kernel; parity pinned in
+            # rq_mjlab/tests/test_kernel_parity.py).
+            opposing = np.sign(tau_e) != np.sign(tau_m)
+            stribeck_term = stribeck_term + opposing * (
+                (np.abs(tau_e) < np.abs(tau_m))
+                * params.load_friction_external_quad
+                * tau_e**2
+                + (np.abs(tau_e) > np.abs(tau_m))
+                * params.load_friction_motor_quad
+                * tau_m**2
             )
         budget = budget + envelope * stribeck_term
 

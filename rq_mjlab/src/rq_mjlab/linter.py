@@ -25,7 +25,7 @@ from typing import Any
 from mjlab.managers.event_manager import EventTermCfg
 
 from rq_mjlab.actuator import BamActuatorCfg
-from rq_mjlab.events import EXPANDED_FIELDS, expand_bam_fields
+from rq_mjlab.events import expand_bam_fields
 
 # The model fields the BAM law writes every step: an event that
 # randomises one of these changes nothing the solver ever sees.
@@ -57,6 +57,19 @@ def lint(events_cfg: Any, actuator_cfgs: tuple[Any, ...]) -> None:
     `RuntimeError` when a BAM actuator is configured but no event
     expands `dof_frictionloss` per world.
     """
+    # A dict here iterates its KEY STRINGS and the isinstance filter
+    # empties silently — lint would bless anything (the same coercion
+    # family as the entity seam's fixed bug; review 2026-09-01).
+    bad = [
+        type(cfg).__name__
+        for cfg in actuator_cfgs
+        if not hasattr(cfg, "target_names_expr")
+    ]
+    if bad:
+        raise TypeError(
+            f"lint takes an ordered tuple of actuator cfgs, got element(s) "
+            f"{bad} — pass (cfg,) not a dict or names"
+        )
     bam_groups = [cfg for cfg in actuator_cfgs if isinstance(cfg, BamActuatorCfg)]
     if not bam_groups:
         return
@@ -76,10 +89,6 @@ def lint(events_cfg: Any, actuator_cfgs: tuple[Any, ...]) -> None:
                     "every physics step - the draw would change nothing. Randomise "
                     "the bundle's parameters instead (dr_from_bundle) or drop the term."
                 )
-        if set(declared) >= set(EXPANDED_FIELDS) and term.func is not expand_bam_fields:
-            # Another term already expands the field; that satisfies the
-            # allocation even though the write itself is the offence above.
-            expansion_present = expansion_present or bool(declared)
     if offences:
         raise SilentNoOp("\n".join(offences))
     if not expansion_present:
