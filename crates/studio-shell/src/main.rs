@@ -109,6 +109,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_app_id("robotiq_studio")
         .with_icon(std::sync::Arc::new(icon));
 
+    // On Linux, re_ui's chrome probe defaults to client-drawn
+    // decorations (always, when WAYLAND_DISPLAY is unset) — but the
+    // client here is US, and our header is a brand bar, not a drag
+    // region: the window came up borderless and could neither move nor
+    // resize (seen live on WSLg, 2026-08-31; the only grabbable thing
+    // near the top was the viewport panel's resize handle). Ask for the
+    // native frame instead; WSLg draws a movable, resizable one.
+    #[cfg(target_os = "linux")]
+    {
+        native_options.viewport = native_options
+            .viewport
+            .with_decorations(true)
+            .with_title_shown(true)
+            .with_titlebar_shown(true)
+            .with_transparent(false);
+    }
+
     eframe::run_native(
         "robotiq studio",
         native_options,
@@ -135,6 +152,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 re_viewer::AsyncRuntimeHandle::from_current_tokio_runtime_or_wasmbindgen()?,
             );
             rerun_app.add_log_receiver(rx);
+
+            // The builder's `.with_decorations(true)` above is not enough:
+            // the embedded viewer re-asserts its OWN chrome preference every
+            // frame (`sync_native_window_decorations`, driven by this
+            // AppOptions flag, whose Linux default is client-drawn) and
+            // strips the frame right back off. Tell the app itself to want
+            // native decorations.
+            #[cfg(target_os = "linux")]
+            {
+                rerun_app.app_options_mut().custom_window_decorations = false;
+            }
 
             let viewport = ViewportFeed::spawn(&cc.egui_ctx, DEFAULT_TASK);
             let agent = AgentSession::spawn(&cc.egui_ctx);
