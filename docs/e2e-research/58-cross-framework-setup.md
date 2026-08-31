@@ -240,7 +240,45 @@ from zero. Borrow, with sources:
   BAM or microduck can currently say which dynamics produced a given
   demonstration; every record of ours will.
 
-## 9. What changed since 56 §7
+## 9. The dialect rule: whose conventions win where *(standing, 2026-08-31)*
+
+The operator's rule: the product must hold robotiq's coding standards
+AND read as native in each host's dialect. The boundary principle —
+**at every interface we speak THEIR language; inside the core we keep
+ours** — resolved per artifact, from the idioms the reads measured:
+
+- **`rq_mjlab` is written in mjlab's dialect** (56): `*Cfg`
+  dataclasses, `entity_name` (their deliberate rename), the
+  `edit_spec → initialize → compute` actuator lifecycle verbatim, the
+  `param_names` fusion contract, tyro-compatible flags with explicit
+  booleans, uv packaging, torch, Python ≥3.10, tests + a changelog
+  entry per change — an mjlab maintainer should read it as mjlab code.
+- **The bundle wraps BAM's dialect untouched** (57): their flat params
+  dict rides verbatim under one key — no key ever renamed, their
+  `model`/`actuator` keys sacred, `params/<motor>/` layout respected —
+  with our additions as sibling namespaced keys (`provenance`,
+  `metrics`, `uncertainty`, `context`, `schema_version`). Both a
+  `python -m` module (their CLI style) and a console script.
+- **Press outputs speak LeRobot exactly** (32/45): v2.1 layout,
+  `observation.state`/`action` feature naming — a dataset consumer
+  must not be able to tell it wasn't written by their own recorder.
+- **The manifest takes Arena's spec shape** (59): typed,
+  validated-cold, `ArenaEnvGraphSpec`-like — but the CORE stays
+  stdlib-pure (the auditor's-laptop rule): dataclasses + stdlib
+  validation in core; pydantic and other host deps live only in
+  adapter packages that already carry that host.
+- **Skills follow Arena's shipped format** (59): `arena:SKILL.md` +
+  `allowed-tools` + `arena:evaluations.md` — the shape both creator teams
+  already merge into their repos.
+
+Where dialects and standards conflict, OURS win on semantics, never
+on surface: we emit files their loaders accept, but our loaders never
+silently ignore unknown keys (BAM's does — that is a gap, not a
+convention); no hardcoded constants regardless of host style; refusal
+messages name the artifact and the reason everywhere. Surface is
+theirs; discipline is ours.
+
+## 10. What changed since 56 §7
 
 56 rejected "adoption as substrate" and proposed a bridge robotiq
 would build alone. 57 showed the bridge half-exists (Rhoban's
