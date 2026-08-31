@@ -26,9 +26,13 @@ from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
 bootstrap()
 
 from rq_pipeline.collect.scripted_demos import generate_scripted_demos  # noqa: E402
-from rq_pipeline.tasks.so101 import LIFT, build_lift, scripted_pick  # noqa: E402
+from rq_pipeline.tasks.so101 import (  # noqa: E402
+    LIFT_STUDY,
+    build_lift_study,
+    scripted_pick,
+)
 
-EXPERT = "scripted-pick@lift"
+EXPERT = "scripted-pick@lift-study"
 
 
 def conditions(args: argparse.Namespace) -> dict[str, dict]:
@@ -98,7 +102,7 @@ def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
             episodes=trials,
             batch_size=trials,
             extra=RobotiqEnvConfig.cli_flags(
-                LIFT,
+                LIFT_STUDY,
                 record_to=records_path,
                 policy_name=f"paired-{name}",
                 variations=pins,
@@ -173,7 +177,7 @@ def convert(out: Path) -> int:
     from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
 
     study = json.loads((out / "study.json").read_text())
-    task = build_lift()
+    task = build_lift_study()
     for name in study["conditions"]:
         root = out / f"{name}-lerobot"
         export_demos(out / name, root, task=task, repo_id=f"rq-pipeline/paired-{name}")
@@ -214,7 +218,7 @@ def main() -> int:
         print(f"== condition {name}: {condition['basis']}")
         batches[name] = generate_scripted_demos(
             args.out / name,
-            task_factory=build_lift,
+            task_factory=build_lift_study,
             policy=scripted_pick,
             expert=EXPERT,
             dr=condition["dr"],
@@ -227,7 +231,7 @@ def main() -> int:
         )
 
     study = {
-        "task": LIFT,
+        "task": LIFT_STUDY,
         "expert": EXPERT,
         "truth": {"damping": args.truth_damping, "gain": args.truth_gain},
         "conditions": {
