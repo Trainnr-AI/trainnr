@@ -114,11 +114,14 @@ def cpu_execute(
     controls: Any,
     *,
     spec: Any = None,
+    on_step: Any = None,
 ) -> tuple[bool, Any, Any]:
     """One kept candidate on CPU MuJoCo — the reference instrument's
     verdict, and the states/sensors a dataset writer renders frames
     from: `(succeeded, states, sensors)`. `controls` are per physics
-    step (the `expand_controls` shape)."""
+    step (the `expand_controls` shape). `on_step(tick, model, data)`,
+    when given, sees the live model/data after every step — the frame
+    renderer's hook."""
     import numpy as np  # noqa: PLC0415
 
     from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
@@ -127,7 +130,9 @@ def cpu_execute(
     backend = MuJoCoBackend()
     backend.load_spec(task.spec if spec is None else spec)
     stepper = backend.stepper(initial_state, controls.shape[0])
-    for row in controls:
+    for tick, row in enumerate(controls):
         stepper.advance(row, 1)
+        if on_step is not None:
+            on_step(tick, backend.model, stepper.data)
     succeeded = bool(task.protocol.success(stepper.states, stepper.sensors))
     return succeeded, stepper.states, stepper.sensors

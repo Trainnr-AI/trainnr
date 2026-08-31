@@ -54,7 +54,15 @@ from rq_pipeline.tasks.aloha2 import (
     scripted_kitting_episode,
 )
 
-__all__ = ["ATTEMPTS_PER_EPISODE", "DR_SPAN", "DemoBatch", "generate_demos"]
+__all__ = [
+    "ATTEMPTS_PER_EPISODE",
+    "DR_SPAN",
+    "SPAWN_NOISE",
+    "DemoBatch",
+    "generate_demos",
+    "kitting_dynamics_fn",
+    "kitting_variant_fn",
+]
 
 # ±30 %: measured 2026-08-26 with the gain scaled correctly (BOTH kp
 # terms) the expert keeps 8/10 at 0.10 and 10/10 at 0.30. An earlier
@@ -188,3 +196,63 @@ def _attempt(
         actions,
         frames,
     )
+
+
+# ±4 mm of part-spawn jitter for multiplication: inside the ±5 mm basin
+# where open-loop replay survives (measured 2026-08-31, docs/07 B3.1 —
+# 63/63 keep at ±5 mm, 1/12 at ±30 mm). Retargeting past the basin is
+# future work; this constant IS the honest amplification radius.
+SPAWN_NOISE = 0.004
+
+
+def kitting_variant_fn(home: Any) -> Any:
+    """The Mimic variation for kitting: draw a jittered spawn around a
+    random seed's parts, then nearest-neighbour-select the source seed
+    for that point (usually the same seed; the selection is real when
+    seeds cluster). `home` is the keyframe state — spawn coordinates
+    are dynamics-independent, so one copy serves every round."""
+    import numpy as np  # noqa: PLC0415 - sim extra
+
+    from rq_pipeline.collect.multiply import Variant, nearest_seed  # noqa: PLC0415
+
+    def variant_fn(rng: Generator, seeds: list[Any]) -> Variant:
+        anchor = seeds[int(rng.integers(len(seeds)))]
+        spawns = {
+            arm: [
+                float(coord + rng.uniform(-SPAWN_NOISE, SPAWN_NOISE))
+                for coord in anchor.manifest["draws"][arm]
+            ]
+            for arm in PART_ORDER
+        }
+        point = np.concatenate([spawns[arm] for arm in PART_ORDER])
+        source = nearest_seed(
+            seeds,
+            point,
+            lambda s: np.concatenate([s.manifest["draws"][arm] for arm in PART_ORDER]),
+        )
+        initial = np.asarray(home, dtype=float).copy()
+        for arm in PART_ORDER:
+            part = PART_STATE_SLICE[arm]
+            initial[part.start], initial[part.start + 1] = spawns[arm]
+        return Variant(seed_index=source, initial_state=initial, draws=spawns)
+
+    return variant_fn
+
+
+def kitting_dynamics_fn(spec: KittingSpec, dr_span: float = DR_SPAN) -> Any:
+    """One fresh kitting scene per round, rescaled by a damping/gain
+    draw from the same span the seed generator uses."""
+
+    def dynamics_fn(rng: Generator) -> tuple[Any, dict[str, float], str]:
+        scene = build_kitting(spec=spec).spec
+        dynamics = {
+            "damping": float(1.0 + rng.uniform(-dr_span, dr_span)),
+            "gain": float(1.0 + rng.uniform(-dr_span, dr_span)),
+        }
+        scale_dynamics(
+            scene, damping_scale=dynamics["damping"], gain_scale=dynamics["gain"]
+        )
+        basis = f"caller-declared span ±{dr_span:g} (kitting DR, docs/31)"
+        return scene, dynamics, basis
+
+    return dynamics_fn
