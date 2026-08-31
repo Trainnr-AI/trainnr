@@ -100,7 +100,9 @@ def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
             output_dir=out / f"{name}-eval",
             seed=1000,
             episodes=trials,
-            batch_size=trials,
+            # A batch is one renderer per env; 40 EGL contexts is a way
+            # to find a driver limit, not a result.
+            batch_size=min(trials, 8),
             extra=RobotiqEnvConfig.cli_flags(
                 LIFT_STUDY,
                 record_to=records_path,
