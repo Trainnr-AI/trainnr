@@ -264,31 +264,44 @@ def sample_dynamics(
     only with an explicit `fallback_span`: uniform over ±span around
     the point estimates, basis naming the span as caller-declared.
     `rng` is any numpy Generator — the press already owns one."""
+    ranges, basis = declared_ranges(bundle, fallback_span=fallback_span)
+    return {
+        param: float(rng.uniform(low, high)) for param, (low, high) in ranges.items()
+    }, basis
+
+
+def declared_ranges(
+    bundle: Mapping[str, Any], *, fallback_span: float | None = None
+) -> tuple[dict[str, tuple[float, float]], str]:
+    """The sampling region and its BASIS, spelled once for every
+    consumer (the press draws episodes from it; `rq_mjlab` draws
+    per-world scales from it): the bundle's identified intervals when it
+    declares them, else — only with an explicit `fallback_span` — a
+    caller-declared span around the point estimates, with the basis
+    string saying exactly which."""
+    try:
+        return dr_ranges(bundle), "identified-interval"
+    except ValueError:
+        if fallback_span is None:
+            raise
     numeric = {
         key: float(value)
         for key, value in bundle["params"].items()
         if key not in PARAM_IDENTITY_KEYS and isinstance(value, (int, float))
     }
-    try:
-        ranges = dr_ranges(bundle)
-        basis = "identified-interval"
-    except ValueError:
-        if fallback_span is None:
-            raise
-        # min/max, not (1-s, 1+s) order: a NEGATIVE parameter (q_offset
-        # is -0.068 in the shipped sts3215 fit) inverts the endpoints —
-        # caught by the first test that sampled a real bundle.
-        ranges = {
-            param: (
-                min(value * (1 - fallback_span), value * (1 + fallback_span)),
-                max(value * (1 - fallback_span), value * (1 + fallback_span)),
-            )
-            for param, value in numeric.items()
-        }
-        basis = f"caller-declared span ±{fallback_span:g} (bundle is point estimates)"
-    return {
-        param: float(rng.uniform(low, high)) for param, (low, high) in ranges.items()
-    }, basis
+    # min/max, not (1-s, 1+s) order: a NEGATIVE parameter (q_offset
+    # is -0.068 in the shipped sts3215 fit) inverts the endpoints —
+    # caught by the first test that sampled a real bundle.
+    ranges = {
+        param: (
+            min(value * (1 - fallback_span), value * (1 + fallback_span)),
+            max(value * (1 - fallback_span), value * (1 + fallback_span)),
+        )
+        for param, value in numeric.items()
+    }
+    return ranges, (
+        f"caller-declared span ±{fallback_span:g} (bundle is point estimates)"
+    )
 
 
 def as_scales(

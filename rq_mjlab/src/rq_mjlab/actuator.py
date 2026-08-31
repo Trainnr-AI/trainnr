@@ -138,6 +138,21 @@ class BamActuatorCfg(ActuatorCfg):
         return BamActuator(self, *args, **kwargs)
 
 
+class _EffectiveLaw:
+    """`LawParams` with per-world tensors substituted for drawn fields;
+    everything else reads through to the cfg's scalars."""
+
+    def __init__(self, law: LawParams, draws: dict[str, torch.Tensor]) -> None:
+        self._law = law
+        self._draws = draws
+
+    def __getattr__(self, name: str) -> Any:
+        draws = object.__getattribute__(self, "_draws")
+        if name in draws:
+            return draws[name]
+        return getattr(object.__getattribute__(self, "_law"), name)
+
+
 class BamActuator(Actuator[BamActuatorCfg]):
     """The law at run time; see the module docstring for the per-step story."""
 
@@ -181,6 +196,62 @@ class BamActuator(Actuator[BamActuatorCfg]):
         num_envs = int(self._qfrc_actuator.shape[0])
         if self._dof_frictionloss.shape[0] != num_envs:
             raise RuntimeError(MISSING_EXPANSION_MESSAGE)
+        self._draws: dict[str, torch.Tensor] = {}
+
+    # LawParams fields a DR draw may replace per world — the law's own
+    # constants. The passives (armature, friction_viscous) are MODEL
+    # fields: randomise them with mjlab's native joint_armature /
+    # joint_damping events, ranges from the same bundle (rq_mjlab.dr).
+    SCALABLE = (
+        "kt",
+        "R",
+        "friction_base",
+        "friction_stribeck",
+        "load_friction_motor",
+        "load_friction_external",
+        "load_friction_motor_stribeck",
+        "load_friction_external_stribeck",
+        "load_friction_motor_quad",
+        "load_friction_external_quad",
+        "dtheta_stribeck",
+        "alpha",
+        "error_gain_ratio",
+    )
+
+    def set_param_draws(
+        self, env_ids: torch.Tensor, draws: dict[str, torch.Tensor]
+    ) -> None:
+        """Write per-world ABSOLUTE parameter values for `env_ids` —
+        the DR event's sink (`rq_mjlab.dr.bam_param_dr_event`). A first
+        touch of a parameter fills every world with the bundle's point
+        estimate; an unknown or non-scalable name is refused."""
+        if not hasattr(self, "_qfrc_actuator"):
+            raise RuntimeError("set_param_draws before initialize()")
+        num_envs = int(self._qfrc_actuator.shape[0])
+        device = self._qfrc_actuator.device
+        for name, values in draws.items():
+            if name not in self.SCALABLE:
+                raise ValueError(
+                    f"{name!r} is not a per-world law parameter; scalable: "
+                    f"{self.SCALABLE} (passives go through mjlab's own events)"
+                )
+            if name not in self._draws:
+                self._draws[name] = torch.full(
+                    (num_envs, 1),
+                    float(getattr(self.cfg.law, name)),
+                    device=device,
+                )
+            self._draws[name][env_ids] = torch.as_tensor(
+                values, dtype=self._draws[name].dtype, device=device
+            ).reshape(-1, 1)
+
+    def effective_law(self) -> Any:
+        """The law with any per-world draws substituted — broadcastable
+        tensors where a draw exists, the cfg's scalars elsewhere. The
+        kernel's functions take either."""
+        if not self._draws:
+            return self.cfg.law
+        return _EffectiveLaw(self.cfg.law, self._draws)
 
     def _solver_friction(self) -> torch.Tensor:
         """Last solve's DOF-friction rows scattered onto the DOFs,
@@ -195,7 +266,7 @@ class BamActuator(Actuator[BamActuatorCfg]):
         return out.scatter_add_(1, ids, force)
 
     def compute(self, cmd: ActuatorCmd) -> torch.Tensor:
-        law = self.cfg.law
+        law = self.effective_law()
         q, qd = cmd.pos, cmd.vel
         dofs = self._dof_ids
         tau_prev = self._qfrc_actuator[:, dofs]
