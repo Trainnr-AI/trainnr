@@ -114,9 +114,13 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
     sensors: Any,
     actions: Any,
     frames: Iterable[tuple[int, Any]],
-    manifest: Manifest,
+    manifest: Any,
 ) -> Path:
-    """One kept episode onto disk in `DemoLayout`; returns its directory."""
+    """One kept episode onto disk in `DemoLayout`; returns its directory.
+
+    `manifest` is anything with `write_to(episode_dir)` — this task's
+    legacy `Manifest` or the press's go-forward `EpisodeManifest`; the
+    layout does not care which sidecar schema rides in it."""
     import numpy as np  # noqa: PLC0415 - sim extra
     from PIL import Image  # noqa: PLC0415
 

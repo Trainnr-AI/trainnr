@@ -167,6 +167,10 @@ their framework. That is the whole trick, twice now (58 §0).
 1. **Generalize the micro-press**: task-agnostic `generate_demos`
    (task registry + referee + expert in, today's kitting as case one),
    `DatasetProvenance` → the full sidecar schema. CPU-only, no gates.
+   *(SHIPPED 2026-08-31: `rq_pipeline/collect/press.py` — the loop +
+   `EpisodeManifest` with task/instrument/expert stamps and the named
+   dynamics vector; kitting is the first adapter, its legacy manifest
+   and committed batches untouched.)*
 2. **`dr_from_bundle` sampling + refusal** — lands with 58's bundle
    spec (also CPU-only).
 3. **The datasheet generator** over existing records.
