@@ -83,7 +83,7 @@ waits on docs/38):
 
 ## 2.2 The deltas, read (2026-09-01, both sources local)
 
-mjlab 1.3.0's `velocity_env_cfg.py` (the wheel, extracted) beside
+mjlab 1.3.0's velocity base (the wheel's *velocity_env_cfg.py*, extracted) beside
 their 949-line delta file. What the walk recipe actually is:
 
 **Timing/actions** (base values kept): `decimation 4`,
