@@ -40,5 +40,5 @@
     "vendored_via": "operator-supplied repomix pack of Rhoban/bam main"
   },
   "schema": "robotiq-actuator-bundle/1",
-  "stamp": "mx106-m2@339ee5aaf320"
+  "stamp": "mx106-m2@b3ee2c0c5519"
 }

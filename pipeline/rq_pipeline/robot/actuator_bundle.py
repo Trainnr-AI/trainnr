@@ -44,6 +44,11 @@ from rq_pipeline.robot.actuator_library import (
 
 SCHEMA = "robotiq-actuator-bundle/1"
 
+# The committed store of wrapped bundles, beside the library they wrap —
+# the ONE spelling (the MCP server, the CLI and the e2e preflight all
+# import it; it was spelled three ways once, review 2026-09-01).
+BUNDLE_STORE = ACTUATORS_ROOT.parent / "actuator-bundles"
+
 # Every section the envelope may carry. A key outside this set is a
 # refusal, not a warning — the one lesson BAM's silently-tolerant
 # loader teaches by counterexample.
@@ -62,8 +67,14 @@ SECTIONS = frozenset(
 )
 
 # Sections whose absence is legal but must be SAID: verify reports each
-# as an advisory so a consumer knows what this bundle cannot promise.
-OPTIONAL_SECTIONS = ("context", "metrics", "uncertainty")
+# as an advisory naming what the bundle cannot promise. OPTIONAL_SECTIONS
+# derives from this map so the two cannot drift (review 2026-09-01).
+ABSENCE_ADVISORIES = {
+    "context": "the electrical/firmware operating point (vin, kp)",
+    "metrics": "fit quality (train or held-out MAE)",
+    "uncertainty": "parameter intervals (point estimates only)",
+}
+OPTIONAL_SECTIONS = tuple(ABSENCE_ADVISORIES)
 
 # BAM's params files always carry these two identity keys on top of the
 # numeric fit fields; a dict without them is not a BAM fit.
@@ -82,10 +93,24 @@ RAIL_TOLERANCE = 0.01  # fraction of the bound
 # BAM ships load terms at ~1e-13 (docs/e2e-research/57 §3).
 FLOOR = 1e-9
 
-# Fields excluded from the content hash: the stamp itself, and the wrap
+# Parameters that are NOT the motor's to randomise: q_offset and
+# command_delay are the identification RIG's (mount bias, bus latency —
+# BAM's own docs say so, 57 §7), and max_velocity/error_gain_ratio are
+# firmware registers. A declared span over "the params" must never
+# jitter these — jittering a bench constant is physically meaningless.
+# Shared with rq_mjlab's SCALABLE filter; one home (review 2026-09-01).
+RIG_AND_FIRMWARE_PARAMS = frozenset(
+    {"q_offset", "command_delay", "max_velocity", "error_gain_ratio"}
+)
+
+# Fields excluded from the content hash: the stamp itself; the wrap
 # metadata (WHEN it was wrapped must not change WHAT it is — the same
-# fit wrapped twice is the same artifact).
-UNHASHED = ("stamp", "wrap")
+# fit wrapped twice is the same artifact); and the checks, which are
+# DERIVED from params under this module's constants — hashing them
+# coupled every bundle's identity to FLOOR/RAIL_TOLERANCE, so
+# tightening a checker re-stamped unchanged fits (review 2026-09-01).
+# `verify` recomputes checks instead, so tampering is still caught.
+UNHASHED = ("stamp", "wrap", "checks")
 
 
 def wrap(
@@ -178,6 +203,19 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
     if bad_types:
         raise ValueError(f"non-numeric fit value(s) for {bad_types}")
 
+    for section, shape in (("checks", dict), ("wrap", dict), ("context", dict)):
+        if section in bundle and not isinstance(bundle[section], shape):
+            raise ValueError(
+                f"section {section!r} must be a {shape.__name__}, got "
+                f"{type(bundle[section]).__name__}"
+            )
+    if "checks" in bundle and bundle["checks"] != run_checks(params):
+        raise ValueError(
+            "the bundle's stored checks disagree with the checks its params "
+            "earn under this verifier — the artifact was edited, or it was "
+            "checked under different constants; re-wrap it"
+        )
+
     expected = _stamp(bundle)
     if bundle["stamp"] != expected:
         raise ValueError(
@@ -187,11 +225,7 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
 
     return [
         f"no {section!r} section: this bundle cannot promise "
-        + {
-            "context": "the electrical/firmware operating point (vin, kp)",
-            "metrics": "fit quality (train or held-out MAE)",
-            "uncertainty": "parameter intervals (point estimates only)",
-        }[section]
+        + ABSENCE_ADVISORIES[section]
         for section in OPTIONAL_SECTIONS
         if section not in bundle
     ]
@@ -287,7 +321,9 @@ def declared_ranges(
     numeric = {
         key: float(value)
         for key, value in bundle["params"].items()
-        if key not in PARAM_IDENTITY_KEYS and isinstance(value, (int, float))
+        if key not in PARAM_IDENTITY_KEYS
+        and key not in RIG_AND_FIRMWARE_PARAMS
+        and isinstance(value, (int, float))
     }
     # min/max, not (1-s, 1+s) order: a NEGATIVE parameter (q_offset
     # is -0.068 in the shipped sts3215 fit) inverts the endpoints —
@@ -311,10 +347,17 @@ def as_scales(
     estimates — the shape scale-based randomisers (kitting's
     `scale_dynamics`, mjlab's `operation="scale"` DR) consume."""
     params = bundle["params"]
+    zeroes = sorted(p for p in dynamics if p in params and float(params[p]) == 0.0)
+    if zeroes:
+        raise ValueError(
+            f"cannot express {zeroes} as scales: the bundle's point "
+            "estimate is zero — a multiplier of zero is undefined, and "
+            "silently dropping the parameter would un-randomise it"
+        )
     return {
         param: value / float(params[param])
         for param, value in dynamics.items()
-        if param in params and float(params[param]) != 0.0
+        if param in params
     }
 
 

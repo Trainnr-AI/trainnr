@@ -35,6 +35,12 @@ from rq_pipeline.tasks.so101 import (  # noqa: E402
 EXPERT = "scripted-pick@lift-study"
 
 
+# The evaluation seed, shared by BOTH arms: pairing means arm A's
+# trial k and arm B's trial k start identically (docs/e2e-research/
+# 62 §2). One constant so a caller cannot desync the arms.
+EVAL_SEED = 1000
+
+
 def conditions(args: argparse.Namespace) -> dict[str, dict]:
     """The two arms of the study. The ONLY allowed difference is the
     range and the basis string."""
@@ -66,7 +72,11 @@ def conditions(args: argparse.Namespace) -> dict[str, dict]:
 
 def _checkpoint(training_dir: Path) -> Path:
     """The newest checkpoint's pretrained_model directory."""
-    checkpoints = sorted((training_dir / "checkpoints").glob("[0-9]*"))
+    # Sorted NUMERICALLY: lexicographic order only happens to work while
+    # LeRobot zero-pads (review 2026-09-01).
+    checkpoints = sorted(
+        (training_dir / "checkpoints").glob("[0-9]*"), key=lambda p: int(p.name)
+    )
     if not checkpoints:
         raise FileNotFoundError(f"no checkpoints under {training_dir}")
     return checkpoints[-1] / "pretrained_model"
@@ -98,7 +108,7 @@ def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
             policy_path=_checkpoint(out / f"{name}-training"),
             device=device,
             output_dir=out / f"{name}-eval",
-            seed=1000,
+            seed=EVAL_SEED,
             episodes=trials,
             # A batch is one renderer per env; 40 EGL contexts is a way
             # to find a driver limit, not a result.

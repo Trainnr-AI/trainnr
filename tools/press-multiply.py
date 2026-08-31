@@ -74,6 +74,21 @@ def main() -> int:
     }
     if args.impl:
         engine["impl"] = args.impl
+    else:
+        # The backend's default impl is Warp — the GPU instrument. On a
+        # machine without CUDA that dies deep inside Warp; refuse here,
+        # naming the flag (review 2026-09-01: this tool now runs on the
+        # Mac too).
+        import warp as wp  # noqa: PLC0415
+
+        if not wp.is_cuda_available():
+            print(
+                "no CUDA device: the default MJX impl is 'warp' (the GPU "
+                "instrument). Pass --impl jax to multiply on this machine, "
+                "or run on the box.",
+                file=sys.stderr,
+            )
+            return 1
 
     plan = MultiplyPlan(
         variant_fn=kitting_variant_fn(home),

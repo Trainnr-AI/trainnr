@@ -191,13 +191,26 @@ def demos(chain: Chain) -> None:
     # Preflight: the certified actuator-bundle store verifies before a
     # single episode is pressed — a tampered or malformed bundle fails
     # the chain here, by name, not in a training run three stages later.
-    from rq_pipeline.mcp_server import BUNDLE_STORE  # noqa: PLC0415
-    from rq_pipeline.robot.actuator_bundle import read_bundle  # noqa: PLC0415
+    from rq_pipeline.robot.actuator_bundle import (  # noqa: PLC0415
+        BUNDLE_STORE,
+        read_bundle,
+    )
 
     store = sorted(BUNDLE_STORE.glob("*.bundle.json"))
+    if not store:
+        # An empty store used to pass with "0 bundles verify" — a green
+        # line for a missing artifact (review 2026-09-01).
+        raise StageFailed(chain.current, 1)
     for bundle_path in store:
         read_bundle(bundle_path)  # verifies; raises naming the file
-    chain.say(f"preflight: {len(store)} certified actuator bundles verify")
+    # Honest scope: this is a STORE INTEGRITY check. The kitting chain
+    # does not read an actuator bundle (its dynamics come from the task
+    # bundle's own model), so nothing here could fail later either —
+    # the earlier wording claimed it caught what a training run would.
+    chain.say(
+        f"preflight: {len(store)} certified actuator bundles verify "
+        "(store integrity; this chain's kitting task consumes none)"
+    )
 
     batch = generate_demos(
         chain.layout.demos,

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
+from rq_pipeline.physics.servo_dr import named_joints, scale_servo_dynamics
 from rq_pipeline.protocol import CameraSpec
 from rq_pipeline.tasks.scene import (
     FLOOR_GEOM,
@@ -143,26 +144,21 @@ def ctrl_from_act_sim_action(action: Any) -> Any:
 
 
 def scale_dynamics(spec: Any, *, damping_scale: float, gain_scale: float) -> None:
-    """Domain randomisation on an UNCOMPILED spec: every arm joint's
+    """Domain randomisation on an UNCOMPILED spec: every ARM joint's
     damping and every actuator's stiffness, scaled in place.
 
-    The one way to scale a position servo's gain: `gainprm[0]` (kp on
-    the command) and `biasprm[1]` (-kp on the position) TOGETHER.
-    Scaling `gainprm[0]` alone multiplies the SETPOINT, not the
-    stiffness — force = kp'*ctrl - kp*q settles at q = (kp'/kp)*ctrl —
-    and the demo generator did exactly that until 2026-08-26: a 5%
-    "gain" change moved every joint target 5% (3° on the elbow), and
-    the scripted expert "only worked at nominal" (2/10 at ±10%, 0/10 at
-    ±30%). With both terms scaled it keeps 8/10 at ±10% and 10/10 at
-    ±30% with no retries. One function, so a tool cannot get it wrong
-    again (tools/show-many.py had it right all along).
+    The both-terms gain rule and the story behind it live once, in
+    `physics/servo_dr.py`; this wrapper is the ALOHA rig's own joint
+    predicate (arm joints by name — the scene's free objects carry
+    damping too and must not be randomised) and the name every caller
+    here already uses.
     """
-    for joint in spec.joints:
-        if joint.name.startswith(ARM_PREFIXES):
-            joint.damping[0] = joint.damping[0] * damping_scale
-    for actuator in spec.actuators:
-        actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
-        actuator.biasprm[1] = actuator.biasprm[1] * gain_scale
+    scale_servo_dynamics(
+        spec,
+        damping_scale=damping_scale,
+        gain_scale=gain_scale,
+        joints=named_joints(ARM_PREFIXES),
+    )
 
 
 def _rig_scene(name: str, bundle_xml: Path) -> Any:

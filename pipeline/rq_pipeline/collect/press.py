@@ -194,7 +194,10 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
         result = attempt_fn(rng, frame_every=frame_every)
         dynamics = ", ".join(f"{k} x{v:.2f}" for k, v in result.dynamics.items())
         verdict = "KEEP" if result.succeeded else "discard"
-        if result.note and not result.succeeded:
+        if result.note:
+            # Notes ride on kept attempts too (a retry story, a device
+            # disagreement); dropping them there hid information the
+            # adapter deliberately wrote (review 2026-09-01).
             verdict += f" ({result.note})"
         say(
             f"attempt {attempts}: {verdict} ({dynamics}, retries {len(result.retries)})"

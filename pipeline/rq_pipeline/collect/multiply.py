@@ -207,7 +207,10 @@ def multiply(  # noqa: PLR0913 - every knob of the loop, named
                 instrument=instrument,
                 dynamics=dynamics,
                 draws={
-                    "multiplied_from": int(variant.seed_index),
+                    # The seed's own episode name, not its index in a
+                    # sorted glob (review 2026-09-01).
+                    "multiplied_from": seeds[variant.seed_index].episode
+                    or f"index {variant.seed_index}",
                     "action_noise_std": plan.action_noise,
                     **variant.draws,
                 },

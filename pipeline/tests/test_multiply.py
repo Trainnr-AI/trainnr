@@ -178,7 +178,9 @@ class Multiplication(unittest.TestCase):
             self.assertGreaterEqual(result.device_kept, result.kept)
             manifest = EpisodeManifest.read_from(out / "episode_0000")
             self.assertTrue(manifest.expert.startswith("multiplied:hinge-expert"))
-            self.assertEqual(manifest.draws["multiplied_from"], 0)
+            # The seed's EPISODE, not a list index: re-sharding the seeds
+            # directory must not repoint provenance (review 2026-09-01).
+            self.assertEqual(manifest.draws["multiplied_from"], "episode_0000")
             self.assertIn("angle_jitter", manifest.draws)
             self.assertEqual(manifest.dynamics_basis, "test span ±0.1")
             self.assertEqual(manifest.verdict, "success (task referee, CPU reference)")

@@ -42,6 +42,11 @@ class Seed:
     sensors: Any
     actions: Any
     manifest: dict[str, Any]
+    # The episode directory this seed was read from. Multiplied episodes
+    # cite THIS, never a position in a sorted list — re-sharding a seeds
+    # directory used to silently repoint every provenance stamp at a
+    # different episode (review 2026-09-01).
+    episode: str = ""
 
     @classmethod
     def read(cls, episode_dir: Path) -> Seed:
@@ -53,7 +58,13 @@ class Seed:
             sensors = data[DemoLayout.SENSORS].astype(float)
             actions = data[DemoLayout.ACTIONS].astype(float)
         manifest = json.loads((episode_dir / DemoLayout.MANIFEST_FILE).read_text())
-        return cls(states=states, sensors=sensors, actions=actions, manifest=manifest)
+        return cls(
+            states=states,
+            sensors=sensors,
+            actions=actions,
+            manifest=manifest,
+            episode=episode_dir.name,
+        )
 
 
 def expand_controls(actions: Any, *, control_interval: int, steps: int) -> Any:

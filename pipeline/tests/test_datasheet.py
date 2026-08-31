@@ -96,6 +96,33 @@ class Summaries(unittest.TestCase):
             self.assertIn("mixed dynamics bases", text)
 
 
+class ShardsAndAbsences(unittest.TestCase):
+    def test_shards_refuse_a_single_keep_rate_bound(self) -> None:
+        # Two seeds in one directory: attempt counters restart per
+        # shard, so episodes/max_attempt read "400%" once (review
+        # 2026-09-01).
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = press_manifest(1, 1.0)
+            second = press_manifest(1, 1.0)
+            second["seed"] = 99
+            write_manifest(root, 0, first)
+            write_manifest(root, 1, second)
+            summary = summarize(root)
+            self.assertEqual(summary.shards, 2)
+            page = render(summary)
+            self.assertIn("2 shards in this directory", page)
+            self.assertNotIn("keep rate ≤", page)
+
+    def test_an_empty_basis_is_unstated_not_called_legacy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, 0, press_manifest(1, 1.0, basis=""))
+            summary = summarize(root)
+            self.assertIn("unstated", summary.bases[0])
+            self.assertNotIn("legacy", summary.bases[0])
+
+
 class Rendering(unittest.TestCase):
     def test_the_page_states_the_facts_and_writes_beside_the_batch(self) -> None:
         with TemporaryDirectory() as tmp:

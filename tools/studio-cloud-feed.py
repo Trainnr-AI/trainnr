@@ -37,6 +37,8 @@ bootstrap()
 from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: E402
 
 SEEN_LINES_CAP = 20000
+# Only a default: every run states its own budget with --steps.
+DEFAULT_TOTAL_STEPS = 10000
 
 STAGE = re.compile(
     r"== training [a-z]+|== evaluating [a-z]+"
@@ -83,7 +85,7 @@ def parse_poll(
         if line in seen_lines:
             last_step = metrics.step
             continue
-        seen_lines.add(line)
+        seen_lines[line] = None
         if 0 <= metrics.step < last_step - 1000:
             # The counter jumped far backward: a NEW arm starting over
             # (the paired study trains twice) - mark it once.
@@ -94,6 +96,7 @@ def parse_poll(
         # operator can follow (the "it stops at 10000" lesson,
         # 2026-09-01 - a restarted counter streams BEHIND a shared
         # sequence timeline's end, invisibly).
+        rr.reset_time()  # the trial clock must not ride along (see emit_record)
         rr.set_time("wall", timestamp=time.time())
         rr.set_time("train_step", sequence=metrics.step)
         # The step itself as a series: on the wall timeline this plot IS
@@ -106,32 +109,41 @@ def parse_poll(
 
 def emit_record(
     rr: Any, name: str, arm: str, line: str, seen: set[tuple[str, int]]
-) -> None:
+) -> bool:
     """One per-trial eval record onto the `trial` timeline: success as a
-    0/1 series per arm, and a TextLog naming the trial's outcome."""
+    0/1 series per arm, and a TextLog naming the trial's outcome.
+    Returns False for a line this feed could not read — a JSON array or
+    a null field raises TypeError, which the old two-exception catch let
+    through to kill an overnight feed (review 2026-09-01)."""
     import json  # noqa: PLC0415
 
     try:
         record = json.loads(line)
         trial, success = int(record["trial"]), bool(record["success"])
-    except (ValueError, KeyError):
-        return
+    except (ValueError, KeyError, TypeError):
+        return False
     if (arm, trial) in seen:
-        return
+        return True
     seen.add((arm, trial))
+    # Only the trial timeline for this family: `set_time` persists on the
+    # thread, so leaving wall/train_step set here stamped the NEXT
+    # metric line with this record's stale clocks (review 2026-09-01).
+    rr.reset_time()
     rr.set_time("trial", sequence=trial)
     rr.log(f"{name}/eval/{arm}/success", rr.Scalars(1.0 if success else 0.0))
     rr.log(
         f"{name}/stage",
         rr.TextLog(f"eval {arm} trial {trial}: {'KEEP' if success else 'fail'}"),
     )
+    return True
 
 
-def status_card(
+def status_card(  # noqa: PLR0913 - the card's inputs, each named
     rr: Any,
     name: str,
     state: tuple,
     *,
+    total_steps: int,
     eval_progress: str = "",
     trials_seen: int = 0,
 ) -> tuple[float, int] | None:
@@ -143,7 +155,7 @@ def status_card(
     if last_step >= 0 and last_seen is not None and last_step > last_seen[1]:
         per_s = (last_step - last_seen[1]) / max(now - last_seen[0], 1e-9)
         rate = f"{per_s:.1f} steps/s"
-        eta = f"~{(10000 - last_step) / max(per_s, 1e-9) / 60:.0f} min"
+        eta = f"~{(total_steps - last_step) / max(per_s, 1e-9) / 60:.0f} min"
     losses = (
         "  ".join(
             f"{key} {value:.3f}"
@@ -157,7 +169,7 @@ def status_card(
         f"{name}/status",
         rr.TextDocument(
             f"## cloud training - {arm}\n\n"
-            f"- step **{max(last_step, 0)} / 10000** ({rate}, ETA {eta})\n"
+            f"- step **{max(last_step, 0)} / {total_steps}** ({rate}, ETA {eta})\n"
             f"- {losses}\n"
             f"- GPU {gpu}\n"
             f"- stages so far: {stages}\n"
@@ -180,6 +192,14 @@ def main() -> int:
     parser.add_argument("log", help="remote log path, e.g. /workspace/robotiq/run.log")
     parser.add_argument("--name", default="cloud")
     parser.add_argument("--every", type=float, default=2.0, help="poll seconds")
+    parser.add_argument(
+        # The run's own step budget: baked in as 10000 once, which made
+        # the card lie for every other run (review 2026-09-01).
+        "--steps",
+        type=int,
+        default=DEFAULT_TOTAL_STEPS,
+        help="the run's total training steps, for the card's progress and ETA",
+    )
     parser.add_argument("--key", type=Path, default=Path.home() / ".ssh" / "id_ed25519")
     parser.add_argument("--address", default="rerun+http://127.0.0.1:9876/proxy")
     parser.add_argument(
@@ -198,7 +218,9 @@ def main() -> int:
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
-    seen_lines: set[str] = set()
+    # Insertion-ordered so eviction can drop the OLDEST half; a plain
+    # set has no age and the cap could only clear (review 2026-09-01).
+    seen_lines: dict[str, None] = {}
     last_seen: tuple[float, int] | None = None  # (wall clock, step) for ETA
     while True:
         try:
@@ -235,10 +257,31 @@ def main() -> int:
                 check=False,
             ).stdout
         except subprocess.TimeoutExpired:
+            rr.log(
+                f"{args.name}/stage",
+                rr.TextLog("feed: ssh poll timed out; retrying"),
+            )
+            time.sleep(args.every * 5)
+            continue
+        if not raw.strip():
+            # An empty poll is a DEAD LINK, not an idle trainer: rendering
+            # "?" for arm/GPU silently masked a refused connection
+            # (review 2026-09-01).
+            rr.log(
+                f"{args.name}/stage",
+                rr.TextLog("feed: ssh poll returned nothing (link down?)"),
+            )
             time.sleep(args.every * 5)
             continue
         if len(seen_lines) > SEEN_LINES_CAP:
-            seen_lines.clear()  # bounded; re-logging identical points is harmless
+            # Evict the OLDEST half, never clear: a clear makes the whole
+            # 256 KB tail "new" next poll, re-logging every historical
+            # point at wall=now — a vertical replay cliff on the very
+            # timeline the wall clock exists to keep honest, and the new-arm
+            # detector re-fires on any restart still in the tail
+            # (review 2026-09-01).
+            for old in list(seen_lines)[: SEEN_LINES_CAP // 2]:
+                del seen_lines[old]
         arm, gpu, latest, eval_progress, last_step = parse_poll(
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
@@ -254,6 +297,7 @@ def main() -> int:
             rr,
             args.name,
             (arm, gpu, latest, last_step, last_seen, len(seen_stages)),
+            total_steps=args.steps,
             eval_progress=eval_progress,
             trials_seen=len(seen_records),
         )

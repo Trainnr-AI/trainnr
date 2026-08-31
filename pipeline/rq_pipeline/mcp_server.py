@@ -30,17 +30,16 @@ from typing import Any
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.physics.registry import engines
+
+# BUNDLE_STORE has ONE home (the bundle module itself); it was spelled
+# three ways once — review 2026-09-01.
+from rq_pipeline.robot.actuator_bundle import BUNDLE_STORE
 from rq_pipeline.robot.actuator_library import (
-    ACTUATORS_ROOT,
     list_actuators,
     list_models,
     load_actuator,
 )
 from rq_pipeline.tasks.registry import resolve, tasks
-
-# The committed store of certified actuator bundles (A1's artifacts —
-# tools/actuator-bundle.py wrap --all), beside the library they wrap.
-BUNDLE_STORE = ACTUATORS_ROOT.parent / "actuator-bundles"
 
 # robots/actuators is the actuator LIBRARY (per-servo friction models,
 # grown by tools/sync-bam-actuators.py), not a robot bundle — it has its
@@ -134,6 +133,12 @@ def describe_actuator_bundles() -> list[dict[str, Any]]:
     check flags (optimizer rails/floors) and honesty advisories."""
     from rq_pipeline.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
 
+    if not BUNDLE_STORE.is_dir():
+        raise FileNotFoundError(
+            f"no bundle store at {BUNDLE_STORE} — an empty list here would "
+            "read as 'no bundles' when the path is simply wrong; wrap the "
+            "vendored fits with tools/actuator-bundle.py wrap --all"
+        )
     described = []
     for path in sorted(BUNDLE_STORE.glob("*.bundle.json")):
         bundle = read_bundle(path)  # verifies on read; a bad file raises by name

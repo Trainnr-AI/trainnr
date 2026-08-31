@@ -168,9 +168,30 @@ class Sampling(unittest.TestCase):
         kt = bundle["params"]["kt"]
         self.assertTrue(kt * 0.9 <= dynamics["kt"] <= kt * 1.1)
         # The negative-parameter case that caught the inverted-endpoints
-        # bug: q_offset is -0.068 in the shipped fit.
-        q_offset = bundle["params"]["q_offset"]
-        self.assertTrue(q_offset * 1.1 <= dynamics["q_offset"] <= q_offset * 0.9)
+        # bug, on a MOTOR parameter (load_friction_motor is negative in
+        # no shipped fit, so use the min/max property directly).
+        for param, value in dynamics.items():
+            point = float(bundle["params"][param])
+            low, high = sorted((point * 0.9, point * 1.1))
+            self.assertTrue(low <= value <= high, param)
+
+    def test_the_rigs_own_parameters_are_never_sampled(self) -> None:
+        # q_offset is the BENCH's mount bias and command_delay the BUS's
+        # latency (BAM's docs, 57 §7); max_velocity/error_gain_ratio are
+        # firmware registers. Jittering them is physically meaningless —
+        # a declared span must not reach them (review 2026-09-01).
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.robot.actuator_bundle import (  # noqa: PLC0415
+            RIG_AND_FIRMWARE_PARAMS,
+        )
+
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        dynamics, _basis = sample_dynamics(
+            bundle, np.random.default_rng(0), fallback_span=0.1
+        )
+        self.assertIn("q_offset", bundle["params"])  # it IS in the fit
+        self.assertFalse(set(dynamics) & RIG_AND_FIRMWARE_PARAMS)
 
     def test_scales_are_multipliers_of_the_point_estimates(self) -> None:
         bundle = self._with_uncertainty()

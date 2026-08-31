@@ -26,24 +26,14 @@ if TYPE_CHECKING:
 
     from rq_pipeline.tasks.task import Task
 
+# The servo-DR rule has ONE home (physics/servo_dr.py); this module's
+# own copy grew a different joint filter and drifted from the rig's
+# (review, 2026-09-01).
+from rq_pipeline.physics.servo_dr import scale_servo_dynamics
+
 # {"damping": (low, high), "gain": (low, high)} — the ONLY thing the
 # study's two conditions are allowed to disagree on.
 DrRanges = dict[str, tuple[float, float]]
-
-
-def scale_servo_dynamics(spec: Any, *, damping_scale: float, gain_scale: float) -> None:
-    """DR on an UNCOMPILED spec: every damped joint's damping, every
-    actuator's stiffness. The gain rule is `tasks/aloha2/rig.py`'s
-    hard-won one — `gainprm[0]` AND `biasprm[1]` together, because
-    scaling `gainprm[0]` alone moves the SETPOINT, not the stiffness
-    (docs/07 "the gain that was a setpoint", 2026-08-26). Joint filter:
-    damping > 0 — arm joints carry damping, free-object joints don't."""
-    for joint in spec.joints:
-        if joint.damping[0] > 0:
-            joint.damping[0] = joint.damping[0] * damping_scale
-    for actuator in spec.actuators:
-        actuator.gainprm[0] = actuator.gainprm[0] * gain_scale
-        actuator.biasprm[1] = actuator.biasprm[1] * gain_scale
 
 
 def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers

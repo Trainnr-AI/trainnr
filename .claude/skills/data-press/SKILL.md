@@ -14,7 +14,8 @@ span). Every run writes `datasheet.md` beside the batch.
 
 ## Commands (from `pipeline/`)
 
-- Kitting batch: `uv run --extra sim python ../tools/kitting-demos.py <out> --episodes N --seed S`
+- Kitting batch: `uv run --extra sim python ../tools/kitting-demos.py N <out> --seed S`
+  (episodes and out are POSITIONAL, in that order)
 - Datasheet for an existing batch (one import, no CLI needed):
   `uv run python -c "from rq_pipeline.collect.datasheet import write_datasheet; print(write_datasheet('<demos_dir>'))"`
 - MCP (read-only): `describe_datasheet(demos_dir)`
