@@ -84,10 +84,30 @@ it proves the protocol executes end-to-end and the accounting is
 paired; its verdict will be UNRESOLVED by construction (docs/32's
 power arithmetic — distinguishing rates at these sample sizes needs
 dozens of paired trials). The real run's sizing comes from
-`pipeline/rq_pipeline/stats/effects.py`'s own power table before any GPU hour is spent:
-pick the minimal detectable gap delta, read N. That sizing note —
-"we computed N before running" — is itself a positioning line no
-surveyed framework can write.
+`pipeline/rq_pipeline/stats/power.py` before any GPU hour is spent —
+exact power of the SAME `fisher_exact` the verdict uses, stdlib-pure,
+pinned by `pipeline/tests/test_stats_power.py`. Measured 2026-08-31
+(alpha 0.05, power 0.8, per-side paired trials; the test's actual
+size at n=40 is 0.03 — exact tests are conservative):
+
+| guessed rate at truth | identified rate at truth | N per side |
+|---|---|---|
+| 0.3 | 0.7 | 29 |
+| 0.4 | 0.8 | 27 |
+| 0.5 | 0.9 | 23 |
+| 0.6 | 0.9 | 36 |
+| 0.7 | 0.95 | 39 |
+
+Reading: if the truth-distance is enough to cost the guessed arm ~0.4
+of success rate, ~25–30 paired trials per side resolve it; a subtler
+0.3 gap needs ~36–39. **The budget the sizing implies**: evaluation is
+cheap (a 5 s episode even on CPU; 2 × 40 trials is minutes) — the cost
+is the two REAL trainings, and T5's precedent (docs/34: ACT 10k steps
+at batch 64 on a rented B200 in well under an hour) puts the whole
+study around **2–3 GPU-hours ≈ $10–20** plus demo generation, which
+is CPU. The decision the operator holds is that number. That sizing
+note — "we computed N before running" — is itself a positioning line
+no surveyed framework can write.
 
 ## 4. What the result means either way
 
