@@ -76,7 +76,11 @@ class RerunRecorder(RecorderTerm):
         if cfg.mirror:
             from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
-            self._mirror = RigMirror(mj_model, model_colors=True)
+            # Mirror what MuJoCo's own visualizer shows (groups 0-2):
+            # collision geoms share surfaces with the visual meshes and
+            # z-fight them into shimmering shades (the duck: 5 opaque
+            # group-3 collision meshes over 70 visual ones, 2026-09-01).
+            self._mirror = RigMirror(mj_model, model_colors=True, skip_groups=(3, 4, 5))
         self._said_no_reward = False
         self._began = time.time()
         if cfg.layout:
