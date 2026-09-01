@@ -79,6 +79,8 @@ class RerunRecorder(RecorderTerm):
             self._mirror = RigMirror(mj_model, model_colors=True)
         self._said_no_reward = False
         self._began = time.time()
+        if cfg.layout:
+            self._send_layout()
         rr.log(
             "recorder/config",
             rr.TextDocument(
@@ -92,6 +94,30 @@ class RerunRecorder(RecorderTerm):
             ),
             static=True,
         )
+
+    def _send_layout(self) -> None:
+        """A purposeful window: the 3D mirror, the camera, the series —
+        each in its own view, so the viewer's auto-layout never wedges
+        the 2D camera image into a 3D view (the pinhole complaint,
+        2026-09-01)."""
+        try:
+            import rerun.blueprint as rrb  # noqa: PLC0415 - viz extra
+
+            self._rr.send_blueprint(
+                rrb.Blueprint(
+                    rrb.Grid(
+                        rrb.Spatial3DView(origin="world", name="physics"),
+                        rrb.Spatial2DView(origin="camera", name="camera"),
+                        rrb.TimeSeriesView(origin="train", name="training"),
+                        rrb.TextLogView(origin="recorder", name="events"),
+                    ),
+                    collapse_panels=False,
+                )
+            )
+        except Exception as error:
+            self._rr.log(
+                "recorder/notes", self._rr.TextLog(f"layout not sent: {error}")
+            )
 
     def _clock(self) -> None:
         self._rr.set_time("env_steps", sequence=int(self._env.common_step_counter))
@@ -159,12 +185,22 @@ class RerunRecorder(RecorderTerm):
         outside renderer, which is why the Studio's panel cannot draw
         it). Needs a GL context (MUJOCO_GL=egl on a headless GPU box);
         refusal is once, by name, and frames are simply absent."""
+        model = self._env.sim.mj_model
         if self._render is None:
             try:
-                model = self._env.sim.mj_model
+                camera = mujoco.MjvCamera()
+                mujoco.mjv_defaultCamera(camera)
+                # A chase camera on the robot, not MuJoCo's default free
+                # look-at-nothing (the first frames showed floor and
+                # horizon, duck out of frame): framed by the model's own
+                # extent, lookat re-aimed at body 1 every frame.
+                camera.distance = 2.5 * float(model.stat.extent)
+                camera.elevation = -20.0
+                camera.azimuth = 120.0
                 self._render = (
                     mujoco.Renderer(model, height=360, width=640),
                     mujoco.MjData(model),
+                    camera,
                 )
             except Exception as error:
                 self._cfg.frames = False
@@ -173,11 +209,12 @@ class RerunRecorder(RecorderTerm):
                     self._rr.TextLog(f"camera disabled: {error} (set MUJOCO_GL=egl?)"),
                 )
                 return
-        renderer, mj_data = self._render
-        qpos = self._qpos[watched].cpu().numpy()
-        mj_data.qpos[:] = qpos
-        mujoco.mj_forward(self._env.sim.mj_model, mj_data)
-        renderer.update_scene(mj_data)
+        renderer, mj_data, camera = self._render
+        mj_data.qpos[:] = self._qpos[watched].cpu().numpy()
+        mujoco.mj_forward(model, mj_data)
+        if model.nbody > 1:
+            camera.lookat[:] = mj_data.xpos[1]
+        renderer.update_scene(mj_data, camera=camera)
         self._rr.log("camera/watched", self._rr.Image(renderer.render()))
 
     def record_pre_reset(self, env_ids: torch.Tensor) -> None:
@@ -210,6 +247,7 @@ class RerunRecorderCfg(RecorderTermCfg):
     watched_env: int = 0
     mirror: bool = True  # the 3D scene beside the series
     frames: bool = True  # MuJoCo-rendered camera images of the watched world
+    layout: bool = True  # send a purposeful view layout on connect
     frame_every: int = 25  # control steps between camera frames (renders cost ~30 ms)
     every: int = (
         10  # control steps between samples: the viewer's rate, not the trainer's
