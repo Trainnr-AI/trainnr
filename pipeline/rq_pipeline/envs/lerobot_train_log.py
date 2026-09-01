@@ -285,6 +285,18 @@ class TrainLine:
     stamp: datetime | None = None
 
 
+# LeRobot's console abbreviations -> the names the dashboards plot.
+# One home: train-watch and the cloud feed logged the SAME numbers
+# under different entity paths, so a blueprint keyed to one could
+# never match the other's recording (review 2026-09-01).
+METRIC_NAMES = {
+    "grdn": "grad_norm",
+    "smp/s": "samples_per_s",
+    "updt_s": "update_s",
+    "data_s": "dataloading_s",
+}
+
+
 def parse_train_line(line: str) -> TrainLine | None:
     """The metrics line as data, or None for any other line."""
     tokens = dict(_TOKEN.findall(line))

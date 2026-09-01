@@ -57,8 +57,7 @@ from _lab import bootstrap, frame_viewer, rr_session
 
 bootstrap()
 from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
 PITCH = 1.6

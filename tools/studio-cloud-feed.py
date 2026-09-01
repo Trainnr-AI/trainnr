@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,13 @@ from _lab import bootstrap
 
 bootstrap()
 
-from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: E402
+from rq_pipeline.cloud.provider import SshEndpoint  # noqa: E402
+from rq_pipeline.cloud.transfer import ssh_argv  # noqa: E402
+from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+    METRIC_NAMES,
+    parse_train_line,
+)
+from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: E402
 
 SEEN_LINES_CAP = 20000
 
@@ -66,6 +73,17 @@ RSL_FAMILIES = {
     "Episode_Metrics/": "rl/metrics/",
     "Metrics/": "rl/metrics/",
 }
+
+
+@dataclass
+class RslStatus:
+    """The latest rsl-rl block's headline, for the status card."""
+
+    iteration: int
+    total: int
+    reward: float | None = None
+    elapsed: str | None = None
+    eta: str | None = None
 # Slugs routed to rl/more/ - the layout only grows its "more" pane
 # once this is non-empty, so the catch-all never sits as an empty
 # plot (the operator's rule: no pane without data, 2026-09-01).
@@ -90,12 +108,13 @@ def route_rsl_row(rr: Any, name: str, key: str, value: float) -> None:
     rr.log(f"{name}/rl/more/{slug}", rr.Scalars(value))
 
 
-def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> list | None:
+def parse_rsl(
+    rr: Any, name: str, raw: str, seen_iters: set[int]
+) -> RslStatus | None:
     """rsl-rl blocks into Rerun: each unseen iteration's rows become
-    series on the `iteration` timeline. Returns the latest
-    [iteration, total, reward, elapsed, eta] for the status card."""
-    latest = None
-    iteration = None
+    series on the `iteration` timeline. Returns the latest block's
+    status for the card."""
+    latest: RslStatus | None = None
     emit = False
     for line in ANSI_RE.sub("", raw).splitlines():
         header = RSL_ITER_RE.search(line)
@@ -106,13 +125,16 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> list | None:
                 seen_iters.add(iteration)
                 rr.set_time("wall", timestamp=time.time())
                 rr.set_time("iteration", sequence=iteration)
-            latest = [iteration, int(header.group(2)), None, None, None]
+            latest = RslStatus(iteration, int(header.group(2)))
             continue
-        if iteration is None:
+        if latest is None:
             continue
         clock = RSL_CLOCK_RE.match(line)
         if clock:
-            latest[3 if clock.group(1) == "Time elapsed" else 4] = clock.group(2)
+            if clock.group(1) == "Time elapsed":
+                latest.elapsed = clock.group(2)
+            else:
+                latest.eta = clock.group(2)
             continue
         row = RSL_ROW_RE.match(line)
         if not row:
@@ -121,7 +143,7 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> list | None:
         if emit:
             route_rsl_row(rr, name, key, value)
         if key == "Mean reward":
-            latest[2] = value
+            latest.reward = value
     return latest
 
 
@@ -195,8 +217,11 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
 
 
 def choose_layout(
-    rr: Any, name: str, sent: tuple | None, signals: tuple
-) -> tuple | None:
+    rr: Any,
+    name: str,
+    sent: tuple[str, bool] | None,
+    signals: tuple[bool, bool],
+) -> tuple[str, bool] | None:
     """Send (or resend) the layout whenever what SHOULD be on screen
     changes: the first data reveals the run's kind, and a first
     unrecognised row makes the "more" pane earn its place."""
@@ -212,14 +237,15 @@ def choose_layout(
     return want
 
 
-def write_rl_card(rr: Any, name: str, rsl: list, gpu: str) -> None:
+def write_rl_card(rr: Any, name: str, rsl: RslStatus, gpu: str) -> None:
     """The rsl-rl run's 'right now' card."""
-    iteration, total, reward, elapsed, eta = rsl
-    card = f"## RL training\n\n- iteration **{iteration} / {total}**\n"
-    if reward is not None:
-        card += f"- mean reward **{reward:.2f}**\n"
-    if elapsed is not None:
-        card += f"- elapsed {elapsed}" + (f", ETA **{eta}**\n" if eta else "\n")
+    card = f"## RL training\n\n- iteration **{rsl.iteration} / {rsl.total}**\n"
+    if rsl.reward is not None:
+        card += f"- mean reward **{rsl.reward:.2f}**\n"
+    if rsl.elapsed is not None:
+        card += f"- elapsed {rsl.elapsed}" + (
+            f", ETA **{rsl.eta}**\n" if rsl.eta else "\n"
+        )
     card += f"- GPU {gpu}\n"
     rr.log(
         f"{name}/status",
@@ -248,7 +274,10 @@ STAGE = re.compile(
 
 
 def parse_poll(
-    rr: Any, name: str, raw: str, state: tuple
+    rr: Any,
+    name: str,
+    raw: str,
+    state: tuple[set[str], set[tuple[str, int]], dict[str, None]],
 ) -> tuple[str, str, Any, str, int]:
     """One ssh poll's lines into Rerun: sentinel-prefixed arm/GPU/eval
     lines, stages, per-trial eval records, and train metrics."""
@@ -304,7 +333,7 @@ def parse_poll(
         # "which step are we at right now" (the operator's ask).
         rr.log(f"{name}/train/step", rr.Scalars(float(metrics.step)))
         for key, value in metrics.metrics.items():
-            rr.log(f"{name}/train/{key}", rr.Scalars(value))
+            rr.log(f"{name}/train/{METRIC_NAMES.get(key, key)}", rr.Scalars(value))
     return arm, gpu, latest, eval_progress, last_step
 
 
@@ -402,7 +431,7 @@ def main() -> int:
         help="the run's total training steps, for the card's progress and ETA",
     )
     parser.add_argument("--key", type=Path, default=Path.home() / ".ssh" / "id_ed25519")
-    parser.add_argument("--address", default="rerun+http://127.0.0.1:9876/proxy")
+    parser.add_argument("--address", default=STUDIO_ADDRESS)
     parser.add_argument(
         "--records",
         default="",
@@ -413,10 +442,18 @@ def main() -> int:
     import rerun as rr  # noqa: PLC0415 - viz extra
 
     user_host, _, port = args.door.rpartition(":")
+    username, _, host = user_host.partition("@")
+    # The shared ssh options (transfer.Ssh): keepalive included — a
+    # hand-rolled argv without ServerAliveInterval is why an overnight
+    # feed could silently drop (review 2026-09-01).
+    door = SshEndpoint(
+        host=host, port=int(port), username=username, command=args.door
+    )
+    poll_argv = ssh_argv(door, args.key)
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
-    layout_sent: tuple | None = None
+    layout_sent: tuple[str, bool] | None = None
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
@@ -429,14 +466,7 @@ def main() -> int:
         try:
             raw = subprocess.run(
                 [
-                    "ssh",
-                    "-p",
-                    port,
-                    "-i",
-                    str(args.key),
-                    "-o",
-                    "ConnectTimeout=15",
-                    user_host,
+                    *poll_argv,
                     f"tr '\\r' '\\n' < {args.log} 2>/dev/null | tail -c 262144; "
                     f"echo; tr '\\r' '\\n' < {args.log} 2>/dev/null | "
                     "grep -a '== training' | tail -1 | sed 's/^/RQARM /'; "
@@ -496,14 +526,14 @@ def main() -> int:
             args.name,
             layout_sent,
             (
-                rsl is not None and rsl[0] is not None,
+                rsl is not None,
                 latest is not None or last_step >= 0 or bool(eval_progress),
             ),
         )
-        if rsl is not None and rsl[0] is not None:
+        if rsl is not None:
             write_rl_card(rr, args.name, rsl, gpu)
         log_gpu(rr, args.name, gpu)
-        if rsl is None or rsl[0] is None:
+        if rsl is None:
             # The lerobot-style card only when no rsl-rl blocks are in
             # the log - it was clobbering the RL card every poll.
             last_seen = status_card(

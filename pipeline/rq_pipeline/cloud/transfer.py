@@ -45,7 +45,14 @@ class Rsync:
 
 
 class Ssh:
-    OPTIONS = ("-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30")
+    OPTIONS = (
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ConnectTimeout=15",
+    )
 
 
 def ssh_argv(door: SshEndpoint, key: Path | None = None) -> list[str]:

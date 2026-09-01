@@ -40,8 +40,7 @@ from rq_pipeline.tasks.components import (  # noqa: E402
     compose,
 )
 from rq_pipeline.tasks.scene import NominalOptions  # noqa: E402
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 CUBE_QPOS = 15  # free joint: cube x, y, z
 SIM_HZ = round(1 / NominalOptions.TIMESTEP)

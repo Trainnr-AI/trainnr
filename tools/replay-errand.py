@@ -26,8 +26,7 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
     compose_rig,
     salute_pose,
 )
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 parser.add_argument("wire", type=Path, help="the .wire recording")

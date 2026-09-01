@@ -81,6 +81,7 @@ from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
 from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
     CHAIN_LOG_FILE,
     GPU_LOG_FILE,
+    METRIC_NAMES,
     RUN_MANIFEST_FILE,
     TRAINER_CONFIG,
     FileFollower,
@@ -137,15 +138,6 @@ class Timelines:
     WALL = "wall"
     SIM = "sim_time"
     VIDEO = "video_time"
-
-
-# LeRobot's abbreviations, spelled out for the panel.
-METRIC_NAMES = {
-    "grdn": "grad_norm",
-    "smp/s": "samples_per_s",
-    "updt_s": "update_s",
-    "data_s": "dataloading_s",
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -390,8 +382,7 @@ class Watcher:
     ) -> None:
         import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
         from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: PLC0415
-
-        from _rig3d import RigMirror  # noqa: PLC0415
+        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
         self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)

@@ -131,8 +131,7 @@ class PhysicsNarrator:
     def __init__(self, model: "mujoco.MjModel", task_name: str) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
-
-        from _rig3d import RigMirror  # noqa: PLC0415
+        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)

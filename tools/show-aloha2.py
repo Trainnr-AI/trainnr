@@ -46,8 +46,7 @@ from rq_pipeline.tasks.scene import (  # noqa: E402
     NominalOptions,
     RenderBudget,
 )
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 BUNDLE = BUNDLE_XML.parent
 OFFSET = [0.2, -0.7, 0.9, 0.0, -0.5, 0.3, 0.02] * 2

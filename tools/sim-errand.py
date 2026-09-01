@@ -28,8 +28,7 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
     compose_rig,
     salute_pose,
 )
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 
 def _mime_total_s() -> float:

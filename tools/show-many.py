@@ -58,8 +58,7 @@ from rq_pipeline.tasks.scene import (  # noqa: E402
     pin_nominal_options,
     set_render_budget,
 )
-
-from _rig3d import RigMirror  # noqa: E402
+from rq_pipeline.viz import RigMirror  # noqa: E402
 
 NEUTRAL_QPOS = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084, 0.0084] * 2
 PITCH = 1.6  # metres between world origins; the rig is 1.22 m wide
