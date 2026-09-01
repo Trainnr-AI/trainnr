@@ -44,6 +44,9 @@ SEEN_LINES_CAP = 20000
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RSL_ITER_RE = re.compile(r"Learning iteration +(\d+)/(\d+)")
 RSL_ROW_RE = re.compile(r"^\s*([A-Za-z_/ ]+[A-Za-z_/]): +(-?[0-9.]+)")
+# "Time elapsed: 0:40:04" / "ETA: 0:52:06" - H:MM:SS, not a scalar;
+# checked before RSL_ROW_RE, which would read them as the bare hour.
+RSL_CLOCK_RE = re.compile(r"^\s*(Time elapsed|ETA): +([0-9:]+)")
 RSL_SERIES = {
     "Mean reward": "rl/reward",
     "Mean episode length": "rl/episode_length",
@@ -51,102 +54,162 @@ RSL_SERIES = {
     "Mean surrogate loss": "rl/surrogate_loss",
     "Mean entropy loss": "rl/entropy_loss",
     "Mean action std": "rl/action_std",
+    "Total steps": "rl/total_steps",
     "Steps per second": "rl/steps_per_second",
+    "Collection time": "rl/collection_time",
+    "Learning time": "rl/learning_time",
+    "Iteration time": "rl/iteration_time",
+}
+RSL_FAMILIES = {
+    "Episode_Reward/": "rl/reward_terms/",
+    "Episode_Termination/": "rl/terminations/",
+    "Episode_Metrics/": "rl/metrics/",
+    "Metrics/": "rl/metrics/",
 }
 
 
-def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> tuple | None:
+def route_rsl_row(rr: Any, name: str, key: str, value: float) -> None:
+    """Every numeric row lands somewhere: known singles by their given
+    names, the families under theirs, anything unrecognised under
+    rl/more/ - the whitelist was silently dropping terminations and
+    the timing rows (2026-09-01)."""
+    if key in RSL_SERIES:
+        rr.log(f"{name}/{RSL_SERIES[key]}", rr.Scalars(value))
+        return
+    for prefix, family in RSL_FAMILIES.items():
+        if key.startswith(prefix):
+            path = f"{name}/{family}{key.removeprefix(prefix)}"
+            rr.log(path, rr.Scalars(value))
+            return
+    slug = key.lower().replace(" ", "_").replace("/", "_")
+    rr.log(f"{name}/rl/more/{slug}", rr.Scalars(value))
+
+
+def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> list | None:
     """rsl-rl blocks into Rerun: each unseen iteration's rows become
-    series on the `iteration` timeline (reward terms and metrics get
-    their own families). Returns the latest (iteration, total, reward)
-    for the status card."""
+    series on the `iteration` timeline. Returns the latest
+    [iteration, total, reward, elapsed, eta] for the status card."""
     latest = None
     iteration = None
-    total = 0
     emit = False
-    reward = None
     for line in ANSI_RE.sub("", raw).splitlines():
         header = RSL_ITER_RE.search(line)
         if header:
             iteration = int(header.group(1))
-            total = int(header.group(2))
             emit = iteration not in seen_iters
             if emit:
                 seen_iters.add(iteration)
                 rr.set_time("wall", timestamp=time.time())
                 rr.set_time("iteration", sequence=iteration)
-            latest = (iteration, total, reward)
+            latest = [iteration, int(header.group(2)), None, None, None]
             continue
-        if iteration is None or not emit:
+        if iteration is None:
+            continue
+        clock = RSL_CLOCK_RE.match(line)
+        if clock:
+            latest[3 if clock.group(1) == "Time elapsed" else 4] = clock.group(2)
             continue
         row = RSL_ROW_RE.match(line)
         if not row:
             continue
         key, value = row.group(1).strip(), float(row.group(2))
-        if key in RSL_SERIES:
-            rr.log(f"{name}/{RSL_SERIES[key]}", rr.Scalars(value))
-            if key == "Mean reward":
-                reward = value
-                latest = (iteration, total, reward)
-        elif key.startswith("Episode_Reward/"):
-            term = key.removeprefix("Episode_Reward/")
-            rr.log(f"{name}/rl/reward_terms/{term}", rr.Scalars(value))
-        elif key.startswith("Metrics/"):
-            metric = key.removeprefix("Metrics/")
-            rr.log(f"{name}/rl/metrics/{metric}", rr.Scalars(value))
+        if emit:
+            route_rsl_row(rr, name, key, value)
+        if key == "Mean reward":
+            latest[2] = value
     return latest
 
 
-def send_layout(rr: Any, name: str) -> None:
+def send_layout(rr: Any, name: str, rl: bool) -> None:
     """The feed names its own panes - reward front and centre, one
     view per series family - instead of the viewer's auto-layout,
     which panes whichever entities it notices first and buried
-    rl/reward entirely (2026-09-01)."""
+    rl/reward entirely (2026-09-01). Sent only once the first poll
+    has said which kind of run this is: rsl-rl runs get the rl/*
+    panes, lerobot-style runs get train/eval - never both, so no
+    pane sits empty for the run's whole life."""
     try:
         import rerun.blueprint as rrb  # noqa: PLC0415 - viz extra
 
-        rr.send_blueprint(
-            rrb.Blueprint(
-                rrb.Grid(
-                    rrb.TimeSeriesView(
-                        origin=f"{name}/rl/reward", name="reward"
-                    ),
-                    rrb.TimeSeriesView(
-                        origin=f"{name}/rl",
-                        name="losses",
-                        contents=[
-                            "$origin/value_loss",
-                            "$origin/surrogate_loss",
-                            "$origin/entropy_loss",
-                            "$origin/action_std",
-                        ],
-                    ),
-                    rrb.TimeSeriesView(
-                        origin=f"{name}/rl/reward_terms", name="reward terms"
-                    ),
-                    rrb.TimeSeriesView(
-                        origin=f"{name}/rl/metrics", name="metrics"
-                    ),
-                    rrb.TimeSeriesView(
-                        origin=f"{name}/rl",
-                        name="pace",
-                        contents=[
-                            "$origin/episode_length",
-                            "$origin/steps_per_second",
-                        ],
-                    ),
-                    rrb.TimeSeriesView(origin=f"{name}/gpu", name="gpu"),
-                    rrb.TextDocumentView(
-                        origin=f"{name}/status", name="status"
-                    ),
-                    rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
-                    rrb.TimeSeriesView(origin=f"{name}/eval", name="eval"),
+        if rl:
+            views = [
+                rrb.TimeSeriesView(origin=f"{name}/rl/reward", name="reward"),
+                rrb.TimeSeriesView(
+                    origin=f"{name}/rl",
+                    name="losses",
+                    contents=[
+                        "$origin/value_loss",
+                        "$origin/surrogate_loss",
+                        "$origin/entropy_loss",
+                        "$origin/action_std",
+                    ],
                 ),
-                collapse_panels=False,
-            )
+                rrb.TimeSeriesView(
+                    origin=f"{name}/rl/reward_terms", name="reward terms"
+                ),
+                rrb.TimeSeriesView(origin=f"{name}/rl/metrics", name="metrics"),
+                rrb.TimeSeriesView(
+                    origin=f"{name}/rl/terminations", name="terminations"
+                ),
+                rrb.TimeSeriesView(
+                    origin=f"{name}/rl",
+                    name="pace",
+                    contents=[
+                        "$origin/episode_length",
+                        "$origin/steps_per_second",
+                    ],
+                ),
+                rrb.TimeSeriesView(
+                    origin=f"{name}/rl",
+                    name="times",
+                    contents=[
+                        "$origin/collection_time",
+                        "$origin/learning_time",
+                        "$origin/iteration_time",
+                    ],
+                ),
+                rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more"),
+            ]
+        else:
+            views = [
+                rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
+                rrb.TimeSeriesView(origin=f"{name}/eval", name="eval"),
+            ]
+        views += [
+            rrb.TimeSeriesView(origin=f"{name}/gpu", name="gpu"),
+            rrb.TextDocumentView(origin=f"{name}/status", name="status"),
+        ]
+        rr.send_blueprint(
+            rrb.Blueprint(rrb.Grid(*views), collapse_panels=False)
         )
     except Exception as error:
         print(f"layout not sent: {error}")
+
+
+def write_rl_card(rr: Any, name: str, rsl: list, gpu: str) -> None:
+    """The rsl-rl run's 'right now' card."""
+    iteration, total, reward, elapsed, eta = rsl
+    card = f"## RL training\n\n- iteration **{iteration} / {total}**\n"
+    if reward is not None:
+        card += f"- mean reward **{reward:.2f}**\n"
+    if elapsed is not None:
+        card += f"- elapsed {elapsed}" + (f", ETA **{eta}**\n" if eta else "\n")
+    card += f"- GPU {gpu}\n"
+    rr.log(
+        f"{name}/status",
+        rr.TextDocument(card, media_type=rr.MediaType.MARKDOWN),
+        static=True,
+    )
+
+
+def log_gpu(rr: Any, name: str, gpu: str) -> None:
+    """The sentinel GPU line into utilization and memory series."""
+    if "%" not in gpu:
+        return
+    rr.set_time("wall", timestamp=time.time())
+    util, memory = (part.strip() for part in gpu.split(","))
+    rr.log(f"{name}/gpu/utilization", rr.Scalars(float(util.split()[0])))
+    rr.log(f"{name}/gpu/memory_gb", rr.Scalars(float(memory.split()[0]) / 1024.0))
 
 
 # Only a default: every run states its own budget with --steps.
@@ -326,8 +389,8 @@ def main() -> int:
     user_host, _, port = args.door.rpartition(":")
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)
-    send_layout(rr, args.name)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
+    layout_sent = False
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
@@ -402,24 +465,16 @@ def main() -> int:
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
         rsl = parse_rsl(rr, args.name, raw, seen_iters)
+        if not layout_sent:
+            if rsl is not None and rsl[0] is not None:
+                send_layout(rr, args.name, rl=True)
+                layout_sent = True
+            elif latest is not None or last_step >= 0 or eval_progress:
+                send_layout(rr, args.name, rl=False)
+                layout_sent = True
         if rsl is not None and rsl[0] is not None:
-            card = f"## RL training\n\n- iteration **{rsl[0]} / {rsl[1]}**\n"
-            if rsl[2] is not None:
-                card += f"- mean reward **{rsl[2]:.2f}**\n"
-            card += f"- GPU {gpu}\n"
-            rr.log(
-                f"{args.name}/status",
-                rr.TextDocument(card, media_type=rr.MediaType.MARKDOWN),
-                static=True,
-            )
-        if "%" in gpu:
-            rr.set_time("wall", timestamp=time.time())
-            util, memory = (part.strip() for part in gpu.split(","))
-            rr.log(f"{args.name}/gpu/utilization", rr.Scalars(float(util.split()[0])))
-            rr.log(
-                f"{args.name}/gpu/memory_gb",
-                rr.Scalars(float(memory.split()[0]) / 1024.0),
-            )
+            write_rl_card(rr, args.name, rsl, gpu)
+        log_gpu(rr, args.name, gpu)
         if rsl is None or rsl[0] is None:
             # The lerobot-style card only when no rsl-rl blocks are in
             # the log - it was clobbering the RL card every poll.
