@@ -228,10 +228,14 @@ class MJXWarpBackend:
         self._check_capacity(contacts)
         return np.asarray(states)
 
-    def stepper(self, initial_states: Any, steps: int) -> MJXBatchedStepper:
+    def stepper(self, initial_state: Any, steps: int) -> MJXBatchedStepper:
         """The batched stepping loop over the loaded model: the door the
-        vectorized env and a batched harness drive (see the class)."""
-        return MJXBatchedStepper(self, initial_states, steps)
+        vectorized env and a batched harness drive (see the class).
+
+        `initial_state` is (nbatch, nstate) here — the parameter name is
+        the `Engine` protocol's, which runtime_checkable isinstance can
+        never verify (it checks attribute presence, not signatures)."""
+        return MJXBatchedStepper(self, initial_state, steps)
 
     # ---- the programs, once per loaded model ---------------------------
 
@@ -377,7 +381,7 @@ class MJXBatchedStepper:
     recompiles. A step that touches the contact ceiling is refused."""
 
     def __init__(
-        self, backend: MJXWarpBackend, initial_states: Any, steps: int
+        self, backend: MJXWarpBackend, initial_state: Any, steps: int
     ) -> None:
         import jax.numpy as jnp  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
@@ -386,10 +390,10 @@ class MJXBatchedStepper:
             raise ValueError(f"steps must be positive, got {steps}")
         programs = backend._device()
         layout = programs.layout
-        initial = np.asarray(initial_states, dtype=float)
+        initial = np.asarray(initial_state, dtype=float)
         if initial.ndim != ROLLOUT_STATE_RANK or initial.shape[1] != layout.width:
             raise ValueError(
-                "MJX is a batched engine: initial_states must be "
+                "MJX is a batched engine: initial_state must be "
                 f"(nbatch, {layout.width}), got {initial.shape} - a single world "
                 "is row[None, :]"
             )
@@ -413,17 +417,18 @@ class MJXBatchedStepper:
 
         return np.asarray(self._data.sensordata)
 
-    def advance(self, controls: Any, substeps: int) -> None:
-        """Hold `controls` (nbatch, nu) for `substeps` physics steps —
-        fewer at the end of the budget, never more."""
+    def advance(self, control: Any, substeps: int) -> None:
+        """Hold `control` (nbatch, nu) for `substeps` physics steps —
+        fewer at the end of the budget, never more. The parameter name
+        is the `Stepper` protocol's (see `stepper` above)."""
         import numpy as np  # noqa: PLC0415
 
         if substeps <= 0:
             raise ValueError(f"substeps must be positive, got {substeps}")
-        control = np.asarray(controls, dtype=float)
+        control = np.asarray(control, dtype=float)
         if control.shape != (self.nbatch, self.model.nu):
             raise ValueError(
-                f"controls must be ({self.nbatch}, {self.model.nu}), "
+                f"control must be ({self.nbatch}, {self.model.nu}), "
                 f"got {control.shape}"
             )
         if self.done:

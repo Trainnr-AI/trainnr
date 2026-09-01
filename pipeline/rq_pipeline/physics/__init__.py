@@ -9,11 +9,16 @@ Engines register by name (`registry.py`, the `rq_pipeline.engines`
 entry-point group): `resolve("mujoco").build()`.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.physics.backend import ModelCounts
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.physics.registry import engines, resolve
+
+if TYPE_CHECKING:
+    # The real import stays lazy (__getattr__ below): the mjx extra is
+    # optional. This one is for the checker, which cannot see __getattr__.
+    from rq_pipeline.physics.mjx_backend import MJXWarpBackend
 
 __all__ = [
     "MJXWarpBackend",

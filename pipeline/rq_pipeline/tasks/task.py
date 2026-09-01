@@ -14,7 +14,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 from rq_pipeline.bundles.hashing import content_stamp
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol
@@ -34,7 +37,8 @@ class TaskSpec(Protocol):
     and a hash names; `trials` is the one field every spec declares, so an
     evaluation can be sized to its starts (`envs.robotiq.make_env`)."""
 
-    trials: int
+    @property
+    def trials(self) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -78,7 +82,9 @@ class Task:
         certificate cites beside the bundle's; None without a spec."""
         if self.task_spec is None:
             return None
-        return content_stamp(self.name, asdict(self.task_spec))
+        return content_stamp(
+            self.name, asdict(cast("DataclassInstance", self.task_spec))
+        )
 
     @property
     def control_hz(self) -> int:

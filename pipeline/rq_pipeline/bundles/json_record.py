@@ -13,7 +13,10 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, fields
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 T = TypeVar("T", bound="JsonRecord")
 
@@ -22,7 +25,9 @@ class JsonRecord:
     """Mixin for a dataclass: `write(path)` / `read(path)` as JSON."""
 
     def as_json(self) -> str:
-        return json.dumps(asdict(self), indent=1)
+        # The mixin contract (dataclass hosts only) is invisible to the
+        # checker; the casts state it once instead of per call site.
+        return json.dumps(asdict(cast("DataclassInstance", self)), indent=1)
 
     def write(self, path: Path) -> Path:
         path = Path(path)
@@ -33,5 +38,5 @@ class JsonRecord:
     @classmethod
     def read(cls: type[T], path: Path) -> T:
         raw: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
-        known = {field.name for field in fields(cls)}
+        known = {field.name for field in fields(cast("type[DataclassInstance]", cls))}
         return cls(**{key: value for key, value in raw.items() if key in known})

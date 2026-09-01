@@ -149,6 +149,8 @@ def _attempt(
         scene, damping_scale=dynamics["damping"], gain_scale=dynamics["gain"]
     )
     model = scene.compile()
+    if task.protocol.home is None:
+        raise ValueError("kitting demos need the protocol's home keyframe")
     initial = keyframe_state(model, task.protocol.home)
     draws: dict[str, Any] = {}
     for arm in PART_ORDER:

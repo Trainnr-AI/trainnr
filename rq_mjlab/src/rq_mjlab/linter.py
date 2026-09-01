@@ -18,6 +18,7 @@ marking, never a name heuristic.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass
 from typing import Any
@@ -39,6 +40,7 @@ class SilentNoOp(ValueError):
 def _event_terms(events_cfg: Any) -> dict[str, EventTermCfg]:
     if events_cfg is None:
         return {}
+    items: Iterable[tuple[str, Any]]
     if isinstance(events_cfg, dict):
         items = events_cfg.items()
     elif is_dataclass(events_cfg):

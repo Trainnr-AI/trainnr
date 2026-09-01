@@ -49,3 +49,10 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "PL", "RUF"]
+
+[tool.mypy]
+# Zero errors as of 2026-09-01; tools/verify.sh gates it. mjlab ships
+# py.typed and is checked; warp and mujoco do not.
+python_version = "3.12"
+ignore_missing_imports = true
+files = ["src/rq_mjlab"]

@@ -21,9 +21,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.plugins import load_group
+
+if TYPE_CHECKING:
+    from rq_pipeline.evaluate.harness import Engine
 
 ENTRY_POINT_GROUP = "rq_pipeline.engines"
 # The modules that register the built-in engines; imported by `engines()`
@@ -41,7 +44,7 @@ class EngineEntry:
     """A registered engine: its name, its constructor, one line about it."""
 
     name: str
-    build: Callable[..., Any]  # build(**kwargs) -> an Engine
+    build: Callable[..., Engine]  # build(**kwargs), kwargs are engine-specific
     doc: str
 
 

@@ -147,9 +147,10 @@ def pool_rank_correlations(
     heterogeneity_p = chi_squared_survival(heterogeneity_q, len(per_task) - 1)
 
     exact_ps = [entry.exact_p for entry in per_task]
-    if all(p is not None for p in exact_ps):
-        fisher_statistic = -2.0 * sum(log(p) for p in exact_ps)
-        combined_exact_p = chi_squared_survival(fisher_statistic, 2 * len(exact_ps))
+    known_ps = [p for p in exact_ps if p is not None]
+    if len(known_ps) == len(exact_ps):
+        fisher_statistic = -2.0 * sum(log(p) for p in known_ps)
+        combined_exact_p = chi_squared_survival(fisher_statistic, 2 * len(known_ps))
     else:
         combined_exact_p = None
 

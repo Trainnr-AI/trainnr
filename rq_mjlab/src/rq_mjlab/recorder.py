@@ -23,13 +23,18 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mujoco
 import torch
+
+if TYPE_CHECKING:
+    from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+    from rq_pipeline.viz import RigMirror
 from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
-DEFAULT_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"  # the Studio's server
+# One home for the Studio's ingest address (rq-pipeline is a hard dep).
+from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
 
 
 def _require_rerun() -> Any:
@@ -45,7 +50,7 @@ def _require_rerun() -> Any:
 class RerunRecorder(RecorderTerm):
     """Stream one watched world's training story to a Rerun endpoint."""
 
-    def __init__(self, cfg: RerunRecorderCfg, env: Any) -> None:
+    def __init__(self, cfg: RerunRecorderCfg, env: ManagerBasedRlEnv) -> None:
         super().__init__(cfg, env)
         rr = _require_rerun()
         self._rr = rr
@@ -69,10 +74,13 @@ class RerunRecorder(RecorderTerm):
             for j in range(mj_model.njnt)
             if int(mj_model.jnt_type[j]) not in scalar
         ]
-        self._qpos = None  # torch view, bound lazily (data exists post-init)
-        self._geom_views = None  # (xpos, xmat) torch views, bound lazily
-        self._render = None  # (mujoco.Renderer, MjData) for the camera leg
-        self._mirror = None
+        # Bound lazily: the batched data exists only post-init.
+        self._qpos: torch.Tensor | None = None
+        self._geom_views: tuple[torch.Tensor, torch.Tensor] | None = None
+        self._render: (
+            tuple[mujoco.Renderer, mujoco.MjData, mujoco.MjvCamera] | None
+        ) = None
+        self._mirror: RigMirror | None = None
         if cfg.mirror:
             from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
@@ -161,26 +169,27 @@ class RerunRecorder(RecorderTerm):
             rr.Scalars(float(env.episode_length_buf[watched])),
         )
         if self._mirror is not None:
-            self._log_mirror(watched)
+            self._log_mirror(self._mirror, watched)
         if (
             self._cfg.frames
             and int(env.common_step_counter) % self._cfg.frame_every == 0
         ):
             self._log_frame(watched)
 
-    def _log_mirror(self, watched: int) -> None:
+    def _log_mirror(self, mirror: RigMirror, watched: int) -> None:
         """One world's geoms out of the batched engine, into 3D."""
         if self._geom_views is None:
             from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
             data = self._env.sim.data
             self._geom_views = (as_torch(data.geom_xpos), as_torch(data.geom_xmat))
+        xpos_view, xmat_view = self._geom_views
 
         class _World:
-            geom_xpos = self._geom_views[0][watched].cpu().numpy()
-            geom_xmat = self._geom_views[1][watched].cpu().numpy()
+            geom_xpos = xpos_view[watched].cpu().numpy()
+            geom_xmat = xmat_view[watched].cpu().numpy()
 
-        self._mirror.log(_World(), path="world/robot")
+        mirror.log(_World(), path="world/robot")
         # A ground patch that FOLLOWS the robot: context underfoot
         # without an origin-pinned plane skewing the view's bounds.
         center = _World.geom_xpos.mean(axis=0)
@@ -228,7 +237,9 @@ class RerunRecorder(RecorderTerm):
                 )
                 return
         renderer, mj_data, camera = self._render
-        mj_data.qpos[:] = self._qpos[watched].cpu().numpy()
+        qpos_view = self._qpos
+        assert qpos_view is not None  # bound by record_post_step before any frame
+        mj_data.qpos[:] = qpos_view[watched].cpu().numpy()
         mujoco.mj_forward(model, mj_data)
         if model.nbody > 1:
             camera.lookat[:] = mj_data.xpos[1]

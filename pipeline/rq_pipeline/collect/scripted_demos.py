@@ -36,6 +36,14 @@ from rq_pipeline.physics.servo_dr import scale_servo_dynamics
 DrRanges = dict[str, tuple[float, float]]
 
 
+def _task_label(task: Any) -> str:
+    """The task's stamp when it has one, its name otherwise — what every
+    episode record carries as its `task` field."""
+    return str(
+        getattr(task, "stamp", None) or getattr(task, "name", type(task).__name__)
+    )
+
+
 def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     task_factory: Callable[[], Task],
     policy: Callable[[int, Any], Any],
@@ -95,7 +103,7 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
             )
             actions[tick] = control
             stepper.advance(control, interval)
-            if renderer is not None and tick % frame_every == 0:
+            if camera is not None and renderer is not None and tick % frame_every == 0:
                 renderer.update_scene(stepper.data, camera=camera.camera_name)
                 frames.append((tick * interval, renderer.render().copy()))
     finally:
@@ -153,8 +161,7 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
         return EpisodeManifest(
             seed=seed,
             attempt=attempt,
-            task=getattr(task, "stamp", None)
-            or getattr(task, "name", type(task).__name__),
+            task=_task_label(task),
             expert=expert,
             instrument=backend.instrument,
             dynamics=result.dynamics,
@@ -167,7 +174,7 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
 
     return press(
         out,
-        task=getattr(task, "stamp", None) or getattr(task, "name", type(task).__name__),
+        task=_task_label(task),
         expert=expert,
         instrument=backend.instrument,
         control_hz=control_hz,

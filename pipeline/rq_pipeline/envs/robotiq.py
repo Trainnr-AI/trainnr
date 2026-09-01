@@ -39,7 +39,7 @@ import functools
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import numpy as np
 
@@ -99,7 +99,10 @@ class RobotiqEnv(gym.Env):
     trial is spent.
     """
 
-    metadata: ClassVar[dict[str, Any]] = {
+    # gymnasium declares metadata as an INSTANCE variable with a class
+    # default (core.py), so this is a default, not a ClassVar — each env
+    # instance overwrites it with the task's real fps below.
+    metadata: dict[str, Any] = {  # noqa: RUF012 - gymnasium's own contract
         "render_modes": [RENDER_MODE],
         "render_fps": 0,  # per instance, from the task's control rate
     }

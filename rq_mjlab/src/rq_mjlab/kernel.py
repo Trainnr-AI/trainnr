@@ -75,7 +75,9 @@ class LawParams:
         return self.vin * self.kt / self.R
 
 
-def duty(law: LawParams, q: torch.Tensor, qd: torch.Tensor, target: torch.Tensor):
+def duty(
+    law: LawParams, q: torch.Tensor, qd: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:
     """The firmware P law's duty cycle in [-max_pwm, max_pwm]."""
     d = (target - q) * law.kp * law.error_gain * law.error_gain_ratio
     if law.max_current > 0:
@@ -85,7 +87,9 @@ def duty(law: LawParams, q: torch.Tensor, qd: torch.Tensor, target: torch.Tensor
     return torch.clamp(d, -law.max_pwm, law.max_pwm)
 
 
-def torque(law: LawParams, qd: torch.Tensor, duty_cycle: torch.Tensor):
+def torque(
+    law: LawParams, qd: torch.Tensor, duty_cycle: torch.Tensor
+) -> torch.Tensor:
     """The DC motor's torque from the applied voltage, back-EMF included."""
     return law.kt * law.vin * duty_cycle / law.R - law.kt**2 * qd / law.R
 

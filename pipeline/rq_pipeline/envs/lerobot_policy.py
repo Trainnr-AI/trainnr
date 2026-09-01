@@ -12,7 +12,7 @@ normalised grippers for the public checkpoints) stay with the rig
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,8 +27,9 @@ class LoadedPolicy:
     reset: Callable[[], None]  # before every episode: the chunk queue must not leak
     # raw env observation -> the whole predicted chunk (chunk_size, nu): what
     # `evaluate.scheduler.ActionScheduler` executes on OUR horizon instead
-    # of the checkpoint's own n_action_steps.
-    predict: Callable[[dict[str, Any]], Any]
+    # of the checkpoint's own n_action_steps. Mapping, not dict: the
+    # scheduler's ChunkPolicy contract.
+    predict: Callable[[Mapping[str, Any]], Any]
 
     def as_chunk_policy(self) -> ChunkPolicy:
         return ChunkPolicy(name=self.name, predict=self.predict, reset=self.reset)
@@ -74,7 +75,7 @@ def load_policy(path: Path | str, *, instruction: str, device: str) -> LoadedPol
         preprocessor_overrides={"device_processor": {"device": device}},
     )
 
-    def batch_of(observation: dict[str, Any]) -> Any:
+    def batch_of(observation: Mapping[str, Any]) -> Any:
         batch = preprocess_observation(dict(observation))
         batch["task"] = [instruction]
         return preprocessor(batch)
@@ -84,7 +85,7 @@ def load_policy(path: Path | str, *, instruction: str, device: str) -> LoadedPol
             action = postprocessor(policy.select_action(batch_of(observation)))
         return action.squeeze(0).cpu().numpy()
 
-    def predict(observation: dict[str, Any]) -> Any:
+    def predict(observation: Mapping[str, Any]) -> Any:
         """The whole chunk, (chunk_size, nu), de-normalised: LeRobot's
         postprocessor takes a (B, T, dim) chunk and equals its per-step
         result exactly (measured on the T5 checkpoint, 2026-08-27)."""

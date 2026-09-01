@@ -54,7 +54,15 @@ step "ruff lint (pipeline)"    "(cd pipeline && uvx ruff check .)"
 # 2026-08-27, no gate that ran it — 63 findings had accrued.
 step "ruff format (tools)"     "(cd pipeline && uvx ruff format --check ../tools)"
 step "ruff lint (tools)"       "(cd pipeline && uvx ruff check ../tools)"
+# rq_mjlab had NO Python gate until 2026-09-01 — its lint, types and
+# tests ran only when somebody remembered. Now under the same roof.
+step "ruff lint (rq_mjlab)"    "(cd rq_mjlab && uvx ruff check src tests)"
+# Types, both packages: zero errors is the baseline (2026-09-01); the
+# config (and the untyped-C-extension ignores) lives in each pyproject.
+step "mypy (pipeline)"         "(cd pipeline && uvx mypy rq_pipeline)"
+step "mypy (rq_mjlab)"         "(cd rq_mjlab && uvx mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
+step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
 step "simulator solves the U-trap" \
      "cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
 

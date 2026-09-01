@@ -18,6 +18,10 @@ from collections.abc import Sequence
 from typing import Any
 
 RIG_PATH = "world/rig"  # where every rig tool logs the mirror
+# The Studio's Rerun ingest door — the ONE home for the address every
+# feed and recorder connects to (the Rust shell binds the same port;
+# crates/studio-shell/src/main.rs stays a documented mirror).
+STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
 
 
 def mat_to_xyzw(flat: Any) -> Any:
@@ -68,8 +72,11 @@ class RigMirror:
     ) -> None:
         import mujoco  # noqa: PLC0415 - sim extra
 
-        self.geoms, self.half_sizes, self.colors = [], [], []
-        self.meshes = []  # (geom id, entity name, vertices, faces, rgba)
+        self.geoms: list[int] = []  # geom ids drawn as boxes
+        self.half_sizes: list[list[float]] = []
+        self.colors: list[list[int]] = []  # rgb per box geom
+        # (geom id, entity name, vertices, faces, rgba)
+        self.meshes: list[tuple[int, str, Any, Any, list[int]]] = []
         self._mesh_logged: set[str] = set()
         for g in range(model.ngeom):
             name = model.geom(g).name
