@@ -131,7 +131,21 @@ class PhysicsNarrator:
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)
         rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
-        self.mirror = RigMirror(model, model_colors=True)
+        # Narrate ONE robot even when the scene holds a flock: rr.log
+        # BLOCKS when the channel floods, and twenty ducks' series plus
+        # 700 mesh transforms per tick froze the whole sim loop inside
+        # a log call ("Sender has been blocked", 2026-09-01). The
+        # pixels show the flock; the twin narrates specimen zero.
+        flock = sorted(
+            {
+                model.joint(j).name.split("/")[0]
+                for j in range(model.njnt)
+                if "/" in (model.joint(j).name or "")
+            }
+        )
+        self._narrated = flock[0] + "/" if len(flock) > 1 else ""
+        others = tuple(f"{prefix}/" for prefix in flock[1:])
+        self.mirror = RigMirror(model, model_colors=True, skip_prefixes=others)
 
         # Hinges and slides get scalar series; a free joint's 7-wide qpos
         # is pose, not a signal, and the mirror already shows it.
@@ -147,9 +161,12 @@ class PhysicsNarrator:
             )
             for j in range(model.njnt)
             if int(model.jnt_type[j]) in scalar_types
+            and (model.joint(j).name or "").startswith(self._narrated)
         ]
         self.actuators = [
-            (model.actuator(a).name or f"actuator{a}", a) for a in range(model.nu)
+            (model.actuator(a).name or f"actuator{a}", a)
+            for a in range(model.nu)
+            if (model.actuator(a).name or "").startswith(self._narrated)
         ]
         rr.send_blueprint(self._blueprint(rrb))
 

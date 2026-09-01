@@ -64,6 +64,7 @@ class RigMirror:
         skip: Sequence[str] = ("floor",),
         model_colors: bool = False,
         skip_groups: Sequence[int] = (),
+        skip_prefixes: Sequence[str] = (),
     ) -> None:
         import mujoco  # noqa: PLC0415 - sim extra
 
@@ -74,6 +75,8 @@ class RigMirror:
             name = model.geom(g).name
             if name in skip or int(model.geom_group[g]) in skip_groups:
                 continue
+            if any(name.startswith(prefix) for prefix in skip_prefixes):
+                continue  # e.g. every duck but the narrated one
             size = model.geom_size[g]
             kind = int(model.geom_type[g])
             # A geom with a material takes the material's colour (the
