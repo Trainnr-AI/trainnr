@@ -79,9 +79,15 @@ def main() -> int:
         # machine without CUDA that dies deep inside Warp; refuse here,
         # naming the flag (review 2026-09-01: this tool now runs on the
         # Mac too).
-        import warp as wp  # noqa: PLC0415
+        try:
+            import warp as wp  # noqa: PLC0415
 
-        if not wp.is_cuda_available():
+            cuda = wp.is_cuda_available()
+        except ImportError:
+            # No warp at all (plain sim extra): same refusal, not a
+            # traceback (second review, 2026-09-01).
+            cuda = False
+        if not cuda:
             print(
                 "no CUDA device: the default MJX impl is 'warp' (the GPU "
                 "instrument). Pass --impl jax to multiply on this machine, "

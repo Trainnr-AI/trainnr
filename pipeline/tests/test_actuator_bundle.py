@@ -193,6 +193,44 @@ class Sampling(unittest.TestCase):
         self.assertIn("q_offset", bundle["params"])  # it IS in the fit
         self.assertFalse(set(dynamics) & RIG_AND_FIRMWARE_PARAMS)
 
+    def test_deleting_the_checks_section_is_refused(self) -> None:
+        # checks left the content hash, which opened a tamper: DELETE the
+        # section and the rail flags vanish with the stamp still valid
+        # (second review, 2026-09-01). Required now.
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        del bundle["checks"]
+        with self.assertRaises(ValueError) as ctx:
+            verify(bundle)
+        self.assertIn("checks", str(ctx.exception))
+
+    def test_identified_intervals_over_rig_params_are_not_sampled(self) -> None:
+        # The exclusion must hold on BOTH paths: the first cut filtered
+        # only the fallback span, so a bundle DECLARING an interval for
+        # q_offset still had it sampled (second review, 2026-09-01).
+        import numpy as np  # noqa: PLC0415
+
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        bundle["uncertainty"] = {
+            "kt": {"low": 1.2, "high": 1.35},
+            "q_offset": {"low": -0.08, "high": -0.05},
+        }
+        bundle["stamp"] = _stamp(bundle)
+        dynamics, basis = sample_dynamics(bundle, np.random.default_rng(0))
+        self.assertEqual(basis, "identified-interval")
+        self.assertNotIn("q_offset", dynamics)
+        self.assertIn("kt", dynamics)
+
+    def test_a_zero_point_estimate_refuses_scaling(self) -> None:
+        # No committed bundle carries a zero param, so nothing exercised
+        # this raise until now (second review, 2026-09-01).
+        bundle = wrap("feetech_sts3215_7_4V", "m6")
+        bundle["params"]["friction_stribeck"] = 0.0
+        bundle["checks"] = run_checks(bundle["params"])
+        bundle["stamp"] = _stamp(bundle)
+        with self.assertRaises(ValueError) as ctx:
+            as_scales({"friction_stribeck": 0.01}, bundle)
+        self.assertIn("zero", str(ctx.exception))
+
     def test_scales_are_multipliers_of_the_point_estimates(self) -> None:
         bundle = self._with_uncertainty()
         scales = as_scales({"kt": bundle["params"]["kt"] * 1.05}, bundle)

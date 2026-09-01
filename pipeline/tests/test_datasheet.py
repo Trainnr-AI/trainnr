@@ -114,6 +114,18 @@ class ShardsAndAbsences(unittest.TestCase):
             self.assertIn("2 shards in this directory", page)
             self.assertNotIn("keep rate ≤", page)
 
+    def test_same_seed_shards_are_caught_by_the_attempt_restart(self) -> None:
+        # Two runs with the DEFAULT seed and disjoint episode ranges —
+        # the documented sharding pattern — collapse the seed signal;
+        # the attempt counter's restart is the boundary that survives
+        # (second review, 2026-09-01).
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, 0, press_manifest(3, 1.0))  # shard A ends at 3
+            write_manifest(root, 1, press_manifest(1, 1.0))  # shard B restarts
+            summary = summarize(root)
+            self.assertEqual(summary.shards, 2)
+
     def test_an_empty_basis_is_unstated_not_called_legacy(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

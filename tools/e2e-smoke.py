@@ -225,10 +225,14 @@ def demos(chain: Chain) -> None:
     # The batch's own datasheet (written by the press): its warnings go
     # into the chain log verbatim — surfaced, never smoothed over.
     sheet = summarize(chain.layout.demos)
+    rate = (
+        f"keep rate <= {sheet.keep_rate_bound:.0%}"
+        if sheet.shards == 1
+        else f"{sheet.shards} shards, no single keep-rate bound"
+    )
     chain.say(
         f"datasheet: {chain.layout.demos / DATASHEET_FILE} — "
-        f"{sheet.episodes} episodes, keep rate <= {sheet.keep_rate_bound:.0%}, "
-        f"bases {list(sheet.bases)}"
+        f"{sheet.episodes} episodes, {rate}, bases {list(sheet.bases)}"
     )
     for warning in sheet.warnings:
         chain.say(f"datasheet WARNING: {warning}")

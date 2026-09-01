@@ -83,6 +83,20 @@ class OneLawOneSpelling(unittest.TestCase):
         # third of the store, and the kernel had no field for it.
         self._assert_parity(UNDIRECTED)
 
+    def test_scalable_and_rig_params_are_disjoint_across_trees(self) -> None:
+        # The pipeline says "never jitter these"; SCALABLE says "draw
+        # these per world". One parameter sat in both lists once
+        # (error_gain_ratio — second review, 2026-09-01); this pin keeps
+        # the two trees' physics claims from contradicting again.
+        from rq_pipeline.robot.actuator_bundle import (  # noqa: PLC0415
+            RIG_AND_FIRMWARE_PARAMS,
+        )
+
+        from rq_mjlab.actuator import BamActuator  # noqa: PLC0415
+
+        overlap = set(BamActuator.SCALABLE) & RIG_AND_FIRMWARE_PARAMS
+        self.assertEqual(overlap, set(), f"both drawable and forbidden: {overlap}")
+
     def test_every_committed_bundle_builds_a_law(self) -> None:
         # The sweep the first pass lacked: a roster that refuses real
         # fits is an outage, not a safeguard (review 2026-09-01).

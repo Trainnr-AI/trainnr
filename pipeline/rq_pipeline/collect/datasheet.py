@@ -21,6 +21,7 @@ laptop; `statistics` does the arithmetic.
 
 from __future__ import annotations
 
+import itertools
 import json
 import statistics
 from dataclasses import dataclass, field
@@ -132,7 +133,19 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
 
     tasks, experts = distinct("task"), distinct("expert")
     instruments, bases = distinct("instrument"), distinct("basis")
-    shards = len({episode["seed"] for episode in normalized})
+    # Shards: distinct seeds AND attempt-counter restarts. Seeds alone
+    # collapse when N runs share the default seed with disjoint episode
+    # ranges (the documented sharding pattern), and legacy manifests may
+    # carry no seed at all — but each shard restarts its attempt counter,
+    # so a DECREASE in attempt number across the episode order is a
+    # shard boundary regardless (second review, 2026-09-01).
+    seeds = {episode["seed"] for episode in normalized if episode["seed"] is not None}
+    restarts = 1 + sum(
+        1
+        for previous, current in itertools.pairwise(normalized)
+        if current["attempt"] < previous["attempt"]
+    )
+    shards = max(len(seeds), restarts)
     warnings = [
         f"mixed {name} stamps: {values}"
         for name, values in (

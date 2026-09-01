@@ -76,6 +76,29 @@ class TheLoop(unittest.TestCase):
             self.assertEqual(list((Path(tmp) / "demos").iterdir()), [])
         self.assertIn("gave up after 3 attempts", said[-1])
 
+    def test_a_note_on_a_kept_attempt_reaches_the_log(self) -> None:
+        # Notes ride on KEPT attempts too (a retry story, a device
+        # disagreement); the first cut dropped them there (second
+        # review, 2026-09-01).
+        def noted_attempt(rng, *, frame_every):
+            result = scripted_attempts(True)(rng, frame_every=frame_every)
+            return type(result)(**{**result.__dict__, "note": "device disagreed"})
+
+        said: list[str] = []
+        with TemporaryDirectory() as tmp:
+            press(
+                Path(tmp) / "demos",
+                task="t@1",
+                expert="e@1",
+                instrument="i",
+                control_hz=50,
+                attempt_fn=noted_attempt,
+                episodes=1,
+                seed=7,
+                say=said.append,
+            )
+        self.assertTrue(any("KEEP (device disagreed)" in line for line in said))
+
     def test_the_sidecar_answers_the_arcs_unanswerable_questions(self) -> None:
         # Which task, which engine, which expert, which dynamics — the
         # per-episode record no dataset in the studied ecosystems

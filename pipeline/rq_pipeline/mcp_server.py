@@ -174,7 +174,12 @@ def describe_datasheet(demos_dir: str) -> dict[str, Any]:
     from rq_pipeline.collect.datasheet import summarize  # noqa: PLC0415
 
     summary = summarize(Path(demos_dir))
-    return {**asdict(summary), "keep_rate_bound": summary.keep_rate_bound}
+    return {
+        **asdict(summary),
+        # None across shards: each shard restarts its attempt counter,
+        # so no single bound exists (the render refuses too).
+        "keep_rate_bound": summary.keep_rate_bound if summary.shards == 1 else None,
+    }
 
 
 def describe_tasks() -> list[dict[str, Any]]:

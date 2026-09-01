@@ -86,6 +86,12 @@ PARAM_IDENTITY_KEYS = ("model", "actuator")
 # alpha = 9.999999997 (docs/e2e-research/57 §3). A fitted value within
 # RAIL_TOLERANCE of a bound earns a `near_search_bound` check flag — a
 # certification signal, not an error.
+# POLICY (second review, 2026-09-01): checks are derived, so they sit
+# outside the stamp — but verify recomputes them, which means changing
+# FLOOR/RAIL_TOLERANCE makes every committed bundle FAIL verify (a
+# measured 10/48 on a FLOOR bump) until `tools/actuator-bundle.py wrap
+# --all` refreshes the store. Deliberate: a loud fleet-wide refusal
+# with a named recovery beats silently re-stamping unchanged fits.
 OBSERVED_SEARCH_BOUNDS: Mapping[str, float] = {"alpha": 10.0}
 RAIL_TOLERANCE = 0.01  # fraction of the bound
 
@@ -95,13 +101,15 @@ FLOOR = 1e-9
 
 # Parameters that are NOT the motor's to randomise: q_offset and
 # command_delay are the identification RIG's (mount bias, bus latency —
-# BAM's own docs say so, 57 §7), and max_velocity/error_gain_ratio are
-# firmware registers. A declared span over "the params" must never
+# BAM's own docs say so, 57 §7), and max_velocity is the firmware's
+# internal rate-limit register. A span over "the params" must never
 # jitter these — jittering a bench constant is physically meaningless.
-# Shared with rq_mjlab's SCALABLE filter; one home (review 2026-09-01).
-RIG_AND_FIRMWARE_PARAMS = frozenset(
-    {"q_offset", "command_delay", "max_velocity", "error_gain_ratio"}
-)
+# error_gain_ratio is deliberately NOT here: it is a FITTED correction
+# (present in every params JSON with a fitted value) — the first cut
+# excluded it and contradicted rq_mjlab's SCALABLE list, which draws
+# it (second review, 2026-09-01). The two lists are pinned disjoint by
+# rq_mjlab/tests/test_kernel_parity.py.
+RIG_AND_FIRMWARE_PARAMS = frozenset({"q_offset", "command_delay", "max_velocity"})
 
 # Fields excluded from the content hash: the stamp itself; the wrap
 # metadata (WHEN it was wrapped must not change WHAT it is — the same
@@ -183,7 +191,7 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
             f"bundle carries unknown section(s) {unknown} — "
             f"the schema {SCHEMA} defines {sorted(SECTIONS)}"
         )
-    for required in ("schema", "params", "provenance", "stamp"):
+    for required in ("schema", "params", "provenance", "checks", "stamp"):
         if required not in bundle:
             raise ValueError(f"bundle is missing required section {required!r}")
     if bundle["schema"] != SCHEMA:
@@ -212,8 +220,9 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
     if "checks" in bundle and bundle["checks"] != run_checks(params):
         raise ValueError(
             "the bundle's stored checks disagree with the checks its params "
-            "earn under this verifier — the artifact was edited, or it was "
-            "checked under different constants; re-wrap it"
+            "earn under this verifier — the artifact was edited, or the "
+            "checker's constants changed; refresh the store with "
+            "tools/actuator-bundle.py wrap --all"
         )
 
     expected = _stamp(bundle)
@@ -277,10 +286,18 @@ def dr_ranges(bundle: Mapping[str, Any]) -> dict[str, tuple[float, float]]:
             "fallback_span to DECLARE a span instead, and the basis will "
             "say so"
         )
-    return {
+    ranges = {
         param: (float(region["low"]), float(region["high"]))
         for param, region in uncertainty.items()
+        if param not in RIG_AND_FIRMWARE_PARAMS
     }
+    if not ranges:
+        raise ValueError(
+            f"bundle {bundle.get('stamp', '<unstamped>')}'s uncertainty "
+            "section covers only rig/firmware parameters — nothing the "
+            "motor's dynamics may draw"
+        )
+    return ranges
 
 
 def sample_dynamics(

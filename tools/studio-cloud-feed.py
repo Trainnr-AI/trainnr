@@ -239,6 +239,7 @@ def main() -> int:
                     "grep -a '== training' | tail -1 | sed 's/^/RQARM /'; "
                     "nvidia-smi --query-gpu=utilization.gpu,memory.used "
                     "--format=csv,noheader | sed 's/^/RQGPU /'; "
+                    "echo RQPOLL_OK; "
                     f"tr '\\r' '\\n' < {args.log} 2>/dev/null | "
                     "grep -a 'Stepping through eval batches' | tail -1 "
                     "| sed 's/^/RQEVAL /'"
@@ -263,10 +264,11 @@ def main() -> int:
             )
             time.sleep(args.every * 5)
             continue
-        if not raw.strip():
-            # An empty poll is a DEAD LINK, not an idle trainer: rendering
-            # "?" for arm/GPU silently masked a refused connection
-            # (review 2026-09-01).
+        if "RQPOLL_OK" not in raw:
+            # The sentinel is echoed by the remote shell itself, so its
+            # absence means the LINK failed — not an idle trainer or a
+            # log that does not exist yet (which the first cut conflated
+            # with a dead link; second review, 2026-09-01).
             rr.log(
                 f"{args.name}/stage",
                 rr.TextLog("feed: ssh poll returned nothing (link down?)"),
