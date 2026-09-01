@@ -119,6 +119,7 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
     actions: Any,
     frames: Iterable[tuple[int, Any]],
     manifest: EpisodeSidecar,
+    camera_frames: dict[str, Iterable[tuple[int, Any]]] | None = None,
 ) -> Path:
     """One kept episode onto disk in `DemoLayout`; returns its directory.
 
@@ -139,10 +140,24 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
             DemoLayout.ACTIONS: np.asarray(actions, dtype=np.float32),
         },
     )
-    for tick, frame in frames:
+    flat = list(frames)
+    if flat and camera_frames:
+        raise ValueError("an episode stores flat frames OR per-camera frames, not both")
+    for tick, frame in flat:
         Image.fromarray(frame).save(
             frames_dir / DemoLayout.FRAME_FILE.format(tick=tick), quality=JPEG_QUALITY
         )
+    # The multi-camera layout: frames/<camera_key>/<tick>.jpg — one
+    # subdirectory per declared camera (docs/66 §4; the flat layout
+    # stays what every committed single-camera batch reads as).
+    for camera, cam_frames in (camera_frames or {}).items():
+        camera_dir = frames_dir / camera
+        camera_dir.mkdir(parents=True, exist_ok=True)
+        for tick, frame in cam_frames:
+            Image.fromarray(frame).save(
+                camera_dir / DemoLayout.FRAME_FILE.format(tick=tick),
+                quality=JPEG_QUALITY,
+            )
     manifest.write_to(episode_dir)
     return episode_dir
 

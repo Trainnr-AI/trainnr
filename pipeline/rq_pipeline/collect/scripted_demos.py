@@ -15,11 +15,18 @@ experimental design.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
+from rq_pipeline.collect.press import (
+    DemoBatch,
+    EpisodeManifest,
+    PressFeed,
+    PressResult,
+    press,
+)
+from rq_pipeline.evaluate.variations import Variation, VariationKeys, draw_random
 
 if TYPE_CHECKING:
     from numpy.random import Generator
@@ -44,6 +51,28 @@ def _task_label(task: Any) -> str:
     )
 
 
+def _apply_visuals(
+    model: Any, visuals: Sequence[Variation], rng: Generator
+) -> dict[str, Any]:
+    """Draw every visual knob from `rng` and write it onto the compiled
+    model through the engine's appliers — what a knob DOES has one home
+    (physics/variations.py, the same appliers evaluation sweeps); the
+    press only draws and records. Returns the drawn values, JSON-ready,
+    for the manifest."""
+    from rq_pipeline.physics.variations import (  # noqa: PLC0415 - sim extra
+        apply_key,
+        snapshot_all,
+    )
+
+    nominal = snapshot_all(model)
+    drawn: dict[str, Any] = {}
+    for variation in visuals:
+        value = draw_random(variation, rng)
+        apply_key(model, nominal, variation.key, value)
+        drawn[variation.key] = list(value) if isinstance(value, tuple) else value
+    return drawn
+
+
 def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     task_factory: Callable[[], Task],
     policy: Callable[[int, Any], Any],
@@ -52,6 +81,8 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     dr: DrRanges,
     basis: str,
     frame_every: int,
+    visuals: Sequence[Variation] = (),
+    visual_basis: str = "",
 ) -> PressResult:
     import mujoco  # noqa: PLC0415 - sim extra
     import numpy as np  # noqa: PLC0415
@@ -71,6 +102,7 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
         gain_scale=dynamics["gain"],
     )
     model = task.spec.compile()
+    drawn = _apply_visuals(model, visuals, rng) if visuals else {}
     backend = MuJoCoBackend()
     backend.load_model(model)
     protocol = task.protocol
@@ -85,13 +117,18 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
 
     # frame_every=0: no renderer at all — headless generation and the
     # unit tests (a GL context is a per-box concern, not the physics').
-    camera = task.cameras[0] if frame_every else None
-    renderer = (
-        mujoco.Renderer(model, height=camera.height, width=camera.width)
-        if camera
-        else None
-    )
-    frames: list[tuple[int, Any]] = []
+    # Otherwise EVERY declared camera renders (docs/66 §4: the task
+    # declares a rig, the dataset carries the rig), renderers shared
+    # across cameras of the same resolution.
+    cameras = task.cameras if frame_every else ()
+    renderers: dict[tuple[int, int], Any] = {}
+    for spec in cameras:
+        size = (spec.height, spec.width)
+        if size not in renderers:
+            renderers[size] = mujoco.Renderer(
+                model, height=spec.height, width=spec.width
+            )
+    camera_frames: dict[str, list[tuple[int, Any]]] = {c.key: [] for c in cameras}
     interval = protocol.control_interval
     ticks = protocol.steps // interval
     actions = np.empty((ticks, model.nu))
@@ -103,11 +140,15 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
             )
             actions[tick] = control
             stepper.advance(control, interval)
-            if camera is not None and renderer is not None and tick % frame_every == 0:
-                renderer.update_scene(stepper.data, camera=camera.camera_name)
-                frames.append((tick * interval, renderer.render().copy()))
+            if cameras and tick % frame_every == 0:
+                for spec in cameras:
+                    renderer = renderers[(spec.height, spec.width)]
+                    renderer.update_scene(stepper.data, camera=spec.camera_name)
+                    camera_frames[spec.key].append(
+                        (tick * interval, renderer.render().copy())
+                    )
     finally:
-        if renderer is not None:
+        for renderer in renderers.values():
             renderer.close()
     succeeded = bool(protocol.success(stepper.states, stepper.sensors))
     return PressResult(
@@ -119,7 +160,9 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
         stepper.states,
         stepper.sensors,
         actions,
-        frames,
+        visuals=drawn,
+        visual_basis=visual_basis if drawn else "",
+        camera_frames=camera_frames or None,
     )
 
 
@@ -135,6 +178,9 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
     seed: int,
     frame_every: int = 5,
     first_episode: int = 0,
+    visuals: Sequence[Variation] = (),
+    visual_basis: str = "",
+    feed: PressFeed | None = None,
     say: Callable[[str], None] = print,
 ) -> DemoBatch:
     """Press `episodes` kept demonstrations of the open-loop `policy`
@@ -151,10 +197,27 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
         raise ValueError(
             f"dr must declare exactly damping and gain ranges, got {sorted(dr)}"
         )
+    unknown = [v.key for v in visuals if v.name not in VariationKeys.VISUAL_NAMES]
+    if unknown:
+        raise ValueError(
+            f"visual DR draws only {sorted(VariationKeys.VISUAL_NAMES)} knobs "
+            f"(dynamics draws have their own contract, `dr`); got {unknown}"
+        )
+    if visuals and not visual_basis:
+        raise ValueError(
+            "visual DR needs a visual_basis naming where the ranges came from"
+        )
 
     def attempt_fn(rng: Generator, *, frame_every: int) -> PressResult:
         return _attempt(
-            task_factory, policy, rng, dr=dr, basis=basis, frame_every=frame_every
+            task_factory,
+            policy,
+            rng,
+            dr=dr,
+            basis=basis,
+            frame_every=frame_every,
+            visuals=visuals,
+            visual_basis=visual_basis,
         )
 
     def manifest_fn(result: PressResult, attempt: int) -> EpisodeManifest:
@@ -170,6 +233,8 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
             control_hz=control_hz,
             frame_every_control_ticks=frame_every,
             dynamics_basis=result.dynamics_basis,
+            visuals=result.visuals,
+            visual_basis=result.visual_basis,
         )
 
     return press(
@@ -184,5 +249,6 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
         frame_every=frame_every,
         first_episode=first_episode,
         manifest_fn=manifest_fn,
+        feed=feed,
         say=say,
     )

@@ -97,17 +97,38 @@ class GainScale:
 
 @applier(VariationKeys.DIFFUSE_SCALE)
 class DiffuseScale:
-    """Every light's diffuse level: `lights.diffuse_scale`."""
+    """Diffuse level, scaled — two hosts for one knob name:
+    `lights.diffuse_scale` scales every scene light, and
+    `headlight.diffuse_scale` scales MuJoCo's built-in camera-attached
+    headlight (`model.vis.headlight`). A scene with no `<light>`
+    elements is REFUSED on the lights host: scaling an empty array is
+    the silent no-op DR knob this stack exists to make impossible
+    (measured 2026-09-02 — the so101 scenes have nlight == 0 and all
+    their brightness is the headlight's)."""
 
     def snapshot(self, model: Any) -> Any:
-        return model.light_diffuse.copy()
+        return model.light_diffuse.copy(), model.vis.headlight.diffuse.copy()
 
     def restore(self, model: Any, nominal: Any) -> None:
-        model.light_diffuse[:] = nominal
+        lights, headlight = nominal
+        model.light_diffuse[:] = lights
+        model.vis.headlight.diffuse[:] = headlight
 
     def apply(self, model: Any, nominal: Any, host: str, value: Any) -> None:
+        lights, headlight = nominal
+        if host == VariationKeys.HEADLIGHT:
+            model.vis.headlight.diffuse[:] = headlight * float(value)
+            return
         _expect_host(host, VariationKeys.LIGHTS, VariationKeys.DIFFUSE_SCALE)
-        model.light_diffuse[:] = nominal * float(value)
+        if len(lights) == 0:
+            raise ValueError(
+                f"{VariationKeys.LIGHTS}.{VariationKeys.DIFFUSE_SCALE} on a "
+                "model with no lights would scale nothing — this scene is lit "
+                "by the built-in headlight; draw "
+                f"{VariationKeys.HEADLIGHT}.{VariationKeys.DIFFUSE_SCALE} "
+                "instead"
+            )
+        model.light_diffuse[:] = lights * float(value)
 
 
 @applier(VariationKeys.MASS_SCALE)

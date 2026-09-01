@@ -50,11 +50,21 @@ class VariationKeys:
     JOINTS = "joints"
     ACTUATORS = "actuators"
     LIGHTS = "lights"
+    # MuJoCo's built-in camera-attached light (model.vis.headlight) —
+    # the ONLY light a scene without <light> elements has, and so the
+    # brightness knob that actually works there (measured 2026-09-02:
+    # the so101 scenes compile with nlight == 0).
+    HEADLIGHT = "headlight"
     DAMPING_SCALE = "damping_scale"
     GAIN_SCALE = "gain_scale"
     DIFFUSE_SCALE = "diffuse_scale"
     MASS_SCALE = "mass_scale"
     OFFSET_M = "offset_m"
+
+    # The purely-visual knobs — what a generation-time visual-DR spec
+    # may draw (docs/66 §4). collect/scripted_demos.py refuses the
+    # rest: dynamics draws have their own contract and their own basis.
+    VISUAL_NAMES = frozenset({DIFFUSE_SCALE, OFFSET_M})
 
     @staticmethod
     def key(host: str, name: str) -> str:
@@ -133,6 +143,22 @@ def draw(variation: Variation, trial: int, protocol_hash: str) -> Any:
     values = tuple(
         lo + _unit(protocol_hash, variation.key, trial, i) * (h - lo)
         for i, (lo, h) in enumerate(zip(sampler.low, sampler.high, strict=True))
+    )
+    return values[0] if len(values) == 1 else values
+
+
+def draw_random(variation: Variation, rng: Any) -> Any:
+    """The value one PRESS attempt sees, drawn from `rng` (a numpy
+    Generator) — generation wants the run seed's stream, where `draw`'s
+    trial-hash pairing is an evaluation contract. Sampler semantics
+    have ONE home either way: Choice picks a label, Uniform draws each
+    component of its box."""
+    sampler = variation.sampler
+    if isinstance(sampler, Choice):
+        return sampler.labels[int(rng.integers(len(sampler.labels)))]
+    values = tuple(
+        float(rng.uniform(lo, high))
+        for lo, high in zip(sampler.low, sampler.high, strict=True)
     )
     return values[0] if len(values) == 1 else values
 

@@ -38,6 +38,7 @@ from rq_pipeline.collect.kitting_export import Manifest
 from rq_pipeline.collect.press import (
     ATTEMPTS_PER_EPISODE,
     DemoBatch,
+    PressFeed,
     PressResult,
     Say,
     press,
@@ -80,6 +81,7 @@ def generate_demos(  # noqa: PLR0913 - every knob of the generator, named
     first_episode: int = 0,
     max_attempts: int | None = None,
     spec: KittingSpec = KITTING_SPEC,
+    feed: PressFeed | None = None,
     say: Say = print,
 ) -> DemoBatch:
     """Keep `episodes` referee-passing demonstrations under `out`, numbered
@@ -120,6 +122,7 @@ def generate_demos(  # noqa: PLR0913 - every knob of the generator, named
         frame_every=frame_every,
         first_episode=first_episode,
         max_attempts=max_attempts,
+        feed=feed,
         say=say,
     )
 

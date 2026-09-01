@@ -72,6 +72,11 @@ class DatasheetSummary:
     # restarts its own attempt counter.
     shards: int = 1
     warnings: tuple[str, ...] = field(default=())
+    # Visual draws (lighting, camera pose — docs/66 §4), spread per
+    # scalar knob or per vector component; empty for batches pressed
+    # without visual DR.
+    visuals: dict[str, DynamicsSpread] = field(default_factory=dict)
+    visual_bases: tuple[str, ...] = ()
 
     @property
     def keep_rate_bound(self) -> float:
@@ -94,6 +99,8 @@ def _normalize(raw: dict) -> dict:
             "basis": raw.get("dynamics_basis") or UNSTATED,
             "attempt": raw["attempt"],
             "retries": raw.get("retries", []),
+            "visuals": raw.get("visuals") or {},
+            "visual_basis": raw.get("visual_basis") or "",
         }
     # The kitting task's legacy Manifest: scales into a dynamics dict,
     # its declared span into a basis.
@@ -109,7 +116,26 @@ def _normalize(raw: dict) -> dict:
         "basis": f"caller-declared span ±{raw['dr_span']:g} (legacy kitting manifest)",
         "attempt": raw["attempt"],
         "retries": raw.get("retries", []),
+        "visuals": {},
+        "visual_basis": "",
     }
+
+
+def _fold_visuals(
+    normalized: list[dict],
+) -> tuple[dict[str, list[float]], tuple[str, ...]]:
+    """Visual draws across the batch — vector draws (a camera offset)
+    spread per component — and the bases they were drawn under."""
+    visual_draws: dict[str, list[float]] = {}
+    for episode in normalized:
+        for key, value in episode["visuals"].items():
+            if isinstance(value, (list, tuple)):
+                for i, component in enumerate(value):
+                    visual_draws.setdefault(f"{key}[{i}]", []).append(float(component))
+            else:
+                visual_draws.setdefault(key, []).append(float(value))
+    bases = tuple(sorted({e["visual_basis"] for e in normalized if e["visuals"]}))
+    return visual_draws, bases
 
 
 def summarize(demos_dir: str | Path) -> DatasheetSummary:
@@ -127,6 +153,7 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
     for episode in normalized:
         for param, value in episode["dynamics"].items():
             draws.setdefault(param, []).append(float(value))
+    visual_draws, visual_bases = _fold_visuals(normalized)
 
     def distinct(key: str) -> tuple[str, ...]:
         return tuple(sorted({episode[key] for episode in normalized}))
@@ -157,6 +184,10 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
     ]
     if len(bases) > 1:
         warnings.append(f"mixed dynamics bases: {bases}")
+    if len(visual_bases) > 1:
+        warnings.append(f"mixed visual bases: {visual_bases}")
+    if visual_draws and any(not e["visuals"] for e in normalized):
+        warnings.append("visual draws on some episodes only (mixed batch)")
     for name, values in (
         ("task", tasks),
         ("instrument", instruments),
@@ -187,6 +218,8 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
         retries_total=sum(len(episode["retries"]) for episode in normalized),
         shards=shards,
         warnings=tuple(warnings),
+        visuals={key: DynamicsSpread.of(vals) for key, vals in visual_draws.items()},
+        visual_bases=visual_bases,
     )
 
 
@@ -226,6 +259,20 @@ def render(summary: DatasheetSummary) -> str:
         f"| {param} | {s.low:.4g} | {s.mean:.4g} | {s.high:.4g} |"
         for param, s in sorted(summary.dynamics.items())
     ]
+    if summary.visuals:
+        lines += [
+            "",
+            "## Visual draws",
+            "",
+            f"Basis: {', '.join(summary.visual_bases)}",
+            "",
+            "| knob | low | mean | high |",
+            "|---|---|---|---|",
+        ]
+        lines += [
+            f"| {key} | {s.low:.4g} | {s.mean:.4g} | {s.high:.4g} |"
+            for key, s in sorted(summary.visuals.items())
+        ]
     if summary.warnings:
         lines += ["", "## Warnings", ""]
         lines += [f"- {warning}" for warning in summary.warnings]

@@ -71,6 +71,15 @@ class PressResult:
     actions: NDArray | None = None
     frames: list[tuple[int, NDArray]] | None = None
     note: str = ""
+    # Generation-time visual draws (lighting, camera pose — keys the
+    # engine's appliers know; docs/66 §4) and where their ranges came
+    # from. Empty when the adapter drew none.
+    visuals: dict[str, Any] = field(default_factory=dict)
+    visual_basis: str = ""
+    # Frames per camera key, for adapters that render the task's whole
+    # declared rig; `frames` stays the single-camera path (kitting's
+    # committed layout).
+    camera_frames: dict[str, list[tuple[int, NDArray]]] | None = None
 
 
 class AttemptFn(Protocol):
@@ -111,6 +120,8 @@ class EpisodeManifest(JsonRecord):
     dynamics_basis: str = ""
     action_semantics: str = "commanded actuator positions, ctrl order"
     verdict: str = "success (task referee)"
+    visuals: dict[str, Any] = field(default_factory=dict)
+    visual_basis: str = ""
 
     def write_to(self, episode_dir: Path) -> Path:
         return self.write(Path(episode_dir) / DemoLayout.MANIFEST_FILE)
@@ -142,6 +153,19 @@ class DemoBatch:
         return self.first_episode + self.kept - 1
 
 
+class PressFeed(Protocol):
+    """Where a press run streams (docs/66 §0: everything that happens
+    streams to the Studio). The loop reports every attempt and the
+    final accounting; what listens — the Studio via
+    `collect/press_feed.py`, a test's list — is the caller's choice."""
+
+    def attempt(
+        self, attempts: int, kept: int, wanted: int, result: PressResult
+    ) -> None: ...
+
+    def done(self, batch: DemoBatch) -> None: ...
+
+
 def press(  # noqa: PLR0913 - every knob of the loop, named
     out: Path,
     *,
@@ -157,6 +181,7 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
     max_attempts: int | None = None,
     attempts_per_episode: int = ATTEMPTS_PER_EPISODE,
     manifest_fn: ManifestFn | None = None,
+    feed: PressFeed | None = None,
     say: Say = print,
 ) -> DemoBatch:
     """Keep `episodes` referee-passing demonstrations under `out`,
@@ -185,6 +210,8 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
                 control_hz=control_hz,
                 frame_every_control_ticks=frame_every,
                 dynamics_basis=result.dynamics_basis,
+                visuals=result.visuals,
+                visual_basis=result.visual_basis,
             )
 
     limit = attempts_per_episode * episodes if max_attempts is None else max_attempts
@@ -203,6 +230,8 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
             f"attempt {attempts}: {verdict} ({dynamics}, retries {len(result.retries)})"
         )
         if not result.succeeded:
+            if feed is not None:
+                feed.attempt(attempts, kept, episodes, result)
             continue
         write_episode(
             out,
@@ -211,9 +240,12 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
             sensors=result.sensors,
             actions=result.actions,
             frames=result.frames or [],
+            camera_frames=result.camera_frames,
             manifest=manifest_fn(result, attempts),
         )
         kept += 1
+        if feed is not None:
+            feed.attempt(attempts, kept, episodes, result)
 
     if kept:
         # The batch describes itself before anyone asks (docs/
@@ -222,6 +254,8 @@ def press(  # noqa: PLR0913 - every knob of the loop, named
 
         say(f"datasheet -> {write_datasheet(out)}")
     batch = DemoBatch(out, episodes, kept, attempts, first_episode, expert, task)
+    if feed is not None:
+        feed.done(batch)
     say(
         f"kept {kept}/{attempts} episodes -> {out} "
         f"(episodes {first_episode}..{batch.last_episode})"

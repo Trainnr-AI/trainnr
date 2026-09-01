@@ -24,6 +24,7 @@ from _lab import PREVIEW_EVERY_TICKS, bootstrap
 bootstrap()
 
 from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
+from rq_pipeline.collect.press_feed import StudioPressFeed  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +53,11 @@ def parse_args() -> argparse.Namespace:
         " and seeds fill ONE batch directory in parallel",
     )
     parser.add_argument(
+        "--no-studio",
+        action="store_true",
+        help="do not stream this run to the Studio (docs/66 §0 streams by default)",
+    )
+    parser.add_argument(
         "--dr-span",
         type=float,
         default=DR_SPAN,
@@ -63,6 +69,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    def say(text: str) -> None:
+        print(text, file=sys.stderr, flush=True)
+
+    # docs/66 §0: everything that happens streams to the Studio -- the
+    # press run is watchable by default, opted out per run.
+    feed = None if args.no_studio else StudioPressFeed.connect(args.out.name, say=say)
     batch = generate_demos(
         args.out,
         episodes=args.episodes,
@@ -71,7 +84,8 @@ def main() -> None:
         frame_every=args.frame_every,
         first_episode=args.first_episode,
         max_attempts=args.max_attempts,
-        say=lambda text: print(text, file=sys.stderr, flush=True),
+        feed=feed,
+        say=say,
     )
     if not batch.complete:
         sys.exit(1)

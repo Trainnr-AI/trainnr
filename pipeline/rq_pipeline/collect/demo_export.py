@@ -34,7 +34,22 @@ from rq_pipeline.protocol import RGB_CHANNELS
 if TYPE_CHECKING:
     from rq_pipeline.tasks.task import Task
 
-__all__ = ["episode_dirs", "export_demos", "guard_constant_dims"]
+__all__ = [
+    "episode_camera_keys",
+    "episode_dirs",
+    "export_demos",
+    "guard_constant_dims",
+]
+
+
+def episode_camera_keys(episode_dir: Path) -> tuple[str, ...]:
+    """The cameras a pressed episode stored: subdirectory names under
+    `frames/` (the multi-camera layout, docs/66 §4), or `()` for the
+    legacy flat single-camera layout every committed batch uses."""
+    frames_dir = Path(episode_dir) / DemoLayout.FRAMES_DIR
+    if not frames_dir.is_dir():
+        return ()
+    return tuple(sorted(p.name for p in frames_dir.iterdir() if p.is_dir()))
 
 
 def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
@@ -123,25 +138,49 @@ def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
         {getattr(m, "dynamics_basis", None) for m in manifests},
         "the dynamics basis",
     )
+    # Same rule for the visual ranges (docs/66 §4): the DRAWS should
+    # differ per episode — that is the point — but where the ranges
+    # came from must be one story per dataset.
+    _one(
+        {getattr(m, "visual_basis", "") or None for m in manifests},
+        "the visual basis",
+    )
     if control_hz % frame_every:
         raise ValueError(
             f"{control_hz} Hz is not divisible by frame_every={frame_every}"
         )
     fps = control_hz // frame_every
 
-    first_frame = next(
-        iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB)))
-    )
-    height, width = np.asarray(Image.open(first_frame)).shape[:2]
-    # The keys the env's plugin derives (envs/lerobot_plugin.py): training
-    # and evaluation observe the same thing under the same name.
-    image_key = f"{OBS_IMAGES}.{camera_key}"
-    features = {
-        image_key: {
+    # One layout per batch: every episode stores the same cameras
+    # (multi-camera subdirs) or all are flat single-camera batches,
+    # where the caller's `camera_key` names the one camera.
+    layout = _one({episode_camera_keys(ep) for ep in episodes}, "the camera layout")
+    cameras: list[str | None] = list(layout) or [None]
+
+    def frame_paths(episode: Path, camera: str | None) -> list[Path]:
+        base = episode / DemoLayout.FRAMES_DIR
+        if camera is not None:
+            base = base / camera
+        return sorted(base.glob(DemoLayout.FRAME_GLOB))
+
+    def image_key(camera: str | None) -> str:
+        # The keys the env's plugin derives (envs/lerobot_plugin.py):
+        # training and evaluation observe the same thing under the same
+        # name — the env renders EVERY declared camera by its key.
+        return f"{OBS_IMAGES}.{camera if camera is not None else camera_key}"
+
+    features: dict[str, Any] = {}
+    for camera in cameras:
+        sample = frame_paths(episodes[0], camera)
+        if not sample:
+            raise ValueError(f"{episodes[0]} has no frames for camera {camera!r}")
+        height, width = np.asarray(Image.open(sample[0])).shape[:2]
+        features[image_key(camera)] = {
             "dtype": "video" if use_videos else "image",
             "shape": (height, width, RGB_CHANNELS),
             "names": list(IMAGE_AXES),
-        },
+        }
+    features |= {
         OBS_STATE: {
             "dtype": "float32",
             "shape": (state_width,),
@@ -169,25 +208,20 @@ def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
                 f"{episode}: {len(sensors)} sensor rows are not a whole "
                 f"multiple of {len(actions)} action rows"
             )
-        frames = sorted((episode / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB))
-        if not frames:
-            raise ValueError(f"{episode} has no frames")
-        for frame_path in frames:
-            tick = int(frame_path.stem)  # the physics step the frame was taken at
-            dataset.add_frame(
-                {
-                    image_key: np.asarray(Image.open(frame_path)),
-                    OBS_STATE: np.asarray(
-                        sensors[tick, :state_width], dtype=np.float32
-                    ),
-                    ACTION: np.asarray(
-                        actions[tick // steps_per_control], dtype=np.float32
-                    ),
-                    "task": instruction,
-                }
-            )
+        ticks = _add_episode_frames(
+            dataset,
+            episode,
+            cameras=cameras,
+            frame_paths=frame_paths,
+            image_key=image_key,
+            sensors=sensors,
+            actions=actions,
+            state_width=state_width,
+            steps_per_control=steps_per_control,
+            instruction=instruction,
+        )
         dataset.save_episode()
-        frame_counts.append(len(frames))
+        frame_counts.append(ticks)
     if hasattr(dataset, "finalize"):
         dataset.finalize()
     if clamp_constant_dims:
@@ -206,6 +240,47 @@ def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     )
     provenance.write(Path(root) / PROVENANCE_FILE)
     return Path(root)
+
+
+def _add_episode_frames(  # noqa: PLR0913 - one episode's facts, each named
+    dataset: Any,
+    episode: Path,
+    *,
+    cameras: list[str | None],
+    frame_paths: Any,
+    image_key: Any,
+    sensors: Any,
+    actions: Any,
+    state_width: int,
+    steps_per_control: int,
+    instruction: str,
+) -> int:
+    """One episode's rows into the dataset; returns the frame count.
+    Every camera captured at the same physics steps, by construction in
+    the press — a disagreement is a broken batch."""
+    import numpy as np  # noqa: PLC0415 - the caller imported the train extra
+    from lerobot.utils.constants import ACTION, OBS_STATE  # noqa: PLC0415
+    from PIL import Image  # noqa: PLC0415
+
+    camera_paths = {camera: frame_paths(episode, camera) for camera in cameras}
+    if not all(camera_paths.values()):
+        raise ValueError(f"{episode} has no frames")
+    ticks = _one(
+        {tuple(int(p.stem) for p in paths) for paths in camera_paths.values()},
+        f"{episode.name}'s frame ticks across cameras",
+    )
+    for i, tick in enumerate(ticks):
+        row: dict[str, Any] = {
+            image_key(camera): np.asarray(Image.open(camera_paths[camera][i]))
+            for camera in cameras
+        }
+        row |= {
+            OBS_STATE: np.asarray(sensors[tick, :state_width], dtype=np.float32),
+            ACTION: np.asarray(actions[tick // steps_per_control], dtype=np.float32),
+            "task": instruction,
+        }
+        dataset.add_frame(row)
+    return len(ticks)
 
 
 def export_demos(
