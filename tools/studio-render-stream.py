@@ -446,7 +446,11 @@ def duck_scene() -> "object":
     # 2026-09-01). The preview is a museum stand: the trunk welded at
     # standing height, the limbs free to wave under the idle sinusoid.
     trunk = duck.worldbody.first_body()
-    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, 0.13])
+    # Measured 2026-09-01: at the zero pose every mesh vertex sits
+    # ~0.144 m ABOVE the root origin (onshape's export frame), so the
+    # stand goes just BELOW zero to put the soles on the floor; the
+    # weld's gravity sag rests the feet onto ground contact.
+    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, -0.008])
     frame.attach_body(trunk, "duck/", "")
     weld = scene.add_equality()
     weld.type = mujoco.mjtEq.mjEQ_WELD
