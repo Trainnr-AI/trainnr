@@ -177,6 +177,18 @@ class RerunRecorder(RecorderTerm):
             geom_xmat = self._geom_views[1][watched].cpu().numpy()
 
         self._mirror.log(_World(), path="world/robot")
+        # A ground patch that FOLLOWS the robot: context underfoot
+        # without an origin-pinned plane skewing the view's bounds.
+        center = _World.geom_xpos.mean(axis=0)
+        self._rr.log(
+            "world/ground",
+            self._rr.Boxes3D(
+                centers=[[float(center[0]), float(center[1]), -0.005]],
+                half_sizes=[[1.0, 1.0, 0.005]],
+                colors=[[70, 80, 90]],
+                fill_mode="solid",
+            ),
+        )
 
     def _log_frame(self, watched: int) -> None:
         """The watched world through MuJoCo's own renderer — the lit,

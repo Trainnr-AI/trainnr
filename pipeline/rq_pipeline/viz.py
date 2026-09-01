@@ -31,6 +31,19 @@ def mat_to_xyzw(flat: Any) -> Any:
     return [quat[1], quat[2], quat[3], quat[0]]
 
 
+def _bounding_half(mujoco: Any, kind: int, size: Any) -> list | None:
+    """A primitive geom's bounding half-sizes; None for planes."""
+    if kind == int(mujoco.mjtGeom.mjGEOM_PLANE):
+        return None
+    if kind == int(mujoco.mjtGeom.mjGEOM_BOX):
+        return size.tolist()
+    if kind == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
+        return [size[0], size[0], size[1]]
+    if kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE):
+        return [size[0], size[0], size[1] + size[0]]
+    return [size[0]] * 3
+
+
 class RigMirror:
     """Collects a model's geoms once; logs their poses per frame.
 
@@ -82,14 +95,14 @@ class RigMirror:
                     )
                 )
                 continue
-            if kind == int(mujoco.mjtGeom.mjGEOM_BOX):
-                half = size.tolist()
-            elif kind == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
-                half = [size[0], size[0], size[1]]
-            elif kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE):
-                half = [size[0], size[0], size[1] + size[0]]
-            else:
-                half = [size[0]] * 3
+            half = _bounding_half(mujoco, kind, size)
+            if half is None or max(half) <= 0.0:
+                # Planes (infinite; mirrored as a zero box they would
+                # ANCHOR the view's bounds at their own position, so a
+                # robot a meter away shrinks to a corner of the frame —
+                # measured on the duck, 2026-09-01) and zero-size geoms
+                # draw nothing; the caller supplies its own ground.
+                continue
             self.geoms.append(g)
             self.half_sizes.append(half)
             if model_colors:
