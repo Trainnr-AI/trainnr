@@ -434,29 +434,36 @@ def duck_scene() -> "object":
         rgba=[0.45, 0.5, 0.55, 1.0],
     )
     scene.worldbody.add_light(pos=[0.4, -0.4, 1.2], dir=[-0.3, 0.3, -1.0])
-    duck = mujoco.MjSpec.from_file(
-        str(repo / "robots" / "microduck" / "robot_walk.xml")
-    )
-    # Their training resets the base at z = 0.12-0.13 (the delta file);
-    # spawning at 0 puts the trunk inside the floor. And the bare XML
-    # cannot STAND: only the feet carry floor collision (1/1; the other
-    # collision meshes are self-collision-only, 2/2) and the kp=0.55
-    # placeholder servos - replaced by the BAM actuator at train time -
-    # are too weak to hold posture, so it tips and sinks (seen live,
-    # 2026-09-01). The preview is a museum stand: the trunk welded at
-    # standing height, the limbs free to wave under the idle sinusoid.
-    trunk = duck.worldbody.first_body()
-    # Measured 2026-09-01: at the zero pose every mesh vertex sits
-    # ~0.144 m ABOVE the root origin (onshape's export frame), so the
-    # stand goes just BELOW zero to put the soles on the floor; the
-    # weld's gravity sag rests the feet onto ground contact.
-    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, -0.008])
-    frame.attach_body(trunk, "duck/", "")
-    weld = scene.add_equality()
-    weld.type = mujoco.mjtEq.mjEQ_WELD
-    weld.objtype = mujoco.mjtObj.mjOBJ_BODY
-    weld.name1 = trunk.name  # attach already prefixed it (duck/...)
-    weld.name2 = "world"
+    # A flock on museum stands (the operator's ask, 2026-09-01). The
+    # bare XML cannot STAND: only the feet carry floor collision (the
+    # other collision meshes are self-collision-only, 2/2) and the
+    # kp=0.55 placeholder servos - replaced by the BAM actuator at
+    # train time - are too weak to hold posture. So each trunk welds at
+    # standing height, limbs free under the idle sinusoid. Stand
+    # height measured 2026-09-01: at the zero pose every mesh vertex
+    # sits ~0.144 m ABOVE the root origin (onshape's export frame), so
+    # the stand goes just below zero and the weld's sag rests the feet
+    # onto ground contact.
+    count, spacing = 20, 0.4
+    columns = 5
+    xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
+    for index in range(count):
+        duck = mujoco.MjSpec.from_file(xml)
+        trunk = duck.worldbody.first_body()
+        row, col = divmod(index, columns)
+        frame = scene.worldbody.add_frame(
+            pos=[
+                (col - (columns - 1) / 2) * spacing,
+                (row - (count / columns - 1) / 2) * spacing,
+                -0.008,
+            ]
+        )
+        frame.attach_body(trunk, f"duck{index}/", "")
+        weld = scene.add_equality()
+        weld.type = mujoco.mjtEq.mjEQ_WELD
+        weld.objtype = mujoco.mjtObj.mjOBJ_BODY
+        weld.name1 = trunk.name  # attach already prefixed it
+        weld.name2 = "world"
     return scene
 
 
