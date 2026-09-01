@@ -37,6 +37,66 @@ bootstrap()
 from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: E402
 
 SEEN_LINES_CAP = 20000
+
+# rsl-rl's console block (the RL trainers' format, vs lerobot's k:v
+# line): an ANSI-bold "Learning iteration N/M" header followed by
+# aligned "Name: value" rows, including per-term reward breakdowns.
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+RSL_ITER_RE = re.compile(r"Learning iteration +(\d+)/(\d+)")
+RSL_ROW_RE = re.compile(r"^\s*([A-Za-z_/ ]+[A-Za-z_/]): +(-?[0-9.]+)")
+RSL_SERIES = {
+    "Mean reward": "rl/reward",
+    "Mean episode length": "rl/episode_length",
+    "Mean value loss": "rl/value_loss",
+    "Mean surrogate loss": "rl/surrogate_loss",
+    "Mean entropy loss": "rl/entropy_loss",
+    "Mean action std": "rl/action_std",
+    "Steps per second": "rl/steps_per_second",
+}
+
+
+def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> tuple | None:
+    """rsl-rl blocks into Rerun: each unseen iteration's rows become
+    series on the `iteration` timeline (reward terms and metrics get
+    their own families). Returns the latest (iteration, total, reward)
+    for the status card."""
+    latest = None
+    iteration = None
+    total = 0
+    emit = False
+    reward = None
+    for line in ANSI_RE.sub("", raw).splitlines():
+        header = RSL_ITER_RE.search(line)
+        if header:
+            iteration = int(header.group(1))
+            total = int(header.group(2))
+            emit = iteration not in seen_iters
+            if emit:
+                seen_iters.add(iteration)
+                rr.set_time("wall", timestamp=time.time())
+                rr.set_time("iteration", sequence=iteration)
+            latest = (iteration, total, reward)
+            continue
+        if iteration is None or not emit:
+            continue
+        row = RSL_ROW_RE.match(line)
+        if not row:
+            continue
+        key, value = row.group(1).strip(), float(row.group(2))
+        if key in RSL_SERIES:
+            rr.log(f"{name}/{RSL_SERIES[key]}", rr.Scalars(value))
+            if key == "Mean reward":
+                reward = value
+                latest = (iteration, total, reward)
+        elif key.startswith("Episode_Reward/"):
+            term = key.removeprefix("Episode_Reward/")
+            rr.log(f"{name}/rl/reward_terms/{term}", rr.Scalars(value))
+        elif key.startswith("Metrics/"):
+            metric = key.removeprefix("Metrics/")
+            rr.log(f"{name}/rl/metrics/{metric}", rr.Scalars(value))
+    return latest
+
+
 # Only a default: every run states its own budget with --steps.
 DEFAULT_TOTAL_STEPS = 10000
 
@@ -218,6 +278,7 @@ def main() -> int:
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
+    seen_iters: set[int] = set()
     # Insertion-ordered so eviction can drop the OLDEST half; a plain
     # set has no age and the cap could only clear (review 2026-09-01).
     seen_lines: dict[str, None] = {}
@@ -287,6 +348,17 @@ def main() -> int:
         arm, gpu, latest, eval_progress, last_step = parse_poll(
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
+        rsl = parse_rsl(rr, args.name, raw, seen_iters)
+        if rsl is not None and rsl[0] is not None:
+            card = f"## RL training\n\n- iteration **{rsl[0]} / {rsl[1]}**\n"
+            if rsl[2] is not None:
+                card += f"- mean reward **{rsl[2]:.2f}**\n"
+            card += f"- GPU {gpu}\n"
+            rr.log(
+                f"{args.name}/status",
+                rr.TextDocument(card, media_type=rr.MediaType.MARKDOWN),
+                static=True,
+            )
         if "%" in gpu:
             rr.set_time("wall", timestamp=time.time())
             util, memory = (part.strip() for part in gpu.split(","))
