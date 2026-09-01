@@ -35,7 +35,6 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 // The task whose ACCEPTED scripted expert drives the viewport for real —
 // a genuine dual-arm pick-and-place cycling the protocol's own paired
 // trial starts, not placeholder motion (tools/studio-render-stream.py).
-const DEFAULT_TASK: &str = "kitting";
 
 /// The robot-development pipeline as the panel's first-class entry
 /// points — (chip label, subagent name in `.claude/agents/`), in
@@ -164,7 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rerun_app.app_options_mut().custom_window_decorations = false;
             }
 
-            let viewport = ViewportFeed::spawn(&cc.egui_ctx, DEFAULT_TASK);
+            let viewport = ViewportFeed::idle();
             let agent = AgentSession::spawn(&cc.egui_ctx);
             Ok(Box::new(StudioShell {
                 rerun_app,
@@ -252,10 +251,13 @@ impl eframe::App for StudioShell {
         // The MuJoCo sim viewport on top; the whole rest of the window IS
         // the Rerun viewer — blueprint panel, timeline, views, exactly as
         // the standalone app renders them.
-        egui::Panel::top("sim_viewport")
-            .resizable(true)
-            .default_size(VIEWPORT_DEFAULT_HEIGHT)
-            .min_size(VIEWPORT_MIN_HEIGHT)
+        // Two panel ids on purpose: egui remembers a panel's size by id,
+        // and the idle strip must not inherit a 420 px preview height.
+        let active = self.viewport.is_active();
+        egui::Panel::top(if active { "sim_viewport" } else { "sim_viewport_idle" })
+            .resizable(active)
+            .default_size(if active { VIEWPORT_DEFAULT_HEIGHT } else { 36.0 })
+            .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
             .show(ui, |ui| {
                 self.viewport.show(ui);
             });

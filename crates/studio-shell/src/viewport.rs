@@ -79,7 +79,36 @@ pub struct ViewportFeed {
     stream_ended: Arc<AtomicBool>,
 }
 
+/// The scene previews the idle strip offers — pipeline-registry tasks
+/// `studio-render-stream.py` can run. The LIVE scene never comes from
+/// here: a training run mirrors itself into the Rerun 3D view below
+/// (`world/robot`, the recorder's mirror).
+const PREVIEW_TASKS: &[&str] = &["kitting", "lift"];
+
 impl ViewportFeed {
+    /// No subprocess, no canned scene: the panel starts as a slim strip
+    /// offering previews. The operator's rule (2026-09-01): the window's
+    /// 3D follows what is actually happening — and what is actually
+    /// happening streams into the viewer below, not into this panel.
+    pub fn idle() -> Self {
+        Self {
+            child: None,
+            stdin: None,
+            latest: Arc::new(Mutex::new(None)),
+            texture: None,
+            spawn_error: None,
+            sent_size: INITIAL_RENDER_SIZE,
+            last_resize_sent: None,
+            stream_ended: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Whether a preview is running (or died trying) — the panel sizes
+    /// itself by this.
+    pub fn is_active(&self) -> bool {
+        self.child.is_some() || self.spawn_error.is_some() || self.texture.is_some()
+    }
+
     /// Spawns `tools/studio-render-stream.py` under the pipeline's `uv`
     /// environment. `ctx` is cloned into the reader thread so it can wake
     /// the UI (`request_repaint`) the moment a new frame lands — egui does
@@ -145,6 +174,27 @@ impl ViewportFeed {
     /// before the first frame arrives or if the subprocess never started.
     /// Dragging orbits the camera; scrolling while hovered zooms it.
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        if !self.is_active() {
+            ui.horizontal(|ui| {
+                ui.label(
+                    "Live physics streams into the 3D view below while a run is on. \
+                     Preview a pipeline scene:",
+                );
+                for task in PREVIEW_TASKS {
+                    if ui.button(*task).clicked() {
+                        *self = Self::spawn(ui.ctx(), task);
+                    }
+                }
+            });
+            return;
+        }
+        ui.horizontal(|ui| {
+            ui.label("scene preview (not the live run)");
+            if ui.button("✕ stop").clicked() {
+                *self = Self::idle();
+                return;
+            }
+        });
         if let Some(frame) = self.latest.lock().expect("not poisoned").take() {
             let image = ColorImage::from_rgb([frame.width, frame.height], &frame.rgb);
             match &mut self.texture {
