@@ -121,6 +121,15 @@ impl ViewportFeed {
         // `viz` brings rerun-sdk: the script narrates the physics into
         // the app's own embedded viewer (best-effort — see the script).
         let mut command = Command::new("uv");
+        // Its own process group, so stop/drop can reap the WHOLE tree:
+        // killing only the `uv` wrapper left the python grandchild
+        // alive and flooding the ingest channel (the zombie stream,
+        // 2026-09-01).
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            command.process_group(0);
+        }
         command
             .args(["run", "--extra", "sim", "--extra", "viz", "python"])
             .arg(&script)
@@ -338,6 +347,14 @@ impl Drop for ViewportFeed {
         // kind of leak the crate's own smoke test already checked for by
         // hand — do it here so every caller gets it for free.
         if let Some(mut child) = self.child.take() {
+            // The child leads its own process group (see spawn); kill
+            // the group so the python grandchild dies with the wrapper.
+            #[cfg(unix)]
+            {
+                let _ = Command::new("kill")
+                    .args(["-TERM", &format!("-{}", child.id())])
+                    .status();
+            }
             let _ = child.kill();
             let _ = child.wait();
         }
