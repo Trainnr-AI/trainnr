@@ -120,11 +120,27 @@ impl ViewportFeed {
 
         // `viz` brings rerun-sdk: the script narrates the physics into
         // the app's own embedded viewer (best-effort — see the script).
-        let spawned = Command::new("uv")
+        let mut command = Command::new("uv");
+        command
             .args(["run", "--extra", "sim", "--extra", "viz", "python"])
             .arg(&script)
             .arg(task_name)
-            .current_dir(&pipeline_dir)
+            .current_dir(&pipeline_dir);
+        // The pipeline's own wsl.env, spelled here because this spawn
+        // does not go through a tool wrapper: without these, MuJoCo's
+        // offscreen GL on WSL falls back to llvmpipe — the SOFTWARE
+        // rasterizer at ~300 ms/frame and ~300% CPU (measured on the
+        // kitting preview, 2026-09-01; the box's documented gotcha).
+        // Harmless on native Linux; macOS must not get MUJOCO_GL=egl.
+        #[cfg(target_os = "linux")]
+        {
+            command
+                .env("MUJOCO_GL", "egl")
+                .env("GALLIUM_DRIVER", "d3d12")
+                .env("LD_LIBRARY_PATH", "/usr/lib/wsl/lib")
+                .env("OMP_NUM_THREADS", "1");
+        }
+        let spawned = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
