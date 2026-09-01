@@ -380,9 +380,7 @@ class MJXBatchedStepper:
     on the backend, cached per substep count: a new stepper never
     recompiles. A step that touches the contact ceiling is refused."""
 
-    def __init__(
-        self, backend: MJXWarpBackend, initial_state: Any, steps: int
-    ) -> None:
+    def __init__(self, backend: MJXWarpBackend, initial_state: Any, steps: int) -> None:
         import jax.numpy as jnp  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
 
@@ -428,8 +426,7 @@ class MJXBatchedStepper:
         control = np.asarray(control, dtype=float)
         if control.shape != (self.nbatch, self.model.nu):
             raise ValueError(
-                f"control must be ({self.nbatch}, {self.model.nu}), "
-                f"got {control.shape}"
+                f"control must be ({self.nbatch}, {self.model.nu}), got {control.shape}"
             )
         if self.done:
             return

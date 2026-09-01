@@ -403,8 +403,17 @@ class Perturber:
             skin_id = np.array([-1], dtype=np.int32)
             # mjv_select's rely runs bottom-up; the wire sends top-down.
             body = mujoco.mjv_select(
-                self._model, data, vopt, aspect, x, 1.0 - y,
-                scene, point, geom_id, flex_id, skin_id,
+                self._model,
+                data,
+                vopt,
+                aspect,
+                x,
+                1.0 - y,
+                scene,
+                point,
+                geom_id,
+                flex_id,
+                skin_id,
             )
             if body > 0:
                 self.pert.select = body
@@ -412,8 +421,13 @@ class Perturber:
                 mujoco.mjv_initPerturb(self._model, data, scene, self.pert)
         if self.pert.active and (dx or dy):
             mujoco.mjv_movePerturb(
-                self._model, data,
-                mujoco.mjtMouse.mjMOUSE_MOVE_H, dx, dy, scene, self.pert,
+                self._model,
+                data,
+                mujoco.mjtMouse.mjMOUSE_MOVE_H,
+                dx,
+                dy,
+                scene,
+                self.pert,
             )
 
     def draw(self, scene) -> None:
@@ -424,13 +438,19 @@ class Perturber:
             return
         geom = scene.geoms[scene.ngeom]
         mujoco.mjv_initGeom(
-            geom, mujoco.mjtGeom.mjGEOM_CAPSULE,
-            np.zeros(3), np.zeros(3), np.zeros(9),
+            geom,
+            mujoco.mjtGeom.mjGEOM_CAPSULE,
+            np.zeros(3),
+            np.zeros(3),
+            np.zeros(9),
             np.array([1.0, 0.35, 0.1, 0.8], dtype=np.float32),
         )
         mujoco.mjv_connector(
-            geom, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.004,
-            self.pert.refpos, self._body_pos(),
+            geom,
+            mujoco.mjtGeom.mjGEOM_CAPSULE,
+            0.004,
+            self.pert.refpos,
+            self._body_pos(),
         )
         scene.ngeom += 1
 

@@ -12,6 +12,14 @@ engine instrument stamp, expert stamp, and the NAMED dynamics values it
 ran under, with their basis (identified interval vs caller-declared
 span). Every run writes `datasheet.md` beside the batch.
 
+## MCP doors (any agent, docs/64 stage 1)
+
+With the rq MCP server connected, the same work is tool calls:
+`generate_demos(episodes, seed, out)` → job handle;
+`multiply_demos(seeds_dir, out, ...)` (GPU box);
+`run_chain(name, scale, ...)` — the whole press→train→certify chain;
+`job_status(job_id)` polls, artifacts land under `runs/` as always.
+
 ## Commands (from `pipeline/`)
 
 - Kitting batch: `uv run --extra sim python ../tools/kitting-demos.py N <out> --seed S`

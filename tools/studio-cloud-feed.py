@@ -84,6 +84,8 @@ class RslStatus:
     reward: float | None = None
     elapsed: str | None = None
     eta: str | None = None
+
+
 # Slugs routed to rl/more/ - the layout only grows its "more" pane
 # once this is non-empty, so the catch-all never sits as an empty
 # plot (the operator's rule: no pane without data, 2026-09-01).
@@ -108,9 +110,7 @@ def route_rsl_row(rr: Any, name: str, key: str, value: float) -> None:
     rr.log(f"{name}/rl/more/{slug}", rr.Scalars(value))
 
 
-def parse_rsl(
-    rr: Any, name: str, raw: str, seen_iters: set[int]
-) -> RslStatus | None:
+def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set[int]) -> RslStatus | None:
     """rsl-rl blocks into Rerun: each unseen iteration's rows become
     series on the `iteration` timeline. Returns the latest block's
     status for the card."""
@@ -197,9 +197,7 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
                 ),
             ]
             if MORE_SEEN:
-                views.append(
-                    rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more")
-                )
+                views.append(rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more"))
         else:
             views = [
                 rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
@@ -209,9 +207,7 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
             rrb.TimeSeriesView(origin=f"{name}/gpu", name="gpu"),
             rrb.TextDocumentView(origin=f"{name}/status", name="status"),
         ]
-        rr.send_blueprint(
-            rrb.Blueprint(rrb.Grid(*views), collapse_panels=False)
-        )
+        rr.send_blueprint(rrb.Blueprint(rrb.Grid(*views), collapse_panels=False))
     except Exception as error:
         print(f"layout not sent: {error}")
 
@@ -446,9 +442,7 @@ def main() -> int:
     # The shared ssh options (transfer.Ssh): keepalive included — a
     # hand-rolled argv without ServerAliveInterval is why an overnight
     # feed could silently drop (review 2026-09-01).
-    door = SshEndpoint(
-        host=host, port=int(port), username=username, command=args.door
-    )
+    door = SshEndpoint(host=host, port=int(port), username=username, command=args.door)
     poll_argv = ssh_argv(door, args.key)
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)

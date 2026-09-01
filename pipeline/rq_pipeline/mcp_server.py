@@ -8,10 +8,13 @@ through the repo's public seams (`bundles`, `actuator_library`, the two
 registries), never around them, so the answers an agent gets are the
 same ones the pipeline itself acts on.
 
-Read-only by design in this first pass: the server is a window into the
-instrument, not a lever on it. Launching runs and mutating bundles stay
-with the operator until the cheap-and-reversible phase has earned the
-next one (the Studio doc's own sequencing).
+Two kinds of tools (docs/64 §3): the DESCRIBE family — read-only
+windows through the repo's public seams — and, since S2, the ACT
+family (`rq_pipeline.mcp_actions`): thin doors that spawn the CLI
+owning the work as a background job and hand back a handle
+(`job_status` polls, artifacts land under `runs/` as always). The
+agent lives in the developer's own tool; these tools are how it
+presses, trains, certifies and opens the Studio.
 
 The query functions are plain functions returning JSON-able dicts, with
 no MCP import anywhere near them — the suite tests them directly and the
@@ -396,6 +399,44 @@ def build_server() -> Any:
     server.tool(
         description="An actuator's friction-torque curves over velocity, from its model"
     )(friction_curve)
+
+    # The ACT family — S2's doors (docs/64 §3 stage 1), each spawning
+    # the CLI that owns the work as a job.
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+
+    actions = Actions(JobManager(_runs_root(None)))
+    server.tool(
+        description="Press referee-gated demonstrations (scripted expert, DR "
+        "draws recorded). Returns a job handle."
+    )(actions.generate_demos)
+    server.tool(
+        description="Multiply seed demos (device filters, CPU verifies, referee "
+        "gates). Needs the GPU box. Returns a job handle."
+    )(actions.multiply_demos)
+    server.tool(
+        description="The whole chain: press -> dataset -> train -> paired eval "
+        "-> fold with intervals. smoke scale runs on a laptop. Job handle."
+    )(actions.run_chain)
+    server.tool(
+        description="Train the microduck walk on the certified stack (rq_mjlab). "
+        "agent=smoke is minutes; agent=g3 is the flagship recipe. Job handle."
+    )(actions.train_walk)
+    server.tool(
+        description="The locomotion certificate: paired episodes, exact "
+        "intervals, stamps on every row. Job handle."
+    )(actions.certify_walk)
+    server.tool(
+        description="Launch the Studio (release build); anything speaking the "
+        "Rerun SDK streams into it on :9876."
+    )(actions.open_studio)
+    server.tool(
+        description="Onboard a robot: its MJCF directory becomes a hash-stamped "
+        "bundle under robots/, compiled once as the honesty check."
+    )(actions.onboard_robot)
+    server.tool(description="A job's state and log tail")(actions.job_status)
+    server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
+    server.tool(description="Every job on record, newest first")(actions.list_jobs)
     return server
 
 

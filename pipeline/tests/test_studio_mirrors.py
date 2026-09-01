@@ -11,9 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-RENDER_STREAM = (REPO / "tools" / "studio-render-stream.py").read_text(
-    encoding="utf-8"
-)
+RENDER_STREAM = (REPO / "tools" / "studio-render-stream.py").read_text(encoding="utf-8")
 VIEWPORT_RS = (REPO / "crates" / "studio-shell" / "src" / "viewport.rs").read_text(
     encoding="utf-8"
 )

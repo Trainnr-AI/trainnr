@@ -113,9 +113,7 @@ class TheRslParser(unittest.TestCase):
         status = feed.parse_rsl(rr, "g3", RSL_BLOCK, seen)
         self.assertEqual(
             status,
-            feed.RslStatus(
-                3477, 8000, reward=111.84, elapsed="0:40:04", eta="0:52:06"
-            ),
+            feed.RslStatus(3477, 8000, reward=111.84, elapsed="0:40:04", eta="0:52:06"),
         )
         self.assertEqual(seen, {3477})
         by_path = scalars_by_path(rr)
@@ -136,9 +134,7 @@ class TheRslParser(unittest.TestCase):
         rr = FakeRr()
         feed.parse_rsl(rr, "g3", RSL_BLOCK, set())
         clockish = [
-            path
-            for path in scalars_by_path(rr)
-            if "eta" in path or "elapsed" in path
+            path for path in scalars_by_path(rr) if "eta" in path or "elapsed" in path
         ]
         self.assertEqual(clockish, [])
         self.assertEqual(feed.MORE_SEEN, set())  # nothing fell to more/
@@ -189,9 +185,7 @@ class TheLayoutChooser(unittest.TestCase):
 
     def test_no_signal_keeps_whatever_was_sent(self) -> None:
         with mock.patch.object(feed, "send_layout") as sender:
-            self.assertIsNone(
-                feed.choose_layout(FakeRr(), "g3", None, (False, False))
-            )
+            self.assertIsNone(feed.choose_layout(FakeRr(), "g3", None, (False, False)))
             self.assertEqual(
                 feed.choose_layout(FakeRr(), "g3", ("rl", False), (False, False)),
                 ("rl", False),
