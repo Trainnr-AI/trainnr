@@ -367,14 +367,17 @@ def main() -> int:
                 f"{args.name}/gpu/memory_gb",
                 rr.Scalars(float(memory.split()[0]) / 1024.0),
             )
-        last_seen = status_card(
-            rr,
-            args.name,
-            (arm, gpu, latest, last_step, last_seen, len(seen_stages)),
-            total_steps=args.steps,
-            eval_progress=eval_progress,
-            trials_seen=len(seen_records),
-        )
+        if rsl is None or rsl[0] is None:
+            # The lerobot-style card only when no rsl-rl blocks are in
+            # the log - it was clobbering the RL card every poll.
+            last_seen = status_card(
+                rr,
+                args.name,
+                (arm, gpu, latest, last_step, last_seen, len(seen_stages)),
+                total_steps=args.steps,
+                eval_progress=eval_progress,
+                trials_seen=len(seen_records),
+            )
         time.sleep(args.every)
 
 
