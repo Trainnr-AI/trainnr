@@ -43,7 +43,7 @@ class MicroduckEntity(unittest.TestCase):
         # all (caught 2026-09-01 by the walk cfg's linter showcase).
         with self.assertRaises(TypeError) as ctx:
             entity_from_bundle(ROBOT, "robot_walk.xml", {"servos": self._actuator()})
-        self.assertIn("ordered, not named", str(ctx.exception))
+        self.assertIn("tuple of actuator cfgs", str(ctx.exception))
 
     def test_point_estimate_dr_refuses_without_a_declared_span(self) -> None:
         # The store's m6 is a point estimate (advisories say so); asking

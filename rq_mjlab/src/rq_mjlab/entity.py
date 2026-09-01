@@ -50,6 +50,14 @@ def entity_from_bundle(
     # the raw spec, whose XML actuators masked it). Refused by name now.
     from mjlab.actuator.actuator import ActuatorCfg  # noqa: PLC0415
 
+    if not isinstance(actuators, tuple):
+        # A GENERATOR drains in the check below and leaves an empty
+        # tuple — an entity with no law, the very bug this refusal
+        # exists to stop (second review, 2026-09-01).
+        raise TypeError(
+            f"actuators must be a tuple of actuator cfgs, got "
+            f"{type(actuators).__name__}"
+        )
     bad = [type(a).__name__ for a in actuators if not isinstance(a, ActuatorCfg)]
     if bad:
         raise TypeError(

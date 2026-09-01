@@ -23,7 +23,8 @@ from rq_pipeline.robot.friction_budget import (
 from rq_mjlab.kernel import LawParams, friction_budget
 
 VISCOUS = 0.03  # pipeline-side only; the kernel delegates it to dof_damping
-PARAMS = {
+# M5/M6: the DIRECTIONAL load family.
+DIRECTIONAL = {
     "friction_base": 0.05,
     "friction_stribeck": 0.02,
     "dtheta_stribeck": 0.37,
@@ -36,6 +37,17 @@ PARAMS = {
     "load_friction_external_quad": 0.003,
 }
 
+# M3/M4: the UNDIRECTED load family — the third of the store the torch
+# kernel could not express at all until 2026-09-01's second review.
+UNDIRECTED = {
+    "friction_base": 0.05,
+    "friction_stribeck": 0.02,
+    "dtheta_stribeck": 0.37,
+    "alpha": 1.8,
+    "load_friction_base": 0.06,
+    "load_friction_stribeck": 0.09,
+}
+
 # The grid: both signs, dominance both ways, the tie, zero, and a
 # spread of velocities including rest (Stribeck envelope = 1).
 TORQUES = (-5.0, -1.0, 0.0, 1.0, 5.0)
@@ -43,9 +55,9 @@ VELOCITIES = (0.0, 0.1, 2.0)
 
 
 class OneLawOneSpelling(unittest.TestCase):
-    def test_torch_kernel_matches_numpy_reference_on_the_grid(self) -> None:
-        law = LawParams(kt=1.0, R=1.0, **PARAMS)
-        numpy_params = FrictionParams(friction_viscous=VISCOUS, **PARAMS)
+    def _assert_parity(self, params: dict) -> None:
+        law = LawParams(kt=1.0, R=1.0, **params)
+        numpy_params = FrictionParams(friction_viscous=VISCOUS, **params)
         for tau_m, tau_e, qd in itertools.product(TORQUES, TORQUES, VELOCITIES):
             with self.subTest(tau_m=tau_m, tau_e=tau_e, qd=qd):
                 kernel = float(
@@ -62,6 +74,34 @@ class OneLawOneSpelling(unittest.TestCase):
                     )
                 )
                 self.assertAlmostEqual(kernel, reference, places=9)
+
+    def test_the_directional_family_m5_m6(self) -> None:
+        self._assert_parity(DIRECTIONAL)
+
+    def test_the_undirected_family_m3_m4(self) -> None:
+        # 16 of the 48 committed bundles are m3/m4 — this family is a
+        # third of the store, and the kernel had no field for it.
+        self._assert_parity(UNDIRECTED)
+
+    def test_every_committed_bundle_builds_a_law(self) -> None:
+        # The sweep the first pass lacked: a roster that refuses real
+        # fits is an outage, not a safeguard (review 2026-09-01).
+        import json  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        from rq_mjlab.actuator import _CONSUMED_KEYS  # noqa: PLC0415
+
+        store = sorted(
+            (Path(__file__).resolve().parents[2] / "robots" / "actuator-bundles").glob(
+                "*.bundle.json"
+            )
+        )
+        self.assertTrue(store, "no committed bundles to sweep")
+        for path in store:
+            with self.subTest(bundle=path.name):
+                params = json.loads(path.read_text())["params"]
+                unknown = sorted(set(params) - set(_CONSUMED_KEYS))
+                self.assertEqual(unknown, [], f"{path.name} carries {unknown}")
 
 
 if __name__ == "__main__":

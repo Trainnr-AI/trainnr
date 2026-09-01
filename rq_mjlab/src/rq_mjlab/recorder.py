@@ -106,13 +106,17 @@ class RerunRecorder(RecorderTerm):
         if isinstance(reward, torch.Tensor) and reward.numel() > watched:
             rr.log("train/reward", rr.Scalars(float(reward[watched])))
         elif not self._said_no_reward:
-            # Once, by name: a silently missing reward trace reads as a
-            # flat policy (review 2026-09-01).
+            # Once, by name — and the two absences are different: a
+            # missing buffer is an env without rewards, a short one is a
+            # watched world past its end (second review, 2026-09-01).
             self._said_no_reward = True
-            rr.log(
-                "recorder/notes",
-                rr.TextLog("no reward_buf on this env: reward trace omitted"),
+            why = (
+                "no reward_buf on this env"
+                if not isinstance(reward, torch.Tensor)
+                else f"reward_buf has {reward.numel()} entries, watched world is "
+                f"{watched}"
             )
+            rr.log("recorder/notes", rr.TextLog(f"{why}: reward trace omitted"))
         rr.log(
             "train/episode_length",
             rr.Scalars(float(env.episode_length_buf[watched])),

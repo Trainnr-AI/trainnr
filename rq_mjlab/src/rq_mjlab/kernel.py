@@ -47,6 +47,13 @@ class LawParams:
     R: float
     friction_base: float
     friction_stribeck: float = 0.0
+    # M3/M4: UNDIRECTED load — one coefficient on |tau_m - tau_e| (and
+    # its Stribeck twin). BAM's M5/M6 replace these with the directional
+    # pair below; a fit carries one family or the other, never both.
+    # Their absence here refused 16 of the 48 committed bundles — every
+    # family's m3 and m4 (review, 2026-09-01).
+    load_friction_base: float = 0.0
+    load_friction_stribeck: float = 0.0
     load_friction_motor: float = 0.0
     load_friction_external: float = 0.0
     load_friction_motor_stribeck: float = 0.0
@@ -97,13 +104,22 @@ def friction_budget(
     transcription by `tests/test_kernel_parity.py` across the sign/tie
     grid (the two copies disagreed until 2026-09-01's review)."""
     stribeck = torch.exp(-((qd.abs() / law.dtheta_stribeck) ** law.alpha))
+    # The load family: undirected (M3/M4) OR directional (M5/M6). Both
+    # forms are written; a fit populates one, the other stays at zero.
+    undirected = (tau_prev - tau_ext).abs()
     gearbox = (
-        tau_ext * law.load_friction_external - tau_prev * law.load_friction_motor
-    ).abs()
+        law.load_friction_base * undirected
+        + (
+            tau_ext * law.load_friction_external - tau_prev * law.load_friction_motor
+        ).abs()
+    )
     gearbox_stribeck = (
-        tau_ext * law.load_friction_external_stribeck
-        - tau_prev * law.load_friction_motor_stribeck
-    ).abs()
+        law.load_friction_stribeck * undirected
+        + (
+            tau_ext * law.load_friction_external_stribeck
+            - tau_prev * law.load_friction_motor_stribeck
+        ).abs()
+    )
     opposing = torch.sign(tau_ext) != torch.sign(tau_prev)
     quadratic = opposing * (
         (tau_ext.abs() < tau_prev.abs()) * law.load_friction_external_quad * tau_ext**2

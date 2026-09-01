@@ -80,6 +80,8 @@ _CONSUMED_KEYS = (
     "max_velocity",
     "error_gain_ratio",
     "friction_stribeck",
+    "load_friction_base",
+    "load_friction_stribeck",
     "load_friction_motor",
     "load_friction_external",
     "load_friction_motor_stribeck",
@@ -93,6 +95,8 @@ _CONSUMED_KEYS = (
 # The friction terms a bundle may carry beyond the base; absent means zero.
 _OPTIONAL_FRICTION = (
     "friction_stribeck",
+    "load_friction_base",
+    "load_friction_stribeck",
     "load_friction_motor",
     "load_friction_external",
     "load_friction_motor_stribeck",
@@ -261,8 +265,26 @@ class BamActuator(Actuator[BamActuatorCfg]):
         # linear dof and dropped the last servo on any floating-base
         # robot (found 2026-09-01 by review, invisible to the
         # single-hinge test rigs).
+        from mjlab.utils.spec import TransmissionType  # noqa: PLC0415
+
+        if self.cfg.transmission_type != TransmissionType.JOINT:
+            # target ids would be TENDON/SITE ids; indexing joint_v_adr
+            # with them is nonsense (review 2026-09-01).
+            raise NotImplementedError(
+                f"{type(self).__name__} drives joints only; this cfg asks for "
+                f"{self.cfg.transmission_type} transmission"
+            )
+        indexing = self.entity.indexing
+        if len(indexing.joint_v_adr) != len(indexing.joints):
+            # joint_v_adr is per-DOF; target ids index the non-free joint
+            # LIST. Equal only while every non-free joint is 1-dof — a
+            # ball joint would shift the mapping for everything after it.
+            raise NotImplementedError(
+                "this entity carries a multi-dof non-free joint (ball); the "
+                "law's per-joint dof mapping assumes hinge/slide targets"
+            )
         local = torch.tensor(self._target_ids_list, dtype=torch.long)
-        joint_v_adr = self.entity.indexing.joint_v_adr
+        joint_v_adr = indexing.joint_v_adr
         self._dof_ids = joint_v_adr.to("cpu")[local].to(dtype=torch.long, device=device)
         self._nv = int(mj_model.nv)
         # Torch views over the live warp arrays — zero-copy, per world.

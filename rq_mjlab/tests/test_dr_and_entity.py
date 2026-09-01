@@ -69,6 +69,9 @@ class TheDraws(unittest.TestCase):
                 # global joint 0, dof 0 (the dof fix routes through
                 # entity.indexing — review, 2026-09-01).
                 joint_v_adr=torch.tensor([0]),
+                # One 1-dof joint: the multi-dof guard compares these
+                # two lengths (second review, 2026-09-01).
+                joints=(object(),),
             )
         )
         actuator = cfg.build(entity, [0], ["j"])

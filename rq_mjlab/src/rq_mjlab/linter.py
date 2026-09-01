@@ -57,13 +57,18 @@ def lint(events_cfg: Any, actuator_cfgs: tuple[Any, ...]) -> None:
     `RuntimeError` when a BAM actuator is configured but no event
     expands `dof_frictionloss` per world.
     """
-    # A dict here iterates its KEY STRINGS and the isinstance filter
-    # empties silently — lint would bless anything (the same coercion
-    # family as the entity seam's fixed bug; review 2026-09-01).
+    # A dict iterates its KEY STRINGS and a GENERATOR drains here, both
+    # leaving the isinstance filter empty — lint would bless anything
+    # (the entity seam's coercion family; reviews 2026-09-01, twice).
+    from mjlab.actuator.actuator import ActuatorCfg  # noqa: PLC0415
+
+    if not isinstance(actuator_cfgs, tuple):
+        raise TypeError(
+            f"lint takes an ordered tuple of actuator cfgs, got "
+            f"{type(actuator_cfgs).__name__}"
+        )
     bad = [
-        type(cfg).__name__
-        for cfg in actuator_cfgs
-        if not hasattr(cfg, "target_names_expr")
+        type(cfg).__name__ for cfg in actuator_cfgs if not isinstance(cfg, ActuatorCfg)
     ]
     if bad:
         raise TypeError(
