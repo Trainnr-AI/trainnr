@@ -116,7 +116,8 @@ RIG_CAMERAS = {
 # the block forever, delivered at the TCP level and never displayed.
 # 10 Hz is ample for glanceable telemetry and stays far under the drain
 # rate; the pixels keep their full frame rate regardless.
-NARRATE_HZ = 10.0
+NARRATE_HZ = 10.0  # scalar series: plots need no more
+MIRROR_HZ = 30.0  # the 3D twin: motion legibility beside 30 fps pixels
 # Past this geom count the shadow pass costs more than it lights (43 vs
 # 10.5 ms/frame on the 20-duck flock, 2026-09-01).
 SHADOW_GEOM_BUDGET = 400
@@ -166,6 +167,7 @@ class PhysicsNarrator:
             if int(model.jnt_type[j]) in scalar_types
             and (model.joint(j).name or "").startswith(self._narrated)
         ]
+        self._last_series = -1.0
         self.actuators = [
             (model.actuator(a).name or f"actuator{a}", a)
             for a in range(model.nu)
@@ -211,10 +213,21 @@ class PhysicsNarrator:
     def log(self, data: "mujoco.MjData", sim_time: float) -> None:
         """`sim_time` is monotonic across episodes (the caller adds an
         offset) — `data.time` alone rewinds at every episode reset and a
-        timeline must not."""
+        timeline must not. Called at MIRROR_HZ; the scalar series
+        rate-limit themselves to NARRATE_HZ (a duck marching at 10 Hz
+        beside 30 fps pixels read as 'very low frames', 2026-09-01)."""
         rr = self.rr
         rr.set_time("sim", duration=sim_time)
         self.mirror.log(data)
+        now_series = sim_time - self._last_series >= 1.0 / NARRATE_HZ
+        if not now_series:
+            if data.ncon:
+                rr.log(
+                    "world/contacts",
+                    rr.Points3D(data.contact.pos[: data.ncon], radii=0.004),
+                )
+            return
+        self._last_series = sim_time
         for name, qpos_adr, dof_adr in self.joints:
             rr.log(f"joints/position/{name}", rr.Scalars(float(data.qpos[qpos_adr])))
             rr.log(f"joints/velocity/{name}", rr.Scalars(float(data.qvel[dof_adr])))
@@ -357,7 +370,7 @@ class RenderPump:
         time this step advanced."""
         self.last_sim_time = data.time
         now = time.monotonic()
-        if self.narrator is not None and now - self.last_narrated >= 1.0 / NARRATE_HZ:
+        if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
             self.last_narrated = now
             self.narrator.log(data, self.time_offset + data.time)
 
