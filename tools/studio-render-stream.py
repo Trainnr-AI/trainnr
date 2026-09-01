@@ -46,8 +46,8 @@ rendering.
 
 import math
 import os
-import struct
 import pathlib
+import struct
 import sys
 import threading
 import time
@@ -437,8 +437,22 @@ def duck_scene() -> "object":
     duck = mujoco.MjSpec.from_file(
         str(repo / "robots" / "microduck" / "robot_walk.xml")
     )
-    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, 0.0])
-    frame.attach_body(duck.worldbody.first_body(), "duck/", "")
+    # Their training resets the base at z = 0.12-0.13 (the delta file);
+    # spawning at 0 puts the trunk inside the floor. And the bare XML
+    # cannot STAND: only the feet carry floor collision (1/1; the other
+    # collision meshes are self-collision-only, 2/2) and the kp=0.55
+    # placeholder servos - replaced by the BAM actuator at train time -
+    # are too weak to hold posture, so it tips and sinks (seen live,
+    # 2026-09-01). The preview is a museum stand: the trunk welded at
+    # standing height, the limbs free to wave under the idle sinusoid.
+    trunk = duck.worldbody.first_body()
+    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, 0.13])
+    frame.attach_body(trunk, "duck/", "")
+    weld = scene.add_equality()
+    weld.type = mujoco.mjtEq.mjEQ_WELD
+    weld.objtype = mujoco.mjtObj.mjOBJ_BODY
+    weld.name1 = trunk.name  # attach already prefixed it (duck/...)
+    weld.name2 = "world"
     return scene
 
 
