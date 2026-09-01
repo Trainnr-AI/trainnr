@@ -59,6 +59,8 @@ class TheRecorder(unittest.TestCase):
         term._skipped_joints = []
         term._said_no_reward = False
         term._qpos = None
+        term._geom_views = None
+        term._mirror = None
         import time  # noqa: PLC0415
 
         term._began = time.time()
@@ -86,6 +88,22 @@ class TheRecorder(unittest.TestCase):
         self.assertEqual(memory.num_msgs(), before)
         term.record_pre_reset(torch.tensor([0, 1]))
         self.assertGreater(memory.num_msgs(), before)
+
+    def test_the_mirror_draws_the_watched_worlds_geoms(self) -> None:
+        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+
+        env = _env(steps=10)
+        term, memory = self._term(env)
+        term._mirror = RigMirror(env.sim.mj_model, model_colors=True)
+        before = memory.num_msgs()
+        term.record_post_step()
+        with_mirror = memory.num_msgs() - before
+        term._mirror = None
+        before = memory.num_msgs()
+        term.record_post_step()
+        without = memory.num_msgs() - before
+        # The mirror adds the 3D leg on top of the scalar story.
+        self.assertGreater(with_mirror, without)
 
     def test_the_cfg_names_its_term_class(self) -> None:
         from rq_mjlab.recorder import RerunRecorder, RerunRecorderCfg  # noqa: PLC0415

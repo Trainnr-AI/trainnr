@@ -10,11 +10,13 @@ world's joint positions, the reward, the episode length, on an
 `env_steps` timeline beside wall time, with episode boundaries marked
 at reset.
 
-Deliberately scalar-first: a mesh-true 3D mirror needs per-geom
-transforms shipped per tick and belongs to a later slice; a training
-run's story — is the reward moving, is the episode surviving, what is
-world 0 doing — is legible in the series alone, and this is the shape
-mjlab's own wandb charts already speak.
+Scalars AND the scene: beside the series, the watched world mirrors
+itself in 3D (`rq_pipeline.viz.RigMirror` — mesh geoms logged once,
+one transform per sample; primitives as oriented solids) under
+`world/robot`, so the Studio's 3D view follows whatever robot is
+ACTUALLY training — the operator's rule that everything flows from a
+3D representation of the physics, not a canned scene (2026-09-01).
+`mirror=False` returns the recorder to scalars-only.
 """
 
 from __future__ import annotations
@@ -68,6 +70,12 @@ class RerunRecorder(RecorderTerm):
             if int(mj_model.jnt_type[j]) not in scalar
         ]
         self._qpos = None  # torch view, bound lazily (data exists post-init)
+        self._geom_views = None  # (xpos, xmat) torch views, bound lazily
+        self._mirror = None
+        if cfg.mirror:
+            from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+
+            self._mirror = RigMirror(mj_model, model_colors=True)
         self._said_no_reward = False
         self._began = time.time()
         rr.log(
@@ -121,6 +129,22 @@ class RerunRecorder(RecorderTerm):
             "train/episode_length",
             rr.Scalars(float(env.episode_length_buf[watched])),
         )
+        if self._mirror is not None:
+            self._log_mirror(watched)
+
+    def _log_mirror(self, watched: int) -> None:
+        """One world's geoms out of the batched engine, into 3D."""
+        if self._geom_views is None:
+            from rq_mjlab.actuator import as_torch  # noqa: PLC0415
+
+            data = self._env.sim.data
+            self._geom_views = (as_torch(data.geom_xpos), as_torch(data.geom_xmat))
+
+        class _World:
+            geom_xpos = self._geom_views[0][watched].cpu().numpy()
+            geom_xmat = self._geom_views[1][watched].cpu().numpy()
+
+        self._mirror.log(_World(), path="world/robot")
 
     def record_pre_reset(self, env_ids: torch.Tensor) -> None:
         if (env_ids == self._cfg.watched_env).any():
@@ -150,6 +174,7 @@ class RerunRecorderCfg(RecorderTermCfg):
     address: str = DEFAULT_ADDRESS
     app_id: str = "rq-mjlab-train"
     watched_env: int = 0
+    mirror: bool = True  # the 3D scene beside the series
     every: int = (
         10  # control steps between samples: the viewer's rate, not the trainer's
     )
