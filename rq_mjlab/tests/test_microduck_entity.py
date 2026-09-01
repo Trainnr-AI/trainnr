@@ -29,6 +29,22 @@ class MicroduckEntity(unittest.TestCase):
             ACTUATOR_BUNDLE, target_names_expr=[".*"], physics_dt=PHYSICS_DT
         )
 
+    def test_the_law_replaces_the_models_own_servos(self) -> None:
+        # microduck's XML ships 14 <position> actuators of its own; the
+        # law must REPLACE them, not stand beside them (repeated-name
+        # compile refusal, caught by the first real Entity build on the
+        # box, 2026-09-01). The raw-spec compile cannot see this - only
+        # entity.build() runs edit_spec.
+        import mujoco  # noqa: PLC0415
+
+        cfg, _stamp = entity_from_bundle(ROBOT, "robot_walk.xml", (self._actuator(),))
+        entity = cfg.build()
+        model = entity.spec.compile()
+        self.assertEqual(model.nu, SERVOS)  # replaced, not doubled
+        for i in range(model.nu):
+            self.assertEqual(model.actuator_gaintype[i], mujoco.mjtGain.mjGAIN_FIXED)
+            self.assertEqual(model.actuator_biastype[i], mujoco.mjtBias.mjBIAS_NONE)
+
     def test_builds_from_stamped_bundles_and_compiles(self) -> None:
         actuator = self._actuator()
         cfg, stamp = entity_from_bundle(ROBOT, "robot_walk.xml", (actuator,))

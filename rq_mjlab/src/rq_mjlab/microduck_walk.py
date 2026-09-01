@@ -216,7 +216,10 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
         lin_vel_x=LIN_VEL_X,
         lin_vel_y=LIN_VEL_Y,
         ang_vel_z=ANG_VEL_Z,
-        heading=(-math.pi, math.pi),
+        # No heading range: 1.6's UniformVelocityCommand refuses a
+        # heading range while heading_command is off (caught by the
+        # box's first real env build, 2026-09-01).
+        heading=None,
     )
     twist.heading_command = False
 
@@ -294,9 +297,11 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
         "y": PUSH_VELOCITY,
     }
     events["base_com"].params["asset_cfg"].body_names = (TRUNK,)
-    events["base_com"].params["ranges"] = {
-        axis: (-TRUNK_COM_OFFSET, TRUNK_COM_OFFSET) for axis in ("x", "y", "z")
-    }
+    # 1.6's Ranges dict keys are ENTITY-NAME patterns, not axes (the
+    # box's env build refused 'x' as a body name, 2026-09-01); a plain
+    # tuple applies over body_com_offset's default axes [0, 1, 2] —
+    # exactly their all-axes +-offset.
+    events["base_com"].params["ranges"] = (-TRUNK_COM_OFFSET, TRUNK_COM_OFFSET)
     events["mass_inertia"] = EventTermCfg(
         func=envs_mdp.dr.pseudo_inertia,
         mode="startup",

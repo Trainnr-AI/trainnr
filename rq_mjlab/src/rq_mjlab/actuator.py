@@ -236,6 +236,19 @@ class BamActuator(Actuator[BamActuatorCfg]):
     """The law at run time; see the module docstring for the per-step story."""
 
     def edit_spec(self, spec: mujoco.MjSpec, target_names: list[str]) -> None:
+        # The law REPLACES whatever servo the model declares for its
+        # joints - microduck's XML ships its own <position> actuator per
+        # joint, and adding a motor beside it is a repeated-name refusal
+        # from the compiler (caught by the first real Entity build,
+        # 2026-09-01). Delete-then-add, the actuator-law rule: a partial
+        # edit of the existing servo would keep its biasprm behind.
+        doomed = [
+            actuator
+            for actuator in spec.actuators
+            if actuator.target in target_names or actuator.name in target_names
+        ]
+        for actuator in doomed:
+            spec.delete(actuator)
         for target_name in target_names:
             self._mjs_actuators.append(
                 create_motor_actuator(
