@@ -542,31 +542,41 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
                 rows.append((a, amplitude, phase))
         return rows
 
-    ducks = []
+    import numpy as np  # noqa: PLC0415
+
+    # Vectorized gait: one sin() call per step instead of ~140 Python
+    # float writes at 500 Hz - the interpreter loop was a real share of
+    # the realtime budget (the drag-lag session, 2026-09-01).
+    indices, amplitudes, phases = [], [], []
+    mocap_ids = []
+    duck_index = 0
     for index in range(model.nbody):
         body = model.body(index)
-        if int(body.mocapid[0]) >= 0:
-            duck_index = len(ducks)
-            ducks.append(
-                (int(body.mocapid[0]), targets(f"duck{duck_index}/"), duck_index)
-            )
+        if int(body.mocapid[0]) < 0:
+            continue
+        mocap_ids.append(int(body.mocapid[0]))
+        for ctrl_index, amplitude, phase in targets(f"duck{duck_index}/"):
+            indices.append(ctrl_index)
+            amplitudes.append(amplitude)
+            phases.append(phase + duck_index * 0.7)
+        duck_index += 1
+    indices = np.array(indices)
+    amplitudes = np.array(amplitudes)
+    phases = np.array(phases)
+    mocap_ids = np.array(mocap_ids)
     omega = 2.0 * math.pi * GAIT_HZ
     dt = model.opt.timestep
+    substeps = 4  # observe every 4th step: the tick's own overhead x4 less
     t = 0.0
     while True:
-        t += dt
-        for mocap_id, rows, duck_index in ducks:
-            duck_phase = duck_index * 0.7
-            for ctrl_index, amplitude, phase in rows:
-                data.ctrl[ctrl_index] = amplitude * math.sin(
-                    omega * t + phase + duck_phase
-                )
-            x = data.mocap_pos[mocap_id][0] + PARADE_SPEED * dt
-            if x > PARADE_WRAP_X:
-                x = -PARADE_WRAP_X
-            data.mocap_pos[mocap_id][0] = x
-        mujoco.mj_step(model, data)
-        pump.tick(data, dt)
+        for _ in range(substeps):
+            t += dt
+            data.ctrl[indices] = amplitudes * np.sin(omega * t + phases)
+            x = data.mocap_pos[mocap_ids, 0] + PARADE_SPEED * dt
+            x[x > PARADE_WRAP_X] = -PARADE_WRAP_X
+            data.mocap_pos[mocap_ids, 0] = x
+            mujoco.mj_step(model, data)
+        pump.tick(data, dt * substeps)
 
 
 def stream(task_name: str) -> None:
