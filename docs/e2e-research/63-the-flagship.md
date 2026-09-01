@@ -159,7 +159,31 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
   (nothing in the reward watches head posture; likely ballast). Both
   are §4 gait aesthetics — recorded, not retuned.
 - G4: the certificate, on both instruments, committed with the run's
-  stamps; the §1 diff table lands in docs/33 with dates.
+  stamps; the §1 diff table lands in docs/33 with dates. **CLOSED
+  2026-09-02**: `rq_mjlab.walk_verdict` — one seeded episode per
+  trial under FULL DR and pushes, two declared milestones (survived;
+  tracked = episode-mean planar velocity error closes at least half
+  the standing-still gap, `err_ratio < 0.5` with a 0.1 m/s floored
+  denominator), every row an `EpisodeRecord` with
+  `microduck-walk@824eba27c48c` as source and the full
+  mjlab+mujoco+warp+device instrument. The rows:
+
+  | instrument | survived | tracked | success | CP95 | median err_ratio |
+  |---|---|---|---|---|---|
+  | `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda` | 40/40 | 33/40 | **33/40** | [0.672, 0.927] | 0.389 |
+  | `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cpu` | 40/40 | 37/40 | **37/40** | [0.796, 0.984] | 0.406 |
+
+  The instruments agree within their intervals (same seed; the draw
+  streams differ per device, so trials are not paired across rows —
+  each row is its own 40). Every miss on both instruments is the same
+  shape: a gentle command (0.08–0.21 m/s) where the hop's own 6–11
+  cm/s planar wobble does not shrink — the certificate NAMES the
+  gait's weakness (station-keeping) instead of a demo video hiding
+  it. Zero falls in 80 episodes under DR and pushes. Artifacts:
+  `runs/microduck-walk/20260901-163412/verdict/` (records-{cuda,cpu}
+  .jsonl + walk-verdict-{cuda,cpu}.json); criterion pinned by
+  `tests/test_walk_verdict.py`. The plain-CPU-MuJoCo third instrument
+  belongs to C4's deployment manifest, where the policy leaves torch.
 - Each gate is a session-scale unit; G3 is the only one that costs
   money.
 
