@@ -207,10 +207,12 @@ class RerunRecorder(RecorderTerm):
                 camera = mujoco.MjvCamera()
                 mujoco.mjv_defaultCamera(camera)
                 # A chase camera on the robot, not MuJoCo's default free
-                # look-at-nothing (the first frames showed floor and
-                # horizon, duck out of frame): framed by the model's own
-                # extent, lookat re-aimed at body 1 every frame.
-                camera.distance = 2.5 * float(model.stat.extent)
+                # look-at-nothing. Distance comes from the ROBOT's real
+                # size at the first frame — model.stat.extent is inflated
+                # by the infinite terrain plane (2 m for a 15 cm duck put
+                # the camera 5 m out; the operator saw only floor,
+                # 2026-09-01).
+                camera.distance = 0.0  # set from the geom cloud below
                 camera.elevation = -20.0
                 camera.azimuth = 120.0
                 self._render = (
@@ -230,6 +232,12 @@ class RerunRecorder(RecorderTerm):
         mujoco.mj_forward(model, mj_data)
         if model.nbody > 1:
             camera.lookat[:] = mj_data.xpos[1]
+        if camera.distance <= 0.0:
+            import numpy as np  # noqa: PLC0415
+
+            robot = model.geom_bodyid > 0  # world geoms (terrain) excluded
+            spread = np.linalg.norm(mj_data.geom_xpos[robot] - mj_data.xpos[1], axis=1)
+            camera.distance = 4.0 * float(max(spread.max(), 0.05))
         renderer.update_scene(mj_data, camera=camera)
         self._rr.log("camera/watched", self._rr.Image(renderer.render()))
 
