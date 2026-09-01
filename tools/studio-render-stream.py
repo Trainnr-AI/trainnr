@@ -459,15 +459,25 @@ TAG_PAYLOAD_BYTES = {
 }
 
 
-def _read_control_messages(camera: OrbitCamera, perturber, poke) -> None:
+def _read_control_messages(
+    camera: OrbitCamera, perturber, poke, exit_on_eof: bool = False
+) -> None:
     """The tagged stdin protocol (module docstring): camera deltas,
     perturbation gestures, pause. `poke` wakes the render lane so a
-    drag re-renders NOW instead of at the next physics tick."""
+    drag re-renders NOW instead of at the next physics tick.
+
+    `exit_on_eof`: under a controller (--shm), a closed stdin means the
+    Studio is GONE — exit, hard. A SIGTERMed controller never runs its
+    Drop reaper, and the orphan kept a core at 100% for 46 minutes
+    before anyone looked (measured 2026-09-02). Standalone (no --shm),
+    EOF keeps rendering at the last pose."""
     stdin = sys.stdin.buffer
     while True:
         tag_raw = stdin.read(1)
         if not tag_raw:
-            return  # controller closed stdin — keep rendering at the last pose
+            if exit_on_eof:
+                os._exit(0)  # daemon thread; no cleanup owed
+            return  # standalone: keep rendering at the last pose
         tag = tag_raw[0]
         size = TAG_PAYLOAD_BYTES.get(tag)
         if size is None:
@@ -890,7 +900,7 @@ def stream(task_name: str, shm_path: str | None) -> None:
     # decoupling, reproduced across the process boundary).
     threading.Thread(
         target=_read_control_messages,
-        args=(orbit, perturber, pump._fresh.set),
+        args=(orbit, perturber, pump._fresh.set, pump.sink.shared),
         daemon=True,
     ).start()
 

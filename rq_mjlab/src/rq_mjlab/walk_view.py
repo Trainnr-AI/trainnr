@@ -174,7 +174,9 @@ def main() -> None:
     )
     threading.Thread(
         target=streamer._read_control_messages,
-        args=(orbit, perturber, pump._fresh.set),
+        # exit_on_eof: this leg only ever runs under the Studio; a
+        # closed stdin means the controller died - never orphan the GPU.
+        args=(orbit, perturber, pump._fresh.set, True),
         daemon=True,
     ).start()
 

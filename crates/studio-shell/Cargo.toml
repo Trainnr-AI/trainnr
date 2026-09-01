@@ -10,12 +10,12 @@ version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"
 
-# The Studio (the-studio doc, phase 1): a native window where a MuJoCo
-# subprocess renders the sim viewport (real control: the kitting expert),
-# the ACTUAL Rerun viewer fills the data pane (embedded per Rerun's own
-# extend_viewer_ui example, fed by a gRPC server on :9876 inside the app),
-# and a live agent-client-protocol session to Claude Code's own adapter
-# sits in the side panel with the instrument's MCP server handed to it.
+# The Studio (the-studio doc; chat-free since docs/64, 2026-09-02): a
+# native window where a MuJoCo subprocess renders the sim viewport into
+# a shared-memory ring, and the ACTUAL Rerun viewer fills the data pane
+# (embedded per Rerun's own extend_viewer_ui example, fed by a gRPC
+# server on :9876 inside the app). The agent lives in the developer's
+# own tool and reaches this window through the MCP surface.
 # Run with `cargo run --release` — the debug viewer's slow ingest is a
 # measured hazard (it once wedged the log channel), not a style choice.
 #
@@ -23,7 +23,6 @@ license = "FSL-1.1-ALv2"
 # against re_ui's Cargo.toml: egui ^0.36.1, eframe ^0.36.1); rerun 0.36.3
 # rides the same tree. Bump all of them together.
 [dependencies]
-agent-client-protocol = "2.0.0"
 eframe = { version = "0.36.1", default-features = false, features = [
     "wgpu",
     "default_fonts",
