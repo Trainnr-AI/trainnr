@@ -351,8 +351,12 @@ impl Drop for ViewportFeed {
             // the group so the python grandchild dies with the wrapper.
             #[cfg(unix)]
             {
+                // `-s TERM -- -PGID`: without the `--`, procps kill can
+                // re-parse a negative pgid as a signal spec plus a DIFFERENT
+                // pid — measured 2026-09-01, and the mis-signaled process
+                // was the Studio itself (stop closed the whole app).
                 let _ = Command::new("kill")
-                    .args(["-TERM", &format!("-{}", child.id())])
+                    .args(["-s", "TERM", "--", &format!("-{}", child.id())])
                     .status();
             }
             let _ = child.kill();
