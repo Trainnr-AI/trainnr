@@ -97,6 +97,58 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set) -> tuple | None:
     return latest
 
 
+def send_layout(rr: Any, name: str) -> None:
+    """The feed names its own panes - reward front and centre, one
+    view per series family - instead of the viewer's auto-layout,
+    which panes whichever entities it notices first and buried
+    rl/reward entirely (2026-09-01)."""
+    try:
+        import rerun.blueprint as rrb  # noqa: PLC0415 - viz extra
+
+        rr.send_blueprint(
+            rrb.Blueprint(
+                rrb.Grid(
+                    rrb.TimeSeriesView(
+                        origin=f"{name}/rl/reward", name="reward"
+                    ),
+                    rrb.TimeSeriesView(
+                        origin=f"{name}/rl",
+                        name="losses",
+                        contents=[
+                            "$origin/value_loss",
+                            "$origin/surrogate_loss",
+                            "$origin/entropy_loss",
+                            "$origin/action_std",
+                        ],
+                    ),
+                    rrb.TimeSeriesView(
+                        origin=f"{name}/rl/reward_terms", name="reward terms"
+                    ),
+                    rrb.TimeSeriesView(
+                        origin=f"{name}/rl/metrics", name="metrics"
+                    ),
+                    rrb.TimeSeriesView(
+                        origin=f"{name}/rl",
+                        name="pace",
+                        contents=[
+                            "$origin/episode_length",
+                            "$origin/steps_per_second",
+                        ],
+                    ),
+                    rrb.TimeSeriesView(origin=f"{name}/gpu", name="gpu"),
+                    rrb.TextDocumentView(
+                        origin=f"{name}/status", name="status"
+                    ),
+                    rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
+                    rrb.TimeSeriesView(origin=f"{name}/eval", name="eval"),
+                ),
+                collapse_panels=False,
+            )
+        )
+    except Exception as error:
+        print(f"layout not sent: {error}")
+
+
 # Only a default: every run states its own budget with --steps.
 DEFAULT_TOTAL_STEPS = 10000
 
@@ -274,6 +326,7 @@ def main() -> int:
     user_host, _, port = args.door.rpartition(":")
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)
+    send_layout(rr, args.name)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
 
     seen_stages: set[str] = set()
