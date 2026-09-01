@@ -144,7 +144,20 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
   the m6 bundle's stamp on the cfg; a 2-minute smoke train on the box
   moves in the Studio.
 - G3: the real training run (paid, operator's go) reaches a walking
-  gait; recorder + feed archives the run.
+  gait; recorder + feed archives the run. **CLOSED 2026-09-01**: 8,000
+  iterations on a rented RTX PRO 6000 (1 h 30 m ≈ $3.15, 4,096 envs,
+  0.70 s/iter, ~140k steps/s), mean reward 108→117.9, fell_over→0;
+  live in the Studio through the feed's rsl-rl leg; run archived at
+  `runs/microduck-walk/20260901-163412` (identity.json + model_7999.pt
+  + tfevents + log pulled to the box; full checkpoints on the pod
+  volume). Judged on screen via `walk_play` (native viewer + recorder,
+  identity-gated): ducks locomote under command and survive pushes —
+  the gait is HOPPING-flavoured, consistent with the recipe (air_time
+  weight 3.0 is the largest positive term, nothing rewards left-right
+  alternation, ENABLE_SYMMETRY ships False with them, and 8k of their
+  50k iterations); the policy also carries the head thrown fully back
+  (nothing in the reward watches head posture; likely ballast). Both
+  are §4 gait aesthetics — recorded, not retuned.
 - G4: the certificate, on both instruments, committed with the run's
   stamps; the §1 diff table lands in docs/33 with dates.
 - Each gate is a session-scale unit; G3 is the only one that costs
