@@ -37,6 +37,11 @@ def main() -> None:
     parser.add_argument("--log-root", type=Path, default=Path("../runs/microduck-walk"))
     parser.add_argument("--every", type=int, default=100)
     parser.add_argument("--frame-every", type=int, default=400)
+    parser.add_argument(
+        "--no-recorder",
+        action="store_true",
+        help="headless run (a pod with no Studio listening on :9876)",
+    )
     args = parser.parse_args()
 
     import warp as wp  # noqa: PLC0415
@@ -60,11 +65,15 @@ def main() -> None:
 
     cfg, identity = microduck_walk_env_cfg()
     cfg.scene.num_envs = args.envs
-    cfg.recorders = {
-        "rerun": RerunRecorderCfg(
-            app_id="rq-walk-g3", every=args.every, frame_every=args.frame_every
-        )
-    }
+    cfg.recorders = (
+        {}
+        if args.no_recorder
+        else {
+            "rerun": RerunRecorderCfg(
+                app_id="rq-walk-g3", every=args.every, frame_every=args.frame_every
+            )
+        }
+    )
 
     model_cfg = dict(
         hidden_dims=(512, 256, 128),
