@@ -486,12 +486,87 @@ def duck_scene() -> "object":
             ]
         )
         frame.attach_body(trunk, f"duck{index}/", "")
+        # The stand is a MOCAP body, not the world: the parade loop
+        # glides it forward, so the flock marches while the weld keeps
+        # each duck upright (free walking needs the trained policy -
+        # that is G3's job, not a preview's).
+        stand = scene.worldbody.add_body(
+            name=f"stand{index}",
+            mocap=True,
+            pos=[
+                (col - (columns - 1) / 2) * spacing,
+                (row - (count / columns - 1) / 2) * spacing,
+                0.112,
+            ],
+        )
         weld = scene.add_equality()
         weld.type = mujoco.mjtEq.mjEQ_WELD
         weld.objtype = mujoco.mjtObj.mjOBJ_BODY
         weld.name1 = trunk.name  # attach already prefixed it
-        weld.name2 = "world"
+        weld.name2 = stand.name
     return scene
+
+
+GAIT_HZ = 1.6  # step frequency of the parade waddle
+PARADE_SPEED = 0.12  # m/s along +x, wrapping at the floor's edge
+PARADE_WRAP_X = 2.4
+
+
+def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+    """The duck parade: a scripted waddle on every duck's leg servos
+    (phase-offset per duck) while each mocap stand glides forward -
+    the legs are real physics under weak real servos; the forward
+    motion is the stand's, honestly staged. Free walking is a trained
+    policy's job (flagship G3)."""
+    data = mujoco.MjData(model)
+
+    def targets(name: str) -> "list[tuple[int, float, float]]":
+        """(ctrl index, amplitude, phase) for one duck's gait."""
+        gait = {
+            "left_hip_pitch": (0.45, 0.0),
+            "right_hip_pitch": (0.45, math.pi),
+            "left_knee": (0.6, math.pi / 2),
+            "right_knee": (0.6, math.pi / 2 + math.pi),
+            "left_ankle": (0.3, math.pi),
+            "right_ankle": (0.3, 0.0),
+            "head_pitch": (0.12, math.pi / 2),
+        }
+        rows = []
+        for a in range(model.nu):
+            actuator = model.actuator(a).name or ""
+            if not actuator.startswith(name):
+                continue
+            joint = actuator.removeprefix(name)
+            if joint in gait:
+                amplitude, phase = gait[joint]
+                rows.append((a, amplitude, phase))
+        return rows
+
+    ducks = []
+    for index in range(model.nbody):
+        body = model.body(index)
+        if int(body.mocapid[0]) >= 0:
+            duck_index = len(ducks)
+            ducks.append(
+                (int(body.mocapid[0]), targets(f"duck{duck_index}/"), duck_index)
+            )
+    omega = 2.0 * math.pi * GAIT_HZ
+    dt = model.opt.timestep
+    t = 0.0
+    while True:
+        t += dt
+        for mocap_id, rows, duck_index in ducks:
+            duck_phase = duck_index * 0.7
+            for ctrl_index, amplitude, phase in rows:
+                data.ctrl[ctrl_index] = amplitude * math.sin(
+                    omega * t + phase + duck_phase
+                )
+            x = data.mocap_pos[mocap_id][0] + PARADE_SPEED * dt
+            if x > PARADE_WRAP_X:
+                x = -PARADE_WRAP_X
+            data.mocap_pos[mocap_id][0] = x
+        mujoco.mj_step(model, data)
+        pump.tick(data, dt)
 
 
 def stream(task_name: str) -> None:
@@ -513,6 +588,8 @@ def stream(task_name: str) -> None:
 
     if task is not None and task_name in TASKS_WITH_EXPERTS:
         run_expert_forever(task, pump)
+    elif task_name == DUCK:
+        run_flock_parade_forever(model, pump)
     else:
         run_idle_forever(model, pump)
 
