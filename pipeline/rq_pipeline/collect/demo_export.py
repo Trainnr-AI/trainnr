@@ -1,15 +1,18 @@
-"""Any task's pressed demonstrations → a LeRobot dataset (C1 phase 2).
+"""Pressed demonstrations → a LeRobot dataset: the ONE exporter.
 
-`kitting_export.export_kitting_demos` proved the shape on T5; this is
-the same converter with the task-specific constants replaced by the
-`Task` object itself: the state width, the camera key, the language
-instruction and the bundle stamp all come from the task the demos were
-pressed on, and the sidecar is the go-forward `EpisodeManifest`. One
-NEW refusal beyond the kitting converter's: episodes whose
+`kitting_export.export_kitting_demos` proved the shape on T5, then
+`export_demos` generalised it — as a line-for-line copy. Both fronts
+now share `_export_episodes` (folded 2026-09-01): the task-specific
+constants (state names, camera, instruction, bundle, sidecar class)
+are parameters; the loop, the refusals and the provenance write exist
+once.
+
+One refusal the kitting front never had the schema for: episodes whose
 `dynamics_basis` strings disagree do not become one dataset — mixing
 "we declared this span" with "we measured this interval" is exactly
 the confusion the paired study exists to measure
-(docs/e2e-research/58 §8, 62 §1).
+(docs/e2e-research/58 §8, 62 §1). Kitting's legacy `Manifest` carries
+no basis, so the check is vacuous there by construction.
 """
 
 from __future__ import annotations
@@ -19,13 +22,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.bundles.hashing import stamp
-from rq_pipeline.collect.kitting_export import DatasetProvenance, DemoLayout
+from rq_pipeline.collect.kitting_export import (
+    DatasetProvenance,
+    DemoLayout,
+    episode_dirs,
+)
 from rq_pipeline.collect.press import EpisodeManifest
 from rq_pipeline.collect.provenance import IMAGE_AXES, PROVENANCE_FILE
 from rq_pipeline.protocol import RGB_CHANNELS
 
 if TYPE_CHECKING:
     from rq_pipeline.tasks.task import Task
+
+__all__ = ["episode_dirs", "export_demos", "guard_constant_dims"]
 
 
 def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
@@ -60,32 +69,33 @@ def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
     return patched
 
 
-def episode_dirs(demos_dir: Path) -> list[Path]:
-    dirs = sorted(Path(demos_dir).glob("episode_*"))
-    if not dirs:
-        raise ValueError(f"no episode_* directories under {demos_dir}")
-    return dirs
-
-
 def _one(values: set[Any], what: str) -> Any:
     if len(values) != 1:
-        raise ValueError(f"episodes disagree on {what}: {sorted(values)}")
+        raise ValueError(f"episodes disagree on {what}: {sorted(map(str, values))}")
     (value,) = values
     return value
 
 
-def export_demos(
+def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     demos_dir: Path,
     root: Path,
     *,
-    task: Task,
     repo_id: str,
-    use_videos: bool = True,
+    use_videos: bool,
+    manifests: list[Any],
+    state_width: int,
+    state_names: list[str],
+    camera_key: str,
+    instruction: str,
+    bundle_dir: Path,
+    state_semantics: str | None,
+    action_semantics: str | None,
+    clamp_constant_dims: bool,
 ) -> Path:
-    """Write every episode under `demos_dir` as one LeRobot dataset at
-    `root`, features shaped by `task`. fps comes from the manifests
-    (control_hz / frame_every), never assumed; the provenance sidecar
-    carries the bundle stamp and every episode's manifest verbatim."""
+    """The engine both exporter fronts drive: every episode under
+    `demos_dir` as one LeRobot dataset at `root`. fps comes from the
+    manifests (control_hz / frame_every), never assumed; the provenance
+    sidecar carries the bundle stamp and every manifest verbatim."""
     try:
         import numpy as np  # noqa: PLC0415
         from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
@@ -102,14 +112,17 @@ def export_demos(
         ) from error
 
     episodes = episode_dirs(demos_dir)
-    manifests = [EpisodeManifest.read_from(ep) for ep in episodes]
     control_hz, frame_every = _one(
         {(m.control_hz, m.frame_every_control_ticks) for m in manifests},
         "frame rate",
     )
     expert = _one({m.expert for m in manifests}, "the expert")
-    # 58 §8: a dataset is one basis or it is two datasets.
-    _one({m.dynamics_basis for m in manifests}, "the dynamics basis")
+    # 58 §8: a dataset is one basis or it is two datasets. Legacy
+    # sidecars carry no basis; a batch of them agrees on None.
+    _one(
+        {getattr(m, "dynamics_basis", None) for m in manifests},
+        "the dynamics basis",
+    )
     if control_hz % frame_every:
         raise ValueError(
             f"{control_hz} Hz is not divisible by frame_every={frame_every}"
@@ -120,9 +133,9 @@ def export_demos(
         iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB)))
     )
     height, width = np.asarray(Image.open(first_frame)).shape[:2]
-    camera = task.cameras[0]  # the camera the press rendered
-    image_key = f"{OBS_IMAGES}.{camera.key}"
-    names = [f"q{i}" for i in range(task.state_width)]
+    # The keys the env's plugin derives (envs/lerobot_plugin.py): training
+    # and evaluation observe the same thing under the same name.
+    image_key = f"{OBS_IMAGES}.{camera_key}"
     features = {
         image_key: {
             "dtype": "video" if use_videos else "image",
@@ -131,13 +144,13 @@ def export_demos(
         },
         OBS_STATE: {
             "dtype": "float32",
-            "shape": (task.state_width,),
-            "names": names,
+            "shape": (state_width,),
+            "names": state_names,
         },
         ACTION: {
             "dtype": "float32",
-            "shape": (task.state_width,),
-            "names": names,
+            "shape": (state_width,),
+            "names": state_names,
         },
     }
     dataset = LeRobotDataset.create(
@@ -148,6 +161,8 @@ def export_demos(
         trajectory = np.load(episode / DemoLayout.TRAJECTORY_FILE)
         sensors = trajectory[DemoLayout.SENSORS]
         actions = trajectory[DemoLayout.ACTIONS]
+        # Sensors are per PHYSICS step, actions per CONTROL tick (measured:
+        # 14000 rows against 1400); frames are named by physics step.
         steps_per_control = len(sensors) // len(actions)
         if steps_per_control * len(actions) != len(sensors):
             raise ValueError(
@@ -163,28 +178,60 @@ def export_demos(
                 {
                     image_key: np.asarray(Image.open(frame_path)),
                     OBS_STATE: np.asarray(
-                        sensors[tick, : task.state_width], dtype=np.float32
+                        sensors[tick, :state_width], dtype=np.float32
                     ),
                     ACTION: np.asarray(
                         actions[tick // steps_per_control], dtype=np.float32
                     ),
-                    "task": task.instruction,
+                    "task": instruction,
                 }
             )
         dataset.save_episode()
         frame_counts.append(len(frames))
     if hasattr(dataset, "finalize"):
         dataset.finalize()
-    guard_constant_dims(Path(root))
+    if clamp_constant_dims:
+        guard_constant_dims(Path(root))
 
-    DatasetProvenance(
-        bundle=stamp(task.bundle_dir.name, task.bundle_dir),
+    provenance = DatasetProvenance(
+        bundle=stamp(bundle_dir.name, bundle_dir),
         source=Path(demos_dir).name,
         expert=expert,
         episodes=len(episodes),
         frames=frame_counts,
         fps=fps,
         manifests=[asdict(m) for m in manifests],
+        **({"state_semantics": state_semantics} if state_semantics else {}),
+        **({"action_semantics": action_semantics} if action_semantics else {}),
+    )
+    provenance.write(Path(root) / PROVENANCE_FILE)
+    return Path(root)
+
+
+def export_demos(
+    demos_dir: Path,
+    root: Path,
+    *,
+    task: Task,
+    repo_id: str,
+    use_videos: bool = True,
+) -> Path:
+    """Write every episode under `demos_dir` as one LeRobot dataset at
+    `root`, features shaped by `task`: the state width, the camera key,
+    the instruction and the bundle stamp all come from the task the
+    demos were pressed on."""
+    episodes = episode_dirs(demos_dir)
+    return _export_episodes(
+        demos_dir,
+        root,
+        repo_id=repo_id,
+        use_videos=use_videos,
+        manifests=[EpisodeManifest.read_from(ep) for ep in episodes],
+        state_width=task.state_width,
+        state_names=[f"q{i}" for i in range(task.state_width)],
+        camera_key=task.cameras[0].key,  # the camera the press rendered
+        instruction=task.instruction,
+        bundle_dir=task.bundle_dir,
         state_semantics=(
             f"sensordata[0:{task.state_width}]: the task's jointpos block "
             f"(radians) - what the harness observes with "
@@ -193,5 +240,5 @@ def export_demos(
         action_semantics=(
             f"{task.state_width} commanded actuator positions, ctrl order"
         ),
-    ).write(Path(root) / PROVENANCE_FILE)
-    return Path(root)
+        clamp_constant_dims=True,
+    )

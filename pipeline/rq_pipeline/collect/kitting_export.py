@@ -22,17 +22,18 @@ imports cleanly without them so it can raise the helpful error.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from rq_pipeline.collect.press import EpisodeSidecar
 
-from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.json_record import JsonRecord
-from rq_pipeline.collect.provenance import IMAGE_AXES, PROVENANCE_FILE
-from rq_pipeline.protocol import RGB_CHANNELS
+
+# Re-export: the tests and tools read the sidecar's name from this
+# module, where the provenance classes live.
+from rq_pipeline.collect.provenance import PROVENANCE_FILE  # noqa: F401
 from rq_pipeline.tasks.aloha2 import (
     ALOHA_TOP_CAMERAS,
     ARM_NAMES,
@@ -184,116 +185,28 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     bundle_dir: Path = DEFAULT_BUNDLE,
     use_videos: bool = True,
 ) -> Path:
-    """Write every episode under `demos_dir` as one LeRobot dataset at `root`.
-
-    fps comes from the manifest (control_hz / frame_every_control_ticks),
-    never assumed. The provenance sidecar records the bundle stamp the
-    demos were simulated on and every episode's manifest — the dataset
-    is traceable to the exact dynamics and draws it came from, the same
-    rule as the certificate.
-    """
-    try:
-        import numpy as np  # noqa: PLC0415
-        from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
-        from lerobot.utils.constants import (  # noqa: PLC0415
-            ACTION,
-            OBS_IMAGES,
-            OBS_STATE,
-        )
-        from PIL import Image  # noqa: PLC0415
-    except ImportError as error:
-        raise ImportError(
-            "kitting export needs the 'train' extra on Python >= 3.12 "
-            "(uv sync --python 3.12 --extra train)"
-        ) from error
+    """The T5 front of the one exporter (`demo_export._export_episodes`):
+    the kitting constants — servo names, top camera, legacy `Manifest`
+    sidecar — over the shared loop, refusals and provenance write.
+    `clamp_constant_dims` off: every kitting joint moves, and the T5
+    datasets predate the guard (their stats stay byte-stable)."""
+    # Function-local: demo_export imports this module (the layout and
+    # provenance classes live here), so the top level would be a cycle.
+    from rq_pipeline.collect.demo_export import _export_episodes  # noqa: PLC0415
 
     episodes = episode_dirs(demos_dir)
-    manifests = [Manifest.read_from(ep) for ep in episodes]
-    rates = {(m.control_hz, m.frame_every_control_ticks) for m in manifests}
-    if len(rates) != 1:
-        raise ValueError(f"episodes disagree on frame rate: {sorted(rates)}")
-    (control_hz, frame_every), *_ = rates
-    experts = {m.expert for m in manifests}
-    if len(experts) != 1:
-        # Two choreographies in one batch is two datasets; a stamp that
-        # names the expert exists so this cannot pass unnoticed.
-        raise ValueError(f"episodes disagree on the expert: {sorted(experts)}")
-    (expert,) = experts
-    if control_hz % frame_every:
-        raise ValueError(
-            f"{control_hz} Hz is not divisible by frame_every={frame_every}"
-        )
-    fps = control_hz // frame_every
-
-    first_frame = next(
-        iter(sorted((episodes[0] / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB)))
+    return _export_episodes(
+        demos_dir,
+        root,
+        repo_id=repo_id,
+        use_videos=use_videos,
+        manifests=[Manifest.read_from(ep) for ep in episodes],
+        state_width=STATE_WIDTH,
+        state_names=SERVO_NAMES,
+        camera_key=TOP_CAMERA.key,
+        instruction=task,
+        bundle_dir=bundle_dir,
+        state_semantics=None,  # DatasetProvenance's defaults ARE the kitting text
+        action_semantics=None,
+        clamp_constant_dims=False,
     )
-    height, width = np.asarray(Image.open(first_frame)).shape[:2]
-    # The keys the env's plugin derives (envs/lerobot_plugin.py): training
-    # and evaluation observe the same thing under the same name.
-    image_key = f"{OBS_IMAGES}.{TOP_CAMERA.key}"
-    features = {
-        image_key: {
-            "dtype": "video" if use_videos else "image",
-            "shape": (height, width, RGB_CHANNELS),
-            "names": list(IMAGE_AXES),
-        },
-        OBS_STATE: {
-            "dtype": "float32",
-            "shape": (STATE_WIDTH,),
-            "names": SERVO_NAMES,
-        },
-        ACTION: {
-            "dtype": "float32",
-            "shape": (STATE_WIDTH,),
-            "names": SERVO_NAMES,
-        },
-    }
-    dataset = LeRobotDataset.create(
-        repo_id=repo_id, fps=fps, root=root, features=features, use_videos=use_videos
-    )
-    frame_counts = []
-    for episode in episodes:
-        trajectory = np.load(episode / DemoLayout.TRAJECTORY_FILE)
-        sensors = trajectory[DemoLayout.SENSORS]
-        actions = trajectory[DemoLayout.ACTIONS]
-        # Sensors are per PHYSICS step, actions per CONTROL tick (measured:
-        # 14000 rows against 1400); frames are named by physics step.
-        steps_per_control = len(sensors) // len(actions)
-        if steps_per_control * len(actions) != len(sensors):
-            raise ValueError(
-                f"{episode}: {len(sensors)} sensor rows are not a whole "
-                f"multiple of {len(actions)} action rows"
-            )
-        frames = sorted((episode / DemoLayout.FRAMES_DIR).glob(DemoLayout.FRAME_GLOB))
-        if not frames:
-            raise ValueError(f"{episode} has no frames")
-        for frame_path in frames:
-            tick = int(frame_path.stem)  # the physics step the frame was taken at
-            dataset.add_frame(
-                {
-                    image_key: np.asarray(Image.open(frame_path)),
-                    OBS_STATE: np.asarray(
-                        sensors[tick, :STATE_WIDTH], dtype=np.float32
-                    ),
-                    ACTION: np.asarray(
-                        actions[tick // steps_per_control], dtype=np.float32
-                    ),
-                    "task": task,
-                }
-            )
-        dataset.save_episode()
-        frame_counts.append(len(frames))
-    if hasattr(dataset, "finalize"):
-        dataset.finalize()
-
-    DatasetProvenance(
-        bundle=stamp(bundle_dir.name, bundle_dir),
-        source=Path(demos_dir).name,
-        expert=expert,
-        episodes=len(episodes),
-        frames=frame_counts,
-        fps=fps,
-        manifests=[asdict(m) for m in manifests],
-    ).write(Path(root) / PROVENANCE_FILE)
-    return Path(root)
