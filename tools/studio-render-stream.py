@@ -117,7 +117,9 @@ RIG_CAMERAS = {
 # 10 Hz is ample for glanceable telemetry and stays far under the drain
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0  # scalar series: plots need no more
-MIRROR_HZ = 30.0  # the 3D twin: motion legibility beside 30 fps pixels
+MIRROR_HZ = 20.0  # the 3D twin: fluid motion; 30 Hz of per-mesh
+# messages (~275 ms/s of Python serialization) blew the loop's realtime
+# budget and slowed BOTH panes (2026-09-01)
 # Past this geom count the shadow pass costs more than it lights (43 vs
 # 10.5 ms/frame on the 20-duck flock, 2026-09-01).
 SHADOW_GEOM_BUDGET = 400
@@ -467,6 +469,9 @@ def duck_scene() -> "object":
     repo = pathlib.Path(__file__).resolve().parent.parent
     scene = mujoco.MjSpec()
     scene.modelname = "microduck-preview"
+    # A decorative parade needs no 2 ms integration: 4 ms halves the
+    # physics share of the realtime budget (375 -> ~190 ms/s).
+    scene.option.timestep = 0.004
     scene.worldbody.add_geom(
         name="floor",
         type=mujoco.mjtGeom.mjGEOM_PLANE,
