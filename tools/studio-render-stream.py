@@ -347,65 +347,127 @@ class RenderPump:
         self.model = model
         self.orbit = orbit
         self.narrator = narrator
-        self.width, self.height = WIDTH, HEIGHT
-        self.renderer = mujoco.Renderer(model, height=self.height, width=self.width)
-        # The shadow pass re-renders every geom per light: measured on
-        # the 20-duck flock at 1300x400, 43 ms/frame with shadows vs
-        # 10.5 without (2026-09-01). Heavy scenes trade shadows for
-        # frame rate; small ones keep the pretty light.
-        self.shadows = model.ngeom <= SHADOW_GEOM_BUDGET
-        self.cam = mujoco.MjvCamera()
-        self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-        self.cam.lookat = list(orbit.lookat)
-        self.out = sys.stdout.buffer
-        self.last_rendered = 0.0
         self.last_narrated = 0.0
         # Episodes reset `data.time` to zero; the narration timeline must
         # not rewind with them, so it runs on an offset the episode loop
         # advances at each boundary.
         self.time_offset = 0.0
         self.last_sim_time = 0.0
+        # The render lane: its own THREAD with its own MjData — physics
+        # never waits for the GPU, drags track at true frame rate, and
+        # the two big budget lines overlap instead of queueing (the
+        # leanest fix, 2026-09-01: mj_step/render/pipe-write all release
+        # the GIL, so a second thread is real parallelism). The staging
+        # MjData carries the latest state; the render thread copies it
+        # under the lock, forwards, and draws. The EGL context is
+        # thread-affine, so the Renderer is BUILT in the render thread.
+        self._staging = mujoco.MjData(model)
+        self._staging_lock = threading.Lock()
+        self._fresh = threading.Event()
+        # macOS: Cocoa wants GL on the main thread (MuJoCo's offscreen
+        # path rides GLFW there) — render inline instead of in a lane.
+        self._threaded = sys.platform != "darwin"
+        if self._threaded:
+            threading.Thread(target=self._render_lane, daemon=True).start()
+        else:
+            self._inline_state = None  # built lazily by _render_once
 
     def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
-        """Observe one step: narrate and render (each rate-limited), then
-        sleep toward real time — `pace_seconds` is how much simulated
-        time this step advanced."""
+        """Observe one step: narrate (rate-limited), hand the render lane
+        a snapshot, then sleep toward real time — `pace_seconds` is how
+        much simulated time this step advanced."""
         self.last_sim_time = data.time
         now = time.monotonic()
         if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
             self.last_narrated = now
             self.narrator.log(data, self.time_offset + data.time)
 
-        if now - self.last_rendered >= 1.0 / TARGET_HZ:
-            self.last_rendered = now
-            want_width, want_height = self.orbit.size()
-            # Clamp to the compiled framebuffer no matter what the viewer
-            # asked: `mujoco.Renderer` refuses (raises) beyond it, and an
-            # exception here kills the whole stream.
-            want_width = min(want_width, int(self.model.vis.global_.offwidth))
-            want_height = min(want_height, int(self.model.vis.global_.offheight))
-            if (want_width, want_height) != (self.width, self.height):
-                # `Renderer` is fixed-size once constructed — a size
-                # change means a rebuild, not a resize.
-                self.renderer.close()
-                self.width, self.height = want_width, want_height
-                self.renderer = mujoco.Renderer(
-                    self.model, height=self.height, width=self.width
-                )
-            self.orbit.apply_to(self.cam)
-            self.renderer.update_scene(data, camera=self.cam)
-            if not self.shadows:
-                self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
-            frame = self.renderer.render()  # HxWx3 uint8, C-contiguous
-            self.out.write(struct.pack("<II", self.width, self.height))
-            self.out.write(frame.tobytes())
-            self.out.flush()
+        with self._staging_lock:
+            self._staging.qpos[:] = data.qpos
+            if self.model.nmocap:
+                self._staging.mocap_pos[:] = data.mocap_pos
+                self._staging.mocap_quat[:] = data.mocap_quat
+        self._fresh.set()
+        if not self._threaded:
+            self._render_inline(now)
 
         # Pace toward real time: sleep off whatever of this step's
         # simulated duration wall time hasn't already consumed.
         remaining = pace_seconds - (time.monotonic() - now)
         if remaining > 0:
             time.sleep(remaining)
+
+    def _render_inline(self, now: float) -> None:
+        """The Darwin path: one render lane's body, run synchronously at
+        TARGET_HZ inside tick (Cocoa's main-thread GL rule)."""
+        if self._inline_state is None:
+            self._inline_state = {"last": 0.0}
+        if now - self._inline_state["last"] < 1.0 / TARGET_HZ:
+            return
+        self._inline_state["last"] = now
+        self._render_step(self._inline_state)
+
+    def _render_lane(self) -> None:
+        state: dict = {}
+        interval = 1.0 / TARGET_HZ
+        while True:
+            self._fresh.wait(timeout=interval)
+            self._fresh.clear()
+            began = time.monotonic()
+            self._render_step(state)
+            # Hold the lane to the target rate.
+            leftover = interval - (time.monotonic() - began)
+            if leftover > 0:
+                time.sleep(leftover)
+
+    def _render_step(self, state: dict) -> None:
+        """One frame: snapshot -> forward -> (re)size -> render -> ship.
+        `state` persists the renderer/camera between calls; built on
+        first use IN THE CALLING THREAD (GL contexts are thread-affine).
+        Shadow budget: measured on the 20-duck flock at 1300x400,
+        43 ms/frame with shadows vs 10.5 without (2026-09-01)."""
+        model = self.model
+        if "renderer" not in state:
+            state["width"], state["height"] = WIDTH, HEIGHT
+            state["renderer"] = mujoco.Renderer(
+                model, height=state["height"], width=state["width"]
+            )
+            state["shadows"] = model.ngeom <= SHADOW_GEOM_BUDGET
+            cam = mujoco.MjvCamera()
+            cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+            cam.lookat = list(self.orbit.lookat)
+            state["cam"] = cam
+            state["local"] = mujoco.MjData(model)
+        local = state["local"]
+        with self._staging_lock:
+            local.qpos[:] = self._staging.qpos
+            if model.nmocap:
+                local.mocap_pos[:] = self._staging.mocap_pos
+                local.mocap_quat[:] = self._staging.mocap_quat
+        mujoco.mj_forward(model, local)
+        want_width, want_height = self.orbit.size()
+        # Clamp to the compiled framebuffer no matter what the viewer
+        # asked: `mujoco.Renderer` refuses (raises) beyond it, and an
+        # exception here kills the whole stream.
+        want_width = min(want_width, int(model.vis.global_.offwidth))
+        want_height = min(want_height, int(model.vis.global_.offheight))
+        if (want_width, want_height) != (state["width"], state["height"]):
+            # `Renderer` is fixed-size once constructed — a size change
+            # means a rebuild, not a resize.
+            state["renderer"].close()
+            state["width"], state["height"] = want_width, want_height
+            state["renderer"] = mujoco.Renderer(
+                model, height=state["height"], width=state["width"]
+            )
+        self.orbit.apply_to(state["cam"])
+        state["renderer"].update_scene(local, camera=state["cam"])
+        if not state["shadows"]:
+            state["renderer"].scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        frame = state["renderer"].render()  # HxWx3 uint8, C-contiguous
+        out = sys.stdout.buffer
+        out.write(struct.pack("<II", state["width"], state["height"]))
+        out.write(frame.tobytes())
+        out.flush()
 
 
 def run_expert_forever(task: "object", pump: RenderPump) -> None:
