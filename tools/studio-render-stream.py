@@ -13,24 +13,35 @@ MuJoCo already renders correctly from Python everywhere this repo runs it
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
 any language can display it without touching MuJoCo's C API directly.
 
-Wire format, stdout, per frame, flushed immediately:
+Frame transport (2026-09-02, the Rust piping rebuild): with `--shm
+<path>` frames go through a MEMORY-MAPPED ring the controller created —
+16-byte header (magic u32, seq u32, width u32, height u32, all LE) then
+raw RGB8 pixels — under a seqlock (seq odd while writing, even when
+stable; a reader that sees the seq move mid-copy discards and retries).
+One 0xF7 byte on stdout per published frame is the wake-up token, so
+the controller never polls. Raw frames over the pipe (the previous
+wire, kept as the no-`--shm` fallback below) measured ~6 MB/frame — the
+lag the ring exists to remove.
+
+Fallback wire format, stdout, per frame, flushed immediately:
 
     width  : u32 little-endian
     height : u32 little-endian
     pixels : width * height * 3 raw RGB8 bytes, row-major, no padding
 
-No length-of-message prefix beyond that — width/height give the reader
-everything needed to know how many pixel bytes follow. A reader that reads
-short must retry; this script does not resend a partial frame.
+Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
 
-Wire format, stdin, per camera+size update — 3 little-endian f32 then 2
-little-endian u32, no header (fixed size, nothing to frame):
-
-    d_azimuth   : degrees to ADD, MuJoCo's own convention
-    d_elevation : degrees to add (clamped here)
-    d_distance  : metres to add (clamped here)
-    width       : absolute pixels the renderer should produce
-    height      : absolute pixels the renderer should produce
+    0x01 camera : f32 d_azimuth (degrees to ADD, MuJoCo's convention),
+                  f32 d_elevation (clamped here), f32 d_distance
+                  (metres, clamped here), u32 width, u32 height
+                  (absolute pixels the renderer should produce)
+    0x02 select : f32 x, f32 y — pointer in the RENDERED image,
+                  normalized [0,1], top-left origin; starts a
+                  perturbation on the body under the pointer
+    0x03 drag   : f32 dx, f32 dy — normalized pointer deltas moving the
+                  active perturbation (MuJoCo's own mjv_movePerturb)
+    0x04 release: end the perturbation
+    0x05 pause  : toggle the physics loop
 
 Camera values arrive as DELTAS and this side integrates them: every
 absolute camera fact — the per-rig starting pose, the clamps — lives
@@ -65,6 +76,7 @@ from _lab import bootstrap
 bootstrap()
 
 import mujoco  # noqa: E402
+import numpy as np  # noqa: E402
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
 
 BUILDERS = {entry.name: entry for entry in tasks().values()}
@@ -74,7 +86,13 @@ BUILDERS = {entry.name: entry for entry in tasks().values()}
 TASKS_WITH_EXPERTS = ("kitting",)
 DEFAULT_TASK = "kitting"
 WIDTH, HEIGHT = 1024, 576
-TARGET_HZ = 30.0
+# 60 with the shared-memory ring (a frame is one memcpy); the stdout
+# fallback stays honest at 30 (6 MB/frame through a pipe, measured).
+TARGET_HZ = 60.0
+FALLBACK_HZ = 30.0
+SHM_HEADER = 16  # magic u32, seq u32, width u32, height u32 - all LE
+SHM_MAGIC = 0x524A4D51  # "QMJR"
+FRAME_TOKEN = b"\xf7"  # one byte on stdout per published shm frame
 
 # Free-camera framing per rig, seeded from each rig's own viewer tools
 # (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
@@ -273,7 +291,6 @@ MAX_RENDER_SIDE = 1920
 # (pos=[0, -0.85, 0.25], rq_pipeline/tasks/so101.py) so the free camera's
 # first frame looks close to that fixed one — approximate by eye, not
 # derived, since the viewer immediately lets a human correct it.
-CAMERA_UPDATE_BYTES = 20  # 3 x f32, 2 x u32
 
 
 # The one home for every absolute camera fact (see the module docstring's
@@ -328,13 +345,184 @@ class OrbitCamera:
             self.width, self.height = width, height
 
 
-def _read_camera_updates(camera: OrbitCamera) -> None:
+class Perturber:
+    """A viewer-grade perturbation, split across the three threads that
+    each own a piece of it: the stdin reader QUEUES select/drag/release,
+    the render lane RESOLVES them (selection and mjv_movePerturb need
+    the freshly updated scene and camera), and the physics loop APPLIES
+    the force each step (mjv_applyPerturbForce writes xfrc_applied).
+    The native viewer does all three in one loop; across a process
+    boundary the queue is the seam."""
+
+    def __init__(self, model: "mujoco.MjModel") -> None:
+        self._lock = threading.Lock()
+        self._model = model
+        self.pert = mujoco.MjvPerturb()
+        self._live_xpos = np.zeros((model.nbody, 3))
+        self._pending_select: tuple[float, float] | None = None
+        self._pending_drag = [0.0, 0.0]
+        self._release = False
+        self.paused = False
+
+    # -- stdin reader side ------------------------------------------------
+    def queue_select(self, x: float, y: float) -> None:
+        with self._lock:
+            self._pending_select = (x, y)
+
+    def queue_drag(self, dx: float, dy: float) -> None:
+        with self._lock:
+            self._pending_drag[0] += dx
+            self._pending_drag[1] += dy
+
+    def queue_release(self) -> None:
+        with self._lock:
+            self._release = True
+
+    def toggle_pause(self) -> None:
+        self.paused = not self.paused
+
+    # -- render-lane side -------------------------------------------------
+    def resolve(self, data: "mujoco.MjData", scene, vopt, aspect: float) -> None:
+        """Selection and drag against the CURRENT scene — MuJoCo's own
+        math: mjv_select ray-casts the pointer, mjv_movePerturb moves
+        the reference point in the camera plane."""
+        with self._lock:
+            select, self._pending_select = self._pending_select, None
+            dx, dy = self._pending_drag
+            self._pending_drag = [0.0, 0.0]
+            release, self._release = self._release, False
+        if release:
+            self.pert.active = 0
+            self.pert.select = 0
+            return
+        if select is not None:
+            x, y = select
+            point = np.zeros(3)
+            geom_id = np.array([-1], dtype=np.int32)
+            flex_id = np.array([-1], dtype=np.int32)
+            skin_id = np.array([-1], dtype=np.int32)
+            # mjv_select's rely runs bottom-up; the wire sends top-down.
+            body = mujoco.mjv_select(
+                self._model, data, vopt, aspect, x, 1.0 - y,
+                scene, point, geom_id, flex_id, skin_id,
+            )
+            if body > 0:
+                self.pert.select = body
+                self.pert.active = mujoco.mjtPertBit.mjPERT_TRANSLATE
+                mujoco.mjv_initPerturb(self._model, data, scene, self.pert)
+        if self.pert.active and (dx or dy):
+            mujoco.mjv_movePerturb(
+                self._model, data,
+                mujoco.mjtMouse.mjMOUSE_MOVE_H, dx, dy, scene, self.pert,
+            )
+
+    def draw(self, scene) -> None:
+        """The pull, visible: a connector from the body to the reference
+        point (the Renderer's update_scene never passes pert down, so
+        the built-in mjVIS_PERTFORCE arrow cannot draw itself)."""
+        if not self.pert.active or scene.ngeom >= scene.maxgeom:
+            return
+        geom = scene.geoms[scene.ngeom]
+        mujoco.mjv_initGeom(
+            geom, mujoco.mjtGeom.mjGEOM_CAPSULE,
+            np.zeros(3), np.zeros(3), np.zeros(9),
+            np.array([1.0, 0.35, 0.1, 0.8], dtype=np.float32),
+        )
+        mujoco.mjv_connector(
+            geom, mujoco.mjtGeom.mjGEOM_CAPSULE, 0.004,
+            self.pert.refpos, self._body_pos(),
+        )
+        scene.ngeom += 1
+
+    def _body_pos(self) -> "np.ndarray":
+        return self._live_xpos[self.pert.select].copy()
+
+    # -- physics side -----------------------------------------------------
+    def apply(self, data: "mujoco.MjData") -> None:
+        """Each physics step: the standard simulate.cc ritual — clear,
+        then let MuJoCo turn the reference offset into a force."""
+        data.xfrc_applied[:] = 0.0
+        if self.pert.active:
+            mujoco.mjv_applyPerturbForce(self._model, data, self.pert)
+        # The render lane draws the connector from the LIVE body pose.
+        self._live_xpos = data.xpos
+
+
+# The stdin protocol's tags, one home (mirrored by viewport.rs).
+TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
+TAG_PAYLOAD_BYTES = {
+    TAG_CAMERA: 20,
+    TAG_SELECT: 8,
+    TAG_DRAG: 8,
+    TAG_RELEASE: 0,
+    TAG_PAUSE: 0,
+}
+
+
+def _read_control_messages(camera: OrbitCamera, perturber, poke) -> None:
+    """The tagged stdin protocol (module docstring): camera deltas,
+    perturbation gestures, pause. `poke` wakes the render lane so a
+    drag re-renders NOW instead of at the next physics tick."""
     stdin = sys.stdin.buffer
     while True:
-        raw = stdin.read(CAMERA_UPDATE_BYTES)
-        if len(raw) < CAMERA_UPDATE_BYTES:
+        tag_raw = stdin.read(1)
+        if not tag_raw:
             return  # controller closed stdin — keep rendering at the last pose
-        camera.apply_deltas(*struct.unpack("<fffII", raw))
+        tag = tag_raw[0]
+        size = TAG_PAYLOAD_BYTES.get(tag)
+        if size is None:
+            return  # protocol desync: better a frozen camera than garbage
+        payload = stdin.read(size) if size else b""
+        if len(payload) < size:
+            return
+        if tag == TAG_CAMERA:
+            camera.apply_deltas(*struct.unpack("<fffII", payload))
+        elif tag == TAG_SELECT:
+            perturber.queue_select(*struct.unpack("<ff", payload))
+        elif tag == TAG_DRAG:
+            perturber.queue_drag(*struct.unpack("<ff", payload))
+        elif tag == TAG_RELEASE:
+            perturber.queue_release()
+        elif tag == TAG_PAUSE:
+            perturber.toggle_pause()
+        poke()
+
+
+class FrameSink:
+    """Where finished pixels go: the shared-memory ring when the
+    controller gave us one (seqlock write, then a one-byte stdout
+    token), the raw-stdout wire otherwise."""
+
+    def __init__(self, shm_path: str | None) -> None:
+        self._mm = None
+        if shm_path:
+            import mmap  # noqa: PLC0415
+
+            handle = open(shm_path, "r+b")  # noqa: SIM115 - lives forever
+            self._mm = mmap.mmap(handle.fileno(), 0)
+            self._seq = 0
+            struct.pack_into("<I", self._mm, 0, SHM_MAGIC)
+
+    @property
+    def shared(self) -> bool:
+        return self._mm is not None
+
+    def ship(self, frame: "np.ndarray", width: int, height: int) -> None:
+        out = sys.stdout.buffer
+        if self._mm is None:
+            out.write(struct.pack("<II", width, height))
+            out.write(frame.tobytes())
+            out.flush()
+            return
+        self._seq += 1
+        struct.pack_into("<I", self._mm, 4, self._seq)  # odd: writing
+        struct.pack_into("<II", self._mm, 8, width, height)
+        pixels = frame.tobytes()
+        self._mm[SHM_HEADER : SHM_HEADER + len(pixels)] = pixels
+        self._seq += 1
+        struct.pack_into("<I", self._mm, 4, self._seq)  # even: stable
+        out.write(FRAME_TOKEN)
+        out.flush()
 
 
 class RenderPump:
@@ -342,10 +530,20 @@ class RenderPump:
     frame out, narration — shared by the expert's `on_control` hook and
     the no-expert idle loop, so both paths behave identically."""
 
-    def __init__(self, model: "mujoco.MjModel", orbit: OrbitCamera, narrator) -> None:
+    def __init__(
+        self,
+        model: "mujoco.MjModel",
+        orbit: OrbitCamera,
+        narrator,
+        perturber: Perturber | None = None,
+        sink: FrameSink | None = None,
+    ) -> None:
         self.model = model
         self.orbit = orbit
         self.narrator = narrator
+        self.perturber = perturber or Perturber(model)
+        self.sink = sink or FrameSink(None)
+        self.hz = TARGET_HZ if self.sink.shared else FALLBACK_HZ
         self.last_narrated = 0.0
         # Episodes reset `data.time` to zero; the narration timeline must
         # not rewind with them, so it runs on an offset the episode loop
@@ -376,6 +574,8 @@ class RenderPump:
         a snapshot, then sleep toward real time — `pace_seconds` is how
         much simulated time this step advanced."""
         self.last_sim_time = data.time
+        # The shove, if one is active: xfrc for the caller's NEXT steps.
+        self.perturber.apply(data)
         now = time.monotonic()
         if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
             self.last_narrated = now
@@ -398,17 +598,17 @@ class RenderPump:
 
     def _render_inline(self, now: float) -> None:
         """The Darwin path: one render lane's body, run synchronously at
-        TARGET_HZ inside tick (Cocoa's main-thread GL rule)."""
+        the pump's rate inside tick (Cocoa's main-thread GL rule)."""
         if self._inline_state is None:
             self._inline_state = {"last": 0.0}
-        if now - self._inline_state["last"] < 1.0 / TARGET_HZ:
+        if now - self._inline_state["last"] < 1.0 / self.hz:
             return
         self._inline_state["last"] = now
         self._render_step(self._inline_state)
 
     def _render_lane(self) -> None:
         state: dict = {}
-        interval = 1.0 / TARGET_HZ
+        interval = 1.0 / self.hz
         while True:
             self._fresh.wait(timeout=interval)
             self._fresh.clear()
@@ -458,15 +658,24 @@ class RenderPump:
             state["renderer"] = mujoco.Renderer(
                 model, height=state["height"], width=state["width"]
             )
+        if "vopt" not in state:
+            # The physics made visible (rung 1, 2026-09-02): the same
+            # scene-option flags the native viewer toggles with F -
+            # contact forces as arrows, drawn by mjv_updateScene itself.
+            vopt = mujoco.MjvOption()
+            vopt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
+            state["vopt"] = vopt
         self.orbit.apply_to(state["cam"])
-        state["renderer"].update_scene(local, camera=state["cam"])
+        renderer = state["renderer"]
+        renderer.update_scene(local, camera=state["cam"], scene_option=state["vopt"])
+        self.perturber.resolve(
+            local, renderer.scene, state["vopt"], state["width"] / state["height"]
+        )
+        self.perturber.draw(renderer.scene)
         if not state["shadows"]:
-            state["renderer"].scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
-        frame = state["renderer"].render()  # HxWx3 uint8, C-contiguous
-        out = sys.stdout.buffer
-        out.write(struct.pack("<II", state["width"], state["height"]))
-        out.write(frame.tobytes())
-        out.flush()
+            renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        frame = renderer.render()  # HxWx3 uint8, C-contiguous
+        self.sink.ship(frame, state["width"], state["height"])
 
 
 def run_expert_forever(task: "object", pump: RenderPump) -> None:
@@ -658,7 +867,7 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
         pump.tick(data, dt * substeps)
 
 
-def stream(task_name: str) -> None:
+def stream(task_name: str, shm_path: str | None) -> None:
     if task_name == DUCK:
         task, spec, rig = None, duck_scene(), "microduck"
     else:
@@ -672,8 +881,18 @@ def stream(task_name: str) -> None:
     model = spec.compile()
 
     orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
-    threading.Thread(target=_read_camera_updates, args=(orbit,), daemon=True).start()
-    pump = RenderPump(model, orbit, narrator_for(model, task_name))
+    perturber = Perturber(model)
+    pump = RenderPump(
+        model, orbit, narrator_for(model, task_name), perturber, FrameSink(shm_path)
+    )
+    # `poke` = the render lane's own event: a camera or perturb gesture
+    # re-renders NOW, not at the next physics tick (the native viewer's
+    # decoupling, reproduced across the process boundary).
+    threading.Thread(
+        target=_read_control_messages,
+        args=(orbit, perturber, pump._fresh.set),
+        daemon=True,
+    ).start()
 
     if task is not None and task_name in TASKS_WITH_EXPERTS:
         run_expert_forever(task, pump)
@@ -684,7 +903,12 @@ def stream(task_name: str) -> None:
 
 
 if __name__ == "__main__":
-    task_name = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TASK
+    arguments = [a for a in sys.argv[1:] if not a.startswith("--")]
+    shm = None
+    for flag in sys.argv[1:]:
+        if flag.startswith("--shm="):
+            shm = flag.removeprefix("--shm=")
+    task_name = arguments[0] if arguments else DEFAULT_TASK
     if task_name != DUCK and task_name not in BUILDERS:
         sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")
-    stream(task_name)
+    stream(task_name, shm)

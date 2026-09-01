@@ -254,13 +254,21 @@ impl eframe::App for StudioShell {
         // Two panel ids on purpose: egui remembers a panel's size by id,
         // and the idle strip must not inherit a 420 px preview height.
         let active = self.viewport.is_active();
-        egui::Panel::top(if active { "sim_viewport" } else { "sim_viewport_idle" })
-            .resizable(active)
-            .default_size(if active { VIEWPORT_DEFAULT_HEIGHT } else { 36.0 })
-            .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
-            .show(ui, |ui| {
-                self.viewport.show(ui);
-            });
+        egui::Panel::top(if active {
+            "sim_viewport"
+        } else {
+            "sim_viewport_idle"
+        })
+        .resizable(active)
+        .default_size(if active {
+            VIEWPORT_DEFAULT_HEIGHT
+        } else {
+            36.0
+        })
+        .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
+        .show(ui, |ui| {
+            self.viewport.show(ui);
+        });
         self.rerun_app.ui(ui, frame);
     }
 }
