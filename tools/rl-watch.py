@@ -40,6 +40,7 @@ import argparse
 import atexit
 import contextlib
 import functools
+import math
 import multiprocessing
 import shutil
 import tempfile
@@ -56,11 +57,10 @@ import rerun as rr
 from _lab import bootstrap, frame_viewer, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
+from rq_pipeline.tasks.scene import GeomGroup, grid_of  # noqa: E402
 from rq_pipeline.viz import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
-PITCH = 1.6
 MIRROR_EVERY = 10  # control steps at 50 Hz -> 5 Hz
 REALTIME_SLEEP = 0.02  # one control step
 BOX_HELD_Z = 0.15  # the env's own "picked" threshold
@@ -93,30 +93,13 @@ def materialise_assets(env) -> Path:
 
 def grid_model_from_xml(xml_path, worlds: int):
     """The env's scene, attached `worlds` times on a grid, as a CPU model."""
-    scene = mujoco.MjSpec()
-    scene.modelname = f"{ENV_NAME}-grid-{worlds}"
+    scene, prefixes = grid_of(
+        f"{ENV_NAME}-grid-{worlds}",
+        (mujoco.MjSpec.from_file(str(xml_path)) for _ in range(worlds)),
+    )
     scene.visual.quality.shadowsize = 2048
-    scene.worldbody.add_light(
-        pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
-    )
-    scene.worldbody.add_geom(
-        name="ground",
-        type=mujoco.mjtGeom.mjGEOM_PLANE,
-        size=[0, 0, 0.1],
-        pos=[0, 0, -0.75],
-        rgba=[0.12, 0.12, 0.12, 1],
-    )
-    side = int(np.ceil(np.sqrt(worlds)))
-    for n in range(worlds):
-        child = mujoco.MjSpec.from_file(str(xml_path))
-        for geom in child.geoms:
-            if geom.name == "floor":
-                geom.group = GeomGroup.HIDDEN
-        row, col = divmod(n, side)
-        frame = scene.worldbody.add_frame(
-            pos=[(col - (side - 1) / 2) * PITCH, (row - (side - 1) / 2) * PITCH, 0]
-        )
-        scene.attach(child, prefix=f"w{n:02d}/", frame=frame)
+    side = math.isqrt(max(worlds - 1, 0)) + 1
+    del prefixes  # the mirror reads geoms straight off the compiled model
     return scene.compile(), side
 
 

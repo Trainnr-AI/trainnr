@@ -55,13 +55,13 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
 from rq_pipeline.tasks.scene import (  # noqa: E402
     GeomGroup,
     NominalOptions,
+    grid_of,
     pin_nominal_options,
     set_render_budget,
 )
 from rq_pipeline.viz import RigMirror  # noqa: E402
 
 NEUTRAL_QPOS = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084, 0.0084] * 2
-PITCH = 1.6  # metres between world origins; the rig is 1.22 m wide
 LIFTED_M = 0.05  # cube centre 3 cm above resting counts as lifted
 SIM_HZ = round(1 / NominalOptions.TIMESTEP)
 # The Rerun mirror costs one transform log per mesh per world (~900 for
@@ -86,40 +86,14 @@ def parse_args():
 
 def grid_scene(worlds: int, look: str):
     """One MjSpec holding `worlds` copies of the transfer-cube scene."""
-    scene = mujoco.MjSpec()
-    scene.modelname = f"aloha2-many-{worlds}"
+    scene, prefixes = grid_of(
+        f"aloha2-many-{worlds}",
+        (build_transfer_cube(look=look).spec for _ in range(worlds)),
+        disable_floor_contacts=True,
+    )
     pin_nominal_options(scene)
     set_render_budget(scene)
     scene.visual.map.znear = 0.01
-    scene.worldbody.add_light(
-        pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
-    )
-    scene.worldbody.add_geom(
-        name="ground",
-        type=mujoco.mjtGeom.mjGEOM_PLANE,
-        size=[0, 0, 0.1],
-        pos=[0, 0, -0.75],
-        rgba=[0.12, 0.12, 0.12, 1],
-    )
-    side = int(np.ceil(np.sqrt(worlds)))
-    prefixes = []
-    for n in range(worlds):
-        template = build_transfer_cube(look=look).spec
-        # Each copy's own floor would coincide with the ground: hide it.
-        for geom in template.geoms:
-            if geom.name == "floor":
-                geom.group = GeomGroup.HIDDEN
-                geom.contype = 0
-                geom.conaffinity = 0
-        row, col = divmod(n, side)
-        prefix = f"w{n:02d}/"
-        frame = scene.worldbody.add_frame(
-            pos=[(col - (side - 1) / 2) * PITCH, (row - (side - 1) / 2) * PITCH, 0]
-        )
-        # The whole child world — table and frame are world-level geoms,
-        # the cameras too — lands in this frame, every name prefixed.
-        scene.attach(template, prefix=prefix, frame=frame)
-        prefixes.append(prefix)
     return scene, prefixes
 
 

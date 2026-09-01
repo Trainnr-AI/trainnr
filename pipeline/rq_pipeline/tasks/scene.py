@@ -208,3 +208,61 @@ def add_slot_walls(  # noqa: PLR0913 - a well's geometry, each dimension named
             pos=[cx + dx, cy + dy, height],
             rgba=list(rgba),
         )
+
+
+# Metres between world origins on a display grid (the ALOHA rig is
+# 1.22 m wide). Declared twice in two tools until 2026-09-01 — the
+# duplication docs/32 flagged and this function retires.
+GRID_PITCH = 1.6
+
+
+def grid_of(
+    name: str,
+    children: Any,
+    *,
+    pitch: float = GRID_PITCH,
+    disable_floor_contacts: bool = False,
+) -> tuple[Any, list[str]]:
+    """One MjSpec holding every child spec on a centred √n grid.
+
+    The shared skeleton of every many-worlds display model: one
+    directional light, one dark ground plane, each child's own floor
+    hidden (it would coincide with the ground) and the whole child
+    attached under a `wNN/` prefix at its grid cell. Options, render
+    budgets and shadow sizes are the CALLER's to set on the returned
+    scene. Returns (scene spec, prefixes).
+    """
+    import math  # noqa: PLC0415
+
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    children = list(children)
+    scene = mujoco.MjSpec()
+    scene.modelname = name
+    scene.worldbody.add_light(
+        pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+    )
+    scene.worldbody.add_geom(
+        name="ground",
+        type=mujoco.mjtGeom.mjGEOM_PLANE,
+        size=[0, 0, 0.1],
+        pos=[0, 0, -0.75],
+        rgba=[0.12, 0.12, 0.12, 1],
+    )
+    side = math.isqrt(len(children) - 1) + 1 if children else 0
+    prefixes = []
+    for n, child in enumerate(children):
+        for geom in child.geoms:
+            if geom.name == FLOOR_GEOM:
+                geom.group = GeomGroup.HIDDEN
+                if disable_floor_contacts:
+                    geom.contype = 0
+                    geom.conaffinity = 0
+        row, col = divmod(n, side)
+        prefix = f"w{n:02d}/"
+        frame = scene.worldbody.add_frame(
+            pos=[(col - (side - 1) / 2) * pitch, (row - (side - 1) / 2) * pitch, 0]
+        )
+        scene.attach(child, prefix=prefix, frame=frame)
+        prefixes.append(prefix)
+    return scene, prefixes
