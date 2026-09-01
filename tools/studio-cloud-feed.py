@@ -66,6 +66,10 @@ RSL_FAMILIES = {
     "Episode_Metrics/": "rl/metrics/",
     "Metrics/": "rl/metrics/",
 }
+# Slugs routed to rl/more/ - the layout only grows its "more" pane
+# once this is non-empty, so the catch-all never sits as an empty
+# plot (the operator's rule: no pane without data, 2026-09-01).
+MORE_SEEN: set[str] = set()
 
 
 def route_rsl_row(rr: Any, name: str, key: str, value: float) -> None:
@@ -82,6 +86,7 @@ def route_rsl_row(rr: Any, name: str, key: str, value: float) -> None:
             rr.log(path, rr.Scalars(value))
             return
     slug = key.lower().replace(" ", "_").replace("/", "_")
+    MORE_SEEN.add(slug)
     rr.log(f"{name}/rl/more/{slug}", rr.Scalars(value))
 
 
@@ -168,8 +173,11 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
                         "$origin/iteration_time",
                     ],
                 ),
-                rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more"),
             ]
+            if MORE_SEEN:
+                views.append(
+                    rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more")
+                )
         else:
             views = [
                 rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
@@ -184,6 +192,24 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
         )
     except Exception as error:
         print(f"layout not sent: {error}")
+
+
+def choose_layout(
+    rr: Any, name: str, sent: tuple | None, signals: tuple
+) -> tuple | None:
+    """Send (or resend) the layout whenever what SHOULD be on screen
+    changes: the first data reveals the run's kind, and a first
+    unrecognised row makes the "more" pane earn its place."""
+    rl, lerobot = signals
+    if rl:
+        want = ("rl", bool(MORE_SEEN))
+    elif lerobot:
+        want = ("lerobot", False)
+    else:
+        return sent
+    if want != sent:
+        send_layout(rr, name, rl=rl)
+    return want
 
 
 def write_rl_card(rr: Any, name: str, rsl: list, gpu: str) -> None:
@@ -390,7 +416,7 @@ def main() -> int:
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
-    layout_sent = False
+    layout_sent: tuple | None = None
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
@@ -465,13 +491,15 @@ def main() -> int:
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
         rsl = parse_rsl(rr, args.name, raw, seen_iters)
-        if not layout_sent:
-            if rsl is not None and rsl[0] is not None:
-                send_layout(rr, args.name, rl=True)
-                layout_sent = True
-            elif latest is not None or last_step >= 0 or eval_progress:
-                send_layout(rr, args.name, rl=False)
-                layout_sent = True
+        layout_sent = choose_layout(
+            rr,
+            args.name,
+            layout_sent,
+            (
+                rsl is not None and rsl[0] is not None,
+                latest is not None or last_step >= 0 or bool(eval_progress),
+            ),
+        )
         if rsl is not None and rsl[0] is not None:
             write_rl_card(rr, args.name, rsl, gpu)
         log_gpu(rr, args.name, gpu)
