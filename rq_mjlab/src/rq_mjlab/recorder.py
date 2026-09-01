@@ -71,6 +71,7 @@ class RerunRecorder(RecorderTerm):
         ]
         self._qpos = None  # torch view, bound lazily (data exists post-init)
         self._geom_views = None  # (xpos, xmat) torch views, bound lazily
+        self._render = None  # (mujoco.Renderer, MjData) for the camera leg
         self._mirror = None
         if cfg.mirror:
             from rq_pipeline.viz import RigMirror  # noqa: PLC0415
@@ -131,6 +132,11 @@ class RerunRecorder(RecorderTerm):
         )
         if self._mirror is not None:
             self._log_mirror(watched)
+        if (
+            self._cfg.frames
+            and int(env.common_step_counter) % self._cfg.frame_every == 0
+        ):
+            self._log_frame(watched)
 
     def _log_mirror(self, watched: int) -> None:
         """One world's geoms out of the batched engine, into 3D."""
@@ -145,6 +151,34 @@ class RerunRecorder(RecorderTerm):
             geom_xmat = self._geom_views[1][watched].cpu().numpy()
 
         self._mirror.log(_World(), path="world/robot")
+
+    def _log_frame(self, watched: int) -> None:
+        """The watched world through MuJoCo's own renderer — the lit,
+        shadowed camera image, rendered INSIDE the training process from
+        the live state (the batched engine's memory is invisible to any
+        outside renderer, which is why the Studio's panel cannot draw
+        it). Needs a GL context (MUJOCO_GL=egl on a headless GPU box);
+        refusal is once, by name, and frames are simply absent."""
+        if self._render is None:
+            try:
+                model = self._env.sim.mj_model
+                self._render = (
+                    mujoco.Renderer(model, height=360, width=640),
+                    mujoco.MjData(model),
+                )
+            except Exception as error:
+                self._cfg.frames = False
+                self._rr.log(
+                    "recorder/notes",
+                    self._rr.TextLog(f"camera disabled: {error} (set MUJOCO_GL=egl?)"),
+                )
+                return
+        renderer, mj_data = self._render
+        qpos = self._qpos[watched].cpu().numpy()
+        mj_data.qpos[:] = qpos
+        mujoco.mj_forward(self._env.sim.mj_model, mj_data)
+        renderer.update_scene(mj_data)
+        self._rr.log("camera/watched", self._rr.Image(renderer.render()))
 
     def record_pre_reset(self, env_ids: torch.Tensor) -> None:
         if (env_ids == self._cfg.watched_env).any():
@@ -175,6 +209,8 @@ class RerunRecorderCfg(RecorderTermCfg):
     app_id: str = "rq-mjlab-train"
     watched_env: int = 0
     mirror: bool = True  # the 3D scene beside the series
+    frames: bool = True  # MuJoCo-rendered camera images of the watched world
+    frame_every: int = 25  # control steps between camera frames (renders cost ~30 ms)
     every: int = (
         10  # control steps between samples: the viewer's rate, not the trainer's
     )
