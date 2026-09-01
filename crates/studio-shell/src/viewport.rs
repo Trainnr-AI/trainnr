@@ -83,7 +83,7 @@ pub struct ViewportFeed {
 /// `studio-render-stream.py` can run. The LIVE scene never comes from
 /// here: a training run mirrors itself into the Rerun 3D view below
 /// (`world/robot`, the recorder's mirror).
-const PREVIEW_TASKS: &[&str] = &["kitting", "lift"];
+const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 
 impl ViewportFeed {
     /// No subprocess, no canned scene: the panel starts as a slim strip

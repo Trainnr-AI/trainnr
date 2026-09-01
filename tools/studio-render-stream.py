@@ -47,6 +47,7 @@ rendering.
 import math
 import os
 import struct
+import pathlib
 import sys
 import threading
 import time
@@ -79,6 +80,12 @@ TARGET_HZ = 30.0
 # (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
 # a starting pose the operator immediately corrects by dragging.
 RIG_CAMERAS = {
+    "microduck": {
+        "azimuth": 120.0,
+        "elevation": -15.0,
+        "distance": 0.8,
+        "lookat": (0.0, 0.0, 0.12),
+    },
     "so101": {
         "azimuth": 90.0,
         "elevation": -20.0,
@@ -407,24 +414,52 @@ def run_idle_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
         pump.tick(data, dt)
 
 
+DUCK = "duck"  # preview-only scene, not a registry task (no referee)
+
+
+def duck_scene() -> "object":
+    """The microduck bundle on a plain floor — a preview scene, built
+    here rather than registered: a scene with no referee has no
+    business in the task census. The XML's own kp=0.55 position servos
+    hold it under the idle sinusoid."""
+    import mujoco  # noqa: PLC0415
+
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    scene = mujoco.MjSpec()
+    scene.modelname = "microduck-preview"
+    scene.worldbody.add_geom(
+        name="floor",
+        type=mujoco.mjtGeom.mjGEOM_PLANE,
+        size=[3.0, 3.0, 0.1],
+        rgba=[0.45, 0.5, 0.55, 1.0],
+    )
+    scene.worldbody.add_light(pos=[0.4, -0.4, 1.2], dir=[-0.3, 0.3, -1.0])
+    duck = mujoco.MjSpec.from_file(
+        str(repo / "robots" / "microduck" / "robot_walk.xml")
+    )
+    frame = scene.worldbody.add_frame(pos=[0.0, 0.0, 0.0])
+    frame.attach_body(duck.worldbody.first_body(), "duck/", "")
+    return scene
+
+
 def stream(task_name: str) -> None:
-    entry = BUILDERS[task_name]
-    task = entry.build()
+    if task_name == DUCK:
+        task, spec, rig = None, duck_scene(), "microduck"
+    else:
+        entry = BUILDERS[task_name]
+        task = entry.build()
+        spec, rig = task.spec, entry.rig
     # Raise (never lower) the offscreen budget to the viewer's cap — see
     # MAX_RENDER_SIDE's comment for the measured failure without this.
-    task.spec.visual.global_.offwidth = max(
-        task.spec.visual.global_.offwidth, MAX_RENDER_SIDE
-    )
-    task.spec.visual.global_.offheight = max(
-        task.spec.visual.global_.offheight, MAX_RENDER_SIDE
-    )
-    model = task.spec.compile()
+    spec.visual.global_.offwidth = max(spec.visual.global_.offwidth, MAX_RENDER_SIDE)
+    spec.visual.global_.offheight = max(spec.visual.global_.offheight, MAX_RENDER_SIDE)
+    model = spec.compile()
 
-    orbit = OrbitCamera(RIG_CAMERAS.get(entry.rig, RIG_CAMERAS["so101"]))
+    orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
     threading.Thread(target=_read_camera_updates, args=(orbit,), daemon=True).start()
     pump = RenderPump(model, orbit, narrator_for(model, task_name))
 
-    if task_name in TASKS_WITH_EXPERTS:
+    if task is not None and task_name in TASKS_WITH_EXPERTS:
         run_expert_forever(task, pump)
     else:
         run_idle_forever(model, pump)
@@ -432,6 +467,6 @@ def stream(task_name: str) -> None:
 
 if __name__ == "__main__":
     task_name = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TASK
-    if task_name not in BUILDERS:
-        sys.exit(f"unknown task {task_name!r}; one of {sorted(BUILDERS)}")
+    if task_name != DUCK and task_name not in BUILDERS:
+        sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")
     stream(task_name)
