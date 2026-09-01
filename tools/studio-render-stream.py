@@ -117,6 +117,9 @@ RIG_CAMERAS = {
 # 10 Hz is ample for glanceable telemetry and stays far under the drain
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0
+# Past this geom count the shadow pass costs more than it lights (43 vs
+# 10.5 ms/frame on the 20-duck flock, 2026-09-01).
+SHADOW_GEOM_BUDGET = 400
 
 
 class PhysicsNarrator:
@@ -331,6 +334,11 @@ class RenderPump:
         self.narrator = narrator
         self.width, self.height = WIDTH, HEIGHT
         self.renderer = mujoco.Renderer(model, height=self.height, width=self.width)
+        # The shadow pass re-renders every geom per light: measured on
+        # the 20-duck flock at 1300x400, 43 ms/frame with shadows vs
+        # 10.5 without (2026-09-01). Heavy scenes trade shadows for
+        # frame rate; small ones keep the pretty light.
+        self.shadows = model.ngeom <= SHADOW_GEOM_BUDGET
         self.cam = mujoco.MjvCamera()
         self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         self.cam.lookat = list(orbit.lookat)
@@ -371,6 +379,8 @@ class RenderPump:
                 )
             self.orbit.apply_to(self.cam)
             self.renderer.update_scene(data, camera=self.cam)
+            if not self.shadows:
+                self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
             frame = self.renderer.render()  # HxWx3 uint8, C-contiguous
             self.out.write(struct.pack("<II", self.width, self.height))
             self.out.write(frame.tobytes())
