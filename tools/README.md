@@ -12,7 +12,7 @@ cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python ../tools/<name>.py
 ```
 
 `_lab.py` is the shared bench (path bootstrap, Rerun session plumbing)
-and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
+and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; neither is a tool.
 
 ## Gates — run these before pushing
 
@@ -71,7 +71,7 @@ and `_rig3d.py` the shared MuJoCo→Rerun mirror; neither is a tool.
 
 | File | What it is |
 |---|---|
-| `_lab.py`, `_rig3d.py` | The shared bench and the MuJoCo→Rerun mirror the Python tools import |
+| `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `pipeline/rq_pipeline/viz.py`) |
 | `_firmware.sh` | `build_uf2 <crate>`: asks cargo where a firmware binary landed, sourced by the `sim-*.sh` scripts |
 | `wsl-run.sh` | Runs a command under `pipeline/wsl.env`, the WSL box's GPU routing in one file |
 | `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (fmt, clippy, docs, unsafe, ruff over `pipeline/` and `tools/`, the unit suite) |

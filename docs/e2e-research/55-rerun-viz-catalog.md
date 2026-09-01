@@ -48,7 +48,7 @@ their panels:
 | Repo surface | Rerun views it exercises |
 |---|---|
 | `train-watch --follow` | TimeSeries (loss, l1, kld, grad norm, lr, samples/s, GPU), TextDocument (run manifest, trainer config), TextLog (stage), Image/video (eval episodes), the funnel per checkpoint |
-| `rig-rerun.py` / `_rig3d.py` | Spatial3D (Boxes3D batch + Mesh3D twin), Spatial2D (pose trail), TimeSeries (duty, ticks, angles, errors), TextLog (stage notes) |
+| `rig-rerun.py` / `rq_pipeline/viz.py` | Spatial3D (Boxes3D batch + Mesh3D twin), Spatial2D (pose trail), TimeSeries (duty, ticks, angles, errors), TextLog (stage notes) |
 | `rl-watch` (rl-engineering branch, merges later) | its blueprint names verdict, reward terms, episode, losses, throughput, worlds grid |
 | `show-many.py` | batched DR worlds side by side (Spatial3D grid) |
 
