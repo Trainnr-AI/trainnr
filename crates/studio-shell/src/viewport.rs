@@ -145,6 +145,12 @@ pub struct ViewportFeed {
 /// (`world/robot`, the recorder's mirror).
 const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 
+/// The RL view: `rq_mjlab.walk_view` rolls the newest trained walk
+/// checkpoint (policy-driven worlds on the GPU, CPU mirror into the
+/// same frame ring, Ctrl+drag shoves land in the batched sim). Its own
+/// spawn shape: the rq_mjlab venv, not the pipeline's.
+const WALK_TASK: &str = "walk";
+
 impl ViewportFeed {
     /// No subprocess, no canned scene: the panel starts as a slim strip
     /// offering previews. The operator's rule (2026-09-01): the window's
@@ -214,12 +220,22 @@ impl ViewportFeed {
                 last_seq: 0,
             });
 
-        command
-            .args(["run", "--extra", "sim", "--extra", "viz", "python"])
-            .arg(&script)
-            .arg(task_name)
-            .arg(format!("--shm={}", shm_path.display()))
-            .current_dir(&pipeline_dir);
+        if task_name == WALK_TASK {
+            // The RL view runs in the rq_mjlab venv (torch + warp +
+            // mjlab); same ring, same stdin protocol, different door.
+            command
+                .args(["run", "--offline", "python", "-m", "rq_mjlab.walk_view"])
+                .args(["--latest", "--envs", "9"])
+                .arg(format!("--shm={}", shm_path.display()))
+                .current_dir(repo_root.join("rq_mjlab"));
+        } else {
+            command
+                .args(["run", "--extra", "sim", "--extra", "viz", "python"])
+                .arg(&script)
+                .arg(task_name)
+                .arg(format!("--shm={}", shm_path.display()))
+                .current_dir(&pipeline_dir);
+        }
         // The pipeline's own wsl.env, spelled here because this spawn
         // does not go through a tool wrapper: without these, MuJoCo's
         // offscreen GL on WSL falls back to llvmpipe — the SOFTWARE
@@ -302,6 +318,16 @@ impl ViewportFeed {
                     if ui.button(*task).clicked() {
                         *self = Self::spawn(ui.ctx(), task);
                     }
+                }
+                if ui
+                    .button(WALK_TASK)
+                    .on_hover_text(
+                        "the newest trained walk checkpoint, live — \
+                         Ctrl+drag shoves a duck and the policy recovers",
+                    )
+                    .clicked()
+                {
+                    *self = Self::spawn(ui.ctx(), WALK_TASK);
                 }
             });
             return;
