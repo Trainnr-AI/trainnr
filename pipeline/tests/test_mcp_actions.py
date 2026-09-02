@@ -87,6 +87,32 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, PIPELINE_DIR)
             self.assertTrue(str(handle["job_id"]).startswith("generate-demos-"))
 
+    def test_press_planned_spawns_the_planner_press_on_the_task(self) -> None:
+        with harness() as (actions, spawner):
+            handle = actions.press_planned("block_stack", episodes=4, seed=9)
+            [(argv, cwd)] = spawner.calls
+            self.assertEqual(
+                argv,
+                [
+                    *UV_PIPELINE,
+                    "--extra",
+                    "sim",
+                    "--extra",
+                    "viz",
+                    "python",
+                    str(TOOLS_DIR / "planner-demos.py"),
+                    "block_stack",
+                    "--episodes",
+                    "4",
+                    "--seed",
+                    "9",
+                    "--dr-span",
+                    "0.0",
+                ],
+            )
+            self.assertEqual(cwd, PIPELINE_DIR)
+            self.assertTrue(str(handle["job_id"]).startswith("press-planned-"))
+
     def test_zero_episodes_refuses_before_spawning(self) -> None:
         with harness() as (actions, spawner):
             with self.assertRaises(ValueError):

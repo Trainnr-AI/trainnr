@@ -91,6 +91,15 @@ CUBE_A_BODY = "cube_a"
 CUBE_B_BODY = "cube_b"
 HOME_KEYFRAME = f"{ARM_PREFIX}home"  # the bundle's `home`, prefixed by attach
 JAW_BODY = f"{ARM_PREFIX}Fixed_Jaw"
+FINGERTIP_SITE = "fingertip"  # added post-attach: no prefix
+GRASP_SITE = "grasp"  # the planner's point: where the closed jaws meet
+# Where a HELD cube sits in the fixed jaw's frame, oriented so the
+# site's z is the approach (the finger line) and its y the closing line
+# - measured 2026-09-02 from the scripted lift's hold, 4 trials, spread
+# under 1 mm (test-pinned). Not the commanded grip pose: that one is a
+# droop-compensated overshoot whose kinematic pocket is 3.5 cm off.
+_GRASP_POS = (-0.0041, -0.0915, -0.0065)
+_GRASP_QUAT = (0.5034, 0.4958, 0.4966, -0.5041)
 
 
 def _so101_task(
@@ -132,6 +141,18 @@ def _scene_with_arm(name: str, arm_xml: Path) -> Any:
     frame = scene.worldbody.add_frame(pos=[0, 0, 0])
     frame.attach_body(arm.worldbody.first_body(), ARM_PREFIX, "")
     _add_armnetbench_cameras(scene)
+    # The fingertip: reach's referee reads it, and the planner expert
+    # positions it (collect/choreography.Gripper) - one site on every
+    # scene, so a planned pick is the same reach on every so101 task.
+    jaw = scene.body(JAW_BODY)
+    jaw.add_site(name=FINGERTIP_SITE, pos=[0.012, -0.08, 0.0], size=[0.005] * 3)
+    jaw.add_site(name=GRASP_SITE, pos=_GRASP_POS, quat=_GRASP_QUAT, size=[0.004] * 3)
+    scene.add_sensor(
+        name="fingertip_pos",
+        type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
+        objtype=mujoco.mjtObj.mjOBJ_SITE,
+        objname=FINGERTIP_SITE,
+    )
     return scene
 
 
@@ -185,14 +206,6 @@ def build_reach(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     import numpy as np  # noqa: PLC0415
 
     scene = _scene_with_arm("so101-reach", arm_xml)
-    jaw = scene.body(JAW_BODY)
-    jaw.add_site(name="fingertip", pos=[0.012, -0.08, 0.0], size=[0.005] * 3)
-    scene.add_sensor(
-        name="fingertip_pos",
-        type=mujoco.mjtSensor.mjSENS_FRAMEPOS,
-        objtype=mujoco.mjtObj.mjOBJ_SITE,
-        objname="fingertip",
-    )
 
     probe_model = scene.compile()
     probe_data = mujoco.MjData(probe_model)
@@ -522,6 +535,9 @@ _SLOT_WALL_THICKNESS = 0.004
 _SLOT_WALL_HALF_HEIGHT = 0.006
 _INSERT_SEATED_Z_M = 0.019
 _INSERT_MARGIN_M = 0.010
+# The planner releases the cube above the walls (its pads cannot enter
+# the pocket) and lets it drop, as the script does: wall height + margin.
+_PLANNER_DROP_CLEARANCE_M = 2 * _SLOT_WALL_HALF_HEIGHT + 0.006
 
 # The reference insert policy IS the stack script: same pick, same
 # swing, same drop — the scene decides whether that lands on a block or
@@ -575,4 +591,71 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
         ),
         "seat cube A inside the pocket",
         arm_xml,
+    )
+
+
+# ------------------------------------------------------- the planner --
+# docs/66 §3 source 2: the pick/place beats written from poses, not by
+# hand. The scripted experts above stay as the measured ceiling the
+# planner is compared against.
+ARM_IK_JOINTS = tuple(
+    f"{ARM_PREFIX}{name}"
+    for name in ("Rotation", "Pitch", "Elbow", "Wrist_Pitch", "Wrist_Roll")
+)
+PLANNER_LIFT_HEIGHT_M = 0.10  # comfortably above the referee's _LIFTED_HEIGHT_M
+
+
+def so101_gripper(model: Any) -> Any:
+    """The SO-101's grasping facts on this compiled model: the grasp
+    site IS the pocket (measured, see `_GRASP_POS`), the closing line
+    runs tangentially around the base (the `_GRIP` pose's, generalised
+    to any azimuth)."""
+    from rq_pipeline.collect.choreography import Gripper  # noqa: PLC0415
+
+    return Gripper.resolve(
+        model,
+        site=GRASP_SITE,
+        ik_joints=ARM_IK_JOINTS,
+        jaw_ctrl=JAW_INDEX,
+        jaw_open=JAW_OPEN,
+        jaw_closed=JAW_CLOSED,
+    )
+
+
+def planner_goal(task_name: str, model: Any, data: Any) -> Any:
+    """What the planner should do with the picked object on this task,
+    read off the LIVE scene (privileged, as demo generation is)."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    from rq_pipeline.collect.choreography import Lift, Place  # noqa: PLC0415
+
+    if task_name in (LIFT, LIFT_STUDY):
+        return Lift(PLANNER_LIFT_HEIGHT_M)
+    if task_name == BLOCK_STACK:
+        b = data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, CUBE_B_BODY)]
+        return Place((float(b[0]), float(b[1]), float(b[2]) + 0.015 + _CUBE_HALF[2]))
+    if task_name == TOOL_INSERT:
+        return Place((*_SLOT_CENTRE, _CUBE_HALF[2]), _PLANNER_DROP_CLEARANCE_M)
+    raise ValueError(f"no planner goal for task {task_name!r}")
+
+
+def planner_object(task_name: str) -> str:
+    """The body the planner picks on this task."""
+    if task_name in (LIFT, LIFT_STUDY):
+        return CUBE_BODY
+    if task_name in (BLOCK_STACK, TOOL_INSERT):
+        return CUBE_A_BODY
+    raise ValueError(f"no planner object for task {task_name!r}")
+
+
+def planner_rig(task_name: str) -> Any:
+    """What the planner needs to press this task on the SO-101."""
+    from functools import partial  # noqa: PLC0415
+
+    from rq_pipeline.collect.planner_demos import PlannerRig  # noqa: PLC0415
+
+    return PlannerRig(
+        gripper=so101_gripper,
+        goal=partial(planner_goal, task_name),
+        object_body=planner_object(task_name),
     )

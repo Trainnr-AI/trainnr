@@ -73,9 +73,77 @@ def _apply_visuals(
     return drawn
 
 
+class CameraCapture:
+    """Every declared camera rendering on a cadence: `frame_every=0`
+    means no renderer at all (headless generation and the unit tests -
+    a GL context is a per-box concern, not the physics'). Otherwise
+    EVERY declared camera renders (docs/66 §4: the task declares a
+    rig, the dataset carries the rig), renderers shared across cameras
+    of the same resolution."""
+
+    def __init__(
+        self, model: Any, cameras: Sequence[Any], every_ticks: int, interval: int
+    ) -> None:
+        import mujoco  # noqa: PLC0415 - sim extra
+
+        self._cameras = tuple(cameras) if every_ticks else ()
+        self._every = every_ticks
+        self._interval = interval
+        self._renderers: dict[tuple[int, int], Any] = {}
+        for spec in self._cameras:
+            size = (spec.height, spec.width)
+            if size not in self._renderers:
+                self._renderers[size] = mujoco.Renderer(
+                    model, height=spec.height, width=spec.width
+                )
+        self.frames: dict[str, list[tuple[int, Any]]] = {
+            c.key: [] for c in self._cameras
+        }
+
+    def capture(self, step: int, data: Any) -> None:
+        """Render at physics `step` when it opens a frame tick."""
+        if not self._cameras or (step // self._interval) % self._every:
+            return
+        for spec in self._cameras:
+            renderer = self._renderers[(spec.height, spec.width)]
+            renderer.update_scene(data, camera=spec.camera_name)
+            self.frames[spec.key].append((step, renderer.render().copy()))
+
+    def close(self) -> None:
+        for renderer in self._renderers.values():
+            renderer.close()
+
+
+# Drives one seated episode to the horizon and returns the commanded
+# rows (ticks, nu); calls `capture(step, data)` before each control.
+Driver = Callable[["Task", Any, Any, Callable[[int, Any], None]], Any]
+
+
+def scripted_driver(policy: Callable[[int, Any], Any]) -> Driver:
+    """The open-loop scripts: `policy(step, sensordata)` -> ctrl."""
+
+    def drive(
+        task: Task, model: Any, stepper: Any, capture: Callable[[int, Any], None]
+    ) -> Any:
+        import numpy as np  # noqa: PLC0415
+
+        interval = task.protocol.control_interval
+        ticks = task.protocol.steps // interval
+        actions = np.empty((ticks, model.nu))
+        for tick in range(ticks):
+            step = tick * interval
+            capture(step, stepper.data)
+            control = np.asarray(policy(step, stepper.data.sensordata), dtype=float)
+            actions[tick] = control
+            stepper.advance(control, interval)
+        return actions
+
+    return drive
+
+
 def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     task_factory: Callable[[], Task],
-    policy: Callable[[int, Any], Any],
+    driver: Driver,
     rng: Generator,
     *,
     dr: DrRanges,
@@ -84,9 +152,6 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     visuals: Sequence[Variation] = (),
     visual_basis: str = "",
 ) -> PressResult:
-    import mujoco  # noqa: PLC0415 - sim extra
-    import numpy as np  # noqa: PLC0415
-
     from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
         MuJoCoBackend,
         keyframe_state,
@@ -114,42 +179,17 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     trial = int(rng.integers(protocol.trials))
     initial = protocol.perturb(trial, home)
     draws: dict[str, Any] = {"trial": trial}
-
-    # frame_every=0: no renderer at all — headless generation and the
-    # unit tests (a GL context is a per-box concern, not the physics').
-    # Otherwise EVERY declared camera renders (docs/66 §4: the task
-    # declares a rig, the dataset carries the rig), renderers shared
-    # across cameras of the same resolution.
-    cameras = task.cameras if frame_every else ()
-    renderers: dict[tuple[int, int], Any] = {}
-    for spec in cameras:
-        size = (spec.height, spec.width)
-        if size not in renderers:
-            renderers[size] = mujoco.Renderer(
-                model, height=spec.height, width=spec.width
-            )
-    camera_frames: dict[str, list[tuple[int, Any]]] = {c.key: [] for c in cameras}
-    interval = protocol.control_interval
-    ticks = protocol.steps // interval
-    actions = np.empty((ticks, model.nu))
+    cameras = CameraCapture(
+        model,
+        task.cameras if frame_every else (),  # a test task may declare none
+        frame_every,
+        protocol.control_interval,
+    )
     stepper = backend.stepper(initial, protocol.steps)
     try:
-        for tick in range(ticks):
-            control = np.asarray(
-                policy(tick * interval, stepper.data.sensordata), dtype=float
-            )
-            actions[tick] = control
-            stepper.advance(control, interval)
-            if cameras and tick % frame_every == 0:
-                for spec in cameras:
-                    renderer = renderers[(spec.height, spec.width)]
-                    renderer.update_scene(stepper.data, camera=spec.camera_name)
-                    camera_frames[spec.key].append(
-                        (tick * interval, renderer.render().copy())
-                    )
+        actions = driver(task, model, stepper, cameras.capture)
     finally:
-        for renderer in renderers.values():
-            renderer.close()
+        cameras.close()
     succeeded = bool(protocol.success(stepper.states, stepper.sensors))
     return PressResult(
         succeeded,
@@ -162,7 +202,7 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
         actions,
         visuals=drawn,
         visual_basis=visual_basis if drawn else "",
-        camera_frames=camera_frames or None,
+        camera_frames=cameras.frames or None,
     )
 
 
@@ -184,6 +224,43 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
     say: Callable[[str], None] = print,
 ) -> DemoBatch:
     """Press `episodes` kept demonstrations of the open-loop `policy`
+    on `task_factory`'s task (see `generate_demos`)."""
+    return generate_demos(
+        out,
+        task_factory=task_factory,
+        driver=scripted_driver(policy),
+        expert=expert,
+        dr=dr,
+        basis=basis,
+        episodes=episodes,
+        seed=seed,
+        frame_every=frame_every,
+        first_episode=first_episode,
+        visuals=visuals,
+        visual_basis=visual_basis,
+        feed=feed,
+        say=say,
+    )
+
+
+def generate_demos(  # noqa: PLR0913 - every knob of the loop, named
+    out: Path,
+    *,
+    task_factory: Callable[[], Task],
+    driver: Driver,
+    expert: str,
+    dr: DrRanges,
+    basis: str,
+    episodes: int,
+    seed: int,
+    frame_every: int = 5,
+    first_episode: int = 0,
+    visuals: Sequence[Variation] = (),
+    visual_basis: str = "",
+    feed: PressFeed | None = None,
+    say: Callable[[str], None] = print,
+) -> DemoBatch:
+    """Press `episodes` kept demonstrations of whatever `driver` does
     on `task_factory`'s task, dynamics drawn per episode from `dr`
     (the condition), keep/discard by the task's own referee."""
     from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
@@ -211,7 +288,7 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
     def attempt_fn(rng: Generator, *, frame_every: int) -> PressResult:
         return _attempt(
             task_factory,
-            policy,
+            driver,
             rng,
             dr=dr,
             basis=basis,

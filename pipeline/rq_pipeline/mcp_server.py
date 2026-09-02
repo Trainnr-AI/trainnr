@@ -432,6 +432,11 @@ def build_server() -> Any:
         "frames, discards a failures.jsonl. Job handle."
     )(actions.press_walk)
     server.tool(
+        description="The planner expert presses demonstrations (docs/66 D3) on an "
+        "SO-101 task: beats written from the seated scene, executed by chained IK, "
+        "kept by the task's referee, streamed to the Studio. Job handle."
+    )(actions.press_planned)
+    server.tool(
         description="Launch the Studio (release build); anything speaking the "
         "Rerun SDK streams into it on :9876."
     )(actions.open_studio)

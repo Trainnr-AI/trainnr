@@ -12,9 +12,10 @@ says which expert produced it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, NamedTuple
+from typing import Any
 
 from rq_pipeline.bundles.hashing import content_stamp
+from rq_pipeline.collect.choreography import Episode, Waypoint
 from rq_pipeline.tasks.aloha2.kitting import (
     KITTING_SPEC,
     KittingSpec,
@@ -29,7 +30,6 @@ from rq_pipeline.tasks.aloha2.rig import (
     SERVOS_PER_ARM,
     gripper_ctrl_from_normalized,
 )
-from rq_pipeline.tasks.task import CONTROL_INTERVAL
 
 KITTING_EXPERT = "kitting-expert"  # the stamp's name half
 
@@ -132,17 +132,6 @@ class KittingStats:
     truncated: bool = False
 
 
-class Waypoint(NamedTuple):
-    """One choreography beat — typed because the tuple's arity already
-    lied once (an annotation described a removed 3-tuple shape while
-    the code appended and unpacked four)."""
-
-    name: str
-    target: tuple[float, float, float]
-    grip: float
-    seconds: float
-
-
 def expert_stamp() -> str:
     """`kitting-expert@<hash>`: the scripted expert named by its
     choreography's content, the way a task is named by its spec and a
@@ -173,41 +162,6 @@ def kitting_waypoints(
         )
         for name, dz, grip, secs in _PICK_PLACE_SEGMENTS
     ]
-
-
-@dataclass
-class Episode:
-    """The rollout the choreographer drives: the stepper, its live data,
-    a scratch copy for IK, the control vector as it is blended, and the
-    50 Hz actions a dataset records."""
-
-    stepper: Any
-    scratch: Any
-    on_control: Any
-    ctrl: Any
-    actions: list[Any] = field(default_factory=list)
-
-    @property
-    def data(self) -> Any:
-        return self.stepper.data
-
-    def advance(self, seconds: float, target_ctrl: Any) -> None:
-        """Blend `ctrl` toward `target_ctrl` linearly over `seconds`,
-        one control tick at a time, recording each commanded row."""
-        import numpy as np  # noqa: PLC0415
-
-        tick_seconds = self.stepper.model.opt.timestep * CONTROL_INTERVAL
-        controls = max(1, round(seconds / tick_seconds))
-        start = self.ctrl.copy()
-        target = np.asarray(target_ctrl, dtype=float)
-        for tick in range(controls):
-            if self.stepper.done:
-                return
-            self.ctrl = start + (tick + 1) / controls * (target - start)
-            self.actions.append(self.ctrl.copy())
-            if self.on_control is not None:
-                self.on_control(self.stepper.step, self.data)
-            self.stepper.advance(self.ctrl, CONTROL_INTERVAL)
 
 
 @dataclass(frozen=True)

@@ -54,12 +54,36 @@ SO101_EXPERT_RATE: dict[str, dict[str, float]] = {
 }
 
 
+# The planner expert (docs/66 D3) on the same tasks, measured 2026-09-02
+# with the default PlannerKnobs: the scripted experts' ceiling, matched.
+SO101_PLANNER_RATE: dict[str, dict[str, float]] = {
+    LIFT: {"mujoco-3.11.0+x86_64": 1.0},
+    BLOCK_STACK: {"mujoco-3.11.0+x86_64": 1.0},
+    TOOL_INSERT: {"mujoco-3.11.0+x86_64": 1.0},
+}
+
+
 def expected_expert_rate(task: str, instrument: str, case: unittest.TestCase) -> float:
     """The measured rate of `task`'s expert on `instrument`, or skip the pin."""
-    by_instrument = SO101_EXPERT_RATE[task]
+    return _measured(SO101_EXPERT_RATE, "expert", task, instrument, case)
+
+
+def expected_planner_rate(task: str, instrument: str, case: unittest.TestCase) -> float:
+    """The measured rate of the planner on `task` and `instrument`, or skip."""
+    return _measured(SO101_PLANNER_RATE, "planner", task, instrument, case)
+
+
+def _measured(
+    table: dict[str, dict[str, float]],
+    who: str,
+    task: str,
+    instrument: str,
+    case: unittest.TestCase,
+) -> float:
+    by_instrument = table[task]
     if instrument not in by_instrument:
         case.skipTest(
-            f"{task} expert rate not measured on {instrument}; "
+            f"{task} {who} rate not measured on {instrument}; "
             f"measured on {sorted(by_instrument)}"
         )
     return by_instrument[instrument]

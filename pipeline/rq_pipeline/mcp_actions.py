@@ -99,6 +99,29 @@ class Actions:
         ]
         return self.jobs.start("generate-demos", argv, PIPELINE_DIR)
 
+    def press_planned(
+        self,
+        task: str = "lift",
+        episodes: int = 8,
+        seed: int = 17,
+        dr_span: float = 0.0,
+        out: str | None = None,
+    ) -> dict[str, Any]:
+        """The planner expert presses demonstrations (docs/66 D3): on
+        an SO-101 task (lift, block_stack, tool_insert) the planner reads
+        each seated scene, writes the beats and executes them by chained
+        IK; the referee keeps or discards. Streams to the Studio."""
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "viz"),
+            str(TOOLS_DIR / "planner-demos.py"),
+            task,
+        ]
+        if out is not None:
+            argv.append(out)
+        argv += ["--episodes", str(episodes), "--seed", str(seed)]
+        argv += ["--dr-span", str(dr_span)]
+        return self.jobs.start("press-planned", argv, PIPELINE_DIR)
+
     def multiply_demos(
         self,
         seeds_dir: str,
