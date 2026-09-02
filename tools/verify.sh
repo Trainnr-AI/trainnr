@@ -133,8 +133,18 @@ step "firmware pico-odom (RP2350, usb+wifi)" "SKIP_UF2=1 tools/build-pico2.sh pi
 #
 # No longer excluded from --fast: it passes, so it guards every run
 # rather than only the ones somebody remembered to make slow.
+# RERUN=0 on every step whose tool would spawn a viewer: these gates
+# judge parsed counts, not pixels, and a spawned viewer inherits the
+# pipeline's stdout, so `| grep` never sees EOF and the step hangs -
+# or fails outright with no viewer on PATH (measured 2026-09-02:
+# 49/53 on a bare shell, then a hang with a viewer). The SDK honours
+# the variable: the recording is disabled, nothing is spawned.
+# Both replay gates pass headless (2026-09-03). The emulator HIL gate
+# below did NOT finish headless that night: the mission stalled at
+# 14 s simulated (log kept as runs/hil-headless-stall-2026-09-03.log)
+# - with or without a viewer is the open question, docs/07.
 step "replay: RP2350 wire recording" \
-     "cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep 'matched the recording exactly' >/dev/null"
+     "RERUN=0 cargo run -q -p hil-host -- --replay recordings/rp2350-utrap.wire | grep 'matched the recording exactly' >/dev/null"
 # The teleop page is compiled into the binary with `include_str!`, so a
 # missing or renamed file is a build error rather than a 404 discovered by
 # someone standing in a room holding a phone over a robot. This checks the
@@ -158,7 +168,7 @@ step "replay: two-joint bench recording" \
      "cargo run -q -p hil-host --example joint -- --replay recordings/bench-two-joint.wire \
       | grep '0 unparsable' >/dev/null"
 step "replay: perception fixture" \
-     "cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep 'every command matched' >/dev/null"
+     "RERUN=0 cargo run -q -p vision --bin chase -- --replay recordings/chase-sweep.perc | grep 'every command matched' >/dev/null"
 # The rig recordings, read headless. Counts pinned exactly: a parser
 # change that breaks Status, thumbnail or arm_pulses stops being a
 # surprise in the viewer and becomes a red build here.
@@ -172,7 +182,7 @@ step "replay: servo tracking and the stall latch" \
 # Slowest, and needs npx + the emulator checkout.
 [ -z "$CI" ] && \
 step "HIL on the emulator (RP2040)" \
-     "tools/build-robot.sh && cargo run -q -p hil-host | grep 'waypoints:   1/1' >/dev/null"
+     "tools/build-robot.sh && RERUN=0 cargo run -q -p hil-host | grep 'waypoints:   1/1' >/dev/null"
 
 if [ -n "$SERIAL" ]; then
   step "HIL on real silicon ($SERIAL)" \
