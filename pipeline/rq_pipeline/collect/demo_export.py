@@ -44,6 +44,15 @@ __all__ = [
 ]
 
 
+# LeRobot's own guidance for its asynchronous image writer: four
+# threads per camera, no extra processes. Without it every frame is
+# encoded and written on the export's one thread — campaign 3
+# (2026-09-03) spent 12 minutes writing 240,000 frames the press had
+# rendered in 4.5 (docs/07); the writer is the export's wall, not the
+# reads.
+IMAGE_WRITER_THREADS_PER_CAMERA = 4
+
+
 def episode_camera_keys(episode_dir: Path) -> tuple[str, ...]:
     """The cameras a pressed episode stored: subdirectory names under
     `frames/` (the multi-camera layout, docs/66 §4), or `()` for the
@@ -110,6 +119,7 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     clamp_constant_dims: bool,
     action_width: int | None = None,
     action_names: list[str] | None = None,
+    image_writer_threads: int | None = None,
 ) -> Path:
     """The engine every exporter front drives: every episode under
     `demos_dir` as one LeRobot dataset at `root`. fps comes from the
@@ -117,7 +127,12 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     sidecar carries the bundle stamp and every manifest verbatim."""
     try:
         import numpy as np  # noqa: PLC0415
-        from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
+
+        # The availability probe for the helpful error below; the
+        # dataset itself is opened in `_open_dataset`.
+        from lerobot.datasets.lerobot_dataset import (  # noqa: F401, PLC0415
+            LeRobotDataset,
+        )
         from lerobot.utils.constants import (  # noqa: PLC0415
             ACTION,
             OBS_IMAGES,
@@ -199,8 +214,17 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
             "names": state_names if action_names is None else action_names,
         },
     }
-    dataset = LeRobotDataset.create(
-        repo_id=repo_id, fps=fps, root=root, features=features, use_videos=use_videos
+    dataset = _open_dataset(
+        repo_id,
+        fps,
+        root,
+        features,
+        use_videos=use_videos,
+        image_writer_threads=(
+            IMAGE_WRITER_THREADS_PER_CAMERA * len(cameras)
+            if image_writer_threads is None
+            else image_writer_threads
+        ),
     )
     frame_counts = []
     for episode in episodes:
@@ -229,8 +253,7 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
         )
         dataset.save_episode()
         frame_counts.append(ticks)
-    if hasattr(dataset, "finalize"):
-        dataset.finalize()
+    _close_dataset(dataset)
     if clamp_constant_dims:
         guard_constant_dims(Path(root))
 
@@ -247,6 +270,40 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     )
     provenance.write(Path(root) / PROVENANCE_FILE)
     return Path(root)
+
+
+def _open_dataset(  # noqa: PLR0913 - the dataset's facts, each named
+    repo_id: str,
+    fps: int,
+    root: Path,
+    features: dict[str, Any],
+    *,
+    use_videos: bool,
+    image_writer_threads: int,
+) -> Any:
+    """A LeRobot dataset with its asynchronous image writer running."""
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: PLC0415
+
+    return LeRobotDataset.create(
+        repo_id=repo_id,
+        fps=fps,
+        root=root,
+        features=features,
+        use_videos=use_videos,
+        image_writer_threads=image_writer_threads,
+    )
+
+
+def _close_dataset(dataset: Any) -> None:
+    """Finalize, then release the writer's threads: `save_episode`
+    already waited for every frame of every episode (LeRobot's own
+    contract), so nothing is left in flight here."""
+    if hasattr(dataset, "finalize"):
+        dataset.finalize()
+    if hasattr(dataset, "stop_image_writer"):
+        dataset.stop_image_writer()
+    elif hasattr(getattr(dataset, "writer", None), "stop_image_writer"):
+        dataset.writer.stop_image_writer()
 
 
 def _add_episode_frames(  # noqa: PLR0913 - one episode's facts, each named
@@ -362,7 +419,12 @@ class ExportSpec(JsonRecord):
 
 
 def export_batch(
-    demos_dir: Path, root: Path, *, repo_id: str, use_videos: bool = True
+    demos_dir: Path,
+    root: Path,
+    *,
+    repo_id: str,
+    use_videos: bool = True,
+    image_writer_threads: int | None = None,
 ) -> Path:
     """The third front: a batch that describes itself (`export.json`)
     becomes a LeRobot dataset with no Task in hand - the state names,
@@ -390,4 +452,5 @@ def export_batch(
         clamp_constant_dims=spec.clamp_constant_dims,
         action_width=len(spec.action_names) if spec.action_names else None,
         action_names=spec.action_names or None,
+        image_writer_threads=image_writer_threads,
     )

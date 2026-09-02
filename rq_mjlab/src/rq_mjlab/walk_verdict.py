@@ -230,6 +230,30 @@ class VerdictFeed:
         self._rr.log(f"{self.ROOT}/log", self._rr.TextLog(line))
 
 
+def blanked(images: Any) -> Any:
+    """The camera, blanked: zeros of the frames' own shape and dtype.
+    The control the campaign 3 plan asks first (docs/07 2026-09-03):
+    a student judged WITHOUT its image, with the full state still in
+    hand — if the score holds, the image was never used, and the next
+    distill trains without the privileged state."""
+    import numpy as np  # noqa: PLC0415
+
+    return np.zeros_like(images)
+
+
+CAMERA_SIGHTED = "chase"
+CAMERA_BLANKED = "blanked"
+
+
+def verdict_suffix(devicetag: str, *, student: bool, blank_camera: bool) -> str:
+    """The certificate file's suffix — a blanked run must never land on
+    the sighted run's file (`walk-verdict-student-cuda.json` is a
+    campaign's headline number)."""
+    if not student:
+        return devicetag
+    return f"student-{'blank-' if blank_camera else ''}{devicetag}"
+
+
 class StudentPolicy:
     """A vision student (a LeRobot checkpoint) as the env's per-tick
     policy: the SAME chase camera the press wrote its frames with
@@ -247,6 +271,7 @@ class StudentPolicy:
         stride: int,
         frame_size: tuple[int, int],
         device: str,
+        blank_camera: bool = False,
     ) -> None:
         from rq_pipeline.envs.policy_bridge import BridgePolicy  # noqa: PLC0415
 
@@ -268,6 +293,7 @@ class StudentPolicy:
         # driven 5x too fast and fell in 18 ticks (2026-09-02).
         self._stride = stride
         self._held: Any = None
+        self._blank = blank_camera
 
     def __call__(self, obs) -> Any:
         import numpy as np  # noqa: PLC0415
@@ -279,6 +305,8 @@ class StudentPolicy:
         state = obs["actor"].detach().cpu().numpy()
         qpos = self._qpos.detach().cpu().numpy()
         images = np.stack([self._camera.frame_at(row) for row in qpos])
+        if self._blank:
+            images = blanked(images)
         if self.feed is not None:
             self.feed.frame(images[0])
         resets = np.full(len(state), self._first, dtype=bool)
@@ -328,6 +356,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--frame-width", type=int, default=320)
     parser.add_argument("--frame-height", type=int, default=240)
+    parser.add_argument(
+        "--blank-camera",
+        action="store_true",
+        help="judge the student with its image zeroed (state still given): "
+        "the control that says whether the image is used at all",
+    )
     parser.add_argument(
         "--no-studio", action="store_true", help="do not stream to the Studio"
     )
@@ -443,12 +477,15 @@ def main() -> None:
             stride=args.stride,
             frame_size=(args.frame_width, args.frame_height),
             device=devicetag,
+            blank_camera=args.blank_camera,
         )
         policy_name = stamp_of(f"student-{args.student.parent.name}", args.student)
         protocol["student"] = {
             "teacher": args.checkpoint.stem,
             "horizon": args.horizon,
             "stride": args.stride,
+            # Every row says what the student SAW: the camera, or nothing.
+            "camera": CAMERA_BLANKED if args.blank_camera else CAMERA_SIGHTED,
         }
     feed = None if args.no_studio else VerdictFeed.connect(policy_name.split("@")[0])
     if isinstance(policy, StudentPolicy):
@@ -484,7 +521,9 @@ def main() -> None:
     ]
     out_dir = args.checkpoint.parent / "verdict"
     out_dir.mkdir(exist_ok=True)
-    suffix = devicetag if args.student is None else f"student-{devicetag}"
+    suffix = verdict_suffix(
+        devicetag, student=args.student is not None, blank_camera=args.blank_camera
+    )
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 
     write_certificate(

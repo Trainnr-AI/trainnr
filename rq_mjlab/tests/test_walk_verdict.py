@@ -37,3 +37,43 @@ class TheCriterion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheBlankedCamera(unittest.TestCase):
+    """The campaign 3 control (docs/07 2026-09-03): the student judged
+    with its image zeroed, the row and the file saying so."""
+
+    def test_blanked_keeps_shape_and_dtype_and_zeroes_every_pixel(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import blanked  # noqa: PLC0415
+
+        frames = np.full((3, 4, 5, 3), 200, dtype=np.uint8)
+        blank = blanked(frames)
+        self.assertEqual(blank.shape, frames.shape)
+        self.assertEqual(blank.dtype, frames.dtype)
+        self.assertEqual(int(blank.max()), 0)
+
+    def test_a_blanked_run_never_lands_on_the_sighted_file(self) -> None:
+        from rq_mjlab.walk_verdict import verdict_suffix  # noqa: PLC0415
+
+        sighted = verdict_suffix("cuda", student=True, blank_camera=False)
+        blank = verdict_suffix("cuda", student=True, blank_camera=True)
+        self.assertEqual(sighted, "student-cuda")  # campaign 2/3's headline file
+        self.assertEqual(blank, "student-blank-cuda")
+        self.assertEqual(
+            verdict_suffix("cpu", student=False, blank_camera=False), "cpu"
+        )
+
+    def test_the_flag_exists_and_defaults_off(self) -> None:
+        import sys  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import parse_args  # noqa: PLC0415
+
+        with mock.patch.object(sys, "argv", ["walk_verdict", "model.pt"]):
+            self.assertFalse(parse_args().blank_camera)
+        with mock.patch.object(
+            sys, "argv", ["walk_verdict", "model.pt", "--blank-camera"]
+        ):
+            self.assertTrue(parse_args().blank_camera)
