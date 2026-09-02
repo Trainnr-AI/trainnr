@@ -21,7 +21,7 @@ imports cleanly without them so it can raise the helpful error.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -119,7 +119,7 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
     actions: Any,
     frames: Iterable[tuple[int, Any]],
     manifest: EpisodeSidecar,
-    camera_frames: dict[str, Iterable[tuple[int, Any]]] | None = None,
+    camera_frames: Mapping[str, Iterable[tuple[int, Any]]] | None = None,
 ) -> Path:
     """One kept episode onto disk in `DemoLayout`; returns its directory.
 

@@ -6,6 +6,8 @@ plus the job manager's lifecycle and the onboarding refusals.
 from __future__ import annotations
 
 import unittest
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -15,6 +17,7 @@ from rq_pipeline.mcp_actions import (
     STUDIO_DIR,
     TOOLS_DIR,
     TRAIN_PYTHON,
+    WSL_RUN,
     Actions,
 )
 from rq_pipeline.mcp_jobs import JobManager
@@ -41,9 +44,20 @@ class _FakeSpawner:
         return _FakeProcess()
 
 
-def harness(tmp: str) -> tuple[Actions, _FakeSpawner]:
-    spawner = _FakeSpawner()
-    return Actions(JobManager(Path(tmp), spawner=spawner)), spawner
+@contextmanager
+def harness(env_file: Path | None = None) -> Iterator[tuple[Actions, _FakeSpawner]]:
+    """A fake-spawned Actions over a temp runs root. env_file=None: the
+    pins below are the PLATFORM-FREE command lines; the environment's
+    own wrapping has its own test. The watchers are JOINED before the
+    tempdir goes — a fake process exits instantly, and its watcher was
+    still writing the exit file while rmtree ran (2026-09-02)."""
+    with TemporaryDirectory() as tmp:
+        spawner = _FakeSpawner()
+        jobs = JobManager(Path(tmp), spawner=spawner)
+        try:
+            yield Actions(jobs, env_file=env_file), spawner
+        finally:
+            jobs.join()
 
 
 UV_PIPELINE = ["uv", "run", "--project", str(PIPELINE_DIR)]
@@ -52,8 +66,7 @@ UV_MJLAB = ["uv", "run", "--project", str(RQ_MJLAB_DIR), "python"]
 
 class TheDoors(unittest.TestCase):
     def test_generate_demos_spawns_the_kitting_press_verbatim(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, spawner = harness(tmp)
+        with harness() as (actions, spawner):
             handle = actions.generate_demos(episodes=3, seed=7, out="runs/x")
             [(argv, cwd)] = spawner.calls
             self.assertEqual(
@@ -74,15 +87,13 @@ class TheDoors(unittest.TestCase):
             self.assertTrue(str(handle["job_id"]).startswith("generate-demos-"))
 
     def test_zero_episodes_refuses_before_spawning(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, spawner = harness(tmp)
+        with harness() as (actions, spawner):
             with self.assertRaises(ValueError):
                 actions.generate_demos(episodes=0)
             self.assertEqual(spawner.calls, [])
 
     def test_the_chain_runs_through_the_train_venv(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, spawner = harness(tmp)
+        with harness() as (actions, spawner):
             actions.run_chain(name="demo", episodes=2, steps=300, from_stage="train")
             [(argv, _cwd)] = spawner.calls
             self.assertEqual(argv[0], str(TRAIN_PYTHON))
@@ -91,8 +102,7 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(argv[argv.index("--name") + 1], "demo")
 
     def test_the_walk_trains_and_certifies_in_the_rq_mjlab_venv(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, spawner = harness(tmp)
+        with harness() as (actions, spawner):
             actions.train_walk(agent="smoke", iterations=5)
             actions.certify_walk("runs/x/model_100.pt", trials=8, device="cpu")
             (train_argv, train_cwd), (cert_argv, _c) = spawner.calls
@@ -115,8 +125,7 @@ class TheDoors(unittest.TestCase):
             self.assertIn("--device", cert_argv)
 
     def test_the_studio_launches_release_in_its_crate(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, spawner = harness(tmp)
+        with harness() as (actions, spawner):
             actions.open_studio()
             [(argv, cwd)] = spawner.calls
             self.assertEqual(argv, ["cargo", "run", "--release"])
@@ -125,8 +134,7 @@ class TheDoors(unittest.TestCase):
 
 class TheJobLifecycle(unittest.TestCase):
     def test_status_reports_done_with_the_log_tail(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, _spawner = harness(tmp)
+        with harness() as (actions, _spawner):
             handle = actions.open_studio()
             status = actions.job_status(str(handle["job_id"]))
             # The fake process exits 0 instantly; the watcher thread
@@ -139,16 +147,14 @@ class TheJobLifecycle(unittest.TestCase):
             self.assertEqual(status["log_tail"], ["line one", "line two"])
 
     def test_an_unknown_job_is_refused_naming_the_known(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, _spawner = harness(tmp)
+        with harness() as (actions, _spawner):
             actions.open_studio()
             with self.assertRaises(KeyError) as ctx:
                 actions.job_status("nope-123")
             self.assertIn("studio-", str(ctx.exception))
 
     def test_list_is_newest_first(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, _spawner = harness(tmp)
+        with harness() as (actions, _spawner):
             first = actions.open_studio()
             second = actions.train_walk()
             listed = actions.list_jobs()
@@ -160,17 +166,48 @@ class TheJobLifecycle(unittest.TestCase):
 
 class Onboarding(unittest.TestCase):
     def test_a_missing_mjcf_is_refused_by_path(self) -> None:
-        with TemporaryDirectory() as tmp:
-            actions, _spawner = harness(tmp)
-            with self.assertRaises(FileNotFoundError):
-                actions.onboard_robot(f"{tmp}/ghost.xml", "ghost")
+        with harness() as (actions, _spawner), self.assertRaises(FileNotFoundError):
+            ghost = actions.jobs.jobs_dir.parent / "ghost.xml"
+            actions.onboard_robot(str(ghost), "ghost")
 
     def test_an_existing_bundle_is_never_overwritten(self) -> None:
-        actions, _spawner = harness("/tmp")
-        with self.assertRaises(FileExistsError) as ctx:
-            actions.onboard_robot(__file__, "microduck")  # exists in robots/
-        self.assertIn("never overwrites", str(ctx.exception))
+        with harness() as (actions, _spawner):
+            with self.assertRaises(FileExistsError) as ctx:
+                actions.onboard_robot(__file__, "microduck")  # exists in robots/
+            self.assertIn("never overwrites", str(ctx.exception))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheLaunchEnvironment(unittest.TestCase):
+    """On a box with a launch env file (Linux: pipeline/wsl.env), every
+    door carries it — a warp child without CUDA's library path falls to
+    the CPU silently (the first GPU-box run of the doors, 2026-09-02)."""
+
+    def test_uv_doors_pass_the_env_file_to_uv(self) -> None:
+        with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
+            actions.certify_walk("runs/x/model_1.pt", trials=2)
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[:6], [*UV_MJLAB[:4], "--env-file", "/box/wsl.env"])
+
+    def test_the_train_venv_chain_runs_under_wsl_run(self) -> None:
+        with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
+            actions.run_chain(name="t")
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[:2], [str(WSL_RUN), str(TRAIN_PYTHON)])
+
+    def test_the_studio_drops_the_wayland_display_on_that_box(self) -> None:
+        with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
+            actions.open_studio()
+            [(argv, _)] = spawner.calls
+            self.assertEqual(
+                argv, ["env", "-u", "WAYLAND_DISPLAY", "cargo", "run", "--release"]
+            )
+
+    def test_without_an_env_file_nothing_is_wrapped(self) -> None:
+        with harness() as (actions, spawner):
+            actions.open_studio()
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv, ["cargo", "run", "--release"])

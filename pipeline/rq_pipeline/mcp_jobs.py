@@ -77,6 +77,14 @@ class JobManager:
     def __init__(self, runs_root: Path, *, spawner: Spawner = _spawn) -> None:
         self.jobs_dir = Path(runs_root) / JOBS_DIR_NAME
         self._spawner = spawner
+        self._watchers: list[threading.Thread] = []
+
+    def join(self, timeout: float | None = None) -> None:
+        """Wait for every watcher to record its exit — the tests' teardown
+        (a tempdir removed under a still-writing watcher raced,
+        2026-09-02) and any orderly server shutdown."""
+        for watcher in self._watchers:
+            watcher.join(timeout)
 
     def start(self, tool: str, argv: Sequence[str], cwd: Path) -> dict[str, object]:
         """Spawn `argv` in `cwd`; returns the job's id, log path and pid."""
@@ -99,9 +107,18 @@ class JobManager:
         # job that outlives the server ends "unrecorded", said honestly.
         def watch() -> None:
             code = process.wait()
-            (self.jobs_dir / f"{job_id}.exit").write_text(str(code))
+            # Atomic: a reader that sees the file sees the code. The
+            # create-then-write of write_text let status() read an
+            # EMPTY file mid-write (int('') - the lifecycle test, on
+            # the GPU box's faster fake exit, 2026-09-02).
+            exit_path = self.jobs_dir / f"{job_id}.exit"
+            staged = exit_path.with_suffix(".exit.tmp")
+            staged.write_text(str(code))
+            os.replace(staged, exit_path)
 
-        threading.Thread(target=watch, daemon=True).start()
+        watcher = threading.Thread(target=watch, daemon=True)
+        self._watchers.append(watcher)
+        watcher.start()
         return {"job_id": job_id, "log": str(log_path), "pid": process.pid}
 
     def status(

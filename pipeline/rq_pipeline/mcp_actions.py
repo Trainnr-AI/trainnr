@@ -22,6 +22,7 @@ Environment shapes (each the wrapped tool's own documented launch):
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -40,18 +41,44 @@ TOOLS_DIR = REPO_ROOT / "tools"
 TRAIN_PYTHON = PIPELINE_DIR / ".venv-train" / "bin" / "python"
 
 
-def _uv(project: Path, *extras: str) -> list[str]:
+# The box's launch environment (pipeline/wsl.env: GL to the card, CUDA's
+# library path, one BLAS thread). Every door carries it on Linux, because
+# the developer's agent launches the MCP server with NO environment of
+# its own (.mcp.json) — and a warp child without LD_LIBRARY_PATH falls to
+# the CPU SILENTLY: a stranger's certify_walk would have certified on the
+# wrong instrument (found 2026-09-02, the first run of the doors on the
+# GPU box). Harmless on native Linux (the file's own header); absent on
+# macOS and Windows. Tests pass None to keep the command lines verbatim.
+ENV_FILE: Path | None = (
+    PIPELINE_DIR / "wsl.env" if sys.platform.startswith("linux") else None
+)
+WSL_RUN = TOOLS_DIR / "wsl-run.sh"  # the same env for interpreters uv does not launch
+
+
+def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     argv = ["uv", "run", "--project", str(project)]
+    if env_file is not None:
+        argv += ["--env-file", str(env_file)]
     for extra in extras:
         argv += ["--extra", extra]
     return [*argv, "python"]
 
 
 class Actions:
-    """The doors, bound to one JobManager (tests inject a fake spawner)."""
+    """The doors, bound to one JobManager (tests inject a fake spawner)
+    and to the platform's launch environment (tests pass None)."""
 
-    def __init__(self, jobs: JobManager) -> None:
+    def __init__(self, jobs: JobManager, env_file: Path | None = ENV_FILE) -> None:
         self.jobs = jobs
+        self.env_file = env_file
+
+    def _uv(self, project: Path, *extras: str) -> list[str]:
+        return _uv(project, *extras, env_file=self.env_file)
+
+    def _under_env(self, argv: list[str]) -> list[str]:
+        """A non-uv command line under the same environment (wsl-run.sh
+        sources the file, then execs)."""
+        return [str(WSL_RUN), *argv] if self.env_file is not None else argv
 
     # -- data ---------------------------------------------------------
 
@@ -63,7 +90,7 @@ class Actions:
         if episodes < 1:
             raise ValueError(f"episodes must be >= 1, got {episodes}")
         argv = [
-            *_uv(PIPELINE_DIR, "sim"),
+            *self._uv(PIPELINE_DIR, "sim"),
             str(TOOLS_DIR / "kitting-demos.py"),
             str(episodes),
             out,
@@ -84,7 +111,7 @@ class Actions:
         CPU verifies, referee gates). Needs the GPU box — the tool
         itself refuses loudly on a CUDA-less machine."""
         argv = [
-            *_uv(PIPELINE_DIR, "sim", "mjx"),
+            *self._uv(PIPELINE_DIR, "sim", "mjx"),
             str(TOOLS_DIR / "press-multiply.py"),
             seeds_dir,
             out,
@@ -112,7 +139,8 @@ class Actions:
         lerobot-train (in-loop eval) → paired evaluation → the fold
         with intervals and funnels. `scale="smoke"` finishes in minutes
         on a laptop; `scale="cloud"` is the real recipe for a GPU."""
-        argv = [str(TRAIN_PYTHON), str(TOOLS_DIR / "e2e-smoke.py"), "--name", name]
+        argv = self._under_env([str(TRAIN_PYTHON), str(TOOLS_DIR / "e2e-smoke.py")])
+        argv += ["--name", name]
         argv += ["--scale", scale]
         if episodes is not None:
             argv += ["--episodes", str(episodes)]
@@ -136,7 +164,7 @@ class Actions:
         stack: stamped bundles, declared DR bases, the linter green by
         construction). `agent="smoke"` is the box's 2-minute check;
         `agent="g3"` is the flagship recipe."""
-        argv = [*_uv(RQ_MJLAB_DIR), "-m", "rq_mjlab.walk_train", "--agent", agent]
+        argv = [*self._uv(RQ_MJLAB_DIR), "-m", "rq_mjlab.walk_train", "--agent", agent]
         if envs is not None:
             argv += ["--envs", str(envs)]
         if iterations is not None:
@@ -154,7 +182,7 @@ class Actions:
         episodes, tracking error and fall counts with exact intervals,
         the run's stamps on every row."""
         argv = [
-            *_uv(RQ_MJLAB_DIR),
+            *self._uv(RQ_MJLAB_DIR),
             "-m",
             "rq_mjlab.walk_verdict",
             checkpoint,
@@ -173,7 +201,13 @@ class Actions:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun
         SDK streams into its window on :9876."""
-        return self.jobs.start("studio", ["cargo", "run", "--release"], STUDIO_DIR)
+        argv = ["cargo", "run", "--release"]
+        if self.env_file is not None:
+            # WSLg: the embedded viewer re-asserts client-drawn chrome
+            # under Wayland; unsetting the display var restores the
+            # window frame (docs/07 2026-09-01).
+            argv = ["env", "-u", "WAYLAND_DISPLAY", *argv]
+        return self.jobs.start("studio", argv, STUDIO_DIR)
 
     # -- onboarding ----------------------------------------------------
 
