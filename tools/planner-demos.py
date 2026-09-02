@@ -2,7 +2,8 @@
 
     cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \\
         python ../tools/planner-demos.py TASK [out] [--episodes 8] [--seed S] \\
-        [--frame-every 5] [--dr-span 0.0] [--first-episode K] [--no-studio]
+        [--frame-every 5] [--dr-span 0.0] [--first-episode K] [--no-studio] \\
+        [--shards N] [--parallel M]
 
 The planner (`rq_pipeline.collect.choreography.PickPlacePlanner`) reads
 the object and the goal off each seated scene, writes the beats, and
@@ -21,6 +22,12 @@ bootstrap()
 
 from rq_pipeline.collect.planner_demos import generate_planned_demos  # noqa: E402
 from rq_pipeline.collect.press_feed import StudioPressFeed  # noqa: E402
+from rq_pipeline.collect.shards import (  # noqa: E402
+    ShardSpec,
+    plan_shards,
+    record_shard,
+    run_sharded_tool,
+)
 from rq_pipeline.tasks.registry import resolve  # noqa: E402
 from rq_pipeline.tasks.so101 import planner_rig  # noqa: E402
 
@@ -49,6 +56,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--first-episode", type=int, default=0)
     parser.add_argument(
+        "--shards",
+        type=int,
+        default=1,
+        help="press in N runs with disjoint ranges and seeds (docs/66 D4), merged",
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=2,
+        help="shards at a time (3+ EGL contexts livelock on WSL, measured 2026-08-28)",
+    )
+    parser.add_argument("--shard-index", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
         "--no-studio",
         action="store_true",
         help="do not stream this run to the Studio (docs/66 §0 streams by default)",
@@ -69,7 +89,13 @@ def main() -> None:
     def say(text: str) -> None:
         print(text, file=sys.stderr, flush=True)
 
-    feed = None if args.no_studio else StudioPressFeed.connect(out.name, say=say)
+    if args.shards > 1:
+        plan = plan_shards(args.episodes, args.shards, args.seed, args.first_episode)
+        sys.exit(run_sharded_tool(sys.argv, out, plan, parallel=args.parallel, say=say))
+    run_name = (
+        out.name if args.shard_index is None else f"{out.name}-s{args.shard_index}"
+    )
+    feed = None if args.no_studio else StudioPressFeed.connect(run_name, say=say)
     batch = generate_planned_demos(
         out,
         task_factory=resolve(args.task).build,
@@ -83,6 +109,9 @@ def main() -> None:
         feed=feed,
         say=say,
     )
+    if args.shard_index is not None:
+        spec = ShardSpec(args.shard_index, args.first_episode, args.episodes, args.seed)
+        record_shard(out, spec, batch)
     if not batch.complete:
         sys.exit(1)
 

@@ -56,6 +56,8 @@ class DemoLayout:
     TRAJECTORY_FILE = "trajectory.npz"
     MANIFEST_FILE = "manifest.json"
     EXPORT_FILE = "export.json"  # what the batch needs to become a dataset (ExportSpec)
+    SHARD_FILE = "shard-{index:02d}.json"  # one press run's accounting (ShardRecord)
+    SHARD_GLOB = "shard-*.json"
     STATES, SENSORS, ACTIONS = "states", "sensors", "actions"  # the npz keys
 
 

@@ -23,10 +23,11 @@ teacher presses demonstrations (docs/66 D2: keepers judged by the
 certificate's criterion, discards to `failures.jsonl`); the batch
 writes an `export.json`, so `demo_export.export_batch(demos, root,
 repo_id=...)` makes the LeRobot dataset with no Task in hand;
-`press_planned(task, episodes, seed, dr_span, out)` — the planner expert
+`press_planned(task, episodes, seed, dr_span, out, shards)` — the planner expert
 (docs/66 D3) presses an SO-101 task: beats written from the seated
 scene, executed by chained IK, kept by the referee, stamped
-`planner@<knobs>`;
+`planner@<knobs>`; `shards=N` presses in N parallel runs and merges them,
+the datasheet then stating the keep rate exactly (docs/66 D4);
 `certify_walk(checkpoint, student=<pretrained_model>, horizon, ...)` judges
 the distilled vision student through the same chase camera, over the
 policy bridge (`rq_pipeline.envs.policy_bridge`);

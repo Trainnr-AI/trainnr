@@ -99,13 +99,14 @@ class Actions:
         ]
         return self.jobs.start("generate-demos", argv, PIPELINE_DIR)
 
-    def press_planned(
+    def press_planned(  # noqa: PLR0913, PLR0917 - the press's own knobs, each named
         self,
         task: str = "lift",
         episodes: int = 8,
         seed: int = 17,
         dr_span: float = 0.0,
         out: str | None = None,
+        shards: int = 1,
     ) -> dict[str, Any]:
         """The planner expert presses demonstrations (docs/66 D3): on
         an SO-101 task (lift, block_stack, tool_insert) the planner reads
@@ -120,6 +121,8 @@ class Actions:
             argv.append(out)
         argv += ["--episodes", str(episodes), "--seed", str(seed)]
         argv += ["--dr-span", str(dr_span)]
+        if shards > 1:
+            argv += ["--shards", str(shards)]  # docs/66 D4: N runs, one merged batch
         return self.jobs.start("press-planned", argv, PIPELINE_DIR)
 
     def multiply_demos(

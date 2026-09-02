@@ -113,6 +113,12 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, PIPELINE_DIR)
             self.assertTrue(str(handle["job_id"]).startswith("press-planned-"))
 
+    def test_press_planned_shards_only_when_asked(self) -> None:
+        with harness() as (actions, spawner):
+            actions.press_planned("lift", shards=4)
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[-2:], ["--shards", "4"])
+
     def test_zero_episodes_refuses_before_spawning(self) -> None:
         with harness() as (actions, spawner):
             with self.assertRaises(ValueError):

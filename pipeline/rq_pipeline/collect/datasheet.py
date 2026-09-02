@@ -32,6 +32,7 @@ from rq_pipeline.collect.kitting_export import (
     DemoLayout,
     episode_dirs,
 )
+from rq_pipeline.collect.shards import MergedRate, merge_records, read_shard_records
 
 DATASHEET_FILE = "datasheet.md"
 # Two different absences, two different names: a LEGACY sidecar never
@@ -72,6 +73,10 @@ class DatasheetSummary:
     # restarts its own attempt counter.
     shards: int = 1
     warnings: tuple[str, ...] = field(default=())
+    # The merge (collect/shards.py): shard records sum every attempt,
+    # kept or not, so a sharded batch states an EXACT keep rate where
+    # a single run can only bound it.
+    merged: MergedRate | None = None
     # Visual draws (lighting, camera pose — docs/66 §4), spread per
     # scalar knob or per vector component; empty for batches pressed
     # without visual DR.
@@ -145,10 +150,17 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
     string and crashed in `episode_dirs` — normalising in only one of
     the two entry points is the bug (review 2026-09-01)."""
     demos_dir = Path(demos_dir)
-    normalized = [
-        _normalize(json.loads((ep / DemoLayout.MANIFEST_FILE).read_text()))
+    # An episode directory without its manifest yet belongs to a shard
+    # still writing it (two presses fill one directory, docs/66 D4):
+    # not kept yet, not counted - a crash here took a shard down with
+    # it (2026-09-03). A manifest that exists but does not parse still
+    # raises: that is corruption, not timing.
+    manifests = [
+        ep / DemoLayout.MANIFEST_FILE
         for ep in episode_dirs(demos_dir)
+        if (ep / DemoLayout.MANIFEST_FILE).exists()
     ]
+    normalized = [_normalize(json.loads(path.read_text())) for path in manifests]
     draws: dict[str, list[float]] = {}
     for episode in normalized:
         for param, value in episode["dynamics"].items():
@@ -198,13 +210,21 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
                 warnings.append(f"{name} stamp {absence} on some episodes")
     if UNSTAMPED_EXPERT in experts:
         warnings.append("expert unstamped on some episodes (pre-2026-08-27 batch)")
-    if shards > 1:
+    records = read_shard_records(demos_dir)
+    merged = merge_records(records) if records else None
+    if merged is not None and merged.kept != len(normalized):
+        warnings.append(
+            f"shard records count {merged.kept} kept episodes, the directory "
+            f"holds {len(normalized)}: a shard is missing or was re-pressed"
+        )
+    if shards > 1 and merged is None:
         # Attempt counters restart per press run, so a directory filled
         # by N shards has no single denominator — the bound would read
-        # "400%" (review 2026-09-01).
+        # "400%" (review 2026-09-01). The merge's shard records fix that.
         warnings.append(
-            f"{shards} shards (distinct seeds) shipped into one directory: "
-            "the keep-rate bound is per-shard and not meaningful here"
+            f"{shards} shards (distinct seeds) shipped into one directory "
+            "without shard records: the keep-rate bound is per-shard and "
+            "not meaningful here"
         )
 
     return DatasheetSummary(
@@ -218,8 +238,28 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
         retries_total=sum(len(episode["retries"]) for episode in normalized),
         shards=shards,
         warnings=tuple(warnings),
+        merged=merged,
         visuals={key: DynamicsSpread.of(vals) for key, vals in visual_draws.items()},
         visual_bases=visual_bases,
+    )
+
+
+def _keep_rate_line(summary: DatasheetSummary) -> str:
+    if summary.merged is not None:
+        m = summary.merged
+        return (
+            f"- keep rate **{m.rate:.0%}** exactly: {m.kept} kept of {m.attempts}"
+            f" attempts across {m.shards} shards (merged shard records)"
+        )
+    if summary.shards == 1:
+        return (
+            f"- highest attempt number recorded: {summary.max_attempt}"
+            f" (keep rate ≤ {summary.keep_rate_bound:.0%} — attempts after the"
+            " last keep are not recorded)"
+        )
+    return (
+        f"- {summary.shards} shards in this directory: no single"
+        " keep-rate bound (each shard restarts its attempt counter)"
     )
 
 
@@ -232,14 +272,7 @@ def render(summary: DatasheetSummary) -> str:
         "counts below are of SUCCESSFUL episodes only.",
         "",
         f"- episodes kept: **{summary.episodes}**",
-        (
-            f"- highest attempt number recorded: {summary.max_attempt}"
-            f" (keep rate ≤ {summary.keep_rate_bound:.0%} — attempts after the"
-            " last keep are not recorded)"
-            if summary.shards == 1
-            else f"- {summary.shards} shards in this directory: no single"
-            " keep-rate bound (each shard restarts its attempt counter)"
-        ),
+        _keep_rate_line(summary),
         f"- expert retries across the batch: {summary.retries_total}",
         "",
         "## Stamps",

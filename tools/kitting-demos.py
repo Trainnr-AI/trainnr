@@ -3,7 +3,7 @@
     cd pipeline && uv run --env-file wsl.env --extra sim \\
         python ../tools/kitting-demos.py \\
         [episodes] [out] [--frame-every 1] [--dr-span 0.30] [--seed S] \\
-        [--first-episode K]
+        [--first-episode K] [--shards N] [--parallel M]
 
 (On WSL the offscreen renderer reaches the GPU only through the variables
 in pipeline/wsl.env — Mesa's EGL default is llvmpipe at ~300 ms per frame,
@@ -25,6 +25,12 @@ bootstrap()
 
 from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
 from rq_pipeline.collect.press_feed import StudioPressFeed  # noqa: E402
+from rq_pipeline.collect.shards import (  # noqa: E402
+    ShardSpec,
+    plan_shards,
+    record_shard,
+    run_sharded_tool,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,6 +64,19 @@ def parse_args() -> argparse.Namespace:
         help="do not stream this run to the Studio (docs/66 §0 streams by default)",
     )
     parser.add_argument(
+        "--shards",
+        type=int,
+        default=1,
+        help="press in N runs with disjoint ranges and seeds (docs/66 D4), merged",
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=2,
+        help="shards at a time (3+ EGL contexts livelock on WSL, measured 2026-08-28)",
+    )
+    parser.add_argument("--shard-index", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
         "--dr-span",
         type=float,
         default=DR_SPAN,
@@ -75,7 +94,18 @@ def main() -> None:
 
     # docs/66 §0: everything that happens streams to the Studio -- the
     # press run is watchable by default, opted out per run.
-    feed = None if args.no_studio else StudioPressFeed.connect(args.out.name, say=say)
+    if args.shards > 1:
+        plan = plan_shards(args.episodes, args.shards, args.seed, args.first_episode)
+        code = run_sharded_tool(
+            sys.argv, args.out, plan, parallel=args.parallel, say=say
+        )
+        sys.exit(code)
+    name = (
+        args.out.name
+        if args.shard_index is None
+        else f"{args.out.name}-s{args.shard_index}"
+    )
+    feed = None if args.no_studio else StudioPressFeed.connect(name, say=say)
     batch = generate_demos(
         args.out,
         episodes=args.episodes,
@@ -87,6 +117,9 @@ def main() -> None:
         feed=feed,
         say=say,
     )
+    if args.shard_index is not None:
+        spec = ShardSpec(args.shard_index, args.first_episode, args.episodes, args.seed)
+        record_shard(args.out, spec, batch)
     if not batch.complete:
         sys.exit(1)
 

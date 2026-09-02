@@ -30,9 +30,15 @@ class JsonRecord:
         return json.dumps(asdict(cast("DataclassInstance", self)), indent=1)
 
     def write(self, path: Path) -> Path:
+        """Atomic: a reader (another shard's datasheet pass, the feed)
+        sees the old file or the whole new one, never half of it."""
+        import os  # noqa: PLC0415
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.as_json(), encoding="utf-8")
+        staging = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        staging.write_text(self.as_json(), encoding="utf-8")
+        os.replace(staging, path)
         return path
 
     @classmethod
