@@ -153,7 +153,10 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set[int]) -> RslStatus |
 TRAINER_PANES = (
     ("loss", ("loss", "l1_loss", "kld_loss")),
     ("optimizer", ("lr", "grad_norm")),
-    ("throughput", ("samples_per_s", "dataloading_s", "mem_gb", "step")),
+    ("throughput", ("samples_per_s", "dataloading_s", "mem_gb")),
+    # The step on the wall clock is "are we moving" at a glance (the
+    # operator's ask); alone, so it flattens nothing else.
+    ("progress", ("step",)),
 )
 
 
@@ -303,6 +306,40 @@ VERDICT_RE = re.compile(
 )
 STAGE_RE = re.compile(r"^== \d\d:\d\d:\d\d (.+)$")
 TRAIN_BUDGET_RE = re.compile(r"train (\d+) steps")  # the campaign header
+# The trainer's own progress bar: exact step, its budget, elapsed, ETA
+# and rate - "7399/60000 [11:20<1:06:49, 13.12step/s]". The INFO lines
+# print the step rounded to a kilo ("step:7K"), which froze the card's
+# rate at "?" for 80 s at a time (measured 2026-09-03).
+TRAIN_BAR_RE = re.compile(r"(\d+)/(\d+) \[([\d:]+)<([\d:?]+), ([\d.]+)step/s\]")
+
+
+@dataclass(frozen=True)
+class TrainBar:
+    step: int
+    total: int
+    elapsed: str
+    eta: str
+    rate: float
+
+    @property
+    def line(self) -> str:
+        return (
+            f"step **{self.step} / {self.total}** ({self.rate:.1f} step/s, "
+            f"ETA {self.eta}, elapsed {self.elapsed})"
+        )
+
+
+def train_bar(raw: str) -> TrainBar | None:
+    """The newest progress bar in the poll, or None."""
+    last = None
+    for match in TRAIN_BAR_RE.finditer(raw):
+        last = match
+    if last is None:
+        return None
+    step, total, elapsed, eta, rate = last.groups()
+    return TrainBar(int(step), int(total), elapsed, eta, float(rate))
+
+
 DIGEST_PATTERN = r"^== |^batch seed |^attempt [0-9]+: |^kept |^\[verdict\]"
 DIGEST_LINES = 400
 
@@ -404,6 +441,33 @@ def train_progress(
     if last_seen is None or last_step > last_seen[1]:
         return line, (now, last_step)
     return line, last_seen
+
+
+def engine_train_line(
+    rr: Any,
+    name: str,
+    raw: str,
+    train: tuple[Any, int, tuple[float, int] | None],
+    total: int,
+) -> tuple[str, tuple[float, int] | None]:
+    """The card's training line: the trainer's own progress bar when
+    the poll has one (exact step, its ETA and rate; the step logged on
+    the wall clock for the progress pane), else the INFO-line estimate."""
+    latest, last_step, last_seen = train
+    bar = train_bar(raw)
+    if bar is None:
+        return train_progress(latest, last_step, last_seen, total)
+    rr.reset_time()
+    rr.set_time("wall", timestamp=time.time())
+    rr.log(f"{name}/train/step", rr.Scalars(float(bar.step)))
+    losses = ""
+    if latest is not None:
+        losses = ", " + " ".join(
+            f"{METRIC_NAMES.get(k, k)} {v:.3f}"
+            for k, v in latest.metrics.items()
+            if "loss" in k
+        )
+    return bar.line + losses, last_seen
 
 
 def engine_stage(engine: Any, latest: Any, last_step: int) -> int:
@@ -766,8 +830,12 @@ def main() -> int:
             engine_level=engine_stage(engine, latest, last_step),
         )
         if engine is not None:
-            train_line, last_seen = train_progress(
-                latest, last_step, last_seen, engine.train_steps or args.steps
+            train_line, last_seen = engine_train_line(
+                rr,
+                args.name,
+                raw,
+                (latest, last_step, last_seen),
+                engine.train_steps or args.steps,
             )
             write_engine_card(rr, args.name, engine, gpu, train_line)
         elif rsl is not None:

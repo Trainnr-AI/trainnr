@@ -179,6 +179,22 @@ class TheRowRouter(unittest.TestCase):
         self.assertEqual(feed.MORE_SEEN, set())
 
 
+class TheTrainerBar(unittest.TestCase):
+    def test_the_newest_bar_gives_exact_step_budget_eta_and_rate(self) -> None:
+        raw = (
+            "Training:  11%|█▏ | 6879/60000 [10:34<1:08:44, 12.88step/s]\n"
+            "Training:  12%|█▏ | 7399/60000 [11:20<1:06:49, 13.12step/s]"
+            "INFO 2026 step:7K loss:0.3\n"
+        )
+        bar = feed.train_bar(raw)
+        assert bar is not None
+        self.assertEqual(
+            (bar.step, bar.total, bar.eta, bar.rate), (7399, 60000, "1:06:49", 13.12)
+        )
+        self.assertIn("step **7399 / 60000** (13.1 step/s, ETA 1:06:49", bar.line)
+        self.assertIsNone(feed.train_bar("== 18:33:24 export\n"))
+
+
 class TheRecordingId(unittest.TestCase):
     def test_a_log_streams_into_one_recording_across_restarts(self) -> None:
         a = feed.recording_id_for("root@h:1", "/workspace/x.log")
