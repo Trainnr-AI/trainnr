@@ -6,20 +6,27 @@
 #   sentinel the feed turns into a card (a pod cannot stop itself
 #   without the API key we never ship - docs/07 2026-09-01).
 #
-#   tools/campaign-distill.sh <run_root> <teacher.pt> [episodes] [steps] [worlds]
-#   e.g. /workspace/robotiq/runs/campaign-1 runs/microduck-walk/<stamp>/model_7999.pt 240 30000 48
+#   tools/campaign-distill.sh <run_root> <teacher.pt> [episodes] [steps] [worlds] [frame_every]
+#   e.g. /workspace/robotiq/runs/campaign-2 runs/microduck-walk/<stamp>/model_7999.pt 120 30000 48 1
+#
+# frame_every is the dataset's cadence in control ticks AND the student's
+# stride at certificate time: they must be equal, and for this gait they
+# must be 1. Measured 2026-09-02: the TEACHER itself, its actions held
+# for 5 ticks, falls in 20-23 ticks (40/40); held for 2, 38/40 survive;
+# every tick, 40/40. Campaign 1 pressed at 5 and certified a student
+# that had learned its data well (normalized error 0.13) at 0/40.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 root="${1:?run_root}"; teacher="${2:?teacher checkpoint}"
-episodes="${3:-240}"; steps="${4:-30000}"; worlds="${5:-48}"
+episodes="${3:-240}"; steps="${4:-30000}"; worlds="${5:-48}"; frame_every="${6:-1}"
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 mkdir -p "$root"
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
-say "campaign: press $episodes episodes, train $steps steps"
+say "campaign: press $episodes episodes at 1/$frame_every ticks, train $steps steps"
 cd "$repo/rq_mjlab"
 .venv/bin/python -m rq_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
-  --episodes "$episodes" --worlds "$worlds" --seed 3000 --frame-every 5 --no-studio
+  --episodes "$episodes" --worlds "$worlds" --seed 3000 --frame-every "$frame_every" --no-studio
 
 say "export"
 cd "$repo/pipeline"
@@ -42,5 +49,5 @@ say "certify the student (40 trials, cuda)"
 cd "$repo/rq_mjlab"
 .venv/bin/python -m rq_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
   --device cuda:0 --student "$root/student/checkpoints/last/pretrained_model" \
-  --horizon 2 --stride 5 --no-studio
+  --horizon 2 --stride "$frame_every" --no-studio
 say "CAMPAIGN DONE"

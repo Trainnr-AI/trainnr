@@ -269,7 +269,14 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=12)
     parser.add_argument("--worlds", type=int, default=9)
     parser.add_argument("--seed", type=int, default=1000)
-    parser.add_argument("--frame-every", type=int, default=5)
+    parser.add_argument(
+        "--frame-every",
+        type=int,
+        default=1,
+        help="control ticks per dataset frame - the student's action cadence. "
+        "For this gait it must be 1: the TEACHER, actions held 5 ticks, falls "
+        "in 20-23 ticks; held 2, 38/40 survive (measured 2026-09-02)",
+    )
     parser.add_argument("--width", type=int, default=320)
     parser.add_argument("--height", type=int, default=240)
     parser.add_argument("--device", default=None)

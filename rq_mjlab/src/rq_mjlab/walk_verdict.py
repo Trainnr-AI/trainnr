@@ -312,8 +312,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--stride",
         type=int,
-        default=5,
-        help="control ticks per chunk step: the press's --frame-every",
+        default=1,
+        help="control ticks per chunk step: the press's --frame-every (1 for "
+        "this gait - held 5 ticks even the teacher falls, measured 2026-09-02)",
     )
     parser.add_argument(
         "--student-python",
