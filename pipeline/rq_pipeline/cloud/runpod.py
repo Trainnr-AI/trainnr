@@ -150,6 +150,13 @@ class RunpodProvider:
         }
         if spec.data_centers:
             body["dataCenterIds"] = list(spec.data_centers)
+        if spec.network_volume:
+            # The API's own spelling, read off a pod record (2026-09-03).
+            body["mounts"] = {
+                "network": [
+                    {"volumeId": spec.network_volume, "path": spec.volume_mount}
+                ]
+            }
         return self._machine(self._request("POST", RunpodApi.PODS, body=body))
 
     def machine(self, machine_id: str) -> Machine:

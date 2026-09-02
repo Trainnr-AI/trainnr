@@ -39,6 +39,7 @@ bootstrap()
 
 from rq_pipeline.cloud import (  # noqa: E402
     DEFAULT_PROVIDER,
+    NETWORK_VOLUME_MOUNT,
     Action,
     GpuProvider,
     Machine,
@@ -146,6 +147,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     launch.add_argument("--tier", type=Tier, choices=list(Tier), default=Defaults.TIER)
     launch.add_argument("--image", default=Defaults.IMAGE)
     launch.add_argument("--disk", type=int, default=Defaults.DISK_GB)
+    launch.add_argument(
+        "--volume",
+        default="",
+        help="a network volume id to mount (its data center must be among "
+        "--datacenter; the repo and venvs of earlier pods live there)",
+    )
+    launch.add_argument(
+        "--mount",
+        default=NETWORK_VOLUME_MOUNT,
+        help="where the volume appears in the container",
+    )
     launch.add_argument("--count", type=int, default=1)
     launch.add_argument(
         "--datacenter", action="append", default=[], help="preferred; repeatable"
@@ -329,6 +341,8 @@ def launch_machine(gpu: GpuProvider, args: argparse.Namespace) -> None:
             disk_gb=args.disk,
             tier=args.tier,
             data_centers=tuple(args.datacenter),
+            network_volume=args.volume,
+            volume_mount=args.mount,
         )
     )
     print(describe(machine))

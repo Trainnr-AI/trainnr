@@ -143,12 +143,32 @@ class TheRunpodMapping(unittest.TestCase):
         self.assertTrue(sent["startSsh"])
         self.assertEqual(sent["env"], {"RQ_SCALE": "cloud"})
         self.assertEqual(sent["dataCenterIds"], ["EU-RO-1"])
+        self.assertNotIn("mounts", sent)  # no volume asked for: none sent
         self.assertEqual(machine.id, "pod123")
         self.assertEqual(machine.status, "PROVISIONING")
         self.assertFalse(machine.running)
         self.assertIsNone(machine.ssh_direct)
         self.assertEqual(machine.actions, (Action.TERMINATE,))
         self.assertEqual(machine.cost_per_hour, 0.34)
+
+    def test_a_network_volume_rides_in_the_api_s_own_mount_shape(self) -> None:
+        """The spelling read off a pod record (2026-09-03): a launch
+        with a volume names it under mounts.network."""
+        transport = CannedTransport({("POST", RunpodApi.PODS): (201, PROVISIONING)})
+        RunpodProvider(key=KEY, transport=transport).launch(
+            MachineSpec(
+                name="campaign-4",
+                gpu=GPU_4090,
+                image=IMAGE,
+                data_centers=("US-NC-2",),
+                network_volume="q51i67dwu8",
+            )
+        )
+        sent = json.loads(transport.calls[0][3])
+        self.assertEqual(
+            sent["mounts"],
+            {"network": [{"volumeId": "q51i67dwu8", "path": "/workspace"}]},
+        )
 
     def test_a_running_machine_carries_both_ssh_doors(self) -> None:
         transport = CannedTransport(

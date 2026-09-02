@@ -5,6 +5,7 @@ docs/34 is the runbook as prose."""
 
 from rq_pipeline.cloud.provider import (
     DEFAULT_PROVIDER,
+    NETWORK_VOLUME_MOUNT,
     Action,
     GpuOffer,
     GpuProvider,
@@ -22,6 +23,7 @@ from rq_pipeline.cloud.provider import (
 
 __all__ = [
     "DEFAULT_PROVIDER",
+    "NETWORK_VOLUME_MOUNT",
     "Action",
     "GpuOffer",
     "GpuProvider",

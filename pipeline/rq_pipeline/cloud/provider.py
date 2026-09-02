@@ -64,6 +64,11 @@ class GpuOffer:
     max_count: int | None = None
 
 
+# Where a mounted network volume appears in the container — Runpod's
+# own default, and where every earlier pod's repo lives.
+NETWORK_VOLUME_MOUNT = "/workspace"
+
+
 @dataclass(frozen=True)
 class MachineSpec:
     """What to rent: one container image on N cards of one GPU type."""
@@ -78,6 +83,13 @@ class MachineSpec:
     ssh: bool = True
     ports: Sequence[str] = ("22/tcp",)  # a published sshd: rsync needs it
     data_centers: Sequence[str] = ()
+    # A network volume to mount — the repo, the venvs and the runs of
+    # every earlier pod survive there when a stopped pod's host fills
+    # up and it can never restart (measured 2026-09-03: "not enough
+    # free GPUs on the host machine"). A volume lives in ONE data
+    # center; the launch must name that center or the vendor refuses.
+    network_volume: str = ""
+    volume_mount: str = NETWORK_VOLUME_MOUNT
 
 
 @dataclass(frozen=True)
