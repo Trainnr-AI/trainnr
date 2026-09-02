@@ -42,6 +42,7 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 | `show-aloha2.py`, `show-cargo-chaos.py` | One scene each, MuJoCo viewer + Rerun (the house rule: every session gets both) |
 | `show-rig.py`, `show-yellow.py` | The car+arm rig and the yellow arm in the MuJoCo passive viewer only — their Rerun mirror is queued (docs/32 §10.1) |
 | `show-many.py` | Batched domain-randomized worlds side by side |
+| `pod-volume.py` | a RunPod network volume over its S3 API: `du` by prefix, `ls`, and `rm` (a dry run unless `--yes`) — the door that works when the pod is stopped; credentials are a RunPod S3 API key pair as `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or `--env-file` lifting exactly those two names |
 | `planner-demos.py` | docs/66 D3: the planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`) — beats written from each seated scene, executed by chained IK, kept by the task's referee, every declared camera captured, the batch stamped `planner@<knobs>`; streams to the Studio by default |
 | `kitting-demos.py` | T5's data source: referee-filtered scripted kitting episodes drawn over the task's whole declared band with ±30% DR — trajectories + frames + manifests, each manifest carrying the expert's own stamp (`expert_stamp`); `--first-episode K` shards one batch across parallel generators |
 | `camera-match.py` | Sim renders beside released real frames — camera placement is calibration, not decoration |
