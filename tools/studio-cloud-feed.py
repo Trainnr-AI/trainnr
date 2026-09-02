@@ -147,6 +147,29 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set[int]) -> RslStatus |
     return latest
 
 
+# The trainer's series by scale, one pane each: on a shared axis the
+# step counter (thousands) and the sample rate (hundreds) flatten the
+# losses (units) into the floor - seen on the campaign feed 2026-09-02.
+TRAINER_PANES = (
+    ("loss", ("loss", "l1_loss", "kld_loss")),
+    ("optimizer", ("lr", "grad_norm")),
+    ("throughput", ("samples_per_s", "dataloading_s", "mem_gb", "step")),
+)
+
+
+def trainer_views(name: str) -> list[Any]:
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    return [
+        rrb.TimeSeriesView(
+            origin=f"{name}/train",
+            name=pane,
+            contents=[f"$origin/{series}" for series in members],
+        )
+        for pane, members in TRAINER_PANES
+    ]
+
+
 def send_layout(rr: Any, name: str, kind: str) -> None:
     """The feed names its own panes - reward front and centre, one
     view per series family - instead of the viewer's auto-layout,
@@ -166,7 +189,7 @@ def send_layout(rr: Any, name: str, kind: str) -> None:
                 rrb.TimeSeriesView(origin=f"{name}/press", name="press"),
                 rrb.TextLogView(origin=f"{name}/stage", name="stages"),
                 rrb.TextLogView(origin=f"{name}/verdict", name="verdict"),
-                rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
+                *trainer_views(name),
             ]
         elif kind == "rl":
             views = [
@@ -210,7 +233,7 @@ def send_layout(rr: Any, name: str, kind: str) -> None:
                 views.append(rrb.TimeSeriesView(origin=f"{name}/rl/more", name="more"))
         else:
             views = [
-                rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
+                *trainer_views(name),
                 rrb.TimeSeriesView(origin=f"{name}/eval", name="eval"),
             ]
         views += [
