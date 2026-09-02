@@ -170,7 +170,15 @@ def trainer_views(name: str) -> list[Any]:
     ]
 
 
-def send_layout(rr: Any, name: str, kind: str, *, eval_pane: bool = False) -> None:
+# The engine layout grows with the campaign: press panes first, the
+# trainer's once it logs, the verdict's once a row lands - a pane never
+# sits empty waiting for its stage (the operator's rule).
+ENGINE_PRESS, ENGINE_TRAINING, ENGINE_VERDICT = 0, 1, 2
+
+
+def send_layout(
+    rr: Any, name: str, kind: str, *, eval_pane: bool = False, level: int = 0
+) -> None:
     """The feed names its own panes - reward front and centre, one
     view per series family - instead of the viewer's auto-layout,
     which panes whichever entities it notices first and buried
@@ -188,9 +196,11 @@ def send_layout(rr: Any, name: str, kind: str, *, eval_pane: bool = False) -> No
             views = [
                 rrb.TimeSeriesView(origin=f"{name}/press", name="press"),
                 rrb.TextLogView(origin=f"{name}/stage", name="stages"),
-                rrb.TextLogView(origin=f"{name}/verdict", name="verdict"),
-                *trainer_views(name),
             ]
+            if level >= ENGINE_TRAINING:
+                views += trainer_views(name)
+            if level >= ENGINE_VERDICT:
+                views.append(rrb.TextLogView(origin=f"{name}/verdict", name="verdict"))
         elif kind == "rl":
             views = [
                 rrb.TimeSeriesView(origin=f"{name}/rl/reward", name="reward"),
@@ -249,20 +259,21 @@ def send_layout(rr: Any, name: str, kind: str, *, eval_pane: bool = False) -> No
         print(f"layout not sent: {error}")
 
 
-def choose_layout(
+def choose_layout(  # noqa: PLR0913 - the signals and the two pane flags, named
     rr: Any,
     name: str,
-    sent: tuple[str, bool] | None,
+    sent: tuple[str, int] | None,
     signals: tuple[bool, bool, bool],
     *,
     eval_seen: bool = False,
-) -> tuple[str, bool] | None:
+    engine_level: int = ENGINE_PRESS,
+) -> tuple[str, int] | None:
     """Send (or resend) the layout whenever what SHOULD be on screen
     changes: the first data reveals the run's kind, and a first
     unrecognised row makes the "more" pane earn its place."""
     rl, lerobot, engine = signals
     if engine:
-        want = ("engine", False)
+        want = ("engine", engine_level)  # the flag: how far the campaign got
     elif rl:
         want = ("rl", bool(MORE_SEEN))
     elif lerobot:
@@ -270,7 +281,13 @@ def choose_layout(
     else:
         return sent
     if want != sent:
-        send_layout(rr, name, want[0], eval_pane=want[0] == "lerobot" and want[1])
+        send_layout(
+            rr,
+            name,
+            want[0],
+            eval_pane=want[0] == "lerobot" and bool(want[1]),
+            level=int(want[1]) if want[0] == "engine" else 0,
+        )
     return want
 
 
@@ -309,6 +326,7 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
     the lines already logged (the log is re-read whole each poll)."""
     status = EngineStatus()
     found = False
+    kept_attempts: set[int] = set()
     # Text rows ride the attempt axis too: logged with no time set they
     # miss the pane (the operator's screenshot, 2026-09-03).
     rr.set_time("attempt", sequence=0)
@@ -316,9 +334,14 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
         line = raw_line.strip()
         if attempt := PRESS_ATTEMPT_RE.match(line):
             found = True
-            status.attempts = max(status.attempts, int(attempt.group(1)))
-            if attempt.group(2) == "KEEP":
-                status.kept += 1
+            number = int(attempt.group(1))
+            status.attempts = max(status.attempts, number)
+            if attempt.group(2) == "KEEP" and number not in kept_attempts:
+                # Distinct attempts only: the poll carries the digest AND
+                # the tail, so a line can appear twice (the card once read
+                # "84 kept of 48 attempts", 2026-09-03).
+                kept_attempts.add(number)
+                status.kept = len(kept_attempts)
             rr.set_time("attempt", sequence=int(attempt.group(1)))
             if line not in seen:
                 seen.add(line)
@@ -381,6 +404,17 @@ def train_progress(
     if last_seen is None or last_step > last_seen[1]:
         return line, (now, last_step)
     return line, last_seen
+
+
+def engine_stage(engine: Any, latest: Any, last_step: int) -> int:
+    """How far the campaign got, for the layout: press, training, verdict."""
+    if engine is None:
+        return ENGINE_PRESS
+    if engine.verdict or engine.done:
+        return ENGINE_VERDICT
+    if latest is not None or last_step >= 0:
+        return ENGINE_TRAINING
+    return ENGINE_PRESS
 
 
 def write_engine_card(
@@ -625,7 +659,7 @@ def main() -> int:
     rr.init(f"rq-{args.name}-feed", spawn=False)
     rr.connect_grpc(args.address)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
-    layout_sent: tuple[str, bool] | None = None
+    layout_sent: tuple[str, int] | None = None
 
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
@@ -713,6 +747,7 @@ def main() -> int:
                 engine is not None,
             ),
             eval_seen=bool(eval_progress) or bool(seen_records),
+            engine_level=engine_stage(engine, latest, last_step),
         )
         if engine is not None:
             train_line, last_seen = train_progress(

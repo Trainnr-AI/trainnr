@@ -179,6 +179,20 @@ class TheRowRouter(unittest.TestCase):
         self.assertEqual(feed.MORE_SEEN, set())
 
 
+class TheEngineCounters(unittest.TestCase):
+    def test_kept_counts_distinct_attempts_even_when_the_poll_repeats_them(
+        self,
+    ) -> None:
+        # Every poll carries the whole-log digest AND the tail, so a line
+        # can appear twice; the card once read "84 kept of 48 attempts".
+        lines = ["attempt 1: KEEP (x)", "attempt 2: discard", "attempt 3: KEEP (y)"]
+        raw = "\n".join([*lines, *lines])
+        status = feed.parse_engine(FakeRr(), "c", raw, set())
+        self.assertIsNotNone(status)
+        assert status is not None
+        self.assertEqual((status.kept, status.attempts), (2, 3))
+
+
 class TheLayoutChooser(unittest.TestCase):
     def setUp(self) -> None:
         feed.MORE_SEEN.clear()
@@ -224,6 +238,21 @@ class TheLayoutChooser(unittest.TestCase):
             feed.choose_layout(FakeRr(), "g3", None, (False, False, True)),
             ("engine", False),
         )
+
+    def test_the_engine_layout_grows_with_the_campaign(self) -> None:
+        with mock.patch.object(feed, "send_layout") as sender:
+            sent = feed.choose_layout(FakeRr(), "c", None, (False, False, True))
+            self.assertEqual(sent, ("engine", feed.ENGINE_PRESS))
+            sent = feed.choose_layout(
+                FakeRr(),
+                "c",
+                sent,
+                (False, True, True),
+                engine_level=feed.ENGINE_TRAINING,
+            )
+            self.assertEqual(sent, ("engine", feed.ENGINE_TRAINING))
+            self.assertEqual(sender.call_count, 2)  # the trainer panes earned theirs
+            self.assertEqual(sender.call_args.kwargs["level"], feed.ENGINE_TRAINING)
 
     def test_a_lerobot_run_gets_the_train_eval_layout(self) -> None:
         with mock.patch.object(feed, "send_layout") as sender:
