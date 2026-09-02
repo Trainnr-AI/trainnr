@@ -23,7 +23,21 @@ if TYPE_CHECKING:
 
 APP_ID = "rq-press"
 ATTEMPT_TIMELINE = "attempt"
+TICK_TIMELINE = "tick"  # a kept episode's frames, by physics step
 ENTITY_ROOT = "press"
+FRAMES_PER_KEEPER = 250  # at most this many frames per camera per keeper
+JPEG_QUALITY = 80
+
+
+def thinned(frames: list[tuple[int, Any]], limit: int) -> list[tuple[int, Any]]:
+    """At most `limit` frames, evenly spaced, the last one always kept."""
+    if len(frames) <= limit:
+        return list(frames)
+    step = len(frames) / limit
+    picked = [frames[int(i * step)] for i in range(limit)]
+    if picked[-1] is not frames[-1]:
+        picked[-1] = frames[-1]
+    return picked
 
 
 class StudioPressFeed:
@@ -62,11 +76,22 @@ class StudioPressFeed:
         rr.log(f"{ENTITY_ROOT}/log", rr.TextLog(f"attempt {attempts}: {verdict}{note}"))
         if not result.succeeded:
             return
-        for camera, frames in (result.camera_frames or {}).items():
-            if frames:
-                rr.log(f"{ENTITY_ROOT}/{camera}", rr.Image(frames[-1][1]))
+        # Every frame of the keeper on its own `tick` timeline, so the
+        # operator can scrub the episode; the attempt timeline stays
+        # set, so scrubbing attempts shows each keeper's last frame.
+        # JPEG-compressed: raw RGB at 50 Hz over three cameras would
+        # sit on the viewer's throat (docs/07 2026-09-03).
+        cameras = dict(result.camera_frames or {})
         if result.frames:  # the single-camera path (kitting's layout)
-            rr.log(f"{ENTITY_ROOT}/camera", rr.Image(result.frames[-1][1]))
+            cameras.setdefault("camera", result.frames)
+        for camera, frames in cameras.items():
+            for tick, image in thinned(frames, FRAMES_PER_KEEPER):
+                rr.set_time(TICK_TIMELINE, sequence=int(tick))
+                rr.log(
+                    f"{ENTITY_ROOT}/{camera}",
+                    rr.Image(image).compress(jpeg_quality=JPEG_QUALITY),
+                )
+        rr.disable_timeline(TICK_TIMELINE)
 
     def done(self, batch: DemoBatch) -> None:
         self._rr.log(
