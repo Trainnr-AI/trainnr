@@ -25,7 +25,7 @@ from rq_pipeline.mcp_jobs import JobManager
 
 
 class _FakeProcess:
-    def __init__(self, pid: int = os.getpid(), code: int = 0) -> None:  # noqa: B008 - a LIVE pid, deliberately
+    def __init__(self, pid: int = os.getpid(), code: int = 0) -> None:
         self.pid = pid
         self._code = code
 
