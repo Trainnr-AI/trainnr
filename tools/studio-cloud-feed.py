@@ -170,7 +170,7 @@ def trainer_views(name: str) -> list[Any]:
     ]
 
 
-def send_layout(rr: Any, name: str, kind: str) -> None:
+def send_layout(rr: Any, name: str, kind: str, *, eval_pane: bool = False) -> None:
     """The feed names its own panes - reward front and centre, one
     view per series family - instead of the viewer's auto-layout,
     which panes whichever entities it notices first and buried
@@ -234,7 +234,11 @@ def send_layout(rr: Any, name: str, kind: str) -> None:
         else:
             views = [
                 *trainer_views(name),
-                rrb.TimeSeriesView(origin=f"{name}/eval", name="eval"),
+                *(
+                    [rrb.TimeSeriesView(origin=f"{name}/eval", name="eval")]
+                    if eval_pane
+                    else []
+                ),
             ]
         views += [
             rrb.TimeSeriesView(origin=f"{name}/gpu", name="gpu"),
@@ -250,6 +254,8 @@ def choose_layout(
     name: str,
     sent: tuple[str, bool] | None,
     signals: tuple[bool, bool, bool],
+    *,
+    eval_seen: bool = False,
 ) -> tuple[str, bool] | None:
     """Send (or resend) the layout whenever what SHOULD be on screen
     changes: the first data reveals the run's kind, and a first
@@ -260,11 +266,11 @@ def choose_layout(
     elif rl:
         want = ("rl", bool(MORE_SEEN))
     elif lerobot:
-        want = ("lerobot", False)
+        want = ("lerobot", eval_seen)  # the flag: the eval pane earned its place
     else:
         return sent
     if want != sent:
-        send_layout(rr, name, want[0])
+        send_layout(rr, name, want[0], eval_pane=want[0] == "lerobot" and want[1])
     return want
 
 
@@ -279,6 +285,9 @@ VERDICT_RE = re.compile(
     r"CP95 \[([0-9.]+), ([0-9.]+)\]"
 )
 STAGE_RE = re.compile(r"^== \d\d:\d\d:\d\d (.+)$")
+TRAIN_BUDGET_RE = re.compile(r"train (\d+) steps")  # the campaign header
+DIGEST_PATTERN = r"^== |^batch seed |^attempt [0-9]+: |^kept |^\[verdict\]"
+DIGEST_LINES = 400
 
 
 @dataclass
@@ -291,6 +300,7 @@ class EngineStatus:
     last_batch: str | None = None
     verdict: str | None = None
     done: bool = False
+    train_steps: int | None = None  # the campaign header's budget
 
 
 def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus | None:
@@ -337,6 +347,9 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
         elif stage := STAGE_RE.match(line):
             found = True
             status.stage = stage.group(1)
+            budget = TRAIN_BUDGET_RE.search(line)
+            if budget:
+                status.train_steps = int(budget.group(1))
             status.done = status.done or stage.group(1) == "CAMPAIGN DONE"
             if line not in seen:
                 seen.add(line)
@@ -344,7 +357,35 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
     return status if found else None
 
 
-def write_engine_card(rr: Any, name: str, status: EngineStatus, gpu: str) -> None:
+def train_progress(
+    latest: Any, last_step: int, last_seen: tuple[float, int] | None, total: int
+) -> tuple[str, tuple[float, int] | None]:
+    """'step k / N (rate, ETA), losses' for a card, and the updated
+    (wall, step) pair the ETA is measured from."""
+    if last_step < 0:
+        return "", last_seen
+    now = time.time()
+    rate, eta = "?", "?"
+    if last_seen is not None and last_step > last_seen[1] and now > last_seen[0]:
+        per_second = (last_step - last_seen[1]) / (now - last_seen[0])
+        rate = f"{per_second:.1f} step/s"
+        eta = f"{(total - last_step) / per_second / 60:.0f} min"
+    losses = ""
+    if latest is not None:
+        losses = ", " + " ".join(
+            f"{METRIC_NAMES.get(k, k)} {v:.3f}"
+            for k, v in latest.metrics.items()
+            if "loss" in k
+        )
+    line = f"step **{last_step} / {total}** ({rate}, ETA {eta}){losses}"
+    if last_seen is None or last_step > last_seen[1]:
+        return line, (now, last_step)
+    return line, last_seen
+
+
+def write_engine_card(
+    rr: Any, name: str, status: EngineStatus, gpu: str, train_line: str = ""
+) -> None:
     """The data engine's 'right now' card."""
     card = "## data engine\n\n"
     if status.stage:
@@ -352,6 +393,8 @@ def write_engine_card(rr: Any, name: str, status: EngineStatus, gpu: str) -> Non
     card += f"- pressed **{status.kept}** kept of {status.attempts} attempts\n"
     if status.last_batch:
         card += f"- last batch {status.last_batch}\n"
+    if train_line:
+        card += f"- {train_line}\n"
     if status.verdict:
         card += f"- student certificate: {status.verdict}\n"
     if status.done:
@@ -543,7 +586,7 @@ def status_card(  # noqa: PLR0913 - the card's inputs, each named
     return last_seen
 
 
-def main() -> int:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("door", help="user@host:port (cloud-gpu machines prints it)")
     parser.add_argument("log", help="remote log path, e.g. /workspace/robotiq/run.log")
@@ -564,7 +607,11 @@ def main() -> int:
         default="",
         help="remote glob of per-trial records.jsonl files to stream as cloud/eval/*",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
 
     import rerun as rr  # noqa: PLC0415 - viz extra
 
@@ -593,6 +640,14 @@ def main() -> int:
             raw = subprocess.run(
                 [
                     *poll_argv,
+                    # The structural lines of the WHOLE log first: stage
+                    # markers, press batches, verdict rows, the campaign
+                    # header. A trainer's progress bars push them out of
+                    # the 256 KB tail within seconds, and a feed started
+                    # mid-run then never learns the run's kind (seen
+                    # 2026-09-02: the lerobot layout on a campaign).
+                    f"tr '\\r' '\\n' < {args.log} 2>/dev/null | "
+                    f"grep -aE '{DIGEST_PATTERN}' | tail -n {DIGEST_LINES}; echo; "
                     f"tr '\\r' '\\n' < {args.log} 2>/dev/null | tail -c 262144; "
                     f"echo; tr '\\r' '\\n' < {args.log} 2>/dev/null | "
                     "grep -a '== training' | tail -1 | sed 's/^/RQARM /'; "
@@ -657,9 +712,13 @@ def main() -> int:
                 latest is not None or last_step >= 0 or bool(eval_progress),
                 engine is not None,
             ),
+            eval_seen=bool(eval_progress) or bool(seen_records),
         )
         if engine is not None:
-            write_engine_card(rr, args.name, engine, gpu)
+            train_line, last_seen = train_progress(
+                latest, last_step, last_seen, engine.train_steps or args.steps
+            )
+            write_engine_card(rr, args.name, engine, gpu, train_line)
         elif rsl is not None:
             write_rl_card(rr, args.name, rsl, gpu)
         log_gpu(rr, args.name, gpu)
