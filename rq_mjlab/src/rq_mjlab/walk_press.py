@@ -111,15 +111,21 @@ class ChaseCamera:
         mujoco.mjv_defaultCamera(self.camera)
         self.camera.distance, self.camera.elevation, self.camera.azimuth = 0.6, -18, 135
 
+    def frame_at(self, qpos: Any) -> Any:
+        """One chase frame for one world's qpos - the SAME picture the
+        press writes and the student's verdict shows it (one camera for
+        training and judging, or the certificate measures a camera
+        mismatch instead of a policy)."""
+        self.data.qpos[:] = qpos
+        self._mujoco.mj_forward(self.model, self.data)
+        self.camera.lookat[:] = self.data.xpos[1]  # the trunk, body 1
+        self.renderer.update_scene(self.data, camera=self.camera)
+        return self.renderer.render().copy()
+
     def frames(self, qpos: Any, every: int) -> list[tuple[int, Any]]:
-        out = []
-        for tick in range(0, len(qpos), every):
-            self.data.qpos[:] = qpos[tick]
-            self._mujoco.mj_forward(self.model, self.data)
-            self.camera.lookat[:] = self.data.xpos[1]  # the trunk, body 1
-            self.renderer.update_scene(self.data, camera=self.camera)
-            out.append((tick, self.renderer.render().copy()))
-        return out
+        return [
+            (tick, self.frame_at(qpos[tick])) for tick in range(0, len(qpos), every)
+        ]
 
     def close(self) -> None:
         self.renderer.close()

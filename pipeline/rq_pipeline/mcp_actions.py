@@ -171,16 +171,22 @@ class Actions:
             argv += ["--iterations", str(iterations)]
         return self.jobs.start("train-walk", argv, RQ_MJLAB_DIR)
 
-    def certify_walk(
+    def certify_walk(  # noqa: PLR0913 - the certificate's knobs, each named
         self,
         checkpoint: str,
+        *,
         trials: int = 40,
         seed: int = 1000,
         device: str | None = None,
+        student: str | None = None,
+        horizon: int = 20,
     ) -> dict[str, Any]:
         """The locomotion certificate (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
-        the run's stamps on every row."""
+        the run's stamps on every row. With `student` (a LeRobot
+        checkpoint distilled from this teacher's data, docs/66 D2) the
+        vision student is judged instead, through the policy bridge,
+        seeing the same chase camera the press wrote."""
         argv = [
             *self._uv(RQ_MJLAB_DIR),
             "-m",
@@ -193,6 +199,8 @@ class Actions:
         ]
         if device is not None:
             argv += ["--device", device]
+        if student is not None:
+            argv += ["--student", student, "--horizon", str(horizon)]
         return self.jobs.start("certify-walk", argv, RQ_MJLAB_DIR)
 
     def press_walk(

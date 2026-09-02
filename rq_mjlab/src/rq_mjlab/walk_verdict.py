@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -172,13 +173,207 @@ def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
     return [episode.outcome for episode in rollout_episodes(env, policy, trials)]
 
 
-def main() -> None:
+class VerdictFeed:
+    """The certificate, watched (docs/66 §0): world 0's chase view while
+    a student is judged, every trial's verdict as it lands, the fold at
+    the end - into the Studio's one ingest address. Best-effort: no
+    rerun-sdk means one loud line and an unwatched verdict."""
+
+    ROOT = "verdict"
+
+    def __init__(self, run_name: str) -> None:
+        import rerun as rr  # noqa: PLC0415 - viz extra
+        from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: PLC0415
+
+        self._rr: Any = rr
+        rr.init(f"rq-verdict-{run_name}")
+        rr.connect_grpc(STUDIO_ADDRESS)
+        self._tick = 0
+
+    @classmethod
+    def connect(cls, run_name: str) -> VerdictFeed | None:
+        try:
+            return cls(run_name)
+        except ImportError:
+            print(
+                "no rerun-sdk in this venv - the verdict runs UNWATCHED",
+                file=sys.stderr,
+            )
+            return None
+
+    def frame(self, image: Any) -> None:
+        self._tick += 1
+        self._rr.set_time("tick", sequence=self._tick)
+        self._rr.log(f"{self.ROOT}/camera", self._rr.Image(image))
+
+    def outcomes(self, outcomes: list[EpisodeOutcome]) -> None:
+        rr = self._rr
+        for trial, outcome in enumerate(outcomes):
+            rr.set_time("trial", sequence=trial)
+            rr.log(f"{self.ROOT}/err_ratio", rr.Scalars(outcome.err_ratio))
+            rr.log(f"{self.ROOT}/survived", rr.Scalars(float(outcome.survived)))
+            verdict = (
+                "PASS" if outcome.success else ("fell" if outcome.fell else "drifted")
+            )
+            rr.log(
+                f"{self.ROOT}/log",
+                rr.TextLog(
+                    f"trial {trial}: {verdict} (err_ratio {outcome.err_ratio:.2f})"
+                ),
+            )
+
+    def done(self, line: str) -> None:
+        self._rr.log(f"{self.ROOT}/log", self._rr.TextLog(line))
+
+
+class StudentPolicy:
+    """A vision student (a LeRobot checkpoint) as the env's per-tick
+    policy: the SAME chase camera the press wrote its frames with
+    (walk_press.ChaseCamera, off a one-robot CPU mirror) renders every
+    world's view from the live qpos, the actor observation rides along
+    as the state, and the bridge answers from the train venv."""
+
+    def __init__(  # noqa: PLR0913 - the student's six facts, named
+        self,
+        env,
+        checkpoint: Path,
+        *,
+        python: Path,
+        horizon: int,
+        stride: int,
+        frame_size: tuple[int, int],
+        device: str,
+    ) -> None:
+        from rq_pipeline.envs.policy_bridge import BridgePolicy  # noqa: PLC0415
+
+        from rq_mjlab.actuator import as_torch  # noqa: PLC0415
+        from rq_mjlab.walk_press import CAMERA_KEY, ChaseCamera  # noqa: PLC0415
+
+        self._env = env
+        self._qpos = as_torch(env.unwrapped.sim.data.qpos)
+        self._camera = ChaseCamera(*frame_size)
+        self._bridge = BridgePolicy(
+            python, checkpoint, camera=CAMERA_KEY, horizon=horizon, device=device
+        )
+        self._first = True
+        self.feed: VerdictFeed | None = None
+        self._ticks = 0
+        # The student's clock is the DATASET's: frames every `stride`
+        # control ticks (walk_press --frame-every), so a chunk step is
+        # `stride` ticks long. Asked every tick, the first student was
+        # driven 5x too fast and fell in 18 ticks (2026-09-02).
+        self._stride = stride
+        self._held: Any = None
+
+    def __call__(self, obs) -> Any:
+        import numpy as np  # noqa: PLC0415
+        import torch  # noqa: PLC0415
+
+        if self._held is not None and self._ticks % self._stride:
+            self._ticks += 1
+            return self._held
+        state = obs["actor"].detach().cpu().numpy()
+        qpos = self._qpos.detach().cpu().numpy()
+        images = np.stack([self._camera.frame_at(row) for row in qpos])
+        if self.feed is not None:
+            self.feed.frame(images[0])
+        resets = np.full(len(state), self._first, dtype=bool)
+        self._first = False
+        actions = self._bridge.act(state, images, resets)
+        self._held = torch.as_tensor(actions, device=self._env.unwrapped.device)
+        self._ticks += 1
+        return self._held
+
+    def close(self) -> None:
+        self._bridge.close()
+        self._camera.close()
+
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--trials", type=int, default=40)
     parser.add_argument("--device", default=None, help="cuda:0 or cpu")
     parser.add_argument("--seed", type=int, default=1000)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--student",
+        type=Path,
+        default=None,
+        help="a LeRobot checkpoint (pretrained_model dir): judge the vision "
+        "student distilled from this teacher's data instead of the teacher",
+    )
+    parser.add_argument(
+        "--horizon", type=int, default=2, help="executed chunk steps before a replan"
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=5,
+        help="control ticks per chunk step: the press's --frame-every",
+    )
+    parser.add_argument(
+        "--student-python",
+        type=Path,
+        default=Path(__file__).resolve().parents[3]
+        / "pipeline"
+        / ".venv-train"
+        / "bin"
+        / "python",
+        help="the interpreter with LeRobot (the bridge's server side)",
+    )
+    parser.add_argument("--frame-width", type=int, default=320)
+    parser.add_argument("--frame-height", type=int, default=240)
+    parser.add_argument(
+        "--no-studio", action="store_true", help="do not stream to the Studio"
+    )
+    return parser.parse_args()
+
+
+def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
+    out_dir: Path,
+    suffix: str,
+    outcomes: list[EpisodeOutcome],
+    *,
+    source: str,
+    policy_name: str,
+    instrument: str,
+    protocol: dict[str, Any],
+    identity: dict[str, Any],
+    trials: int,
+) -> None:
+    """The fold and the exact interval, printed and written beside the rows."""
+    from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
+
+    survived = sum(o.survived for o in outcomes)
+    tracked = sum(o.tracked for o in outcomes)
+    successes = sum(o.success for o in outcomes)
+    low, high = clopper_pearson(successes, trials)
+    row = {
+        "source": source,
+        "policy": policy_name,
+        "instrument": instrument,
+        "protocol": protocol,
+        "identity": identity,
+        "funnel": {"survived": survived, "tracked": tracked},
+        "successes": successes,
+        "trials": trials,
+        "ci95": [round(low, 4), round(high, 4)],
+        "median_err_ratio": round(
+            sorted(o.err_ratio for o in outcomes)[len(outcomes) // 2], 4
+        ),
+    }
+    verdict_path = out_dir / f"walk-verdict-{suffix}.json"
+    verdict_path.write_text(json.dumps(row, indent=1))
+    print(
+        f"[verdict] survived {survived}/{trials}, tracked "
+        f"{tracked}/{trials} -> success {successes}/{trials}, "
+        f"CP95 [{low:.3f}, {high:.3f}]"
+    )
+    print(f"[verdict] rows in {out_dir}")
+
+
+def main() -> None:
+    args = parse_args()
 
     import warp as wp  # noqa: PLC0415
 
@@ -194,7 +389,6 @@ def main() -> None:
         EpisodeRecord,
         append_records,
     )
-    from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
 
     from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
     from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
@@ -229,15 +423,42 @@ def main() -> None:
         strict=True,
         map_location=device,
     )
-    outcomes = rollout_outcomes(
-        env, runner.get_inference_policy(device=device), args.trials
-    )
+    policy: Any = runner.get_inference_policy(device=device)
+    policy_name = args.checkpoint.stem
+    if args.student is not None:
+        # The student's identity: its checkpoint directory's content hash
+        # (the same stamp a bundle gets), named by its run step.
+        from rq_pipeline.bundles.hashing import stamp as stamp_of  # noqa: PLC0415
+
+        policy = StudentPolicy(
+            env,
+            args.student,
+            python=args.student_python,
+            horizon=args.horizon,
+            stride=args.stride,
+            frame_size=(args.frame_width, args.frame_height),
+            device=devicetag,
+        )
+        policy_name = stamp_of(f"student-{args.student.parent.name}", args.student)
+        protocol["student"] = {
+            "teacher": args.checkpoint.stem,
+            "horizon": args.horizon,
+            "stride": args.stride,
+        }
+    feed = None if args.no_studio else VerdictFeed.connect(policy_name.split("@")[0])
+    if isinstance(policy, StudentPolicy):
+        policy.feed = feed
+    outcomes = rollout_outcomes(env, policy, args.trials)
+    if isinstance(policy, StudentPolicy):
+        policy.close()
     env.close()
+    if feed is not None:
+        feed.outcomes(outcomes)
 
     records = [
         EpisodeRecord(
             source=source,
-            policy=args.checkpoint.stem,
+            policy=policy_name,
             trial=trial,
             success=outcome.success,
             steps=outcome.steps,
@@ -258,34 +479,20 @@ def main() -> None:
     ]
     out_dir = args.checkpoint.parent / "verdict"
     out_dir.mkdir(exist_ok=True)
-    append_records(out_dir / f"records-{devicetag}.jsonl", records)
+    suffix = devicetag if args.student is None else f"student-{devicetag}"
+    append_records(out_dir / f"records-{suffix}.jsonl", records)
 
-    survived = sum(o.survived for o in outcomes)
-    tracked = sum(o.tracked for o in outcomes)
-    successes = sum(o.success for o in outcomes)
-    low, high = clopper_pearson(successes, args.trials)
-    row = {
-        "source": source,
-        "policy": args.checkpoint.stem,
-        "instrument": instrument,
-        "protocol": protocol,
-        "identity": identity,
-        "funnel": {"survived": survived, "tracked": tracked},
-        "successes": successes,
-        "trials": args.trials,
-        "ci95": [round(low, 4), round(high, 4)],
-        "median_err_ratio": round(
-            sorted(o.err_ratio for o in outcomes)[len(outcomes) // 2], 4
-        ),
-    }
-    verdict_path = out_dir / f"walk-verdict-{devicetag}.json"
-    verdict_path.write_text(json.dumps(row, indent=1))
-    print(
-        f"[verdict] survived {survived}/{args.trials}, tracked "
-        f"{tracked}/{args.trials} -> success {successes}/{args.trials}, "
-        f"CP95 [{low:.3f}, {high:.3f}]"
+    write_certificate(
+        out_dir,
+        suffix,
+        outcomes,
+        source=source,
+        policy_name=policy_name,
+        instrument=instrument,
+        protocol=protocol,
+        identity=identity,
+        trials=args.trials,
     )
-    print(f"[verdict] rows in {out_dir}")
 
 
 if __name__ == "__main__":

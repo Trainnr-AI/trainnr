@@ -23,6 +23,9 @@ teacher presses demonstrations (docs/66 D2: keepers judged by the
 certificate's criterion, discards to `failures.jsonl`); the batch
 writes an `export.json`, so `demo_export.export_batch(demos, root,
 repo_id=...)` makes the LeRobot dataset with no Task in hand;
+`certify_walk(checkpoint, student=<pretrained_model>, horizon, ...)` judges
+the distilled vision student through the same chase camera, over the
+policy bridge (`rq_pipeline.envs.policy_bridge`);
 `job_status(job_id)` polls, artifacts land under `runs/` as always.
 
 ## Commands (from `pipeline/`)

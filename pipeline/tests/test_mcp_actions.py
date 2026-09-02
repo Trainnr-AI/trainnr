@@ -133,6 +133,21 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, STUDIO_DIR)
 
 
+class TheStudentCertificate(unittest.TestCase):
+    def test_a_student_rides_the_same_door_with_its_horizon(self) -> None:
+        with harness() as (actions, spawner):
+            actions.certify_walk(
+                "runs/x/model_1.pt",
+                trials=8,
+                student="runs/s/pretrained_model",
+                horizon=10,
+            )
+            [(argv, _)] = spawner.calls
+            self.assertEqual(
+                argv[-4:], ["--student", "runs/s/pretrained_model", "--horizon", "10"]
+            )
+
+
 class ThePressWalkDoor(unittest.TestCase):
     def test_press_walk_rolls_the_newest_checkpoint_by_default(self) -> None:
         with harness() as (actions, spawner):
