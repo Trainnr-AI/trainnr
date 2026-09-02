@@ -233,6 +233,99 @@ def choose_layout(
     return want
 
 
+# The press's and the certificate's own console lines (walk_press,
+# press.press, walk_verdict, tools/campaign-distill.sh) - a rented
+# card's data engine is watched from here, not from a pod's screen.
+PRESS_BATCH_RE = re.compile(r"^batch seed (\d+): (\d+)/(\d+) pass")
+PRESS_ATTEMPT_RE = re.compile(r"^attempt (\d+): (KEEP|discard)")
+PRESS_KEPT_RE = re.compile(r"^kept (\d+)/(\d+) episodes")
+VERDICT_RE = re.compile(
+    r"^\[verdict\] survived (\d+)/(\d+), tracked (\d+)/(\d+) -> success (\d+)/(\d+), "
+    r"CP95 \[([0-9.]+), ([0-9.]+)\]"
+)
+STAGE_RE = re.compile(r"^== \d\d:\d\d:\d\d (.+)$")
+
+
+@dataclass
+class EngineStatus:
+    """What the data engine's log says right now, for the status card."""
+
+    stage: str | None = None
+    kept: int = 0
+    attempts: int = 0
+    last_batch: str | None = None
+    verdict: str | None = None
+    done: bool = False
+
+
+def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus | None:
+    """Press counters on the `attempt` timeline, every campaign stage
+    and verdict as text, the newest facts for the card. `seen` holds
+    the lines already logged (the log is re-read whole each poll)."""
+    status = EngineStatus()
+    found = False
+    for raw_line in ANSI_RE.sub("", raw).splitlines():
+        line = raw_line.strip()
+        if attempt := PRESS_ATTEMPT_RE.match(line):
+            found = True
+            status.attempts = max(status.attempts, int(attempt.group(1)))
+            if attempt.group(2) == "KEEP":
+                status.kept += 1
+            if line not in seen:
+                seen.add(line)
+                rr.set_time("attempt", sequence=int(attempt.group(1)))
+                rr.log(f"{name}/press/kept", rr.Scalars(float(status.kept)))
+        elif batch := PRESS_BATCH_RE.match(line):
+            found = True
+            status.last_batch = (
+                f"{batch.group(2)}/{batch.group(3)} of batch {batch.group(1)} pass"
+            )
+            if line not in seen:
+                seen.add(line)
+                rr.log(f"{name}/press/log", rr.TextLog(line))
+        elif kept := PRESS_KEPT_RE.match(line):
+            found = True
+            status.kept, status.attempts = int(kept.group(1)), int(kept.group(2))
+        elif verdict := VERDICT_RE.match(line):
+            found = True
+            status.verdict = (
+                f"survived {verdict.group(1)}/{verdict.group(2)}, tracked "
+                f"{verdict.group(3)}/{verdict.group(4)} -> **{verdict.group(5)}/"
+                f"{verdict.group(6)}** CP95 [{verdict.group(7)}, {verdict.group(8)}]"
+            )
+            if line not in seen:
+                seen.add(line)
+                rr.log(f"{name}/verdict/log", rr.TextLog(line))
+        elif stage := STAGE_RE.match(line):
+            found = True
+            status.stage = stage.group(1)
+            status.done = status.done or stage.group(1) == "CAMPAIGN DONE"
+            if line not in seen:
+                seen.add(line)
+                rr.log(f"{name}/stage", rr.TextLog(line))
+    return status if found else None
+
+
+def write_engine_card(rr: Any, name: str, status: EngineStatus, gpu: str) -> None:
+    """The data engine's 'right now' card."""
+    card = "## data engine\n\n"
+    if status.stage:
+        card += f"- stage **{status.stage}**\n"
+    card += f"- pressed **{status.kept}** kept of {status.attempts} attempts\n"
+    if status.last_batch:
+        card += f"- last batch {status.last_batch}\n"
+    if status.verdict:
+        card += f"- student certificate: {status.verdict}\n"
+    if status.done:
+        card += "- **CAMPAIGN DONE - stop the pod**\n"
+    card += f"- GPU {gpu}\n"
+    rr.log(
+        f"{name}/status",
+        rr.TextDocument(card, media_type=rr.MediaType.MARKDOWN),
+        static=True,
+    )
+
+
 def write_rl_card(rr: Any, name: str, rsl: RslStatus, gpu: str) -> None:
     """The rsl-rl run's 'right now' card."""
     card = f"## RL training\n\n- iteration **{rsl.iteration} / {rsl.total}**\n"
@@ -452,6 +545,7 @@ def main() -> int:
     seen_stages: set[str] = set()
     seen_records: set[tuple[str, int]] = set()
     seen_iters: set[int] = set()
+    seen_engine: set[str] = set()
     # Insertion-ordered so eviction can drop the OLDEST half; a plain
     # set has no age and the cap could only clear (review 2026-09-01).
     seen_lines: dict[str, None] = {}
@@ -515,19 +609,22 @@ def main() -> int:
             rr, args.name, raw, (seen_stages, seen_records, seen_lines)
         )
         rsl = parse_rsl(rr, args.name, raw, seen_iters)
+        engine = parse_engine(rr, args.name, raw, seen_engine)
         layout_sent = choose_layout(
             rr,
             args.name,
             layout_sent,
             (
-                rsl is not None,
+                rsl is not None or engine is not None,
                 latest is not None or last_step >= 0 or bool(eval_progress),
             ),
         )
-        if rsl is not None:
+        if engine is not None:
+            write_engine_card(rr, args.name, engine, gpu)
+        elif rsl is not None:
             write_rl_card(rr, args.name, rsl, gpu)
         log_gpu(rr, args.name, gpu)
-        if rsl is None:
+        if rsl is None and engine is None:
             # The lerobot-style card only when no rsl-rl blocks are in
             # the log - it was clobbering the RL card every poll.
             last_seen = status_card(

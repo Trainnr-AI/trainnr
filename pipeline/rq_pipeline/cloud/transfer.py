@@ -28,9 +28,8 @@ class Rsync:
         ".env",  # the credentials — never
         ".git",
         "claude-sync",  # memory and transcripts: not the machine's business
-        "pipeline/.venv",
-        "pipeline/.venv-train",
-        "pipeline/runs",
+        ".venv*",  # every venv, every package (rq_mjlab's alone is gigabytes)
+        "runs",  # datasets and checkpoints live on the machine's volume, not the push
         "docs/photos",
         "target",
         "node_modules",
