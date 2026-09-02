@@ -2,7 +2,7 @@
 
 `kitting_export.export_kitting_demos` proved the shape on T5, then
 `export_demos` generalised it — as a line-for-line copy. Both fronts
-now share `_export_episodes` (folded 2026-09-01): the task-specific
+now share `export_episodes` (folded 2026-09-01): the task-specific
 constants (state names, camera, instruction, bundle, sidecar class)
 are parameters; the loop, the refusals and the provenance write exist
 once.
@@ -17,11 +17,13 @@ no basis, so the check is vacuous there by construction.
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.json_record import JsonRecord
+from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.collect.kitting_export import (
     DatasetProvenance,
     DemoLayout,
@@ -91,7 +93,7 @@ def _one(values: set[Any], what: str) -> Any:
     return value
 
 
-def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
+def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     demos_dir: Path,
     root: Path,
     *,
@@ -106,8 +108,10 @@ def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     state_semantics: str | None,
     action_semantics: str | None,
     clamp_constant_dims: bool,
+    action_width: int | None = None,
+    action_names: list[str] | None = None,
 ) -> Path:
-    """The engine both exporter fronts drive: every episode under
+    """The engine every exporter front drives: every episode under
     `demos_dir` as one LeRobot dataset at `root`. fps comes from the
     manifests (control_hz / frame_every), never assumed; the provenance
     sidecar carries the bundle stamp and every manifest verbatim."""
@@ -187,9 +191,12 @@ def _export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
             "names": state_names,
         },
         ACTION: {
+            # An arm's action IS its state's width (targets per joint);
+            # an RL teacher's is not (a 51-D observation in, 14 targets
+            # out) - the width is declared, never assumed (D2, 2026-09-02).
             "dtype": "float32",
-            "shape": (state_width,),
-            "names": state_names,
+            "shape": (state_width if action_width is None else action_width,),
+            "names": state_names if action_names is None else action_names,
         },
     }
     dataset = LeRobotDataset.create(
@@ -296,7 +303,7 @@ def export_demos(
     the instruction and the bundle stamp all come from the task the
     demos were pressed on."""
     episodes = episode_dirs(demos_dir)
-    return _export_episodes(
+    return export_episodes(
         demos_dir,
         root,
         repo_id=repo_id,
@@ -316,4 +323,71 @@ def export_demos(
             f"{task.state_width} commanded actuator positions, ctrl order"
         ),
         clamp_constant_dims=True,
+    )
+
+
+@dataclass(frozen=True)
+class ExportSpec(JsonRecord):
+    """What a batch needs to become a dataset, written by the press that
+    made it (docs/66 §4: the dataset carries the rig): the state
+    vector's width and names, the camera keys, the instruction, the
+    bundle the robot came from. A press with no `Task` object (the RL
+    rollout press, D2) exports through the same engine as one with.
+    `bundle` is the robot bundle's NAME under robots/, never a path."""
+
+    state_width: int
+    state_names: list[str]
+    cameras: list[str]
+    instruction: str
+    bundle: str
+    state_semantics: str = ""
+    action_semantics: str = ""
+    clamp_constant_dims: bool = True
+    # Empty = the arm case (actions are per-state-column targets).
+    action_names: list[str] = field(default_factory=list)
+    notes: dict[str, Any] = field(default_factory=dict)
+
+    def write_to(self, demos_dir: Path) -> Path:
+        return self.write(Path(demos_dir) / DemoLayout.EXPORT_FILE)
+
+    @classmethod
+    def read_from(cls, demos_dir: Path) -> ExportSpec:
+        path = Path(demos_dir) / DemoLayout.EXPORT_FILE
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{demos_dir} carries no {DemoLayout.EXPORT_FILE} - the press that "
+                "made it must write an ExportSpec, or export through a Task"
+            )
+        return cls.read(path)
+
+
+def export_batch(
+    demos_dir: Path, root: Path, *, repo_id: str, use_videos: bool = True
+) -> Path:
+    """The third front: a batch that describes itself (`export.json`)
+    becomes a LeRobot dataset with no Task in hand - the state names,
+    cameras and bundle come from the batch, the loop and refusals from
+    the one engine."""
+    spec = ExportSpec.read_from(demos_dir)
+    if spec.state_width != len(spec.state_names):
+        raise ValueError(
+            f"{DemoLayout.EXPORT_FILE}: state_width {spec.state_width} but "
+            f"{len(spec.state_names)} state names"
+        )
+    return export_episodes(
+        demos_dir,
+        root,
+        repo_id=repo_id,
+        use_videos=use_videos,
+        manifests=[EpisodeManifest.read_from(ep) for ep in episode_dirs(demos_dir)],
+        state_width=spec.state_width,
+        state_names=spec.state_names,
+        camera_key=spec.cameras[0] if spec.cameras else "camera",
+        instruction=spec.instruction,
+        bundle_dir=robots_dir() / spec.bundle,
+        state_semantics=spec.state_semantics or None,
+        action_semantics=spec.action_semantics or None,
+        clamp_constant_dims=spec.clamp_constant_dims,
+        action_width=len(spec.action_names) if spec.action_names else None,
+        action_names=spec.action_names or None,
     )

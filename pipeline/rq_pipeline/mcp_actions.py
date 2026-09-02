@@ -195,6 +195,25 @@ class Actions:
             argv += ["--device", device]
         return self.jobs.start("certify-walk", argv, RQ_MJLAB_DIR)
 
+    def press_walk(
+        self,
+        checkpoint: str | None = None,
+        episodes: int = 12,
+        worlds: int = 9,
+        seed: int = 1000,
+        out: str = "../runs/walk-demos",
+    ) -> dict[str, Any]:
+        """The RL teacher presses demonstrations (docs/66 D2): the walk
+        checkpoint (newest by default) rolls out in the batched env,
+        each episode judged by the certificate's criterion; keepers
+        become a stamped DemoLayout batch with chase-camera frames,
+        discards a failures.jsonl. Export with export_batch."""
+        argv = [*self._uv(RQ_MJLAB_DIR), "-m", "rq_mjlab.walk_press"]
+        argv += [checkpoint] if checkpoint else ["--latest"]
+        argv += ["--out", out, "--episodes", str(episodes)]
+        argv += ["--worlds", str(worlds), "--seed", str(seed)]
+        return self.jobs.start("press-walk", argv, RQ_MJLAB_DIR)
+
     # -- the Studio ----------------------------------------------------
 
     def open_studio(self) -> dict[str, Any]:

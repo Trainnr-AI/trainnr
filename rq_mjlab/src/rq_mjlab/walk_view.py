@@ -60,7 +60,7 @@ def latest_checkpoint() -> Path:
     return checkpoints[-1]
 
 
-def mirror_of(worlds: int, streamer):
+def mirror_of(worlds: int, offscreen_side: int):
     """One CPU model holding `worlds` copies of the walk robot on one
     ground plane. Every frame sits at the origin: the batched env's
     world ORIGINS are already baked into each free joint's global qpos,
@@ -77,8 +77,8 @@ def mirror_of(worlds: int, streamer):
     for geom in scene.geoms:
         if geom.name == "ground":
             geom.pos[2] = 0.0  # the display grids' table offset; ducks walk at z=0
-    scene.visual.global_.offwidth = streamer.MAX_RENDER_SIDE
-    scene.visual.global_.offheight = streamer.MAX_RENDER_SIDE
+    scene.visual.global_.offwidth = offscreen_side
+    scene.visual.global_.offheight = offscreen_side
     return scene.compile()
 
 
@@ -156,7 +156,7 @@ def main() -> None:
         flush=True,
     )
     env, policy = load_policy(checkpoint, args.envs, device)
-    mirror = mirror_of(args.envs, streamer)
+    mirror = mirror_of(args.envs, streamer.MAX_RENDER_SIDE)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
     device_xfrc = as_torch(env.unwrapped.sim.data.xfrc_applied)

@@ -55,6 +55,7 @@ class DemoLayout:
     FRAME_GLOB = "*.jpg"
     TRAJECTORY_FILE = "trajectory.npz"
     MANIFEST_FILE = "manifest.json"
+    EXPORT_FILE = "export.json"  # what the batch needs to become a dataset (ExportSpec)
     STATES, SENSORS, ACTIONS = "states", "sensors", "actions"  # the npz keys
 
 
@@ -200,17 +201,17 @@ def export_kitting_demos(  # noqa: PLR0913 - four keyword-only knobs, each a nam
     bundle_dir: Path = DEFAULT_BUNDLE,
     use_videos: bool = True,
 ) -> Path:
-    """The T5 front of the one exporter (`demo_export._export_episodes`):
+    """The T5 front of the one exporter (`demo_export.export_episodes`):
     the kitting constants — servo names, top camera, legacy `Manifest`
     sidecar — over the shared loop, refusals and provenance write.
     `clamp_constant_dims` off: every kitting joint moves, and the T5
     datasets predate the guard (their stats stay byte-stable)."""
     # Function-local: demo_export imports this module (the layout and
     # provenance classes live here), so the top level would be a cycle.
-    from rq_pipeline.collect.demo_export import _export_episodes  # noqa: PLC0415
+    from rq_pipeline.collect.demo_export import export_episodes  # noqa: PLC0415
 
     episodes = episode_dirs(demos_dir)
-    return _export_episodes(
+    return export_episodes(
         demos_dir,
         root,
         repo_id=repo_id,

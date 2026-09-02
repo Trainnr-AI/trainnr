@@ -18,6 +18,11 @@ With the rq MCP server connected, the same work is tool calls:
 `generate_demos(episodes, seed, out)` → job handle;
 `multiply_demos(seeds_dir, out, ...)` (GPU box);
 `run_chain(name, scale, ...)` — the whole press→train→certify chain;
+`press_walk(checkpoint|latest, episodes, worlds, seed, out)` — the RL
+teacher presses demonstrations (docs/66 D2: keepers judged by the
+certificate's criterion, discards to `failures.jsonl`); the batch
+writes an `export.json`, so `demo_export.export_batch(demos, root,
+repo_id=...)` makes the LeRobot dataset with no Task in hand;
 `job_status(job_id)` polls, artifacts land under `runs/` as always.
 
 ## Commands (from `pipeline/`)

@@ -133,6 +133,31 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, STUDIO_DIR)
 
 
+class ThePressWalkDoor(unittest.TestCase):
+    def test_press_walk_rolls_the_newest_checkpoint_by_default(self) -> None:
+        with harness() as (actions, spawner):
+            actions.press_walk(episodes=4, worlds=3, seed=9, out="runs/w")
+            [(argv, cwd)] = spawner.calls
+            self.assertEqual(
+                argv,
+                [
+                    *UV_MJLAB,
+                    "-m",
+                    "rq_mjlab.walk_press",
+                    "--latest",
+                    "--out",
+                    "runs/w",
+                    "--episodes",
+                    "4",
+                    "--worlds",
+                    "3",
+                    "--seed",
+                    "9",
+                ],
+            )
+            self.assertEqual(cwd, RQ_MJLAB_DIR)
+
+
 class TheJobLifecycle(unittest.TestCase):
     def test_status_reports_done_with_the_log_tail(self) -> None:
         with harness() as (actions, _spawner):

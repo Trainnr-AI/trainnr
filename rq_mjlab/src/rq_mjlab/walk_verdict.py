@@ -33,6 +33,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # The judgment's constants, declared where the certificate cites them.
 ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
@@ -65,13 +66,47 @@ class EpisodeOutcome:
         return self.survived and self.tracked
 
 
-def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
+@dataclass(frozen=True)
+class WorldEpisode:
+    """One world's first episode: the judgment plus, when captured, the
+    trajectory a dataset writer needs (D2) - the actor's observation
+    and the action at every control tick, the qpos to replay for
+    frames, and the commanded twist the episode began under."""
+
+    outcome: EpisodeOutcome
+    command: list[float]
+    observations: Any = None  # (T, obs) float32
+    actions: Any = None  # (T, nu) float32
+    qpos: Any = None  # (T, nq) float32
+
+
+def instrument_for(device: str) -> str:
+    """The stamp every row carries: the batched stack and its device."""
+    import mjlab  # noqa: PLC0415
+    import mujoco  # noqa: PLC0415
+    import warp as wp  # noqa: PLC0415
+
+    tag = "cuda" if device.startswith("cuda") else "cpu"
+    return (
+        f"mjlab-{getattr(mjlab, '__version__', '1.6.0')}"
+        f"+mujoco-{mujoco.__version__}+warp-{wp.config.version}+{tag}"
+    )
+
+
+def rollout_episodes(
+    env, policy, trials: int, *, capture: bool = False
+) -> list[WorldEpisode]:
     """One completed episode per world, judged from the live managers:
     the commanded twist from the command manager, the base-frame
     velocity from the entity, the cause of death from the termination
     manager. Worlds that finish early keep stepping (the env auto-
-    resets) but only each world's FIRST episode is recorded."""
+    resets) but only each world's FIRST episode is recorded. With
+    `capture`, the per-tick observation/action/qpos of that first
+    episode ride along (the rollout->dataset writer's raw material)."""
+    import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
+
+    from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
     unwrapped = env.unwrapped
     device = unwrapped.device
@@ -81,11 +116,21 @@ def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
     open_worlds = torch.ones(trials, dtype=torch.bool, device=device)
     fell = torch.zeros(trials, dtype=torch.bool, device=device)
     recorded_steps = torch.zeros(trials, dtype=torch.long, device=device)
+    device_qpos = as_torch(unwrapped.sim.data.qpos) if capture else None
+    trace: list[list[tuple[Any, Any, Any]]] = [[] for _ in range(trials)]
 
     obs = env.get_observations()  # a TensorDict, not the (obs, extras) pair
+    first_command = unwrapped.command_manager.get_command("twist").clone()
     while open_worlds.any():
         with torch.inference_mode():
             actions = policy(obs)
+        if capture and device_qpos is not None:
+            actor = obs["actor"].detach().cpu().numpy()
+            act = actions.detach().cpu().numpy()
+            pose = device_qpos.detach().cpu().numpy()
+            still_open = open_worlds.cpu().numpy()
+            for i in np.flatnonzero(still_open):
+                trace[i].append((actor[i], act[i], pose[i]))
         obs, _, dones, _ = env.step(actions)
         command = unwrapped.command_manager.get_command("twist")
         velocity = unwrapped.scene["robot"].data.root_link_lin_vel_b
@@ -99,15 +144,32 @@ def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
             fell |= closing & unwrapped.termination_manager.terminated
             recorded_steps = torch.where(closing, steps, recorded_steps)
             open_worlds &= ~closing
-    return [
-        EpisodeOutcome(
+
+    episodes = []
+    for i in range(trials):
+        outcome = EpisodeOutcome(
             steps=int(recorded_steps[i]),
             fell=bool(fell[i]),
             mean_err=float(err_sum[i] / recorded_steps[i]),
             mean_cmd=float(cmd_sum[i] / recorded_steps[i]),
         )
-        for i in range(trials)
-    ]
+        arrays: dict[str, Any] = {}
+        if capture and trace[i]:
+            observations, acts, poses = zip(*trace[i], strict=True)
+            arrays = {
+                "observations": np.stack(observations).astype(np.float32),
+                "actions": np.stack(acts).astype(np.float32),
+                "qpos": np.stack(poses).astype(np.float32),
+            }
+        episodes.append(
+            WorldEpisode(outcome, [float(v) for v in first_command[i]], **arrays)
+        )
+    return episodes
+
+
+def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
+    """The certificate's view: judgments only (no trajectories)."""
+    return [episode.outcome for episode in rollout_episodes(env, policy, trials)]
 
 
 def main() -> None:
@@ -125,8 +187,6 @@ def main() -> None:
 
     from dataclasses import asdict  # noqa: PLC0415
 
-    import mjlab  # noqa: PLC0415
-    import mujoco  # noqa: PLC0415
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
     from rq_pipeline.bundles.hashing import fields_hash  # noqa: PLC0415
@@ -147,10 +207,7 @@ def main() -> None:
         raise SystemExit(f"identity mismatch: this env is {identity}")
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
-    instrument = (
-        f"mjlab-{getattr(mjlab, '__version__', '1.6.0')}"
-        f"+mujoco-{mujoco.__version__}+warp-{wp.config.version}+{devicetag}"
-    )
+    instrument = instrument_for(device)
     source = f"microduck-walk@{fields_hash(identity)}"
     protocol = {
         "trials": args.trials,

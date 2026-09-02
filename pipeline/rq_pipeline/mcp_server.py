@@ -427,6 +427,11 @@ def build_server() -> Any:
         "intervals, stamps on every row. Job handle."
     )(actions.certify_walk)
     server.tool(
+        description="The RL teacher presses demonstrations (docs/66 D2): the walk "
+        "checkpoint rolls out, keepers become a stamped batch with chase-camera "
+        "frames, discards a failures.jsonl. Job handle."
+    )(actions.press_walk)
+    server.tool(
         description="Launch the Studio (release build); anything speaking the "
         "Rerun SDK streams into it on :9876."
     )(actions.open_studio)
