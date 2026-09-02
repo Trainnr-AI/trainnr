@@ -179,6 +179,13 @@ class TheRowRouter(unittest.TestCase):
         self.assertEqual(feed.MORE_SEEN, set())
 
 
+class TheRecordingId(unittest.TestCase):
+    def test_a_log_streams_into_one_recording_across_restarts(self) -> None:
+        a = feed.recording_id_for("root@h:1", "/workspace/x.log")
+        self.assertEqual(a, feed.recording_id_for("root@h:1", "/workspace/x.log"))
+        self.assertNotEqual(a, feed.recording_id_for("root@h:1", "/workspace/y.log"))
+
+
 class TheEngineCounters(unittest.TestCase):
     def test_kept_counts_distinct_attempts_even_when_the_poll_repeats_them(
         self,

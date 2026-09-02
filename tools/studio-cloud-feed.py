@@ -620,6 +620,13 @@ def status_card(  # noqa: PLR0913 - the card's inputs, each named
     return last_seen
 
 
+def recording_id_for(door: str, log: str) -> str:
+    """The recording a (machine, log) pair always streams into."""
+    import uuid  # noqa: PLC0415
+
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rq-feed://{door}/{log}"))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("door", help="user@host:port (cloud-gpu machines prints it)")
@@ -656,7 +663,16 @@ def main() -> int:
     # feed could silently drop (review 2026-09-01).
     door = SshEndpoint(host=host, port=int(port), username=username, command=args.door)
     poll_argv = ssh_argv(door, args.key)
-    rr.init(f"rq-{args.name}-feed", spawn=False)
+    # One recording per remote log, stable across feed restarts: a
+    # restarted feed CONTINUES the run's recording instead of opening
+    # another, so the Studio's sources list never fills with stale
+    # copies of the same campaign (the operator's screenshot,
+    # 2026-09-03, showed the pre-fix recording beside the live one).
+    rr.init(
+        f"rq-{args.name}-feed",
+        recording_id=recording_id_for(args.door, args.log),
+        spawn=False,
+    )
     rr.connect_grpc(args.address)
     print(f"feeding {args.door}:{args.log} -> {args.address} as {args.name}/")
     layout_sent: tuple[str, int] | None = None
