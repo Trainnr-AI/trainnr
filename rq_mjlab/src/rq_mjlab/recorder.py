@@ -77,9 +77,9 @@ class RerunRecorder(RecorderTerm):
         # Bound lazily: the batched data exists only post-init.
         self._qpos: torch.Tensor | None = None
         self._geom_views: tuple[torch.Tensor, torch.Tensor] | None = None
-        self._render: (
-            tuple[mujoco.Renderer, mujoco.MjData, mujoco.MjvCamera] | None
-        ) = None
+        self._render: tuple[mujoco.Renderer, mujoco.MjData, mujoco.MjvCamera] | None = (
+            None
+        )
         self._mirror: RigMirror | None = None
         if cfg.mirror:
             from rq_pipeline.viz import RigMirror  # noqa: PLC0415

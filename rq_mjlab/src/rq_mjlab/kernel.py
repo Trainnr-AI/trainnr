@@ -87,9 +87,7 @@ def duty(
     return torch.clamp(d, -law.max_pwm, law.max_pwm)
 
 
-def torque(
-    law: LawParams, qd: torch.Tensor, duty_cycle: torch.Tensor
-) -> torch.Tensor:
+def torque(law: LawParams, qd: torch.Tensor, duty_cycle: torch.Tensor) -> torch.Tensor:
     """The DC motor's torque from the applied voltage, back-EMF included."""
     return law.kt * law.vin * duty_cycle / law.R - law.kt**2 * qd / law.R
 
