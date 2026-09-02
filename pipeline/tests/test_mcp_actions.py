@@ -5,6 +5,7 @@ plus the job manager's lifecycle and the onboarding refusals.
 
 from __future__ import annotations
 
+import os
 import unittest
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -24,7 +25,7 @@ from rq_pipeline.mcp_jobs import JobManager
 
 
 class _FakeProcess:
-    def __init__(self, pid: int = 4242, code: int = 0) -> None:
+    def __init__(self, pid: int = os.getpid(), code: int = 0) -> None:  # noqa: B008 - a LIVE pid, deliberately
         self.pid = pid
         self._code = code
 
@@ -136,13 +137,11 @@ class TheJobLifecycle(unittest.TestCase):
     def test_status_reports_done_with_the_log_tail(self) -> None:
         with harness() as (actions, _spawner):
             handle = actions.open_studio()
+            # The fake process exits 0 instantly; join the watcher rather
+            # than poll (a poll saw "ended (unrecorded)" first whenever
+            # the fake pid was dead on the box, 2026-09-02).
+            actions.jobs.join()
             status = actions.job_status(str(handle["job_id"]))
-            # The fake process exits 0 instantly; the watcher thread
-            # records it (poll once — daemon thread scheduling).
-            for _ in range(50):
-                status = actions.job_status(str(handle["job_id"]))
-                if status["state"] != "running":
-                    break
             self.assertEqual(status["state"], "done")
             self.assertEqual(status["log_tail"], ["line one", "line two"])
 
