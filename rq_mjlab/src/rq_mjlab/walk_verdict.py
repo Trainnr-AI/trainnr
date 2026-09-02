@@ -208,6 +208,10 @@ class VerdictFeed:
 
     def outcomes(self, outcomes: list[EpisodeOutcome]) -> None:
         rr = self._rr
+        # The trial rows live on THEIR clock only: without the reset they
+        # also carried the last tick and the viewer stacked all eight on
+        # one x (the operator's screenshot, 2026-09-03).
+        rr.reset_time()
         for trial, outcome in enumerate(outcomes):
             rr.set_time("trial", sequence=trial)
             rr.log(f"{self.ROOT}/err_ratio", rr.Scalars(outcome.err_ratio))
