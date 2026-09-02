@@ -185,42 +185,54 @@ class TheLayoutChooser(unittest.TestCase):
 
     def test_no_signal_keeps_whatever_was_sent(self) -> None:
         with mock.patch.object(feed, "send_layout") as sender:
-            self.assertIsNone(feed.choose_layout(FakeRr(), "g3", None, (False, False)))
+            self.assertIsNone(
+                feed.choose_layout(FakeRr(), "g3", None, (False, False, False))
+            )
             self.assertEqual(
-                feed.choose_layout(FakeRr(), "g3", ("rl", False), (False, False)),
+                feed.choose_layout(
+                    FakeRr(), "g3", ("rl", False), (False, False, False)
+                ),
                 ("rl", False),
             )
         sender.assert_not_called()
 
     def test_the_first_rl_data_sends_the_rl_layout(self) -> None:
         with mock.patch.object(feed, "send_layout") as sender:
-            sent = feed.choose_layout(FakeRr(), "g3", None, (True, False))
+            sent = feed.choose_layout(FakeRr(), "g3", None, (True, False, False))
         self.assertEqual(sent, ("rl", False))
         sender.assert_called_once()
-        self.assertTrue(sender.call_args.kwargs["rl"])
+        self.assertEqual(sender.call_args.args[2], "rl")
 
     def test_a_more_row_earns_exactly_one_resend(self) -> None:
         sent = ("rl", False)
         with mock.patch.object(feed, "send_layout") as sender:
             self.assertEqual(
-                feed.choose_layout(FakeRr(), "g3", sent, (True, False)), sent
+                feed.choose_layout(FakeRr(), "g3", sent, (True, False, False)), sent
             )
             sender.assert_not_called()  # nothing on screen should change
             feed.MORE_SEEN.add("mean_kl_divergence")
             self.assertEqual(
-                feed.choose_layout(FakeRr(), "g3", sent, (True, False)),
+                feed.choose_layout(FakeRr(), "g3", sent, (True, False, False)),
                 ("rl", True),
             )
             sender.assert_called_once()  # the "more" pane earned its place
 
+    def test_an_engine_log_gets_its_own_panes_never_the_rl_ones(self) -> None:
+        # The campaign feed once wore the RL layout: eight empty panes
+        # (the operator's screenshot, 2026-09-03).
+        self.assertEqual(
+            feed.choose_layout(FakeRr(), "g3", None, (False, False, True)),
+            ("engine", False),
+        )
+
     def test_a_lerobot_run_gets_the_train_eval_layout(self) -> None:
         with mock.patch.object(feed, "send_layout") as sender:
             self.assertEqual(
-                feed.choose_layout(FakeRr(), "g3", None, (False, True)),
+                feed.choose_layout(FakeRr(), "g3", None, (False, True, False)),
                 ("lerobot", False),
             )
         sender.assert_called_once()
-        self.assertFalse(sender.call_args.kwargs["rl"])
+        self.assertEqual(sender.call_args.args[2], "lerobot")
 
 
 class TheRlCard(unittest.TestCase):

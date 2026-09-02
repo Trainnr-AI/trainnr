@@ -147,7 +147,7 @@ def parse_rsl(rr: Any, name: str, raw: str, seen_iters: set[int]) -> RslStatus |
     return latest
 
 
-def send_layout(rr: Any, name: str, rl: bool) -> None:
+def send_layout(rr: Any, name: str, kind: str) -> None:
     """The feed names its own panes - reward front and centre, one
     view per series family - instead of the viewer's auto-layout,
     which panes whichever entities it notices first and buried
@@ -158,7 +158,17 @@ def send_layout(rr: Any, name: str, rl: bool) -> None:
     try:
         import rerun.blueprint as rrb  # noqa: PLC0415 - viz extra
 
-        if rl:
+        if kind == "engine":
+            # The data engine's log (press, campaign stages, the student's
+            # verdict): counters and text, the trainer's series once that
+            # stage runs - never the RL panes, which would sit empty.
+            views = [
+                rrb.TimeSeriesView(origin=f"{name}/press", name="press"),
+                rrb.TextLogView(origin=f"{name}/stage", name="stages"),
+                rrb.TextLogView(origin=f"{name}/verdict", name="verdict"),
+                rrb.TimeSeriesView(origin=f"{name}/train", name="train"),
+            ]
+        elif kind == "rl":
             views = [
                 rrb.TimeSeriesView(origin=f"{name}/rl/reward", name="reward"),
                 rrb.TimeSeriesView(
@@ -216,20 +226,22 @@ def choose_layout(
     rr: Any,
     name: str,
     sent: tuple[str, bool] | None,
-    signals: tuple[bool, bool],
+    signals: tuple[bool, bool, bool],
 ) -> tuple[str, bool] | None:
     """Send (or resend) the layout whenever what SHOULD be on screen
     changes: the first data reveals the run's kind, and a first
     unrecognised row makes the "more" pane earn its place."""
-    rl, lerobot = signals
-    if rl:
+    rl, lerobot, engine = signals
+    if engine:
+        want = ("engine", False)
+    elif rl:
         want = ("rl", bool(MORE_SEEN))
     elif lerobot:
         want = ("lerobot", False)
     else:
         return sent
     if want != sent:
-        send_layout(rr, name, rl=rl)
+        send_layout(rr, name, want[0])
     return want
 
 
@@ -264,6 +276,9 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
     the lines already logged (the log is re-read whole each poll)."""
     status = EngineStatus()
     found = False
+    # Text rows ride the attempt axis too: logged with no time set they
+    # miss the pane (the operator's screenshot, 2026-09-03).
+    rr.set_time("attempt", sequence=0)
     for raw_line in ANSI_RE.sub("", raw).splitlines():
         line = raw_line.strip()
         if attempt := PRESS_ATTEMPT_RE.match(line):
@@ -271,9 +286,9 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
             status.attempts = max(status.attempts, int(attempt.group(1)))
             if attempt.group(2) == "KEEP":
                 status.kept += 1
+            rr.set_time("attempt", sequence=int(attempt.group(1)))
             if line not in seen:
                 seen.add(line)
-                rr.set_time("attempt", sequence=int(attempt.group(1)))
                 rr.log(f"{name}/press/kept", rr.Scalars(float(status.kept)))
         elif batch := PRESS_BATCH_RE.match(line):
             found = True
@@ -615,8 +630,9 @@ def main() -> int:
             args.name,
             layout_sent,
             (
-                rsl is not None or engine is not None,
+                rsl is not None,
                 latest is not None or last_step >= 0 or bool(eval_progress),
+                engine is not None,
             ),
         )
         if engine is not None:
