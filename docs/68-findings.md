@@ -96,6 +96,51 @@ not this page.
 
 ![demo-count-lift-2026-09-03](../docs/figures/demo-count-lift-2026-09-03.png)
 
+## c1-competent-lift-2026-09-03
+
+**C1 at a competent recipe: identified-interval DR (±0.05 around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
+
+- date: 2026-09-03 · commit: `336eb39-archive`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `../tools/study.py finding ../docs/studies/c1-competent-lift.json /workspace/robotiq/runs/studies/c1-competent-lift --frame-every 5`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: 2f096c47e447
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - guessed.datasheet: 128 episodes, bases ['guessed span ±0.30 around nominal (folklore DR)'], visual bases []
+  - identified.datasheet: 128 episodes, bases ['declared interval ±0.05 around the study truth (stand-in for an identified fit record, docs/e2e-research/62)'], visual bases []
+  - point.datasheet: 128 episodes, bases ['the point estimate: no DR, the study truth exactly (the arm Rizvi & Tomar 2026 / PACE 2025 predict wins)'], visual bases []
+- outcome:
+  - arms: {'guessed': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-guessed': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}, 'identified': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-identified': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}, 'point': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-point': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}}
+  - effects: [{'a': 'guessed', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'point', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'guessed', 'b': 'point', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.35, 'gain': 0.75}
+  - variations: ['joints.damping_scale=1.35:1.35', 'actuators.gain_scale=0.75:0.75']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: /workspace/robotiq/runs/studies/c1-competent-lift/verdict.json
+  - study: /workspace/robotiq/runs/studies/c1-competent-lift/study.json
+  - guessed.records: /workspace/robotiq/runs/studies/c1-competent-lift/guessed-records.jsonl
+  - guessed.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/guessed/datasheet.md
+  - identified.records: /workspace/robotiq/runs/studies/c1-competent-lift/identified-records.jsonl
+  - identified.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/identified/datasheet.md
+  - point.records: /workspace/robotiq/runs/studies/c1-competent-lift/point-records.jsonl
+  - point.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/point/datasheet.md
+  - figure.svg: docs/figures/c1-competent-lift-2026-09-03.svg
+  - figure.pdf: docs/figures/c1-competent-lift-2026-09-03.pdf
+  - figure.png: docs/figures/c1-competent-lift-2026-09-03.png
+  - figure.csv: docs/figures/c1-competent-lift-2026-09-03.csv
+- caveats:
+  - The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.
+  - Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.
+  - The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).
+  - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+
+![c1-competent-lift-2026-09-03](../docs/figures/c1-competent-lift-2026-09-03.png)
+
 ## audit-unitree-rl-mjlab-2026-09-02
 
 **Unitree's official mjlab stack: two task families behind 22 IDs; fall detection in deploy stubbed to return false; no action clip between policy and motors; two different G1 definitions across families; zero provenance; DR limited to friction/encoder bias/CoM/pushes with gains derived from rotor inertia.**
