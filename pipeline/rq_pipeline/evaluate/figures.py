@@ -51,6 +51,7 @@ def arm_rows(finding: Finding) -> list[dict[str, Any]]:
         rows.append(
             {
                 "arm": name,
+                "group": arm.get("replicate_of", name),
                 "episodes": arm.get("episodes"),
                 "successes": int(arm["successes"]),
                 "trials": int(arm["trials"]),
@@ -65,11 +66,15 @@ def arm_rows(finding: Finding) -> list[dict[str, Any]]:
 
 
 def is_curve(rows: list[dict[str, Any]]) -> bool:
-    """A curve when every arm declares a distinct episode count and
-    there are at least three of them; otherwise a categorical row."""
-    counts = [r["episodes"] for r in rows]
+    """A curve when every declared arm (replicates pooled) has a
+    distinct episode count and there are at least three of them;
+    otherwise a categorical row."""
+    groups: dict[str, Any] = {}
+    for r in rows:
+        groups.setdefault(r["group"], r["episodes"])
+    counts = list(groups.values())
     return (
-        len(rows) >= MIN_CURVE_ARMS
+        len(counts) >= MIN_CURVE_ARMS
         and all(c is not None for c in counts)
         and len(set(counts)) == len(counts)
     )
@@ -82,6 +87,28 @@ def footer(finding: Finding) -> str:
         f"{finding.id} · commit {finding.repo_commit} · {finding.instrument} · "
         f"{n} paired trials per arm, exact 95% intervals · {finding.protocol}"
     )
+
+
+def _style(fig: Any, ax: Any, finding: Finding) -> None:
+    """The recessive frame every figure shares: y in [0, 1], the claim
+    as a left-aligned title, grid and spines in the grid tone, the
+    provenance footer."""
+    ax.set_ylim(0.0, 1.05)
+    ax.set_ylabel("success rate (exact 95% interval)", color=INK)
+    ax.set_title(
+        finding.claim[:TITLE_CHARS] + ("…" if len(finding.claim) > TITLE_CHARS else ""),
+        fontsize=9,
+        color=INK,
+        loc="left",
+    )
+    ax.grid(True, axis="y", color=GRID, linewidth=0.6)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID)
+    ax.tick_params(colors=INK_SECONDARY, labelsize=8)
+    fig.text(0.01, 0.01, footer(finding), fontsize=6, color=INK_SECONDARY, ha="left")
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
 
 
 def render(finding: Finding, root: Path) -> dict[str, str]:
@@ -105,21 +132,33 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
     lower = [r["rate"] - r["ci_low"] for r in rows]
     upper = [r["ci_high"] - r["rate"] for r in rows]
     if curve:
-        # One series, one hue, no legend: the title names it.
+        # One series, one hue, no legend: the title names it. Replicates
+        # of one count sit at the same x as separate dots; the line runs
+        # through each count's mean so the spread reads as spread.
         ax.errorbar(
             xs,
             ys,
             yerr=[lower, upper],
             color=SERIES[0],
-            linewidth=LINE_PT,
+            linestyle="none",
             marker="o",
             markersize=MARKER_PT,
             capsize=3,
             elinewidth=1.0,
         )
+        by_x: dict[Any, list[float]] = {}
+        for x, y in zip(xs, ys, strict=True):
+            by_x.setdefault(x, []).append(y)
+        line_x = sorted(by_x)
+        ax.plot(
+            line_x,
+            [sum(by_x[x]) / len(by_x[x]) for x in line_x],
+            color=SERIES[0],
+            linewidth=LINE_PT,
+        )
         ax.set_xscale("log", base=2)
-        ax.set_xticks(xs)
-        ax.set_xticklabels([str(x) for x in xs])
+        ax.set_xticks(sorted(set(xs)))
+        ax.set_xticklabels([str(x) for x in sorted(set(xs))])
         ax.set_xlabel("demonstrations pressed (referee-gated episodes)", color=INK)
     else:
         for i, (x, y, lo, hi) in enumerate(zip(xs, ys, lower, upper, strict=True)):
@@ -147,22 +186,7 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
             fontsize=8,
             color=INK_SECONDARY,
         )
-    ax.set_ylim(0.0, 1.05)
-    ax.set_ylabel("success rate (exact 95% interval)", color=INK)
-    ax.set_title(
-        finding.claim[:TITLE_CHARS] + ("…" if len(finding.claim) > TITLE_CHARS else ""),
-        fontsize=9,
-        color=INK,
-        loc="left",
-    )
-    ax.grid(True, axis="y", color=GRID, linewidth=0.6)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=INK_SECONDARY, labelsize=8)
-    fig.text(0.01, 0.01, footer(finding), fontsize=6, color=INK_SECONDARY, ha="left")
-    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    _style(fig, ax, finding)
 
     written: dict[str, str] = {}
     for fmt in FORMATS:

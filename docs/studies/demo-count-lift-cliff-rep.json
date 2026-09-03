@@ -1,0 +1,123 @@
+{
+  "id": "demo-count-lift-cliff-rep",
+  "claim": "The demo-count curve on the SO-101 lift ON THE CLIFF (gain 0.4), with THREE replicates per demo count \u2014 three independent presses and training runs each for 8/16/32/64/128 episodes \u2014 so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).",
+  "truth": {
+    "damping": 1.0,
+    "gain": 0.4
+  },
+  "train": {
+    "steps": 10000,
+    "batch": 32
+  },
+  "eval": {
+    "trials": 80,
+    "variations": [],
+    "alpha": 0.05,
+    "delta": 0.15
+  },
+  "compare": [
+    [
+      "n8",
+      "n16"
+    ],
+    [
+      "n16",
+      "n32"
+    ],
+    [
+      "n32",
+      "n64"
+    ],
+    [
+      "n64",
+      "n128"
+    ],
+    [
+      "n8",
+      "n128"
+    ]
+  ],
+  "arms": {
+    "n8": {
+      "episodes": 8,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n16": {
+      "episodes": 16,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n32": {
+      "episodes": 32,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n64": {
+      "episodes": 64,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n128": {
+      "episodes": 128,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    }
+  },
+  "caveats": [
+    "One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.",
+    "Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.",
+    "The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.",
+    "Three replicates per count is the smallest design that shows between-run spread; it is not a variance estimate anyone should quote to two digits.",
+    "Fifteen arms: ~6 h of one pod at 10k steps each \u2014 split across pods by arm if wall clock matters."
+  ],
+  "cameras": [
+    "front"
+  ],
+  "replicates": 3
+}

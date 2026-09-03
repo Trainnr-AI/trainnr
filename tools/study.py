@@ -60,7 +60,37 @@ def load_spec(path: Path) -> dict[str, Any]:
                 raise ValueError(f"{path}: arm {name!r} needs {key!r}")
         if arm.get("visuals") and not arm.get("visual_basis"):
             raise ValueError(f"{path}: arm {name!r} draws visuals without a basis")
+    replicates = int(spec.get("replicates", 1))
+    if replicates < 1:
+        raise ValueError(f"{path}: replicates must be >= 1, got {replicates}")
     return spec
+
+
+REPLICATE_SEP = "#"  # "n16#2": the second replicate of arm n16
+
+
+def expand_arms(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The arms actually pressed, trained and judged: each declared arm
+    `replicates` times under its own press seed and training run.
+    The demo-count curve on the cliff (2026-09-03) scored n8 77/80 and
+    n16 56/80 with ONE run per arm — a per-arm effect (which episodes
+    a small batch holds, one training run's luck) that a single run
+    cannot separate from the data-count effect. Replicates measure
+    the between-run variance instead of assuming it away; comparisons
+    in `compare` pool the replicates of each declared arm."""
+    replicates = int(spec.get("replicates", 1))
+    if replicates == 1:
+        return dict(spec["arms"])
+    return {
+        f"{name}{REPLICATE_SEP}{r}": {**arm, "replicate_of": name}
+        for name, arm in spec["arms"].items()
+        for r in range(1, replicates + 1)
+    }
+
+
+def declared_arm(pressed: str) -> str:
+    """`n16#2` -> `n16`; a non-replicated arm is its own name."""
+    return pressed.split(REPLICATE_SEP, 1)[0]
 
 
 def generate(spec: dict[str, Any], out: Path, *, seed: int, frame_every: int) -> int:
@@ -75,7 +105,7 @@ def generate(spec: dict[str, Any], out: Path, *, seed: int, frame_every: int) ->
     )
 
     batches = {}
-    for index, (name, arm) in enumerate(spec["arms"].items()):
+    for index, (name, arm) in enumerate(expand_arms(spec).items()):
         print(f"== arm {name}: {arm['episodes']} episodes, {arm['basis']}")
         batches[name] = generate_scripted_demos(
             out / name,
@@ -122,7 +152,7 @@ def convert(spec: dict[str, Any], out: Path, *, prune: bool = False) -> int:
     from rq_pipeline.tasks.so101 import build_lift_study  # noqa: PLC0415
 
     task = build_lift_study()
-    for name in spec["arms"]:
+    for name in expand_arms(spec):
         root = out / f"{name}-lerobot"
         export_demos(
             out / name, root, task=task, repo_id=f"rq-pipeline/{spec['id']}-{name}"
@@ -143,7 +173,7 @@ def train(spec: dict[str, Any], out: Path) -> int:
 
     steps, batch = int(spec["train"]["steps"]), int(spec["train"]["batch"])
     device = best_device()
-    for name in spec["arms"]:
+    for name in expand_arms(spec):
         output = out / f"{name}-training"
         command = lerobot_train_command(
             policy="act",
@@ -191,7 +221,7 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
     ]
     device = best_device()
     results: dict[str, Any] = {}
-    for name in spec["arms"]:
+    for name in expand_arms(spec):
         records_path = out / f"{name}-records.jsonl"
         records_path.unlink(missing_ok=True)
         command = lerobot_eval_command(
@@ -231,14 +261,25 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
         float(spec["eval"].get("alpha", 0.05)),
         float(spec["eval"].get("delta", 0.15)),
     )
+
+    def pooled(declared: str) -> list[bool]:
+        """Every replicate's outcomes of one declared arm, concatenated:
+        the comparison then spans the between-run variance too."""
+        return [
+            o
+            for name, r in results.items()
+            if declared_arm(name) == declared
+            for o in r["outcomes"]
+        ]
+
     effects = []
     for a, b in spec.get("compare", []):
         effect = main_effect(
             f"{a} vs {b}",
             a,
             b,
-            results[a]["outcomes"],
-            results[b]["outcomes"],
+            pooled(a),
+            pooled(b),
             alpha=alpha,
             delta=delta,
         )
@@ -286,9 +327,11 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
     verdict = json.loads((out / "verdict.json").read_text())
     # Each arm's declared episode count rides with its result: the
     # figure draws a curve over it when the arms differ in count.
-    for name, arm in spec["arms"].items():
+    for name, arm in expand_arms(spec).items():
         if name in verdict.get("arms", {}):
             verdict["arms"][name]["episodes"] = int(arm["episodes"])
+            if "replicate_of" in arm:
+                verdict["arms"][name]["replicate_of"] = arm["replicate_of"]
     instruments = sorted(
         {i for arm in verdict["arms"].values() for i in arm["instrument"]}
     )

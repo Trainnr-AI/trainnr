@@ -210,3 +210,55 @@ class TheFigure(unittest.TestCase):
                 self.assertIn("mujoco-3.11.0+x86_64", svg)
                 rows = list(csv.DictReader((Path(tmp) / written["csv"]).open()))
                 self.assertEqual([r["arm"] for r in rows], list(record.outcome["arms"]))
+
+
+class TheReplicates(unittest.TestCase):
+    """A spec's `replicates` expands each declared arm into N pressed
+    arms; comparisons pool them; the figure groups them."""
+
+    def test_expand_and_declared_arm(self) -> None:
+        study = _load_study()
+        spec = {
+            "replicates": 3,
+            "arms": {"n8": {"episodes": 8}, "n16": {"episodes": 16}},
+        }
+        arms = study.expand_arms(spec)
+        self.assertEqual(
+            list(arms), ["n8#1", "n8#2", "n8#3", "n16#1", "n16#2", "n16#3"]
+        )
+        self.assertEqual(arms["n8#2"]["replicate_of"], "n8")
+        self.assertEqual(study.declared_arm("n16#3"), "n16")
+        self.assertEqual(study.declared_arm("fixed"), "fixed")
+        self.assertEqual(study.expand_arms({"arms": {"a": {}}}), {"a": {}})
+
+    def test_replicated_curve_renders_grouped(self) -> None:
+        try:
+            import matplotlib  # noqa: F401, PLC0415
+        except ImportError:
+            self.skipTest("matplotlib (train extra)")
+        from rq_pipeline.evaluate.figures import (  # noqa: PLC0415
+            arm_rows,
+            is_curve,
+            render,
+        )
+
+        arms = {}
+        for n in (8, 32, 128):
+            for r in (1, 2):
+                k = 60 + n // 8 + r
+                arms[f"n{n}#{r}"] = {
+                    "successes": k,
+                    "trials": 80,
+                    "ci95": [k / 80 - 0.1, k / 80 + 0.1],
+                    "episodes": n,
+                    "replicate_of": f"n{n}",
+                }
+        record = _finding(
+            id="demo-count-lift-cliff-rep-2026-09-04", outcome={"arms": arms}
+        )
+        rows = arm_rows(record)
+        self.assertTrue(is_curve(rows))
+        self.assertEqual({r["group"] for r in rows}, {"n8", "n32", "n128"})
+        with tempfile.TemporaryDirectory() as tmp:
+            written = render(record, Path(tmp))
+            self.assertTrue((Path(tmp) / written["svg"]).exists())
