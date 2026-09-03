@@ -36,6 +36,16 @@ reached=0
 at() { [ "$reached" = 1 ] && return 0; [ "$1" = "$from" ] && reached=1; [ "$reached" = 1 ]; }
 
 say "campaign: press $episodes episodes at 1/$frame_every ticks, train $steps steps (from $from)"
+if [ "$from" != press ] && [ -d "$root/demos" ]; then
+  # A resumed campaign replays the press's summary from the batch on
+  # disk, in the line the Studio's feed reads (studio-cloud-feed.py
+  # PRESS_KEPT_RE): the card said "0 kept of 0 attempts" for a run
+  # that resumed at train (2026-09-04). Kept = episode dirs, attempts =
+  # kept + the discards in failures.jsonl.
+  kept=$(find "$root/demos" -maxdepth 1 -type d -name 'episode_*' | wc -l | tr -d ' ')
+  failed=0; [ -f "$root/demos/failures.jsonl" ] && failed=$(wc -l < "$root/demos/failures.jsonl" | tr -d ' ')
+  echo "kept $kept/$((kept + failed)) episodes -> $root/demos (replayed from the batch on disk: $failed rows in failures.jsonl)"
+fi
 if at press; then
 cd "$repo/rq_mjlab"
 .venv/bin/python -m rq_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
