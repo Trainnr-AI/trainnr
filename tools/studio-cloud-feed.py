@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -299,7 +299,10 @@ def choose_layout(  # noqa: PLR0913 - the signals and the two pane flags, named
 # card's data engine is watched from here, not from a pod's screen.
 PRESS_BATCH_RE = re.compile(r"^batch seed (\d+): (\d+)/(\d+) pass")
 PRESS_ATTEMPT_RE = re.compile(r"^attempt (\d+): (KEEP|discard)")
-PRESS_KEPT_RE = re.compile(r"^kept (\d+)/(\d+) episodes")
+# `kept N/M episodes -> <dir>`: the dir names the ARM of a multi-arm
+# study (tools/study.py prints one line per arm; the card once showed
+# the last arm's 128/128 for a 248-episode study, 2026-09-04).
+PRESS_KEPT_RE = re.compile(r"^kept (\d+)/(\d+) episodes(?: -> (\S+))?")
 VERDICT_RE = re.compile(
     r"^\[verdict\] survived (\d+)/(\d+), tracked (\d+)/(\d+) -> success (\d+)/(\d+), "
     r"CP95 \[([0-9.]+), ([0-9.]+)\]"
@@ -370,6 +373,9 @@ class EngineStatus:
     kept: int = 0
     attempts: int = 0
     last_batch: str | None = None
+    # Per-arm press counts, keyed by the batch directory's name; the
+    # totals above are their sums once any arm is known.
+    arms: dict[str, tuple[int, int]] = field(default_factory=dict)
     verdict: str | None = None
     done: bool = False
     train_steps: int | None = None  # the campaign header's budget
@@ -411,7 +417,10 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
                 rr.log(f"{name}/press/log", rr.TextLog(line))
         elif kept := PRESS_KEPT_RE.match(line):
             found = True
-            status.kept, status.attempts = int(kept.group(1)), int(kept.group(2))
+            arm = pathlib.PurePosixPath(kept.group(3)).name if kept.group(3) else ""
+            status.arms[arm] = (int(kept.group(1)), int(kept.group(2)))
+            status.kept = sum(k for k, _ in status.arms.values())
+            status.attempts = sum(a for _, a in status.arms.values())
         elif verdict := VERDICT_RE.match(line):
             found = True
             status.verdict = (
@@ -512,7 +521,11 @@ def write_engine_card(
     card = "## data engine\n\n"
     if status.stage:
         card += f"- stage **{status.stage}**\n"
-    card += f"- pressed **{status.kept}** kept of {status.attempts} attempts\n"
+    card += f"- pressed **{status.kept}** kept of {status.attempts} attempts"
+    if len(status.arms) > 1:
+        per_arm = ", ".join(f"{arm} {k}/{a}" for arm, (k, a) in status.arms.items())
+        card += f" ({per_arm})"
+    card += "\n"
     if status.last_batch:
         card += f"- last batch {status.last_batch}\n"
     if train_line:

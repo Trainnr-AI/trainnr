@@ -216,6 +216,47 @@ class TheEngineCounters(unittest.TestCase):
         self.assertEqual((status.kept, status.attempts), (2, 3))
 
 
+class TheArmsOfAStudy(unittest.TestCase):
+    """A multi-arm study prints one `kept` line per arm; the card sums
+    them and names each (it once showed the last arm's 128/128 for a
+    248-episode study, 2026-09-04)."""
+
+    def setUp(self) -> None:
+        feed.MORE_SEEN.clear()
+
+    def test_kept_lines_sum_across_arms_and_name_them(self) -> None:
+        raw = "\n".join(
+            [
+                "kept 8/9 episodes -> /w/runs/studies/demo/n8 (episodes 0..7)",
+                "kept 16/16 episodes -> /w/runs/studies/demo/n16 (episodes 0..15)",
+            ]
+        )
+        status = feed.parse_engine(FakeRr(), "c", raw, set())
+        assert status is not None
+        self.assertEqual((status.kept, status.attempts), (24, 25))
+        self.assertEqual(status.arms, {"n8": (8, 9), "n16": (16, 16)})
+        rr = FakeRr()
+        feed.write_engine_card(rr, "c", status, "0 %, 0 MiB")
+        card = next(
+            p.arg for _path, p, _k in rr.calls if isinstance(p, FakeRr.TextDocument)
+        )
+        self.assertIn("24** kept of 25", card)
+        self.assertIn("n8 8/9", card)
+
+    def test_a_single_press_keeps_its_plain_line(self) -> None:
+        status = feed.parse_engine(
+            FakeRr(), "c", "kept 240/286 episodes -> /w/demos", set()
+        )
+        assert status is not None
+        self.assertEqual((status.kept, status.attempts), (240, 286))
+        rr = FakeRr()
+        feed.write_engine_card(rr, "c", status, "0 %, 0 MiB")
+        card = next(
+            p.arg for _path, p, _k in rr.calls if isinstance(p, FakeRr.TextDocument)
+        )
+        self.assertNotIn("(", card.split("pressed")[1].split("\n")[0])
+
+
 class TheStageClock(unittest.TestCase):
     """Stage rows land at the stage's OWN clock, not the poll's: a feed
     restarted at 14:35 had re-listed the 12:59 and 14:28 stages at
