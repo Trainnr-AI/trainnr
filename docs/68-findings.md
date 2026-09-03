@@ -208,6 +208,55 @@ not this page.
 
 ![demo-count-lift-2026-09-03](../docs/figures/demo-count-lift-2026-09-03.png)
 
+## c1-competent-lift-cliff-2026-09-03
+
+**C1 at a competent recipe: identified-interval DR (±0.05 around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+
+- date: 2026-09-03 · commit: `89412f0-archive`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `../tools/study.py finding ../docs/studies/c1-competent-lift-cliff.json /workspace/robotiq/runs/studies/c1-competent-lift-cliff --frame-every 5`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: c1ec81c7c6a8
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - guessed.datasheet: 128 episodes, bases ['guessed span ±0.30 around nominal (folklore DR)'], visual bases []
+  - identified.datasheet: 128 episodes, bases ['declared interval ±0.05 around the cliff truth (stand-in for an identified fit record)'], visual bases []
+  - point.datasheet: 128 episodes, bases ['the point estimate: no DR, the cliff truth exactly'], visual bases []
+  - wide.datasheet: 128 episodes, bases ['a wide span that COVERS the cliff (gain 0.3-1.3): the honest alternative to guessing narrow'], visual bases []
+- outcome:
+  - arms: {'guessed': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-cliff-guessed': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}, 'identified': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-cliff-identified': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}, 'point': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'c1-competent-lift-cliff-point': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}, 'wide': {'successes': 77, 'trials': 80, 'ci95': [0.8943, 0.9922], 'funnel': {'c1-competent-lift-cliff-wide': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}}
+  - effects: [{'a': 'guessed', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'point', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'wide', 'b': 'identified', 'difference': 0.03749999999999998, 'p': 0.24528301886793386, 'verdict': 'INSENSITIVE'}, {'a': 'guessed', 'b': 'wide', 'difference': -0.03749999999999998, 'p': 0.24528301886793386, 'verdict': 'INSENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.0, 'gain': 0.4}
+  - variations: ['joints.damping_scale=1.0:1.0', 'actuators.gain_scale=0.4:0.4']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/verdict.json
+  - study: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/study.json
+  - guessed.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/guessed-records.jsonl
+  - guessed.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/guessed/datasheet.md
+  - identified.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/identified-records.jsonl
+  - identified.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/identified/datasheet.md
+  - point.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/point-records.jsonl
+  - point.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/point/datasheet.md
+  - wide.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/wide-records.jsonl
+  - wide.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/wide/datasheet.md
+  - figure.svg: docs/figures/c1-competent-lift-cliff-2026-09-03.svg
+  - figure.pdf: docs/figures/c1-competent-lift-cliff-2026-09-03.pdf
+  - figure.png: docs/figures/c1-competent-lift-cliff-2026-09-03.png
+  - figure.csv: docs/figures/c1-competent-lift-cliff-2026-09-03.csv
+- caveats:
+  - The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.
+  - Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.
+  - The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).
+  - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+
+![c1-competent-lift-cliff-2026-09-03](../docs/figures/c1-competent-lift-cliff-2026-09-03.png)
+
 ## c1-competent-lift-2026-09-03
 
 **C1 at a competent recipe: identified-interval DR (±0.05 around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
