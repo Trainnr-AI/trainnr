@@ -68,6 +68,13 @@ class TheRecord(unittest.TestCase):
         ):
             self.assertIn(needle, page)
 
+    def test_a_tree_without_git_reads_its_sync_stamp_or_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(FileNotFoundError, "rq-commit"):
+                repo_commit(Path(tmp))
+            (Path(tmp) / ".rq-commit").write_text("a81974b\n")
+            self.assertEqual(repo_commit(Path(tmp)), "a81974b-archive")
+
     def test_a_dirty_tree_is_marked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             subprocess.run(["git", "init", "-q", tmp], check=True)

@@ -60,9 +60,25 @@ class Finding(JsonRecord):
         return Path(root) / FINDINGS_DIR / f"{self.id}.json"
 
 
+# A tree shipped without .git (a pod's volume copy) carries its commit here.
+COMMIT_FILE = ".rq-commit"
+
+
 def repo_commit(root: Path) -> str:
     """The tree's short hash, with `-dirty` when the tree is not clean:
-    a finding from an uncommitted tree says so."""
+    a finding from an uncommitted tree says so. A tree without `.git`
+    (the pod's volume copy is a `git archive`, 2026-09-04) reads the
+    commit its sync wrote to `.rq-commit`, marked as such; a tree with
+    neither is refused — a finding must name its code."""
+    root = Path(root)
+    if not (root / ".git").exists():
+        stamp_file = root / COMMIT_FILE
+        if not stamp_file.is_file():
+            raise FileNotFoundError(
+                f"{root} has no .git and no {COMMIT_FILE}: a finding cannot name "
+                "the code that produced it (write the commit there when syncing)"
+            )
+        return f"{stamp_file.read_text().strip()}-archive"
     head = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
         cwd=root,
