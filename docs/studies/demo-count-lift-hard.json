@@ -1,0 +1,121 @@
+{
+  "id": "demo-count-lift-hard",
+  "claim": "The demo-count curve on the SO-101 lift at a HARD truth (damping 1.35, gain 0.75, outside the folklore span's centre; at the study truth every arm from 8 demos up scored 80/80, 2026-09-03): success vs 8/16/32/64/128 referee-gated episodes under the same declared DR, one trainer config, 80 matched trials per arm.",
+  "truth": {
+    "damping": 1.35,
+    "gain": 0.75
+  },
+  "train": {
+    "steps": 10000,
+    "batch": 32
+  },
+  "eval": {
+    "trials": 80,
+    "variations": [],
+    "alpha": 0.05,
+    "delta": 0.15
+  },
+  "compare": [
+    [
+      "n8",
+      "n16"
+    ],
+    [
+      "n16",
+      "n32"
+    ],
+    [
+      "n32",
+      "n64"
+    ],
+    [
+      "n64",
+      "n128"
+    ],
+    [
+      "n8",
+      "n128"
+    ]
+  ],
+  "arms": {
+    "n8": {
+      "episodes": 8,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n16": {
+      "episodes": 16,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n32": {
+      "episodes": 32,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n64": {
+      "episodes": 64,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n128": {
+      "episodes": 128,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    }
+  },
+  "caveats": [
+    "One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.",
+    "Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.",
+    "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
+    "Judged where the folklore-span policies capped near 47% in C1 (docs/e2e-research/62): the curve's ceiling here is the recipe's, not 100%."
+  ],
+  "cameras": [
+    "front"
+  ]
+}
