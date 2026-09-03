@@ -24,6 +24,48 @@ not this page.
   - Four trials per cell: the cliff's position is coarse (between gain 0.5 and 0.25).
   - The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script.
 
+## visual-dr-lift-cliff-2026-09-03
+
+**On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+
+- date: 2026-09-03 · commit: `bcbb3fe-archive`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `../tools/study.py finding ../docs/studies/visual-dr-lift-cliff.json /workspace/robotiq/runs/studies/visual-dr-lift-cliff --frame-every 5`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: 3f557fa7c0c7
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - fixed.datasheet: 64 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - visual.datasheet: 64 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases ['declared visual span: headlight 0.5-1.5, front camera ±1 cm (docs/66 §4; the so101 scenes are lit by the headlight only, docs/07 2026-09-02)']
+- outcome:
+  - arms: {'fixed': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'visual-dr-lift-cliff-fixed': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64}, 'visual': {'successes': 75, 'trials': 80, 'ci95': [0.8601, 0.9794], 'funnel': {'visual-dr-lift-cliff-visual': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64}}
+  - effects: [{'a': 'fixed', 'b': 'visual', 'difference': -0.050000000000000044, 'p': 0.2098499327391907, 'verdict': 'INSENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.0, 'gain': 0.4}
+  - variations: ['joints.damping_scale=1.0:1.0', 'actuators.gain_scale=0.4:0.4', 'headlight.diffuse_scale=0.5:1.5', 'front.offset_m=-0.01,-0.01,-0.01:0.01,0.01,0.01']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/verdict.json
+  - study: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/study.json
+  - fixed.records: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/fixed-records.jsonl
+  - fixed.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/fixed/datasheet.md
+  - visual.records: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/visual-records.jsonl
+  - visual.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/visual/datasheet.md
+  - figure.svg: docs/figures/visual-dr-lift-cliff-2026-09-03.svg
+  - figure.pdf: docs/figures/visual-dr-lift-cliff-2026-09-03.pdf
+  - figure.png: docs/figures/visual-dr-lift-cliff-2026-09-03.png
+  - figure.csv: docs/figures/visual-dr-lift-cliff-2026-09-03.csv
+- caveats:
+  - The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.
+  - The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.
+  - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+
+![visual-dr-lift-cliff-2026-09-03](../docs/figures/visual-dr-lift-cliff-2026-09-03.png)
+
 ## visual-dr-lift-2026-09-03
 
 **On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth.**
