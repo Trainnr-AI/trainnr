@@ -29,6 +29,17 @@ locomotion (a different recipe with a real dynamics-sensitivity
 profile), or the real robot's region. This page publishes the nulls
 either way — the instrument reports what is, not what sells.*
 
+
+> **Caveat added 2026-09-04.** Every lift-study evaluation before commit
+> `ecb04ac` was judged through a harness that played each policy action
+> for ONE control tick while the datasets were pressed at `frame_every=5`
+> (10 Hz) — every chunk five times too fast (the walk's cadence bug in a
+> second costume; docs/07 2026-09-04). The two nulls stand as measured:
+> the easy-truth 40/40 vs 40/40 shows the task survived even a 5×-fast
+> replay, and the hard-truth ~47% cap is a lower bound on what the
+> recipe can do. Both are re-run under the held harness in the
+> `c1-competent-lift` study (docs/studies/), which also adds the point arm.
+
 ## 0. The claim under test
 
 Our datasheets say synthetic data is drawn from an identified
