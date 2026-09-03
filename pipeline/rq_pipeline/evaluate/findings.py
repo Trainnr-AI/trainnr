@@ -129,5 +129,7 @@ def render_ledger(findings: list[Finding]) -> str:
         if f.caveats:
             lines.append("- caveats:")
             lines += [f"  - {c}" for c in f.caveats]
+        if "figure.png" in f.artifacts:
+            lines += ["", f"![{f.id}](../{f.artifacts['figure.png']})"]
         lines.append("")
     return "\n".join(lines)

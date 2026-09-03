@@ -3,6 +3,7 @@ dirty-tree mark — and the study spec's refusals."""
 
 from __future__ import annotations
 
+import csv
 import importlib.util
 import json
 import subprocess
@@ -142,3 +143,63 @@ class TheSpec(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheFigure(unittest.TestCase):
+    """A figure is a function of the record: the arms' intervals, the
+    provenance on the canvas, the numbers in a CSV beside it."""
+
+    def _curve(self) -> Finding:
+        arms = {}
+        for n, k in ((8, 10), (16, 30), (32, 50), (64, 62), (128, 68)):
+            arms[f"n{n}"] = {
+                "successes": k,
+                "trials": 80,
+                "ci95": [k / 80 - 0.1, k / 80 + 0.1],
+                "episodes": n,
+            }
+        return _finding(id="demo-count-lift-2026-09-04", outcome={"arms": arms})
+
+    def test_a_curve_and_a_categorical_row_render_with_provenance(self) -> None:
+        try:
+            import matplotlib  # noqa: F401, PLC0415
+        except ImportError:
+            self.skipTest("matplotlib (train extra)")
+        from rq_pipeline.evaluate.figures import (  # noqa: PLC0415
+            arm_rows,
+            is_curve,
+            render,
+        )
+
+        curve = self._curve()
+        self.assertTrue(is_curve(arm_rows(curve)))
+        pair = _finding(
+            id="visual-dr-lift-2026-09-04",
+            outcome={
+                "arms": {
+                    "fixed": {
+                        "successes": 40,
+                        "trials": 80,
+                        "ci95": [0.39, 0.61],
+                        "episodes": 64,
+                    },
+                    "visual": {
+                        "successes": 55,
+                        "trials": 80,
+                        "ci95": [0.57, 0.79],
+                        "episodes": 64,
+                    },
+                }
+            },
+        )
+        self.assertFalse(is_curve(arm_rows(pair)))
+        with tempfile.TemporaryDirectory() as tmp:
+            for record in (curve, pair):
+                written = render(record, Path(tmp))
+                for fmt in ("svg", "pdf", "png", "csv"):
+                    self.assertTrue((Path(tmp) / written[fmt]).exists(), fmt)
+                svg = (Path(tmp) / written["svg"]).read_text()
+                self.assertIn("abc1234", svg)  # the commit, on the canvas
+                self.assertIn("mujoco-3.11.0+x86_64", svg)
+                rows = list(csv.DictReader((Path(tmp) / written["csv"]).open()))
+                self.assertEqual([r["arm"] for r in rows], list(record.outcome["arms"]))

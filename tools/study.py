@@ -260,6 +260,11 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
 
     study = json.loads((out / STUDY_FILE).read_text())
     verdict = json.loads((out / "verdict.json").read_text())
+    # Each arm's declared episode count rides with its result: the
+    # figure draws a curve over it when the arms differ in count.
+    for name, arm in spec["arms"].items():
+        if name in verdict.get("arms", {}):
+            verdict["arms"][name]["episodes"] = int(arm["episodes"])
     instruments = sorted(
         {i for arm in verdict["arms"].values() for i in arm["instrument"]}
     )
@@ -293,9 +298,22 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
         protocol=PROTOCOL,
         caveats=tuple(spec.get("caveats", [])),
     )
+    from rq_pipeline.evaluate.figures import render  # noqa: PLC0415
+
+    figures = render(record, REPO)
+    record = Finding(
+        **{
+            **record.__dict__,
+            "artifacts": {
+                **record.artifacts,
+                **{f"figure.{k}": v for k, v in figures.items()},
+            },
+        }
+    )
     path = record.path(REPO)
     record.write(path)
     print(f"finding -> {path}")
+    print(f"figure -> {figures['svg']} (+pdf, png, csv)")
     return 0
 
 
