@@ -46,6 +46,56 @@ not this page.
 
 ![visual-dr-lift-2026-09-03](../docs/figures/visual-dr-lift-2026-09-03.png)
 
+## demo-count-lift-2026-09-03
+
+**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm.**
+
+- date: 2026-09-03 · commit: `634de76-archive`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `../tools/study.py finding ../docs/studies/demo-count-lift.json /workspace/robotiq/runs/studies/demo-count-lift --frame-every 5`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: 88343cdae1b8
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - n8.datasheet: 8 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n16.datasheet: 16 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n32.datasheet: 32 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n64.datasheet: 64 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n128.datasheet: 128 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+- outcome:
+  - arms: {'n8': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-n8': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 8}, 'n16': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-n16': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 16}, 'n32': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-n32': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 32}, 'n64': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-n64': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64}, 'n128': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-n128': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}}
+  - effects: [{'a': 'n8', 'b': 'n16', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'n16', 'b': 'n32', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'n32', 'b': 'n64', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'n64', 'b': 'n128', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'n8', 'b': 'n128', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.18, 'gain': 0.85}
+  - variations: ['joints.damping_scale=1.18:1.18', 'actuators.gain_scale=0.85:0.85']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: /workspace/robotiq/runs/studies/demo-count-lift/verdict.json
+  - study: /workspace/robotiq/runs/studies/demo-count-lift/study.json
+  - n8.records: /workspace/robotiq/runs/studies/demo-count-lift/n8-records.jsonl
+  - n8.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n8/datasheet.md
+  - n16.records: /workspace/robotiq/runs/studies/demo-count-lift/n16-records.jsonl
+  - n16.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n16/datasheet.md
+  - n32.records: /workspace/robotiq/runs/studies/demo-count-lift/n32-records.jsonl
+  - n32.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n32/datasheet.md
+  - n64.records: /workspace/robotiq/runs/studies/demo-count-lift/n64-records.jsonl
+  - n64.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n64/datasheet.md
+  - n128.records: /workspace/robotiq/runs/studies/demo-count-lift/n128-records.jsonl
+  - n128.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n128/datasheet.md
+  - figure.svg: docs/figures/demo-count-lift-2026-09-03.svg
+  - figure.pdf: docs/figures/demo-count-lift-2026-09-03.pdf
+  - figure.png: docs/figures/demo-count-lift-2026-09-03.png
+  - figure.csv: docs/figures/demo-count-lift-2026-09-03.csv
+- caveats:
+  - One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.
+  - Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.
+  - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+
+![demo-count-lift-2026-09-03](../docs/figures/demo-count-lift-2026-09-03.png)
+
 ## audit-unitree-rl-mjlab-2026-09-02
 
 **Unitree's official mjlab stack: two task families behind 22 IDs; fall detection in deploy stubbed to return false; no action clip between policy and motors; two different G1 definitions across families; zero provenance; DR limited to friction/encoder bias/CoM/pushes with gains derived from rotor inertia.**
