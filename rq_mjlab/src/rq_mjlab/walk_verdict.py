@@ -245,13 +245,26 @@ CAMERA_SIGHTED = "chase"
 CAMERA_BLANKED = "blanked"
 
 
-def verdict_suffix(devicetag: str, *, student: bool, blank_camera: bool) -> str:
-    """The certificate file's suffix — a blanked run must never land on
+STATE_GIVEN = "actor"
+STATE_BLANKED = "blanked"
+
+
+def verdict_suffix(
+    devicetag: str, *, student: bool, blank_camera: bool, blank_state: bool = False
+) -> str:
+    """The certificate file's suffix — a control run must never land on
     the sighted run's file (`walk-verdict-student-cuda.json` is a
-    campaign's headline number)."""
+    campaign's headline number): `blank-` for the camera control,
+    `blank-state-` for the state control, `blank-both-` for both."""
     if not student:
         return devicetag
-    return f"student-{'blank-' if blank_camera else ''}{devicetag}"
+    control = {
+        (False, False): "",
+        (True, False): "blank-",
+        (False, True): "blank-state-",
+        (True, True): "blank-both-",
+    }[(blank_camera, blank_state)]
+    return f"student-{control}{devicetag}"
 
 
 class StudentPolicy:
@@ -272,6 +285,7 @@ class StudentPolicy:
         frame_size: tuple[int, int],
         device: str,
         blank_camera: bool = False,
+        blank_state: bool = False,
     ) -> None:
         from rq_pipeline.envs.policy_bridge import BridgePolicy  # noqa: PLC0415
 
@@ -294,6 +308,12 @@ class StudentPolicy:
         self._stride = stride
         self._held: Any = None
         self._blank = blank_camera
+        # The complementary control (2026-09-04): the camera blanked
+        # collapsed the student to 0/40, which proves the image is USED,
+        # not that the state is unused — a blank frame is out of
+        # distribution. Zeroing the state instead says whether the
+        # student is purely visual.
+        self._blank_state = blank_state
 
     def __call__(self, obs) -> Any:
         import numpy as np  # noqa: PLC0415
@@ -303,6 +323,8 @@ class StudentPolicy:
             self._ticks += 1
             return self._held
         state = obs["actor"].detach().cpu().numpy()
+        if self._blank_state:
+            state = blanked(state)
         qpos = self._qpos.detach().cpu().numpy()
         images = np.stack([self._camera.frame_at(row) for row in qpos])
         if self._blank:
@@ -356,6 +378,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--frame-width", type=int, default=320)
     parser.add_argument("--frame-height", type=int, default=240)
+    parser.add_argument(
+        "--blank-state",
+        action="store_true",
+        help="judge the student with its state vector zeroed (image still "
+        "given): the complement of --blank-camera",
+    )
     parser.add_argument(
         "--blank-camera",
         action="store_true",
@@ -478,6 +506,7 @@ def main() -> None:
             frame_size=(args.frame_width, args.frame_height),
             device=devicetag,
             blank_camera=args.blank_camera,
+            blank_state=args.blank_state,
         )
         policy_name = stamp_of(f"student-{args.student.parent.name}", args.student)
         protocol["student"] = {
@@ -486,6 +515,7 @@ def main() -> None:
             "stride": args.stride,
             # Every row says what the student SAW: the camera, or nothing.
             "camera": CAMERA_BLANKED if args.blank_camera else CAMERA_SIGHTED,
+            "state": STATE_BLANKED if args.blank_state else STATE_GIVEN,
         }
     feed = None if args.no_studio else VerdictFeed.connect(policy_name.split("@")[0])
     if isinstance(policy, StudentPolicy):
@@ -522,7 +552,10 @@ def main() -> None:
     out_dir = args.checkpoint.parent / "verdict"
     out_dir.mkdir(exist_ok=True)
     suffix = verdict_suffix(
-        devicetag, student=args.student is not None, blank_camera=args.blank_camera
+        devicetag,
+        student=args.student is not None,
+        blank_camera=args.blank_camera,
+        blank_state=args.blank_state,
     )
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 

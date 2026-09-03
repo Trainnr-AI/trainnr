@@ -62,6 +62,14 @@ class TheBlankedCamera(unittest.TestCase):
         self.assertEqual(sighted, "student-cuda")  # campaign 2/3's headline file
         self.assertEqual(blank, "student-blank-cuda")
         self.assertEqual(
+            verdict_suffix("cuda", student=True, blank_camera=False, blank_state=True),
+            "student-blank-state-cuda",
+        )
+        self.assertEqual(
+            verdict_suffix("cuda", student=True, blank_camera=True, blank_state=True),
+            "student-blank-both-cuda",
+        )
+        self.assertEqual(
             verdict_suffix("cpu", student=False, blank_camera=False), "cpu"
         )
 
