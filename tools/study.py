@@ -108,8 +108,17 @@ def generate(spec: dict[str, Any], out: Path, *, seed: int, frame_every: int) ->
     return 0 if all(b.complete for b in batches.values()) else 1
 
 
-def convert(spec: dict[str, Any], out: Path) -> int:
+def convert(spec: dict[str, Any], out: Path, *, prune: bool = False) -> int:
+    """Every arm to a LeRobot dataset. `prune` deletes each arm's pressed
+    episode directories once its dataset exists: the frames are the bulk
+    of a study (~650 MB per 128-episode arm at 10 Hz; a 60 GB volume
+    filled with three studies and a campaign, 2026-09-04), and the
+    dataset, datasheet and manifests are the durable artifacts — the
+    press is reproducible from spec + seed by construction."""
+    import shutil  # noqa: PLC0415
+
     from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
+    from rq_pipeline.collect.kitting_export import DemoLayout  # noqa: PLC0415
     from rq_pipeline.tasks.so101 import build_lift_study  # noqa: PLC0415
 
     task = build_lift_study()
@@ -119,6 +128,13 @@ def convert(spec: dict[str, Any], out: Path) -> int:
             out / name, root, task=task, repo_id=f"rq-pipeline/{spec['id']}-{name}"
         )
         print(f"{name}: dataset -> {root}")
+        if prune:
+            gone = 0
+            for episode in (out / name).glob(DemoLayout.EPISODE_GLOB):
+                if episode.is_dir():
+                    shutil.rmtree(episode)
+                    gone += 1
+            print(f"{name}: pruned {gone} pressed episode dirs (datasheet kept)")
     return 0
 
 
@@ -334,13 +350,18 @@ def main() -> int:
     parser.add_argument("out", type=Path)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--frame-every", type=int, default=5)
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="convert: delete the pressed episode dirs once the dataset exists",
+    )
     args = parser.parse_args()
     spec = load_spec(args.spec)
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "generate":
         return generate(spec, args.out, seed=args.seed, frame_every=args.frame_every)
     if args.phase == "convert":
-        return convert(spec, args.out)
+        return convert(spec, args.out, prune=args.prune)
     if args.phase == "train":
         return train(spec, args.out)
     if args.phase == "evaluate":
