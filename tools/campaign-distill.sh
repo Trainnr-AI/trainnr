@@ -44,13 +44,22 @@ cd "$repo/rq_mjlab"
 fi
 
 if at export; then
-say "export"
+# Export onto the pod's LOCAL disk, then move the finished dataset to
+# the run root in one pass: written straight onto the network volume,
+# campaign 4's export sat at 40 % of one core for 14 minutes (I/O-bound
+# on the volume, 2026-09-03); the writer fix (async threads) only pays
+# on a local disk. EXPORT_SCRATCH overrides the staging directory.
+scratch="${EXPORT_SCRATCH:-/tmp/rq-export}/$(basename "$root")"
+rm -rf "$scratch"; mkdir -p "$scratch"
+say "export (staged on $scratch)"
 cd "$repo/pipeline"
 .venv-train/bin/python -c "
 from pathlib import Path
 from rq_pipeline.collect.demo_export import export_batch
-export_batch(Path('$root/demos'), Path('$root/dataset'), repo_id='rq-pipeline/microduck-walk-campaign', use_videos=False)
+export_batch(Path('$root/demos'), Path('$scratch/dataset'), repo_id='rq-pipeline/microduck-walk-campaign', use_videos=False)
 print('exported')"
+say "move the dataset to $root/dataset"
+rm -rf "$root/dataset" && mv "$scratch/dataset" "$root/dataset"
 
 fi
 
