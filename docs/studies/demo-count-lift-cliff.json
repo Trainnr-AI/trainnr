@@ -1,0 +1,121 @@
+{
+  "id": "demo-count-lift-cliff",
+  "claim": "On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm \u2014 judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
+  "truth": {
+    "damping": 1.0,
+    "gain": 0.4
+  },
+  "train": {
+    "steps": 10000,
+    "batch": 32
+  },
+  "eval": {
+    "trials": 80,
+    "variations": [],
+    "alpha": 0.05,
+    "delta": 0.15
+  },
+  "compare": [
+    [
+      "n8",
+      "n16"
+    ],
+    [
+      "n16",
+      "n32"
+    ],
+    [
+      "n32",
+      "n64"
+    ],
+    [
+      "n64",
+      "n128"
+    ],
+    [
+      "n8",
+      "n128"
+    ]
+  ],
+  "arms": {
+    "n8": {
+      "episodes": 8,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n16": {
+      "episodes": 16,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n32": {
+      "episodes": 32,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n64": {
+      "episodes": 64,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    },
+    "n128": {
+      "episodes": 128,
+      "dr": {
+        "damping": [
+          0.7,
+          1.3
+        ],
+        "gain": [
+          0.7,
+          1.3
+        ]
+      },
+      "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+    }
+  },
+  "caveats": [
+    "One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.",
+    "Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.",
+    "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
+    "The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff."
+  ],
+  "cameras": [
+    "front"
+  ]
+}
