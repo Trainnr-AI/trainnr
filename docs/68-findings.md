@@ -107,6 +107,57 @@ not this page.
 
 ![visual-dr-lift-2026-09-03](../docs/figures/visual-dr-lift-2026-09-03.png)
 
+## demo-count-lift-cliff-2026-09-03
+
+**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+
+- date: 2026-09-03 · commit: `bcbb3fe-archive`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `../tools/study.py finding ../docs/studies/demo-count-lift-cliff.json /workspace/robotiq/runs/studies/demo-count-lift-cliff --frame-every 5`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: b3d78c171da0
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - n8.datasheet: 8 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n16.datasheet: 16 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n32.datasheet: 32 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n64.datasheet: 64 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+  - n128.datasheet: 128 episodes, bases ['declared span ±0.30 around nominal (the folklore DR, docs/31)'], visual bases []
+- outcome:
+  - arms: {'n8': {'successes': 77, 'trials': 80, 'ci95': [0.8943, 0.9922], 'funnel': {'demo-count-lift-cliff-n8': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 8}, 'n16': {'successes': 56, 'trials': 80, 'ci95': [0.5872, 0.7974], 'funnel': {'demo-count-lift-cliff-n16': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 16}, 'n32': {'successes': 70, 'trials': 80, 'ci95': [0.7821, 0.9384], 'funnel': {'demo-count-lift-cliff-n32': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 32}, 'n64': {'successes': 73, 'trials': 80, 'ci95': [0.828, 0.9641], 'funnel': {'demo-count-lift-cliff-n64': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64}, 'n128': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-cliff-n128': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128}}
+  - effects: [{'a': 'n8', 'b': 'n16', 'difference': -0.26250000000000007, 'p': 9.98937968365743e-06, 'verdict': 'SENSITIVE'}, {'a': 'n16', 'b': 'n32', 'difference': 0.17500000000000004, 'p': 0.011276969674602691, 'verdict': 'SENSITIVE'}, {'a': 'n32', 'b': 'n64', 'difference': 0.03749999999999998, 'p': 0.6090615589454278, 'verdict': 'UNRESOLVED'}, {'a': 'n64', 'b': 'n128', 'difference': 0.08750000000000002, 'p': 0.013626619009035765, 'verdict': 'SENSITIVE'}, {'a': 'n8', 'b': 'n128', 'difference': 0.03749999999999998, 'p': 0.24528301886793386, 'verdict': 'INSENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.0, 'gain': 0.4}
+  - variations: ['joints.damping_scale=1.0:1.0', 'actuators.gain_scale=0.4:0.4']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: /workspace/robotiq/runs/studies/demo-count-lift-cliff/verdict.json
+  - study: /workspace/robotiq/runs/studies/demo-count-lift-cliff/study.json
+  - n8.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n8-records.jsonl
+  - n8.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n8/datasheet.md
+  - n16.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n16-records.jsonl
+  - n16.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n16/datasheet.md
+  - n32.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n32-records.jsonl
+  - n32.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n32/datasheet.md
+  - n64.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n64-records.jsonl
+  - n64.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n64/datasheet.md
+  - n128.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n128-records.jsonl
+  - n128.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n128/datasheet.md
+  - figure.svg: docs/figures/demo-count-lift-cliff-2026-09-03.svg
+  - figure.pdf: docs/figures/demo-count-lift-cliff-2026-09-03.pdf
+  - figure.png: docs/figures/demo-count-lift-cliff-2026-09-03.png
+  - figure.csv: docs/figures/demo-count-lift-cliff-2026-09-03.csv
+- caveats:
+  - One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.
+  - Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.
+  - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+
+![demo-count-lift-cliff-2026-09-03](../docs/figures/demo-count-lift-cliff-2026-09-03.png)
+
 ## demo-count-lift-2026-09-03
 
 **On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm.**
