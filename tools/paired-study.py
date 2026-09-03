@@ -82,7 +82,9 @@ def _checkpoint(training_dir: Path) -> Path:
     return checkpoints[-1] / "pretrained_model"
 
 
-def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
+def evaluate(
+    out: Path, *, trials: int, alpha: float, delta: float, frame_every: int
+) -> int:
     """Phase 4: both checkpoints judged AT the truth on matched trials —
     the dynamics pinned by degenerate variation ranges, so every trial
     of every policy runs the same world (62 §2)."""
@@ -119,6 +121,7 @@ def evaluate(out: Path, *, trials: int, alpha: float, delta: float) -> int:
                 policy_name=f"paired-{name}",
                 variations=pins,
                 trials=trials,
+                frame_every=frame_every,
             ),
         )
         print(f"== evaluating {name} at truth {truth} ({trials} paired trials)")
@@ -221,7 +224,11 @@ def main() -> int:
         return train(args.out, steps=args.train_steps, batch=args.batch)
     if args.phase == "evaluate":
         return evaluate(
-            args.out, trials=args.trials, alpha=args.alpha, delta=args.delta
+            args.out,
+            trials=args.trials,
+            alpha=args.alpha,
+            delta=args.delta,
+            frame_every=args.frame_every,
         )
 
     the_conditions = conditions(args)

@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 import gymnasium as gym
 from gymnasium.vector import AutoresetMode
@@ -47,6 +48,7 @@ from rq_pipeline.envs.contract import (
     RGB_CHANNELS,
     ObservationKeys,
 )
+from rq_pipeline.envs.hold import ActionHold
 from rq_pipeline.envs.robotiq import make_env
 from rq_pipeline.evaluate.variations import parse_variation
 from rq_pipeline.tasks.registry import resolve, tasks
@@ -58,6 +60,12 @@ WORKER_START_METHOD = "spawn"
 # discovers a plugin by importing the PACKAGE that registers it.
 ENV_FLAG_PREFIX = "--env."
 PLUGIN_PACKAGE = __name__.rsplit(".", 1)[0]
+
+
+def held_env(*, frame_every: int = 1, **kwargs: Any) -> gym.Env:
+    """`make_env`, holding each action `frame_every` ticks (envs/hold.py)."""
+    env = make_env(**kwargs)
+    return ActionHold(env, frame_every) if frame_every > 1 else env
 
 
 @EnvConfig.register_subclass(ENV_TYPE)
@@ -82,6 +90,10 @@ class RobotiqEnvConfig(EnvConfig):
     # — each drawn by trial index (paired across policies), applied at
     # reset, written into the row.
     variations: list[str] = field(default_factory=list)
+    # The dataset's cadence in control ticks (the press's --frame-every):
+    # the env holds each action this many ticks and reports the frame
+    # rate the policy was trained at. 1 is the harness's native 50 Hz.
+    frame_every: int = 1
     features: dict[str, PolicyFeature] = field(default_factory=dict)
     features_map: dict[str, str] = field(default_factory=dict)
 
@@ -98,7 +110,12 @@ class RobotiqEnvConfig(EnvConfig):
             built = resolve(self.task).build()
         except KeyError as error:  # a config error is a ValueError, like the rest
             raise ValueError(str(error)) from error
-        self.fps = built.control_hz
+        if self.frame_every < 1 or built.control_hz % self.frame_every:
+            raise ValueError(
+                f"--env.frame_every={self.frame_every} does not divide the task's "
+                f"{built.control_hz} Hz control rate"
+            )
+        self.fps = built.control_hz // self.frame_every
         width = built.state_width
         self.features = {
             ACTION: PolicyFeature(type=FeatureType.ACTION, shape=(width,)),
@@ -116,7 +133,7 @@ class RobotiqEnvConfig(EnvConfig):
             self.features_map[key] = f"{OBS_IMAGES}.{camera.key}"
 
     @classmethod
-    def cli_flags(
+    def cli_flags(  # noqa: PLR0913 - the env's knobs on a command line, each named
         cls,
         task: str,
         *,
@@ -124,6 +141,7 @@ class RobotiqEnvConfig(EnvConfig):
         policy_name: str | None = None,
         variations: Sequence[str] = (),
         trials: int | None = None,
+        frame_every: int | None = None,
     ) -> list[str]:
         """The `--env.*` arguments that select this plugin on LeRobot's
         command lines (`lerobot-train`, `lerobot-eval`): the type, the
@@ -143,6 +161,8 @@ class RobotiqEnvConfig(EnvConfig):
             flags.append(f"{ENV_FLAG_PREFIX}variations={json.dumps(list(variations))}")
         if trials is not None:
             flags.append(f"{ENV_FLAG_PREFIX}trials={trials}")
+        if frame_every is not None:
+            flags.append(f"{ENV_FLAG_PREFIX}frame_every={frame_every}")
         return flags
 
     @property
@@ -161,7 +181,9 @@ class RobotiqEnvConfig(EnvConfig):
         """`{suite: {task_id: VectorEnv}}`, the shape `lerobot.envs.make_env`
         documents. Async copies are spawned so each worker builds its own
         renderer (the env defers renderer creation to first use)."""
-        factories = [partial(make_env, **self.gym_kwargs)] * n_envs
+        factories = [
+            partial(held_env, frame_every=self.frame_every, **self.gym_kwargs)
+        ] * n_envs
         if use_async_envs and n_envs > 1:
             vec: gym.vector.VectorEnv = gym.vector.AsyncVectorEnv(
                 factories,

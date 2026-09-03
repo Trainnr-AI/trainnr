@@ -165,6 +165,9 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
 
     truth = spec["truth"]
     trials = int(spec["eval"]["trials"])
+    # The env honours the dataset's cadence (envs/hold.py): the press's
+    # frame_every, recorded at generate time.
+    frame_every = int(json.loads((out / STUDY_FILE).read_text())["frame_every"])
     variations = [
         f"joints.damping_scale={truth['damping']}:{truth['damping']}",
         f"actuators.gain_scale={truth['gain']}:{truth['gain']}",
@@ -188,9 +191,13 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
                 policy_name=f"{spec['id']}-{name}",
                 variations=variations,
                 trials=trials,
+                frame_every=frame_every,
             ),
         )
-        print(f"== evaluating {name} at truth {truth} ({trials} paired trials)")
+        print(
+            f"== evaluating {name} at truth {truth} ({trials} paired trials, "
+            f"actions held {frame_every} ticks)"
+        )
         subprocess.run(command, check=True)
         records = read_records(records_path)
         (score,) = fold(records)
@@ -243,6 +250,7 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
         "truth": truth,
         "variations": variations,
         "trials": trials,
+        "frame_every": frame_every,
     }
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1))
     print(f"verdict -> {out / 'verdict.json'}")
