@@ -1,0 +1,35 @@
+{
+ "id": "audit-silent-dr-knobs-2026-09-02",
+ "claim": "Silent no-op domain-randomization knobs: five DR entries in Pollen's microduck_rl (BAM->mjlab) that the actuator model overwrites at construction, plus one in our own scene (lights.diffuse_scale on a model with nlight == 0); a construction-time linter now refuses the class.",
+ "date": "2026-09-02",
+ "repo_commit": "70c078c",
+ "argv": [
+  "read at source (docs/e2e-research/57 \u00a75)",
+  "tools/verify (rq_mjlab.linter tests)",
+  "uv run --extra sim python -  # pixel check, docs/07 2026-09-02"
+ ],
+ "instrument": "mujoco-3.11.0+arm64 (pixel check); mjlab-1.6.0 (linter)",
+ "outcome": {
+  "microduck_rl_no_op_knobs": 5,
+  "our_no_op_knobs": 1,
+  "pixel_check": "headlight draw 0.40 -> mean 23.7, 1.17 -> 40.1 after the fix; identical 36.5 before"
+ },
+ "inputs": {
+  "scene": "rq_pipeline.tasks.so101 lift-study (nlight == 0)"
+ },
+ "artifacts": {
+  "linter": "rq_mjlab/src/rq_mjlab/linter.py",
+  "applier": "pipeline/rq_pipeline/physics/variations.py",
+  "log": "docs/07-progress-log.md 2026-09-02 (D1)"
+ },
+ "sources": {
+  "pollen-robotics/microduck_rl": "repomix pack read 2026-08-31 (163 files; commit unrecorded \u2014 record it before publication)",
+  "Rhoban/bam": "v1.0.2",
+  "mujocolab/mjlab": "v1.6.0 (2026-08-08)",
+  "prior sightings": "mjlab #971, #1043, #1168; IsaacLab #7272, #5063, #7538, #7511; mujoco_playground v0.0.4 (docs/e2e-research/67 \u00a75)"
+ },
+ "protocol": "docs/e2e-research/67-novelty-audit.md \u00a75",
+ "caveats": [
+  "The phenomenon is known from the stacks' own trackers; the audit count and the refusing linter are the contribution."
+ ]
+}

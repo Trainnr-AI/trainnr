@@ -1,0 +1,34 @@
+{
+ "id": "audit-newton-solvermujoco-roundtrip-2026-08-27",
+ "claim": "Newton's SolverMuJoCo import of a MuJoCo model drops sensors, keyframes and visual geoms, rewrites the root mass, flips the integrator and ZEROES servo kv (undamped servos) \u2014 measured by round-trip.",
+ "date": "2026-08-27",
+ "repo_commit": "see docs/e2e-research/51 (pre-ledger)",
+ "argv": [
+  "tools/newton-roundtrip probe (docs/e2e-research/51)"
+ ],
+ "instrument": "newton v1.5.0 (PyPI `newton`), mujoco-3.11.0",
+ "outcome": {
+  "lost": [
+   "sensors",
+   "keyframes",
+   "visual geoms"
+  ],
+  "rewritten": [
+   "root mass",
+   "integrator"
+  ],
+  "zeroed": [
+   "servo kv"
+  ]
+ },
+ "artifacts": {
+  "doc": "docs/e2e-research/51-solvermujoco-roundtrip.md"
+ },
+ "sources": {
+  "newton-physics/newton": "v1.5.0 (latest 2026-08-27); docs read at 1.6.0.dev0"
+ },
+ "protocol": "docs/e2e-research/51",
+ "caveats": [
+  "Measured on our so101.xml; other models may lose different fields."
+ ]
+}
