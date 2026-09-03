@@ -216,6 +216,42 @@ class TheEngineCounters(unittest.TestCase):
         self.assertEqual((status.kept, status.attempts), (2, 3))
 
 
+class TheStageClock(unittest.TestCase):
+    """Stage rows land at the stage's OWN clock, not the poll's: a feed
+    restarted at 14:35 had re-listed the 12:59 and 14:28 stages at
+    14:35 (2026-09-04)."""
+
+    def setUp(self) -> None:
+        feed.MORE_SEEN.clear()
+
+    def test_a_stage_row_is_stamped_at_its_logged_time(self) -> None:
+        import datetime as dt  # noqa: PLC0415
+
+        rr = FakeRr()
+        now = dt.datetime(2026, 9, 4, 14, 35, 18, tzinfo=dt.UTC).timestamp()
+        with mock.patch.object(feed.time, "time", return_value=now):
+            feed.parse_engine(rr, "c", "== 12:59:40 train", set())
+        stage_index = next(
+            i for i, (path, _p, _k) in enumerate(rr.calls) if path == "c/stage"
+        )
+        walls = [t for t in rr.times if t[0] == "wall"]
+        self.assertEqual(
+            walls[-2][1]["timestamp"],
+            dt.datetime(2026, 9, 4, 12, 59, 40, tzinfo=dt.UTC).timestamp(),
+        )
+        self.assertEqual(walls[-1][1]["timestamp"], now)  # the poll's clock, restored
+        self.assertEqual(rr.calls[stage_index][1].arg, "== 12:59:40 train")
+
+    def test_a_time_after_now_means_yesterday(self) -> None:
+        import datetime as dt  # noqa: PLC0415
+
+        now = dt.datetime(2026, 9, 4, 0, 10, 0, tzinfo=dt.UTC).timestamp()
+        stamped = feed.stage_instant(23, 50, 0, now)
+        self.assertEqual(
+            stamped, dt.datetime(2026, 9, 3, 23, 50, 0, tzinfo=dt.UTC).timestamp()
+        )
+
+
 class TheLayoutChooser(unittest.TestCase):
     def setUp(self) -> None:
         feed.MORE_SEEN.clear()

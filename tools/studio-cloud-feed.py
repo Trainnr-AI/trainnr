@@ -304,7 +304,25 @@ VERDICT_RE = re.compile(
     r"^\[verdict\] survived (\d+)/(\d+), tracked (\d+)/(\d+) -> success (\d+)/(\d+), "
     r"CP95 \[([0-9.]+), ([0-9.]+)\]"
 )
-STAGE_RE = re.compile(r"^== \d\d:\d\d:\d\d (.+)$")
+STAGE_RE = re.compile(r"^== (\d\d):(\d\d):(\d\d) (.+)$")
+
+
+def stage_instant(hh: int, mm: int, ss: int, now: float) -> float:
+    """A stage line's own clock (`== HH:MM:SS`, the campaign script's
+    `date -u`) as a wall timestamp: today's date at that UTC time, or
+    yesterday's when that would be in the future. Stage rows used to be
+    stamped at the poll that first READ them, so a feed restarted at
+    14:35 re-listed the 12:59 and 14:28 stages at 14:35 (2026-09-04)."""
+    import datetime as dt  # noqa: PLC0415
+
+    day = dt.datetime.fromtimestamp(now, tz=dt.UTC).replace(
+        hour=hh, minute=mm, second=ss, microsecond=0
+    )
+    if day.timestamp() > now + 60:
+        day -= dt.timedelta(days=1)
+    return day.timestamp()
+
+
 TRAIN_BUDGET_RE = re.compile(r"train (\d+) steps")  # the campaign header
 # The trainer's own progress bar: exact step, its budget, elapsed, ETA
 # and rate - "7399/60000 [11:20<1:06:49, 13.12step/s]". The INFO lines
@@ -406,14 +424,20 @@ def parse_engine(rr: Any, name: str, raw: str, seen: set[str]) -> EngineStatus |
                 rr.log(f"{name}/verdict/log", rr.TextLog(line))
         elif stage := STAGE_RE.match(line):
             found = True
-            status.stage = stage.group(1)
+            status.stage = stage.group(4)
             budget = TRAIN_BUDGET_RE.search(line)
             if budget:
                 status.train_steps = int(budget.group(1))
-            status.done = status.done or stage.group(1) == "CAMPAIGN DONE"
+            status.done = status.done or stage.group(4) == "CAMPAIGN DONE"
             if line not in seen:
                 seen.add(line)
+                # The row lands at the stage's OWN clock, then the poll's
+                # clock is restored for everything logged after it.
+                now = time.time()
+                hh, mm, ss = (int(stage.group(i)) for i in (1, 2, 3))
+                rr.set_time("wall", timestamp=stage_instant(hh, mm, ss, now))
                 rr.log(f"{name}/stage", rr.TextLog(line))
+                rr.set_time("wall", timestamp=now)
     return status if found else None
 
 
