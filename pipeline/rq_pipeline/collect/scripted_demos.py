@@ -73,6 +73,24 @@ def _apply_visuals(
     return drawn
 
 
+def select_cameras(
+    declared: Sequence[Any], keys: Sequence[str] | None
+) -> tuple[Any, ...]:
+    """The cameras a press renders: every declared one, or the named
+    subset — an unknown key is refused by name (a study that asks for
+    "front" must not silently press three cameras; the ArmnetBench rig
+    trained 10x slower than one camera on the pod, 2026-09-04)."""
+    if keys is None:
+        return tuple(declared)
+    known = {c.key: c for c in declared}
+    unknown = [k for k in keys if k not in known]
+    if unknown:
+        raise ValueError(
+            f"unknown cameras {unknown}; the task declares {sorted(known)}"
+        )
+    return tuple(known[k] for k in keys)
+
+
 class CameraCapture:
     """Every declared camera rendering on a cadence: `frame_every=0`
     means no renderer at all (headless generation and the unit tests -
@@ -151,6 +169,7 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     frame_every: int,
     visuals: Sequence[Variation] = (),
     visual_basis: str = "",
+    cameras: Sequence[str] | None = None,
 ) -> PressResult:
     from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
         MuJoCoBackend,
@@ -181,7 +200,8 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     draws: dict[str, Any] = {"trial": trial}
     cameras = CameraCapture(
         model,
-        task.cameras if frame_every else (),  # a test task may declare none
+        # A test task may declare none; a study may ask for a subset.
+        select_cameras(task.cameras, cameras) if frame_every else (),
         frame_every,
         protocol.control_interval,
     )
@@ -220,6 +240,7 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
     first_episode: int = 0,
     visuals: Sequence[Variation] = (),
     visual_basis: str = "",
+    cameras: Sequence[str] | None = None,
     feed: PressFeed | None = None,
     say: Callable[[str], None] = print,
 ) -> DemoBatch:
@@ -238,6 +259,7 @@ def generate_scripted_demos(  # noqa: PLR0913 - every knob of the loop, named
         first_episode=first_episode,
         visuals=visuals,
         visual_basis=visual_basis,
+        cameras=cameras,
         feed=feed,
         say=say,
     )
@@ -257,6 +279,7 @@ def generate_demos(  # noqa: PLR0913 - every knob of the loop, named
     first_episode: int = 0,
     visuals: Sequence[Variation] = (),
     visual_basis: str = "",
+    cameras: Sequence[str] | None = None,
     feed: PressFeed | None = None,
     say: Callable[[str], None] = print,
 ) -> DemoBatch:
@@ -295,6 +318,7 @@ def generate_demos(  # noqa: PLR0913 - every knob of the loop, named
             frame_every=frame_every,
             visuals=visuals,
             visual_basis=visual_basis,
+            cameras=cameras,
         )
 
     def manifest_fn(result: PressResult, attempt: int) -> EpisodeManifest:

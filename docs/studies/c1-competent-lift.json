@@ -76,6 +76,10 @@
   "caveats": [
     "The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.",
     "Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.",
-    "The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67)."
+    "The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).",
+    "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage."
+  ],
+  "cameras": [
+    "front"
   ]
 }

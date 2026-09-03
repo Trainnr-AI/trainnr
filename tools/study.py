@@ -89,6 +89,7 @@ def generate(spec: dict[str, Any], out: Path, *, seed: int, frame_every: int) ->
             frame_every=frame_every,
             visuals=[parse_variation(v) for v in arm.get("visuals", [])],
             visual_basis=arm.get("visual_basis", ""),
+            cameras=spec.get("cameras"),
         )
     record = {
         "spec": spec,

@@ -34,7 +34,7 @@ worth measuring rather than assuming.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -390,10 +390,26 @@ def _study_jitter(trial: int, component: int) -> float:
     return (2.0 * unit - 1.0) * _STUDY_JITTER_RAD
 
 
+@dataclass(frozen=True)
+class LiftStudySpec:
+    """The study task's one datum: how many paired starts it declares.
+    A study that judges on 80 matched trials rebuilds the task with
+    `trials=80` and its stamp says so (`envs.robotiq.make_env` sizes
+    the protocol through this spec; the jitter is deterministic per
+    trial index, so any count is valid)."""
+
+    trials: int = _STUDY_TRIALS
+
+
+LIFT_STUDY_SPEC = LiftStudySpec()
+
+
 @register(LIFT_STUDY, rig=RIG)
-def build_lift_study(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
-    """Lift with study-grade starts: bounded, deterministic, unlimited
-    trials. Everything else is `build_lift`'s, by construction."""
+def build_lift_study(
+    arm_xml: Path = DEFAULT_ARM_XML, spec: LiftStudySpec = LIFT_STUDY_SPEC
+) -> Task:
+    """Lift with study-grade starts: bounded, deterministic, any number
+    of trials. Everything else is `build_lift`'s, by construction."""
     task = build_lift(arm_xml)
 
     def perturb(trial: int, home: Any) -> Any:
@@ -405,7 +421,8 @@ def build_lift_study(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
     return replace(
         task,
         name=LIFT_STUDY,
-        protocol=replace(task.protocol, trials=_STUDY_TRIALS, perturb=perturb),
+        protocol=replace(task.protocol, trials=spec.trials, perturb=perturb),
+        task_spec=spec,
     )
 
 
