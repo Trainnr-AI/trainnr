@@ -1,6 +1,6 @@
 {
  "id": "c1-competent-lift-2026-09-03",
- "claim": "C1 at a competent recipe: identified-interval DR (\u00b10.05 around the study truth) vs the folklore \u00b10.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials \u2014 the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.",
+ "claim": "C1 at a competent recipe: identified-interval DR (\u00b15 % relative around the study truth) vs the folklore \u00b10.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials \u2014 the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.",
  "date": "2026-09-03",
  "repo_commit": "336eb39-archive",
  "argv": [

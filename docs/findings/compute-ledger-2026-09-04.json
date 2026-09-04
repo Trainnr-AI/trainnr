@@ -1,6 +1,6 @@
 {
  "id": "compute-ledger-2026-09-04",
- "claim": "Every measured result in this paper was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one B200 attempt ($6.79/h, abandoned: 52 of 120 minutes were provider initialization), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 50 pod-hours in total for the studies and campaigns of 2026-09-01 to 04, on the order of $110, plus ~$34 for the two August chain runs.",
+ "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 49 pod-hours in total from the first sized chain run (2026-08-31) to the walk replicates (2026-09-04), on the order of $110.",
  "date": "2026-09-04",
  "repo_commit": "71f96cc",
  "argv": [
@@ -9,12 +9,12 @@
  "instrument": "RunPod API (pods, costPerHr) + docs/07",
  "outcome": {
   "gpu_rented": "NVIDIA RTX PRO 6000 Blackwell Server Edition, 96 GB, CUDA 13.2, $2.09/h secure (14 pods over the period, at most 6 concurrent)",
-  "gpu_rented_abandoned": "NVIDIA B200, $6.79/h, one 2 h attempt (2026-08-28)",
+  "gpu_rented_abandoned": "NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)",
   "gpu_owned": "NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)",
   "cpu_local": "Apple M1 Pro, 16 GB (macOS 25.5)",
   "pod_hours_by_run": {
-   "T5 chain + C1 run 2 (2026-08-27/28)": 2.5,
-   "B200 chain attempt (2026-08-28)": 2.0,
+   "C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)": 2.5,
+   "B200 chain attempt (2026-08-27, abandoned)": 1.57,
    "G3 walk teacher, 8000 it (2026-09-01)": 1.6,
    "campaign 1 (2026-09-02)": 1.5,
    "campaign 2 (2026-09-02)": 1.2,
@@ -25,11 +25,11 @@
    "walk C1 run 1 x3 pods (2026-09-04)": 5.7,
    "walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)": 11.4
   },
-  "pod_hours_total_estimate": 49.6,
+  "pod_hours_total_estimate": 49.2,
   "dollars_estimate": {
    "rtx_pro_6000": "~47.6 h x $2.09 = ~$99",
-   "b200": "2 h x $6.79 = ~$14",
-   "total": "~$113"
+   "b200": "94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)",
+   "total": "~$110"
   },
   "per_result_cost": {
    "one walk arm (train 8000 it + two 40-trial certificates)": "~1.9 h, ~$4",
@@ -54,6 +54,7 @@
  "caveats": [
   "Hours are reconstructed from logged stage timestamps and pod uptimes, not from the invoice: reconcile against RunPod's billing export before the paper states a dollar figure (the API exposes current-session uptime only).",
   "Idle time is included where a pod sat between stages (campaign 4's parked night is not: it was stopped).",
-  "The owned RTX 3090 Ti and the M1 Pro are not costed."
+  "The owned RTX 3090 Ti and the M1 Pro are not costed.",
+  "Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34."
  ]
 }

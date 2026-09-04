@@ -112,7 +112,7 @@
   "caveats": [
     "One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.",
     "Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.",
-    "The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.",
+    "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.",
     "Three replicates per count is the smallest design that shows between-run spread; it is not a variance estimate anyone should quote to two digits.",
     "Fifteen arms: ~6 h of one pod at 10k steps each \u2014 split across pods by arm if wall clock matters."
   ],

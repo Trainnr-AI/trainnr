@@ -1,6 +1,6 @@
 {
   "id": "visual-dr-lift-cliff",
-  "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth \u2014 judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
+  "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth \u2014 judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
   "truth": {
     "damping": 1.0,
     "gain": 0.4
@@ -63,7 +63,7 @@
     "The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.",
     "The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.",
     "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
-    "The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff."
+    "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect."
   ],
   "cameras": [
     "front"

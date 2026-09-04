@@ -1,10 +1,10 @@
 {
  "id": "lift-expert-envelope-2026-09-04",
- "claim": "The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 \u2014 the folklore \u00b130% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.",
+ "claim": "The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 on the 4-trial grid; at 12 trials, 9/12 at 0.5, 12/12 at 0.45, 10/12 at 0.4 \u2014 the cliff is below 0.4 and the 4-trial grid was too coarse to place it \u2014 the folklore \u00b130% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.",
  "date": "2026-09-04",
  "repo_commit": "9709cd9",
  "argv": [
-  "uv run --extra sim python cell.py <damping> <gain>  # 4 study-jitter trials per cell, one process per cell (repeated MjSpec compiles in one process segfault)"
+  "uv run --extra sim python ../tools/lift-envelope-cell.py <damping> <gain> [trials]  # one process per cell"
  ],
  "instrument": "mujoco-3.11.0+arm64",
  "outcome": {
@@ -33,6 +33,11 @@
     "0.15": 0
    },
    "damping_effect": "none: every damping row identical"
+  },
+  "fine_cells_12_trials": {
+   "d1.0 g0.5": "9/12",
+   "d1.0 g0.45": "12/12",
+   "d1.0 g0.4": "10/12"
   }
  },
  "inputs": {
@@ -40,11 +45,11 @@
   "expert": "scripted-pick@lift-study"
  },
  "artifacts": {
-  "scratch": "scratchpad/cell.py (the grid runner; not tracked)"
+  "cell_tool": "tools/lift-envelope-cell.py"
  },
  "protocol": "docs/e2e-research/62 \u00a71 (the expert's competence ceiling, mapped before choosing a truth)",
  "caveats": [
-  "Four trials per cell: the cliff's position is coarse (between gain 0.5 and 0.25).",
+  "Four trials per cell on the grid: the cliff's position is coarse; the three 12-trial cells (0.5, 0.45, 0.4) place it below 0.4.",
   "The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script."
  ]
 }

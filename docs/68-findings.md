@@ -47,26 +47,27 @@ not this page.
 
 ## lift-expert-envelope-2026-09-04
 
-**The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 — the folklore ±30% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.**
+**The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 on the 4-trial grid; at 12 trials, 9/12 at 0.5, 12/12 at 0.45, 10/12 at 0.4 — the cliff is below 0.4 and the 4-trial grid was too coarse to place it — the folklore ±30% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.**
 
 - date: 2026-09-04 · commit: `9709cd9`
 - instrument: `mujoco-3.11.0+arm64`
-- command: `uv run --extra sim python cell.py <damping> <gain>  # 4 study-jitter trials per cell, one process per cell (repeated MjSpec compiles in one process segfault)`
+- command: `uv run --extra sim python ../tools/lift-envelope-cell.py <damping> <gain> [trials]  # one process per cell`
 - protocol: docs/e2e-research/62 §1 (the expert's competence ceiling, mapped before choosing a truth)
 - inputs:
   - task: lift-study (build_lift_study, LiftStudySpec trials=40)
   - expert: scripted-pick@lift-study
 - outcome:
   - grid: {'damping': [1.0, 1.35, 2.0, 3.0, 5.0], 'gain': [1.0, 0.75, 0.5, 0.35, 0.25, 0.15], 'success_of_4_by_gain': {'1.0': 4, '0.75': 4, '0.5': 3, '0.35': 1, '0.25': 0, '0.15': 0}, 'damping_effect': 'none: every damping row identical'}
+  - fine_cells_12_trials: {'d1.0 g0.5': '9/12', 'd1.0 g0.45': '12/12', 'd1.0 g0.4': '10/12'}
 - artifacts:
-  - scratch: scratchpad/cell.py (the grid runner; not tracked)
+  - cell_tool: tools/lift-envelope-cell.py
 - caveats:
-  - Four trials per cell: the cliff's position is coarse (between gain 0.5 and 0.25).
+  - Four trials per cell on the grid: the cliff's position is coarse; the three 12-trial cells (0.5, 0.45, 0.4) place it below 0.4.
   - The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script.
 
 ## compute-ledger-2026-09-04
 
-**Every measured result in this paper was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one B200 attempt ($6.79/h, abandoned: 52 of 120 minutes were provider initialization), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 50 pod-hours in total for the studies and campaigns of 2026-09-01 to 04, on the order of $110, plus ~$34 for the two August chain runs.**
+**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 49 pod-hours in total from the first sized chain run (2026-08-31) to the walk replicates (2026-09-04), on the order of $110.**
 
 - date: 2026-09-04 · commit: `71f96cc`
 - instrument: `RunPod API (pods, costPerHr) + docs/07`
@@ -77,12 +78,12 @@ not this page.
   - hours_source: docs/07 entries and study logs (stage timestamps)
 - outcome:
   - gpu_rented: NVIDIA RTX PRO 6000 Blackwell Server Edition, 96 GB, CUDA 13.2, $2.09/h secure (14 pods over the period, at most 6 concurrent)
-  - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 2 h attempt (2026-08-28)
+  - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)
   - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
   - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
-  - pod_hours_by_run: {'T5 chain + C1 run 2 (2026-08-27/28)': 2.5, 'B200 chain attempt (2026-08-28)': 2.0, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)': 11.4}
-  - pod_hours_total_estimate: 49.6
-  - dollars_estimate: {'rtx_pro_6000': '~47.6 h x $2.09 = ~$99', 'b200': '2 h x $6.79 = ~$14', 'total': '~$113'}
+  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)': 11.4}
+  - pod_hours_total_estimate: 49.2
+  - dollars_estimate: {'rtx_pro_6000': '~47.6 h x $2.09 = ~$99', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$110'}
   - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s'}
   - wall_clock_wins: {'three lift studies in parallel': '2.7 h instead of ~8', 'walk C1 six replicates on six pods': '~1.9 h instead of ~11'}
 - artifacts:
@@ -92,10 +93,11 @@ not this page.
   - Hours are reconstructed from logged stage timestamps and pod uptimes, not from the invoice: reconcile against RunPod's billing export before the paper states a dollar figure (the API exposes current-session uptime only).
   - Idle time is included where a pod sat between stages (campaign 4's parked night is not: it was stopped).
   - The owned RTX 3090 Ti and the M1 Pro are not costed.
+  - Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.
 
 ## visual-dr-lift-cliff-2026-09-03
 
-**On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `bcbb3fe-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -131,7 +133,7 @@ not this page.
   - The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.
   - The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
-  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+  - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
 
 ![visual-dr-lift-cliff-2026-09-03](../docs/figures/visual-dr-lift-cliff-2026-09-03.png)
 
@@ -178,7 +180,7 @@ not this page.
 
 ## demo-count-lift-cliff-2026-09-03
 
-**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `bcbb3fe-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -221,9 +223,9 @@ not this page.
   - figure.csv: docs/figures/demo-count-lift-cliff-2026-09-03.csv
 - caveats:
   - One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.
-  - Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.
+  - Judged at gain 0.4, OUTSIDE the folklore ±0.30 span (0.7-1.3): the press's draws never reach the judged truth.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
-  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+  - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
 
 ![demo-count-lift-cliff-2026-09-03](../docs/figures/demo-count-lift-cliff-2026-09-03.png)
 
@@ -279,7 +281,7 @@ not this page.
 
 ## c1-competent-lift-cliff-2026-09-03
 
-**C1 at a competent recipe: identified-interval DR (±0.05 around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `89412f0-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -319,16 +321,15 @@ not this page.
   - figure.csv: docs/figures/c1-competent-lift-cliff-2026-09-03.csv
 - caveats:
   - The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.
-  - Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.
   - The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
-  - The truth sits where the expert itself succeeds ~1 in 2 (4-trial grid), so the press at the folklore span keeps demos the expert could not repeat at the truth: the referee gates the press at ITS draw, the judge sits at the cliff.
+  - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
 
 ![c1-competent-lift-cliff-2026-09-03](../docs/figures/c1-competent-lift-cliff-2026-09-03.png)
 
 ## c1-competent-lift-2026-09-03
 
-**C1 at a competent recipe: identified-interval DR (±0.05 around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
+**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
 
 - date: 2026-09-03 · commit: `336eb39-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -394,7 +395,7 @@ not this page.
 
 ## audit-silent-dr-knobs-2026-09-02
 
-**Silent no-op domain-randomization knobs: five DR entries in Pollen's microduck_rl (BAM->mjlab) that the actuator model overwrites at construction, plus one in our own scene (lights.diffuse_scale on a model with nlight == 0); a construction-time linter now refuses the class.**
+**Silent no-op domain-randomization knobs: five DR entries in Pollen's microduck_rl that measurably do nothing — two overwritten by the BAM actuator at construction (frictionloss, damping), one IMU field never read, one mass randomizer that is a no-op under mjlab 1.3, and config-dict writes the framework ignores (docs/e2e-research/57 §5) — plus one in our own scene (lights.diffuse_scale on a model with nlight == 0); a construction-time linter now refuses the overwritten class.**
 
 - date: 2026-09-02 · commit: `70c078c`
 - instrument: `mujoco-3.11.0+arm64 (pixel check); mjlab-1.6.0 (linter)`
@@ -405,7 +406,7 @@ not this page.
 - outcome:
   - microduck_rl_no_op_knobs: 5
   - our_no_op_knobs: 1
-  - pixel_check: headlight draw 0.40 -> mean 23.7, 1.17 -> 40.1 after the fix; identical 36.5 before
+  - pixel_check: headlight draw 0.40 -> mean pixel 23.7, 1.14 -> 39.5, 1.17 -> 40.1 after the fix (docs/07 2026-09-02 D1)
 - artifacts:
   - linter: rq_mjlab/src/rq_mjlab/linter.py
   - applier: pipeline/rq_pipeline/physics/variations.py
@@ -413,7 +414,7 @@ not this page.
 - sources:
   - pollen-robotics/microduck_rl: repomix pack read 2026-08-31 (163 files; commit unrecorded — record it before publication)
   - Rhoban/bam: v1.0.2
-  - mujocolab/mjlab: v1.6.0 (2026-08-08)
+  - mujocolab/mjlab: v1.6.0 (the pack read 2026-08-31; release date not verified in-repo)
   - prior sightings: mjlab #971, #1043, #1168; IsaacLab #7272, #5063, #7538, #7511; mujoco_playground v0.0.4 (docs/e2e-research/67 §5)
 - caveats:
   - The phenomenon is known from the stacks' own trackers; the audit count and the refusing linter are the contribution.
