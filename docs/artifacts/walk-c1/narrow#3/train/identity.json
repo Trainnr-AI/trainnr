@@ -1,0 +1,6 @@
+{
+ "robot": "microduck@14b51b63c52e",
+ "actuator": "xl330-m6@3ae1b8c2156b",
+ "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)",
+ "seed": 44
+}

@@ -186,6 +186,34 @@ def _span_points(
         )
 
 
+def _frame(fig: Any, ax: Any, finding: Finding) -> None:
+    """The house frame for a nested-arms finding (figures._style reads
+    flat arms): y in [0, 1], the claim as title, recessive grid, the
+    provenance footer."""
+    import textwrap  # noqa: PLC0415
+
+    ax.set_ylim(0.0, 1.05)
+    ax.set_ylabel("success rate (exact 95% interval)", color=fx.INK)
+    ax.set_title(
+        textwrap.fill(finding.claim[: fx.TITLE_CHARS] + "…", fx.TITLE_WRAP),
+        fontsize=9,
+        color=fx.INK,
+        loc="left",
+    )
+    ax.grid(True, axis="y", color=fx.GRID, linewidth=0.6)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(fx.GRID)
+    ax.tick_params(colors=fx.INK_SECONDARY, labelsize=8)
+    footer = (
+        f"{finding.id} · commit {finding.repo_commit} · {finding.instrument} · "
+        f"40 paired trials per run, replicates pooled, exact 95% intervals · "
+        f"{finding.protocol}"
+    )
+    fig.text(0.01, 0.01, footer, fontsize=6, color=fx.INK_SECONDARY, ha="left")
+
+
 def draw(finding: Finding, scales: tuple[float, ...], span: float) -> dict[str, str]:
     """The curve per arm over the pinned scale (1.0 = the fit) and the
     drawn-span columns beside it; the house style and footer."""
@@ -227,7 +255,7 @@ def draw(finding: Finding, scales: tuple[float, ...], span: float) -> dict[str, 
                 label=f"trained {cells['trained_under']}",
             )
         _span_points(ax2, cells, columns, offset=(i - 1) * 0.18, color=color)
-    fx._style(fig, ax, finding)  # the shared frame, on purpose
+    _frame(fig, ax, finding)
     ax.set_xlabel(
         "judged pinned at fit x s (1.0 = the measured actuator)", color=fx.INK
     )

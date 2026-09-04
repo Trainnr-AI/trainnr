@@ -1,0 +1,31 @@
+{
+ "source": "microduck-walk@a2a4c59bd483",
+ "policy": "model_7999",
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_floor_mps": 0.1,
+  "dr_basis": "pinned: every law parameter at fit x 1.2 (no draw)",
+  "judged_at": "every law parameter at fit x 1.2"
+ },
+ "identity": {
+  "robot": "microduck@14b51b63c52e",
+  "actuator": "xl330-m6@3ae1b8c2156b",
+  "dr_basis": "pinned: every law parameter at fit x 1.2 (no draw)",
+  "trained_dr_basis": "none: the bundle's point fit exactly (no law DR)",
+  "seed": 43
+ },
+ "funnel": {
+  "survived": 39,
+  "tracked": 34
+ },
+ "successes": 33,
+ "trials": 40,
+ "ci95": [
+  0.6722,
+  0.9266
+ ],
+ "median_err_ratio": 0.4094
+}

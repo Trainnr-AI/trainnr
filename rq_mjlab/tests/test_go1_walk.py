@@ -92,3 +92,4 @@ class TheRegistry(unittest.TestCase):
         agent = walk_spec("go1").agent(123)
         self.assertEqual(agent.max_iterations, 123)
         self.assertEqual(agent.experiment_name, "go1_velocity")
+        self.assertEqual(agent.logger, "tensorboard")  # their default is wandb

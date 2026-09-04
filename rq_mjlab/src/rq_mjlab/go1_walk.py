@@ -165,4 +165,9 @@ def go1_agent(iterations: int) -> Any:
         unitree_go1_ppo_runner_cfg,
     )
 
-    return replace(unitree_go1_ppo_runner_cfg(), max_iterations=iterations)
+    # Their cfg logs to wandb (mjlab/rl/config.py default); the study's
+    # runs log to tensorboard like the microduck's — the first Go1 smoke
+    # died in rsl-rl's wandb writer (2026-09-04).
+    return replace(
+        unitree_go1_ppo_runner_cfg(), max_iterations=iterations, logger="tensorboard"
+    )
