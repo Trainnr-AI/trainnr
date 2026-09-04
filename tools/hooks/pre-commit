@@ -47,6 +47,9 @@ gate "tests (studio-shell)"      "cd crates/studio-shell && cargo test -q"
 # in, and that is the thing to notice.
 gate "unsafe still forbidden everywhere" "python3 tools/check-unsafe-gates.py"
 gate "docs describe real code" "python3 tools/check-docs.py"
+# Every k/n in the paper drafts and ledgers has a finding record behind
+# it — the 2026-09-04 audit found five quoted numbers with none.
+gate "numbers trace to records"  "python3 tools/check-numbers.py"
 
 # Python gets the same treatment as Rust — ruff is its clippy+rustfmt and
 # the unit suite is fast enough to run on every commit. Gated on uv being

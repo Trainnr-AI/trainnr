@@ -1,0 +1,37 @@
+{
+ "id": "multiply-smoke-device-keep-2026-08-31",
+ "claim": "Multiplication smoke run (3 kitting seeds -> 4 episodes, W=64 worlds, one round): the device kept 63/64 candidates under a fresh dynamics draw (damping x0.78, far from every seed's own draw), the CPU reference refused 0 of them, 4 shipped with 280 frames each \u2014 within the \u00b130 % DR span the open-loop actions are dynamics-robust; the brittle axis is spawn position (the basin record).",
+ "date": "2026-08-31",
+ "repo_commit": "see docs/07 B3.2",
+ "argv": [
+  "tools/press-multiply.py <seeds> <out> --episodes 4 --worlds 64 --seed 11"
+ ],
+ "instrument": "mujoco-warp (RTX 3090 Ti, WSL2) filter; mujoco-3.11.0 CPU reference",
+ "outcome": {
+  "arms": {
+   "device-keep": {
+    "successes": 63,
+    "trials": 64
+   },
+   "cpu-refused-of-device-keepers": {
+    "successes": 0,
+    "trials": 63
+   }
+  },
+  "shipped_episodes": 4,
+  "frames_per_episode": 280
+ },
+ "inputs": {
+  "seeds": "3 CPU-pressed kitting seeds",
+  "dynamics_draw": "damping x0.78 (one round)"
+ },
+ "artifacts": {
+  "log": "docs/07-progress-log.md B3.2 (2026-08-31)",
+  "code": "pipeline/rq_pipeline/collect/multiply.py"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/60 \u00a73; multiply.py's device-filter / CPU-verify contract",
+ "caveats": [
+  "Run directories are on the WSL box, not tracked; the numbers are the log entry's."
+ ]
+}

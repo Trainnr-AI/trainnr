@@ -443,6 +443,18 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
         ),
     }
     verdict_path = out_dir / f"walk-verdict-{suffix}.json"
+    if verdict_path.exists():
+        # A certificate is never silently replaced: an 8-trial smoke run
+        # once overwrote the flagship's 40-trial file (found 2026-09-04
+        # by an audit reading the rows). The rows are appended and stay
+        # the primary artifact; the previous file is kept beside the new.
+        stamp_prev = json.loads(verdict_path.read_text())
+        previous = out_dir / (
+            f"walk-verdict-{suffix}.seed{stamp_prev['protocol'].get('seed')}"
+            f".n{stamp_prev['trials']}.json"
+        )
+        if not previous.exists():
+            verdict_path.rename(previous)
     verdict_path.write_text(json.dumps(row, indent=1))
     print(
         f"[verdict] survived {survived}/{trials}, tracked "

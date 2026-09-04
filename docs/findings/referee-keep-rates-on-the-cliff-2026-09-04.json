@@ -1,0 +1,48 @@
+{
+ "id": "referee-keep-rates-on-the-cliff-2026-09-04",
+ "claim": "Pressing 128 lift episodes at gain 0.4: the folklore \u00b10.30 span (whose draws never reach the judged gain) needed 128 attempts; the arms that draw near it needed more \u2014 identified 151, wide 143, point 160 \u2014 the referee discarding 10-20 % of attempts exactly where the scripted expert struggles.",
+ "date": "2026-09-04",
+ "repo_commit": "d25fb30",
+ "argv": [
+  "tools/study.py generate docs/studies/c1-competent-lift-cliff.json <out> --frame-every 5"
+ ],
+ "instrument": "mujoco-3.11.0+x86_64",
+ "outcome": {
+  "arms": {
+   "guessed": {
+    "kept": 128,
+    "max_attempt": 128,
+    "keep_rate_bound": 1.0
+   },
+   "identified": {
+    "kept": 128,
+    "max_attempt": 151,
+    "keep_rate_bound": 0.848
+   },
+   "point": {
+    "kept": 128,
+    "max_attempt": 160,
+    "keep_rate_bound": 0.8
+   },
+   "wide": {
+    "kept": 128,
+    "max_attempt": 143,
+    "keep_rate_bound": 0.895
+   }
+  }
+ },
+ "inputs": {
+  "study": "docs/studies/c1-competent-lift-cliff.json",
+  "expert": "scripted-pick@lift-study"
+ },
+ "artifacts": {
+  "guessed.datasheet": "docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-guessed.md",
+  "identified.datasheet": "docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-identified.md",
+  "point.datasheet": "docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-point.md",
+  "wide.datasheet": "docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-wide.md"
+ },
+ "protocol": "docs/e2e-research/60 \u00a73 (the press records each kept episode's attempt number; the bound is kept/max_attempt)",
+ "caveats": [
+  "The keep rate is an UPPER bound: attempts after the last keep are not recorded (the datasheet says so)."
+ ]
+}

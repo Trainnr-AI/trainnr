@@ -1,0 +1,55 @@
+{
+ "id": "lift-harness-cadence-fix-2026-09-04",
+ "claim": "The LeRobot evaluation harness played every action chunk for one control tick against datasets pressed at frame_every 5: the same lift checkpoint scored 0/3 at hold 1 and 3/3 at hold 5 on three seeds, and the visual-DR study's arms went from 0/80 and 3/80 to 80/80 and 80/80 when re-judged with the hold \u2014 the walk's cadence bug in a second costume.",
+ "date": "2026-09-04",
+ "repo_commit": "ecb04ac",
+ "argv": [
+  "rq_pipeline.envs.policy_bridge + envs.robotiq.make_env probe: hold 1 vs 5 on seeds 0,1,2 (pod, 2026-09-04)",
+  "tools/study.py evaluate docs/studies/visual-dr-lift.json <out>  # before and after envs/hold.py"
+ ],
+ "instrument": "mujoco-3.11.0+x86_64",
+ "outcome": {
+  "arms": {
+   "hold-1-probe": {
+    "successes": 0,
+    "trials": 3
+   },
+   "hold-5-probe": {
+    "successes": 3,
+    "trials": 3
+   },
+   "visual-dr-fixed-before": {
+    "successes": 0,
+    "trials": 80
+   },
+   "visual-dr-visual-before": {
+    "successes": 3,
+    "trials": 80
+   },
+   "visual-dr-fixed-after": {
+    "successes": 80,
+    "trials": 80
+   },
+   "visual-dr-visual-after": {
+    "successes": 80,
+    "trials": 80
+   }
+  }
+ },
+ "inputs": {
+  "checkpoint": "visual-dr-lift fixed arm, 20000 steps (studies/visual-dr-lift on the volume)",
+  "policy_fit": "reproduced its training actions to mean |diff| 0.0045 rad on its own frames"
+ },
+ "artifacts": {
+  "fix": "pipeline/rq_pipeline/envs/hold.py",
+  "flag": "--env.frame_every",
+  "tests": "pipeline/tests/test_action_hold.py",
+  "after": "docs/findings/visual-dr-lift-2026-09-03.json",
+  "log": "docs/07-progress-log.md, entry 2026-09-04 'the studies'"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/68 \u00a74.1",
+ "caveats": [
+  "The 'before' evaluation's per-trial rows (verdict.sweep.json, *-records.sweep.jsonl) are on the volume under runs/studies/visual-dr-lift, not tracked; the 'after' numbers are the tracked finding."
+ ]
+}

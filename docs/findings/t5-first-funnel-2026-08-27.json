@@ -1,0 +1,40 @@
+{
+ "id": "t5-first-funnel-2026-08-27",
+ "claim": "The T5 chain's first certificate, a 600-step ACT on four demonstrations: 0/4 on four paired starts, CP95 [0, 0.602], and the funnel that turns a row of zeros into a diagnosis \u2014 part_moved 2/4, part_lifted 0/4, one_in_slot 0/4, both_in_slot 0/4; the trainer's own in-loop eval 0/2.",
+ "date": "2026-08-27",
+ "repo_commit": "see docs/07 2026-08-27 (pre-ledger)",
+ "argv": [
+  "lerobot-eval --env.type=robotiq --env.task=kitting --env.record_to=<records> --eval.n_episodes=4 (the 600-step checkpoint)"
+ ],
+ "instrument": "mujoco-3.11.0 (Mac, arm64)",
+ "outcome": {
+  "arms": {
+   "t5-600-step": {
+    "successes": 0,
+    "trials": 4,
+    "ci95": [
+     0.0,
+     0.602
+    ],
+    "funnel": {
+     "part_moved": "2/4",
+     "part_lifted": "0/4",
+     "one_in_slot": "0/4",
+     "both_in_slot": "0/4"
+    }
+   }
+  }
+ },
+ "inputs": {
+  "policy": "ACT, 600 steps, 4 demonstrations (a smoke-scale run)",
+  "task": "aloha2 kitting"
+ },
+ "artifacts": {
+  "log": "docs/07-progress-log.md, entry 2026-08-27 (the T5 chain end to end)"
+ },
+ "sources": {},
+ "protocol": "docs/32 (the evaluation layer): paired starts, exact interval, milestone funnel",
+ "caveats": [
+  "A smoke-scale run whose purpose was the chain, not the policy; kept because docs/33 quotes its funnel as the example of a row of zeros made legible."
+ ]
+}

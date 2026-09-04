@@ -1,0 +1,48 @@
+{
+ "id": "multiplication-basin-2026-08-31",
+ "claim": "Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and 63/63 (W=64) keep at \u00b15 mm spawn jitter, 1/12 at \u00b130 mm; the seed's own actions from its own start keep 3/3 on the device and 3/3 on the CPU reference \u2014 the amplification radius (SPAWN_NOISE = 0.004) is set inside the basin, not guessed.",
+ "date": "2026-08-31",
+ "repo_commit": "see docs/07 B3.1",
+ "argv": [
+  "tools/press-multiply.py <seeds> <out> --worlds 64 (MJXWarpBackend filter, MuJoCoBackend re-verify)"
+ ],
+ "instrument": "mujoco-warp (RTX 3090 Ti, WSL2) filter; mujoco-3.11.0 CPU reference",
+ "outcome": {
+  "arms": {
+   "own-start-device": {
+    "successes": 3,
+    "trials": 3
+   },
+   "own-start-cpu": {
+    "successes": 3,
+    "trials": 3
+   },
+   "jitter-5mm-w8": {
+    "successes": 9,
+    "trials": 9
+   },
+   "jitter-5mm-w64": {
+    "successes": 63,
+    "trials": 63
+   },
+   "jitter-30mm": {
+    "successes": 1,
+    "trials": 12
+   }
+  }
+ },
+ "inputs": {
+  "task": "aloha2 kitting (3 CPU-pressed seeds, each replayed under its own damping/gain draw)",
+  "constant": "SPAWN_NOISE = 0.004 in collect/kitting_demos.py"
+ },
+ "artifacts": {
+  "log": "docs/07-progress-log.md B3.1 (2026-08-31)",
+  "code": "pipeline/rq_pipeline/collect/multiply.py",
+  "positioning": "docs/33-what-we-say.md"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/59 \u00a75 (Mimic's contract) and docs/e2e-research/60 \u00a73",
+ "caveats": [
+  "Measured on the WSL box; the run directories live there, not on the volume or in git \u2014 the numbers are the log entry's."
+ ]
+}

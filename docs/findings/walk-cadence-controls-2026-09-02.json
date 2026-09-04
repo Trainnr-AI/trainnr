@@ -1,0 +1,48 @@
+{
+ "id": "walk-cadence-controls-2026-09-02",
+ "claim": "The walk teacher with its own actions zero-order-held: every tick 40/40 survive 500 ticks; held 2 ticks 38/40 (falls at ticks 283, 488); held 5 ticks 0/40, first falls at ticks 20-23 \u2014 a 10 Hz dataset (frames every 5 of 50 Hz ticks) is below the hop's control bandwidth, and no student trained on it could stand however well it learned (campaign 1's 0/40 student had normalized action error 0.136 on its own frames).",
+ "date": "2026-09-02",
+ "repo_commit": "6ed84a7",
+ "argv": [
+  "rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 with the teacher's action held 1 / 2 / 5 ticks (the hold probe of 2026-09-02, run on the pod)"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "outcome": {
+  "arms": {
+   "held-1": {
+    "successes": 40,
+    "trials": 40,
+    "survived": 40
+   },
+   "held-2": {
+    "successes": 38,
+    "trials": 40,
+    "falls_at_ticks": [
+     283,
+     488
+    ]
+   },
+   "held-5": {
+    "successes": 0,
+    "trials": 40,
+    "first_falls_at_ticks": "20-23"
+   }
+  },
+  "student_fit": {
+   "campaign_1_normalized_action_error": 0.136
+  }
+ },
+ "inputs": {
+  "teacher": "microduck-walk@824eba27c48c, model_7999",
+  "dataset_cadence": "frames every 5 ticks at 50 Hz control (10 Hz)"
+ },
+ "artifacts": {
+  "log": "docs/07-progress-log.md, entry 2026-09-02 'campaign 1 - the student learned; the cadence killed it'"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/63 \u00a72 (the certificate) with the action held N ticks",
+ "caveats": [
+  "Log-derived: the per-trial rows of the hold probe were on the pod's container disk (released 2026-09-02) and are not tracked; the numbers are the log entry's, written the day they were measured.",
+  "'survive' here is the certificate's survived milestone; the tracked milestone is not reported for the hold probe."
+ ]
+}

@@ -1,0 +1,135 @@
+{
+ "id": "walk-distillation-campaigns-2026-09-04",
+ "claim": "RL teacher -> vision student on the microduck walk, certified on 40 matched pushed trials (seed 1000): teacher 33/40 cuda (37/40 cpu); students campaign 1 (10 Hz data) 0/40, campaign 2 (120 ep at 50 Hz, 30k) 18/40, campaign 3 (240 ep, 60k) 24/40, campaign 4 (same recipe re-pressed) 27/40; campaign 4's student with the camera blanked 0/40 and with the state blanked 0/40.",
+ "date": "2026-09-04",
+ "repo_commit": "d25fb30",
+ "argv": [
+  "rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 [--student <pretrained_model>] [--blank-camera | --blank-state]"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "outcome": {
+  "arms": {
+   "teacher-cuda": {
+    "successes": 33,
+    "trials": 40,
+    "survived": 40,
+    "tracked": 33,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "model_7999",
+    "ci95": [
+     0.6722,
+     0.9266
+    ]
+   },
+   "teacher-cpu": {
+    "successes": 37,
+    "trials": 40,
+    "survived": 40,
+    "tracked": 37,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cpu",
+    "seed": 1000,
+    "policy": "model_7999",
+    "ci95": [
+     0.7961,
+     0.9843
+    ]
+   },
+   "campaign-1": {
+    "successes": 0,
+    "trials": 40,
+    "survived": 0,
+    "tracked": 0,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@d406ee7d7680",
+    "ci95": [
+     0.0,
+     0.0881
+    ]
+   },
+   "campaign-2": {
+    "successes": 18,
+    "trials": 40,
+    "survived": 26,
+    "tracked": 25,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@5ca41ffb2fc6",
+    "ci95": [
+     0.2926,
+     0.6151
+    ]
+   },
+   "campaign-3": {
+    "successes": 24,
+    "trials": 40,
+    "survived": 29,
+    "tracked": 30,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@c39a1b54c06b",
+    "ci95": [
+     0.4333,
+     0.7514
+    ]
+   },
+   "campaign-4": {
+    "successes": 27,
+    "trials": 40,
+    "survived": 34,
+    "tracked": 29,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@d2c35fcf3459",
+    "ci95": [
+     0.5087,
+     0.8143
+    ]
+   },
+   "campaign-4-camera-blanked": {
+    "successes": 0,
+    "trials": 40,
+    "survived": 0,
+    "tracked": 4,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@d2c35fcf3459",
+    "ci95": [
+     0.0,
+     0.0881
+    ]
+   },
+   "campaign-4-state-blanked": {
+    "successes": 0,
+    "trials": 40,
+    "survived": 0,
+    "tracked": 0,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@d2c35fcf3459",
+    "ci95": [
+     0.0,
+     0.0881
+    ]
+   }
+  }
+ },
+ "inputs": {
+  "teacher": "runs/microduck-walk/20260901-163412/model_7999.pt (microduck-walk@824eba27c48c)",
+  "criterion": "survived and err_ratio<0.5"
+ },
+ "artifacts": {
+  "records_cuda": "docs/artifacts/walk-verdicts/records-cuda.jsonl",
+  "records_cpu": "docs/artifacts/walk-verdicts/records-cpu.jsonl",
+  "records_students": "docs/artifacts/walk-verdicts/records-student-cuda.jsonl",
+  "records_blank_camera": "docs/artifacts/walk-verdicts/records-student-blank-cuda.jsonl",
+  "records_blank_state": "docs/artifacts/walk-verdicts/records-student-blank-state-cuda.jsonl"
+ },
+ "protocol": "docs/e2e-research/63 \u00a72 (the certificate); docs/07 campaigns 1-4",
+ "caveats": [
+  "Per-trial rows are the primary artifact (tracked here); the certificate JSON files in the same directory were overwritten by a later 8-trial smoke run at seed 7 and are NOT the source of these numbers.",
+  "Campaign 4's student weights were deleted by a storage prune (docs/07 2026-09-04); its rows survive.",
+  "Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution."
+ ]
+}
