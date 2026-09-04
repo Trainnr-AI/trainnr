@@ -87,7 +87,12 @@ def fold(
     the paired effects between arms."""
     from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
 
-    result: dict[str, Any] = {"arms": {}, "under_span_0.10": {}, "replicates": {}, "effects": []}
+    result: dict[str, Any] = {
+        "arms": {},
+        "under_span_0.10": {},
+        "replicates": {},
+        "effects": [],
+    }
     for arm in arms:
         runs = replicate_dirs(root, arm)
         fits = [certificate(root, run.name, AT_FIT) for run in runs]
