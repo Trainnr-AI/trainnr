@@ -1,0 +1,94 @@
+{
+ "id": "walk-dagger-round-1-2026-09-04",
+ "claim": "DAgger round 1 on the walk: the base student drove 120 episodes, the teacher labeled every state, the referee kept the passes; a new student trained on the union of the base dataset and the relabeled batch, certified on the same 40 matched trials as the base \u2014 base 22/40 vs round-1 26/40.",
+ "date": "2026-09-04",
+ "repo_commit": "cced727-dirty",
+ "argv": [
+  "tools/dagger-fold.py",
+  "docs/artifacts/walk-verdicts",
+  "student-last@6b6cef16e54f",
+  "student-last@c9020b1b1ce3",
+  "--round-dir",
+  "docs/artifacts/dagger/round-1",
+  "--date",
+  "2026-09-04"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "outcome": {
+  "arms": {
+   "base": {
+    "policy": "student-last@6b6cef16e54f",
+    "successes": 22,
+    "trials": 40,
+    "ci95": [
+     0.3849,
+     0.7074
+    ],
+    "funnel": {
+     "survived": 31,
+     "tracked": 29
+    },
+    "instrument": [
+     "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda"
+    ]
+   },
+   "dagger-1": {
+    "policy": "student-last@c9020b1b1ce3",
+    "successes": 26,
+    "trials": 40,
+    "ci95": [
+     0.4832,
+     0.7937
+    ],
+    "funnel": {
+     "survived": 34,
+     "tracked": 31
+    },
+    "instrument": [
+     "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda"
+    ]
+   }
+  },
+  "effects": [
+   {
+    "a": "base",
+    "b": "dagger-1",
+    "difference": 0.09999999999999998,
+    "p": 0.49389114635085757,
+    "verdict": "UNRESOLVED"
+   }
+  ],
+  "alpha": 0.05,
+  "delta": 0.15
+ },
+ "inputs": {
+  "teacher_verdict_dir": "docs/artifacts/walk-verdicts",
+  "round_datasheet": "# Datasheet\n\nEvery episode in this batch passed its task's own referee; the\ncounts below are of SUCCESSFUL episodes only.\n\n- episodes kept: **120**\n- highest attempt number recorded: 189 (keep rate \u2264 63% \u2014 attempts after the last keep are not recorded)\n- expert retries across the batch: 0\n\n## Stamps\n\n- task: microduck-walk@824eba27c48c\n- expert: model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f\n- instrument: mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda\n\n## Dynamics draws\n\nBasis: caller-declared span \u00b10.1 (bundle is point estimates); per-world draws live inside the batched env and are not ",
+  "union": {
+   "sources": [
+    "dataset",
+    "dataset"
+   ],
+   "episodes": 360,
+   "experts": [
+    "model_7999@6a7479eec9ee",
+    "model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f"
+   ]
+  }
+ },
+ "artifacts": {
+  "records": "docs/artifacts/walk-verdicts/records-student-cuda.jsonl",
+  "round_datasheet": "docs/artifacts/dagger/round-1/datasheet.md",
+  "union_provenance": "docs/artifacts/dagger/round-1/union-provenance.json",
+  "figure.svg": "docs/figures/walk-dagger-round-1-2026-09-04.svg",
+  "figure.pdf": "docs/figures/walk-dagger-round-1-2026-09-04.pdf",
+  "figure.png": "docs/figures/walk-dagger-round-1-2026-09-04.png",
+  "figure.csv": "docs/figures/walk-dagger-round-1-2026-09-04.csv"
+ },
+ "sources": {},
+ "protocol": "docs/66 \u00a76 (DAgger on the walk: tools/walk-dagger-round.sh)",
+ "caveats": [
+  "One round, one training run per student, 40 trials each: a direction, replicate before a sentence.",
+  "The round student trained 20k steps on 360 episodes; the base trained 60k on 240 \u2014 steps per episode differ."
+ ]
+}

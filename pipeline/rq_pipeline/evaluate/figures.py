@@ -18,6 +18,7 @@ axes); colours are the reference palette's first slots, validated
 from __future__ import annotations
 
 import csv
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,10 @@ SURFACE = "#fcfcfb"
 
 MARKER_PT = 7.0
 MIN_CURVE_ARMS = 3  # fewer points is a row, not a curve
-TITLE_CHARS = 110  # the claim, trimmed to one title line
+TITLE_CHARS = 110  # the claim, trimmed
+TITLE_WRAP = (
+    64  # characters per title line: 110 on one line ran off the canvas (2026-09-04)
+)
 LINE_PT = 1.6
 DPI = 200
 
@@ -96,7 +100,11 @@ def _style(fig: Any, ax: Any, finding: Finding) -> None:
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("success rate (exact 95% interval)", color=INK)
     ax.set_title(
-        finding.claim[:TITLE_CHARS] + ("…" if len(finding.claim) > TITLE_CHARS else ""),
+        textwrap.fill(
+            finding.claim[:TITLE_CHARS]
+            + ("…" if len(finding.claim) > TITLE_CHARS else ""),
+            TITLE_WRAP,
+        ),
         fontsize=9,
         color=INK,
         loc="left",

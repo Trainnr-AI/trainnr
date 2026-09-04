@@ -1,0 +1,3 @@
+arm,group,episodes,successes,trials,rate,ci_low,ci_high
+base,base,,22,40,0.55,0.3849,0.7074
+dagger-1,dagger-1,,26,40,0.65,0.4832,0.7937

@@ -31,6 +31,54 @@ not this page.
   - Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution.
   - Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each.
 
+## walk-dagger-round-1-2026-09-04
+
+**DAgger round 1 on the walk: the base student drove 120 episodes, the teacher labeled every state, the referee kept the passes; a new student trained on the union of the base dataset and the relabeled batch, certified on the same 40 matched trials as the base — base 22/40 vs round-1 26/40.**
+
+- date: 2026-09-04 · commit: `cced727-dirty`
+- instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
+- command: `tools/dagger-fold.py docs/artifacts/walk-verdicts student-last@6b6cef16e54f student-last@c9020b1b1ce3 --round-dir docs/artifacts/dagger/round-1 --date 2026-09-04`
+- protocol: docs/66 §6 (DAgger on the walk: tools/walk-dagger-round.sh)
+- inputs:
+  - teacher_verdict_dir: docs/artifacts/walk-verdicts
+  - round_datasheet: # Datasheet
+
+Every episode in this batch passed its task's own referee; the
+counts below are of SUCCESSFUL episodes only.
+
+- episodes kept: **120**
+- highest attempt number recorded: 189 (keep rate ≤ 63% — attempts after the last keep are not recorded)
+- expert retries across the batch: 0
+
+## Stamps
+
+- task: microduck-walk@824eba27c48c
+- expert: model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f
+- instrument: mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda
+
+## Dynamics draws
+
+Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws live inside the batched env and are not 
+  - union: {'sources': ['dataset', 'dataset'], 'episodes': 360, 'experts': ['model_7999@6a7479eec9ee', 'model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f']}
+- outcome:
+  - arms: {'base': {'policy': 'student-last@6b6cef16e54f', 'successes': 22, 'trials': 40, 'ci95': [0.3849, 0.7074], 'funnel': {'survived': 31, 'tracked': 29}, 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}, 'dagger-1': {'policy': 'student-last@c9020b1b1ce3', 'successes': 26, 'trials': 40, 'ci95': [0.4832, 0.7937], 'funnel': {'survived': 34, 'tracked': 31}, 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}}
+  - effects: [{'a': 'base', 'b': 'dagger-1', 'difference': 0.09999999999999998, 'p': 0.49389114635085757, 'verdict': 'UNRESOLVED'}]
+  - alpha: 0.05
+  - delta: 0.15
+- artifacts:
+  - records: docs/artifacts/walk-verdicts/records-student-cuda.jsonl
+  - round_datasheet: docs/artifacts/dagger/round-1/datasheet.md
+  - union_provenance: docs/artifacts/dagger/round-1/union-provenance.json
+  - figure.svg: docs/figures/walk-dagger-round-1-2026-09-04.svg
+  - figure.pdf: docs/figures/walk-dagger-round-1-2026-09-04.pdf
+  - figure.png: docs/figures/walk-dagger-round-1-2026-09-04.png
+  - figure.csv: docs/figures/walk-dagger-round-1-2026-09-04.csv
+- caveats:
+  - One round, one training run per student, 40 trials each: a direction, replicate before a sentence.
+  - The round student trained 20k steps on 360 episodes; the base trained 60k on 240 — steps per episode differ.
+
+![walk-dagger-round-1-2026-09-04](../docs/figures/walk-dagger-round-1-2026-09-04.png)
+
 ## walk-c1-2026-09-04
 
 **C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared ±0.10 span, and the folklore ±0.30 span — same G3 recipe — each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; own-DR certificates ride along.**
@@ -136,7 +184,7 @@ not this page.
 
 ## compute-ledger-2026-09-04
 
-**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 49 pod-hours in total from the first sized chain run (2026-08-31) to the walk replicates (2026-09-04), on the order of $110.**
+**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 53 pod-hours in total from the first sized chain run (2026-08-31) to the DAgger round (2026-09-04), on the order of $120.**
 
 - date: 2026-09-04 · commit: `71f96cc`
 - instrument: `RunPod API (pods, costPerHr) + docs/07`
@@ -150,10 +198,10 @@ not this page.
   - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)
   - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
   - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
-  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)': 11.4}
-  - pod_hours_total_estimate: 49.2
-  - dollars_estimate: {'rtx_pro_6000': '~47.6 h x $2.09 = ~$99', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$110'}
-  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s'}
+  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4}
+  - pod_hours_total_estimate: 53.4
+  - dollars_estimate: {'rtx_pro_6000': '~51.8 h x $2.09 = ~$108', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$120'}
+  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)'}
   - wall_clock_wins: {'three lift studies in parallel': '2.7 h instead of ~8', 'walk C1 six replicates on six pods': '~1.9 h instead of ~11'}
 - artifacts:
   - log: docs/07-progress-log.md
@@ -163,6 +211,7 @@ not this page.
   - Idle time is included where a pod sat between stages (campaign 4's parked night is not: it was stopped).
   - The owned RTX 3090 Ti and the M1 Pro are not costed.
   - Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.
+  - Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) — 53.4 h, ~$120.
 
 ## visual-dr-lift-cliff-2026-09-03
 

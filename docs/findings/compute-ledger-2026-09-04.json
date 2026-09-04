@@ -1,6 +1,6 @@
 {
  "id": "compute-ledger-2026-09-04",
- "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 49 pod-hours in total from the first sized chain run (2026-08-31) to the walk replicates (2026-09-04), on the order of $110.",
+ "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 53 pod-hours in total from the first sized chain run (2026-08-31) to the DAgger round (2026-09-04), on the order of $120.",
  "date": "2026-09-04",
  "repo_commit": "71f96cc",
  "argv": [
@@ -23,19 +23,21 @@
    "lift studies x3 pods (2026-09-03)": 8.0,
    "cliff studies x3 pods + killed hard reruns (2026-09-03)": 11.0,
    "walk C1 run 1 x3 pods (2026-09-04)": 5.7,
-   "walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)": 11.4
+   "campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)": 4.2,
+   "walk C1 replicates 2-3 x6 pods (2026-09-04)": 11.4
   },
-  "pod_hours_total_estimate": 49.2,
+  "pod_hours_total_estimate": 53.4,
   "dollars_estimate": {
-   "rtx_pro_6000": "~47.6 h x $2.09 = ~$99",
+   "rtx_pro_6000": "~51.8 h x $2.09 = ~$108",
    "b200": "94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)",
-   "total": "~$110"
+   "total": "~$120"
   },
   "per_result_cost": {
    "one walk arm (train 8000 it + two 40-trial certificates)": "~1.9 h, ~$4",
    "one lift study arm (press, convert, train 20k, judge 80 trials)": "~1.0 h, ~$2.1",
    "the walk C1 with three replicates per arm (9 runs)": "~17 h, ~$36",
-   "one 40-trial certificate on the walk": "~30 s"
+   "one 40-trial certificate on the walk": "~30 s",
+   "one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)": "~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)"
   },
   "wall_clock_wins": {
    "three lift studies in parallel": "2.7 h instead of ~8",
@@ -55,6 +57,7 @@
   "Hours are reconstructed from logged stage timestamps and pod uptimes, not from the invoice: reconcile against RunPod's billing export before the paper states a dollar figure (the API exposes current-session uptime only).",
   "Idle time is included where a pod sat between stages (campaign 4's parked night is not: it was stopped).",
   "The owned RTX 3090 Ti and the M1 Pro are not costed.",
-  "Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34."
+  "Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.",
+  "Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) \u2014 53.4 h, ~$120."
  ]
 }

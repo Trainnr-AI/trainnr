@@ -49,7 +49,17 @@ def main() -> int:
     parser.add_argument("verdict_dir", type=Path)
     parser.add_argument("base", help="the base student's policy stamp")
     parser.add_argument("round", help="the round student's policy stamp")
-    parser.add_argument("--round-dir", type=Path, default=None)
+    parser.add_argument(
+        "--round-dir",
+        type=Path,
+        default=None,
+        help="the round's directory on the machine (demos/datasheet.md, "
+        "dataset/provenance.json) or its tracked copy under docs/artifacts/dagger "
+        "(datasheet.md, union-provenance.json)",
+    )
+    parser.add_argument(
+        "--date", default=None, help="the run's date (UTC); default today"
+    )
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--delta", type=float, default=0.15)
     args = parser.parse_args()
@@ -93,19 +103,25 @@ def main() -> int:
     artifacts: dict[str, str] = {"records": str(args.verdict_dir / RECORDS)}
     if args.round_dir is not None:
         sheet = args.round_dir / "demos" / "datasheet.md"
+        if not sheet.is_file():
+            sheet = args.round_dir / "datasheet.md"
         if sheet.is_file():
             inputs["round_datasheet"] = sheet.read_text()[:600]
             artifacts["round_datasheet"] = str(sheet)
         union = args.round_dir / "dataset" / "provenance.json"
+        if not union.is_file():
+            union = args.round_dir / "union-provenance.json"
         if union.is_file():
             prov = json.loads(union.read_text())
             inputs["union"] = {
                 "sources": prov.get("sources"),
                 "episodes": prov.get("episodes"),
+                "experts": prov.get("experts"),
             }
             artifacts["union_provenance"] = str(union)
+    date = args.date or today()
     record = Finding(
-        id=f"walk-dagger-round-1-{today()}",
+        id=f"walk-dagger-round-1-{date}",
         claim=(
             "DAgger round 1 on the walk: the base student drove 120 episodes, the "
             "teacher labeled every state, the referee kept the passes; a new student "
@@ -114,7 +130,7 @@ def main() -> int:
             f"{arms['base']['successes']}/40 vs round-1 "
             f"{arms['dagger-1']['successes']}/40."
         ),
-        date=today(),
+        date=date,
         repo_commit=repo_commit(REPO),
         argv=sys.argv,
         instrument=", ".join(
