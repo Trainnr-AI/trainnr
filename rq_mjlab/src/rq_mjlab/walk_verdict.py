@@ -379,6 +379,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frame-width", type=int, default=320)
     parser.add_argument("--frame-height", type=int, default=240)
     parser.add_argument(
+        "--judge-at-fit",
+        action="store_true",
+        help="judge with NO law DR — the bundle's point fit exactly, the pinned "
+        "truth the walk C1 study's arms share (pushes stay on)",
+    )
+    parser.add_argument(
         "--blank-state",
         action="store_true",
         help="judge the student with its state vector zeroed (image still "
@@ -439,7 +445,7 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
     print(f"[verdict] rows in {out_dir}")
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in order
     args = parse_args()
 
     import warp as wp  # noqa: PLC0415
@@ -457,15 +463,27 @@ def main() -> None:
         append_records,
     )
 
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+    from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+        LAW_DR_SPAN,
+        microduck_walk_env_cfg,
+    )
     from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
 
-    cfg, identity = microduck_walk_env_cfg()
+    cfg, identity = microduck_walk_env_cfg(
+        law_dr_span=None if args.judge_at_fit else LAW_DR_SPAN
+    )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
     trained = args.checkpoint.parent / "identity.json"
-    if trained.is_file() and json.loads(trained.read_text()) != identity:
-        raise SystemExit(f"identity mismatch: this env is {identity}")
+    if trained.is_file():
+        trained_identity = json.loads(trained.read_text())
+        # Robot and actuator must match; the DR basis may differ on
+        # purpose (a policy trained under one span is judged at the fit),
+        # and the certificate records both.
+        for key in ("robot", "actuator"):
+            if trained_identity.get(key) != identity.get(key):
+                raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
+        identity = {**identity, "trained_dr_basis": trained_identity.get("dr_basis")}
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
@@ -557,6 +575,9 @@ def main() -> None:
         blank_camera=args.blank_camera,
         blank_state=args.blank_state,
     )
+    if args.judge_at_fit:
+        suffix = f"at-fit-{suffix}"
+        protocol["judged_at"] = "the bundle's point fit (no law DR)"
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 
     write_certificate(

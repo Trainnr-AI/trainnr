@@ -42,6 +42,8 @@ from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
+from rq_mjlab.microduck_walk import LAW_DR_SPAN
+
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
     "smoke": {"envs": 256, "iterations": 20, "every": 10},
@@ -99,6 +101,19 @@ def main() -> None:
     parser.add_argument("--every", type=int, default=None)
     parser.add_argument("--frame-every", type=int, default=400)
     parser.add_argument(
+        "--dr-span",
+        type=float,
+        default=LAW_DR_SPAN,
+        help="declared law-DR span around the bundle's point fit; 0 = no law DR "
+        "(the walk C1 study's arms: 0 / 0.10 / 0.30)",
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=None,
+        help="archive here instead of <log-root>/<timestamp> (a study names its arms)",
+    )
+    parser.add_argument(
         "--no-recorder",
         action="store_true",
         help="headless run (a pod with no Studio listening on :9876)",
@@ -117,10 +132,12 @@ def main() -> None:
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+    from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+        microduck_walk_env_cfg,
+    )
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
-    cfg, identity = microduck_walk_env_cfg()
+    cfg, identity = microduck_walk_env_cfg(law_dr_span=args.dr_span or None)
     cfg.scene.num_envs = envs
     cfg.recorders = (
         {}
@@ -138,7 +155,9 @@ def main() -> None:
     # The smoke gate archives nothing; g3 archives itself with identity.
     log_dir = None
     if args.agent == "g3":
-        log_dir = args.log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_dir = args.log_dir or args.log_root / datetime.now().strftime(
+            "%Y%m%d-%H%M%S"
+        )
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
         print(f"[g3] log_dir: {log_dir}")

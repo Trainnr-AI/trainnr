@@ -105,3 +105,29 @@ class TheWalkCfg(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheLawDrSpan(unittest.TestCase):
+    """The walk C1's knob: a declared span around the point fit, or no
+    law DR at all — and the basis says which (2026-09-04)."""
+
+    def test_no_span_means_no_law_dr_and_says_so(self) -> None:
+        from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+
+        cfg, stamps = microduck_walk_env_cfg(law_dr_span=None)
+        self.assertNotIn("bam_param_dr", cfg.events)
+        self.assertIn("point fit", stamps["dr_basis"])
+        zero_cfg, zero_stamps = microduck_walk_env_cfg(law_dr_span=0.0)
+        self.assertNotIn("bam_param_dr", zero_cfg.events)
+        self.assertEqual(zero_stamps["dr_basis"], stamps["dr_basis"])
+
+    def test_a_wide_span_lands_on_the_basis(self) -> None:
+        from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+
+        cfg, stamps = microduck_walk_env_cfg(law_dr_span=0.30)
+        self.assertIn("bam_param_dr", cfg.events)
+        self.assertIn("0.3", stamps["dr_basis"])
+        # Robot and actuator stamps do not move with the span.
+        _base, base_stamps = microduck_walk_env_cfg()
+        self.assertEqual(stamps["robot"], base_stamps["robot"])
+        self.assertEqual(stamps["actuator"], base_stamps["actuator"])

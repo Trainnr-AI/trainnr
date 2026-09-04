@@ -138,10 +138,17 @@ PHYSICS_DT = 0.005
 
 
 def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each statement a cited number
-    *, play: bool = False
+    *, play: bool = False, law_dr_span: float | None = LAW_DR_SPAN
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The walk cfg and its identity: robot stamp, actuator stamp, and
-    the law-DR basis — the three strings a run's record must carry."""
+    the law-DR basis — the three strings a run's record must carry.
+
+    `law_dr_span` is the DECLARED span around the bundle's point fit
+    that the law-parameter DR draws from (the bundle carries no
+    intervals — every bundle in the store is a point estimate,
+    2026-09-04). `None` or 0 means NO law DR: the actuator runs at the
+    fit exactly — the point arm of the walk C1 study, and the pinned
+    truth every arm is judged at. The basis string says which."""
     cfg = make_velocity_env_cfg()
     if cfg.sim.mujoco.timestep != PHYSICS_DT:
         raise AssertionError(
@@ -326,8 +333,11 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     # Ours: the expansion event (their decorator-carrier no-op, owned),
     # and law DR from the certified bundle with a declared basis.
     events["bam_expansion"] = bam_expansion_event()
-    law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=LAW_DR_SPAN)
-    events["bam_param_dr"] = law_dr
+    if law_dr_span:
+        law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=law_dr_span)
+        events["bam_param_dr"] = law_dr
+    else:
+        dr_basis = "none: the bundle's point fit exactly (no law DR)"
 
     # Curricula: none — see the module docstring's OMITTED list.
     cfg.curriculum = {}
