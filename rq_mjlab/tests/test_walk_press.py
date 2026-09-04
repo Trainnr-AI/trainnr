@@ -91,3 +91,33 @@ class TheExportDescriptor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DaggerRelabel(unittest.TestCase):
+    """DAgger's one move, pinned without a GPU: the student's episode
+    keeps its judgment, command and states; only the actions become the
+    teacher's labels — and a shape mismatch is refused."""
+
+    def test_the_teacher_labels_the_students_states(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_mjlab.walk_press import relabel  # noqa: PLC0415
+
+        obs = np.arange(12, dtype=np.float32).reshape(3, 4)
+        student_actions = np.zeros((3, 2), dtype=np.float32)
+        episode = WorldEpisode(
+            EpisodeOutcome(steps=3, fell=False, mean_err=0.1, mean_cmd=0.3),
+            command=[0.3, 0.0, 0.0],
+            observations=obs,
+            actions=student_actions,
+            qpos=np.ones((3, 5), dtype=np.float32),
+        )
+        labeled = relabel(episode, lambda o: o[:, :2] * 10)
+        np.testing.assert_array_equal(labeled.actions, obs[:, :2] * 10)
+        np.testing.assert_array_equal(labeled.observations, obs)  # the student's states
+        self.assertIs(labeled.outcome, episode.outcome)  # the student's judgment
+        self.assertEqual(labeled.command, episode.command)
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            relabel(episode, lambda o: o)  # (3, 4) labels for (3, 2) actions
+        with self.assertRaisesRegex(ValueError, "captured"):
+            relabel(WorldEpisode(episode.outcome, episode.command), lambda o: o)

@@ -131,7 +131,50 @@ class ChaseCamera:
         self.renderer.close()
 
 
-def press_walk(  # noqa: PLR0913 - every knob of the press, named
+def relabel(episode: WorldEpisode, teacher: Any) -> WorldEpisode:
+    """DAgger's one move: the STUDENT drove (its observations, its
+    states), the TEACHER labels — every captured observation gets the
+    action the teacher would have taken there, and that pair is what
+    the dataset learns from. `teacher` maps a (T, obs) array to a
+    (T, nu) array (the rsl-rl actor on a batch of observations). The
+    judgment, command and qpos are the student's episode, untouched:
+    the referee gated the STUDENT's walk, not the teacher's labels."""
+    import numpy as np  # noqa: PLC0415
+
+    if episode.observations is None:
+        raise ValueError("relabel needs a captured episode (observations)")
+    labels = np.asarray(teacher(episode.observations), dtype=np.float32)
+    if labels.shape != episode.actions.shape:
+        raise ValueError(
+            f"teacher labels {labels.shape} do not match the student's actions "
+            f"{episode.actions.shape}"
+        )
+    return WorldEpisode(
+        episode.outcome,
+        episode.command,
+        observations=episode.observations,
+        actions=labels,
+        qpos=episode.qpos,
+    )
+
+
+def teacher_labeler(policy: Any, device: str) -> Any:
+    """The rsl-rl inference policy as a batch labeler: (T, obs) numpy
+    in, (T, nu) numpy out, no gradients."""
+    import numpy as np  # noqa: PLC0415
+    import torch  # noqa: PLC0415
+
+    def label(observations: Any) -> Any:
+        with torch.no_grad():
+            obs = torch.as_tensor(
+                np.asarray(observations), dtype=torch.float32, device=device
+            )
+            return policy(obs).detach().cpu().numpy()
+
+    return label
+
+
+def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one loop
     checkpoint: Path,
     out: Path,
     *,
@@ -143,9 +186,19 @@ def press_walk(  # noqa: PLR0913 - every knob of the press, named
     device: str,
     feed: Any = None,
     say: Any = print,
+    driver: Any = None,
+    driver_name: str = "",
 ) -> DemoBatch:
     """Press `episodes` kept walk demonstrations from `checkpoint` under
-    `out`; the batched rollouts run `worlds` at a time."""
+    `out`; the batched rollouts run `worlds` at a time.
+
+    `driver` is who ROLLS OUT; the checkpoint's teacher always LABELS.
+    With no driver the teacher drives itself (the D2 press). With a
+    driver — a `walk_verdict.StudentPolicy` over the bridge — this is
+    DAgger: the student visits its own states, the teacher says what
+    to do there, the referee keeps the episodes where the student's
+    walk passed, and the dataset grows exactly where the student is
+    weak (docs/66 §6; Ross et al. 2011)."""
     import numpy as np  # noqa: PLC0415
 
     from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
@@ -153,9 +206,18 @@ def press_walk(  # noqa: PLR0913 - every knob of the press, named
 
     _, identity = microduck_walk_env_cfg()
     env, policy = load_policy(checkpoint, worlds, device)
+    teacher = teacher_labeler(policy, device)
+    if driver is not None and hasattr(driver, "bind"):
+        driver.bind(env)
+    rolling = policy if driver is None else driver
     unwrapped = env.unwrapped
     source = f"microduck-walk@{fields_hash(identity)}"
     expert = checkpoint_stamp(checkpoint)
+    if driver is not None:
+        # The dataset's expert is still the teacher (its labels); the
+        # driver rides on the stamp so a DAgger batch is never mistaken
+        # for a teacher press.
+        expert = f"{expert}+dagger:{driver_name or 'student'}"
     instrument = instrument_for(device)
     control_hz = round(1.0 / float(unwrapped.step_dt))
     basis = (
@@ -189,7 +251,9 @@ def press_walk(  # noqa: PLR0913 - every knob of the press, named
         batch_seed = int(rng.integers(2**31 - 1))
         unwrapped.seed(batch_seed)
         env.reset()
-        rolled = rollout_episodes(env, policy, worlds, capture=True)
+        rolled = rollout_episodes(env, rolling, worlds, capture=True)
+        if driver is not None:
+            rolled = [relabel(ep, teacher) for ep in rolled]
         queue.extend((batch_seed, world, ep) for world, ep in enumerate(rolled))
         passing = sum(e.outcome.success for e in rolled)
         say(f"batch seed {batch_seed}: {passing}/{worlds} pass the criterion")
@@ -258,6 +322,8 @@ def press_walk(  # noqa: PLR0913 - every knob of the press, named
         )
     finally:
         camera.close()
+        if driver is not None and hasattr(driver, "close"):
+            driver.close()
         env.close()
 
 
@@ -281,6 +347,20 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=240)
     parser.add_argument("--device", default=None)
     parser.add_argument("--no-studio", action="store_true")
+    parser.add_argument(
+        "--student",
+        type=Path,
+        default=None,
+        help="DAgger: a LeRobot checkpoint (pretrained_model dir) DRIVES the "
+        "rollouts over the bridge; the teacher labels every visited state",
+    )
+    parser.add_argument("--horizon", type=int, default=2)
+    parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument(
+        "--student-python",
+        type=Path,
+        default=REPO / "pipeline" / ".venv-train" / "bin" / "python",
+    )
     args = parser.parse_args()
 
     from rq_mjlab.walk_view import latest_checkpoint  # noqa: PLC0415
@@ -298,6 +378,45 @@ def main() -> None:
 
         feed = StudioPressFeed.connect(f"walk-{args.out.name}")
 
+    driver = None
+    driver_name = ""
+    if args.student is not None:
+        from rq_pipeline.bundles.hashing import stamp as stamp_of  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import StudentPolicy  # noqa: PLC0415
+        from rq_mjlab.walk_view import load_policy  # noqa: PLC0415
+
+        # The student needs the env it will drive; press_walk builds its
+        # own, so the driver is built lazily on that env below.
+        driver_name = stamp_of(f"student-{args.student.parent.name}", args.student)
+
+        class _LazyStudent:
+            """Binds the StudentPolicy to press_walk's env on first call."""
+
+            def __init__(self) -> None:
+                self._inner: Any = None
+
+            def bind(self, env: Any) -> None:
+                self._inner = StudentPolicy(
+                    env,
+                    args.student,
+                    python=args.student_python,
+                    horizon=args.horizon,
+                    stride=args.stride,
+                    frame_size=(args.width, args.height),
+                    device="cuda" if device.startswith("cuda") else "cpu",
+                )
+
+            def __call__(self, obs: Any) -> Any:
+                return self._inner(obs)
+
+            def close(self) -> None:
+                if self._inner is not None:
+                    self._inner.close()
+
+        driver = _LazyStudent()
+        del load_policy
+
     batch = press_walk(
         checkpoint,
         args.out,
@@ -308,6 +427,8 @@ def main() -> None:
         frame_size=(args.width, args.height),
         device=device,
         feed=feed,
+        driver=driver,
+        driver_name=driver_name,
     )
     print(f"[walk-press] kept {batch.kept}/{batch.attempts} attempts -> {batch.out}")
     if not batch.complete:
