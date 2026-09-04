@@ -19,7 +19,7 @@ root="${1:-runs/studies/walk-c1}"; [[ "$root" = /* ]] || root="$repo/$root"
 arms="${2:-point narrow wide}"
 scales="${3:-0.7 0.8 0.9 1.1 1.2 1.3}"
 span="${4:-0.30}"
-trials="${TRIALS:-40}"; seed="${SEED:-1000}"
+trials="${TRIALS:-40}"; seed="${SEED:-1000}"; robot="${ROBOT:-microduck}"
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
@@ -27,8 +27,8 @@ cd "$repo/rq_mjlab"
 certify() { # <ckpt> <certificate file> <verdict args...>
   local ckpt="$1" cert="$2"; shift 2
   if [ -f "$(dirname "$ckpt")/verdict/$cert" ]; then say "have $cert for $ckpt"; return 0; fi
-  .venv/bin/python -m rq_mjlab.walk_verdict "$ckpt" --trials "$trials" --seed "$seed" \
-    --device cuda:0 --no-studio "$@"
+  .venv/bin/python -m rq_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" \
+    --seed "$seed" --device cuda:0 --no-studio "$@"
 }
 
 total=0; done_n=0

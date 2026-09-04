@@ -36,6 +36,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
+
 # The judgment's constants, declared where the certificate cites them.
 ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
 ERR_FLOOR = 0.1  # m/s; below this commanded speed the ratio's denominator floors
@@ -351,6 +353,12 @@ class StudentPolicy:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path)
+    parser.add_argument(
+        "--robot",
+        choices=ROBOTS,
+        default=DEFAULT_ROBOT,
+        help="which walk (rq_mjlab.walks) the checkpoint belongs to",
+    )
     parser.add_argument("--trials", type=int, default=40)
     parser.add_argument("--device", default=None, help="cuda:0 or cpu")
     parser.add_argument("--seed", type=int, default=1000)
@@ -496,18 +504,14 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
         append_records,
     )
 
-    from rq_mjlab.microduck_walk import (  # noqa: PLC0415
-        LAW_DR_SPAN,
-        microduck_walk_env_cfg,
-    )
-    from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
-
     if args.judge_at_fit and args.judge_span is not None:
         raise SystemExit("--judge-at-fit and --judge-span exclude each other")
-    judge_span = LAW_DR_SPAN if args.judge_span is None else args.judge_span
-    cfg, identity = microduck_walk_env_cfg(
-        law_dr_span=None if args.judge_at_fit else judge_span,
-        law_pin_scale=args.judge_at_scale,
+    spec = walk_spec(args.robot)
+    default_span = spec.default_span
+    judge_span = default_span if args.judge_span is None else args.judge_span
+    cfg, identity = spec.env_cfg(
+        dr_span=None if args.judge_at_fit else judge_span,
+        pin_scale=args.judge_at_scale,
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
@@ -530,7 +534,7 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
-    source = f"microduck-walk@{fields_hash(identity)}"
+    source = f"{spec.source_prefix}@{fields_hash(identity)}"
     protocol = {
         "trials": args.trials,
         "seed": args.seed,
@@ -540,7 +544,7 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
     }
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
 
-    agent = g3_agent(iterations=1)
+    agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
@@ -625,7 +629,7 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
         suffix = f"under-pm{args.judge_span:g}-{suffix}"
         protocol["judged_at"] = f"law DR drawn from ±{args.judge_span:g} around the fit"
     else:
-        protocol["judged_at"] = f"law DR drawn from ±{LAW_DR_SPAN:g} around the fit"
+        protocol["judged_at"] = f"law DR drawn from ±{default_span:g} around the fit"
     if args.judge_at_scale is not None:
         suffix = f"at-x{args.judge_at_scale:g}-{suffix}"
         protocol["judged_at"] = f"every law parameter at fit x {args.judge_at_scale:g}"

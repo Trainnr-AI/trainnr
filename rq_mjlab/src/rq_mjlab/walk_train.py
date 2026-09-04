@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
-from rq_mjlab.microduck_walk import LAW_DR_SPAN
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
 
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
@@ -95,16 +95,26 @@ def g3_agent(iterations: int) -> Any:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--agent", choices=sorted(DEFAULTS), default="g3")
+    parser.add_argument(
+        "--robot",
+        choices=ROBOTS,
+        default=DEFAULT_ROBOT,
+        help="which walk (rq_mjlab.walks): the microduck on its certified bundle, "
+        "or mjlab's own Go1 flat task around its derived gains",
+    )
     parser.add_argument("--envs", type=int, default=None)
     parser.add_argument("--iterations", type=int, default=None)
-    parser.add_argument("--log-root", type=Path, default=Path("../runs/microduck-walk"))
+    parser.add_argument(
+        "--log-root", type=Path, default=None, help="default ../runs/<robot>-walk"
+    )
     parser.add_argument("--every", type=int, default=None)
     parser.add_argument("--frame-every", type=int, default=400)
     parser.add_argument(
         "--dr-span",
         type=float,
-        default=LAW_DR_SPAN,
-        help="declared law-DR span around the bundle's point fit; 0 = no law DR "
+        default=None,
+        help="declared actuator-DR span around the identified point (the bundle's "
+        "fit, or Go1's derived gains); 0 = none; default the walk's own "
         "(the walk C1 study's arms: 0 / 0.10 / 0.30)",
     )
     parser.add_argument(
@@ -139,12 +149,12 @@ def main() -> None:
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
-    from rq_mjlab.microduck_walk import (  # noqa: PLC0415
-        microduck_walk_env_cfg,
-    )
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
-    cfg, identity = microduck_walk_env_cfg(law_dr_span=args.dr_span or None)
+    spec = walk_spec(args.robot)
+    span = spec.default_span if args.dr_span is None else args.dr_span
+    cfg, identity = spec.env_cfg(dr_span=span or None, pin_scale=None)
+    log_root = args.log_root or Path(f"../runs/{args.robot}-walk")
     cfg.scene.num_envs = envs
     if args.seed is not None:
         cfg.seed = args.seed
@@ -161,13 +171,11 @@ def main() -> None:
         }
     )
 
-    agent = smoke_agent(iterations) if args.agent == "smoke" else g3_agent(iterations)
+    agent = smoke_agent(iterations) if args.agent == "smoke" else spec.agent(iterations)
     # The smoke gate archives nothing; g3 archives itself with identity.
     log_dir = None
     if args.agent == "g3":
-        log_dir = args.log_dir or args.log_root / datetime.now().strftime(
-            "%Y%m%d-%H%M%S"
-        )
+        log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
         print(f"[g3] log_dir: {log_dir}")

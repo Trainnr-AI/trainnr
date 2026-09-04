@@ -102,7 +102,7 @@ def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
     return world_of, device_of
 
 
-def load_policy(checkpoint: Path, envs: int, device: str):
+def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduck"):
     """The env and its inference policy, identity-gated (the same door
     walk_play and walk_verdict use)."""
     from dataclasses import asdict  # noqa: PLC0415
@@ -110,15 +110,15 @@ def load_policy(checkpoint: Path, envs: int, device: str):
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
-    from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
+    from rq_mjlab.walks import walk_spec  # noqa: PLC0415
 
-    cfg, identity = microduck_walk_env_cfg()
+    spec = walk_spec(robot)
+    cfg, identity = spec.env_cfg(dr_span=spec.default_span, pin_scale=None)
     cfg.scene.num_envs = envs
     trained = checkpoint.parent / "identity.json"
     if trained.is_file() and json.loads(trained.read_text()) != identity:
         raise SystemExit(f"identity mismatch: this env is {identity}")
-    agent = g3_agent(iterations=1)
+    agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
