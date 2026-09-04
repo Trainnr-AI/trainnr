@@ -1,6 +1,6 @@
 {
  "id": "walk-distillation-campaigns-2026-09-04",
- "claim": "RL teacher -> vision student on the microduck walk, certified on 40 matched pushed trials (seed 1000): teacher 33/40 cuda (37/40 cpu); students campaign 1 (10 Hz data) 0/40, campaign 2 (120 ep at 50 Hz, 30k) 18/40, campaign 3 (240 ep, 60k) 24/40, campaign 4 (same recipe re-pressed) 27/40; campaign 4's student with the camera blanked 0/40 and with the state blanked 0/40.",
+ "claim": "RL teacher -> vision student on the microduck walk, certified on 40 matched pushed trials (seed 1000): teacher 33/40 cuda (37/40 cpu); students campaign 1 (10 Hz data) 0/40, campaign 2 (120 ep at 50 Hz, 30k) 18/40, campaign 3 (240 ep, 60k) 24/40, campaign 4 (same recipe re-pressed) 27/40, campaign 4b (campaign 4's dataset retrained from scratch) 22/40; campaign 4's student with the camera blanked 0/40 and with the state blanked 0/40.",
  "date": "2026-09-04",
  "repo_commit": "d25fb30",
  "argv": [
@@ -112,6 +112,20 @@
      0.0,
      0.0881
     ]
+   },
+   "campaign-4b": {
+    "successes": 22,
+    "trials": 40,
+    "survived": 31,
+    "tracked": 29,
+    "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+    "seed": 1000,
+    "policy": "student-last@6b6cef16e54f",
+    "ci95": [
+     0.3849,
+     0.7074
+    ],
+    "note": "campaign 4's dataset (240 episodes, 50 Hz) retrained from scratch after the storage prune deleted campaign 4's checkpoint (docs/07 2026-09-04); same recipe, 60k steps, new training seed"
    }
   }
  },
@@ -124,12 +138,14 @@
   "records_cpu": "docs/artifacts/walk-verdicts/records-cpu.jsonl",
   "records_students": "docs/artifacts/walk-verdicts/records-student-cuda.jsonl",
   "records_blank_camera": "docs/artifacts/walk-verdicts/records-student-blank-cuda.jsonl",
-  "records_blank_state": "docs/artifacts/walk-verdicts/records-student-blank-state-cuda.jsonl"
+  "records_blank_state": "docs/artifacts/walk-verdicts/records-student-blank-state-cuda.jsonl",
+  "certificate_campaign_4b": "docs/artifacts/walk-verdicts/walk-verdict-student-cuda.campaign-4b.json"
  },
  "protocol": "docs/e2e-research/63 \u00a72 (the certificate); docs/07 campaigns 1-4",
  "caveats": [
   "Per-trial rows are the primary artifact (tracked here); the certificate JSON files in the same directory were overwritten by a later 8-trial smoke run at seed 7 and are NOT the source of these numbers.",
   "Campaign 4's student weights were deleted by a storage prune (docs/07 2026-09-04); its rows survive.",
-  "Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution."
+  "Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution.",
+  "Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each."
  ]
 }
