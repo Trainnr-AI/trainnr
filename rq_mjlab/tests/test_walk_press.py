@@ -9,7 +9,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.kitting_export import DemoLayout
@@ -121,3 +121,23 @@ class DaggerRelabel(unittest.TestCase):
             relabel(episode, lambda o: o)  # (3, 4) labels for (3, 2) actions
         with self.assertRaisesRegex(ValueError, "captured"):
             relabel(WorldEpisode(episode.outcome, episode.command), lambda o: o)
+
+    def test_the_labeler_hands_the_actor_its_observation_group(self) -> None:
+        """An rsl-rl actor indexes a TensorDict by observation group; a
+        bare tensor raises IndexError inside the model (the crash that
+        killed DAgger round 1's first launch, 2026-09-04)."""
+        import numpy as np  # noqa: PLC0415
+
+        from rq_mjlab.walk_press import teacher_labeler  # noqa: PLC0415
+        from rq_mjlab.walk_verdict import ACTOR_OBS_GROUP  # noqa: PLC0415
+
+        seen: dict[str, Any] = {}
+
+        def actor(obs: Any) -> Any:  # what rsl-rl's MLPModel.get_latent does
+            seen["batch"] = tuple(obs.batch_size)
+            return obs[ACTOR_OBS_GROUP][:, :2] * 10
+
+        label = teacher_labeler(actor, "cpu")
+        obs = np.arange(12, dtype=np.float32).reshape(3, 4)
+        np.testing.assert_array_equal(label(obs), obs[:, :2] * 10)
+        self.assertEqual(seen["batch"], (3,))

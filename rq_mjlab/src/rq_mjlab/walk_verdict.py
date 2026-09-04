@@ -40,6 +40,11 @@ from typing import Any
 ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
 ERR_FLOOR = 0.1  # m/s; below this commanded speed the ratio's denominator floors
 
+# The observation group the actor reads and the capture records: what a
+# captured (T, obs) row IS, and the key a labeler must hand back to the
+# actor — rsl-rl actors index a TensorDict of groups, never a bare tensor.
+ACTOR_OBS_GROUP = "actor"
+
 
 @dataclass(frozen=True)
 class EpisodeOutcome:
@@ -126,7 +131,7 @@ def rollout_episodes(
         with torch.inference_mode():
             actions = policy(obs)
         if capture and device_qpos is not None:
-            actor = obs["actor"].detach().cpu().numpy()
+            actor = obs[ACTOR_OBS_GROUP].detach().cpu().numpy()
             act = actions.detach().cpu().numpy()
             pose = device_qpos.detach().cpu().numpy()
             still_open = open_worlds.cpu().numpy()

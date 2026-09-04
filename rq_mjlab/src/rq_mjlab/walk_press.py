@@ -160,15 +160,23 @@ def relabel(episode: WorldEpisode, teacher: Any) -> WorldEpisode:
 
 def teacher_labeler(policy: Any, device: str) -> Any:
     """The rsl-rl inference policy as a batch labeler: (T, obs) numpy
-    in, (T, nu) numpy out, no gradients."""
+    in, (T, nu) numpy out, no gradients. The captured rows are the
+    actor's observation group (`walk_verdict.ACTOR_OBS_GROUP`), and the
+    actor indexes a TensorDict of groups — handing it the bare tensor
+    is the IndexError that killed DAgger round 1's first launch
+    (docs/07 2026-09-04)."""
     import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
+    from tensordict import TensorDict  # noqa: PLC0415
+
+    from rq_mjlab.walk_verdict import ACTOR_OBS_GROUP  # noqa: PLC0415
 
     def label(observations: Any) -> Any:
         with torch.no_grad():
-            obs = torch.as_tensor(
+            rows = torch.as_tensor(
                 np.asarray(observations), dtype=torch.float32, device=device
             )
+            obs = TensorDict({ACTOR_OBS_GROUP: rows}, batch_size=[rows.shape[0]])
             return policy(obs).detach().cpu().numpy()
 
     return label
