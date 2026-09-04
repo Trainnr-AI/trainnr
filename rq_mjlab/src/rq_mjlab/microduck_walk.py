@@ -138,7 +138,10 @@ PHYSICS_DT = 0.005
 
 
 def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each statement a cited number
-    *, play: bool = False, law_dr_span: float | None = LAW_DR_SPAN
+    *,
+    play: bool = False,
+    law_dr_span: float | None = LAW_DR_SPAN,
+    law_pin_scale: float | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The walk cfg and its identity: robot stamp, actuator stamp, and
     the law-DR basis — the three strings a run's record must carry.
@@ -333,7 +336,11 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     # Ours: the expansion event (their decorator-carrier no-op, owned),
     # and law DR from the certified bundle with a declared basis.
     events["bam_expansion"] = bam_expansion_event()
-    if law_dr_span:
+    if law_pin_scale is not None:
+        # The envelope probe: the law at a fixed offset from the fit.
+        law_dr, dr_basis = bam_param_dr_event(actuator, pin_scale=law_pin_scale)
+        events["bam_param_dr"] = law_dr
+    elif law_dr_span:
         law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=law_dr_span)
         events["bam_param_dr"] = law_dr
     else:

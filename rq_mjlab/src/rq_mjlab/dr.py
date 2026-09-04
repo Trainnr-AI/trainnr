@@ -49,6 +49,7 @@ def bam_param_dr_event(
     entity_name: str = "robot",
     fallback_span: float | None = None,
     mode: str = "reset",
+    pin_scale: float | None = None,
 ) -> tuple[EventTermCfg, str]:
     """An event term that redraws the actuator's law parameters per
     world from ITS bundle's declared region — and the BASIS string the
@@ -68,6 +69,12 @@ def bam_param_dr_event(
     (`BamActuator.SCALABLE`); the region's other entries — the passives,
     `q_offset`, `command_delay` — are for mjlab's native events and the
     cfg, and are ignored here by name.
+
+    `pin_scale` replaces the region with a DEGENERATE one — every law
+    parameter at exactly fit x pin_scale, no draw — the envelope probe
+    (docs/e2e-research/68 §4.2 on the walk): judge a policy at a known
+    offset from the measured fit and read where it fails. The basis
+    says "pinned", never "identified" or "declared".
     """
     if not isinstance(actuator_cfg, BamActuatorCfg):
         raise TypeError(
@@ -76,9 +83,20 @@ def bam_param_dr_event(
             "exist yet at cfg-build time; the event finds it by stamp"
         )
     stamp = actuator_cfg.stamp
-    ranges, basis = dr_from_bundle(
-        actuator_cfg.bundle_path, fallback_span=fallback_span
-    )
+    if pin_scale is not None:
+        if pin_scale <= 0:
+            raise ValueError(f"pin_scale must be positive, got {pin_scale}")
+        # A span of zero around the fit gives the point values; scale them.
+        point, _ = dr_from_bundle(actuator_cfg.bundle_path, fallback_span=0.0)
+        ranges = {
+            name: (low * pin_scale, low * pin_scale)
+            for name, (low, _high) in point.items()
+        }
+        basis = f"pinned: every law parameter at fit x {pin_scale:g} (no draw)"
+    else:
+        ranges, basis = dr_from_bundle(
+            actuator_cfg.bundle_path, fallback_span=fallback_span
+        )
     drawable = {
         name: bounds for name, bounds in ranges.items() if name in BamActuator.SCALABLE
     }

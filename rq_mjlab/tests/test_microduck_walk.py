@@ -131,3 +131,13 @@ class TheLawDrSpan(unittest.TestCase):
         _base, base_stamps = microduck_walk_env_cfg()
         self.assertEqual(stamps["robot"], base_stamps["robot"])
         self.assertEqual(stamps["actuator"], base_stamps["actuator"])
+
+    def test_a_pinned_scale_is_a_degenerate_region_with_its_own_basis(self) -> None:
+        from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+
+        cfg, stamps = microduck_walk_env_cfg(law_pin_scale=0.5)
+        self.assertIn("bam_param_dr", cfg.events)
+        self.assertIn("pinned", stamps["dr_basis"])
+        self.assertIn("0.5", stamps["dr_basis"])
+        with self.assertRaisesRegex(ValueError, "positive"):
+            microduck_walk_env_cfg(law_pin_scale=0.0)

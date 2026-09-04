@@ -379,6 +379,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frame-width", type=int, default=320)
     parser.add_argument("--frame-height", type=int, default=240)
     parser.add_argument(
+        "--judge-at-scale",
+        type=float,
+        default=None,
+        help="the envelope probe: judge with every law parameter pinned at "
+        "fit x SCALE (no draw); the certificate file carries the scale",
+    )
+    parser.add_argument(
         "--judge-at-fit",
         action="store_true",
         help="judge with NO law DR — the bundle's point fit exactly, the pinned "
@@ -470,7 +477,8 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
     from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
 
     cfg, identity = microduck_walk_env_cfg(
-        law_dr_span=None if args.judge_at_fit else LAW_DR_SPAN
+        law_dr_span=None if args.judge_at_fit else LAW_DR_SPAN,
+        law_pin_scale=args.judge_at_scale,
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
@@ -578,6 +586,9 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
     if args.judge_at_fit:
         suffix = f"at-fit-{suffix}"
         protocol["judged_at"] = "the bundle's point fit (no law DR)"
+    if args.judge_at_scale is not None:
+        suffix = f"at-x{args.judge_at_scale:g}-{suffix}"
+        protocol["judged_at"] = f"every law parameter at fit x {args.judge_at_scale:g}"
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 
     write_certificate(
