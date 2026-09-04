@@ -5,23 +5,25 @@
 # trials — so every arm is judged in the same world. Arms run one per
 # pod in parallel; the study's finding folds their certificates.
 #
-#   tools/walk-c1-arm.sh <arm> <span> [iterations] [trials]
-#   e.g. tools/walk-c1-arm.sh point 0 8000 40
-#        tools/walk-c1-arm.sh narrow 0.10
-#        tools/walk-c1-arm.sh wide 0.30
+#   tools/walk-c1-arm.sh <arm> <span> [iterations] [trials] [seed] [replicate]
+#   e.g. tools/walk-c1-arm.sh point 0 8000 40          # run 1: mjlab's seed 42
+#        tools/walk-c1-arm.sh narrow 0.10 8000 40 43 2 # replicate 2 under seed 43
+# A replicate lands under runs/studies/walk-c1/<arm>#<replicate>/ so the
+# fold pools it with its arm (tools/walk-c1-fold.py).
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 arm="${1:?arm name}"; span="${2:?law-DR span (0 = none)}"
-iterations="${3:-8000}"; trials="${4:-40}"
-root="$repo/runs/studies/walk-c1/$arm"
+iterations="${3:-8000}"; trials="${4:-40}"; seed="${5:-}"; replicate="${6:-}"
+root="$repo/runs/studies/walk-c1/$arm${replicate:+#$replicate}"
+seed_flag=""; [ -n "$seed" ] && seed_flag="--seed $seed"
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 mkdir -p "$root"
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
-say "walk-c1 arm $arm: span $span, $iterations iterations"
+say "walk-c1 arm $arm${replicate:+ replicate $replicate}: span $span, $iterations iterations${seed:+, seed $seed}"
 cd "$repo/rq_mjlab"
 .venv/bin/python -m rq_mjlab.walk_train --agent g3 --iterations "$iterations" \
-  --dr-span "$span" --log-dir "$root/train" --no-recorder
+  --dr-span "$span" --log-dir "$root/train" --no-recorder $seed_flag
 
 ckpt="$(ls "$root"/train/model_*.pt | sort -t_ -k2 -n | tail -1)"
 say "certify $arm at the fit: $ckpt ($trials trials, seed 1000)"

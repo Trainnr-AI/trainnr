@@ -108,6 +108,13 @@ def main() -> None:
         "(the walk C1 study's arms: 0 / 0.10 / 0.30)",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="the env's seed (mjlab's default 42 when unset): a study's replicates "
+        "name theirs, and the identity records it",
+    )
+    parser.add_argument(
         "--log-dir",
         type=Path,
         default=None,
@@ -139,6 +146,9 @@ def main() -> None:
 
     cfg, identity = microduck_walk_env_cfg(law_dr_span=args.dr_span or None)
     cfg.scene.num_envs = envs
+    if args.seed is not None:
+        cfg.seed = args.seed
+    identity = {**identity, "seed": cfg.seed}
     cfg.recorders = (
         {}
         if args.no_recorder
