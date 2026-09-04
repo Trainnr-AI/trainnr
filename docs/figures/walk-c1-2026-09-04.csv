@@ -1,4 +1,4 @@
 arm,group,episodes,successes,trials,rate,ci_low,ci_high
-point,point,,34,40,0.85,0.7016,0.9429
-narrow,narrow,,37,40,0.925,0.7961,0.9843
-wide,wide,,29,40,0.725,0.5611,0.854
+point,point,,108,120,0.9,0.8318,0.9473
+narrow,narrow,,108,120,0.9,0.8318,0.9473
+wide,wide,,84,120,0.7,0.6096,0.7802

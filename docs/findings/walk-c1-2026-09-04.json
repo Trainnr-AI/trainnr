@@ -1,8 +1,8 @@
 {
  "id": "walk-c1-2026-09-04",
- "claim": "C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared \u00b10.10 span, and the folklore \u00b10.30 span \u2014 same G3 recipe \u2014 each certified AT THE FIT (no law DR, pushes on) on 40 matched trials; own-DR certificates ride along.",
+ "claim": "C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared \u00b10.10 span, and the folklore \u00b10.30 span \u2014 same G3 recipe \u2014 each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; own-DR certificates ride along.",
  "date": "2026-09-04",
- "repo_commit": "d1fa795-archive",
+ "repo_commit": "9cb7916-archive",
  "argv": [
   "../tools/walk-c1-fold.py",
   "/workspace/robotiq/runs/studies/walk-c1"
@@ -11,17 +11,23 @@
  "outcome": {
   "arms": {
    "point": {
-    "successes": 34,
-    "trials": 40,
+    "successes": 108,
+    "trials": 120,
     "ci95": [
-     0.7016,
-     0.9429
+     0.8318,
+     0.9473
+    ],
+    "runs": 3,
+    "per_run": [
+     34,
+     37,
+     37
     ],
     "funnel": {
-     "survived": 40,
-     "tracked": 34
+     "survived": 120,
+     "tracked": 108
     },
-    "median_err_ratio": 0.4095,
+    "median_err_ratio": 0.3763,
     "trained_dr_basis": "none: the bundle's point fit exactly (no law DR)",
     "judged_at": "the bundle's point fit (no law DR)",
     "instrument": [
@@ -29,15 +35,21 @@
     ]
    },
    "narrow": {
-    "successes": 37,
-    "trials": 40,
+    "successes": 108,
+    "trials": 120,
     "ci95": [
-     0.7961,
-     0.9843
+     0.8318,
+     0.9473
+    ],
+    "runs": 3,
+    "per_run": [
+     37,
+     36,
+     35
     ],
     "funnel": {
-     "survived": 40,
-     "tracked": 37
+     "survived": 120,
+     "tracked": 108
     },
     "median_err_ratio": 0.371,
     "trained_dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)",
@@ -47,17 +59,23 @@
     ]
    },
    "wide": {
-    "successes": 29,
-    "trials": 40,
+    "successes": 84,
+    "trials": 120,
     "ci95": [
-     0.5611,
-     0.854
+     0.6096,
+     0.7802
+    ],
+    "runs": 3,
+    "per_run": [
+     29,
+     31,
+     24
     ],
     "funnel": {
-     "survived": 40,
-     "tracked": 29
+     "survived": 120,
+     "tracked": 84
     },
-    "median_err_ratio": 0.4112,
+    "median_err_ratio": 0.4248,
     "trained_dr_basis": "caller-declared span \u00b10.3 (bundle is point estimates)",
     "judged_at": "the bundle's point fit (no law DR)",
     "instrument": [
@@ -67,66 +85,191 @@
   },
   "own_dr": {
    "point": {
-    "successes": 31,
-    "trials": 40,
-    "ci95": [
-     0.6155,
-     0.8916
+    "successes": 101,
+    "trials": 120,
+    "per_run": [
+     31,
+     35,
+     35
     ],
-    "funnel": {
-     "survived": 39,
-     "tracked": 32
-    },
     "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
    },
    "narrow": {
-    "successes": 35,
-    "trials": 40,
-    "ci95": [
-     0.732,
-     0.9581
+    "successes": 105,
+    "trials": 120,
+    "per_run": [
+     35,
+     35,
+     35
     ],
-    "funnel": {
-     "survived": 40,
-     "tracked": 35
-    },
     "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
    },
    "wide": {
-    "successes": 30,
-    "trials": 40,
-    "ci95": [
-     0.588,
-     0.8731
+    "successes": 87,
+    "trials": 120,
+    "per_run": [
+     30,
+     34,
+     23
     ],
-    "funnel": {
-     "survived": 40,
-     "tracked": 30
-    },
     "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
    }
+  },
+  "replicates": {
+   "point": [
+    {
+     "run": "point",
+     "seed": 42,
+     "successes": 34,
+     "trials": 40,
+     "ci95": [
+      0.7016,
+      0.9429
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 34
+     }
+    },
+    {
+     "run": "point#2",
+     "seed": 43,
+     "successes": 37,
+     "trials": 40,
+     "ci95": [
+      0.7961,
+      0.9843
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 37
+     }
+    },
+    {
+     "run": "point#3",
+     "seed": 44,
+     "successes": 37,
+     "trials": 40,
+     "ci95": [
+      0.7961,
+      0.9843
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 37
+     }
+    }
+   ],
+   "narrow": [
+    {
+     "run": "narrow",
+     "seed": 42,
+     "successes": 37,
+     "trials": 40,
+     "ci95": [
+      0.7961,
+      0.9843
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 37
+     }
+    },
+    {
+     "run": "narrow#2",
+     "seed": 43,
+     "successes": 36,
+     "trials": 40,
+     "ci95": [
+      0.7634,
+      0.9721
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 36
+     }
+    },
+    {
+     "run": "narrow#3",
+     "seed": 44,
+     "successes": 35,
+     "trials": 40,
+     "ci95": [
+      0.732,
+      0.9581
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 35
+     }
+    }
+   ],
+   "wide": [
+    {
+     "run": "wide",
+     "seed": 42,
+     "successes": 29,
+     "trials": 40,
+     "ci95": [
+      0.5611,
+      0.854
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 29
+     }
+    },
+    {
+     "run": "wide#2",
+     "seed": 43,
+     "successes": 31,
+     "trials": 40,
+     "ci95": [
+      0.6155,
+      0.8916
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 31
+     }
+    },
+    {
+     "run": "wide#3",
+     "seed": 44,
+     "successes": 24,
+     "trials": 40,
+     "ci95": [
+      0.4333,
+      0.7514
+     ],
+     "funnel": {
+      "survived": 40,
+      "tracked": 24
+     }
+    }
+   ]
   },
   "effects": [
    {
     "a": "wide",
     "b": "narrow",
     "difference": 0.20000000000000007,
-    "p": 0.036737511261511584,
+    "p": 0.00016321215380720133,
     "verdict": "SENSITIVE"
    },
    {
     "a": "point",
     "b": "narrow",
-    "difference": 0.07500000000000007,
-    "p": 0.4813689171934211,
-    "verdict": "UNRESOLVED"
+    "difference": 0.0,
+    "p": 1.0,
+    "verdict": "INSENSITIVE"
    },
    {
     "a": "wide",
     "b": "point",
-    "difference": 0.125,
-    "p": 0.27417040130339937,
-    "verdict": "UNRESOLVED"
+    "difference": 0.20000000000000007,
+    "p": 0.00016321215380720133,
+    "verdict": "SENSITIVE"
    }
   ],
   "alpha": 0.05,
@@ -139,8 +282,14 @@
  },
  "artifacts": {
   "point.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point/train/verdict/walk-verdict-at-fit-cuda.json",
+  "point#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "point#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point#3/train/verdict/walk-verdict-at-fit-cuda.json",
   "narrow.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow/train/verdict/walk-verdict-at-fit-cuda.json",
+  "narrow#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "narrow#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow#3/train/verdict/walk-verdict-at-fit-cuda.json",
   "wide.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide/train/verdict/walk-verdict-at-fit-cuda.json",
+  "wide#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "wide#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide#3/train/verdict/walk-verdict-at-fit-cuda.json",
   "figure.svg": "docs/figures/walk-c1-2026-09-04.svg",
   "figure.pdf": "docs/figures/walk-c1-2026-09-04.pdf",
   "figure.png": "docs/figures/walk-c1-2026-09-04.png",
@@ -150,6 +299,7 @@
  "protocol": "docs/66 \u00a78 (C1 on the walk: tools/walk-c1-arm.sh, judged at the fit)",
  "caveats": [
   "No bundle in the store carries intervals: the arms are point / declared \u00b10.10 / declared \u00b10.30 around BAM's point fit \u2014 the identified-INTERVAL arm needs a fit with intervals (the bench chapter).",
-  "One training run per arm: the lift's cliff curve showed per-run variance can exceed the effect; replicate before quoting a difference."
+  "Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.",
+  "Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44."
  ]
 }

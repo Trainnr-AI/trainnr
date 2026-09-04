@@ -491,7 +491,13 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
         for key in ("robot", "actuator"):
             if trained_identity.get(key) != identity.get(key):
                 raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
-        identity = {**identity, "trained_dr_basis": trained_identity.get("dr_basis")}
+        identity = {
+            **identity,
+            "trained_dr_basis": trained_identity.get("dr_basis"),
+            # The training run's seed (walk_train --seed; mjlab's default
+            # 42 when the run predates the knob) — a replicate's name.
+            "seed": trained_identity.get("seed", 42),
+        }
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
