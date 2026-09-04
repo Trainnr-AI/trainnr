@@ -262,3 +262,84 @@ class TheReplicates(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             written = render(record, Path(tmp))
             self.assertTrue((Path(tmp) / written["svg"]).exists())
+
+
+class TheWalkFold(unittest.TestCase):
+    """The walk C1 fold pools replicates per arm: run 1 at `<arm>`,
+    replicates at `<arm>#k`, trials concatenated in replicate order."""
+
+    def _walk_fold(self):
+        if str(REPO / "tools") not in sys.path:
+            sys.path.insert(0, str(REPO / "tools"))
+        spec = importlib.util.spec_from_file_location(
+            "walk_fold", REPO / "tools" / "walk-c1-fold.py"
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _write_run(self, root: Path, name: str, successes: int, seed: int) -> None:
+        verdict = root / name / "train" / "verdict"
+        verdict.mkdir(parents=True)
+        cert = {
+            "successes": successes,
+            "trials": 4,
+            "ci95": [0.1, 0.9],
+            "funnel": {"survived": 4, "tracked": successes},
+            "median_err_ratio": 0.4,
+            "identity": {"trained_dr_basis": "b", "seed": seed},
+            "protocol": {"judged_at": "fit", "dr_basis": "b"},
+            "instrument": "mjlab-test",
+        }
+        (verdict / "walk-verdict-at-fit-cuda.json").write_text(json.dumps(cert))
+        rows = [
+            {
+                "source": "microduck-walk@0123456789ab",
+                "policy": "p",
+                "trial": t,
+                "success": t < successes,
+                "steps": 1,
+                "instrument": "mjlab-test",
+                "protocol": {},
+                "seed": 1000,
+                "events": [],
+                "variations": {},
+            }
+            for t in range(4)
+        ]
+        (verdict / "records-at-fit-cuda.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n"
+        )
+
+    def test_replicates_pool_in_order_and_keep_per_run_counts(self) -> None:
+        fold = self._walk_fold()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_run(root, "narrow", 3, 42)
+            self._write_run(root, "narrow#2", 4, 43)
+            self._write_run(root, "narrow#3", 2, 44)
+            self._write_run(root, "wide", 1, 42)
+            self.assertEqual(
+                [p.name for p in fold.replicate_dirs(root, "narrow")],
+                ["narrow", "narrow#2", "narrow#3"],
+            )
+            self.assertEqual(
+                fold.outcomes(root, "narrow"),
+                [True, True, True, False] + [True] * 4 + [True, True, False, False],
+            )
+            result = fold.fold(root, ("narrow", "wide"), alpha=0.05, delta=0.15)
+            self.assertEqual(
+                (
+                    result["arms"]["narrow"]["successes"],
+                    result["arms"]["narrow"]["trials"],
+                ),
+                (9, 12),
+            )
+            self.assertEqual(result["arms"]["narrow"]["per_run"], [3, 4, 2])
+            self.assertEqual(
+                [r["seed"] for r in result["replicates"]["narrow"]], [42, 43, 44]
+            )
+            self.assertEqual(result["arms"]["wide"]["runs"], 1)
+            with self.assertRaisesRegex(FileNotFoundError, "point"):
+                fold.replicate_dirs(root, "point")

@@ -15,6 +15,7 @@ with its figure, like every other study.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -40,7 +41,25 @@ ACTUATOR = "xl330-m6@3ae1b8c2156b (point fit, no intervals)"
 RECIPE = "g3_agent, 8000 iterations, 4096 envs"
 
 
+REPLICATE_SEP = "#"  # "narrow#2": replicate 2 of the narrow arm
+
+
+def replicate_dirs(root: Path, arm: str) -> list[Path]:
+    """The arm's runs: `<root>/<arm>` (run 1) and every `<root>/<arm>#k`,
+    in replicate order. An arm with no directory at all is refused."""
+    found = sorted(
+        (p for p in root.glob(f"{arm}{REPLICATE_SEP}*") if p.is_dir()),
+        key=lambda p: int(p.name.split(REPLICATE_SEP, 1)[1]),
+    )
+    first = root / arm
+    dirs = ([first] if first.is_dir() else []) + found
+    if not dirs:
+        raise FileNotFoundError(f"arm {arm!r} has no run under {root}")
+    return dirs
+
+
 def certificate(root: Path, arm: str, name: str) -> dict[str, Any]:
+    """One run's certificate; `arm` may be a replicate dir name."""
     path = root / arm / "train" / "verdict" / name
     if not path.is_file():
         raise FileNotFoundError(
@@ -50,8 +69,13 @@ def certificate(root: Path, arm: str, name: str) -> dict[str, Any]:
 
 
 def outcomes(root: Path, arm: str) -> list[bool]:
-    rows = read_records(root / arm / "train" / "verdict" / AT_FIT_RECORDS)
-    return [r.success for r in sorted(rows, key=lambda r: r.trial)]
+    """Every replicate's at-fit outcomes of one arm, concatenated in
+    replicate order (trial k of each run started identically)."""
+    pooled: list[bool] = []
+    for run in replicate_dirs(root, arm):
+        rows = read_records(run / "train" / "verdict" / AT_FIT_RECORDS)
+        pooled += [r.success for r in sorted(rows, key=lambda r: r.trial)]
+    return pooled
 
 
 def fold(
@@ -59,31 +83,59 @@ def fold(
 ) -> dict[str, Any]:
     """The at-fit certificates as arms, the own-DR ones beside them, and
     the paired effects between arms."""
-    result: dict[str, Any] = {"arms": {}, "own_dr": {}, "effects": []}
+    from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
+
+    result: dict[str, Any] = {"arms": {}, "own_dr": {}, "replicates": {}, "effects": []}
     for arm in arms:
-        fit = certificate(root, arm, AT_FIT)
-        result["arms"][arm] = {
-            "successes": fit["successes"],
-            "trials": fit["trials"],
-            "ci95": fit["ci95"],
-            "funnel": fit["funnel"],
-            "median_err_ratio": fit["median_err_ratio"],
-            "trained_dr_basis": fit["identity"].get("trained_dr_basis"),
-            "judged_at": fit["protocol"].get("judged_at"),
-            "instrument": [fit["instrument"]],
-        }
-        try:
-            own = certificate(root, arm, OWN_DR)
-        except FileNotFoundError:
-            result["own_dr"][arm] = None
-        else:
-            result["own_dr"][arm] = {
-                "successes": own["successes"],
-                "trials": own["trials"],
-                "ci95": own["ci95"],
-                "funnel": own["funnel"],
-                "dr_basis": own["protocol"].get("dr_basis"),
+        runs = replicate_dirs(root, arm)
+        fits = [certificate(root, run.name, AT_FIT) for run in runs]
+        # Each replicate as its own row (the spread IS the finding), and
+        # the arm as their pool with an exact interval on the pooled count.
+        result["replicates"][arm] = [
+            {
+                "run": run.name,
+                "seed": fit["identity"].get("seed"),
+                "successes": fit["successes"],
+                "trials": fit["trials"],
+                "ci95": fit["ci95"],
+                "funnel": fit["funnel"],
             }
+            for run, fit in zip(runs, fits, strict=True)
+        ]
+        successes = sum(f["successes"] for f in fits)
+        trials = sum(f["trials"] for f in fits)
+        low, high = clopper_pearson(successes, trials)
+        result["arms"][arm] = {
+            "successes": successes,
+            "trials": trials,
+            "ci95": [round(low, 4), round(high, 4)],
+            "runs": len(fits),
+            "per_run": [f["successes"] for f in fits],
+            "funnel": {
+                "survived": sum(f["funnel"]["survived"] for f in fits),
+                "tracked": sum(f["funnel"]["tracked"] for f in fits),
+            },
+            "median_err_ratio": sorted(f["median_err_ratio"] for f in fits)[
+                len(fits) // 2
+            ],
+            "trained_dr_basis": fits[0]["identity"].get("trained_dr_basis"),
+            "judged_at": fits[0]["protocol"].get("judged_at"),
+            "instrument": sorted({f["instrument"] for f in fits}),
+        }
+        owns = []
+        for run in runs:
+            with contextlib.suppress(FileNotFoundError):
+                owns.append(certificate(root, run.name, OWN_DR))
+        result["own_dr"][arm] = (
+            {
+                "successes": sum(o["successes"] for o in owns),
+                "trials": sum(o["trials"] for o in owns),
+                "per_run": [o["successes"] for o in owns],
+                "dr_basis": owns[0]["protocol"].get("dr_basis"),
+            }
+            if owns
+            else None
+        )
     for a, b in COMPARE:
         if a in arms and b in arms:
             effect = main_effect(
@@ -123,7 +175,8 @@ def main() -> int:
         own_text = f"; under own DR {own['successes']}/{own['trials']}" if own else ""
         print(
             f"{arm}: at the fit {r['successes']}/{r['trials']} CI95 {r['ci95']} "
-            f"(trained {r['trained_dr_basis']}){own_text}"
+            f"over {r['runs']} run(s) {r['per_run']} (trained {r['trained_dr_basis']})"
+            f"{own_text}"
         )
     for e in outcome["effects"]:
         print(
@@ -148,16 +201,17 @@ def main() -> int:
         outcome=outcome,
         inputs={"robot": ROBOT, "actuator": ACTUATOR, "recipe": RECIPE},
         artifacts={
-            f"{arm}.at_fit": str(args.root / arm / "train" / "verdict" / AT_FIT)
+            f"{run.name}.at_fit": str(run / "train" / "verdict" / AT_FIT)
             for arm in arms
+            for run in replicate_dirs(args.root, arm)
         },
         protocol=PROTOCOL,
         caveats=(
             "No bundle in the store carries intervals: the arms are point / declared "
             "±0.10 / declared ±0.30 around BAM's point fit — the identified-INTERVAL "
             "arm needs a fit with intervals (the bench chapter).",
-            "One training run per arm: the lift's cliff curve showed per-run variance "
-            "can exceed the effect; replicate before quoting a difference.",
+            "Replicates are pooled per arm (trial k of each run starts identically); "
+            "per-run counts are on the record so the between-run spread is visible.",
         ),
     )
     figures = render(record, REPO)
