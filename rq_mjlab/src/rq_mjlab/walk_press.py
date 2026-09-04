@@ -36,6 +36,7 @@ from typing import Any
 from rq_pipeline.bundles.hashing import fields_hash, stamp
 from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
+from rq_pipeline.collect.provenance import dagger_stamp
 
 from rq_mjlab.walk_verdict import (
     ERR_RATIO_BOUND,
@@ -225,7 +226,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         # The dataset's expert is still the teacher (its labels); the
         # driver rides on the stamp so a DAgger batch is never mistaken
         # for a teacher press.
-        expert = f"{expert}+dagger:{driver_name or 'student'}"
+        expert = dagger_stamp(expert, driver_name or "student")
     instrument = instrument_for(device)
     control_hz = round(1.0 / float(unwrapped.step_dt))
     basis = (

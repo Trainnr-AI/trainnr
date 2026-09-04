@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.json_record import JsonRecord
-from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.collect.provenance import PROVENANCE_FILE, labeler
 
-# What every source must agree on for a union to be ONE dataset.
-MUST_AGREE = ("fps", "expert", "bundle")
+# What every source must agree on for a union to be ONE dataset. The
+# expert is compared by its LABELER (`provenance.labeler`): a DAgger
+# batch stamped `<teacher>+dagger:<student>` joins the teacher's own
+# dataset — the same teacher wrote every action; the student only chose
+# where. Round 1's first merge (2026-09-04) was refused for that suffix.
+MUST_AGREE = ("fps", "bundle")
 BASIS_KEYS = ("dynamics_basis", "visual_basis")
 MIN_SOURCES = 2  # a union of one is the dataset itself
 
@@ -36,8 +40,9 @@ class UnionProvenance(JsonRecord):
     source_provenance: list[dict[str, Any]]  # each source's sidecar, verbatim
     episodes: int
     fps: int
-    expert: str
+    expert: str  # the shared labeler
     bundle: str
+    experts: list[str]  # each source's full stamp, in order (drivers included)
     note: str = (
         "a union keeps every source's episodes and manifests; nothing is resampled"
     )
@@ -71,6 +76,11 @@ def check_union(sources: list[Path]) -> list[dict[str, Any]]:
         values = {str(s.get(key)) for s in sidecars}
         if len(values) != 1:
             raise ValueError(f"sources disagree on {key}: {sorted(values)}")
+    labelers = {labeler(str(s.get("expert"))) for s in sidecars}
+    if len(labelers) != 1:
+        raise ValueError(
+            f"sources disagree on expert (the labeler): {sorted(labelers)}"
+        )
     for key in BASIS_KEYS:
         values: set[str] = set()
         for s in sidecars:
@@ -102,7 +112,8 @@ def concat_datasets(sources: list[Path], out: Path, *, repo_id: str) -> Path:
         source_provenance=sidecars,
         episodes=sum(int(s.get("episodes", 0)) for s in sidecars),
         fps=int(sidecars[0]["fps"]),
-        expert=str(sidecars[0]["expert"]),
+        expert=labeler(str(sidecars[0]["expert"])),
         bundle=str(sidecars[0]["bundle"]),
+        experts=[str(s["expert"]) for s in sidecars],
     ).write(out / PROVENANCE_FILE)
     return out

@@ -46,6 +46,20 @@ class TheUnionCheck(unittest.TestCase):
         self.assertEqual([s["source"] for s in sidecars], ["a", "b"])
         self.assertEqual(sum(s["episodes"] for s in sidecars), 7)
 
+    def test_a_dagger_batch_joins_its_teachers_dataset(self) -> None:
+        """Same labeler, different driver: one story (round 1's merge)."""
+        from rq_pipeline.collect.provenance import (  # noqa: PLC0415
+            dagger_stamp,
+            labeler,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            a = _dataset(Path(tmp) / "a")
+            b = _dataset(Path(tmp) / "b", expert=dagger_stamp("t@1", "s@9"))
+            sidecars = check_union([a, b])
+        self.assertEqual({labeler(s["expert"]) for s in sidecars}, {"t@1"})
+        self.assertEqual(sidecars[1]["expert"], "t@1+dagger:s@9")
+
     def test_disagreements_are_refused_by_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             a = _dataset(Path(tmp) / "a")
