@@ -31,7 +31,9 @@ PROSE = (
     "docs/70-goals-ledger.md",
     "docs/33-what-we-say.md",
 )
-RATIO = re.compile(r"(?<![\d.])(\d{1,3})/(\d{1,3})(?![\d.])")
+# A trailing "." is a sentence's end, not a decimal: "90/120." must
+# match (the matrix record's claim ends on one, 2026-09-04); ".5" must not.
+RATIO = re.compile(r"(?<![\d.])(\d{1,3})/(\d{1,3})(?!\d|\.\d)")
 # Ratios that are not success counts, by denominator: dates are never
 # quoted as k/n here, but doc references ("docs 11/12") and pages are.
 NOT_A_SCORE = {"1/2", "11/12", "2/3"}
