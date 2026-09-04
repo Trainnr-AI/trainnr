@@ -56,6 +56,35 @@ not this page.
   - Four trials per cell: the cliff's position is coarse (between gain 0.5 and 0.25).
   - The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script.
 
+## compute-ledger-2026-09-04
+
+**Every measured result in this paper was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one B200 attempt ($6.79/h, abandoned: 52 of 120 minutes were provider initialization), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 50 pod-hours in total for the studies and campaigns of 2026-09-01 to 04, on the order of $110, plus ~$34 for the two August chain runs.**
+
+- date: 2026-09-04 · commit: `71f96cc`
+- instrument: `RunPod API (pods, costPerHr) + docs/07`
+- command: `assembled from docs/07's dated entries and the RunPod pod list (`cloud-gpu.py machines`; the API exposes per-pod current-session uptime only)`
+- protocol: docs/34-cloud-gpu.md
+- inputs:
+  - rate_source: RunPod pod list, costPerHr field
+  - hours_source: docs/07 entries and study logs (stage timestamps)
+- outcome:
+  - gpu_rented: NVIDIA RTX PRO 6000 Blackwell Server Edition, 96 GB, CUDA 13.2, $2.09/h secure (14 pods over the period, at most 6 concurrent)
+  - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 2 h attempt (2026-08-28)
+  - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
+  - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
+  - pod_hours_by_run: {'T5 chain + C1 run 2 (2026-08-27/28)': 2.5, 'B200 chain attempt (2026-08-28)': 2.0, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'walk C1 replicates 2-3 x6 pods (2026-09-04, in flight)': 11.4}
+  - pod_hours_total_estimate: 49.6
+  - dollars_estimate: {'rtx_pro_6000': '~47.6 h x $2.09 = ~$99', 'b200': '2 h x $6.79 = ~$14', 'total': '~$113'}
+  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s'}
+  - wall_clock_wins: {'three lift studies in parallel': '2.7 h instead of ~8', 'walk C1 six replicates on six pods': '~1.9 h instead of ~11'}
+- artifacts:
+  - log: docs/07-progress-log.md
+  - pod_list: tools/cloud-gpu.py machines
+- caveats:
+  - Hours are reconstructed from logged stage timestamps and pod uptimes, not from the invoice: reconcile against RunPod's billing export before the paper states a dollar figure (the API exposes current-session uptime only).
+  - Idle time is included where a pod sat between stages (campaign 4's parked night is not: it was stopped).
+  - The owned RTX 3090 Ti and the M1 Pro are not costed.
+
 ## visual-dr-lift-cliff-2026-09-03
 
 **On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds ~1 in 2 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
