@@ -1,6 +1,6 @@
 {
  "id": "walk-c1-2026-09-04",
- "claim": "C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared \u00b10.10 span, and the folklore \u00b10.30 span \u2014 same G3 recipe \u2014 each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; own-DR certificates ride along.",
+ "claim": "C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared \u00b10.10 span, and the folklore \u00b10.30 span \u2014 same G3 recipe \u2014 each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; a second certificate per run judges the policy under law DR drawn from \u00b10.10 around the fit (the module constant LAW_DR_SPAN, the same span for every arm \u2014 not each arm's own span).",
  "date": "2026-09-04",
  "repo_commit": "9cb7916-archive",
  "argv": [
@@ -81,38 +81,6 @@
     "instrument": [
      "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda"
     ]
-   }
-  },
-  "own_dr": {
-   "point": {
-    "successes": 101,
-    "trials": 120,
-    "per_run": [
-     31,
-     35,
-     35
-    ],
-    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
-   },
-   "narrow": {
-    "successes": 105,
-    "trials": 120,
-    "per_run": [
-     35,
-     35,
-     35
-    ],
-    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
-   },
-   "wide": {
-    "successes": 87,
-    "trials": 120,
-    "per_run": [
-     30,
-     34,
-     23
-    ],
-    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
    }
   },
   "replicates": {
@@ -273,7 +241,40 @@
    }
   ],
   "alpha": 0.05,
-  "delta": 0.15
+  "delta": 0.15,
+  "under_span_0.10": {
+   "point": {
+    "successes": 101,
+    "trials": 120,
+    "per_run": [
+     31,
+     35,
+     35
+    ],
+    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
+   },
+   "narrow": {
+    "successes": 105,
+    "trials": 120,
+    "per_run": [
+     35,
+     35,
+     35
+    ],
+    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
+   },
+   "wide": {
+    "successes": 87,
+    "trials": 120,
+    "per_run": [
+     30,
+     34,
+     23
+    ],
+    "dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)"
+   }
+  },
+  "under_span_0.10_note": "every arm judged under \u00b10.10 law DR (LAW_DR_SPAN); mislabeled 'own DR' until 2026-09-04 \u2014 the key was renamed when the mismatch matrix was designed"
  },
  "inputs": {
   "robot": "microduck@14b51b63c52e",
@@ -300,6 +301,7 @@
  "caveats": [
   "No bundle in the store carries intervals: the arms are point / declared \u00b10.10 / declared \u00b10.30 around BAM's point fit \u2014 the identified-INTERVAL arm needs a fit with intervals (the bench chapter).",
   "Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.",
-  "Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44."
+  "Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44.",
+  "The non-at-fit certificates are all under \u00b10.10 (walk_verdict's default LAW_DR_SPAN), not each arm's own span: the point arm's second certificate is at-fit-plus-\u00b10.10-draws, the wide arm's is \u00b10.10 too. Judging under \u00b10.30 needs walk_verdict --judge-span 0.30 (added 2026-09-04)."
  ]
 }

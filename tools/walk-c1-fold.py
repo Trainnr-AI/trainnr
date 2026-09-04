@@ -5,8 +5,10 @@
 Each arm (tools/walk-c1-arm.sh) leaves two certificates under
 `<root>/<arm>/train/verdict/`: `walk-verdict-at-fit-cuda.json` (judged
 at the bundle's point fit, the shared world) and `walk-verdict-cuda.json`
-(judged under the arm's own DR). The at-fit certificates are the study's
-arms; the own-DR ones ride along as the robustness view. Comparisons are
+(judged under law DR drawn from ±0.10 around the fit — walk_verdict's
+LAW_DR_SPAN, the SAME span for every arm, not each arm's own; it was
+called "own DR" here until 2026-09-04). The at-fit certificates are the
+study's arms; the ±0.10 ones ride along under `under_span_0.10`. Comparisons are
 paired on the certificate's shared seed and folded with the same
 `main_effect` every study uses; the finding lands in `docs/findings/`
 with its figure, like every other study.
@@ -85,7 +87,7 @@ def fold(
     the paired effects between arms."""
     from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
 
-    result: dict[str, Any] = {"arms": {}, "own_dr": {}, "replicates": {}, "effects": []}
+    result: dict[str, Any] = {"arms": {}, "under_span_0.10": {}, "replicates": {}, "effects": []}
     for arm in arms:
         runs = replicate_dirs(root, arm)
         fits = [certificate(root, run.name, AT_FIT) for run in runs]
@@ -126,7 +128,7 @@ def fold(
         for run in runs:
             with contextlib.suppress(FileNotFoundError):
                 owns.append(certificate(root, run.name, OWN_DR))
-        result["own_dr"][arm] = (
+        result["under_span_0.10"][arm] = (
             {
                 "successes": sum(o["successes"] for o in owns),
                 "trials": sum(o["trials"] for o in owns),
@@ -171,8 +173,8 @@ def main() -> int:
     arms = tuple(args.arms.split(","))
     outcome = fold(args.root, arms, alpha=args.alpha, delta=args.delta)
     for arm, r in outcome["arms"].items():
-        own = outcome["own_dr"][arm]
-        own_text = f"; under own DR {own['successes']}/{own['trials']}" if own else ""
+        own = outcome["under_span_0.10"][arm]
+        own_text = f"; under ±0.10 {own['successes']}/{own['trials']}" if own else ""
         print(
             f"{arm}: at the fit {r['successes']}/{r['trials']} CI95 {r['ci95']} "
             f"over {r['runs']} run(s) {r['per_run']} (trained {r['trained_dr_basis']})"

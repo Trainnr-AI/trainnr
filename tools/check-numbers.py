@@ -61,7 +61,7 @@ def recorded_ratios() -> set[str]:
         for rows in outcome.get("replicates", {}).values():
             for row in rows:
                 have.add(f"{row['successes']}/{row['trials']}")
-        for own in outcome.get("own_dr", {}).values():
+        for own in outcome.get("under_span_0.10", {}).values():
             if isinstance(own, dict):
                 have.add(f"{own['successes']}/{own['trials']}")
                 for k in own.get("per_run") or []:
