@@ -1,0 +1,123 @@
+{
+ "arms": {
+  "n8": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-n8": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n16": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-n16": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n32": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-n32": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n64": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-n64": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n128": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-n128": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  }
+ },
+ "effects": [
+  {
+   "a": "n8",
+   "b": "n16",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n16",
+   "b": "n32",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n32",
+   "b": "n64",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n64",
+   "b": "n128",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n8",
+   "b": "n128",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  }
+ ],
+ "alpha": 0.05,
+ "delta": 0.15,
+ "truth": {
+  "damping": 1.18,
+  "gain": 0.85
+ },
+ "variations": [
+  "joints.damping_scale=1.18:1.18",
+  "actuators.gain_scale=0.85:0.85"
+ ],
+ "trials": 80,
+ "frame_every": 5
+}

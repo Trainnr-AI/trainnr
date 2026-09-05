@@ -341,12 +341,12 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/verdict.json
-  - study: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/study.json
-  - fixed.records: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/fixed-records.jsonl
-  - fixed.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/fixed/datasheet.md
-  - visual.records: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/visual-records.jsonl
-  - visual.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift-cliff/visual/datasheet.md
+  - verdict: docs/artifacts/lift-studies/visual-dr-lift-cliff/verdict.json
+  - study: docs/artifacts/lift-studies/visual-dr-lift-cliff/study.json
+  - fixed.records: docs/artifacts/lift-studies/visual-dr-lift-cliff/fixed-records.jsonl
+  - fixed.datasheet: docs/artifacts/lift-studies/visual-dr-lift-cliff/fixed/datasheet.md
+  - visual.records: docs/artifacts/lift-studies/visual-dr-lift-cliff/visual-records.jsonl
+  - visual.datasheet: docs/artifacts/lift-studies/visual-dr-lift-cliff/visual/datasheet.md
   - figure.svg: docs/figures/visual-dr-lift-cliff-2026-09-03.svg
   - figure.pdf: docs/figures/visual-dr-lift-cliff-2026-09-03.pdf
   - figure.png: docs/figures/visual-dr-lift-cliff-2026-09-03.png
@@ -356,6 +356,7 @@ not this page.
   - The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
   - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![visual-dr-lift-cliff-2026-09-03](../docs/figures/visual-dr-lift-cliff-2026-09-03.png)
 
@@ -383,12 +384,12 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/visual-dr-lift/verdict.json
-  - study: /workspace/robotiq/runs/studies/visual-dr-lift/study.json
-  - fixed.records: /workspace/robotiq/runs/studies/visual-dr-lift/fixed-records.jsonl
-  - fixed.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift/fixed/datasheet.md
-  - visual.records: /workspace/robotiq/runs/studies/visual-dr-lift/visual-records.jsonl
-  - visual.datasheet: /workspace/robotiq/runs/studies/visual-dr-lift/visual/datasheet.md
+  - verdict: docs/artifacts/lift-studies/visual-dr-lift/verdict.json
+  - study: docs/artifacts/lift-studies/visual-dr-lift/study.json
+  - fixed.records: docs/artifacts/lift-studies/visual-dr-lift/fixed-records.jsonl
+  - fixed.datasheet: docs/artifacts/lift-studies/visual-dr-lift/fixed/datasheet.md
+  - visual.records: docs/artifacts/lift-studies/visual-dr-lift/visual-records.jsonl
+  - visual.datasheet: docs/artifacts/lift-studies/visual-dr-lift/visual/datasheet.md
   - figure.svg: docs/figures/visual-dr-lift-2026-09-03.svg
   - figure.pdf: docs/figures/visual-dr-lift-2026-09-03.pdf
   - figure.png: docs/figures/visual-dr-lift-2026-09-03.png
@@ -397,6 +398,7 @@ not this page.
   - The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.
   - The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![visual-dr-lift-2026-09-03](../docs/figures/visual-dr-lift-2026-09-03.png)
 
@@ -427,18 +429,18 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/demo-count-lift-cliff/verdict.json
-  - study: /workspace/robotiq/runs/studies/demo-count-lift-cliff/study.json
-  - n8.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n8-records.jsonl
-  - n8.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n8/datasheet.md
-  - n16.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n16-records.jsonl
-  - n16.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n16/datasheet.md
-  - n32.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n32-records.jsonl
-  - n32.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n32/datasheet.md
-  - n64.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n64-records.jsonl
-  - n64.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n64/datasheet.md
-  - n128.records: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n128-records.jsonl
-  - n128.datasheet: /workspace/robotiq/runs/studies/demo-count-lift-cliff/n128/datasheet.md
+  - verdict: docs/artifacts/lift-studies/demo-count-lift-cliff/verdict.json
+  - study: docs/artifacts/lift-studies/demo-count-lift-cliff/study.json
+  - n8.records: docs/artifacts/lift-studies/demo-count-lift-cliff/n8-records.jsonl
+  - n8.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff/n8/datasheet.md
+  - n16.records: docs/artifacts/lift-studies/demo-count-lift-cliff/n16-records.jsonl
+  - n16.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff/n16/datasheet.md
+  - n32.records: docs/artifacts/lift-studies/demo-count-lift-cliff/n32-records.jsonl
+  - n32.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff/n32/datasheet.md
+  - n64.records: docs/artifacts/lift-studies/demo-count-lift-cliff/n64-records.jsonl
+  - n64.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff/n64/datasheet.md
+  - n128.records: docs/artifacts/lift-studies/demo-count-lift-cliff/n128-records.jsonl
+  - n128.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff/n128/datasheet.md
   - figure.svg: docs/figures/demo-count-lift-cliff-2026-09-03.svg
   - figure.pdf: docs/figures/demo-count-lift-cliff-2026-09-03.pdf
   - figure.png: docs/figures/demo-count-lift-cliff-2026-09-03.png
@@ -448,6 +450,7 @@ not this page.
   - Judged at gain 0.4, OUTSIDE the folklore ±0.30 span (0.7-1.3): the press's draws never reach the judged truth.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
   - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![demo-count-lift-cliff-2026-09-03](../docs/figures/demo-count-lift-cliff-2026-09-03.png)
 
@@ -478,18 +481,18 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/demo-count-lift/verdict.json
-  - study: /workspace/robotiq/runs/studies/demo-count-lift/study.json
-  - n8.records: /workspace/robotiq/runs/studies/demo-count-lift/n8-records.jsonl
-  - n8.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n8/datasheet.md
-  - n16.records: /workspace/robotiq/runs/studies/demo-count-lift/n16-records.jsonl
-  - n16.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n16/datasheet.md
-  - n32.records: /workspace/robotiq/runs/studies/demo-count-lift/n32-records.jsonl
-  - n32.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n32/datasheet.md
-  - n64.records: /workspace/robotiq/runs/studies/demo-count-lift/n64-records.jsonl
-  - n64.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n64/datasheet.md
-  - n128.records: /workspace/robotiq/runs/studies/demo-count-lift/n128-records.jsonl
-  - n128.datasheet: /workspace/robotiq/runs/studies/demo-count-lift/n128/datasheet.md
+  - verdict: docs/artifacts/lift-studies/demo-count-lift/verdict.json
+  - study: docs/artifacts/lift-studies/demo-count-lift/study.json
+  - n8.records: docs/artifacts/lift-studies/demo-count-lift/n8-records.jsonl
+  - n8.datasheet: docs/artifacts/lift-studies/demo-count-lift/n8/datasheet.md
+  - n16.records: docs/artifacts/lift-studies/demo-count-lift/n16-records.jsonl
+  - n16.datasheet: docs/artifacts/lift-studies/demo-count-lift/n16/datasheet.md
+  - n32.records: docs/artifacts/lift-studies/demo-count-lift/n32-records.jsonl
+  - n32.datasheet: docs/artifacts/lift-studies/demo-count-lift/n32/datasheet.md
+  - n64.records: docs/artifacts/lift-studies/demo-count-lift/n64-records.jsonl
+  - n64.datasheet: docs/artifacts/lift-studies/demo-count-lift/n64/datasheet.md
+  - n128.records: docs/artifacts/lift-studies/demo-count-lift/n128-records.jsonl
+  - n128.datasheet: docs/artifacts/lift-studies/demo-count-lift/n128/datasheet.md
   - figure.svg: docs/figures/demo-count-lift-2026-09-03.svg
   - figure.pdf: docs/figures/demo-count-lift-2026-09-03.pdf
   - figure.png: docs/figures/demo-count-lift-2026-09-03.png
@@ -498,6 +501,7 @@ not this page.
   - One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.
   - Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![demo-count-lift-2026-09-03](../docs/figures/demo-count-lift-2026-09-03.png)
 
@@ -527,15 +531,15 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/verdict.json
-  - study: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/study.json
-  - guessed.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/guessed-records.jsonl
+  - verdict: docs/artifacts/lift-studies/c1-competent-lift-cliff/verdict.json
+  - study: docs/artifacts/lift-studies/c1-competent-lift-cliff/study.json
+  - guessed.records: docs/artifacts/lift-studies/c1-competent-lift-cliff/guessed-records.jsonl
   - guessed.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-guessed.md
-  - identified.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/identified-records.jsonl
+  - identified.records: docs/artifacts/lift-studies/c1-competent-lift-cliff/identified-records.jsonl
   - identified.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-identified.md
-  - point.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/point-records.jsonl
+  - point.records: docs/artifacts/lift-studies/c1-competent-lift-cliff/point-records.jsonl
   - point.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-point.md
-  - wide.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/wide-records.jsonl
+  - wide.records: docs/artifacts/lift-studies/c1-competent-lift-cliff/wide-records.jsonl
   - wide.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-wide.md
   - figure.svg: docs/figures/c1-competent-lift-cliff-2026-09-03.svg
   - figure.pdf: docs/figures/c1-competent-lift-cliff-2026-09-03.pdf
@@ -546,6 +550,7 @@ not this page.
   - The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
   - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![c1-competent-lift-cliff-2026-09-03](../docs/figures/c1-competent-lift-cliff-2026-09-03.png)
 
@@ -574,14 +579,14 @@ not this page.
   - trials: 80
   - frame_every: 5
 - artifacts:
-  - verdict: /workspace/robotiq/runs/studies/c1-competent-lift/verdict.json
-  - study: /workspace/robotiq/runs/studies/c1-competent-lift/study.json
-  - guessed.records: /workspace/robotiq/runs/studies/c1-competent-lift/guessed-records.jsonl
-  - guessed.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/guessed/datasheet.md
-  - identified.records: /workspace/robotiq/runs/studies/c1-competent-lift/identified-records.jsonl
-  - identified.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/identified/datasheet.md
-  - point.records: /workspace/robotiq/runs/studies/c1-competent-lift/point-records.jsonl
-  - point.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift/point/datasheet.md
+  - verdict: docs/artifacts/lift-studies/c1-competent-lift/verdict.json
+  - study: docs/artifacts/lift-studies/c1-competent-lift/study.json
+  - guessed.records: docs/artifacts/lift-studies/c1-competent-lift/guessed-records.jsonl
+  - guessed.datasheet: docs/artifacts/lift-studies/c1-competent-lift/guessed/datasheet.md
+  - identified.records: docs/artifacts/lift-studies/c1-competent-lift/identified-records.jsonl
+  - identified.datasheet: docs/artifacts/lift-studies/c1-competent-lift/identified/datasheet.md
+  - point.records: docs/artifacts/lift-studies/c1-competent-lift/point-records.jsonl
+  - point.datasheet: docs/artifacts/lift-studies/c1-competent-lift/point/datasheet.md
   - figure.svg: docs/figures/c1-competent-lift-2026-09-03.svg
   - figure.pdf: docs/figures/c1-competent-lift-2026-09-03.pdf
   - figure.png: docs/figures/c1-competent-lift-2026-09-03.png
@@ -591,6 +596,7 @@ not this page.
   - Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.
   - The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).
   - One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.
+  - Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune).
 
 ![c1-competent-lift-2026-09-03](../docs/figures/c1-competent-lift-2026-09-03.png)
 

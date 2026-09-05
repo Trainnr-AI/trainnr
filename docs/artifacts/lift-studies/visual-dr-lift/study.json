@@ -1,0 +1,86 @@
+{
+ "spec": {
+  "id": "visual-dr-lift",
+  "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth.",
+  "truth": {
+   "damping": 1.18,
+   "gain": 0.85
+  },
+  "train": {
+   "steps": 20000,
+   "batch": 32
+  },
+  "eval": {
+   "trials": 80,
+   "variations": [
+    "headlight.diffuse_scale=0.5:1.5",
+    "front.offset_m=-0.01,-0.01,-0.01:0.01,0.01,0.01"
+   ],
+   "alpha": 0.05,
+   "delta": 0.15
+  },
+  "compare": [
+   [
+    "fixed",
+    "visual"
+   ]
+  ],
+  "arms": {
+   "fixed": {
+    "episodes": 64,
+    "dr": {
+     "damping": [
+      0.7,
+      1.3
+     ],
+     "gain": [
+      0.7,
+      1.3
+     ]
+    },
+    "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)"
+   },
+   "visual": {
+    "episodes": 64,
+    "dr": {
+     "damping": [
+      0.7,
+      1.3
+     ],
+     "gain": [
+      0.7,
+      1.3
+     ]
+    },
+    "basis": "declared span \u00b10.30 around nominal (the folklore DR, docs/31)",
+    "visuals": [
+     "headlight.diffuse_scale=0.5:1.5",
+     "front.offset_m=-0.01,-0.01,-0.01:0.01,0.01,0.01"
+    ],
+    "visual_basis": "declared visual span: headlight 0.5-1.5, front camera \u00b11 cm (docs/66 \u00a74; the so101 scenes are lit by the headlight only, docs/07 2026-09-02)"
+   }
+  },
+  "caveats": [
+   "The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.",
+   "The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.",
+   "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage."
+  ],
+  "cameras": [
+   "front"
+  ]
+ },
+ "spec_hash": "5597bb226d86",
+ "task": "lift-study",
+ "expert": "scripted-pick@lift-study",
+ "seed": 17,
+ "frame_every": 5,
+ "kept": {
+  "fixed": 64,
+  "visual": 64
+ },
+ "attempts": {
+  "fixed": 64,
+  "visual": 64
+ },
+ "protocol": "docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)"
+}

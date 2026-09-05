@@ -1,0 +1,81 @@
+{
+ "arms": {
+  "guessed": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "c1-competent-lift-guessed": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "identified": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "c1-competent-lift-identified": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "point": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "c1-competent-lift-point": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  }
+ },
+ "effects": [
+  {
+   "a": "guessed",
+   "b": "identified",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "point",
+   "b": "identified",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "guessed",
+   "b": "point",
+   "difference": 0.0,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  }
+ ],
+ "alpha": 0.05,
+ "delta": 0.15,
+ "truth": {
+  "damping": 1.35,
+  "gain": 0.75
+ },
+ "variations": [
+  "joints.damping_scale=1.35:1.35",
+  "actuators.gain_scale=0.75:0.75"
+ ],
+ "trials": 80,
+ "frame_every": 5
+}

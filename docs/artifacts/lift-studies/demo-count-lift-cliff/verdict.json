@@ -1,0 +1,123 @@
+{
+ "arms": {
+  "n8": {
+   "successes": 77,
+   "trials": 80,
+   "ci95": [
+    0.8943,
+    0.9922
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-n8": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n16": {
+   "successes": 56,
+   "trials": 80,
+   "ci95": [
+    0.5872,
+    0.7974
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-n16": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n32": {
+   "successes": 70,
+   "trials": 80,
+   "ci95": [
+    0.7821,
+    0.9384
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-n32": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n64": {
+   "successes": 73,
+   "trials": 80,
+   "ci95": [
+    0.828,
+    0.9641
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-n64": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n128": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-n128": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  }
+ },
+ "effects": [
+  {
+   "a": "n8",
+   "b": "n16",
+   "difference": -0.26250000000000007,
+   "p": 9.98937968365743e-06,
+   "verdict": "SENSITIVE"
+  },
+  {
+   "a": "n16",
+   "b": "n32",
+   "difference": 0.17500000000000004,
+   "p": 0.011276969674602691,
+   "verdict": "SENSITIVE"
+  },
+  {
+   "a": "n32",
+   "b": "n64",
+   "difference": 0.03749999999999998,
+   "p": 0.6090615589454278,
+   "verdict": "UNRESOLVED"
+  },
+  {
+   "a": "n64",
+   "b": "n128",
+   "difference": 0.08750000000000002,
+   "p": 0.013626619009035765,
+   "verdict": "SENSITIVE"
+  },
+  {
+   "a": "n8",
+   "b": "n128",
+   "difference": 0.03749999999999998,
+   "p": 0.24528301886793386,
+   "verdict": "INSENSITIVE"
+  }
+ ],
+ "alpha": 0.05,
+ "delta": 0.15,
+ "truth": {
+  "damping": 1.0,
+  "gain": 0.4
+ },
+ "variations": [
+  "joints.damping_scale=1.0:1.0",
+  "actuators.gain_scale=0.4:0.4"
+ ],
+ "trials": 80,
+ "frame_every": 5
+}

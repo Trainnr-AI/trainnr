@@ -75,12 +75,12 @@
   "visual.datasheet": "64 episodes, bases ['declared span \u00b10.30 around nominal (the folklore DR, docs/31)'], visual bases ['declared visual span: headlight 0.5-1.5, front camera \u00b11 cm (docs/66 \u00a74; the so101 scenes are lit by the headlight only, docs/07 2026-09-02)']"
  },
  "artifacts": {
-  "verdict": "/workspace/robotiq/runs/studies/visual-dr-lift/verdict.json",
-  "study": "/workspace/robotiq/runs/studies/visual-dr-lift/study.json",
-  "fixed.records": "/workspace/robotiq/runs/studies/visual-dr-lift/fixed-records.jsonl",
-  "fixed.datasheet": "/workspace/robotiq/runs/studies/visual-dr-lift/fixed/datasheet.md",
-  "visual.records": "/workspace/robotiq/runs/studies/visual-dr-lift/visual-records.jsonl",
-  "visual.datasheet": "/workspace/robotiq/runs/studies/visual-dr-lift/visual/datasheet.md",
+  "verdict": "docs/artifacts/lift-studies/visual-dr-lift/verdict.json",
+  "study": "docs/artifacts/lift-studies/visual-dr-lift/study.json",
+  "fixed.records": "docs/artifacts/lift-studies/visual-dr-lift/fixed-records.jsonl",
+  "fixed.datasheet": "docs/artifacts/lift-studies/visual-dr-lift/fixed/datasheet.md",
+  "visual.records": "docs/artifacts/lift-studies/visual-dr-lift/visual-records.jsonl",
+  "visual.datasheet": "docs/artifacts/lift-studies/visual-dr-lift/visual/datasheet.md",
   "figure.svg": "docs/figures/visual-dr-lift-2026-09-03.svg",
   "figure.pdf": "docs/figures/visual-dr-lift-2026-09-03.pdf",
   "figure.png": "docs/figures/visual-dr-lift-2026-09-03.png",
@@ -91,6 +91,7 @@
  "caveats": [
   "The evaluation sweep equals the training sweep by design: this measures robustness inside the declared visual span, not generalization beyond it.",
   "The scene's only light is MuJoCo's headlight; scene-light randomization is not exercised.",
-  "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage."
+  "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
+  "Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune)."
  ]
 }

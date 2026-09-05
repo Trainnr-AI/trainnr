@@ -151,18 +151,18 @@
   "n128.datasheet": "128 episodes, bases ['declared span \u00b10.30 around nominal (the folklore DR, docs/31)'], visual bases []"
  },
  "artifacts": {
-  "verdict": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/verdict.json",
-  "study": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/study.json",
-  "n8.records": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n8-records.jsonl",
-  "n8.datasheet": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n8/datasheet.md",
-  "n16.records": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n16-records.jsonl",
-  "n16.datasheet": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n16/datasheet.md",
-  "n32.records": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n32-records.jsonl",
-  "n32.datasheet": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n32/datasheet.md",
-  "n64.records": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n64-records.jsonl",
-  "n64.datasheet": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n64/datasheet.md",
-  "n128.records": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n128-records.jsonl",
-  "n128.datasheet": "/workspace/robotiq/runs/studies/demo-count-lift-cliff/n128/datasheet.md",
+  "verdict": "docs/artifacts/lift-studies/demo-count-lift-cliff/verdict.json",
+  "study": "docs/artifacts/lift-studies/demo-count-lift-cliff/study.json",
+  "n8.records": "docs/artifacts/lift-studies/demo-count-lift-cliff/n8-records.jsonl",
+  "n8.datasheet": "docs/artifacts/lift-studies/demo-count-lift-cliff/n8/datasheet.md",
+  "n16.records": "docs/artifacts/lift-studies/demo-count-lift-cliff/n16-records.jsonl",
+  "n16.datasheet": "docs/artifacts/lift-studies/demo-count-lift-cliff/n16/datasheet.md",
+  "n32.records": "docs/artifacts/lift-studies/demo-count-lift-cliff/n32-records.jsonl",
+  "n32.datasheet": "docs/artifacts/lift-studies/demo-count-lift-cliff/n32/datasheet.md",
+  "n64.records": "docs/artifacts/lift-studies/demo-count-lift-cliff/n64-records.jsonl",
+  "n64.datasheet": "docs/artifacts/lift-studies/demo-count-lift-cliff/n64/datasheet.md",
+  "n128.records": "docs/artifacts/lift-studies/demo-count-lift-cliff/n128-records.jsonl",
+  "n128.datasheet": "docs/artifacts/lift-studies/demo-count-lift-cliff/n128/datasheet.md",
   "figure.svg": "docs/figures/demo-count-lift-cliff-2026-09-03.svg",
   "figure.pdf": "docs/figures/demo-count-lift-cliff-2026-09-03.pdf",
   "figure.png": "docs/figures/demo-count-lift-cliff-2026-09-03.png",
@@ -174,6 +174,7 @@
   "One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.",
   "Judged at gain 0.4, OUTSIDE the folklore \u00b10.30 span (0.7-1.3): the press's draws never reach the judged truth.",
   "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
-  "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect."
+  "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.",
+  "Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune)."
  ]
 }

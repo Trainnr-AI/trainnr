@@ -105,14 +105,14 @@
   "point.datasheet": "128 episodes, bases ['the point estimate: no DR, the study truth exactly (the arm Rizvi & Tomar 2026 / PACE 2025 predict wins)'], visual bases []"
  },
  "artifacts": {
-  "verdict": "/workspace/robotiq/runs/studies/c1-competent-lift/verdict.json",
-  "study": "/workspace/robotiq/runs/studies/c1-competent-lift/study.json",
-  "guessed.records": "/workspace/robotiq/runs/studies/c1-competent-lift/guessed-records.jsonl",
-  "guessed.datasheet": "/workspace/robotiq/runs/studies/c1-competent-lift/guessed/datasheet.md",
-  "identified.records": "/workspace/robotiq/runs/studies/c1-competent-lift/identified-records.jsonl",
-  "identified.datasheet": "/workspace/robotiq/runs/studies/c1-competent-lift/identified/datasheet.md",
-  "point.records": "/workspace/robotiq/runs/studies/c1-competent-lift/point-records.jsonl",
-  "point.datasheet": "/workspace/robotiq/runs/studies/c1-competent-lift/point/datasheet.md",
+  "verdict": "docs/artifacts/lift-studies/c1-competent-lift/verdict.json",
+  "study": "docs/artifacts/lift-studies/c1-competent-lift/study.json",
+  "guessed.records": "docs/artifacts/lift-studies/c1-competent-lift/guessed-records.jsonl",
+  "guessed.datasheet": "docs/artifacts/lift-studies/c1-competent-lift/guessed/datasheet.md",
+  "identified.records": "docs/artifacts/lift-studies/c1-competent-lift/identified-records.jsonl",
+  "identified.datasheet": "docs/artifacts/lift-studies/c1-competent-lift/identified/datasheet.md",
+  "point.records": "docs/artifacts/lift-studies/c1-competent-lift/point-records.jsonl",
+  "point.datasheet": "docs/artifacts/lift-studies/c1-competent-lift/point/datasheet.md",
   "figure.svg": "docs/figures/c1-competent-lift-2026-09-03.svg",
   "figure.pdf": "docs/figures/c1-competent-lift-2026-09-03.pdf",
   "figure.png": "docs/figures/c1-competent-lift-2026-09-03.png",
@@ -124,6 +124,7 @@
   "The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.",
   "Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.",
   "The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).",
-  "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage."
+  "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
+  "Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune)."
  ]
 }

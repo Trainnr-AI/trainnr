@@ -1,0 +1,55 @@
+{
+ "arms": {
+  "fixed": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "visual-dr-lift-cliff-fixed": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "visual": {
+   "successes": 75,
+   "trials": 80,
+   "ci95": [
+    0.8601,
+    0.9794
+   ],
+   "funnel": {
+    "visual-dr-lift-cliff-visual": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  }
+ },
+ "effects": [
+  {
+   "a": "fixed",
+   "b": "visual",
+   "difference": -0.050000000000000044,
+   "p": 0.2098499327391907,
+   "verdict": "INSENSITIVE"
+  }
+ ],
+ "alpha": 0.05,
+ "delta": 0.15,
+ "truth": {
+  "damping": 1.0,
+  "gain": 0.4
+ },
+ "variations": [
+  "joints.damping_scale=1.0:1.0",
+  "actuators.gain_scale=0.4:0.4",
+  "headlight.diffuse_scale=0.5:1.5",
+  "front.offset_m=-0.01,-0.01,-0.01:0.01,0.01,0.01"
+ ],
+ "trials": 80,
+ "frame_every": 5
+}

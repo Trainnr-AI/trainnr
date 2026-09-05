@@ -1,0 +1,103 @@
+{
+ "spec": {
+  "id": "c1-competent-lift",
+  "claim": "C1 at a competent recipe: identified-interval DR (\u00b10.05 around the study truth) vs the folklore \u00b10.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials \u2014 the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.",
+  "truth": {
+   "damping": 1.35,
+   "gain": 0.75
+  },
+  "train": {
+   "steps": 20000,
+   "batch": 32
+  },
+  "eval": {
+   "trials": 80,
+   "variations": [],
+   "alpha": 0.05,
+   "delta": 0.15
+  },
+  "compare": [
+   [
+    "guessed",
+    "identified"
+   ],
+   [
+    "point",
+    "identified"
+   ],
+   [
+    "guessed",
+    "point"
+   ]
+  ],
+  "arms": {
+   "guessed": {
+    "episodes": 128,
+    "dr": {
+     "damping": [
+      0.7,
+      1.3
+     ],
+     "gain": [
+      0.7,
+      1.3
+     ]
+    },
+    "basis": "guessed span \u00b10.30 around nominal (folklore DR)"
+   },
+   "identified": {
+    "episodes": 128,
+    "dr": {
+     "damping": [
+      1.2825,
+      1.4175
+     ],
+     "gain": [
+      0.7125,
+      0.7875
+     ]
+    },
+    "basis": "declared interval \u00b10.05 around the study truth (stand-in for an identified fit record, docs/e2e-research/62)"
+   },
+   "point": {
+    "episodes": 128,
+    "dr": {
+     "damping": [
+      1.35,
+      1.35
+     ],
+     "gain": [
+      0.75,
+      0.75
+     ]
+    },
+    "basis": "the point estimate: no DR, the study truth exactly (the arm Rizvi & Tomar 2026 / PACE 2025 predict wins)"
+   }
+  },
+  "caveats": [
+   "The truth is declared, not measured on hardware: this is the sim retest of the DR-basis question, the real-robot C1 is the thesis test.",
+   "Truth damping 1.35 lies outside the folklore span; the folklore arm never saw it.",
+   "The interval arm must beat the point arm, not only the wide arm, for identified-interval DR to stand (novelty audit, docs/e2e-research/67).",
+   "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage."
+  ],
+  "cameras": [
+   "front"
+  ]
+ },
+ "spec_hash": "2f096c47e447",
+ "task": "lift-study",
+ "expert": "scripted-pick@lift-study",
+ "seed": 17,
+ "frame_every": 5,
+ "kept": {
+  "guessed": 128,
+  "identified": 128,
+  "point": 128
+ },
+ "attempts": {
+  "guessed": 128,
+  "identified": 128,
+  "point": 128
+ },
+ "protocol": "docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)"
+}
