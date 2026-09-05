@@ -88,6 +88,22 @@ def expand_arms(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def selected_arms(
+    spec: dict[str, Any], only: list[str] | None
+) -> dict[str, dict[str, Any]]:
+    """The expanded arms, or the named subset — so two pods can split
+    one study's train and judge stages (2026-09-04: one pod from each
+    end of the list; the skip-if-finished rule makes the meeting arm
+    the only possible duplicate). Unknown names are refused."""
+    arms = expand_arms(spec)
+    if not only:
+        return arms
+    unknown = [n for n in only if n not in arms]
+    if unknown:
+        raise KeyError(f"unknown arms {unknown}; this study has {sorted(arms)}")
+    return {n: arms[n] for n in only}
+
+
 def declared_arm(pressed: str) -> str:
     """`n16#2` -> `n16`; a non-replicated arm is its own name."""
     return pressed.split(REPLICATE_SEP, 1)[0]
@@ -168,12 +184,12 @@ def convert(spec: dict[str, Any], out: Path, *, prune: bool = False) -> int:
     return 0
 
 
-def train(spec: dict[str, Any], out: Path) -> int:
+def train(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) -> int:
     from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     steps, batch = int(spec["train"]["steps"]), int(spec["train"]["batch"])
     device = best_device()
-    for name in expand_arms(spec):
+    for name in selected_arms(spec, only):
         output = out / f"{name}-training"
         # Resumable: an arm whose final checkpoint exists is not retrained
         # (a pod killed at the budget's edge keeps what it finished,
@@ -206,7 +222,7 @@ def _checkpoint(training_dir: Path) -> Path:
     return checkpoints[-1] / "pretrained_model"
 
 
-def evaluate(spec: dict[str, Any], out: Path) -> int:
+def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) -> int:
     """Every arm judged AT the truth on matched trials; the spec's extra
     eval variations (visual sweeps) are drawn by trial index, so every
     arm sees the identical factor vector on trial k."""
@@ -227,7 +243,7 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
     ]
     device = best_device()
     results: dict[str, Any] = {}
-    for name in expand_arms(spec):
+    for name in selected_arms(spec, only):
         records_path = out / f"{name}-records.jsonl"
         if records_path.is_file() and len(read_records(records_path)) == trials:
             # Resumable, like train: a judged arm is not re-judged.
@@ -411,7 +427,14 @@ def main() -> int:
         action="store_true",
         help="convert: delete the pressed episode dirs once the dataset exists",
     )
+    parser.add_argument(
+        "--arms",
+        default=None,
+        help="train/evaluate: only these expanded arms, comma-separated "
+        "(e.g. n128#3,n128#2) — a second pod takes the list from the other end",
+    )
     args = parser.parse_args()
+    only = args.arms.split(",") if args.arms else None
     spec = load_spec(args.spec)
     args.out.mkdir(parents=True, exist_ok=True)
     if args.phase == "generate":
@@ -419,9 +442,9 @@ def main() -> int:
     if args.phase == "convert":
         return convert(spec, args.out, prune=args.prune)
     if args.phase == "train":
-        return train(spec, args.out)
+        return train(spec, args.out, only=only)
     if args.phase == "evaluate":
-        return evaluate(spec, args.out)
+        return evaluate(spec, args.out, only=only)
     return finding(spec, args.out, sys.argv)
 
 

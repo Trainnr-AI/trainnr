@@ -58,3 +58,34 @@ class SizableLiftStudy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheArmSubset(unittest.TestCase):
+    """--arms lets a second pod take the list from the other end; a name
+    the study does not have is refused, not silently skipped."""
+
+    def test_subset_and_refusal(self) -> None:
+        import importlib.util  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        tool = Path(__file__).resolve().parents[2] / "tools" / "study.py"
+        if str(tool.parent) not in sys.path:  # study.py imports its _lab sibling
+            sys.path.insert(0, str(tool.parent))
+        spec_ = importlib.util.spec_from_file_location("study_tool", tool)
+        module = importlib.util.module_from_spec(spec_)
+        assert spec_.loader is not None
+        spec_.loader.exec_module(module)
+        selected_arms = module.selected_arms
+
+        spec = {
+            "arms": {"n8": {"episodes": 8}, "n16": {"episodes": 16}},
+            "replicates": 2,
+        }
+        every = selected_arms(spec, None)
+        self.assertEqual(sorted(every), ["n16#1", "n16#2", "n8#1", "n8#2"])
+        self.assertEqual(
+            list(selected_arms(spec, ["n16#2", "n8#1"])), ["n16#2", "n8#1"]
+        )
+        with self.assertRaisesRegex(KeyError, "unknown arms"):
+            selected_arms(spec, ["n32#1"])
