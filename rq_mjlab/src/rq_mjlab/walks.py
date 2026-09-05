@@ -27,12 +27,16 @@ class WalkSpec:
 
 
 def _microduck_env(
-    *, play: bool = False, dr_span: float | None, pin_scale: float | None
+    *,
+    play: bool = False,
+    dr_span: float | None,
+    pin_scale: float | None,
+    head: str = "free",
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
 
     return microduck_walk_env_cfg(
-        play=play, law_dr_span=dr_span, law_pin_scale=pin_scale
+        play=play, law_dr_span=dr_span, law_pin_scale=pin_scale, head=head
     )
 
 
@@ -43,10 +47,16 @@ def _microduck_agent(iterations: int) -> Any:
 
 
 def _go1_env(
-    *, play: bool = False, dr_span: float | None, pin_scale: float | None
+    *,
+    play: bool = False,
+    dr_span: float | None,
+    pin_scale: float | None,
+    head: str = "free",
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import go1_walk_env_cfg  # noqa: PLC0415
 
+    if head != "free":
+        raise ValueError("the Go1 has no head to pin")
     return go1_walk_env_cfg(play=play, dr_span=dr_span, pin_scale=pin_scale)
 
 

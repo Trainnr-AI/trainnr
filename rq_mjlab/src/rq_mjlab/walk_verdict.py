@@ -551,15 +551,18 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     spec = walk_spec(args.robot)
     default_span = spec.default_span
     judge_span = default_span if args.judge_span is None else args.judge_span
+    trained = args.checkpoint.parent / "identity.json"
+    trained_identity: Any = json.loads(trained.read_text()) if trained.is_file() else {}
     cfg, identity = spec.env_cfg(
         dr_span=None if args.judge_at_fit else judge_span,
         pin_scale=args.judge_at_scale,
+        # A policy trained with its head pinned is judged with it pinned:
+        # the action space is part of what the run's identity records.
+        head=str(trained_identity.get("head", "free")),
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
-    trained = args.checkpoint.parent / "identity.json"
-    if trained.is_file():
-        trained_identity = json.loads(trained.read_text())
+    if trained_identity:
         # Robot and actuator must match; the DR basis may differ on
         # purpose (a policy trained under one span is judged at the fit),
         # and the certificate records both.
