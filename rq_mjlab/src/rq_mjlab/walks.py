@@ -27,13 +27,29 @@ class WalkSpec:
 
 
 def _microduck_env(
-    *, play: bool = False, dr_span: float | None, pin_scale: float | None
+    *,
+    play: bool = False,
+    dr_span: float | None,
+    pin_scale: float | None,
+    pin_axis: str = "all",
 ) -> tuple[Any, dict[str, str]]:
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
+    from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+        PIN_AXES,
+        microduck_walk_env_cfg,
+    )
 
     return microduck_walk_env_cfg(
-        play=play, law_dr_span=dr_span, law_pin_scale=pin_scale
+        play=play,
+        law_dr_span=dr_span,
+        law_pin_scale=pin_scale,
+        law_pin_only=_axis(PIN_AXES, pin_axis),
     )
+
+
+def _axis(axes: dict[str, tuple[str, ...] | None], name: str) -> tuple[str, ...] | None:
+    if name not in axes:
+        raise KeyError(f"no mismatch axis {name!r}; this walk has {sorted(axes)}")
+    return axes[name]
 
 
 def _microduck_agent(iterations: int) -> Any:
@@ -43,11 +59,20 @@ def _microduck_agent(iterations: int) -> Any:
 
 
 def _go1_env(
-    *, play: bool = False, dr_span: float | None, pin_scale: float | None
+    *,
+    play: bool = False,
+    dr_span: float | None,
+    pin_scale: float | None,
+    pin_axis: str = "all",
 ) -> tuple[Any, dict[str, str]]:
-    from rq_mjlab.go1_walk import go1_walk_env_cfg  # noqa: PLC0415
+    from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
 
-    return go1_walk_env_cfg(play=play, dr_span=dr_span, pin_scale=pin_scale)
+    return go1_walk_env_cfg(
+        play=play,
+        dr_span=dr_span,
+        pin_scale=pin_scale,
+        pin_only=_axis(PIN_AXES, pin_axis),
+    )
 
 
 def _go1_agent(iterations: int) -> Any:

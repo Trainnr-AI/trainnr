@@ -76,6 +76,16 @@ class TheGo1Cfg(unittest.TestCase):
         )
         events, _ = actuator_dr_events(dr_span=None, pin_scale=0.7)
         self.assertEqual(events["actuator_gains"].params["kp_range"], (0.7, 0.7))
+        # one axis: kp moves, kd and armature sit at derived
+        only_kp, basis = actuator_dr_events(
+            dr_span=None, pin_scale=0.7, pin_only=("kp",)
+        )
+        self.assertEqual(only_kp["actuator_gains"].params["kp_range"], (0.7, 0.7))
+        self.assertEqual(only_kp["actuator_gains"].params["kd_range"], (1.0, 1.0))
+        self.assertEqual(only_kp["actuator_armature"].params["ranges"], (1.0, 1.0))
+        self.assertIn("pinned: kp at derived x 0.7", basis)
+        with self.assertRaisesRegex(ValueError, "pin_only names"):
+            actuator_dr_events(dr_span=None, pin_scale=0.7, pin_only=("kt",))
         self.assertEqual(SCALED, ("kp", "kd", "armature"))
 
 
@@ -87,6 +97,8 @@ class TheRegistry(unittest.TestCase):
             self.assertGreater(spec.default_span, 0.0)
         with self.assertRaisesRegex(KeyError, "no walk"):
             walk_spec("spot")
+        with self.assertRaisesRegex(KeyError, "no mismatch axis"):
+            walk_spec("go1").env_cfg(dr_span=None, pin_scale=0.8, pin_axis="kt")
 
     def test_go1_agent_takes_the_studys_iterations(self) -> None:
         agent = walk_spec("go1").agent(123)

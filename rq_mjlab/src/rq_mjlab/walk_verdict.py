@@ -408,6 +408,13 @@ def parse_args() -> argparse.Namespace:
         "span it trained under — NOT each policy's own span (2026-09-04)",
     )
     parser.add_argument(
+        "--judge-param",
+        default="all",
+        help="with --judge-at-scale: pin only this mismatch axis (the walk's "
+        "PIN_AXES, e.g. kt / R / friction on the microduck, kp / kd / armature "
+        "on the Go1); 'all' moves every parameter together",
+    )
+    parser.add_argument(
         "--judge-at-fit",
         action="store_true",
         help="judge with NO law DR — the bundle's point fit exactly, the pinned "
@@ -486,7 +493,7 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
     print(f"[verdict] rows in {out_dir}")
 
 
-def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in order
+def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
     args = parse_args()
 
     import warp as wp  # noqa: PLC0415
@@ -509,9 +516,12 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
     spec = walk_spec(args.robot)
     default_span = spec.default_span
     judge_span = default_span if args.judge_span is None else args.judge_span
+    if args.judge_param != "all" and args.judge_at_scale is None:
+        raise SystemExit("--judge-param needs --judge-at-scale")
     cfg, identity = spec.env_cfg(
         dr_span=None if args.judge_at_fit else judge_span,
         pin_scale=args.judge_at_scale,
+        pin_axis=args.judge_param,
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
@@ -631,8 +641,10 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
     else:
         protocol["judged_at"] = f"law DR drawn from ±{default_span:g} around the fit"
     if args.judge_at_scale is not None:
-        suffix = f"at-x{args.judge_at_scale:g}-{suffix}"
-        protocol["judged_at"] = f"every law parameter at fit x {args.judge_at_scale:g}"
+        axis = "" if args.judge_param == "all" else f"{args.judge_param}-"
+        suffix = f"at-x{args.judge_at_scale:g}-{axis}{suffix}"
+        moved = "every law parameter" if args.judge_param == "all" else args.judge_param
+        protocol["judged_at"] = f"{moved} at fit x {args.judge_at_scale:g}"
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 
     write_certificate(

@@ -132,6 +132,23 @@ class TheLawDrSpan(unittest.TestCase):
         self.assertEqual(stamps["robot"], base_stamps["robot"])
         self.assertEqual(stamps["actuator"], base_stamps["actuator"])
 
+    def test_a_pin_can_move_one_axis_and_refuses_an_unknown_one(self) -> None:
+        from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+            PIN_AXES,
+            microduck_walk_env_cfg,
+        )
+
+        _, kt = microduck_walk_env_cfg(law_pin_scale=0.8, law_pin_only=PIN_AXES["kt"])
+        self.assertIn("pinned: kt at fit x 0.8", kt["dr_basis"])
+        self.assertIn("the rest at the fit", kt["dr_basis"])
+        _, friction = microduck_walk_env_cfg(
+            law_pin_scale=0.8, law_pin_only=PIN_AXES["friction"]
+        )
+        self.assertIn("friction_base", friction["dr_basis"])
+        self.assertNotIn("kt at", friction["dr_basis"])
+        with self.assertRaisesRegex(ValueError, "pin_only names"):
+            microduck_walk_env_cfg(law_pin_scale=0.8, law_pin_only=("armature",))
+
     def test_a_pinned_scale_is_a_degenerate_region_with_its_own_basis(self) -> None:
         from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
 

@@ -67,13 +67,17 @@ def replicate_dirs(root: Path, arm: str) -> list[Path]:
     return dirs
 
 
+AXIS = "all"  # set from --param: which mismatch axis the pinned cells moved
+
+
 def records_name(condition: str, span: float) -> str:
-    """The rows file for a condition: 'x<s>' (pinned at fit x s),
-    'fit', 'pm<narrow>' (the plain certificate), 'pm<span>'."""
+    """The rows file for a condition: 'x<s>' (pinned at fit x s on the
+    AXIS), 'fit', 'pm<narrow>' (the plain certificate), 'pm<span>'."""
     if condition == "fit":
         return "records-at-fit-cuda.jsonl"
     if condition.startswith("x"):
-        return f"records-at-{condition}-at-fit-cuda.jsonl"
+        tag = "" if AXIS == "all" else f"{AXIS}-"
+        return f"records-at-{condition}-{tag}at-fit-cuda.jsonl"
     if condition == f"pm{NARROW_SPAN:g}":
         return "records-cuda.jsonl"
     if condition == f"pm{span:g}":
@@ -319,10 +323,18 @@ def main() -> int:
     parser.add_argument("--scales", default=",".join(f"{s:g}" for s in DEFAULT_SCALES))
     parser.add_argument("--span", type=float, default=DEFAULT_SPAN)
     parser.add_argument("--date", default=None)
+    parser.add_argument(
+        "--param",
+        default="all",
+        help="the mismatch axis the pinned cells moved (walk_verdict --judge-param); "
+        "'all' is the diagonal, the default matrix",
+    )
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--delta", type=float, default=0.15)
     args = parser.parse_args()
 
+    global AXIS  # noqa: PLW0603 - one run, one axis
+    AXIS = args.param
     arms = tuple(args.arms.split(","))
     scales = tuple(float(s) for s in args.scales.split(","))
     conditions = (
@@ -338,13 +350,15 @@ def main() -> int:
         print(f"missing certificates: {outcome['missing']}", file=sys.stderr)
     date = args.date or today()
     instrument = "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda"
+    axis_id = "" if AXIS == "all" else f"-{AXIS}"
+    moved = "every law parameter" if AXIS == "all" else f"only {AXIS}"
     record = Finding(
-        id=f"walk-mismatch-matrix-{date}",
+        id=f"walk-mismatch-matrix{axis_id}-{date}",
         claim=(
             "The mismatch matrix on the walk: every C1 policy (trained under no law "
             f"DR, ±{NARROW_SPAN:g}, ±{args.span:g}; replicates pooled) judged "
-            "pinned at the fit scaled by s and under drawn spans, 40 matched "
-            "trials per run — " + table(outcome) + "."
+            f"pinned at the fit scaled by s ({moved} moved) and under drawn spans, "
+            "40 matched trials per run — " + table(outcome) + "."
         ),
         date=date,
         repo_commit=repo_commit(REPO),
@@ -368,8 +382,14 @@ def main() -> int:
         },
         protocol=PROTOCOL,
         caveats=(
-            "Pinned scale s multiplies EVERY law parameter of the actuator model by s "
-            "(walk_verdict --judge-at-scale); a real mismatch moves them separately.",
+            (
+                "Pinned scale s multiplies EVERY law parameter of the actuator model "
+                "by s (walk_verdict --judge-at-scale); a real mismatch moves them "
+                "separately — the per-axis matrices (--judge-param) are the slices."
+                if AXIS == "all"
+                else f"Pinned scale s multiplies only the {AXIS} axis of the actuator "
+                "model by s; every other law parameter sits at the fit."
+            ),
             "One robot, one gait, one recipe; the policies are the C1 runs "
             "(three per arm).",
             "The fit is a point estimate: 'how wrong the measurement is' is simulated, "

@@ -94,34 +94,60 @@ def actuator_stamp() -> str:
     return f"{ROBOT}-derived-pd@{fields_hash(derived_actuator_constants())}"
 
 
+PIN_AXES: dict[str, tuple[str, ...] | None] = {
+    "all": None,
+    "kp": ("kp",),
+    "kd": ("kd",),
+    "armature": ("armature",),
+}
+
+
 def actuator_dr_events(
-    *, dr_span: float | None, pin_scale: float | None
+    *,
+    dr_span: float | None,
+    pin_scale: float | None,
+    pin_only: tuple[str, ...] | None = None,
 ) -> tuple[dict[str, EventTermCfg], str]:
     """The study's events and their basis string: a drawn span, a
-    pinned scale, or nothing."""
+    pinned scale (of every scaled parameter, or only `pin_only`), or
+    nothing."""
     if pin_scale is not None:
+        moved = set(SCALED if pin_only is None else pin_only)
+        unknown = moved - set(SCALED)
+        if unknown:
+            raise ValueError(f"pin_only names {sorted(unknown)}; scaled: {SCALED}")
         lo = hi = float(pin_scale)
-        basis = f"pinned: {', '.join(SCALED)} at derived x {pin_scale:g} (no draw)"
+        which = ", ".join(n for n in SCALED if n in moved)
+        basis = (
+            f"pinned: {which} at derived x {pin_scale:g}, the rest at derived (no draw)"
+        )
     elif dr_span:
         lo, hi = 1.0 - float(dr_span), 1.0 + float(dr_span)
         basis = f"declared ±{dr_span:g} scale on {', '.join(SCALED)} around derived"
     else:
         return {}, "none: mjlab's derived PD gains exactly (no actuator DR)"
+    if pin_scale is None:
+        moved = set(SCALED)
+    unit = (1.0, 1.0)  # a parameter the pin leaves at derived
     events = {
         "actuator_gains": EventTermCfg(
             func=envs_mdp.dr.pd_gains,
             mode="reset",
             params={
                 "asset_cfg": ALL_ACTUATORS,
-                "kp_range": (lo, hi),
-                "kd_range": (lo, hi),
+                "kp_range": (lo, hi) if "kp" in moved else unit,
+                "kd_range": (lo, hi) if "kd" in moved else unit,
                 "operation": "scale",
             },
         ),
         "actuator_armature": EventTermCfg(
             func=envs_mdp.dr.joint_armature,
             mode="reset",
-            params={"asset_cfg": ALL_JOINTS, "operation": "scale", "ranges": (lo, hi)},
+            params={
+                "asset_cfg": ALL_JOINTS,
+                "operation": "scale",
+                "ranges": (lo, hi) if "armature" in moved else unit,
+            },
         ),
     }
     return events, basis
@@ -132,6 +158,7 @@ def go1_walk_env_cfg(
     play: bool = False,
     dr_span: float | None = ACTUATOR_DR_SPAN,
     pin_scale: float | None = None,
+    pin_only: tuple[str, ...] | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """mjlab's Go1 flat cfg, their events untouched, ours added; and
     the identity. `play` is their play mode (no corruption, gentler
@@ -142,7 +169,9 @@ def go1_walk_env_cfg(
     )
 
     cfg = unitree_go1_flat_env_cfg(play=play)
-    events, dr_basis = actuator_dr_events(dr_span=dr_span, pin_scale=pin_scale)
+    events, dr_basis = actuator_dr_events(
+        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
+    )
     for name in events:
         if name in cfg.events:
             raise ValueError(f"mjlab's Go1 cfg already carries an event named {name!r}")

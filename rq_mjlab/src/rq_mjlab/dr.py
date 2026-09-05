@@ -43,13 +43,14 @@ def dr_from_bundle(
     return declared_ranges(bundle, fallback_span=fallback_span)
 
 
-def bam_param_dr_event(
+def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
     actuator_cfg: BamActuatorCfg,
     *,
     entity_name: str = "robot",
     fallback_span: float | None = None,
     mode: str = "reset",
     pin_scale: float | None = None,
+    pin_only: tuple[str, ...] | None = None,
 ) -> tuple[EventTermCfg, str]:
     """An event term that redraws the actuator's law parameters per
     world from ITS bundle's declared region — and the BASIS string the
@@ -74,7 +75,11 @@ def bam_param_dr_event(
     parameter at exactly fit x pin_scale, no draw — the envelope probe
     (docs/e2e-research/68 §4.2 on the walk): judge a policy at a known
     offset from the measured fit and read where it fails. The basis
-    says "pinned", never "identified" or "declared".
+    says "pinned", never "identified" or "declared". `pin_only` names the
+    law parameters the pin moves; the rest sit at the fit exactly — one
+    axis of the mismatch space instead of its diagonal (the matrix of
+    2026-09-04 moved every parameter together; a real fit error does
+    not). Names must be in `BamActuator.SCALABLE`.
     """
     if not isinstance(actuator_cfg, BamActuatorCfg):
         raise TypeError(
@@ -88,11 +93,22 @@ def bam_param_dr_event(
             raise ValueError(f"pin_scale must be positive, got {pin_scale}")
         # A span of zero around the fit gives the point values; scale them.
         point, _ = dr_from_bundle(actuator_cfg.bundle_path, fallback_span=0.0)
+        if pin_only is not None:
+            unknown = [n for n in pin_only if n not in BamActuator.SCALABLE]
+            if unknown:
+                raise ValueError(
+                    f"pin_only names {unknown}; the law's scalable parameters are "
+                    f"{BamActuator.SCALABLE}"
+                )
+            moved = set(pin_only)
+        else:
+            moved = set(point)
         ranges = {
-            name: (low * pin_scale, low * pin_scale)
+            name: (low * pin_scale, low * pin_scale) if name in moved else (low, low)
             for name, (low, _high) in point.items()
         }
-        basis = f"pinned: every law parameter at fit x {pin_scale:g} (no draw)"
+        which = "every law parameter" if pin_only is None else ", ".join(pin_only)
+        basis = f"pinned: {which} at fit x {pin_scale:g}, the rest at the fit (no draw)"
     else:
         ranges, basis = dr_from_bundle(
             actuator_cfg.bundle_path, fallback_span=fallback_span

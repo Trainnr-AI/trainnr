@@ -130,6 +130,25 @@ ARMATURE = (0.9, 1.1)
 # declared span over the certified bundle's law parameters — recorded
 # as the basis on the event and on every episode that samples it.
 LAW_DR_SPAN = 0.10
+# The mismatch axes a certificate can pin one at a time (walk_verdict
+# --judge-param): the motor's strength (kt), its winding (R), and the
+# whole friction family as one axis. "all" is the diagonal.
+PIN_AXES: dict[str, tuple[str, ...] | None] = {
+    "all": None,
+    "kt": ("kt",),
+    "R": ("R",),
+    "friction": (
+        "friction_base",
+        "friction_stribeck",
+        "load_friction_motor",
+        "load_friction_external",
+        "load_friction_motor_stribeck",
+        "load_friction_external_stribeck",
+        "load_friction_motor_quad",
+        "load_friction_external_quad",
+        "dtheta_stribeck",
+    ),
+}
 
 # The physics rate this cfg is transcribed against: mjlab 1.6's base
 # timestep x decimation 4 = 50 Hz control, the rate their deploy runs.
@@ -142,6 +161,7 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     play: bool = False,
     law_dr_span: float | None = LAW_DR_SPAN,
     law_pin_scale: float | None = None,
+    law_pin_only: tuple[str, ...] | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The walk cfg and its identity: robot stamp, actuator stamp, and
     the law-DR basis — the three strings a run's record must carry.
@@ -338,7 +358,9 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     events["bam_expansion"] = bam_expansion_event()
     if law_pin_scale is not None:
         # The envelope probe: the law at a fixed offset from the fit.
-        law_dr, dr_basis = bam_param_dr_event(actuator, pin_scale=law_pin_scale)
+        law_dr, dr_basis = bam_param_dr_event(
+            actuator, pin_scale=law_pin_scale, pin_only=law_pin_only
+        )
         events["bam_param_dr"] = law_dr
     elif law_dr_span:
         law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=law_dr_span)
