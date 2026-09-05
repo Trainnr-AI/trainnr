@@ -111,3 +111,40 @@ policies were trained at the SHIPPED point; an identified-interval
 arm centred on the refit needs its own point arm beside it, or the
 interval's relative width applied around the shipped point, stated as
 such.
+
+## 6. The interval (2026-09-06, 100 replicates × 5000 trials, 8 cores, ~75 min)
+
+| parameter | 2.5 % | 97.5 % | median | shipped v1.0.2 |
+|---|---|---|---|---|
+| kt | 0.3416 | 0.3662 | 0.3530 | 0.3660 |
+| R | 2.545 | 3.036 | 2.778 | 2.811 |
+| armature | 0.001707 | 0.001972 | 0.001844 | 0.001808 |
+| friction_viscous | 0.00538 | 0.00853 | 0.00692 | 0.00536 |
+| load_friction_motor | 0.0028 | 0.327 | 0.268 | 0.267 |
+| load_friction_external_stribeck | 0.0049 | 0.384 | 0.155 | 0.081 |
+| dtheta_stribeck | 0.071 | 4.97 | 0.836 | 2.89 |
+| alpha | 0.500 | 9.66 | 4.25 | 8.68 |
+
+(the full table, every replicate's vector and the bootstrap's metrics
+are in the bundle `robots/actuator-bundles/xl330-refit.m6.bundle.json`,
+stamp `xl330-m6@e57c25635c89`; the summary with the zip hash and BAM
+commit rides in its `metrics`.) The shape: the motor constant is known
+to ±3.5 %, resistance to ±9 %, armature to ±7 %, viscous friction to
+±25 %; the friction *split* between motor and external sides, the
+Stribeck knee and the `alpha` exponent are not identified by this
+bench — their intervals are their search ranges. The shipped fit's
+kt sits at the interval's upper edge.
+
+**Why the identified arm draws vectors, not boxes.** Those unidentified
+terms trade off against each other in the fit: a replicate with high
+motor friction has low external friction. Drawing each from its
+marginal box independently would combine values no replicate had. The
+bundle therefore also carries all 100 replicate vectors (`samples`),
+and the DR event picks one whole vector per world (`rq_mjlab.dr`,
+basis "identified-set"). The marginal `uncertainty` box stays on the
+bundle for readers and for consumers that only understand boxes.
+
+**Running now:** three point arms and three identified arms on the
+refit bundle (`tools/walk-c1-refit-pods.sh`), certified at the refit's
+fit and under ±0.10; then their matrix cells. The paper's identified
+column is those six certificates.
