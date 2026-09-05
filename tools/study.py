@@ -175,6 +175,12 @@ def train(spec: dict[str, Any], out: Path) -> int:
     device = best_device()
     for name in expand_arms(spec):
         output = out / f"{name}-training"
+        # Resumable: an arm whose final checkpoint exists is not retrained
+        # (a pod killed at the budget's edge keeps what it finished,
+        # 2026-09-04). The checkpoint dir is named by its step count.
+        if (output / "checkpoints" / f"{steps:06d}" / "pretrained_model").is_dir():
+            print(f"== have {name}: trained ({steps} steps), skipping")
+            continue
         command = lerobot_train_command(
             policy="act",
             device=device,
@@ -223,7 +229,13 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
     results: dict[str, Any] = {}
     for name in expand_arms(spec):
         records_path = out / f"{name}-records.jsonl"
-        records_path.unlink(missing_ok=True)
+        if records_path.is_file() and len(read_records(records_path)) == trials:
+            # Resumable, like train: a judged arm is not re-judged.
+            print(f"== have {name}: {trials} records, skipping the judge")
+            records = read_records(records_path)
+        else:
+            records_path.unlink(missing_ok=True)
+            records = None
         command = lerobot_eval_command(
             policy_path=_checkpoint(out / f"{name}-training"),
             device=device,
@@ -240,12 +252,13 @@ def evaluate(spec: dict[str, Any], out: Path) -> int:
                 frame_every=frame_every,
             ),
         )
-        print(
-            f"== evaluating {name} at truth {truth} ({trials} paired trials, "
-            f"actions held {frame_every} ticks)"
-        )
-        subprocess.run(command, check=True)
-        records = read_records(records_path)
+        if records is None:
+            print(
+                f"== evaluating {name} at truth {truth} ({trials} paired trials, "
+                f"actions held {frame_every} ticks)"
+            )
+            subprocess.run(command, check=True)
+            records = read_records(records_path)
         (score,) = fold(records)
         low, high = clopper_pearson(score.successes, score.trials)
         results[name] = {
