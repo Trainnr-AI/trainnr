@@ -79,6 +79,16 @@ def arm(rows: list[dict[str, Any]], **facts: Any) -> dict[str, Any]:
     }
 
 
+def teacher_rows(path: Path, delay: int, trials: int) -> list[dict[str, Any]]:
+    """The newest rows of the teacher judged under an action delay."""
+    if not path.is_file():
+        return []
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    return [r for r in rows if (r.get("protocol") or {}).get("delay") == delay][
+        -trials:
+    ]
+
+
 def student_file(verdict_dir: Path, latency: int) -> Path:
     name = (
         "records-student-cuda.jsonl"
@@ -93,6 +103,7 @@ def fold(  # noqa: PLR0913 - the fold's knobs, named
     latencies: list[int],
     controls: list[tuple[int, int]],
     *,
+    delays: list[int],
     trials: int,
     alpha: float,
     delta: float,
@@ -104,7 +115,11 @@ def fold(  # noqa: PLR0913 - the fold's knobs, named
         verdict_dir / "records-cuda.jsonl", horizon=0, latency=0, trials=trials
     )
     if teacher:
-        arms["teacher"] = arm(teacher, latency=None, horizon=None)
+        arms["teacher"] = arm(teacher, latency=None, horizon=None, delay=0)
+    for n in delays:
+        rows = teacher_rows(verdict_dir / f"records-delay-{n}-cuda.jsonl", n, trials)
+        if rows:
+            arms[f"teacher-delay-{n}"] = arm(rows, latency=None, horizon=None, delay=n)
     for n in latencies:
         rows = rows_of(
             student_file(verdict_dir, n), horizon=horizon, latency=n, trials=trials
@@ -143,6 +158,7 @@ def fold(  # noqa: PLR0913 - the fold's knobs, named
         "effects": effects,
         "latencies": latencies,
         "controls": controls,
+        "delays": delays,
     }, instrument
 
 
@@ -159,6 +175,7 @@ def main() -> int:
     parser.add_argument("verdict_dir", type=Path)
     parser.add_argument("--latencies", default="0,1,2,4,8")
     parser.add_argument("--controls", default="3:0,1:1", help="horizon:latency pairs")
+    parser.add_argument("--delays", default="1,2,4", help="the teacher's action delays")
     parser.add_argument("--trials", type=int, default=40)
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--delta", type=float, default=0.15)
@@ -172,6 +189,7 @@ def main() -> int:
         args.verdict_dir,
         latencies,
         [(h, n) for h, n in controls],
+        delays=[int(x) for x in args.delays.split(",") if x],
         trials=args.trials,
         alpha=args.alpha,
         delta=args.delta,
