@@ -42,7 +42,7 @@ NOT_A_SCORE = {"1/2", "11/12", "2/3"}
 LISTED = re.compile(r"\d{1,3}/\d{1,3}/")
 
 
-def recorded_ratios() -> set[str]:
+def recorded_ratios() -> set[str]:  # noqa: PLR0912 - one pass over every record shape
     have: set[str] = set()
     for path in sorted(FINDINGS.glob("*.json")):
         text = path.read_text()
