@@ -1,6 +1,6 @@
 {
   "id": "demo-count-lift-cliff-rep",
-  "claim": "The demo-count curve on the SO-101 lift ON THE CLIFF (gain 0.4), with THREE replicates per demo count \u2014 three independent presses and training runs each for 8/16/32/64/128 episodes \u2014 so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).",
+  "claim": "The demo-count curve on the SO-101 lift NEAR THE EXPERT'S EDGE (gain 0.4, where the scripted expert scores 10/12; the id says 'cliff'), with THREE replicates per demo count \u2014 three independent presses and training runs each for 8/16/32/64/128 episodes \u2014 so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).",
   "truth": {
     "damping": 1.0,
     "gain": 0.4

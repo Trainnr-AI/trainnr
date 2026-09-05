@@ -285,9 +285,91 @@ not this page.
   - Four trials per cell on the grid: the cliff's position is coarse; the three 12-trial cells (0.5, 0.45, 0.4) place it below 0.4.
   - The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script.
 
+## demo-count-lift-cliff-rep-2026-09-04
+
+**The demo-count curve on the SO-101 lift NEAR THE EXPERT'S EDGE (gain 0.4, where the scripted expert scores 10/12; the id says 'cliff'), with THREE replicates per demo count — three independent presses and training runs each for 8/16/32/64/128 episodes — so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).**
+
+- date: 2026-09-04 · commit: `bbf1edd-dirty`
+- instrument: `mujoco-3.11.0+x86_64`
+- command: `tools/study.py finding docs/studies/demo-count-lift-cliff-rep.json docs/artifacts/lift-studies/demo-count-lift-cliff-rep`
+- protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
+- inputs:
+  - spec_hash: 07484b99cfc9
+  - task: lift-study
+  - expert: scripted-pick@lift-study
+  - n8#1.datasheet: episodes kept: **8**
+  - n8#2.datasheet: episodes kept: **8**
+  - n8#3.datasheet: episodes kept: **8**
+  - n16#1.datasheet: episodes kept: **16**
+  - n16#2.datasheet: episodes kept: **16**
+  - n16#3.datasheet: episodes kept: **16**
+  - n32#1.datasheet: episodes kept: **32**
+  - n32#2.datasheet: episodes kept: **32**
+  - n32#3.datasheet: episodes kept: **32**
+  - n64#1.datasheet: episodes kept: **64**
+  - n64#2.datasheet: episodes kept: **64**
+  - n64#3.datasheet: episodes kept: **64**
+  - n128#1.datasheet: episodes kept: **128**
+  - n128#2.datasheet: episodes kept: **128**
+  - n128#3.datasheet: episodes kept: **128**
+- outcome:
+  - arms: {'n8#1': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-cliff-rep-n8#1': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 8, 'replicate_of': 'n8'}, 'n8#2': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n8#2': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 8, 'replicate_of': 'n8'}, 'n8#3': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n8#3': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 8, 'replicate_of': 'n8'}, 'n16#1': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n16#1': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 16, 'replicate_of': 'n16'}, 'n16#2': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n16#2': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 16, 'replicate_of': 'n16'}, 'n16#3': {'successes': 78, 'trials': 80, 'ci95': [0.9126, 0.997], 'funnel': {'demo-count-lift-cliff-rep-n16#3': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 16, 'replicate_of': 'n16'}, 'n32#1': {'successes': 78, 'trials': 80, 'ci95': [0.9126, 0.997], 'funnel': {'demo-count-lift-cliff-rep-n32#1': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 32, 'replicate_of': 'n32'}, 'n32#2': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-cliff-rep-n32#2': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 32, 'replicate_of': 'n32'}, 'n32#3': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n32#3': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 32, 'replicate_of': 'n32'}, 'n64#1': {'successes': 77, 'trials': 80, 'ci95': [0.8943, 0.9922], 'funnel': {'demo-count-lift-cliff-rep-n64#1': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64, 'replicate_of': 'n64'}, 'n64#2': {'successes': 78, 'trials': 80, 'ci95': [0.9126, 0.997], 'funnel': {'demo-count-lift-cliff-rep-n64#2': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64, 'replicate_of': 'n64'}, 'n64#3': {'successes': 61, 'trials': 80, 'ci95': [0.6542, 0.8505], 'funnel': {'demo-count-lift-cliff-rep-n64#3': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 64, 'replicate_of': 'n64'}, 'n128#1': {'successes': 68, 'trials': 80, 'ci95': [0.7526, 0.92], 'funnel': {'demo-count-lift-cliff-rep-n128#1': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128, 'replicate_of': 'n128'}, 'n128#2': {'successes': 80, 'trials': 80, 'ci95': [0.9549, 1.0], 'funnel': {'demo-count-lift-cliff-rep-n128#2': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128, 'replicate_of': 'n128'}, 'n128#3': {'successes': 79, 'trials': 80, 'ci95': [0.9323, 0.9997], 'funnel': {'demo-count-lift-cliff-rep-n128#3': []}, 'instrument': ['mujoco-3.11.0+x86_64'], 'episodes': 128, 'replicate_of': 'n128'}}
+  - effects: [{'a': 'n8', 'b': 'n16', 'difference': -0.008333333333333415, 'p': 0.6855304448540659, 'verdict': 'INSENSITIVE'}, {'a': 'n16', 'b': 'n32', 'difference': 0.004166666666666763, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'a': 'n32', 'b': 'n64', 'difference': -0.08750000000000002, 'p': 3.0820053377760226e-05, 'verdict': 'SENSITIVE'}, {'a': 'n64', 'b': 'n128', 'difference': 0.04583333333333328, 'p': 0.08585991313225012, 'verdict': 'INSENSITIVE'}, {'a': 'n8', 'b': 'n128', 'difference': -0.04583333333333339, 'p': 0.006542898299644601, 'verdict': 'SENSITIVE'}]
+  - alpha: 0.05
+  - delta: 0.15
+  - truth: {'damping': 1.0, 'gain': 0.4}
+  - variations: ['joints.damping_scale=1.0:1.0', 'actuators.gain_scale=0.4:0.4']
+  - trials: 80
+  - frame_every: 5
+- artifacts:
+  - verdict: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/verdict.json
+  - study: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/study.json
+  - n8#1.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#1-records.jsonl
+  - n8#1.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#1/datasheet.md
+  - n8#2.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#2-records.jsonl
+  - n8#2.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#2/datasheet.md
+  - n8#3.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#3-records.jsonl
+  - n8#3.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n8#3/datasheet.md
+  - n16#1.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#1-records.jsonl
+  - n16#1.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#1/datasheet.md
+  - n16#2.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#2-records.jsonl
+  - n16#2.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#2/datasheet.md
+  - n16#3.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#3-records.jsonl
+  - n16#3.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n16#3/datasheet.md
+  - n32#1.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#1-records.jsonl
+  - n32#1.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#1/datasheet.md
+  - n32#2.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#2-records.jsonl
+  - n32#2.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#2/datasheet.md
+  - n32#3.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#3-records.jsonl
+  - n32#3.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n32#3/datasheet.md
+  - n64#1.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#1-records.jsonl
+  - n64#1.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#1/datasheet.md
+  - n64#2.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#2-records.jsonl
+  - n64#2.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#2/datasheet.md
+  - n64#3.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#3-records.jsonl
+  - n64#3.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n64#3/datasheet.md
+  - n128#1.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#1-records.jsonl
+  - n128#1.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#1/datasheet.md
+  - n128#2.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#2-records.jsonl
+  - n128#2.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#2/datasheet.md
+  - n128#3.records: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#3-records.jsonl
+  - n128#3.datasheet: docs/artifacts/lift-studies/demo-count-lift-cliff-rep/n128#3/datasheet.md
+  - figure.svg: docs/figures/demo-count-lift-cliff-rep-2026-09-04.svg
+  - figure.pdf: docs/figures/demo-count-lift-cliff-rep-2026-09-04.pdf
+  - figure.png: docs/figures/demo-count-lift-cliff-rep-2026-09-04.png
+  - figure.csv: docs/figures/demo-count-lift-cliff-rep-2026-09-04.csv
+- caveats:
+  - One task, one expert (scripted-pick), one trainer config: the curve is for this recipe, not a law.
+  - Judged at a truth inside the declared span; C1 showed DR-basis effects are invisible at easy truths.
+  - At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.
+  - Three replicates per count is the smallest design that shows between-run spread; it is not a variance estimate anyone should quote to two digits.
+  - Fifteen arms: ~6 h of one pod at 10k steps each — split across pods by arm if wall clock matters.
+
+![demo-count-lift-cliff-rep-2026-09-04](../docs/figures/demo-count-lift-cliff-rep-2026-09-04.png)
+
 ## compute-ledger-2026-09-04
 
-**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 54 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the mismatch matrix (2026-09-04), on the order of $120.**
+**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 62 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the replicated lift curve (2026-09-04), on the order of ~$140.**
 
 - date: 2026-09-04 · commit: `71f96cc`
 - instrument: `RunPod API (pods, costPerHr) + docs/07`
@@ -301,10 +383,10 @@ not this page.
   - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)
   - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
   - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
-  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4, 'the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)': 0.9}
-  - pod_hours_total_estimate: 54.3
-  - dollars_estimate: {'rtx_pro_6000': '~52.7 h x $2.09 = ~$110', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$120'}
-  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)', 'the mismatch matrix (63 forty-trial certificates on nine existing policies)': '~0.5 h, ~$1 (28 min of certificates; ~30 s each warm)'}
+  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4, 'the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)': 0.9, "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8}
+  - pod_hours_total_estimate: 62.1
+  - dollars_estimate: {'rtx_pro_6000': '~60.5 h x $2.09 = ~$126', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$140'}
+  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)', 'the mismatch matrix (63 forty-trial certificates on nine existing policies)': '~0.5 h, ~$1 (28 min of certificates; ~30 s each warm)', 'the replicated lift curve (15 arms: train 10k, judge 80 trials each; presses done earlier)': '~7.8 h, ~$16 (about 27 min per arm; two pods halved the wall clock)'}
   - wall_clock_wins: {'three lift studies in parallel': '2.7 h instead of ~8', 'walk C1 six replicates on six pods': '~1.9 h instead of ~11'}
 - artifacts:
   - log: docs/07-progress-log.md
@@ -316,6 +398,7 @@ not this page.
   - Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.
   - Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) — 53.4 h, ~$120.
   - Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) — 54.3 h, ~$120.
+  - Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods — 62.1 h, ~$140. The account balance moved $18 → $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod.
 
 ## visual-dr-lift-cliff-2026-09-03
 

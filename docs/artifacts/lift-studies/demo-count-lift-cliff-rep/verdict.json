@@ -1,0 +1,263 @@
+{
+ "arms": {
+  "n8#1": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n8#1": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n8#2": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n8#2": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n8#3": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n8#3": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n16#1": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n16#1": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n16#2": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n16#2": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n16#3": {
+   "successes": 78,
+   "trials": 80,
+   "ci95": [
+    0.9126,
+    0.997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n16#3": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n32#1": {
+   "successes": 78,
+   "trials": 80,
+   "ci95": [
+    0.9126,
+    0.997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n32#1": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n32#2": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n32#2": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n32#3": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n32#3": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n64#1": {
+   "successes": 77,
+   "trials": 80,
+   "ci95": [
+    0.8943,
+    0.9922
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n64#1": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n64#2": {
+   "successes": 78,
+   "trials": 80,
+   "ci95": [
+    0.9126,
+    0.997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n64#2": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n64#3": {
+   "successes": 61,
+   "trials": 80,
+   "ci95": [
+    0.6542,
+    0.8505
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n64#3": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n128#1": {
+   "successes": 68,
+   "trials": 80,
+   "ci95": [
+    0.7526,
+    0.92
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n128#1": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n128#2": {
+   "successes": 80,
+   "trials": 80,
+   "ci95": [
+    0.9549,
+    1.0
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n128#2": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  },
+  "n128#3": {
+   "successes": 79,
+   "trials": 80,
+   "ci95": [
+    0.9323,
+    0.9997
+   ],
+   "funnel": {
+    "demo-count-lift-cliff-rep-n128#3": []
+   },
+   "instrument": [
+    "mujoco-3.11.0+x86_64"
+   ]
+  }
+ },
+ "effects": [
+  {
+   "a": "n8",
+   "b": "n16",
+   "difference": -0.008333333333333415,
+   "p": 0.6855304448540659,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n16",
+   "b": "n32",
+   "difference": 0.004166666666666763,
+   "p": 1.0,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n32",
+   "b": "n64",
+   "difference": -0.08750000000000002,
+   "p": 3.0820053377760226e-05,
+   "verdict": "SENSITIVE"
+  },
+  {
+   "a": "n64",
+   "b": "n128",
+   "difference": 0.04583333333333328,
+   "p": 0.08585991313225012,
+   "verdict": "INSENSITIVE"
+  },
+  {
+   "a": "n8",
+   "b": "n128",
+   "difference": -0.04583333333333339,
+   "p": 0.006542898299644601,
+   "verdict": "SENSITIVE"
+  }
+ ],
+ "alpha": 0.05,
+ "delta": 0.15,
+ "truth": {
+  "damping": 1.0,
+  "gain": 0.4
+ },
+ "variations": [
+  "joints.damping_scale=1.0:1.0",
+  "actuators.gain_scale=0.4:0.4"
+ ],
+ "trials": 80,
+ "frame_every": 5
+}

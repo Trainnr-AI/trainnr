@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -396,18 +397,33 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
         "verdict": str(out / "verdict.json"),
         "study": str(out / STUDY_FILE),
     }
-    for name in spec["arms"]:
-        sheet = summarize(out / name)
-        inputs[f"{name}.datasheet"] = (
-            f"{sheet.episodes} episodes, bases {list(sheet.bases)}, "
-            f"visual bases {list(sheet.visual_bases)}"
-        )
+    for name in expand_arms(spec):
+        # Replicates are pressed as `<arm>#<k>`; convert --prune leaves the
+        # datasheet and deletes the episode dirs, so the datasheet is the
+        # source when the episodes are gone (2026-09-04).
+        sheet_path = out / name / "datasheet.md"
+        if any((out / name).glob("episode_*")):
+            sheet = summarize(out / name)
+            inputs[f"{name}.datasheet"] = (
+                f"{sheet.episodes} episodes, bases {list(sheet.bases)}, "
+                f"visual bases {list(sheet.visual_bases)}"
+            )
+        elif sheet_path.is_file():
+            kept = [
+                line for line in sheet_path.read_text().splitlines() if "kept" in line
+            ]
+            inputs[f"{name}.datasheet"] = (
+                kept[0].strip("- ") if kept else "see datasheet"
+            )
+        else:
+            raise FileNotFoundError(f"{name}: neither pressed episodes nor a datasheet")
         artifacts[f"{name}.records"] = str(out / f"{name}-records.jsonl")
-        artifacts[f"{name}.datasheet"] = str(out / name / "datasheet.md")
+        artifacts[f"{name}.datasheet"] = str(sheet_path)
+    date = os.environ.get("RQ_FINDING_DATE") or today()
     record = Finding(
-        id=f"{spec['id']}-{today()}",
+        id=f"{spec['id']}-{date}",
         claim=spec["claim"],
-        date=today(),
+        date=date,
         repo_commit=repo_commit(REPO),
         argv=argv,
         instrument=", ".join(instruments),
