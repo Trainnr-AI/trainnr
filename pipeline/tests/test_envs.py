@@ -196,6 +196,9 @@ class GymnasiumContract(unittest.TestCase):
             row.protocol["milestones"], ["cube_moved", "cube_lifted", "cube_at_left"]
         )
         self.assertTrue(row.instrument.startswith("mujoco-"))
+        # docs/e2e-research/71 E0: a limp policy is perfectly smooth.
+        self.assertEqual(row.variations["rms_jerk"], 0.0)
+        self.assertIn("rms_velocity", row.variations)
 
     def test_unstamped_source_is_refused_before_any_episode(self) -> None:
         from rq_pipeline.envs.robotiq import RobotiqEnv  # noqa: PLC0415
