@@ -143,9 +143,11 @@
  },
  "protocol": "docs/e2e-research/63 \u00a72 (the certificate); docs/07 campaigns 1-4",
  "caveats": [
-  "Per-trial rows are the primary artifact (tracked here); the certificate JSON files in the same directory were overwritten by a later 8-trial smoke run at seed 7 and are NOT the source of these numbers.",
+  "Only walk-verdict-cuda.json (the teacher's cuda certificate) had been overwritten by an 8-trial smoke run at seed 7 (5/8); the other certificate files match their arms; records-student-cuda.jsonl also carries 16 seed-7 rows of student-last@f2d75d0b075f that belong to no arm here. The per-trial rows are the primary artifact; the overwrite guard now renames a previous certificate.",
   "Campaign 4's student weights were deleted by a storage prune (docs/07 2026-09-04); its rows survive.",
   "Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution.",
-  "Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each."
+  "Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each.",
+  "The task source hash on campaign 4b's and DAgger round 1's certificates is microduck-walk@0bb340d9f38d where the earlier students' is @824eba27c48c: walk_verdict's identity gained the training run's dr_basis and seed fields on 2026-09-04 (the certificate-overwrite guard commit), so the hash of the identity dict changed while robot, actuator and judged dr_basis are byte-identical \u2014 the same world, a wider identity.",
+  "Every certificate in this record is judged under law DR drawn from \u00b10.10 around the fit (walk_verdict's default certificate world, pushes on) \u2014 not pinned at the fit as the walk C1 study's arms are."
  ]
 }

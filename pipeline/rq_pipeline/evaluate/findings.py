@@ -109,6 +109,10 @@ def load_findings(root: Path) -> list[Finding]:
     return sorted(found, key=lambda f: (f.date, f.id), reverse=True)
 
 
+def _flat(value: Any) -> str:
+    return " ".join(str(value).split())
+
+
 def render_ledger(findings: list[Finding]) -> str:
     """The ledger page: one section per finding, every provenance field
     stated, nothing summarised away."""
@@ -141,7 +145,9 @@ def render_ledger(findings: list[Finding]) -> str:
         ):
             if mapping:
                 lines.append(f"- {label}:")
-                lines += [f"  - {k}: {v}" for k, v in mapping.items()]
+                # One line per key: a multi-line value (a datasheet pasted
+                # into inputs, 2026-09-04) must not inject headings.
+                lines += [f"  - {k}: {_flat(v)}" for k, v in mapping.items()]
         if f.caveats:
             lines.append("- caveats:")
             lines += [f"  - {c}" for c in f.caveats]

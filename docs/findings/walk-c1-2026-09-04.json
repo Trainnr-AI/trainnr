@@ -282,15 +282,15 @@
   "recipe": "g3_agent, 8000 iterations, 4096 envs"
  },
  "artifacts": {
-  "point.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point/train/verdict/walk-verdict-at-fit-cuda.json",
-  "point#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point#2/train/verdict/walk-verdict-at-fit-cuda.json",
-  "point#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/point#3/train/verdict/walk-verdict-at-fit-cuda.json",
-  "narrow.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow/train/verdict/walk-verdict-at-fit-cuda.json",
-  "narrow#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow#2/train/verdict/walk-verdict-at-fit-cuda.json",
-  "narrow#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/narrow#3/train/verdict/walk-verdict-at-fit-cuda.json",
-  "wide.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide/train/verdict/walk-verdict-at-fit-cuda.json",
-  "wide#2.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide#2/train/verdict/walk-verdict-at-fit-cuda.json",
-  "wide#3.at_fit": "/workspace/robotiq/runs/studies/walk-c1/wide#3/train/verdict/walk-verdict-at-fit-cuda.json",
+  "point.at_fit": "docs/artifacts/walk-c1/point/train/verdict/walk-verdict-at-fit-cuda.json",
+  "point#2.at_fit": "docs/artifacts/walk-c1/point#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "point#3.at_fit": "docs/artifacts/walk-c1/point#3/train/verdict/walk-verdict-at-fit-cuda.json",
+  "narrow.at_fit": "docs/artifacts/walk-c1/narrow/train/verdict/walk-verdict-at-fit-cuda.json",
+  "narrow#2.at_fit": "docs/artifacts/walk-c1/narrow#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "narrow#3.at_fit": "docs/artifacts/walk-c1/narrow#3/train/verdict/walk-verdict-at-fit-cuda.json",
+  "wide.at_fit": "docs/artifacts/walk-c1/wide/train/verdict/walk-verdict-at-fit-cuda.json",
+  "wide#2.at_fit": "docs/artifacts/walk-c1/wide#2/train/verdict/walk-verdict-at-fit-cuda.json",
+  "wide#3.at_fit": "docs/artifacts/walk-c1/wide#3/train/verdict/walk-verdict-at-fit-cuda.json",
   "figure.svg": "docs/figures/walk-c1-2026-09-04.svg",
   "figure.pdf": "docs/figures/walk-c1-2026-09-04.pdf",
   "figure.png": "docs/figures/walk-c1-2026-09-04.png",
@@ -302,6 +302,7 @@
   "No bundle in the store carries intervals: the arms are point / declared \u00b10.10 / declared \u00b10.30 around BAM's point fit \u2014 the identified-INTERVAL arm needs a fit with intervals (the bench chapter).",
   "Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.",
   "Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44.",
-  "The non-at-fit certificates are all under \u00b10.10 (walk_verdict's default LAW_DR_SPAN), not each arm's own span: the point arm's second certificate is at-fit-plus-\u00b10.10-draws, the wide arm's is \u00b10.10 too. Judging under \u00b10.30 needs walk_verdict --judge-span 0.30 (added 2026-09-04)."
+  "The non-at-fit certificates are all under \u00b10.10 (walk_verdict's default LAW_DR_SPAN), not each arm's own span: the point arm's second certificate is at-fit-plus-\u00b10.10-draws, the wide arm's is \u00b10.10 too. Judging under \u00b10.30 needs walk_verdict --judge-span 0.30 (added 2026-09-04).",
+  "Artifacts repointed 2026-09-04 to the tracked copies under docs/artifacts/walk-c1/ (every certificate, row file and identity of the nine runs was pulled from the volume after the matrix)."
  ]
 }

@@ -23,6 +23,13 @@
      "both_in_slot": "0/4"
     }
    }
+  },
+  "funnel_from_claim": {
+   "part_moved": "2/4",
+   "part_lifted": "0/4",
+   "one_in_slot": "0/4",
+   "both_in_slot": "0/4",
+   "in_loop_eval": "0/2"
   }
  },
  "inputs": {

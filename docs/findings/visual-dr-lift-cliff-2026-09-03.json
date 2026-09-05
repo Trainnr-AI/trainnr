@@ -1,6 +1,6 @@
 {
  "id": "visual-dr-lift-cliff-2026-09-03",
- "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth \u2014 judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
+ "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth \u2014 judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
  "date": "2026-09-03",
  "repo_commit": "bcbb3fe-archive",
  "argv": [

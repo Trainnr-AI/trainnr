@@ -139,10 +139,12 @@ not this page.
   - records_blank_state: docs/artifacts/walk-verdicts/records-student-blank-state-cuda.jsonl
   - certificate_campaign_4b: docs/artifacts/walk-verdicts/walk-verdict-student-cuda.campaign-4b.json
 - caveats:
-  - Per-trial rows are the primary artifact (tracked here); the certificate JSON files in the same directory were overwritten by a later 8-trial smoke run at seed 7 and are NOT the source of these numbers.
+  - Only walk-verdict-cuda.json (the teacher's cuda certificate) had been overwritten by an 8-trial smoke run at seed 7 (5/8); the other certificate files match their arms; records-student-cuda.jsonl also carries 16 seed-7 rows of student-last@f2d75d0b075f that belong to no arm here. The per-trial rows are the primary artifact; the overwrite guard now renames a previous certificate.
   - Campaign 4's student weights were deleted by a storage prune (docs/07 2026-09-04); its rows survive.
   - Blanked inputs are out of distribution: 0/40 proves load-bearing, not contribution.
   - Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each.
+  - The task source hash on campaign 4b's and DAgger round 1's certificates is microduck-walk@0bb340d9f38d where the earlier students' is @824eba27c48c: walk_verdict's identity gained the training run's dr_basis and seed fields on 2026-09-04 (the certificate-overwrite guard commit), so the hash of the identity dict changed while robot, actuator and judged dr_basis are byte-identical — the same world, a wider identity.
+  - Every certificate in this record is judged under law DR drawn from ±0.10 around the fit (walk_verdict's default certificate world, pushes on) — not pinned at the fit as the walk C1 study's arms are.
 
 ## walk-dagger-round-1-2026-09-04
 
@@ -154,24 +156,7 @@ not this page.
 - protocol: docs/66 §6 (DAgger on the walk: tools/walk-dagger-round.sh)
 - inputs:
   - teacher_verdict_dir: docs/artifacts/walk-verdicts
-  - round_datasheet: # Datasheet
-
-Every episode in this batch passed its task's own referee; the
-counts below are of SUCCESSFUL episodes only.
-
-- episodes kept: **120**
-- highest attempt number recorded: 189 (keep rate ≤ 63% — attempts after the last keep are not recorded)
-- expert retries across the batch: 0
-
-## Stamps
-
-- task: microduck-walk@824eba27c48c
-- expert: model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f
-- instrument: mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda
-
-## Dynamics draws
-
-Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws live inside the batched env and are not 
+  - round_datasheet: # Datasheet … (full datasheet: docs/artifacts/dagger/round-1/datasheet.md)
   - union: {'sources': ['dataset', 'dataset'], 'episodes': 360, 'experts': ['model_7999@6a7479eec9ee', 'model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f']}
 - outcome:
   - arms: {'base': {'policy': 'student-last@6b6cef16e54f', 'successes': 22, 'trials': 40, 'ci95': [0.3849, 0.7074], 'funnel': {'survived': 31, 'tracked': 29}, 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}, 'dagger-1': {'policy': 'student-last@c9020b1b1ce3', 'successes': 26, 'trials': 40, 'ci95': [0.4832, 0.7937], 'funnel': {'survived': 34, 'tracked': 31}, 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}}
@@ -189,6 +174,8 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
 - caveats:
   - One round, one training run per student, 40 trials each: a direction, replicate before a sentence.
   - The round student trained 20k steps on 360 episodes; the base trained 60k on 240 — steps per episode differ.
+  - The task source hash on campaign 4b's and DAgger round 1's certificates is microduck-walk@0bb340d9f38d where the earlier students' is @824eba27c48c: walk_verdict's identity gained the training run's dr_basis and seed fields on 2026-09-04 (the certificate-overwrite guard commit), so the hash of the identity dict changed while robot, actuator and judged dr_basis are byte-identical — the same world, a wider identity.
+  - Both students are judged under law DR drawn from ±0.10 around the fit (the default certificate world), not pinned at the fit.
 
 ![walk-dagger-round-1-2026-09-04](../docs/figures/walk-dagger-round-1-2026-09-04.png)
 
@@ -213,15 +200,15 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - under_span_0.10: {'point': {'successes': 101, 'trials': 120, 'per_run': [31, 35, 35], 'dr_basis': 'caller-declared span ±0.1 (bundle is point estimates)'}, 'narrow': {'successes': 105, 'trials': 120, 'per_run': [35, 35, 35], 'dr_basis': 'caller-declared span ±0.1 (bundle is point estimates)'}, 'wide': {'successes': 87, 'trials': 120, 'per_run': [30, 34, 23], 'dr_basis': 'caller-declared span ±0.1 (bundle is point estimates)'}}
   - under_span_0.10_note: every arm judged under ±0.10 law DR (LAW_DR_SPAN); mislabeled 'own DR' until 2026-09-04 — the key was renamed when the mismatch matrix was designed
 - artifacts:
-  - point.at_fit: /workspace/robotiq/runs/studies/walk-c1/point/train/verdict/walk-verdict-at-fit-cuda.json
-  - point#2.at_fit: /workspace/robotiq/runs/studies/walk-c1/point#2/train/verdict/walk-verdict-at-fit-cuda.json
-  - point#3.at_fit: /workspace/robotiq/runs/studies/walk-c1/point#3/train/verdict/walk-verdict-at-fit-cuda.json
-  - narrow.at_fit: /workspace/robotiq/runs/studies/walk-c1/narrow/train/verdict/walk-verdict-at-fit-cuda.json
-  - narrow#2.at_fit: /workspace/robotiq/runs/studies/walk-c1/narrow#2/train/verdict/walk-verdict-at-fit-cuda.json
-  - narrow#3.at_fit: /workspace/robotiq/runs/studies/walk-c1/narrow#3/train/verdict/walk-verdict-at-fit-cuda.json
-  - wide.at_fit: /workspace/robotiq/runs/studies/walk-c1/wide/train/verdict/walk-verdict-at-fit-cuda.json
-  - wide#2.at_fit: /workspace/robotiq/runs/studies/walk-c1/wide#2/train/verdict/walk-verdict-at-fit-cuda.json
-  - wide#3.at_fit: /workspace/robotiq/runs/studies/walk-c1/wide#3/train/verdict/walk-verdict-at-fit-cuda.json
+  - point.at_fit: docs/artifacts/walk-c1/point/train/verdict/walk-verdict-at-fit-cuda.json
+  - point#2.at_fit: docs/artifacts/walk-c1/point#2/train/verdict/walk-verdict-at-fit-cuda.json
+  - point#3.at_fit: docs/artifacts/walk-c1/point#3/train/verdict/walk-verdict-at-fit-cuda.json
+  - narrow.at_fit: docs/artifacts/walk-c1/narrow/train/verdict/walk-verdict-at-fit-cuda.json
+  - narrow#2.at_fit: docs/artifacts/walk-c1/narrow#2/train/verdict/walk-verdict-at-fit-cuda.json
+  - narrow#3.at_fit: docs/artifacts/walk-c1/narrow#3/train/verdict/walk-verdict-at-fit-cuda.json
+  - wide.at_fit: docs/artifacts/walk-c1/wide/train/verdict/walk-verdict-at-fit-cuda.json
+  - wide#2.at_fit: docs/artifacts/walk-c1/wide#2/train/verdict/walk-verdict-at-fit-cuda.json
+  - wide#3.at_fit: docs/artifacts/walk-c1/wide#3/train/verdict/walk-verdict-at-fit-cuda.json
   - figure.svg: docs/figures/walk-c1-2026-09-04.svg
   - figure.pdf: docs/figures/walk-c1-2026-09-04.pdf
   - figure.png: docs/figures/walk-c1-2026-09-04.png
@@ -231,6 +218,7 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.
   - Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44.
   - The non-at-fit certificates are all under ±0.10 (walk_verdict's default LAW_DR_SPAN), not each arm's own span: the point arm's second certificate is at-fit-plus-±0.10-draws, the wide arm's is ±0.10 too. Judging under ±0.30 needs walk_verdict --judge-span 0.30 (added 2026-09-04).
+  - Artifacts repointed 2026-09-04 to the tracked copies under docs/artifacts/walk-c1/ (every certificate, row file and identity of the nine runs was pulled from the volume after the matrix).
 
 ![walk-c1-2026-09-04](../docs/figures/walk-c1-2026-09-04.png)
 
@@ -299,7 +287,7 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
 
 ## compute-ledger-2026-09-04
 
-**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 53 pod-hours in total from the first sized chain run (2026-08-31) to the DAgger round (2026-09-04), on the order of $120.**
+**Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 54 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the mismatch matrix (2026-09-04), on the order of $120.**
 
 - date: 2026-09-04 · commit: `71f96cc`
 - instrument: `RunPod API (pods, costPerHr) + docs/07`
@@ -313,10 +301,10 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)
   - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
   - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
-  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4}
-  - pod_hours_total_estimate: 53.4
-  - dollars_estimate: {'rtx_pro_6000': '~51.8 h x $2.09 = ~$108', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$120'}
-  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)'}
+  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4, 'the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)': 0.9}
+  - pod_hours_total_estimate: 54.3
+  - dollars_estimate: {'rtx_pro_6000': '~52.7 h x $2.09 = ~$110', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$120'}
+  - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)', 'the mismatch matrix (63 forty-trial certificates on nine existing policies)': '~0.5 h, ~$1 (28 min of certificates; ~30 s each warm)'}
   - wall_clock_wins: {'three lift studies in parallel': '2.7 h instead of ~8', 'walk C1 six replicates on six pods': '~1.9 h instead of ~11'}
 - artifacts:
   - log: docs/07-progress-log.md
@@ -327,10 +315,11 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - The owned RTX 3090 Ti and the M1 Pro are not costed.
   - Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.
   - Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) — 53.4 h, ~$120.
+  - Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) — 54.3 h, ~$120.
 
 ## visual-dr-lift-cliff-2026-09-03
 
-**On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `bcbb3fe-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -413,7 +402,7 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
 
 ## demo-count-lift-cliff-2026-09-03
 
-**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `bcbb3fe-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -514,7 +503,7 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
 
 ## c1-competent-lift-cliff-2026-09-03
 
-**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged ON THE EXPERT'S CLIFF (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `89412f0-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -541,13 +530,13 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - verdict: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/verdict.json
   - study: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/study.json
   - guessed.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/guessed-records.jsonl
-  - guessed.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/guessed/datasheet.md
+  - guessed.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-guessed.md
   - identified.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/identified-records.jsonl
-  - identified.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/identified/datasheet.md
+  - identified.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-identified.md
   - point.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/point-records.jsonl
-  - point.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/point/datasheet.md
+  - point.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-point.md
   - wide.records: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/wide-records.jsonl
-  - wide.datasheet: /workspace/robotiq/runs/studies/c1-competent-lift-cliff/wide/datasheet.md
+  - wide.datasheet: docs/artifacts/cliff-datasheets/c1-competent-lift-cliff-wide.md
   - figure.svg: docs/figures/c1-competent-lift-cliff-2026-09-03.svg
   - figure.pdf: docs/figures/c1-competent-lift-cliff-2026-09-03.pdf
   - figure.png: docs/figures/c1-competent-lift-cliff-2026-09-03.png
@@ -746,6 +735,7 @@ Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws l
   - task: aloha2 kitting
 - outcome:
   - arms: {'t5-600-step': {'successes': 0, 'trials': 4, 'ci95': [0.0, 0.602], 'funnel': {'part_moved': '2/4', 'part_lifted': '0/4', 'one_in_slot': '0/4', 'both_in_slot': '0/4'}}}
+  - funnel_from_claim: {'part_moved': '2/4', 'part_lifted': '0/4', 'one_in_slot': '0/4', 'both_in_slot': '0/4', 'in_loop_eval': '0/2'}
 - artifacts:
   - log: docs/07-progress-log.md, entry 2026-08-27 (the T5 chain end to end)
 - caveats:

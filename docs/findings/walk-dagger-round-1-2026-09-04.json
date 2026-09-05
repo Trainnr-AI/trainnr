@@ -63,7 +63,7 @@
  },
  "inputs": {
   "teacher_verdict_dir": "docs/artifacts/walk-verdicts",
-  "round_datasheet": "# Datasheet\n\nEvery episode in this batch passed its task's own referee; the\ncounts below are of SUCCESSFUL episodes only.\n\n- episodes kept: **120**\n- highest attempt number recorded: 189 (keep rate \u2264 63% \u2014 attempts after the last keep are not recorded)\n- expert retries across the batch: 0\n\n## Stamps\n\n- task: microduck-walk@824eba27c48c\n- expert: model_7999@6a7479eec9ee+dagger:student-last@6b6cef16e54f\n- instrument: mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda\n\n## Dynamics draws\n\nBasis: caller-declared span \u00b10.1 (bundle is point estimates); per-world draws live inside the batched env and are not ",
+  "round_datasheet": "# Datasheet \u2026 (full datasheet: docs/artifacts/dagger/round-1/datasheet.md)",
   "union": {
    "sources": [
     "dataset",
@@ -89,6 +89,8 @@
  "protocol": "docs/66 \u00a76 (DAgger on the walk: tools/walk-dagger-round.sh)",
  "caveats": [
   "One round, one training run per student, 40 trials each: a direction, replicate before a sentence.",
-  "The round student trained 20k steps on 360 episodes; the base trained 60k on 240 \u2014 steps per episode differ."
+  "The round student trained 20k steps on 360 episodes; the base trained 60k on 240 \u2014 steps per episode differ.",
+  "The task source hash on campaign 4b's and DAgger round 1's certificates is microduck-walk@0bb340d9f38d where the earlier students' is @824eba27c48c: walk_verdict's identity gained the training run's dr_basis and seed fields on 2026-09-04 (the certificate-overwrite guard commit), so the hash of the identity dict changed while robot, actuator and judged dr_basis are byte-identical \u2014 the same world, a wider identity.",
+  "Both students are judged under law DR drawn from \u00b10.10 around the fit (the default certificate world), not pinned at the fit."
  ]
 }
