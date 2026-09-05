@@ -4,11 +4,12 @@ Two of five no-op domain-randomisation terms in one production repo
 randomised fields the BAM actuator overwrites every physics step — the
 draw happened, the physics never changed, nothing raised
 (docs/e2e-research/57 §5; the other three were no-ops by other
-mechanisms, which this linter does not claim to catch). The rule
-belongs at env-cfg time: any event term that writes a model field the actuator's law owns is a no-op by construction, and a
-cfg carrying one is refused with the term and the field named. The
-same pass refuses a cfg that FORGOT the field-expansion event — the
-other half of the same trap.
+mechanisms, which this linter does not claim to catch). The rule belongs
+at env-cfg time: any event term that writes a model field the actuator's
+law owns is a no-op by construction, and a cfg carrying one is refused
+with the term and the field named. The same pass refuses a cfg that
+FORGOT the field-expansion event — the other half of the same trap.
+
 
 `lint(events_cfg, actuator_cfgs)` walks the cfg's event terms the way
 mjlab's own EventManager does (dataclass fields / mapping entries whose
