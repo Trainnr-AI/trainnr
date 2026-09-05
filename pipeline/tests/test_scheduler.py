@@ -59,6 +59,20 @@ class TheSchedule(unittest.TestCase):
         self.assertEqual(rows, [(1, 0), (1, 1), (1, 2), (2, 1), (2, 2), (3, 1)])
         self.assertEqual(scheduler.fetches, 3)
 
+    def test_a_budget_beyond_the_horizon_becomes_the_execution_window(self) -> None:
+        # latency 4 with 2 executed rows: one request in flight at a time,
+        # so each chunk runs rows [4, 8) - the paper's [n, 2n) window.
+        counting = Counting(horizon=12)
+        scheduler = ActionScheduler(
+            counting.policy(), executed_horizon=EXECUTED, nu=NU, latency=4
+        )
+        scheduler.reset()
+        rows = [tuple(scheduler.act({})[:2]) for _ in range(14)]
+        self.assertEqual(rows[:6], [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5)])
+        self.assertEqual(rows[6:10], [(2, 4), (2, 5), (2, 6), (2, 7)])
+        self.assertEqual(rows[10:14], [(3, 4), (3, 5), (3, 6), (3, 7)])
+        self.assertEqual(scheduler.fetches, 4)  # asked at 0, 2, 6, 10
+
     def test_zero_latency_is_the_synchronous_loop(self) -> None:
         counting = Counting()
         scheduler = ActionScheduler(

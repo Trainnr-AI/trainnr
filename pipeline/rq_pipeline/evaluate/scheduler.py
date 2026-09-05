@@ -83,7 +83,13 @@ class ActionScheduler:
             self._current = self._pending[:2]
             self._pending = None
         first = self._current is None
-        if first or tick - self._asked_at >= self.executed_horizon:
+        # One request in flight at a time: while a chunk is being
+        # "inferred" nothing new is asked, so a budget longer than the
+        # executed horizon makes the budget the execution window - the
+        # paper's regime, execution [n, 2n) (docs/e2e-research/71 §1).
+        if first or (
+            self._pending is None and tick - self._asked_at >= self.executed_horizon
+        ):
             chunk = self._checked(self.policy.predict(observation))
             self._asked_at = tick
             self.fetches += 1
