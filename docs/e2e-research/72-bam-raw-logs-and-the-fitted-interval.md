@@ -30,7 +30,7 @@ five other servos, on a CPU, in hours.*
   {50, 100, 150, 200, 300}, mass ∈ {0.04, 0.059, 0.117, 0.159} kg,
   length ∈ {0.11, 0.14, 0.17} m, six trajectories.
   `python -m bam.process --raw … --logdir … --dt 0.005` resamples.
-- **Fitting**: `bam/fit.py`, Optuna `CmaEsSampler(restart_strategy=
+- **Fitting**: the `bam.fit` module, Optuna `CmaEsSampler(restart_strategy=
   "bipop")`, objective = position MAE of a vectorised Euler rollout
   over all logs; `python -m bam.fit --actuator xl330 --model m6
   --logdir <processed> --output <json> [--trials N] [--workers N]
