@@ -230,6 +230,16 @@ def main() -> int:  # noqa: PLR0915 - one run, every step in order
                 for name, iv in summary["interval"].items()
                 if name not in rig
             },
+            # Every replicate's vector: the identified SET a joint draw
+            # samples from (rq_mjlab.dr), keeping the terms' trade-offs.
+            "samples": [
+                {
+                    k: float(v)
+                    for k, v in f.items()
+                    if isinstance(v, float) and k not in rig
+                }
+                for f in fits
+            ],
             "metrics": {
                 "interval_method": summary["bootstrap"],
                 "replicates": summary["replicates"],

@@ -132,7 +132,9 @@ def list_actuators() -> tuple[str, ...]:
 def list_models(slug: str) -> tuple[str, ...]:
     """Which model tiers (`m1`..`m6`) exist for one actuator."""
     directory = _actuator_dir(slug)
-    return tuple(sorted(p.stem for p in directory.glob("m*.json")))
+    # `m6.uncertainty.json` rides beside `m6.json` (the fitted interval,
+    # 2026-09-06); a tier is a stem without a dot.
+    return tuple(sorted(p.stem for p in directory.glob("m*.json") if "." not in p.stem))
 
 
 def load_actuator(slug: str, tier: str = "m6") -> ActuatorModel:

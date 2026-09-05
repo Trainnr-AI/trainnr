@@ -144,6 +144,21 @@ class TheLawDrSpan(unittest.TestCase):
         self.assertNotEqual(refit["actuator"], shipped["actuator"])
         self.assertTrue(refit["actuator"].startswith("xl330-m6@"))
 
+    def test_the_identified_arm_draws_the_refit_bundles_set(self) -> None:
+        from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+            IDENTIFIED,
+            XL330_REFIT_BUNDLE,
+            microduck_walk_env_cfg,
+        )
+
+        cfg, ident = microduck_walk_env_cfg(
+            law_dr_span=IDENTIFIED, bundle=XL330_REFIT_BUNDLE
+        )
+        self.assertIn("bam_param_dr", cfg.events)
+        self.assertIn("identified-set", ident["dr_basis"])
+        self.assertIn("100 bootstrap replicates", ident["dr_basis"])
+        self.assertIn(ident["actuator"].split("@")[0], "xl330-m6")
+
     def test_the_identified_arm_refuses_a_bundle_without_an_interval(self) -> None:
         from rq_mjlab.microduck_walk import IDENTIFIED, microduck_walk_env_cfg  # noqa: PLC0415
 

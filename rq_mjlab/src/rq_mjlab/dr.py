@@ -113,6 +113,25 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
         ranges, basis = dr_from_bundle(
             actuator_cfg.bundle_path, fallback_span=fallback_span
         )
+    # The identified SET, when the bundle carries its bootstrap replicates
+    # (docs/e2e-research/72): draw whole parameter vectors, one replicate
+    # per world, so the friction terms keep the trade-offs the bench
+    # produced — independent marginal draws would combine values the data
+    # never did. Only without a declared span or a pin.
+    table: dict[str, torch.Tensor] = {}
+    if fallback_span is None and pin_scale is None:
+        bundle, _ = verified_bundle(actuator_cfg.bundle_path)
+        samples = bundle.get("samples") or []
+        if samples:
+            names = [n for n in BamActuator.SCALABLE if n in samples[0]]
+            table = {
+                name: torch.tensor([float(s[name]) for s in samples]) for name in names
+            }
+            basis = (
+                f"identified-set: joint draw from {len(samples)} bootstrap "
+                f"replicates of {bundle.get('stamp', '<unstamped>')} "
+                f"(marginal 95 % box on the bundle as `uncertainty`)"
+            )
     drawable = {
         name: bounds for name, bounds in ranges.items() if name in BamActuator.SCALABLE
     }
@@ -135,10 +154,16 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
                 "the event must resolve exactly one"
             )
         count = int(env_ids.shape[0]) if hasattr(env_ids, "shape") else len(env_ids)
+        device = env.device if hasattr(env, "device") else None
         draws = {}
-        for name, (low, high) in drawable.items():
-            u = torch.rand(count, device=env.device if hasattr(env, "device") else None)
-            draws[name] = low + (high - low) * u
+        if table:
+            picks = torch.randint(len(next(iter(table.values()))), (count,))
+            for name, column in table.items():
+                draws[name] = column[picks].to(device)
+        else:
+            for name, (low, high) in drawable.items():
+                u = torch.rand(count, device=device)
+                draws[name] = low + (high - low) * u
         live[0].set_param_draws(env_ids, draws)
 
     redraw.__name__ = "redraw_bam_params"

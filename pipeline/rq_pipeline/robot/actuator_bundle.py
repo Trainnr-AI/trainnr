@@ -60,6 +60,10 @@ SECTIONS = frozenset(
         "context",
         "metrics",
         "uncertainty",
+        # The identified SET: every bootstrap replicate's parameter
+        # vector, for a joint draw that keeps the terms' trade-offs
+        # (docs/e2e-research/72, 2026-09-06). Optional, like uncertainty.
+        "samples",
         "checks",
         "wrap",
         "stamp",
@@ -167,6 +171,8 @@ def wrap(
         bundle["uncertainty"] = interval["uncertainty"]
         if "metrics" in interval:
             bundle["metrics"] = interval["metrics"]
+        if "samples" in interval:
+            bundle["samples"] = interval["samples"]
     if context:
         bundle["context"] = dict(context)
     if wrapped_on is not None:
@@ -201,6 +207,8 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
             f"bundle carries unknown section(s) {unknown} — "
             f"the schema {SCHEMA} defines {sorted(SECTIONS)}"
         )
+    if bundle.get("samples") is not None:
+        _verify_samples(bundle["samples"])
     for required in ("schema", "params", "provenance", "checks", "stamp"):
         if required not in bundle:
             raise ValueError(f"bundle is missing required section {required!r}")
@@ -386,6 +394,20 @@ def as_scales(
         for param, value in dynamics.items()
         if param in params
     }
+
+
+def _verify_samples(samples: Any) -> None:
+    """The identified set: a non-empty list of parameter vectors that all
+    carry the same numeric fields."""
+    if not isinstance(samples, list) or not samples:
+        raise ValueError("'samples' must be a non-empty list of parameter vectors")
+    keys = set(samples[0])
+    for i, vector in enumerate(samples):
+        if not isinstance(vector, dict) or set(vector) != keys:
+            raise ValueError(f"samples[{i}] does not carry the same parameters")
+        bad = [k for k, v in vector.items() if not isinstance(v, int | float)]
+        if bad:
+            raise ValueError(f"samples[{i}] has non-numeric value(s) for {bad}")
 
 
 def _stamp(bundle: Mapping[str, Any]) -> str:
