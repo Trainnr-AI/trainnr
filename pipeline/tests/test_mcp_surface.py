@@ -65,8 +65,10 @@ class Bundles(unittest.TestCase):
 class Actuators(unittest.TestCase):
     def test_all_eight_servos_with_provenance(self) -> None:
         described = describe_actuators()
-        self.assertEqual(len(described), 8)
+        self.assertEqual(len(described), 9)  # eight vendored fits + our XL330 refit
         for servo in described:
+            if servo["source"] == "bam-refit":
+                continue  # one tier, its own provenance (docs/e2e-research/72)
             with self.subTest(slug=servo["slug"]):
                 self.assertEqual(servo["source"], "bam")
                 self.assertEqual(servo["tiers"], ["m1", "m2", "m3", "m4", "m5", "m6"])
@@ -80,10 +82,16 @@ class Actuators(unittest.TestCase):
 class ActuatorBundles(unittest.TestCase):
     def test_the_committed_store_lists_with_stamps_and_advisories(self) -> None:
         described = describe_actuator_bundles()
-        self.assertEqual(len(described), 48)  # 8 motors x m1..m6
+        self.assertEqual(len(described), 49)  # 8 motors x m1..m6 + the XL330 refit
         for entry in described:
             with self.subTest(file=entry["file"]):
                 self.assertIn("@", entry["stamp"])
+                if "refit" in entry["file"]:
+                    # The refit carries its interval: no uncertainty advisory.
+                    self.assertFalse(
+                        any("uncertainty" in a for a in entry["advisories"])
+                    )
+                    continue
                 # Vendored point estimates: the honesty advisories ride
                 # on every listing, not just the deep view.
                 self.assertTrue(any("uncertainty" in a for a in entry["advisories"]))
