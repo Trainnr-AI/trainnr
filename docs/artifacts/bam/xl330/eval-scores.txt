@@ -1,0 +1,3 @@
+shipped m6 (bam v1.0.2, aa17d1c) on the 358 public logs: MAE 0.027171396579687947 rad
+refit m6, 5000 trials, all 358 logs: MAE 0.020246159983196465 rad
+processed with bam.process --dt 0.005; xl330_raw.zip sha256 d308d12658523526...

@@ -89,3 +89,25 @@ If the refit is not run, the sentence for the paper is: "BAM publishes
 point estimates only; its raw XL330 logs (358 recordings, HF bucket
 Gregwar/bam_data, 2026-07-20) permit a bootstrap refit, which we did
 not run."
+
+## 5. First result (2026-09-05): the shipped point is not the logs' best fit
+
+On this laptop, `bam.process` over the 358 logs and one `bam.fit`
+of M6 at 5000 trials took 370 s and plateaued at a position MAE of
+0.0202 rad after ~3700 trials. Scored on the same logs with `bam.fit
+--eval`, the shipped v1.0.2 M6 parameters give 0.0272 rad. The refit
+reproduces the load-bearing parameters within 5 % — kt 0.348 vs
+0.366, R 2.67 vs 2.81, armature 0.00180 vs 0.00181,
+load_friction_motor 0.275 vs 0.267 — and moves freely where the
+objective does not care: the two terms the shipped fit holds at its
+1e-5 floors, `alpha` (0.50, the lower search bound, vs 8.68), the rig
+offset `q_offset` (0.005 vs 0.027). Record `bam-xl330-refit-2026-09-05`;
+params and scores under `docs/artifacts/bam/xl330/`. The bootstrap
+(100 replicates, 5000 trials each) is running; its interval will be
+tight on kt, R and armature and wide on the floor terms and `alpha` —
+which is the honest shape of "the identification's uncertainty" for
+this servo on this bench. Open question for the study: the walk
+policies were trained at the SHIPPED point; an identified-interval
+arm centred on the refit needs its own point arm beside it, or the
+interval's relative width applied around the shipped point, stated as
+such.

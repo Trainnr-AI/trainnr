@@ -1,0 +1,95 @@
+{
+ "id": "bam-xl330-refit-2026-09-05",
+ "claim": "BAM's shipped XL330 M6 fit (v1.0.2) scores a position MAE of 0.0272 rad on Rhoban's own 358 public bench logs; a 5000-trial refit of the same model with their optimiser on the same logs scores 0.0202 rad. The refit reproduces the load-bearing parameters within 5 % (kt 0.95x, R 0.95x, armature 0.99x, load_friction_motor 1.03x) while the terms the shipped fit holds at its search floors, alpha (0.50 vs 8.68, at the lower search bound) and the rig offset move freely \u2014 the objective does not constrain them.",
+ "date": "2026-09-05",
+ "repo_commit": "cccc4dc-dirty",
+ "argv": [
+  "bam.process --raw data_raw_2 --logdir processed --dt 0.005",
+  "bam.fit --actuator xl330 --model m6 --logdir processed --output full-5000.json --trials 5000 --workers 1",
+  "bam.fit --eval --actuator xl330 --model m6 --logdir processed (params.json = shipped / refit)"
+ ],
+ "instrument": "Rhoban/bam v1.0.2 (aa17d1c), optuna 4.9.0 CmaEsSampler bipop, Apple M1 Pro CPU",
+ "outcome": {
+  "mae_rad": {
+   "shipped_m6": 0.027171396579687947,
+   "refit_5000": 0.020246159983196465
+  },
+  "refit": {
+   "kt": 0.3484217300064758,
+   "R": 2.6704289528696585,
+   "armature": 0.0017956795209984515,
+   "q_offset": 0.004758369721713576,
+   "friction_base": 0.006818520716114002,
+   "friction_stribeck": 0.0028775802738118476,
+   "load_friction_motor": 0.27549362955360135,
+   "load_friction_external": 0.00016670539844619098,
+   "load_friction_motor_stribeck": 0.0005262044845091928,
+   "load_friction_external_stribeck": 0.21091318214875926,
+   "load_friction_motor_quad": 0.009128778709221576,
+   "load_friction_external_quad": 0.009315492054235966,
+   "dtheta_stribeck": 3.662222354987697,
+   "alpha": 0.5009196794987004,
+   "friction_viscous": 0.006894075181044391,
+   "model": "m6",
+   "actuator": "xl330"
+  },
+  "shipped": {
+   "kt": 0.36601349688984386,
+   "R": 2.8113923539223227,
+   "armature": 0.0018077432831600838,
+   "q_offset": 0.0271132870444849,
+   "friction_base": 0.004771183165566,
+   "friction_stribeck": 0.004676345799486616,
+   "load_friction_motor": 0.2667860954283698,
+   "load_friction_external": 8.515871897059342e-06,
+   "load_friction_motor_stribeck": 1.0722918395099123e-05,
+   "load_friction_external_stribeck": 0.08077928978935671,
+   "load_friction_motor_quad": 0.009972471242139415,
+   "load_friction_external_quad": 0.004902565732332559,
+   "dtheta_stribeck": 2.890372094130307,
+   "alpha": 8.683259907618984,
+   "friction_viscous": 0.005359668274599504,
+   "model": "m6",
+   "actuator": "xl330"
+  },
+  "ratio_refit_over_shipped": {
+   "kt": 0.952,
+   "R": 0.95,
+   "armature": 0.993,
+   "q_offset": 0.175,
+   "friction_base": 1.429,
+   "friction_stribeck": 0.615,
+   "load_friction_motor": 1.033,
+   "load_friction_external": 19.576,
+   "load_friction_motor_stribeck": 49.073,
+   "load_friction_external_stribeck": 2.611,
+   "load_friction_motor_quad": 0.915,
+   "load_friction_external_quad": 1.9,
+   "dtheta_stribeck": 1.267,
+   "alpha": 0.058,
+   "friction_viscous": 1.286
+  },
+  "trials": 5000,
+  "fit_wall_s": 370
+ },
+ "inputs": {
+  "raw_zip": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip",
+  "raw_zip_sha256_prefix": "d308d12658523526",
+  "recordings": 358,
+  "design": "kp {50,100,150,200,300} x mass {0.04,0.059,0.117,0.159} kg x length {0.11,0.14,0.17} m, six trajectories",
+  "dt": 0.005
+ },
+ "artifacts": {
+  "refit_params": "docs/artifacts/bam/xl330/refit-m6-5000-trials.json",
+  "shipped_params": "docs/artifacts/bam/xl330/shipped-m6-v1.0.2.json",
+  "eval_scores": "docs/artifacts/bam/xl330/eval-scores.txt"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/72 \u00a74 (refit and score with Rhoban's own bam.fit; --eval loads params.json from cwd)",
+ "caveats": [
+  "The shipped fit may come from a different recording campaign than the published zip (its folder is data_raw_2); the comparison is on the public logs only.",
+  "One refit run; the optimiser plateaued after ~3700 of 5000 trials at 0.0202 rad. Optimiser variance is measured by the bootstrap that follows, not here.",
+  "A lower MAE on the fitting logs is not a better model of the servo: no held-out split was used here (BAM's paper uses 75/25).",
+  "Our certified bundle wraps the SHIPPED point; every walk result in this repo is at that point. The refit is a second candidate point, not a replacement."
+ ]
+}
