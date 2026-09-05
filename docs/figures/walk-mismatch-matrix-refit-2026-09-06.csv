@@ -1,0 +1,19 @@
+arm,trained_under,condition,successes,trials,ci_low,ci_high,per_run
+point-refit,none (refit bundle),x0.7,0,120,0.0,0.0303,0/0/0
+point-refit,none (refit bundle),x0.8,3,120,0.0052,0.0713,1/0/2
+point-refit,none (refit bundle),x0.9,28,120,0.161,0.3193,7/7/14
+point-refit,none (refit bundle),fit,52,120,0.3432,0.5269,18/13/21
+point-refit,none (refit bundle),x1.1,60,120,0.4074,0.5926,19/19/22
+point-refit,none (refit bundle),x1.2,63,120,0.4318,0.6169,21/22/20
+point-refit,none (refit bundle),x1.3,60,120,0.4074,0.5926,20/23/17
+point-refit,none (refit bundle),pm0.1,58,120,0.3912,0.5763,18/18/22
+point-refit,none (refit bundle),pm0.3,57,120,0.3831,0.5682,19/16/22
+identified,identified set (refit bundle),x0.7,0,120,0.0,0.0303,0/0/0
+identified,identified set (refit bundle),x0.8,5,120,0.0137,0.0946,3/0/2
+identified,identified set (refit bundle),x0.9,34,120,0.2049,0.3728,15/1/18
+identified,identified set (refit bundle),fit,46,120,0.2961,0.4765,19/4/23
+identified,identified set (refit bundle),x1.1,60,120,0.4074,0.5926,27/5/28
+identified,identified set (refit bundle),x1.2,57,120,0.3831,0.5682,27/5/25
+identified,identified set (refit bundle),x1.3,49,120,0.3195,0.5018,25/4/20
+identified,identified set (refit bundle),pm0.1,56,120,0.3751,0.5599,26/4/26
+identified,identified set (refit bundle),pm0.3,54,120,0.3591,0.5435,26/4/24

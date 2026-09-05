@@ -143,8 +143,14 @@ def fold(  # noqa: PLR0913 - the study's knobs, named
                 "ci95": [round(low, 4), round(high, 4)],
             }
             outcomes[arm][cond] = pooled
+    declared = [
+        (a, b)
+        for a, b in (("wide", "point"), ("wide", "narrow"), ("point", "narrow"))
+        if a in arms and b in arms
+    ]
+    pairs = declared or [(a, b) for i, a in enumerate(arms) for b in arms[i + 1 :]]
     for cond in conditions:
-        for a, b in (("wide", "point"), ("wide", "narrow"), ("point", "narrow")):
+        for a, b in pairs:
             if cond in outcomes.get(a, {}) and cond in outcomes.get(b, {}):
                 if len(outcomes[a][cond]) != len(outcomes[b][cond]):
                     continue

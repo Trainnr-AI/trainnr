@@ -1,6 +1,6 @@
 {
  "id": "compute-ledger-2026-09-04",
- "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 62 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the replicated lift curve (2026-09-04), on the order of ~$140.",
+ "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 79 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the refit study (2026-09-06), on the order of ~$170.",
  "date": "2026-09-04",
  "repo_commit": "71f96cc",
  "argv": [
@@ -26,13 +26,15 @@
    "campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)": 4.2,
    "walk C1 replicates 2-3 x6 pods (2026-09-04)": 11.4,
    "the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)": 0.9,
-   "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8
+   "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8,
+   "per-axis mismatch matrices (162 certificates) on one pod, kept idle after, then stopped (2026-09-06, ~18:20 to 20:50 pod clock)": 2.5,
+   "walk C1 refit arms: point x3 + identified x3 on six pods, ~19:30 to 21:50, one kept to 22:03 for their 42 matrix cells (2026-09-06)": 14.1
   },
-  "pod_hours_total_estimate": 62.1,
+  "pod_hours_total_estimate": 78.7,
   "dollars_estimate": {
-   "rtx_pro_6000": "~60.5 h x $2.09 = ~$126",
+   "rtx_pro_6000": "~77.1 h x $2.09 = ~$161",
    "b200": "94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)",
-   "total": "~$140"
+   "total": "~$170"
   },
   "per_result_cost": {
    "one walk arm (train 8000 it + two 40-trial certificates)": "~1.9 h, ~$4",
@@ -41,11 +43,16 @@
    "one 40-trial certificate on the walk": "~30 s",
    "one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)": "~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)",
    "the mismatch matrix (63 forty-trial certificates on nine existing policies)": "~0.5 h, ~$1 (28 min of certificates; ~30 s each warm)",
-   "the replicated lift curve (15 arms: train 10k, judge 80 trials each; presses done earlier)": "~7.8 h, ~$16 (about 27 min per arm; two pods halved the wall clock)"
+   "the replicated lift curve (15 arms: train 10k, judge 80 trials each; presses done earlier)": "~7.8 h, ~$16 (about 27 min per arm; two pods halved the wall clock)",
+   "one per-axis mismatch matrix (54 forty-trial certificates)": "~0.4 h, ~$1 (warm cache ~10-27 s per certificate)",
+   "the refit study (six arms on six pods + 42 matrix cells)": "~14 h, ~$30 (2.3 h per arm incl. two certificates; ~2.5 h wall clock)"
   },
   "wall_clock_wins": {
    "three lift studies in parallel": "2.7 h instead of ~8",
    "walk C1 six replicates on six pods": "~1.9 h instead of ~11"
+  },
+  "cpu_local_work": {
+   "bam bootstrap": "100 refits x 5000 trials, 8 workers on the M1 Pro, ~75 min; full-data refit 370 s"
   }
  },
  "inputs": {
@@ -64,6 +71,7 @@
   "Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.",
   "Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) \u2014 53.4 h, ~$120.",
   "Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) \u2014 54.3 h, ~$120.",
-  "Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods \u2014 62.1 h, ~$140. The account balance moved $18 \u2192 $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod."
+  "Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods \u2014 62.1 h, ~$140. The account balance moved $18 \u2192 $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod.",
+  "Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study \u2014 78.7 h, ~$170; the account moved $44 \u2192 about $10 over the evening."
  ]
 }
