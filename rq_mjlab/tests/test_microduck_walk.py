@@ -132,6 +132,24 @@ class TheLawDrSpan(unittest.TestCase):
         self.assertEqual(stamps["robot"], base_stamps["robot"])
         self.assertEqual(stamps["actuator"], base_stamps["actuator"])
 
+    def test_the_refit_bundle_changes_the_actuator_stamp_only(self) -> None:
+        from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+            XL330_REFIT_BUNDLE,
+            microduck_walk_env_cfg,
+        )
+
+        _, shipped = microduck_walk_env_cfg()
+        _, refit = microduck_walk_env_cfg(bundle=XL330_REFIT_BUNDLE)
+        self.assertEqual(refit["robot"], shipped["robot"])
+        self.assertNotEqual(refit["actuator"], shipped["actuator"])
+        self.assertTrue(refit["actuator"].startswith("xl330-m6@"))
+
+    def test_the_identified_arm_refuses_a_bundle_without_an_interval(self) -> None:
+        from rq_mjlab.microduck_walk import IDENTIFIED, microduck_walk_env_cfg  # noqa: PLC0415
+
+        with self.assertRaisesRegex(ValueError, "uncertainty"):
+            microduck_walk_env_cfg(law_dr_span=IDENTIFIED)
+
     def test_a_pin_can_move_one_axis_and_refuses_an_unknown_one(self) -> None:
         from rq_mjlab.microduck_walk import (  # noqa: PLC0415
             PIN_AXES,

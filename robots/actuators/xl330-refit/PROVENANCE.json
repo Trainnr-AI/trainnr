@@ -1,0 +1,23 @@
+{
+  "slug": "xl330-refit",
+  "display_name": "ROBOTIS Dynamixel XL-330 \u2014 our refit of BAM's M6 on Rhoban's public bench logs",
+  "source": "bam-refit",
+  "source_repo": "https://github.com/Rhoban/bam",
+  "source_version": "1.0.2",
+  "source_commit": "aa17d1c",
+  "params_path": "docs/artifacts/bam/xl330/refit-m6-5000-trials.json",
+  "model_module": "https://github.com/Rhoban/bam/blob/main/bam/dynamixel/actuator.py",
+  "raw_data_url": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip?download=true",
+  "raw_data_sha256_prefix": "d308d12658523526",
+  "raw_data_recordings": 358,
+  "raw_data_archival_grade": false,
+  "fit": "python -m bam.process --raw data_raw_2 --logdir processed --dt 0.005; python -m bam.fit --actuator xl330 --model m6 --trials 5000 --workers 1 (optuna 4.9.0 CmaEsSampler bipop); position MAE 0.0202 rad on the 358 logs vs 0.0272 for the shipped v1.0.2 point (record bam-xl330-refit-2026-09-05)",
+  "license": "Apache-2.0 (code); the bench logs' licence is unstated on the HF bucket \u2014 this bundle redistributes fitted numbers only",
+  "citation": "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). Extended Friction Models for the Physics Simulation of Servo Actuators. ICRA 2025, pp. 12091-12097. Refit and bootstrap: this repository, docs/e2e-research/72.",
+  "vendored_date": "2026-09-05",
+  "vendored_via": "tools/bam-bootstrap.py and bam.fit on Rhoban's public logs, on an Apple M1 Pro",
+  "models_available": [
+    "m6"
+  ],
+  "notes": "The point is OUR refit, not Rhoban's shipped fit (robots/actuators/xl330 wraps that one). The uncertainty section, when present, is a block bootstrap over the public logs: log-sampling variability on one unit and one bench, not unit-to-unit spread. See docs/e2e-research/72."
+}

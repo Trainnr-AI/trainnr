@@ -70,6 +70,10 @@ REPO = Path(__file__).resolve().parents[3]
 ROBOT_DIR = REPO / "robots" / "microduck"
 MODEL_FILE = "robot_walk.xml"
 XL330_BUNDLE = REPO / "robots" / "actuator-bundles" / "xl330.m6.bundle.json"
+# Our refit of the same model on Rhoban's public logs, with its
+# bootstrap interval (docs/e2e-research/72): the bundle the
+# identified-interval arm and its own point arm train on.
+XL330_REFIT_BUNDLE = REPO / "robots" / "actuator-bundles" / "xl330-refit.m6.bundle.json"
 
 # The bundle's actuated joints — everything but the freejoint; all
 # fourteen are XL330s (57 §2, confirmed against the compiled model).
@@ -130,6 +134,10 @@ ARMATURE = (0.9, 1.1)
 # declared span over the certified bundle's law parameters — recorded
 # as the basis on the event and on every episode that samples it.
 LAW_DR_SPAN = 0.10
+# `law_dr_span=IDENTIFIED` draws from the bundle's own `uncertainty`
+# section — the identified-interval arm the thesis names — and refuses
+# a bundle that carries none (2026-09-05, docs/e2e-research/72).
+IDENTIFIED = "identified"
 # The mismatch axes a certificate can pin one at a time (walk_verdict
 # --judge-param): the motor's strength (kt), its winding (R), and the
 # whole friction family as one axis. "all" is the diagonal.
@@ -159,9 +167,10 @@ PHYSICS_DT = 0.005
 def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each statement a cited number
     *,
     play: bool = False,
-    law_dr_span: float | None = LAW_DR_SPAN,
+    law_dr_span: float | str | None = LAW_DR_SPAN,
     law_pin_scale: float | None = None,
     law_pin_only: tuple[str, ...] | None = None,
+    bundle: Path | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The walk cfg and its identity: robot stamp, actuator stamp, and
     the law-DR basis — the three strings a run's record must carry.
@@ -187,7 +196,7 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
 
     # The robot: our stamped bundle, the certified actuator.
     actuator = BamActuatorCfg.from_bundle(
-        XL330_BUNDLE, target_names_expr=SERVO_JOINTS, physics_dt=PHYSICS_DT
+        bundle or XL330_BUNDLE, target_names_expr=SERVO_JOINTS, physics_dt=PHYSICS_DT
     )
     entity, robot_stamp = entity_from_bundle(ROBOT_DIR, MODEL_FILE, (actuator,))
     cfg.scene.entities = {"robot": entity}
@@ -362,8 +371,14 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
             actuator, pin_scale=law_pin_scale, pin_only=law_pin_only
         )
         events["bam_param_dr"] = law_dr
+    elif law_dr_span == IDENTIFIED:
+        # No fallback: the bundle's interval or a refusal.
+        law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=None)
+        events["bam_param_dr"] = law_dr
     elif law_dr_span:
-        law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=law_dr_span)
+        law_dr, dr_basis = bam_param_dr_event(
+            actuator, fallback_span=float(law_dr_span)
+        )
         events["bam_param_dr"] = law_dr
     else:
         dr_basis = "none: the bundle's point fit exactly (no law DR)"

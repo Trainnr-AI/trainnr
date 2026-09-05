@@ -408,6 +408,13 @@ def parse_args() -> argparse.Namespace:
         "span it trained under — NOT each policy's own span (2026-09-04)",
     )
     parser.add_argument(
+        "--bundle",
+        type=Path,
+        default=None,
+        help="the actuator bundle the checkpoint trained on (microduck only); the "
+        "identity check refuses a mismatch",
+    )
+    parser.add_argument(
         "--judge-param",
         default="all",
         help="with --judge-at-scale: pin only this mismatch axis (the walk's "
@@ -522,6 +529,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         dr_span=None if args.judge_at_fit else judge_span,
         pin_scale=args.judge_at_scale,
         pin_axis=args.judge_param,
+        bundle=args.bundle,
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed

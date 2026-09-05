@@ -127,7 +127,7 @@ def summarize(
     return interval
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0915 - one run, every step in order
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--bam", type=Path, required=True)
     parser.add_argument("--processed", type=Path, required=True)
@@ -139,6 +139,14 @@ def main() -> int:
     parser.add_argument("--trials", type=int, default=5000)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--emit-uncertainty",
+        type=Path,
+        default=None,
+        help="also write the bundle-side interval file (<tier>.uncertainty.json "
+        "beside the vendored params): the fitted params' 2.5-97.5 percentiles, "
+        "rig-only parameters excluded, with the bootstrap's metrics",
+    )
     args = parser.parse_args()
 
     design = blocks(args.processed)
@@ -214,6 +222,25 @@ def main() -> int:
         ],
     }
     (args.out / SUMMARY).write_text(json.dumps(summary, indent=1))
+    if args.emit_uncertainty is not None:
+        rig = {"q_offset", "command_delay", "max_velocity"}
+        emitted = {
+            "uncertainty": {
+                name: {"low": iv["low"], "high": iv["high"]}
+                for name, iv in summary["interval"].items()
+                if name not in rig
+            },
+            "metrics": {
+                "interval_method": summary["bootstrap"],
+                "replicates": summary["replicates"],
+                "trials_per_fit": summary["trials_per_fit"],
+                "bam_commit": summary["bam_commit"],
+                "raw_zip_sha256": summary["raw_zip_sha256"],
+                "caveats": summary["caveats"],
+            },
+        }
+        args.emit_uncertainty.write_text(json.dumps(emitted, indent=2) + "\n")
+        print(f"interval -> {args.emit_uncertainty}")
     for name, iv in summary["interval"].items():
         pt = "" if iv["point"] is None else f"  shipped {iv['point']:.5g}"
         print(

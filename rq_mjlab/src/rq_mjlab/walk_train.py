@@ -92,6 +92,14 @@ def g3_agent(iterations: int) -> Any:
     )
 
 
+def _span(text: str) -> float | str:
+    """A declared span as a number, or the word `identified` for the
+    bundle's own interval (microduck_walk.IDENTIFIED)."""
+    if text == "identified":
+        return text
+    return float(text)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--agent", choices=sorted(DEFAULTS), default="g3")
@@ -110,8 +118,16 @@ def main() -> None:
     parser.add_argument("--every", type=int, default=None)
     parser.add_argument("--frame-every", type=int, default=400)
     parser.add_argument(
+        "--bundle",
+        type=Path,
+        default=None,
+        help="the actuator bundle to train on (microduck only; default the "
+        "shipped xl330.m6; robots/actuator-bundles/xl330-refit.m6 is our refit "
+        "with its interval)",
+    )
+    parser.add_argument(
         "--dr-span",
-        type=float,
+        type=_span,
         default=None,
         help="declared actuator-DR span around the identified point (the bundle's "
         "fit, or Go1's derived gains); 0 = none; default the walk's own "
@@ -153,7 +169,10 @@ def main() -> None:
 
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
-    cfg, identity = spec.env_cfg(dr_span=span or None, pin_scale=None)
+    cfg, identity = spec.env_cfg(
+        dr_span=span or None, pin_scale=None, bundle=args.bundle
+    )
+    print(f"[train] actuator {identity['actuator']}; dr_basis: {identity['dr_basis']}")
     log_root = args.log_root or Path(f"../runs/{args.robot}-walk")
     cfg.scene.num_envs = envs
     if args.seed is not None:

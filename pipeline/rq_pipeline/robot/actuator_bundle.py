@@ -157,6 +157,16 @@ def wrap(
         "provenance": provenance,
         "checks": run_checks(params),
     }
+    # A fit that carries its interval ships `<tier>.uncertainty.json`
+    # beside `<tier>.json` (tools/bam-bootstrap.py --emit-uncertainty,
+    # 2026-09-05): {"uncertainty": {param: {low, high}}, "metrics": {...}}.
+    # Vendored point fits have none, and verify says so as an advisory.
+    interval_path = directory / f"{tier}.uncertainty.json"
+    if interval_path.exists():
+        interval = json.loads(interval_path.read_text())
+        bundle["uncertainty"] = interval["uncertainty"]
+        if "metrics" in interval:
+            bundle["metrics"] = interval["metrics"]
     if context:
         bundle["context"] = dict(context)
     if wrapped_on is not None:

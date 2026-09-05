@@ -25,6 +25,7 @@ scales="${3:-0.7 0.8 0.9 1.1 1.2 1.3}"
 span="${4:-0.30}"
 axes="${5:-all}"
 trials="${TRIALS:-40}"; seed="${SEED:-1000}"; robot="${ROBOT:-microduck}"
+bundle_flag=""; [ -n "${BUNDLE:-}" ] && bundle_flag="--bundle $BUNDLE"
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
@@ -33,7 +34,7 @@ certify() { # <ckpt> <certificate file> <verdict args...>
   local ckpt="$1" cert="$2"; shift 2
   if [ -f "$(dirname "$ckpt")/verdict/$cert" ]; then say "have $cert for $ckpt"; return 0; fi
   .venv/bin/python -m rq_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" \
-    --seed "$seed" --device cuda:0 --no-studio "$@"
+    --seed "$seed" --device cuda:0 --no-studio $bundle_flag "$@"
 }
 
 total=0; done_n=0

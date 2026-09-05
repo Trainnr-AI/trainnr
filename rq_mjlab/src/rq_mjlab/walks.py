@@ -29,9 +29,10 @@ class WalkSpec:
 def _microduck_env(
     *,
     play: bool = False,
-    dr_span: float | None,
+    dr_span: float | str | None,
     pin_scale: float | None,
     pin_axis: str = "all",
+    bundle: Any = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import (  # noqa: PLC0415
         PIN_AXES,
@@ -43,6 +44,7 @@ def _microduck_env(
         law_dr_span=dr_span,
         law_pin_scale=pin_scale,
         law_pin_only=_axis(PIN_AXES, pin_axis),
+        bundle=bundle,
     )
 
 
@@ -61,11 +63,17 @@ def _microduck_agent(iterations: int) -> Any:
 def _go1_env(
     *,
     play: bool = False,
-    dr_span: float | None,
+    dr_span: float | str | None,
     pin_scale: float | None,
     pin_axis: str = "all",
+    bundle: Any = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
+
+    if bundle is not None:
+        raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
+    if dr_span == "identified":
+        raise ValueError("the Go1 walk has no identified interval (derived PD)")
 
     return go1_walk_env_cfg(
         play=play,
