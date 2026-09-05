@@ -1,0 +1,12 @@
+arm,group,episodes,successes,trials,rate,ci_low,ci_high
+teacher,teacher,,32,40,0.8,0.6435219813207658,0.9094775906000101
+teacher-delay-1,teacher-delay-1,,0,40,0.0,0.0,0.08809730287880185
+teacher-delay-2,teacher-delay-2,,0,40,0.0,0.0,0.08809730287880185
+teacher-delay-4,teacher-delay-4,,0,40,0.0,0.0,0.08809730287880185
+latency-0,latency-0,,25,40,0.625,0.4580147522326117,0.7727372775181738
+latency-1,latency-1,,0,40,0.0,0.0,0.08809730287880185
+latency-2,latency-2,,0,40,0.0,0.0,0.08809730287880185
+latency-4,latency-4,,0,40,0.0,0.0,0.08809730287880185
+latency-8,latency-8,,0,40,0.0,0.0,0.08809730287880185
+horizon-3-latency-0,horizon-3-latency-0,,13,40,0.325,0.18572896676335393,0.49129487547844775
+horizon-1-latency-1,horizon-1-latency-1,,0,40,0.0,0.0,0.08809730287880185

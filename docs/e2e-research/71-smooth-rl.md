@@ -190,6 +190,50 @@ tracked` at episode end, plus optionally the per-interval tracking error
 as a dense shaping term reported separately. The ablation that the paper
 lacks costs one flag: truncate or not.
 
+## 4b. Results, 2026-09-05: E0 and E1 on the walk (this box, RTX 3090 Ti)
+
+Record `docs/findings/walk-latency-budget-2026-09-05.json`, figure
+`docs/figures/walk-latency-budget-2026-09-05.svg`; 40 matched trials
+on seed 1000 per row, the campaign 3 student (`student-last@c39a1b54c06b`)
+and its teacher (`model_7999`), one control tick = 20 ms.
+
+| policy | condition | success | survived | tracked | median fall tick | median RMS jerk |
+|---|---|---|---|---|---|---|
+| teacher | synchronous | 32/40 [0.644, 0.909] | 40 | 32 | 1000 | 272,658 |
+| teacher | actions delayed 1 tick | 0/40 | 17 | 0 | | |
+| teacher | delayed 2 ticks | 0/40 | 0 | 0 | | |
+| teacher | delayed 4 ticks | 0/40 | 0 | 0 | | |
+| student | latency 0 (rows [0,2) per chunk) | 25/40 [0.458, 0.773] | 28 | 33 | 1000 | 268,178 |
+| student | latency 1 | 0/40 | 0 | 3 | 61 | 292,631 |
+| student | latency 2 | 0/40 | 0 | 4 | | |
+| student | latency 4 | 0/40 | 0 | 2 | | |
+| student | latency 8 | 0/40 | 0 | 4 | | |
+| student | horizon 3, latency 0 (a third row per chunk) | 13/40 [0.186, 0.491] | 22 | 22 | | |
+| student | horizon 1, latency 1 (one row, one tick stale) | 0/40 | 0 | 5 | | |
+
+**E0.** The student is as rough as its teacher: median jerk 268k against
+273k in the action's units per second cubed (both re-target every tick
+at 50 Hz). Under a budget the jerk rises 9 % as the duck goes down.
+Smoothness is now a column on every certificate row, three engines.
+
+**E1.** One tick of inference budget takes the student from 25/40 to
+0/40 (every duck down, median fall at tick 61; effect −0.625, p 2e-10),
+and so does every larger budget. The two controls separate the causes:
+executing a third row per chunk with no staleness costs half the
+successes (13/40), while one tick of staleness with a single row per
+chunk costs all of them - staleness dominates. And the decisive
+control is the teacher's: delayed one tick it tracks 0/40 (17 stand),
+delayed two it falls 0/40. **Neither policy has a delay margin of even
+20 ms; the student inherited its collapse from a teacher trained with
+zero latency.** This is the mismatch the paper fine-tunes against,
+measured with intervals on both sides of a distillation - and it says
+the fix belongs on the teacher's training side first: a teacher
+trained under a latency budget (the paper's "run the timed loop during
+training", applied to the RL teacher) is the prerequisite for any
+student that will run on hardware. Every walk certificate issued so
+far was a synchronous one; a certificate should also be issued at the
+deployment latency.
+
 ## 4a. Building E2 without their code: the transcription protocol
 
 SmoothRL ships no code (checked 2026-09-05: no repository linked from

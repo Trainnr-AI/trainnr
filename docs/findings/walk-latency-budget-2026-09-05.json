@@ -1,0 +1,314 @@
+{
+ "id": "walk-latency-budget-2026-09-05",
+ "claim": "The campaign 3 vision student certified under an inference budget of n control ticks (SmoothRL's timed loop, emulated in the scheduler), 40 matched trials on the shared seed - teacher 32/40 [0.644, 0.909]; teacher-delay-1 0/40 [0.000, 0.088]; teacher-delay-2 0/40 [0.000, 0.088]; teacher-delay-4 0/40 [0.000, 0.088]; latency-0 25/40 [0.458, 0.773]; latency-1 0/40 [0.000, 0.088]; latency-2 0/40 [0.000, 0.088]; latency-4 0/40 [0.000, 0.088]; latency-8 0/40 [0.000, 0.088]; horizon-3-latency-0 13/40 [0.186, 0.491]; horizon-1-latency-1 0/40 [0.000, 0.088].",
+ "date": "2026-09-05",
+ "repo_commit": "39568b2",
+ "argv": [
+  "tools/walk-latency-fold.py",
+  "runs/microduck-walk/20260901-163412/verdict",
+  "--date",
+  "2026-09-05"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "outcome": {
+  "arms": {
+   "teacher": {
+    "successes": 32,
+    "trials": 40,
+    "ci95": [
+     0.6435219813207658,
+     0.9094775906000101
+    ],
+    "survived": 40,
+    "tracked": 32,
+    "median_steps": 1000.0,
+    "median_rms_jerk": 272658.0,
+    "policy": "model_7999",
+    "latency": null,
+    "horizon": null,
+    "delay": 0
+   },
+   "teacher-delay-1": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 17,
+    "tracked": 0,
+    "median_steps": 790.0,
+    "median_rms_jerk": 309575.9,
+    "policy": "model_7999",
+    "latency": null,
+    "horizon": null,
+    "delay": 1
+   },
+   "teacher-delay-2": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 0,
+    "median_steps": 25.5,
+    "median_rms_jerk": 349006.2,
+    "policy": "model_7999",
+    "latency": null,
+    "horizon": null,
+    "delay": 2
+   },
+   "teacher-delay-4": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 0,
+    "median_steps": 24.0,
+    "median_rms_jerk": 313489.4,
+    "policy": "model_7999",
+    "latency": null,
+    "horizon": null,
+    "delay": 4
+   },
+   "latency-0": {
+    "successes": 25,
+    "trials": 40,
+    "ci95": [
+     0.4580147522326117,
+     0.7727372775181738
+    ],
+    "survived": 28,
+    "tracked": 33,
+    "median_steps": 1000.0,
+    "median_rms_jerk": 267036.1,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 0,
+    "horizon": 2
+   },
+   "latency-1": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 3,
+    "median_steps": 60.5,
+    "median_rms_jerk": 290577.7,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 1,
+    "horizon": 2
+   },
+   "latency-2": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 4,
+    "median_steps": 72.0,
+    "median_rms_jerk": 253614.3,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 2,
+    "horizon": 2
+   },
+   "latency-4": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 2,
+    "median_steps": 61.0,
+    "median_rms_jerk": 246360.9,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 4,
+    "horizon": 2
+   },
+   "latency-8": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 4,
+    "median_steps": 53.0,
+    "median_rms_jerk": 220475.3,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 8,
+    "horizon": 2
+   },
+   "horizon-3-latency-0": {
+    "successes": 13,
+    "trials": 40,
+    "ci95": [
+     0.18572896676335393,
+     0.49129487547844775
+    ],
+    "survived": 22,
+    "tracked": 22,
+    "median_steps": 1000.0,
+    "median_rms_jerk": 255217.1,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 0,
+    "horizon": 3
+   },
+   "horizon-1-latency-1": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.08809730287880185
+    ],
+    "survived": 0,
+    "tracked": 5,
+    "median_steps": 60.5,
+    "median_rms_jerk": 258104.3,
+    "policy": "student-student@c39a1b54c06b",
+    "latency": 1,
+    "horizon": 1
+   }
+  },
+  "effects": [
+   {
+    "key": "latency-1",
+    "side_a": "latency-0",
+    "side_b": "latency-1",
+    "successes_a": 25,
+    "trials_a": 40,
+    "successes_b": 0,
+    "trials_b": 40,
+    "interval_a": [
+     0.4580147522326117,
+     0.7727372775181738
+    ],
+    "interval_b": [
+     0.0,
+     0.08809730287880185
+    ],
+    "difference": -0.625,
+    "p_value": 2.2137493226721965e-10,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "key": "latency-2",
+    "side_a": "latency-0",
+    "side_b": "latency-2",
+    "successes_a": 25,
+    "trials_a": 40,
+    "successes_b": 0,
+    "trials_b": 40,
+    "interval_a": [
+     0.4580147522326117,
+     0.7727372775181738
+    ],
+    "interval_b": [
+     0.0,
+     0.08809730287880185
+    ],
+    "difference": -0.625,
+    "p_value": 2.2137493226721965e-10,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "key": "latency-4",
+    "side_a": "latency-0",
+    "side_b": "latency-4",
+    "successes_a": 25,
+    "trials_a": 40,
+    "successes_b": 0,
+    "trials_b": 40,
+    "interval_a": [
+     0.4580147522326117,
+     0.7727372775181738
+    ],
+    "interval_b": [
+     0.0,
+     0.08809730287880185
+    ],
+    "difference": -0.625,
+    "p_value": 2.2137493226721965e-10,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "key": "latency-8",
+    "side_a": "latency-0",
+    "side_b": "latency-8",
+    "successes_a": 25,
+    "trials_a": 40,
+    "successes_b": 0,
+    "trials_b": 40,
+    "interval_a": [
+     0.4580147522326117,
+     0.7727372775181738
+    ],
+    "interval_b": [
+     0.0,
+     0.08809730287880185
+    ],
+    "difference": -0.625,
+    "p_value": 2.2137493226721965e-10,
+    "verdict": "SENSITIVE"
+   }
+  ],
+  "latencies": [
+   0,
+   1,
+   2,
+   4,
+   8
+  ],
+  "controls": [
+   [
+    3,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "delays": [
+   1,
+   2,
+   4
+  ]
+ },
+ "inputs": {
+  "verdict_dir": "runs/microduck-walk/20260901-163412/verdict",
+  "student": "runs/campaign-3/student (student-last@c39a1b54c06b)"
+ },
+ "artifacts": {
+  "latency-0": "runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl",
+  "latency-1": "runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl",
+  "latency-2": "runs/microduck-walk/20260901-163412/verdict/records-student-latency-2-cuda.jsonl",
+  "latency-4": "runs/microduck-walk/20260901-163412/verdict/records-student-latency-4-cuda.jsonl",
+  "latency-8": "runs/microduck-walk/20260901-163412/verdict/records-student-latency-8-cuda.jsonl",
+  "horizon-3-latency-0": "runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl",
+  "horizon-1-latency-1": "runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl",
+  "figure.svg": "docs/figures/walk-latency-budget-2026-09-05.svg",
+  "figure.pdf": "docs/figures/walk-latency-budget-2026-09-05.pdf",
+  "figure.png": "docs/figures/walk-latency-budget-2026-09-05.png",
+  "figure.csv": "docs/figures/walk-latency-budget-2026-09-05.csv"
+ },
+ "sources": {},
+ "protocol": "docs/e2e-research/71 \u00a74 E1 (walk_verdict --latency n; the scheduler's timed loop)",
+ "caveats": [
+  "One student, one box; the budget is emulated in the scheduler (the chunk in flight keeps supplying its own later rows, one request in flight at a time), the first chunk taking over at once.",
+  "Zero latency executes rows [0, h) of each chunk; a budget n executes rows [n, n + h), or [n, 2n) once n exceeds h: the controls separate staleness from row depth.",
+  "Smoothness is the RMS jerk of the issued targets per trial (docs/71 E0)."
+ ]
+}
