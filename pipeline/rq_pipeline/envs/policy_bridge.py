@@ -118,6 +118,7 @@ class BridgePolicy:
         horizon: int,
         device: str,
         cwd: Path | None = None,
+        latency: int = 0,
     ) -> None:
         argv = [
             str(python),
@@ -131,6 +132,8 @@ class BridgePolicy:
             str(horizon),
             "--device",
             device,
+            "--latency",
+            str(latency),
         ]
         self.process = subprocess.Popen(
             argv,
@@ -165,6 +168,13 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--camera", default="chase")
     parser.add_argument("--horizon", type=int, default=20)
+    parser.add_argument(
+        "--latency",
+        type=int,
+        default=0,
+        help="inference budget in control ticks: a chunk asked at t takes over at "
+        "t + latency (docs/e2e-research/71); 0 = the synchronous loop",
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--instruction", default="")
     args = parser.parse_args()
@@ -197,7 +207,7 @@ def main() -> None:
         scheduler = schedulers.get(world)
         if scheduler is None or reset:
             scheduler = ActionScheduler(
-                chunk_policy, executed_horizon=args.horizon, nu=nu
+                chunk_policy, executed_horizon=args.horizon, nu=nu, latency=args.latency
             )
             scheduler.reset()
             schedulers[world] = scheduler

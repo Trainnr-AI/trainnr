@@ -64,6 +64,7 @@ from rq_pipeline.envs.contract import (
 )
 from rq_pipeline.evaluate.harness import home_state
 from rq_pipeline.evaluate.records import EpisodeRecord, append_records, protocol_hash
+from rq_pipeline.evaluate.smoothness import SmoothnessMeter
 from rq_pipeline.evaluate.variations import Variation, describe, draw_all
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, Stepper
 from rq_pipeline.physics.placement import require_start
@@ -252,6 +253,9 @@ class RobotiqEnv(gym.Env):
         self._stepper = Stepper(
             self._model, initial, self.protocol.steps, data=self._data
         )
+        self._meter = SmoothnessMeter(
+            1, dt=float(self._model.opt.timestep) * self.protocol.control_interval
+        )
         return self._observe(), self._info(False)
 
     def step(
@@ -259,6 +263,7 @@ class RobotiqEnv(gym.Env):
     ) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
         if self._stepper is None:
             raise RuntimeError("reset() before step()")
+        self._meter.observe(np.asarray(action, dtype=float)[None])
         self._stepper.advance(action, self.protocol.control_interval)
         done = self._stepper.done
         ok = False
@@ -300,7 +305,7 @@ class RobotiqEnv(gym.Env):
             protocol=self._protocol_fields,
             seed=self._seed,
             events=events_for(self.protocol, states, sensors),
-            variations=dict(self._values),
+            variations={**self._values, **self._meter.result(0).columns()},
             placement=self._placement,
         )
 

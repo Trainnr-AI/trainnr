@@ -59,6 +59,7 @@ __all__ = [
     "require_observables",
     "run_sensor_episode",
     "score_policies",
+    "sensor_episode",
 ]
 
 
@@ -150,11 +151,38 @@ def run_sensor_episode(
     is what the actuators get, exactly like the wire. Pixel policies go
     through the gymnasium env instead (rq_pipeline.envs); both are the
     same `Stepper`."""
+    states, sensors, _ = sensor_episode(
+        backend, act, initial_state, steps=steps, control_interval=control_interval
+    )
+    return states, sensors
+
+
+def sensor_episode(
+    backend: Engine,
+    act: Callable[[int, Any], Any],
+    initial_state: Any,
+    *,
+    steps: int,
+    control_interval: int,
+) -> tuple[Any, Any, Mapping[str, Any]]:
+    """`run_sensor_episode` plus what the certificate columns need: the
+    smoothness of the issued controls (docs/e2e-research/71 E0), keyed
+    like every other `variations` entry, empty when the engine does not
+    state its timestep."""
+    from rq_pipeline.evaluate.smoothness import (  # noqa: PLC0415
+        Smoothness,
+        control_period,
+    )
+
     stepper = backend.stepper(initial_state, steps)
+    controls = []
     while not stepper.done:
         control = act(stepper.step, stepper.sensordata)
+        controls.append(control)
         stepper.advance(control, control_interval)
-    return stepper.states, stepper.sensors
+    period = control_period(stepper, control_interval)
+    columns = Smoothness.of(controls, dt=period).columns() if period else {}
+    return stepper.states, stepper.sensors, columns
 
 
 def require_observables(backend: Engine, protocol: EpisodeProtocol) -> None:
@@ -175,7 +203,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     protocol: EpisodeProtocol,
     *,
     source: str,
-    run_episode: Callable[[Any, Any], tuple[Any, Any]],
+    run_episode: Callable[[Any, Any], tuple[Any, ...]],
     gate_cameras: bool = False,
     record_to: Path | None = None,
 ) -> tuple[SimScore, ...]:
@@ -184,7 +212,8 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     policy through the identical paired trials. `run_episode(policy,
     initial_state) -> (states, sensors)` is the only thing that differs
     between observing sensors and observing pixels — so it is the only
-    thing callers supply. Vision callers set `gate_cameras` because a
+    thing callers supply; a third element, when returned, is the row's
+    `variations` (the smoothness columns). Vision callers set `gate_cameras` because a
     camera-less model would score their policies 0% silently.
 
     Every trial becomes an `EpisodeRecord`; the scores are the fold over
@@ -218,7 +247,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
     records: list[EpisodeRecord] = []
     for policy in policies:
         for trial, start in enumerate(starts):
-            states, sensors = run_episode(policy, start)
+            states, sensors, *extra = run_episode(policy, start)
             record = EpisodeRecord(
                 source=source,
                 policy=policy.name,
@@ -228,6 +257,7 @@ def score_policies(  # noqa: PLR0913 - the skeleton carries both harnesses' knob
                 instrument=instrument,
                 protocol=fields,
                 events=events_for(protocol, states, sensors),
+                variations=dict(extra[0]) if extra else {},
                 placement=placement[trial],
             )
             records.append(record)
@@ -246,8 +276,8 @@ def evaluate_policies(
 ) -> tuple[SimScore, ...]:
     """Score every sensor policy under the identical protocol; census-gated."""
 
-    def run_episode(policy: SimPolicy, initial: Any) -> tuple[Any, Any]:
-        return run_sensor_episode(
+    def run_episode(policy: SimPolicy, initial: Any) -> tuple[Any, ...]:
+        return sensor_episode(
             backend,
             policy.act,
             initial,

@@ -190,6 +190,56 @@ tracked` at episode end, plus optionally the per-interval tracking error
 as a dense shaping term reported separately. The ablation that the paper
 lacks costs one flag: truncate or not.
 
+## 4a. Building E2 without their code: the transcription protocol
+
+SmoothRL ships no code (checked 2026-09-05: no repository linked from
+the arXiv page or the project page; RL Token's page links none either).
+"Exact and correct" therefore means faithful to the paper's own
+specification, tested against the paper's own claims - the way the
+actuator law was transcribed from BAM and pinned at both ends.
+
+1. **Algorithm 1 is the reference.** It is complete pseudocode for the
+   two processes (asynchronous rollout; off-policy updates over a shared
+   replay). It gets transcribed line for line into one module, each
+   line's number kept in a comment, with the state
+   `(s_t, z_t, ã[0,n), a[n,2n), a_target, r, s', z', ā', ã'[0,n))` as
+   one typed record.
+2. **Every stated number is pinned to its section**, as a named field
+   whose docstring cites the page: MLP 3 × 512 with LayerNorm (§3.4,
+   §4.3), correction bound 0.05, update-to-data `G = 5`, actor delay
+   `D = 5`, batch 256, the smoothness penalty over `Δ¹..Δ³` (Eq. 5),
+   TD3 target noise and a pessimistic minimum over a random critic
+   subset (REDQ), the BC anchor to the reference chunk, `γ^{2n}` in the
+   backup, replay seeded by 50 base-only rollouts, `n = 6` frames at
+   30 Hz, `H = 32`.
+3. **Every unstated number is marked ours**, in one table in the module
+   and here: `γ`, `τ`, the learning rate, the ensemble size `N` and
+   subset `M`, the target-noise scale and clip, `w_bc`, `w_smooth`,
+   `w_k`, the actor's activation, the "hold action" before the first
+   chunk. They take standard TD3/REDQ values and are exposed as fields,
+   never buried.
+4. **The mechanism is tested, not trusted.** Three tests pin what the
+   paper claims about its own objective: (a) the partition - for a
+   budget `n` and horizon `H`, rows `[0,n)`, `[n,2n)`, `[2n,H)` land in
+   the committed, execution and discarded regions, and the scheduler
+   test already proves the executed rows are exactly `[n, ...)`; (b) the
+   truncation - a finite-difference check that perturbing committed or
+   discarded rows of the actor's chunk leaves `∂L_actor/∂θ` unchanged
+   while perturbing execution rows changes it; (c) the backup - the
+   reward summed over exactly `2n` frames, the bootstrap at `s_{t+2n}`,
+   the discount `γ^{2n}`, and the critic's input carrying the executed
+   committed region, checked on a hand-built two-step episode.
+5. **The ablation the paper lacks costs one flag** (`truncate=False`
+   sends the gradient through the whole `[0,2n)` span), so the central
+   claim becomes a measured difference on our certificate, with an
+   interval - which their single run per task cannot give.
+6. **What we do not transcribe.** The RL token `z_t` (a readout of a
+   VLA's internals) has no counterpart on an ACT student; the residual
+   head conditions on the state and the reference chunk, and that
+   departure is recorded as such. Human intervention has no role in
+   simulation; the sparse reward is the certificate's criterion, exact
+   and free, instead of an operator's call.
+
 ## 5. Sources
 
 - Astribot Team, SmoothRL, arXiv:2608.29768v1, 2026-08-30 - §§1–5, Figures

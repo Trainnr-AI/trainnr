@@ -46,6 +46,40 @@ class TheSchedule(unittest.TestCase):
         self.assertEqual(counting.calls, 3)
         self.assertEqual(scheduler.fetches, 3)
 
+    def test_a_latency_budget_skips_the_committed_rows(self) -> None:
+        # docs/e2e-research/71: asked at tick 2, a chunk takes over at
+        # tick 3 with its row 1 - row 0 was the committed region the
+        # previous chunk supplied while this one was being inferred.
+        counting = Counting()
+        scheduler = ActionScheduler(
+            counting.policy(), executed_horizon=EXECUTED, nu=NU, latency=1
+        )
+        scheduler.reset()
+        rows = [tuple(scheduler.act({})[:2]) for _ in range(6)]
+        self.assertEqual(rows, [(1, 0), (1, 1), (1, 2), (2, 1), (2, 2), (3, 1)])
+        self.assertEqual(scheduler.fetches, 3)
+
+    def test_zero_latency_is_the_synchronous_loop(self) -> None:
+        counting = Counting()
+        scheduler = ActionScheduler(
+            counting.policy(), executed_horizon=EXECUTED, nu=NU, latency=0
+        )
+        scheduler.reset()
+        rows = [tuple(scheduler.act({})[:2]) for _ in range(5)]
+        self.assertEqual(rows, [(1, 0), (1, 1), (2, 0), (2, 1), (3, 0)])
+
+    def test_a_chunk_must_cover_the_wait_and_the_window(self) -> None:
+        scheduler = ActionScheduler(
+            Counting(horizon=2).policy(), executed_horizon=EXECUTED, nu=NU, latency=1
+        )
+        scheduler.reset()
+        with self.assertRaises(ValueError):
+            scheduler.act({})
+        with self.assertRaises(ValueError):
+            ActionScheduler(
+                Counting().policy(), executed_horizon=EXECUTED, nu=NU, latency=-1
+            )
+
     def test_reset_drops_the_held_chunk_and_resets_the_policy(self) -> None:
         counting = Counting()
         scheduler = ActionScheduler(counting.policy(), executed_horizon=EXECUTED, nu=NU)
