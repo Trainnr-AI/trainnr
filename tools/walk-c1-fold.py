@@ -143,7 +143,12 @@ def fold(
             if owns
             else None
         )
-    for a, b in COMPARE:
+    # The declared pairs when the arms are the study's trio; every pair
+    # otherwise (the refit arms of 2026-09-06: point-refit vs identified).
+    pairs = [(a, b) for a, b in COMPARE if a in arms and b in arms] or [
+        (a, b) for i, a in enumerate(arms) for b in arms[i + 1 :]
+    ]
+    for a, b in pairs:
         if a in arms and b in arms:
             effect = main_effect(
                 f"{a} vs {b}",
@@ -174,6 +179,7 @@ def main() -> int:
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--delta", type=float, default=0.15)
     parser.add_argument("--id", default="walk-c1")
+    parser.add_argument("--date", default=None, help="the runs' date; default today")
     args = parser.parse_args()
     arms = tuple(args.arms.split(","))
     outcome = fold(args.root, arms, alpha=args.alpha, delta=args.delta)
@@ -191,35 +197,71 @@ def main() -> int:
             f"p {e['p']:.3g}, {e['verdict']}"
         )
     first = next(iter(outcome["arms"].values()))
-    record = Finding(
-        id=f"{args.id}-{today()}",
-        claim=(
+    date = args.date or today()
+    # Robot and actuator from the certificates themselves, not a constant:
+    # the refit arms train on a different bundle (2026-09-06).
+    first_cert = certificate(
+        args.root, replicate_dirs(args.root, arms[0])[0].name, AT_FIT
+    )
+    identity = first_cert.get("identity", {})
+    robot = identity.get("robot", ROBOT)
+    actuator = identity.get("actuator", ACTUATOR)
+    trained = "; ".join(
+        f"{arm}: {r['trained_dr_basis']}" for arm, r in outcome["arms"].items()
+    )
+    if set(arms) == set(DEFAULT_ARMS):
+        claim = (
             "C1 on the walk: the microduck teacher trained under NO law DR (the "
             "bundle's point fit), the declared ±0.10 span, and the folklore ±0.30 "
             "span — same G3 recipe — each certified AT THE FIT (no law DR, pushes "
-            f"on) on {first['trials']} matched trials; own-DR certificates ride along."
-        ),
-        date=today(),
+            f"on) on {first['trials']} matched trials; a second certificate per run "
+            "judges under ±0.10 law DR (the same span for every arm)."
+        )
+    else:
+        claim = (
+            f"C1 on the walk, arms {', '.join(arms)} on actuator {actuator} — same G3 "
+            f"recipe, trained under [{trained}] — each certified AT THE FIT of that "
+            f"bundle (no law DR, pushes on) on {first['trials']} matched trials; a "
+            "second certificate per run judges under ±0.10 law DR."
+        )
+    identified = any(
+        "identified" in (r["trained_dr_basis"] or "") for r in outcome["arms"].values()
+    )
+    caveats = (
+        (
+            "The identified arm draws from the bundle's bootstrap interval "
+            "(docs/e2e-research/72): log-sampling variability on one unit and one "
+            "bench, not unit-to-unit spread; its point arm is the same bundle with "
+            "no draw, so the comparison is at one point.",
+        )
+        if identified
+        else (
+            "No bundle in the store carries intervals: the arms are point / declared "
+            "±0.10 / declared ±0.30 around BAM's point fit — the identified-INTERVAL "
+            "arm needs a fit with intervals (docs/e2e-research/72).",
+        )
+    ) + (
+        "Replicates are pooled per arm (trial k of each run starts identically); "
+        "per-run counts are on the record so the between-run spread is visible.",
+    )
+    record = Finding(
+        id=f"{args.id}-{date}",
+        claim=claim,
+        date=date,
         repo_commit=repo_commit(REPO),
         argv=sys.argv,
         instrument=", ".join(
             sorted({i for r in outcome["arms"].values() for i in r["instrument"]})
         ),
         outcome=outcome,
-        inputs={"robot": ROBOT, "actuator": ACTUATOR, "recipe": RECIPE},
+        inputs={"robot": robot, "actuator": actuator, "recipe": RECIPE},
         artifacts={
             f"{run.name}.at_fit": str(run / "train" / "verdict" / AT_FIT)
             for arm in arms
             for run in replicate_dirs(args.root, arm)
         },
         protocol=PROTOCOL,
-        caveats=(
-            "No bundle in the store carries intervals: the arms are point / declared "
-            "±0.10 / declared ±0.30 around BAM's point fit — the identified-INTERVAL "
-            "arm needs a fit with intervals (the bench chapter).",
-            "Replicates are pooled per arm (trial k of each run starts identically); "
-            "per-run counts are on the record so the between-run spread is visible.",
-        ),
+        caveats=caveats,
     )
     figures = render(record, REPO)
     artifacts = {**record.artifacts, **{f"figure.{k}": v for k, v in figures.items()}}
