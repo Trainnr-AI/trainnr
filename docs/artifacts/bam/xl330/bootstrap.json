@@ -1,0 +1,108 @@
+{
+ "actuator": "xl330",
+ "model": "m6",
+ "replicates": 100,
+ "trials_per_fit": 5000,
+ "sampler": "optuna CmaEsSampler(restart_strategy='bipop'), bam.fit defaults",
+ "bootstrap": "block bootstrap within ('kp', 'mass', 'length'); 60 blocks; seed 7",
+ "bam_commit": "aa17d1c",
+ "raw_zip_sha256": "d308d126585235264cd4045b4702e35992fe36a9bb6b4a280987ba6ae5f09546",
+ "processed_logs": 358,
+ "interval": {
+  "kt": {
+   "low": 0.34160819249170377,
+   "high": 0.3662413900126214,
+   "median": 0.35298922205349004,
+   "point": 0.36601349688984386
+  },
+  "R": {
+   "low": 2.545340646704905,
+   "high": 3.0362116781245927,
+   "median": 2.777607242536522,
+   "point": 2.8113923539223227
+  },
+  "armature": {
+   "low": 0.001707358958047298,
+   "high": 0.0019723229343313513,
+   "median": 0.0018440929667765083,
+   "point": 0.0018077432831600838
+  },
+  "q_offset": {
+   "low": 0.0006015989483966748,
+   "high": 0.010076038449434048,
+   "median": 0.005030993683375486,
+   "point": 0.0271132870444849
+  },
+  "friction_base": {
+   "low": 0.0005259648848279867,
+   "high": 0.010343071362733863,
+   "median": 0.008044373913573762,
+   "point": 0.004771183165566
+  },
+  "friction_stribeck": {
+   "low": 1.0994581182059342e-05,
+   "high": 0.011056342161857254,
+   "median": 0.0016778857621580566,
+   "point": 0.004676345799486616
+  },
+  "load_friction_motor": {
+   "low": 0.0027657921847380243,
+   "high": 0.3270834353275456,
+   "median": 0.26783002340935147,
+   "point": 0.2667860954283698
+  },
+  "load_friction_external": {
+   "low": 4.184240031145132e-05,
+   "high": 0.14025762559555782,
+   "median": 0.07634345591239408,
+   "point": 8.515871897059342e-06
+  },
+  "load_friction_motor_stribeck": {
+   "low": 2.484727038768098e-06,
+   "high": 0.21094150557646532,
+   "median": 0.00020506708357168442,
+   "point": 1.0722918395099123e-05
+  },
+  "load_friction_external_stribeck": {
+   "low": 0.004897173073461386,
+   "high": 0.38417440476351017,
+   "median": 0.15498262632661636,
+   "point": 0.08077928978935671
+  },
+  "load_friction_motor_quad": {
+   "low": 0.00016518146755777058,
+   "high": 0.00986875501735175,
+   "median": 0.004662380341842512,
+   "point": 0.009972471242139415
+  },
+  "load_friction_external_quad": {
+   "low": 0.00015588197042111905,
+   "high": 0.009975876170600249,
+   "median": 0.004634830145775211,
+   "point": 0.004902565732332559
+  },
+  "dtheta_stribeck": {
+   "low": 0.07095675011105361,
+   "high": 4.973314267303458,
+   "median": 0.8362345501769992,
+   "point": 2.890372094130307
+  },
+  "alpha": {
+   "low": 0.500084751787912,
+   "high": 9.65818168374658,
+   "median": 4.253412627807876,
+   "point": 8.683259907618984
+  },
+  "friction_viscous": {
+   "low": 0.005376964536625481,
+   "high": 0.00852990169433271,
+   "median": 0.006924159952004405,
+   "point": 0.005359668274599504
+  }
+ },
+ "caveats": [
+  "The interval is log-sampling variability on Rhoban's single unit and bench (their rig's q_offset and command_delay included), not unit-to-unit or temperature spread.",
+  "Each replicate is one optimiser run at the stated trial budget; optimiser variance is inside the interval, not separated from it.",
+  "The data licence is unstated on the HF bucket; the logs are not redistributed here, only the fitted numbers."
+ ]
+}

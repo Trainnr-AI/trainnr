@@ -60,10 +60,13 @@ def recorded_ratios() -> set[str]:
                     have.add(f"{k}/{per_run_trials}")
             if "kept" in arm and "max_attempt" in arm:
                 have.add(f"{arm['kept']}/{arm['max_attempt']}")
-        for rows in outcome.get("replicates", {}).values():
-            for row in rows:
-                have.add(f"{row['successes']}/{row['trials']}")
-        for own in outcome.get("under_span_0.10", {}).values():
+        replicates = outcome.get("replicates", {})
+        # A study's replicates are rows per arm; a bootstrap's is a count.
+        if isinstance(replicates, dict):
+            for rows in replicates.values():
+                for row in rows:
+                    have.add(f"{row['successes']}/{row['trials']}")
+        for own in (outcome.get("under_span_0.10") or {}).values():
             if isinstance(own, dict):
                 have.add(f"{own['successes']}/{own['trials']}")
                 for k in own.get("per_run") or []:
