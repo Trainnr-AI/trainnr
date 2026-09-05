@@ -1,0 +1,6 @@
+{
+ "robot": "microduck@14b51b63c52e",
+ "actuator": "xl330-m6@e57c25635c89",
+ "dr_basis": "identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)",
+ "seed": 44
+}

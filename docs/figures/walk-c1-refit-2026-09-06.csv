@@ -1,0 +1,3 @@
+arm,group,episodes,successes,trials,rate,ci_low,ci_high
+point-refit,point-refit,,52,120,0.43333333333333335,0.3432,0.5269
+identified,identified,,46,120,0.38333333333333336,0.2961,0.4765

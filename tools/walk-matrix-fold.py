@@ -52,6 +52,8 @@ ARM_SPAN = {
     "point": "none",
     "narrow": f"±{NARROW_SPAN:g}",
     "wide": f"±{DEFAULT_SPAN:g}",
+    "point-refit": "none (refit bundle)",
+    "identified": "identified set (refit bundle)",
 }
 
 
@@ -324,6 +326,11 @@ def main() -> int:
     parser.add_argument("--span", type=float, default=DEFAULT_SPAN)
     parser.add_argument("--date", default=None)
     parser.add_argument(
+        "--id",
+        default="walk-mismatch-matrix",
+        help="the record id's stem (the refit arms' matrix names its bundle)",
+    )
+    parser.add_argument(
         "--param",
         default="all",
         help="the mismatch axis the pinned cells moved (walk_verdict --judge-param); "
@@ -353,10 +360,10 @@ def main() -> int:
     axis_id = "" if AXIS == "all" else f"-{AXIS}"
     moved = "every law parameter" if AXIS == "all" else f"only {AXIS}"
     record = Finding(
-        id=f"walk-mismatch-matrix{axis_id}-{date}",
+        id=f"{args.id}{axis_id}-{date}",
         claim=(
-            "The mismatch matrix on the walk: every C1 policy (trained under no law "
-            f"DR, ±{NARROW_SPAN:g}, ±{args.span:g}; replicates pooled) judged "
+            "The mismatch matrix on the walk: the C1 policies "
+            f"{', '.join(arms)} (replicates pooled) judged "
             f"pinned at the fit scaled by s ({moved} moved) and under drawn spans, "
             "40 matched trials per run — " + table(outcome) + "."
         ),

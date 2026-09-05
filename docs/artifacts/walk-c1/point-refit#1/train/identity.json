@@ -1,0 +1,6 @@
+{
+ "robot": "microduck@14b51b63c52e",
+ "actuator": "xl330-m6@e57c25635c89",
+ "dr_basis": "none: the bundle's point fit exactly (no law DR)",
+ "seed": 42
+}
