@@ -25,7 +25,8 @@ scales="${3:-0.7 0.8 0.9 1.1 1.2 1.3}"
 span="${4:-0.30}"
 axes="${5:-all}"
 trials="${TRIALS:-40}"; seed="${SEED:-1000}"; robot="${ROBOT:-microduck}"
-bundle_flag=""; [ -n "${BUNDLE:-}" ] && bundle_flag="--bundle $BUNDLE"
+bundle_flag=""
+if [ -n "${BUNDLE:-}" ]; then b="$BUNDLE"; [[ "$b" = /* ]] || b="$repo/$b"; bundle_flag="--bundle $b"; fi  # the stages cd elsewhere: absolute
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 

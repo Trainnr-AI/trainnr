@@ -16,7 +16,8 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 arm="${1:?arm name}"; span="${2:?actuator-DR span (0 = none)}"
 iterations="${3:-8000}"; trials="${4:-40}"; seed="${5:-}"; replicate="${6:-}"
 robot="${ROBOT:-microduck}"
-bundle_flag=""; [ -n "${BUNDLE:-}" ] && bundle_flag="--bundle $BUNDLE"  # e.g. robots/actuator-bundles/xl330-refit.m6.bundle.json
+bundle_flag=""
+if [ -n "${BUNDLE:-}" ]; then b="$BUNDLE"; [[ "$b" = /* ]] || b="$repo/$b"; bundle_flag="--bundle $b"; fi  # the stages cd elsewhere: absolute  # e.g. robots/actuator-bundles/xl330-refit.m6.bundle.json
 study="walk-c1"; [ "$robot" = microduck ] || study="walk-c1-$robot"
 root="$repo/runs/studies/$study/$arm${replicate:+#$replicate}"
 seed_flag=""; [ -n "$seed" ] && seed_flag="--seed $seed"

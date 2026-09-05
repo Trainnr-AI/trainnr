@@ -27,11 +27,16 @@ class VendoredLibrary(unittest.TestCase):
                 "waveshare_st3025",
                 "xl320",
                 "xl330",
+                # Our refit of the XL330's M6 on Rhoban's public logs, with
+                # its bootstrap interval (docs/e2e-research/72, 2026-09-06).
+                "xl330-refit",
             },
         )
 
     def test_every_actuator_has_all_six_tiers(self) -> None:
         for slug in list_actuators():
+            if slug.endswith("-refit"):
+                continue  # a refit carries the one tier it re-fit
             with self.subTest(slug=slug):
                 self.assertEqual(
                     list_models(slug), ("m1", "m2", "m3", "m4", "m5", "m6")
@@ -45,7 +50,7 @@ class VendoredLibrary(unittest.TestCase):
                     self.assertEqual(model.slug, slug)
                     self.assertEqual(model.tier, tier)
                     self.assertIsInstance(model.friction.friction_viscous, float)
-                    self.assertEqual(model.provenance.source, "bam")
+                    self.assertIn(model.provenance.source, ("bam", "bam-refit"))
 
     def test_m1_has_no_stribeck_m6_has_everything(self) -> None:
         m1 = load_actuator("feetech_sts3215_7_4V", "m1")

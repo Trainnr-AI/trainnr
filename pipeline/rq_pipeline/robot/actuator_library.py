@@ -27,7 +27,9 @@ from rq_pipeline.robot.friction_budget import FrictionParams
 ACTUATORS_ROOT = Path(__file__).resolve().parents[3] / "robots" / "actuators"
 PROVENANCE_FILE = "PROVENANCE.json"
 REQUIRED_PROVENANCE_FIELDS = ("source", "citation", "license")
-KNOWN_SOURCES = ("bam", "own-bench", "datasheet")
+# "bam-refit": BAM's own model and optimiser re-run by us on Rhoban's
+# public bench logs, with a bootstrap interval (docs/e2e-research/72).
+KNOWN_SOURCES = ("bam", "bam-refit", "own-bench", "datasheet")
 # BAM's schema always carries these on top of the friction fields
 # (bam.model.Model / bam.actuator.VoltageControlledActuator): the
 # DC-motor + firmware-control-law side, not the friction budget.
