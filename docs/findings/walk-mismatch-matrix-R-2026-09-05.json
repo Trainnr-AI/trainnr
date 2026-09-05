@@ -1,0 +1,726 @@
+{
+ "id": "walk-mismatch-matrix-R-2026-09-05",
+ "claim": "The mismatch matrix on the walk: every C1 policy (trained under no law DR, \u00b10.1, \u00b10.3; replicates pooled) judged pinned at the fit scaled by s (only R moved) and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 91/120, x0.8 97/120, x0.9 100/120, fit 108/120, x1.1 103/120, x1.2 100/120, x1.3 101/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 94/120, x0.8 102/120, x0.9 102/120, fit 108/120, x1.1 107/120, x1.2 107/120, x1.3 106/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 87/120, x0.8 88/120, x0.9 88/120, fit 84/120, x1.1 86/120, x1.2 87/120, x1.3 84/120, pm0.1 87/120, pm0.3 90/120.",
+ "date": "2026-09-05",
+ "repo_commit": "3c9a86b-dirty",
+ "argv": [
+  "tools/walk-matrix-fold.py",
+  "docs/artifacts/walk-c1",
+  "--param",
+  "R",
+  "--span",
+  "0.30",
+  "--date",
+  "2026-09-05"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "outcome": {
+  "conditions": [
+   "x0.7",
+   "x0.8",
+   "x0.9",
+   "fit",
+   "x1.1",
+   "x1.2",
+   "x1.3",
+   "pm0.1",
+   "pm0.3"
+  ],
+  "arms": {
+   "point": {
+    "trained_under": "none",
+    "runs": 3,
+    "x0.7": {
+     "successes": 91,
+     "trials": 120,
+     "per_run": [
+      28,
+      29,
+      34
+     ],
+     "ci95": [
+      0.6717,
+      0.8318
+     ]
+    },
+    "x0.8": {
+     "successes": 97,
+     "trials": 120,
+     "per_run": [
+      28,
+      34,
+      35
+     ],
+     "ci95": [
+      0.7264,
+      0.8744
+     ]
+    },
+    "x0.9": {
+     "successes": 100,
+     "trials": 120,
+     "per_run": [
+      30,
+      35,
+      35
+     ],
+     "ci95": [
+      0.7544,
+      0.8951
+     ]
+    },
+    "fit": {
+     "successes": 108,
+     "trials": 120,
+     "per_run": [
+      34,
+      37,
+      37
+     ],
+     "ci95": [
+      0.8318,
+      0.9473
+     ]
+    },
+    "x1.1": {
+     "successes": 103,
+     "trials": 120,
+     "per_run": [
+      33,
+      35,
+      35
+     ],
+     "ci95": [
+      0.7829,
+      0.9153
+     ]
+    },
+    "x1.2": {
+     "successes": 100,
+     "trials": 120,
+     "per_run": [
+      34,
+      31,
+      35
+     ],
+     "ci95": [
+      0.7544,
+      0.8951
+     ]
+    },
+    "x1.3": {
+     "successes": 101,
+     "trials": 120,
+     "per_run": [
+      33,
+      33,
+      35
+     ],
+     "ci95": [
+      0.7638,
+      0.9019
+     ]
+    },
+    "pm0.1": {
+     "successes": 101,
+     "trials": 120,
+     "per_run": [
+      31,
+      35,
+      35
+     ],
+     "ci95": [
+      0.7638,
+      0.9019
+     ]
+    },
+    "pm0.3": {
+     "successes": 85,
+     "trials": 120,
+     "per_run": [
+      25,
+      27,
+      33
+     ],
+     "ci95": [
+      0.6184,
+      0.7877
+     ]
+    }
+   },
+   "narrow": {
+    "trained_under": "\u00b10.1",
+    "runs": 3,
+    "x0.7": {
+     "successes": 94,
+     "trials": 120,
+     "per_run": [
+      34,
+      28,
+      32
+     ],
+     "ci95": [
+      0.6989,
+      0.8533
+     ]
+    },
+    "x0.8": {
+     "successes": 102,
+     "trials": 120,
+     "per_run": [
+      35,
+      33,
+      34
+     ],
+     "ci95": [
+      0.7733,
+      0.9086
+     ]
+    },
+    "x0.9": {
+     "successes": 102,
+     "trials": 120,
+     "per_run": [
+      35,
+      33,
+      34
+     ],
+     "ci95": [
+      0.7733,
+      0.9086
+     ]
+    },
+    "fit": {
+     "successes": 108,
+     "trials": 120,
+     "per_run": [
+      37,
+      36,
+      35
+     ],
+     "ci95": [
+      0.8318,
+      0.9473
+     ]
+    },
+    "x1.1": {
+     "successes": 107,
+     "trials": 120,
+     "per_run": [
+      35,
+      37,
+      35
+     ],
+     "ci95": [
+      0.8219,
+      0.941
+     ]
+    },
+    "x1.2": {
+     "successes": 107,
+     "trials": 120,
+     "per_run": [
+      35,
+      37,
+      35
+     ],
+     "ci95": [
+      0.8219,
+      0.941
+     ]
+    },
+    "x1.3": {
+     "successes": 106,
+     "trials": 120,
+     "per_run": [
+      35,
+      36,
+      35
+     ],
+     "ci95": [
+      0.812,
+      0.9347
+     ]
+    },
+    "pm0.1": {
+     "successes": 105,
+     "trials": 120,
+     "per_run": [
+      35,
+      35,
+      35
+     ],
+     "ci95": [
+      0.8022,
+      0.9283
+     ]
+    },
+    "pm0.3": {
+     "successes": 95,
+     "trials": 120,
+     "per_run": [
+      32,
+      31,
+      32
+     ],
+     "ci95": [
+      0.708,
+      0.8604
+     ]
+    }
+   },
+   "wide": {
+    "trained_under": "\u00b10.3",
+    "runs": 3,
+    "x0.7": {
+     "successes": 87,
+     "trials": 120,
+     "per_run": [
+      29,
+      31,
+      27
+     ],
+     "ci95": [
+      0.636,
+      0.8025
+     ]
+    },
+    "x0.8": {
+     "successes": 88,
+     "trials": 120,
+     "per_run": [
+      29,
+      34,
+      25
+     ],
+     "ci95": [
+      0.6449,
+      0.8099
+     ]
+    },
+    "x0.9": {
+     "successes": 88,
+     "trials": 120,
+     "per_run": [
+      29,
+      34,
+      25
+     ],
+     "ci95": [
+      0.6449,
+      0.8099
+     ]
+    },
+    "fit": {
+     "successes": 84,
+     "trials": 120,
+     "per_run": [
+      29,
+      31,
+      24
+     ],
+     "ci95": [
+      0.6096,
+      0.7802
+     ]
+    },
+    "x1.1": {
+     "successes": 86,
+     "trials": 120,
+     "per_run": [
+      31,
+      34,
+      21
+     ],
+     "ci95": [
+      0.6272,
+      0.7951
+     ]
+    },
+    "x1.2": {
+     "successes": 87,
+     "trials": 120,
+     "per_run": [
+      32,
+      34,
+      21
+     ],
+     "ci95": [
+      0.636,
+      0.8025
+     ]
+    },
+    "x1.3": {
+     "successes": 84,
+     "trials": 120,
+     "per_run": [
+      31,
+      33,
+      20
+     ],
+     "ci95": [
+      0.6096,
+      0.7802
+     ]
+    },
+    "pm0.1": {
+     "successes": 87,
+     "trials": 120,
+     "per_run": [
+      30,
+      34,
+      23
+     ],
+     "ci95": [
+      0.636,
+      0.8025
+     ]
+    },
+    "pm0.3": {
+     "successes": 90,
+     "trials": 120,
+     "per_run": [
+      31,
+      34,
+      25
+     ],
+     "ci95": [
+      0.6627,
+      0.8245
+     ]
+    }
+   }
+  },
+  "effects": [
+   {
+    "condition": "x0.7",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.033333333333333326,
+    "p": 0.6584026166772984,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.7",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.05833333333333335,
+    "p": 0.3684873505720635,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.7",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.025000000000000022,
+    "p": 0.75892335260607,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.8",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.07500000000000007,
+    "p": 0.2189996255248086,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.8",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.1166666666666667,
+    "p": 0.038120272128077615,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x0.8",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.04166666666666663,
+    "p": 0.49304114965029,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.9",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.10000000000000009,
+    "p": 0.08418024597570299,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x0.9",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.1166666666666667,
+    "p": 0.038120272128077615,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x0.9",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.016666666666666607,
+    "p": 0.8598683531049625,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "fit",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.20000000000000007,
+    "p": 0.0001632121538072269,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "fit",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.20000000000000007,
+    "p": 0.0001632121538072269,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "fit",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.0,
+    "p": 1.0,
+    "verdict": "INSENSITIVE"
+   },
+   {
+    "condition": "x1.1",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.1416666666666666,
+    "p": 0.011112061900405357,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x1.1",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.17500000000000004,
+    "p": 0.0009949609794100847,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x1.1",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.03333333333333344,
+    "p": 0.5587853831323583,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x1.2",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.10833333333333339,
+    "p": 0.06121819569454326,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x1.2",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.16666666666666674,
+    "p": 0.0016298866442912723,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x1.2",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.05833333333333335,
+    "p": 0.2605448806214526,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "x1.3",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.14166666666666672,
+    "p": 0.013548003412410631,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x1.3",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.18333333333333335,
+    "p": 0.000734833676570913,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "x1.3",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.04166666666666663,
+    "p": 0.4538171028488397,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "pm0.1",
+    "a": "wide",
+    "b": "point",
+    "difference": 0.1166666666666667,
+    "p": 0.041011591447111334,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "pm0.1",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.15000000000000002,
+    "p": 0.005702011298989904,
+    "verdict": "SENSITIVE"
+   },
+   {
+    "condition": "pm0.1",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.033333333333333326,
+    "p": 0.579179503997317,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "pm0.3",
+    "a": "wide",
+    "b": "point",
+    "difference": -0.04166666666666663,
+    "p": 0.5614237704225251,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "pm0.3",
+    "a": "wide",
+    "b": "narrow",
+    "difference": 0.04166666666666663,
+    "p": 0.5392482271012907,
+    "verdict": "UNRESOLVED"
+   },
+   {
+    "condition": "pm0.3",
+    "a": "point",
+    "b": "narrow",
+    "difference": 0.08333333333333326,
+    "p": 0.17944039377598606,
+    "verdict": "UNRESOLVED"
+   }
+  ],
+  "alpha": 0.05,
+  "delta": 0.15,
+  "missing": []
+ },
+ "inputs": {
+  "study_root": "docs/artifacts/walk-c1",
+  "policies": "the walk C1 checkpoints (record walk-c1-2026-09-04)",
+  "scales": [
+   0.7,
+   0.8,
+   0.9,
+   1.1,
+   1.2,
+   1.3
+  ],
+  "spans": [
+   0.1,
+   0.3
+  ]
+ },
+ "artifacts": {
+  "point.x0.7": "docs/artifacts/walk-c1/point/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "point.x0.8": "docs/artifacts/walk-c1/point/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "point.x0.9": "docs/artifacts/walk-c1/point/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "point.fit": "docs/artifacts/walk-c1/point/train/verdict/records-at-fit-cuda.jsonl",
+  "point.x1.1": "docs/artifacts/walk-c1/point/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "point.x1.2": "docs/artifacts/walk-c1/point/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "point.x1.3": "docs/artifacts/walk-c1/point/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "point.pm0.1": "docs/artifacts/walk-c1/point/train/verdict/records-cuda.jsonl",
+  "point.pm0.3": "docs/artifacts/walk-c1/point/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "point#2.x0.7": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "point#2.x0.8": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "point#2.x0.9": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "point#2.fit": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-fit-cuda.jsonl",
+  "point#2.x1.1": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "point#2.x1.2": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "point#2.x1.3": "docs/artifacts/walk-c1/point#2/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "point#2.pm0.1": "docs/artifacts/walk-c1/point#2/train/verdict/records-cuda.jsonl",
+  "point#2.pm0.3": "docs/artifacts/walk-c1/point#2/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "point#3.x0.7": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "point#3.x0.8": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "point#3.x0.9": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "point#3.fit": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-fit-cuda.jsonl",
+  "point#3.x1.1": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "point#3.x1.2": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "point#3.x1.3": "docs/artifacts/walk-c1/point#3/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "point#3.pm0.1": "docs/artifacts/walk-c1/point#3/train/verdict/records-cuda.jsonl",
+  "point#3.pm0.3": "docs/artifacts/walk-c1/point#3/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "narrow.x0.7": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "narrow.x0.8": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "narrow.x0.9": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "narrow.fit": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-fit-cuda.jsonl",
+  "narrow.x1.1": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "narrow.x1.2": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "narrow.x1.3": "docs/artifacts/walk-c1/narrow/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "narrow.pm0.1": "docs/artifacts/walk-c1/narrow/train/verdict/records-cuda.jsonl",
+  "narrow.pm0.3": "docs/artifacts/walk-c1/narrow/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "narrow#2.x0.7": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "narrow#2.x0.8": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "narrow#2.x0.9": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "narrow#2.fit": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-fit-cuda.jsonl",
+  "narrow#2.x1.1": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "narrow#2.x1.2": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "narrow#2.x1.3": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "narrow#2.pm0.1": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-cuda.jsonl",
+  "narrow#2.pm0.3": "docs/artifacts/walk-c1/narrow#2/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "narrow#3.x0.7": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "narrow#3.x0.8": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "narrow#3.x0.9": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "narrow#3.fit": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-fit-cuda.jsonl",
+  "narrow#3.x1.1": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "narrow#3.x1.2": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "narrow#3.x1.3": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "narrow#3.pm0.1": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-cuda.jsonl",
+  "narrow#3.pm0.3": "docs/artifacts/walk-c1/narrow#3/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "wide.x0.7": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "wide.x0.8": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "wide.x0.9": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "wide.fit": "docs/artifacts/walk-c1/wide/train/verdict/records-at-fit-cuda.jsonl",
+  "wide.x1.1": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "wide.x1.2": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "wide.x1.3": "docs/artifacts/walk-c1/wide/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "wide.pm0.1": "docs/artifacts/walk-c1/wide/train/verdict/records-cuda.jsonl",
+  "wide.pm0.3": "docs/artifacts/walk-c1/wide/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "wide#2.x0.7": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "wide#2.x0.8": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "wide#2.x0.9": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "wide#2.fit": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-fit-cuda.jsonl",
+  "wide#2.x1.1": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "wide#2.x1.2": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "wide#2.x1.3": "docs/artifacts/walk-c1/wide#2/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "wide#2.pm0.1": "docs/artifacts/walk-c1/wide#2/train/verdict/records-cuda.jsonl",
+  "wide#2.pm0.3": "docs/artifacts/walk-c1/wide#2/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "wide#3.x0.7": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x0.7-R-at-fit-cuda.jsonl",
+  "wide#3.x0.8": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x0.8-R-at-fit-cuda.jsonl",
+  "wide#3.x0.9": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x0.9-R-at-fit-cuda.jsonl",
+  "wide#3.fit": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-fit-cuda.jsonl",
+  "wide#3.x1.1": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x1.1-R-at-fit-cuda.jsonl",
+  "wide#3.x1.2": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x1.2-R-at-fit-cuda.jsonl",
+  "wide#3.x1.3": "docs/artifacts/walk-c1/wide#3/train/verdict/records-at-x1.3-R-at-fit-cuda.jsonl",
+  "wide#3.pm0.1": "docs/artifacts/walk-c1/wide#3/train/verdict/records-cuda.jsonl",
+  "wide#3.pm0.3": "docs/artifacts/walk-c1/wide#3/train/verdict/records-under-pm0.3-cuda.jsonl",
+  "figure.svg": "docs/figures/walk-mismatch-matrix-R-2026-09-05.svg",
+  "figure.pdf": "docs/figures/walk-mismatch-matrix-R-2026-09-05.pdf",
+  "figure.png": "docs/figures/walk-mismatch-matrix-R-2026-09-05.png",
+  "figure.csv": "docs/figures/walk-mismatch-matrix-R-2026-09-05.csv"
+ },
+ "sources": {},
+ "protocol": "docs/70 \u00a79 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)",
+ "caveats": [
+  "Pinned scale s multiplies only the R axis of the actuator model by s; every other law parameter sits at the fit.",
+  "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",
+  "The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured \u2014 paper 2's bench says how wrong it actually was."
+ ]
+}

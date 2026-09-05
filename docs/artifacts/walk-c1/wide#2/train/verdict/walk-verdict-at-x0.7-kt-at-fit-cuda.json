@@ -1,0 +1,31 @@
+{
+ "source": "microduck-walk@dae7f1f433ee",
+ "policy": "model_7999",
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_floor_mps": 0.1,
+  "dr_basis": "pinned: kt at fit x 0.7, the rest at the fit (no draw)",
+  "judged_at": "kt at fit x 0.7"
+ },
+ "identity": {
+  "robot": "microduck@14b51b63c52e",
+  "actuator": "xl330-m6@3ae1b8c2156b",
+  "dr_basis": "pinned: kt at fit x 0.7, the rest at the fit (no draw)",
+  "trained_dr_basis": "caller-declared span \u00b10.3 (bundle is point estimates)",
+  "seed": 43
+ },
+ "funnel": {
+  "survived": 39,
+  "tracked": 24
+ },
+ "successes": 23,
+ "trials": 40,
+ "ci95": [
+  0.4089,
+  0.7296
+ ],
+ "median_err_ratio": 0.4615
+}

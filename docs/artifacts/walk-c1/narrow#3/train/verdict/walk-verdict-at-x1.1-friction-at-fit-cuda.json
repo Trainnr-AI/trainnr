@@ -1,0 +1,31 @@
+{
+ "source": "microduck-walk@7693b530ae02",
+ "policy": "model_7999",
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_floor_mps": 0.1,
+  "dr_basis": "pinned: friction_base, friction_stribeck, load_friction_motor, load_friction_external, load_friction_motor_stribeck, load_friction_external_stribeck, load_friction_motor_quad, load_friction_external_quad, dtheta_stribeck at fit x 1.1, the rest at the fit (no draw)",
+  "judged_at": "friction at fit x 1.1"
+ },
+ "identity": {
+  "robot": "microduck@14b51b63c52e",
+  "actuator": "xl330-m6@3ae1b8c2156b",
+  "dr_basis": "pinned: friction_base, friction_stribeck, load_friction_motor, load_friction_external, load_friction_motor_stribeck, load_friction_external_stribeck, load_friction_motor_quad, load_friction_external_quad, dtheta_stribeck at fit x 1.1, the rest at the fit (no draw)",
+  "trained_dr_basis": "caller-declared span \u00b10.1 (bundle is point estimates)",
+  "seed": 44
+ },
+ "funnel": {
+  "survived": 40,
+  "tracked": 35
+ },
+ "successes": 35,
+ "trials": 40,
+ "ci95": [
+  0.732,
+  0.9581
+ ],
+ "median_err_ratio": 0.3696
+}
