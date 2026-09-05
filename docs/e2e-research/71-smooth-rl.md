@@ -200,18 +200,18 @@ and its teacher (`model_7999`), one control tick = 20 ms.
 | policy | condition | success | survived | tracked | median fall tick | median RMS jerk |
 |---|---|---|---|---|---|---|
 | teacher | synchronous | 32/40 [0.644, 0.909] | 40 | 32 | 1000 | 272,658 |
-| teacher | actions delayed 1 tick | 0/40 | 17 | 0 | | |
-| teacher | delayed 2 ticks | 0/40 | 0 | 0 | | |
+| teacher | actions delayed 1 tick | 0/40 | 17 | 0 | 790 | 309,576 |
+| teacher | delayed 2 ticks | 0/40 | 0 | 0 | 26 | 349,006 |
 | teacher | delayed 4 ticks | 0/40 | 0 | 0 | | |
-| student | latency 0 (rows [0,2) per chunk) | 25/40 [0.458, 0.773] | 28 | 33 | 1000 | 268,178 |
-| student | latency 1 | 0/40 | 0 | 3 | 61 | 292,631 |
-| student | latency 2 | 0/40 | 0 | 4 | | |
+| student | latency 0 (rows [0,2) per chunk) | 25/40 [0.458, 0.773] | 28 | 33 | 1000 | 267,036 |
+| student | latency 1 | 0/40 | 0 | 3 | 61 | 290,578 |
+| student | latency 2 | 0/40 | 0 | 4 | 72 | 253,614 |
 | student | latency 4 | 0/40 | 0 | 2 | | |
 | student | latency 8 | 0/40 | 0 | 4 | | |
-| student | horizon 3, latency 0 (a third row per chunk) | 13/40 [0.186, 0.491] | 22 | 22 | | |
+| student | horizon 3, latency 0 (a third row per chunk) | 13/40 [0.186, 0.491] | 22 | 22 | 1000 | 255,217 |
 | student | horizon 1, latency 1 (one row, one tick stale) | 0/40 | 0 | 5 | | |
 
-**E0.** The student is as rough as its teacher: median jerk 268k against
+**E0.** The student is as rough as its teacher: median jerk 267k against
 273k in the action's units per second cubed (both re-target every tick
 at 50 Hz). Under a budget the jerk rises 9 % as the duck goes down.
 Smoothness is now a column on every certificate row, three engines.
