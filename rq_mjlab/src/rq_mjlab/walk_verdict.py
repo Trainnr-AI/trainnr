@@ -264,13 +264,14 @@ STATE_GIVEN = "actor"
 STATE_BLANKED = "blanked"
 
 
-def verdict_suffix(
+def verdict_suffix(  # noqa: PLR0913 - every control that earns its own file, named
     devicetag: str,
     *,
     student: bool,
     blank_camera: bool,
     blank_state: bool = False,
     latency: int = 0,
+    delay: int = 0,
 ) -> str:
     """The certificate file's suffix — a control run must never land on
     the sighted run's file (`walk-verdict-student-cuda.json` is a
@@ -278,7 +279,7 @@ def verdict_suffix(
     `blank-state-` for the state control, `blank-both-` for both,
     `latency-N-` for a run under an inference budget."""
     if not student:
-        return devicetag
+        return teacher_suffix(devicetag, delay)
     control = {
         (False, False): "",
         (True, False): "blank-",
@@ -287,6 +288,11 @@ def verdict_suffix(
     }[(blank_camera, blank_state)]
     budget = f"latency-{latency}-" if latency else ""
     return f"student-{control}{budget}{devicetag}"
+
+
+def teacher_suffix(devicetag: str, delay: int = 0) -> str:
+    """The teacher's file, its own when judged under an action delay."""
+    return f"delay-{delay}-{devicetag}" if delay else devicetag
 
 
 class StudentPolicy:
@@ -392,6 +398,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--horizon", type=int, default=2, help="executed chunk steps before a replan"
+    )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=0,
+        help="the TEACHER's action delay in control ticks (its delay margin, the "
+        "control for the student's --latency; docs/e2e-research/71 E1)",
     )
     parser.add_argument(
         "--latency",
@@ -515,7 +528,7 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
     print(f"[verdict] rows in {out_dir}")
 
 
-def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in order
+def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
     args = parse_args()
 
     import warp as wp  # noqa: PLC0415
@@ -585,6 +598,14 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
         map_location=device,
     )
     policy: Any = runner.get_inference_policy(device=device)
+    if args.delay:
+        # The teacher's delay margin, the way the student's budget is
+        # measured (docs/e2e-research/71 E1): its action from the
+        # observation at t reaches the robot at t + delay.
+        from rq_pipeline.evaluate.scheduler import Delayed  # noqa: PLC0415
+
+        policy = Delayed(policy, args.delay)
+        protocol["delay"] = args.delay
     policy_name = args.checkpoint.stem
     if args.student is not None:
         # The student's identity: its checkpoint directory's content hash
@@ -654,6 +675,7 @@ def main() -> None:  # noqa: PLR0915 - the certificate's whole procedure, in ord
         blank_camera=args.blank_camera,
         blank_state=args.blank_state,
         latency=args.latency if args.student is not None else 0,
+        delay=args.delay if args.student is None else 0,
     )
     if args.judge_at_fit:
         suffix = f"at-fit-{suffix}"

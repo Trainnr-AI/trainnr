@@ -125,3 +125,24 @@ class ActionScheduler:
                 f"latency {self.latency}"
             )
         return chunk
+
+
+class Delayed:
+    """Any per-tick policy, its actions arriving `ticks` later: the
+    action computed from the observation at t is applied at t + ticks,
+    the first action holding until then (docs/e2e-research/71 E1's
+    control for a policy that is not chunked - the walk teacher's
+    delay margin, measured the way the student's budget is)."""
+
+    def __init__(self, policy: Callable[[Any], Any], ticks: int) -> None:
+        if ticks < 0:
+            raise ValueError(f"delay must be >= 0 ticks, got {ticks}")
+        self.policy = policy
+        self.ticks = ticks
+        self._queue: list[Any] = []
+
+    def __call__(self, observation: Any) -> Any:
+        self._queue.append(self.policy(observation))
+        if len(self._queue) <= self.ticks:
+            return self._queue[0]  # nothing has arrived yet: hold the first
+        return self._queue.pop(0)

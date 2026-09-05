@@ -2,7 +2,7 @@
 
 import unittest
 
-from rq_pipeline.evaluate.scheduler import ActionScheduler, ChunkPolicy
+from rq_pipeline.evaluate.scheduler import ActionScheduler, ChunkPolicy, Delayed
 from rq_pipeline.protocol import EpisodeProtocol, protocol_fields
 
 NU = 3
@@ -145,3 +145,16 @@ class TheProtocolField(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheDelay(unittest.TestCase):
+    def test_actions_arrive_ticks_later_and_the_first_holds(self) -> None:
+        seen = Delayed(lambda observation: observation, ticks=2)
+        self.assertEqual([seen(t) for t in range(6)], [0, 0, 0, 1, 2, 3])
+
+    def test_zero_delay_is_the_policy_itself(self) -> None:
+        self.assertEqual(
+            [Delayed(lambda o: o * 10, 0)(t) for t in range(3)], [0, 10, 20]
+        )
+        with self.assertRaises(ValueError):
+            Delayed(lambda o: o, -1)
