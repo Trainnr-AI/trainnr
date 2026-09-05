@@ -286,6 +286,26 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
             "outcomes": [r.success for r in sorted(records, key=lambda r: r.trial)],
         }
         print(f"{name}: {score.successes}/{score.trials} CI95 [{low:.3f}, {high:.3f}]")
+    # The summary spans every arm whose rows are complete on disk, not
+    # only the ones this invocation judged: two pods split the judging
+    # (2026-09-04), and the last one to finish writes the whole verdict.
+    for name in expand_arms(spec):
+        path = out / f"{name}-records.jsonl"
+        if name in results or not path.is_file():
+            continue
+        rows = read_records(path)
+        if len(rows) != trials:
+            continue
+        (score,) = fold(rows)
+        low, high = clopper_pearson(score.successes, score.trials)
+        results[name] = {
+            "successes": score.successes,
+            "trials": score.trials,
+            "ci95": [round(low, 4), round(high, 4)],
+            "funnel": funnel(rows),
+            "instrument": sorted({r.instrument for r in rows}),
+            "outcomes": [r.success for r in sorted(rows, key=lambda r: r.trial)],
+        }
     alpha, delta = (
         float(spec["eval"].get("alpha", 0.05)),
         float(spec["eval"].get("delta", 0.15)),
@@ -303,6 +323,9 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
 
     effects = []
     for a, b in spec.get("compare", []):
+        if not pooled(a) or not pooled(b):
+            print(f"{a} vs {b}: skipped — an arm is not judged yet")
+            continue
         effect = main_effect(
             f"{a} vs {b}",
             a,
