@@ -27,8 +27,8 @@
    "walk C1 replicates 2-3 x6 pods (2026-09-04)": 11.4,
    "the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)": 0.9,
    "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8,
-   "per-axis mismatch matrices (162 certificates) on one pod, kept idle after, then stopped (2026-09-06, ~18:20 to 20:50 pod clock)": 2.5,
-   "walk C1 refit arms: point x3 + identified x3 on six pods, ~19:30 to 21:50, one kept to 22:03 for their 42 matrix cells (2026-09-06)": 14.1
+   "per-axis mismatch matrices (162 certificates) on one pod, kept idle after, then stopped (2026-09-05 UTC, ~18:20 to 20:50)": 2.5,
+   "walk C1 refit arms: point x3 + identified x3 on six pods, ~19:30 to 21:50, one kept to 22:03 for their 42 matrix cells (2026-09-05 UTC)": 14.1
   },
   "pod_hours_total_estimate": 78.7,
   "dollars_estimate": {
@@ -72,6 +72,13 @@
   "Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) \u2014 53.4 h, ~$120.",
   "Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) \u2014 54.3 h, ~$120.",
   "Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods \u2014 62.1 h, ~$140. The account balance moved $18 \u2192 $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod.",
-  "Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study \u2014 78.7 h, ~$170; the account moved $44 \u2192 about $10 over the evening."
+  "Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study \u2014 78.7 h, ~$170; the account moved $44 \u2192 about $10 over the evening.",
+  "Dates in this record are UTC (the pods' clock); record ids elsewhere carry the fold's local date, which for the evening of 2026-09-05 UTC is 2026-09-06 IST."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "hours and dollars extended through 2026-09-06 (refit study, per-axis matrices)"
+  }
  ]
 }

@@ -369,5 +369,11 @@
   "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.",
   "Three replicates per count is the smallest design that shows between-run spread; it is not a variance estimate anyone should quote to two digits.",
   "Fifteen arms: ~6 h of one pod at 10k steps each \u2014 split across pods by arm if wall clock matters."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "date is the study's run date (2026-09-04, pod clock UTC); folded 2026-09-05 on the pulled artifacts; caveat 5's '~6 h of one pod' was the plan \u2014 the run took 7.8 pod-hours on two pods (compute ledger)"
+  }
  ]
 }

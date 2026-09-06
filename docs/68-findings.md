@@ -129,17 +129,21 @@ not this page.
 
 ## bam-xl330-bootstrap-interval-2026-09-06
 
-**A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to ±3.5 % (kt [0.3416, 0.3662]), the resistance to ±9 % (R [2.545, 3.036]), the armature to ±7 % and viscous friction to ±25 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span their search ranges — unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).**
+**A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to ±3.5 % (kt [0.3416, 0.3662]), the resistance to ±9 % (R [2.545, 3.036]), the armature to ±7 % and viscous friction to ±23 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span most of BAM's declared search ranges (bam/model.py: alpha [0.5, 10], dtheta_stribeck [0.01, 5], the quadratic terms [0, 0.01]) — unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).**
 
 - date: 2026-09-06 · commit: `09b00e6-dirty`
 - instrument: `Rhoban/bam v1.0.2 (aa17d1c), optuna 4.9.0 CmaEsSampler bipop, Apple M1 Pro CPU (8 workers), ~75 min`
-- command: `tools/bam-bootstrap.py --bam <Rhoban/bam v1.0.2> --processed <bam.process --dt 0.005> --actuator xl330 --model m6 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json`
+- command: `python3 tools/bam-bootstrap.py --bam <Rhoban/bam @ aa17d1cd5a84938b79143239de09ae33e175b402> --processed <bam.process --raw data_raw_2 --logdir processed --dt 0.005> --raw-zip xl330_raw.zip --actuator xl330 --model m6 --out boot-100 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json`
 - protocol: docs/e2e-research/72 §4 and §6 (block bootstrap; the identified arm draws whole replicate vectors, not marginal boxes)
 - inputs:
   - raw_zip: https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip
   - raw_zip_sha256: d308d126585235264cd4045b4702e35992fe36a9bb6b4a280987ba6ae5f09546
   - recordings: 358
   - blocks: 60 blocks of 5-6 trajectories by (kp, mass, length), resampled within block with replacement
+  - bam_commit_full: aa17d1cd5a84938b79143239de09ae33e175b402
+  - optuna: 4.9.0
+  - outer_workers: 8
+  - machine: Apple M1 Pro (10 cores), macOS 25.5
 - outcome:
   - replicates: 100
   - trials_per_fit: 5000
@@ -150,6 +154,10 @@ not this page.
   - interval: {'kt': {'low': 0.341608, 'high': 0.366241, 'median': 0.352989, 'shipped': 0.36601349688984386}, 'R': {'low': 2.545341, 'high': 3.036212, 'median': 2.777607, 'shipped': 2.8113923539223227}, 'armature': {'low': 0.001707, 'high': 0.001972, 'median': 0.001844, 'shipped': 0.0018077432831600838}, 'q_offset': {'low': 0.000602, 'high': 0.010076, 'median': 0.005031, 'shipped': 0.0271132870444849}, 'friction_base': {'low': 0.000526, 'high': 0.010343, 'median': 0.008044, 'shipped': 0.004771183165566}, 'friction_stribeck': {'low': 1.1e-05, 'high': 0.011056, 'median': 0.001678, 'shipped': 0.004676345799486616}, 'load_friction_motor': {'low': 0.002766, 'high': 0.327083, 'median': 0.26783, 'shipped': 0.2667860954283698}, 'load_friction_external': {'low': 4.2e-05, 'high': 0.140258, 'median': 0.076343, 'shipped': 8.515871897059342e-06}, 'load_friction_motor_stribeck': {'low': 2e-06, 'high': 0.210942, 'median': 0.000205, 'shipped': 1.0722918395099123e-05}, 'load_friction_external_stribeck': {'low': 0.004897, 'high': 0.384174, 'median': 0.154983, 'shipped': 0.08077928978935671}, 'load_friction_motor_quad': {'low': 0.000165, 'high': 0.009869, 'median': 0.004662, 'shipped': 0.009972471242139415}, 'load_friction_external_quad': {'low': 0.000156, 'high': 0.009976, 'median': 0.004635, 'shipped': 0.004902565732332559}, 'dtheta_stribeck': {'low': 0.070957, 'high': 4.973314, 'median': 0.836235, 'shipped': 2.890372094130307}, 'alpha': {'low': 0.500085, 'high': 9.658182, 'median': 4.253413, 'shipped': 8.683259907618984}, 'friction_viscous': {'low': 0.005377, 'high': 0.00853, 'median': 0.006924, 'shipped': 0.005359668274599504}}
   - relative_halfwidth: {'kt': 0.035, 'R': 0.088, 'armature': 0.072, 'friction_viscous': 0.228}
   - unidentified: ['q_offset', 'friction_base', 'friction_stribeck', 'load_friction_motor', 'load_friction_external', 'load_friction_motor_stribeck', 'load_friction_external_stribeck', 'load_friction_motor_quad', 'load_friction_external_quad', 'dtheta_stribeck', 'alpha']
+  - replicate_mae_rad_summary: {'min': 0.01850141667023873, 'median': 0.020166314469753137, 'max': 0.0221419861518104, 'n': 100}
+  - declared_search_bounds_bam: {'source': 'Rhoban/bam aa17d1c: bam/model.py (Parameter(initial, min, max)) and bam/dynamixel/actuator.py (xl330 block)', 'alpha': [0.5, 10.0], 'dtheta_stribeck': [0.01, 5.0], 'load_friction_motor_quad': [0.0, 0.01], 'load_friction_external_quad': [0.0, 0.01], 'load_friction_motor_stribeck': [0.0, 1.0], 'load_friction_external_stribeck': [0.0, 1.0], 'friction_base': [0.0, 'max_friction_base'], 'friction_viscous': [0.0, 'max_viscous_friction'], 'kt (xl330)': [0.25, 1.5], 'armature (xl330)': [0.0001, 0.01]}
+  - at_declared_bound: {'alpha': 'refit 0.5009 at min 0.5; 20 of 100 replicates below 0.51', 'friction_viscous': "replicate min 0.00500 — the xl330 block's floor; shipped 0.00536 lies below the 95 % box's low 0.00538"}
+  - shipped_outside_box: ['friction_viscous (0.005360 < 0.005377)', 'q_offset (0.0271 vs [0.0006, 0.0101]; a rig parameter)']
 - artifacts:
   - summary: docs/artifacts/bam/xl330/bootstrap.json
   - replicates: docs/artifacts/bam/xl330/bootstrap-replicates/
@@ -159,8 +167,12 @@ not this page.
   - The interval is log-sampling variability on Rhoban's single unit and bench (their rig's q_offset and command_delay included), not unit-to-unit or temperature spread.
   - Each replicate is one optimiser run at the stated trial budget; optimiser variance is inside the interval, not separated from it.
   - The data licence is unstated on the HF bucket; the logs are not redistributed here, only the fitted numbers.
-  - Percentiles over 100 replicates: the tails are coarse (the 2.5th percentile is the 3rd-lowest value); quote the interval to two significant figures.
   - The bootstrap centre is the refit, not the shipped point (record bam-xl330-refit-2026-09-05); the walk C1's shipped-point policies are a different world from the refit arms.
+  - Percentiles over 100 replicates interpolate between the 3rd and 4th lowest (and highest) values; the tails are coarse — quote the interval to two significant figures.
+  - BAM's optimiser sets no seed (docs/e2e-research/72 §1): a replicate is not bit-reproducible; each is one CMA-ES run at 5000 trials, final position MAE 0.0185–0.0221 rad (median 0.0202) across the 100.
+  - The identified arm draws the twelve LAW parameters jointly from these replicates; armature is drawn by mjlab's joint_armature event from the declared ±0.10 (microduck_walk.ARMATURE) in every arm, and viscous friction sits at the bundle's point — so the two parameters the bootstrap identifies most tightly are the two not drawn from the set (record walk-c1-refit).
+  - The bundle's `metrics` section carries the bootstrap summary as emitted (sampler, worker count, optuna version and machine are on this record and docs/artifacts/bam/xl330/bootstrap.json, not in the bundle; re-wrapping would change the stamp the six refit arms trained under).
+  - Relative half-widths are (high − low) / (2 · median): kt 3.5 %, R 8.8 %, armature 7.2 %, friction_viscous 22.8 %.
 
 ## walk-mismatch-matrix-kt-2026-09-05
 
@@ -503,7 +515,7 @@ not this page.
 
 ## bam-xl330-refit-2026-09-05
 
-**BAM's shipped XL330 M6 fit (v1.0.2) scores a position MAE of 0.0272 rad on Rhoban's own 358 public bench logs; a 5000-trial refit of the same model with their optimiser on the same logs scores 0.0202 rad. The refit reproduces the load-bearing parameters within 5 % (kt 0.95x, R 0.95x, armature 0.99x, load_friction_motor 1.03x) while the terms the shipped fit holds at its search floors, alpha (0.50 vs 8.68, at the lower search bound) and the rig offset move freely — the objective does not constrain them.**
+**BAM's shipped XL330 M6 fit (v1.0.2) scores a position MAE of 0.0272 rad on Rhoban's own 358 public bench logs; a 5000-trial refit of the same model with their optimiser on the same logs scores 0.0202 rad. The refit reproduces the load-bearing parameters within about 5 % (kt 0.952x, R 0.950x, armature 0.993x, load_friction_motor 1.033x) while the terms the shipped fit holds at its search floors, alpha (0.50 vs 8.68; BAM declares alpha in [0.5, 10] in bam/model.py, so the refit sits at the floor) and the rig offset move freely — the objective does not constrain them.**
 
 - date: 2026-09-05 · commit: `cccc4dc-dirty`
 - instrument: `Rhoban/bam v1.0.2 (aa17d1c), optuna 4.9.0 CmaEsSampler bipop, Apple M1 Pro CPU`
@@ -511,10 +523,11 @@ not this page.
 - protocol: docs/e2e-research/72 §4 (refit and score with Rhoban's own bam.fit; --eval loads params.json from cwd)
 - inputs:
   - raw_zip: https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip
-  - raw_zip_sha256_prefix: d308d12658523526
   - recordings: 358
   - design: kp {50,100,150,200,300} x mass {0.04,0.059,0.117,0.159} kg x length {0.11,0.14,0.17} m, six trajectories
   - dt: 0.005
+  - raw_zip_sha256: d308d126585235264cd4045b4702e35992fe36a9bb6b4a280987ba6ae5f09546
+  - bam_commit_full: aa17d1cd5a84938b79143239de09ae33e175b402
 - outcome:
   - mae_rad: {'shipped_m6': 0.027171396579687947, 'refit_5000': 0.020246159983196465}
   - refit: {'kt': 0.3484217300064758, 'R': 2.6704289528696585, 'armature': 0.0017956795209984515, 'q_offset': 0.004758369721713576, 'friction_base': 0.006818520716114002, 'friction_stribeck': 0.0028775802738118476, 'load_friction_motor': 0.27549362955360135, 'load_friction_external': 0.00016670539844619098, 'load_friction_motor_stribeck': 0.0005262044845091928, 'load_friction_external_stribeck': 0.21091318214875926, 'load_friction_motor_quad': 0.009128778709221576, 'load_friction_external_quad': 0.009315492054235966, 'dtheta_stribeck': 3.662222354987697, 'alpha': 0.5009196794987004, 'friction_viscous': 0.006894075181044391, 'model': 'm6', 'actuator': 'xl330'}
@@ -690,6 +703,7 @@ not this page.
   - effects: [{'a': 'base', 'b': 'dagger-1', 'difference': 0.09999999999999998, 'p': 0.49389114635085757, 'verdict': 'UNRESOLVED'}]
   - alpha: 0.05
   - delta: 0.15
+  - press: {'kept': 120, 'highest_attempt_recorded': 189, 'note': 'attempts after the last keep are not recorded, so 189 is a lower bound (datasheet: docs/artifacts/dagger/round-1/datasheet.md)'}
 - artifacts:
   - records: docs/artifacts/walk-verdicts/records-student-cuda.jsonl
   - round_datasheet: docs/artifacts/dagger/round-1/datasheet.md
@@ -698,6 +712,7 @@ not this page.
   - figure.pdf: docs/figures/walk-dagger-round-1-2026-09-04.pdf
   - figure.png: docs/figures/walk-dagger-round-1-2026-09-04.png
   - figure.csv: docs/figures/walk-dagger-round-1-2026-09-04.csv
+  - base_records: docs/artifacts/walk-verdicts/records-student-cuda.jsonl (policy student-last@6b6cef16e54f rows)
 - caveats:
   - One round, one training run per student, 40 trials each: a direction, replicate before a sentence.
   - The round student trained 20k steps on 360 episodes; the base trained 60k on 240 — steps per episode differ.
@@ -741,7 +756,7 @@ not this page.
   - figure.png: docs/figures/walk-c1-2026-09-04.png
   - figure.csv: docs/figures/walk-c1-2026-09-04.csv
 - caveats:
-  - No bundle in the store carries intervals: the arms are point / declared ±0.10 / declared ±0.30 around BAM's point fit — the identified-INTERVAL arm needs a fit with intervals (the bench chapter).
+  - When this study ran no bundle carried an interval: the arms are point / declared ±0.10 / declared ±0.30 around BAM's shipped point fit. The identified arm ran later on a refit bundle (record walk-c1-refit) — a different point, so not one table with this study. It needed a fit with intervals (the bench chapter).
   - Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.
   - Run 1 of each arm predates the --seed knob and ran under mjlab's default seed 42 (read from identity.json: absent = default); runs 2 and 3 recorded 43 and 44.
   - The non-at-fit certificates are all under ±0.10 (walk_verdict's default LAW_DR_SPAN), not each arm's own span: the point arm's second certificate is at-fit-plus-±0.10-draws, the wide arm's is ±0.10 too. Judging under ±0.30 needs walk_verdict --judge-span 0.30 (added 2026-09-04).
@@ -910,7 +925,7 @@ not this page.
   - gpu_rented_abandoned: NVIDIA B200, $6.79/h, one 94-minute attempt (2026-08-27; 52 min were provider initialization)
   - gpu_owned: NVIDIA RTX 3090 Ti 24 GB (WSL2, Ubuntu 22.04)
   - cpu_local: Apple M1 Pro, 16 GB (macOS 25.5)
-  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4, 'the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)': 0.9, "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8, 'per-axis mismatch matrices (162 certificates) on one pod, kept idle after, then stopped (2026-09-06, ~18:20 to 20:50 pod clock)': 2.5, 'walk C1 refit arms: point x3 + identified x3 on six pods, ~19:30 to 21:50, one kept to 22:03 for their 42 matrix cells (2026-09-06)': 14.1}
+  - pod_hours_by_run: {'C1 sized run 2 on the RTX PRO 6000 (2026-08-31/09-01)': 2.5, 'B200 chain attempt (2026-08-27, abandoned)': 1.57, 'G3 walk teacher, 8000 it (2026-09-01)': 1.6, 'campaign 1 (2026-09-02)': 1.5, 'campaign 2 (2026-09-02)': 1.2, 'campaign 3 (2026-09-03)': 2.0, 'campaign 4 press+export, train+3 certificates (2026-09-03/04)': 2.7, 'lift studies x3 pods (2026-09-03)': 8.0, 'cliff studies x3 pods + killed hard reruns (2026-09-03)': 11.0, 'walk C1 run 1 x3 pods (2026-09-04)': 5.7, 'campaign 4b retrain (60k) + DAgger round 1 (press 120, union, train 20k, certificate), 1 pod (2026-09-04, launch ~16:15 to stop 20:25 UTC)': 4.2, 'walk C1 replicates 2-3 x6 pods (2026-09-04)': 11.4, 'the mismatch matrix (63 certificates) + the Go1 smoke, 1 pod (2026-09-04, ~20:45 to 21:36 UTC)': 0.9, "replicated lift demo-count curve, 15 arms split over 2 pods (2026-09-04, ~12:30 to 16:55 and ~13:10 to 16:35 on the pods' clock)": 7.8, 'per-axis mismatch matrices (162 certificates) on one pod, kept idle after, then stopped (2026-09-05 UTC, ~18:20 to 20:50)': 2.5, 'walk C1 refit arms: point x3 + identified x3 on six pods, ~19:30 to 21:50, one kept to 22:03 for their 42 matrix cells (2026-09-05 UTC)': 14.1}
   - pod_hours_total_estimate: 78.7
   - dollars_estimate: {'rtx_pro_6000': '~77.1 h x $2.09 = ~$161', 'b200': '94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)', 'total': '~$170'}
   - per_result_cost: {'one walk arm (train 8000 it + two 40-trial certificates)': '~1.9 h, ~$4', 'one lift study arm (press, convert, train 20k, judge 80 trials)': '~1.0 h, ~$2.1', 'the walk C1 with three replicates per arm (9 runs)': '~17 h, ~$36', 'one 40-trial certificate on the walk': '~30 s', 'one DAgger round on the walk (120 student-driven episodes, union, train 20k, one certificate)': '~1.7 h, ~$3.5 (18:35 to 20:16 UTC, 2026-09-04)', 'the mismatch matrix (63 forty-trial certificates on nine existing policies)': '~0.5 h, ~$1 (28 min of certificates; ~30 s each warm)', 'the replicated lift curve (15 arms: train 10k, judge 80 trials each; presses done earlier)': '~7.8 h, ~$16 (about 27 min per arm; two pods halved the wall clock)', 'one per-axis mismatch matrix (54 forty-trial certificates)': '~0.4 h, ~$1 (warm cache ~10-27 s per certificate)', 'the refit study (six arms on six pods + 42 matrix cells)': '~14 h, ~$30 (2.3 h per arm incl. two certificates; ~2.5 h wall clock)'}
@@ -928,6 +943,7 @@ not this page.
   - Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) — 54.3 h, ~$120.
   - Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods — 62.1 h, ~$140. The account balance moved $18 → $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod.
   - Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study — 78.7 h, ~$170; the account moved $44 → about $10 over the evening.
+  - Dates in this record are UTC (the pods' clock); record ids elsewhere carry the fold's local date, which for the evening of 2026-09-05 UTC is 2026-09-06 IST.
 
 ## visual-dr-lift-cliff-2026-09-03
 
@@ -1119,7 +1135,7 @@ not this page.
 
 ## c1-competent-lift-cliff-2026-09-03
 
-**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
+**C1 at a competent recipe: the arm named 'identified' (a DECLARED ±5 % relative span; no fitted interval existed on 2026-09-03) (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
 - date: 2026-09-03 · commit: `89412f0-archive`
 - instrument: `mujoco-3.11.0+x86_64`
@@ -1168,7 +1184,7 @@ not this page.
 
 ## c1-competent-lift-2026-09-03
 
-**C1 at a competent recipe: identified-interval DR (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
+**C1 at a competent recipe: the arm named 'identified' (a DECLARED ±5 % relative span; no fitted interval existed on 2026-09-03) (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
 
 - date: 2026-09-03 · commit: `336eb39-archive`
 - instrument: `mujoco-3.11.0+x86_64`

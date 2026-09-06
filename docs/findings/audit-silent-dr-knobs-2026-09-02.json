@@ -31,5 +31,11 @@
  "protocol": "docs/e2e-research/67-novelty-audit.md \u00a75",
  "caveats": [
   "The phenomenon is known from the stacks' own trackers; the audit count and the refusing linter are the contribution."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "pixel-check numbers extended 2026-09-04"
+  }
  ]
 }

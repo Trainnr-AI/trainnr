@@ -7,9 +7,12 @@ five other servos, on a CPU, in hours.*
 
 ## 1. What is public
 
-- **Rhoban/bam** (https://github.com/Rhoban/bam, Apache-2.0; created
-  2024-03-26; releases v1.0.0/v1.0.1 2026-06-30, v1.0.2 2026-07-16;
-  last push 2026-08-30). The repo holds code and the fitted params
+- **Rhoban/bam** (https://github.com/Rhoban/bam, Apache-2.0; v1.0.2
+  2026-07-16 = commit aa17d1cd5a84938b79143239de09ae33e175b402, the
+  one we vendored and refit with; the creation date, v1.0.0/v1.0.1
+  dates and last-push date below are the research agent's read of the
+  GitHub page on 2026-09-05, not re-verified: created 2024-03-26,
+  v1.0.0/v1.0.1 2026-06-30, last push 2026-08-30). The repo holds code and the fitted params
   (`bam/params/<slug>/m1..m6.json`), no data.
 - **Raw logs** are linked from the docs
   (https://bam.readthedocs.io/en/latest/usage/actuators.html) to a
@@ -42,7 +45,7 @@ five other servos, on a CPU, in hours.*
   data-resampling interval; the XL330 and STS3215 are not in the
   paper.
 
-## 2. What nobody else publishes
+## 2. What we found published (2026-09-05 search; entries not re-verified are marked)
 
 No public XL330 or STS3215 fit carries parameter intervals: SO-ARM100's
 simulation constants are point values "adapted from Open Duck Mini";
@@ -73,7 +76,7 @@ fit M6 with `bam.fit --trials ~5000`, repeat ~100 times: at under five
 minutes a fit, about eight CPU-hours, parallel across cores. Record
 per replicate the MAE and the parameter vector; the interval is the
 2.5–97.5 percentile per parameter. Write it into the bundle's
-`uncertainty` section with a new `fit` section (zip sha256, BAM SHA
+`uncertainty` section plus a `metrics` section (zip sha256, BAM SHA
 `aa17d1c` = v1.0.2, trials, sampler, replicate count). Then the walk
 C1 gains the arm the thesis names — trained under the *identified*
 interval — beside point, declared ±10 % and ±30 %.
@@ -103,9 +106,8 @@ objective does not care: the two terms the shipped fit holds at its
 1e-5 floors, `alpha` (0.50, the lower search bound, vs 8.68), the rig
 offset `q_offset` (0.005 vs 0.027). Record `bam-xl330-refit-2026-09-05`;
 params and scores under `docs/artifacts/bam/xl330/`. The bootstrap
-(100 replicates, 5000 trials each) is running; its interval will be
-tight on kt, R and armature and wide on the floor terms and `alpha` —
-which is the honest shape of "the identification's uncertainty" for
+(100 replicates, 5000 trials each) followed (§6): tight on kt, R and
+armature and wide on the floor terms and `alpha` — the honest shape of "the identification's uncertainty" for
 this servo on this bench. Open question for the study: the walk
 policies were trained at the SHIPPED point; an identified-interval
 arm centred on the refit needs its own point arm beside it, or the
@@ -130,7 +132,7 @@ are in the bundle `robots/actuator-bundles/xl330-refit.m6.bundle.json`,
 stamp `xl330-m6@e57c25635c89`; the summary with the zip hash and BAM
 commit rides in its `metrics`.) The shape: the motor constant is known
 to ±3.5 %, resistance to ±9 %, armature to ±7 %, viscous friction to
-±25 %; the friction *split* between motor and external sides, the
+±23 %; the friction *split* between motor and external sides, the
 Stribeck knee and the `alpha` exponent are not identified by this
 bench — their intervals are their search ranges. The shipped fit's
 kt sits at the interval's upper edge.
@@ -144,7 +146,24 @@ and the DR event picks one whole vector per world (`rq_mjlab.dr`,
 basis "identified-set"). The marginal `uncertainty` box stays on the
 bundle for readers and for consumers that only understand boxes.
 
-**Running now:** three point arms and three identified arms on the
+**Run 2026-09-05 UTC:** three point arms and three identified arms on the
 refit bundle (`tools/walk-c1-refit-pods.sh`), certified at the refit's
-fit and under ±0.10; then their matrix cells. The paper's identified
-column is those six certificates.
+fit; then their matrix cells (record `walk-c1-refit` and
+`walk-mismatch-matrix-refit`). The paper's §5.4 is those certificates.
+
+## 7. BAM's declared search bounds (read from the clone at aa17d1c, 2026-09-06)
+
+Rhoban/bam's model module (its Parameter takes initial, min, max): `alpha` (1.35, 0.5,
+10.0); `dtheta_stribeck` (0.2, 0.01, 5.0); `load_friction_motor_quad`
+and `load_friction_external_quad` (0.0, 0.0, 0.01); the Stribeck load
+terms (0.05, 0.0, 1.0); `friction_base` and `friction_stribeck`
+(0.05, 0.0, max_friction_base); `friction_viscous` (0.1, 0.0,
+max_viscous_friction). its Dynamixel actuator module, the XL330 block:
+`kt` (0.7, 0.25, 1.5), `armature` (0.0005, 0.0001, 0.01). So the
+refit's alpha 0.5009 is at the declared floor, the bootstrap's alpha
+interval [0.50, 9.66] spans nearly the whole declared range, and the
+quadratic terms' 97.5 % values (0.0099) sit at their ceiling. These
+bounds are recorded on `docs/artifacts/bam/xl330/bootstrap.json` and
+the bootstrap record; the bundle's `checks.near_search_bound` knows
+only the observed rails from the published fits, so it did not flag
+alpha.

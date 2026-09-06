@@ -149,5 +149,11 @@
   "Training-run variance on the student is at least five trials of forty: campaign 4 and 4b share one dataset and differ only in the training run (27 vs 22). Campaign 3 vs 4 (re-pressed, 24 vs 27) is inside that spread, so the press's repeatability cannot be separated from the trainer's at n=1 each.",
   "The task source hash on campaign 4b's and DAgger round 1's certificates is microduck-walk@0bb340d9f38d where the earlier students' is @824eba27c48c: walk_verdict's identity gained the training run's dr_basis and seed fields on 2026-09-04 (the certificate-overwrite guard commit), so the hash of the identity dict changed while robot, actuator and judged dr_basis are byte-identical \u2014 the same world, a wider identity.",
   "Every certificate in this record is judged under law DR drawn from \u00b10.10 around the fit (walk_verdict's default certificate world, pushes on) \u2014 not pinned at the fit as the walk C1 study's arms are."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "campaign 4b arm, the hash-change and world caveats added 2026-09-04/05"
+  }
  ]
 }

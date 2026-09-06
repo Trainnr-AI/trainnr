@@ -158,11 +158,11 @@ class TheLawDrSpan(unittest.TestCase):
         )
 
         params = json.loads(XL330_REFIT_BUNDLE.read_text())["params"]
-        cfg, ident = microduck_walk_env_cfg(
+        _cfg, ident = microduck_walk_env_cfg(
             law_pin_scale=1.0, bundle=XL330_REFIT_BUNDLE
         )
         self.assertIn("pinned", ident["dr_basis"])
-        cfg2, ident2 = microduck_walk_env_cfg(
+        _cfg2, ident2 = microduck_walk_env_cfg(
             law_dr_span=0.1, bundle=XL330_REFIT_BUNDLE
         )
         self.assertIn("caller-declared span ±0.1", ident2["dr_basis"])

@@ -1,6 +1,6 @@
 {
  "id": "c1-competent-lift-cliff-2026-09-03",
- "claim": "C1 at a competent recipe: identified-interval DR (\u00b15 % relative around the study truth) vs the folklore \u00b10.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials \u2014 the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good \u2014 judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
+ "claim": "C1 at a competent recipe: the arm named 'identified' (a DECLARED \u00b15 % relative span; no fitted interval existed on 2026-09-03) (\u00b15 % relative around the study truth) vs the folklore \u00b10.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials \u2014 the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good \u2014 judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).",
  "date": "2026-09-03",
  "repo_commit": "89412f0-archive",
  "argv": [
@@ -151,5 +151,11 @@
   "One camera (front, 576x1024): the three-camera rig trained 10x slower on the pod (1.4 step/s, 2026-09-04) and C1's earlier nulls were single-camera; comparability over coverage.",
   "At gain 0.4 the scripted expert succeeds 10/12 (12-trial cell, 2026-09-04; the 4-trial grid had read 1/4 at 0.35 and 3/4 at 0.5, and '~1 in 2' was an interpolation, corrected by measurement): the judged truth is near the expert's edge, not on its cliff, which the near-ceiling results reflect.",
   "Artifacts repointed 2026-09-04 to tracked copies under docs/artifacts/lift-studies/ (rows, datasheets, study.json pulled from the volume before its prune)."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "the arm named 'identified' drew a declared \u00b15 %, not a fitted interval \u2014 claim reworded"
+  }
  ]
 }

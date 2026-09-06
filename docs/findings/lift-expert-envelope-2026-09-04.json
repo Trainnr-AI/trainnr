@@ -51,5 +51,11 @@
  "caveats": [
   "Four trials per cell on the grid: the cliff's position is coarse; the three 12-trial cells (0.5, 0.45, 0.4) place it below 0.4.",
   "The expert's envelope bounds what any policy trained on its demos can show; a policy may be more or less robust than the script."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "12-trial cells added 2026-09-04"
+  }
  ]
 }
