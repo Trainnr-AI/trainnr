@@ -88,11 +88,21 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
             "exist yet at cfg-build time; the event finds it by stamp"
         )
     stamp = actuator_cfg.stamp
+    # The bundle's POINT is its params — never `declared_ranges`, which
+    # prefers a bundle's interval over any span and so, on a bundle that
+    # carries one, handed the interval's LOW bounds to the pin and the
+    # interval itself to a "declared" span (found 2026-09-06 on the
+    # refit bundle: every pinned and spanned certificate of its arms was
+    # judged in the wrong world and re-run).
+    bundle, _advisories = verified_bundle(actuator_cfg.bundle_path)
+    point = {
+        name: (float(value), float(value))
+        for name, value in bundle["params"].items()
+        if isinstance(value, int | float) and not isinstance(value, bool)
+    }
     if pin_scale is not None:
         if pin_scale <= 0:
             raise ValueError(f"pin_scale must be positive, got {pin_scale}")
-        # A span of zero around the fit gives the point values; scale them.
-        point, _ = dr_from_bundle(actuator_cfg.bundle_path, fallback_span=0.0)
         if pin_only is not None:
             unknown = [n for n in pin_only if n not in BamActuator.SCALABLE]
             if unknown:
@@ -109,6 +119,16 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
         }
         which = "every law parameter" if pin_only is None else ", ".join(pin_only)
         basis = f"pinned: {which} at fit x {pin_scale:g}, the rest at the fit (no draw)"
+    elif fallback_span is not None:
+        # An explicit span is the caller's declaration, around the point,
+        # whatever interval the bundle carries.
+        ranges = {
+            name: (low * (1.0 - fallback_span), low * (1.0 + fallback_span))
+            for name, (low, _high) in point.items()
+        }
+        basis = f"caller-declared span ±{fallback_span:g} around the bundle's point" + (
+            " (its interval not used)" if bundle.get("uncertainty") else ""
+        )
     else:
         ranges, basis = dr_from_bundle(
             actuator_cfg.bundle_path, fallback_span=fallback_span
@@ -120,7 +140,6 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
     # never did. Only without a declared span or a pin.
     table: dict[str, torch.Tensor] = {}
     if fallback_span is None and pin_scale is None:
-        bundle, _ = verified_bundle(actuator_cfg.bundle_path)
         samples = bundle.get("samples") or []
         if samples:
             names = [n for n in BamActuator.SCALABLE if n in samples[0]]

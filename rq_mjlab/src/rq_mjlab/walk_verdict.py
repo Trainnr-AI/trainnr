@@ -645,9 +645,9 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         protocol["judged_at"] = "the bundle's point fit (no law DR)"
     elif args.judge_span is not None:
         suffix = f"under-pm{args.judge_span:g}-{suffix}"
-        protocol["judged_at"] = f"law DR drawn from ±{args.judge_span:g} around the fit"
+        protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
     else:
-        protocol["judged_at"] = f"law DR drawn from ±{default_span:g} around the fit"
+        protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
     if args.judge_at_scale is not None:
         axis = "" if args.judge_param == "all" else f"{args.judge_param}-"
         suffix = f"at-x{args.judge_at_scale:g}-{axis}{suffix}"

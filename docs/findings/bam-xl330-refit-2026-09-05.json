@@ -1,6 +1,6 @@
 {
  "id": "bam-xl330-refit-2026-09-05",
- "claim": "BAM's shipped XL330 M6 fit (v1.0.2) scores a position MAE of 0.0272 rad on Rhoban's own 358 public bench logs; a 5000-trial refit of the same model with their optimiser on the same logs scores 0.0202 rad. The refit reproduces the load-bearing parameters within 5 % (kt 0.95x, R 0.95x, armature 0.99x, load_friction_motor 1.03x) while the terms the shipped fit holds at its search floors, alpha (0.50 vs 8.68, at the lower search bound) and the rig offset move freely \u2014 the objective does not constrain them.",
+ "claim": "BAM's shipped XL330 M6 fit (v1.0.2) scores a position MAE of 0.0272 rad on Rhoban's own 358 public bench logs; a 5000-trial refit of the same model with their optimiser on the same logs scores 0.0202 rad. The refit reproduces the load-bearing parameters within about 5 % (kt 0.952x, R 0.950x, armature 0.993x, load_friction_motor 1.033x) while the terms the shipped fit holds at its search floors, alpha (0.50 vs 8.68; BAM declares alpha in [0.5, 10] in bam/model.py, so the refit sits at the floor) and the rig offset move freely \u2014 the objective does not constrain them.",
  "date": "2026-09-05",
  "repo_commit": "cccc4dc-dirty",
  "argv": [
@@ -74,10 +74,11 @@
  },
  "inputs": {
   "raw_zip": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip",
-  "raw_zip_sha256_prefix": "d308d12658523526",
   "recordings": 358,
   "design": "kp {50,100,150,200,300} x mass {0.04,0.059,0.117,0.159} kg x length {0.11,0.14,0.17} m, six trajectories",
-  "dt": 0.005
+  "dt": 0.005,
+  "raw_zip_sha256": "d308d126585235264cd4045b4702e35992fe36a9bb6b4a280987ba6ae5f09546",
+  "bam_commit_full": "aa17d1cd5a84938b79143239de09ae33e175b402"
  },
  "artifacts": {
   "refit_params": "docs/artifacts/bam/xl330/refit-m6-5000-trials.json",
@@ -91,5 +92,11 @@
   "One refit run; the optimiser plateaued after ~3700 of 5000 trials at 0.0202 rad. Optimiser variance is measured by the bootstrap that follows, not here.",
   "A lower MAE on the fitting logs is not a better model of the servo: no held-out split was used here (BAM's paper uses 75/25).",
   "Our certified bundle wraps the SHIPPED point; every walk result in this repo is at that point. The refit is a second candidate point, not a replacement."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "full zip hash and BAM commit; the declared bound for alpha sourced; ratios to three figures"
+  }
  ]
 }

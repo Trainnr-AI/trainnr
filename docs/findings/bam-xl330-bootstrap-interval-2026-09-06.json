@@ -1,10 +1,10 @@
 {
  "id": "bam-xl330-bootstrap-interval-2026-09-06",
- "claim": "A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to \u00b13.5 % (kt [0.3416, 0.3662]), the resistance to \u00b19 % (R [2.545, 3.036]), the armature to \u00b17 % and viscous friction to \u00b125 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span their search ranges \u2014 unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).",
+ "claim": "A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to \u00b13.5 % (kt [0.3416, 0.3662]), the resistance to \u00b19 % (R [2.545, 3.036]), the armature to \u00b17 % and viscous friction to \u00b123 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span most of BAM's declared search ranges (bam/model.py: alpha [0.5, 10], dtheta_stribeck [0.01, 5], the quadratic terms [0, 0.01]) \u2014 unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).",
  "date": "2026-09-06",
  "repo_commit": "09b00e6-dirty",
  "argv": [
-  "tools/bam-bootstrap.py --bam <Rhoban/bam v1.0.2> --processed <bam.process --dt 0.005> --actuator xl330 --model m6 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json"
+  "python3 tools/bam-bootstrap.py --bam <Rhoban/bam @ aa17d1cd5a84938b79143239de09ae33e175b402> --processed <bam.process --raw data_raw_2 --logdir processed --dt 0.005> --raw-zip xl330_raw.zip --actuator xl330 --model m6 --out boot-100 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json"
  ],
  "instrument": "Rhoban/bam v1.0.2 (aa17d1c), optuna 4.9.0 CmaEsSampler bipop, Apple M1 Pro CPU (8 workers), ~75 min",
  "outcome": {
@@ -124,13 +124,74 @@
    "load_friction_external_quad",
    "dtheta_stribeck",
    "alpha"
+  ],
+  "replicate_mae_rad_summary": {
+   "min": 0.01850141667023873,
+   "median": 0.020166314469753137,
+   "max": 0.0221419861518104,
+   "n": 100
+  },
+  "declared_search_bounds_bam": {
+   "source": "Rhoban/bam aa17d1c: bam/model.py (Parameter(initial, min, max)) and bam/dynamixel/actuator.py (xl330 block)",
+   "alpha": [
+    0.5,
+    10.0
+   ],
+   "dtheta_stribeck": [
+    0.01,
+    5.0
+   ],
+   "load_friction_motor_quad": [
+    0.0,
+    0.01
+   ],
+   "load_friction_external_quad": [
+    0.0,
+    0.01
+   ],
+   "load_friction_motor_stribeck": [
+    0.0,
+    1.0
+   ],
+   "load_friction_external_stribeck": [
+    0.0,
+    1.0
+   ],
+   "friction_base": [
+    0.0,
+    "max_friction_base"
+   ],
+   "friction_viscous": [
+    0.0,
+    "max_viscous_friction"
+   ],
+   "kt (xl330)": [
+    0.25,
+    1.5
+   ],
+   "armature (xl330)": [
+    0.0001,
+    0.01
+   ]
+  },
+  "at_declared_bound": {
+   "alpha": "refit 0.5009 at min 0.5; 20 of 100 replicates below 0.51",
+   "friction_viscous": "replicate min 0.00500 \u2014 the xl330 block's floor; shipped 0.00536 lies below the 95 % box's low 0.00538"
+  },
+  "shipped_outside_box": [
+   "friction_viscous (0.005360 < 0.005377)",
+   "q_offset (0.0271 vs [0.0006, 0.0101]; a rig parameter)"
   ]
  },
  "inputs": {
   "raw_zip": "https://huggingface.co/buckets/Gregwar/bam_data/resolve/xl330_raw.zip",
   "raw_zip_sha256": "d308d126585235264cd4045b4702e35992fe36a9bb6b4a280987ba6ae5f09546",
   "recordings": 358,
-  "blocks": "60 blocks of 5-6 trajectories by (kp, mass, length), resampled within block with replacement"
+  "blocks": "60 blocks of 5-6 trajectories by (kp, mass, length), resampled within block with replacement",
+  "bam_commit_full": "aa17d1cd5a84938b79143239de09ae33e175b402",
+  "optuna": "4.9.0",
+  "outer_workers": 8,
+  "machine": "Apple M1 Pro (10 cores), macOS 25.5"
  },
  "artifacts": {
   "summary": "docs/artifacts/bam/xl330/bootstrap.json",
@@ -144,7 +205,17 @@
   "The interval is log-sampling variability on Rhoban's single unit and bench (their rig's q_offset and command_delay included), not unit-to-unit or temperature spread.",
   "Each replicate is one optimiser run at the stated trial budget; optimiser variance is inside the interval, not separated from it.",
   "The data licence is unstated on the HF bucket; the logs are not redistributed here, only the fitted numbers.",
-  "Percentiles over 100 replicates: the tails are coarse (the 2.5th percentile is the 3rd-lowest value); quote the interval to two significant figures.",
-  "The bootstrap centre is the refit, not the shipped point (record bam-xl330-refit-2026-09-05); the walk C1's shipped-point policies are a different world from the refit arms."
+  "The bootstrap centre is the refit, not the shipped point (record bam-xl330-refit-2026-09-05); the walk C1's shipped-point policies are a different world from the refit arms.",
+  "Percentiles over 100 replicates interpolate between the 3rd and 4th lowest (and highest) values; the tails are coarse \u2014 quote the interval to two significant figures.",
+  "BAM's optimiser sets no seed (docs/e2e-research/72 \u00a71): a replicate is not bit-reproducible; each is one CMA-ES run at 5000 trials, final position MAE 0.0185\u20130.0221 rad (median 0.0202) across the 100.",
+  "The identified arm draws the twelve LAW parameters jointly from these replicates; armature is drawn by mjlab's joint_armature event from the declared \u00b10.10 (microduck_walk.ARMATURE) in every arm, and viscous friction sits at the bundle's point \u2014 so the two parameters the bootstrap identifies most tightly are the two not drawn from the set (record walk-c1-refit).",
+  "The bundle's `metrics` section carries the bootstrap summary as emitted (sampler, worker count, optuna version and machine are on this record and docs/artifacts/bam/xl330/bootstrap.json, not in the bundle; re-wrapping would change the stamp the six refit arms trained under).",
+  "Relative half-widths are (high \u2212 low) / (2 \u00b7 median): kt 3.5 %, R 8.8 %, armature 7.2 %, friction_viscous 22.8 %."
+ ],
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "MAE per replicate, BAM's declared bounds with their source, full hashes, argv, the passives caveat \u2014 after the provenance review"
+  }
  ]
 }

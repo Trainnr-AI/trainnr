@@ -144,6 +144,32 @@ class TheLawDrSpan(unittest.TestCase):
         self.assertNotEqual(refit["actuator"], shipped["actuator"])
         self.assertTrue(refit["actuator"].startswith("xl330-m6@"))
 
+    def test_a_pin_and_a_declared_span_use_the_refit_bundles_point_not_its_interval(
+        self,
+    ) -> None:
+        """Found 2026-09-06: declared_ranges prefers a bundle's interval, so
+        the pin took the interval's LOW bounds and a declared span the
+        interval itself. The event must build both from the params."""
+        import json  # noqa: PLC0415
+
+        from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+            XL330_REFIT_BUNDLE,
+            microduck_walk_env_cfg,
+        )
+
+        params = json.loads(XL330_REFIT_BUNDLE.read_text())["params"]
+        cfg, ident = microduck_walk_env_cfg(
+            law_pin_scale=1.0, bundle=XL330_REFIT_BUNDLE
+        )
+        self.assertIn("pinned", ident["dr_basis"])
+        cfg2, ident2 = microduck_walk_env_cfg(
+            law_dr_span=0.1, bundle=XL330_REFIT_BUNDLE
+        )
+        self.assertIn("caller-declared span ±0.1", ident2["dr_basis"])
+        self.assertIn("its interval not used", ident2["dr_basis"])
+        self.assertNotIn("identified", ident2["dr_basis"])
+        self.assertGreater(params["kt"], 0.3)  # the point the tests above pin
+
     def test_the_identified_arm_draws_the_refit_bundles_set(self) -> None:
         from rq_mjlab.microduck_walk import (  # noqa: PLC0415
             IDENTIFIED,
@@ -160,7 +186,10 @@ class TheLawDrSpan(unittest.TestCase):
         self.assertIn(ident["actuator"].split("@")[0], "xl330-m6")
 
     def test_the_identified_arm_refuses_a_bundle_without_an_interval(self) -> None:
-        from rq_mjlab.microduck_walk import IDENTIFIED, microduck_walk_env_cfg  # noqa: PLC0415
+        from rq_mjlab.microduck_walk import (  # noqa: PLC0415
+            IDENTIFIED,
+            microduck_walk_env_cfg,
+        )
 
         with self.assertRaisesRegex(ValueError, "uncertainty"):
             microduck_walk_env_cfg(law_dr_span=IDENTIFIED)
