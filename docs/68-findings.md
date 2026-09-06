@@ -7,7 +7,7 @@ not this page.
 
 ## walk-mismatch-matrix-refit-2026-09-06
 
-**The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 3/120, x0.9 28/120, fit 52/120, x1.1 60/120, x1.2 63/120, x1.3 60/120, pm0.1 58/120, pm0.3 57/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 5/120, x0.9 34/120, fit 46/120, x1.1 60/120, x1.2 57/120, x1.3 49/120, pm0.1 56/120, pm0.3 54/120.**
+**WITHDRAWN: The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 3/120, x0.9 28/120, fit 52/120, x1.1 60/120, x1.2 63/120, x1.3 60/120, pm0.1 58/120, pm0.3 57/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 5/120, x0.9 34/120, fit 46/120, x1.1 60/120, x1.2 57/120, x1.3 49/120, pm0.1 56/120, pm0.3 54/120.**
 
 - date: 2026-09-06 · commit: `9a6e082-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
@@ -124,6 +124,7 @@ not this page.
 - caveats:
   - The identified arm draws from the bundle's bootstrap interval (docs/e2e-research/72): log-sampling variability on one unit and one bench, not unit-to-unit spread; its point arm is the same bundle with no draw, so the comparison is at one point.
   - Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.
+  - The second certificate per run (`under_span_0.10`) was judged under the bundle's marginal interval boxes, not ±0.10: the DR event preferred a bundle's interval over a declared span (fixed in commit 62b999b). The at-fit column is unaffected. Those six certificates are being re-judged.
 
 ![walk-c1-refit-2026-09-06](../docs/figures/walk-c1-refit-2026-09-06.png)
 

@@ -1,6 +1,6 @@
 {
  "id": "walk-mismatch-matrix-refit-2026-09-06",
- "claim": "The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run \u2014 point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 3/120, x0.9 28/120, fit 52/120, x1.1 60/120, x1.2 63/120, x1.3 60/120, pm0.1 58/120, pm0.3 57/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 5/120, x0.9 34/120, fit 46/120, x1.1 60/120, x1.2 57/120, x1.3 49/120, pm0.1 56/120, pm0.3 54/120.",
+ "claim": "WITHDRAWN: The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run \u2014 point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 3/120, x0.9 28/120, fit 52/120, x1.1 60/120, x1.2 63/120, x1.3 60/120, pm0.1 58/120, pm0.3 57/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 5/120, x0.9 34/120, fit 46/120, x1.1 60/120, x1.2 57/120, x1.3 49/120, pm0.1 56/120, pm0.3 54/120.",
  "date": "2026-09-06",
  "repo_commit": "9a6e082-dirty",
  "argv": [
@@ -432,5 +432,12 @@
   "Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately \u2014 the per-axis matrices (--judge-param) are the slices.",
   "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",
   "The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured \u2014 paper 2's bench says how wrong it actually was."
+ ],
+ "status": "WITHDRAWN 2026-09-06 \u2014 every pinned and drawn-span cell was judged in the wrong world (the DR event took the bundle's interval bounds instead of its params; commit 62b999b fixes it); only the `fit` column stands. Re-judging with the fixed seam replaces this record.",
+ "revised": [
+  {
+   "date": "2026-09-06",
+   "what": "withdrawn pending re-judging (seam bug found by the provenance review)"
+  }
  ]
 }
