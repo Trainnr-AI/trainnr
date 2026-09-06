@@ -30,6 +30,7 @@ PROSE = (
     "docs/e2e-research/70-paper-sections-5-9.md",
     "docs/70-goals-ledger.md",
     "docs/33-what-we-say.md",
+    "docs/paper/reading.md",
 )
 # A trailing "." is a sentence's end, not a decimal: "90/120." must
 # match (the matrix record's claim ends on one, 2026-09-04); ".5" must not.
