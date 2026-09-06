@@ -1,8 +1,8 @@
 {
  "id": "walk-mismatch-matrix-2026-09-04",
- "claim": "The mismatch matrix on the walk: every C1 policy (trained under no law DR, \u00b10.1, \u00b10.3; replicates pooled) judged pinned at the fit scaled by s and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 17/120, x0.8 78/120, x0.9 99/120, fit 108/120, x1.1 103/120, x1.2 103/120, x1.3 99/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 39/120, x0.8 89/120, x0.9 103/120, fit 108/120, x1.1 108/120, x1.2 106/120, x1.3 105/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 56/120, x0.8 79/120, x0.9 85/120, fit 84/120, x1.1 88/120, x1.2 87/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.",
+ "claim": "The mismatch matrix on the walk: the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 17/120, x0.8 78/120, x0.9 99/120, fit 108/120, x1.1 103/120, x1.2 103/120, x1.3 99/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 39/120, x0.8 89/120, x0.9 103/120, fit 108/120, x1.1 108/120, x1.2 106/120, x1.3 105/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 56/120, x0.8 79/120, x0.9 85/120, fit 84/120, x1.1 88/120, x1.2 87/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.",
  "date": "2026-09-04",
- "repo_commit": "9fbf3f8-dirty",
+ "repo_commit": "d989135-dirty",
  "argv": [
   "tools/walk-matrix-fold.py",
   "docs/artifacts/walk-c1",
@@ -715,7 +715,7 @@
  "sources": {},
  "protocol": "docs/70 \u00a79 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)",
  "caveats": [
-  "Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately.",
+  "Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately \u2014 the per-axis matrices (--judge-param) are the slices.",
   "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",
   "The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured \u2014 paper 2's bench says how wrong it actually was."
  ]

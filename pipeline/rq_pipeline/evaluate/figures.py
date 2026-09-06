@@ -38,6 +38,7 @@ SURFACE = "#fcfcfb"
 MARKER_PT = 7.0
 MIN_CURVE_ARMS = 3  # fewer points is a row, not a curve
 TITLE_CHARS = 110  # the claim, trimmed
+TITLE_HEAD_CHARS = 90  # a claim's lead clause is the title when it fits
 TITLE_WRAP = (
     64  # characters per title line: 110 on one line ran off the canvas (2026-09-04)
 )
@@ -93,22 +94,30 @@ def footer(finding: Finding) -> str:
     )
 
 
+def title_of(finding: Finding) -> str:
+    """A title that names the study, not the whole claim: the claim up
+    to its first colon or dash when that is short, else its first
+    TITLE_CHARS characters; the record id on a second line so a reader
+    can find the record from the figure alone (figure pass, 2026-09-06)."""
+    claim = finding.claim.replace("WITHDRAWN: ", "")
+    head = claim
+    for sep in (": ", " — "):
+        if sep in claim and len(claim.split(sep, 1)[0]) <= TITLE_HEAD_CHARS:
+            head = claim.split(sep, 1)[0]
+            break
+    if len(head) > TITLE_CHARS:
+        head = head[:TITLE_CHARS] + "…"
+    status = " (WITHDRAWN)" if finding.claim.startswith("WITHDRAWN") else ""
+    return textwrap.fill(head, TITLE_WRAP) + f"\n{finding.id}{status}"
+
+
 def _style(fig: Any, ax: Any, finding: Finding) -> None:
-    """The recessive frame every figure shares: y in [0, 1], the claim
-    as a left-aligned title, grid and spines in the grid tone, the
-    provenance footer."""
+    """The recessive frame every figure shares: y in [0, 1], the study's
+    name as a left-aligned title with the record id beneath, grid and
+    spines in the grid tone, the provenance footer."""
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("success rate (exact 95% interval)", color=INK)
-    ax.set_title(
-        textwrap.fill(
-            finding.claim[:TITLE_CHARS]
-            + ("…" if len(finding.claim) > TITLE_CHARS else ""),
-            TITLE_WRAP,
-        ),
-        fontsize=9,
-        color=INK,
-        loc="left",
-    )
+    ax.set_title(title_of(finding), fontsize=9, color=INK, loc="left")
     ax.grid(True, axis="y", color=GRID, linewidth=0.6)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -184,10 +193,22 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
         ax.set_xticks(xs)
         ax.set_xticklabels([r["arm"] for r in rows], color=INK)
         ax.set_xlim(-0.6, len(rows) - 0.4)
+    # One label per x: replicates that share an x get one line listing
+    # each run's count over the shared trial count, above the highest
+    # interval, instead of three labels printed over each other.
+    shared: dict[Any, list[dict[str, Any]]] = {}
     for x, r in zip(xs, rows, strict=True):
+        shared.setdefault(x, []).append(r)
+    for x, group in shared.items():
+        trials = sorted({r["trials"] for r in group})
+        label = (
+            f"{group[0]['successes']}/{group[0]['trials']}"
+            if len(group) == 1
+            else "/".join(str(r["successes"]) for r in group) + f" of {trials[0]}"
+        )
         ax.annotate(
-            f"{r['successes']}/{r['trials']}",
-            (x, r["ci_high"]),
+            label,
+            (x, max(r["ci_high"] for r in group)),
             textcoords="offset points",
             xytext=(0, 6),
             ha="center",

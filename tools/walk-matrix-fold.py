@@ -202,16 +202,9 @@ def _frame(fig: Any, ax: Any, finding: Finding) -> None:
     """The house frame for a nested-arms finding (figures._style reads
     flat arms): y in [0, 1], the claim as title, recessive grid, the
     provenance footer."""
-    import textwrap  # noqa: PLC0415
-
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("success rate (exact 95% interval)", color=fx.INK)
-    ax.set_title(
-        textwrap.fill(finding.claim[: fx.TITLE_CHARS] + "…", fx.TITLE_WRAP),
-        fontsize=9,
-        color=fx.INK,
-        loc="left",
-    )
+    ax.set_title(fx.title_of(finding), fontsize=9, color=fx.INK, loc="left")
     ax.grid(True, axis="y", color=fx.GRID, linewidth=0.6)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -368,8 +361,9 @@ def main() -> int:
     record = Finding(
         id=f"{args.id}{axis_id}-{date}",
         claim=(
-            "The mismatch matrix on the walk: the C1 policies "
-            f"{', '.join(arms)} (replicates pooled) judged "
+            "The mismatch matrix on the walk"
+            + ("" if AXIS == "all" else f" ({AXIS} alone)")
+            + f": the C1 policies {', '.join(arms)} (replicates pooled) judged "
             f"pinned at the fit scaled by s ({moved} moved) and under drawn spans, "
             "40 matched trials per run — " + table(outcome) + "."
         ),

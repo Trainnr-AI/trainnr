@@ -1,8 +1,8 @@
 {
  "id": "walk-mismatch-matrix-friction-2026-09-05",
- "claim": "The mismatch matrix on the walk: every C1 policy (trained under no law DR, \u00b10.1, \u00b10.3; replicates pooled) judged pinned at the fit scaled by s (only friction moved) and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 106/120, x0.8 102/120, x0.9 104/120, fit 108/120, x1.1 104/120, x1.2 103/120, x1.3 105/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 106/120, x0.8 106/120, x0.9 106/120, fit 108/120, x1.1 108/120, x1.2 108/120, x1.3 107/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 88/120, x0.8 84/120, x0.9 87/120, fit 84/120, x1.1 87/120, x1.2 88/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.",
+ "claim": "The mismatch matrix on the walk (friction alone): the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (only friction moved) and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 106/120, x0.8 102/120, x0.9 104/120, fit 108/120, x1.1 104/120, x1.2 103/120, x1.3 105/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 106/120, x0.8 106/120, x0.9 106/120, fit 108/120, x1.1 108/120, x1.2 108/120, x1.3 107/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 88/120, x0.8 84/120, x0.9 87/120, fit 84/120, x1.1 87/120, x1.2 88/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.",
  "date": "2026-09-05",
- "repo_commit": "3c9a86b-dirty",
+ "repo_commit": "d989135-dirty",
  "argv": [
   "tools/walk-matrix-fold.py",
   "docs/artifacts/walk-c1",
