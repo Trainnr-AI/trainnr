@@ -1,5 +1,5 @@
 {
- "source": "microduck-walk@45b1341ab70f",
+ "source": "microduck-walk@e029816f23e4",
  "policy": "model_7999",
  "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
  "protocol": {
@@ -7,25 +7,26 @@
   "seed": 1000,
   "criterion": "survived and err_ratio<0.5",
   "err_floor_mps": 0.1,
-  "dr_basis": "identified-interval",
-  "judged_at": "law DR drawn from \u00b10.3 around the fit"
+  "dr_basis": "caller-declared span \u00b10.3 around the bundle's point (its interval not used)",
+  "judged_at": "law DR: caller-declared span \u00b10.3 around the bundle's point (its interval not used)"
  },
  "identity": {
   "robot": "microduck@14b51b63c52e",
   "actuator": "xl330-m6@e57c25635c89",
-  "dr_basis": "identified-interval",
+  "dr_basis": "caller-declared span \u00b10.3 around the bundle's point (its interval not used)",
+  "head": "free",
   "trained_dr_basis": "identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)",
   "seed": 43
  },
  "funnel": {
-  "survived": 40,
-  "tracked": 4
+  "survived": 37,
+  "tracked": 3
  },
- "successes": 4,
+ "successes": 3,
  "trials": 40,
  "ci95": [
-  0.0279,
-  0.2366
+  0.0157,
+  0.2039
  ],
- "median_err_ratio": 0.5944
+ "median_err_ratio": 0.6184
 }

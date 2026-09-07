@@ -7,9 +7,9 @@ not this page.
 
 ## walk-mismatch-matrix-refit-2026-09-06
 
-**WITHDRAWN: The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 3/120, x0.9 28/120, fit 52/120, x1.1 60/120, x1.2 63/120, x1.3 60/120, pm0.1 58/120, pm0.3 57/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 5/120, x0.9 34/120, fit 46/120, x1.1 60/120, x1.2 57/120, x1.3 49/120, pm0.1 56/120, pm0.3 54/120.**
+**The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 1/120, x0.9 33/120, fit 52/120, x1.1 64/120, x1.2 63/120, x1.3 53/120, pm0.1 53/120, pm0.3 42/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 12/120, x0.9 39/120, fit 46/120, x1.1 58/120, x1.2 54/120, x1.3 46/120, pm0.1 53/120, pm0.3 33/120.**
 
-- date: 2026-09-06 · commit: `9a6e082-dirty`
+- date: 2026-09-06 · commit: `c4612f7-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --arms point-refit,identified --span 0.30 --date 2026-09-06 --id walk-mismatch-matrix-refit`
 - protocol: docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)
@@ -20,8 +20,8 @@ not this page.
   - spans: [0.1, 0.3]
 - outcome:
   - conditions: ['x0.7', 'x0.8', 'x0.9', 'fit', 'x1.1', 'x1.2', 'x1.3', 'pm0.1', 'pm0.3']
-  - arms: {'point-refit': {'trained_under': 'none (refit bundle)', 'runs': 3, 'x0.7': {'successes': 0, 'trials': 120, 'per_run': [0, 0, 0], 'ci95': [0.0, 0.0303]}, 'x0.8': {'successes': 3, 'trials': 120, 'per_run': [1, 0, 2], 'ci95': [0.0052, 0.0713]}, 'x0.9': {'successes': 28, 'trials': 120, 'per_run': [7, 7, 14], 'ci95': [0.161, 0.3193]}, 'fit': {'successes': 52, 'trials': 120, 'per_run': [18, 13, 21], 'ci95': [0.3432, 0.5269]}, 'x1.1': {'successes': 60, 'trials': 120, 'per_run': [19, 19, 22], 'ci95': [0.4074, 0.5926]}, 'x1.2': {'successes': 63, 'trials': 120, 'per_run': [21, 22, 20], 'ci95': [0.4318, 0.6169]}, 'x1.3': {'successes': 60, 'trials': 120, 'per_run': [20, 23, 17], 'ci95': [0.4074, 0.5926]}, 'pm0.1': {'successes': 58, 'trials': 120, 'per_run': [18, 18, 22], 'ci95': [0.3912, 0.5763]}, 'pm0.3': {'successes': 57, 'trials': 120, 'per_run': [19, 16, 22], 'ci95': [0.3831, 0.5682]}}, 'identified': {'trained_under': 'identified set (refit bundle)', 'runs': 3, 'x0.7': {'successes': 0, 'trials': 120, 'per_run': [0, 0, 0], 'ci95': [0.0, 0.0303]}, 'x0.8': {'successes': 5, 'trials': 120, 'per_run': [3, 0, 2], 'ci95': [0.0137, 0.0946]}, 'x0.9': {'successes': 34, 'trials': 120, 'per_run': [15, 1, 18], 'ci95': [0.2049, 0.3728]}, 'fit': {'successes': 46, 'trials': 120, 'per_run': [19, 4, 23], 'ci95': [0.2961, 0.4765]}, 'x1.1': {'successes': 60, 'trials': 120, 'per_run': [27, 5, 28], 'ci95': [0.4074, 0.5926]}, 'x1.2': {'successes': 57, 'trials': 120, 'per_run': [27, 5, 25], 'ci95': [0.3831, 0.5682]}, 'x1.3': {'successes': 49, 'trials': 120, 'per_run': [25, 4, 20], 'ci95': [0.3195, 0.5018]}, 'pm0.1': {'successes': 56, 'trials': 120, 'per_run': [26, 4, 26], 'ci95': [0.3751, 0.5599]}, 'pm0.3': {'successes': 54, 'trials': 120, 'per_run': [26, 4, 24], 'ci95': [0.3591, 0.5435]}}}
-  - effects: [{'condition': 'x0.7', 'a': 'point-refit', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'condition': 'x0.8', 'a': 'point-refit', 'b': 'identified', 'difference': 0.016666666666666663, 'p': 0.7218980054783155, 'verdict': 'INSENSITIVE'}, {'condition': 'x0.9', 'a': 'point-refit', 'b': 'identified', 'difference': 0.04999999999999999, 'p': 0.46108359397187176, 'verdict': 'UNRESOLVED'}, {'condition': 'fit', 'a': 'point-refit', 'b': 'identified', 'difference': -0.04999999999999999, 'p': 0.5115213503941369, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.1', 'a': 'point-refit', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.2', 'a': 'point-refit', 'b': 'identified', 'difference': -0.050000000000000044, 'p': 0.5186942272160517, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.3', 'a': 'point-refit', 'b': 'identified', 'difference': -0.09166666666666667, 'p': 0.19471498402932394, 'verdict': 'UNRESOLVED'}, {'condition': 'pm0.1', 'a': 'point-refit', 'b': 'identified', 'difference': -0.016666666666666663, 'p': 0.897187410292041, 'verdict': 'UNRESOLVED'}, {'condition': 'pm0.3', 'a': 'point-refit', 'b': 'identified', 'difference': -0.024999999999999967, 'p': 0.7957590549279625, 'verdict': 'UNRESOLVED'}]
+  - arms: {'point-refit': {'trained_under': 'none (refit bundle)', 'runs': 3, 'x0.7': {'successes': 0, 'trials': 120, 'per_run': [0, 0, 0], 'ci95': [0.0, 0.0303]}, 'x0.8': {'successes': 1, 'trials': 120, 'per_run': [0, 0, 1], 'ci95': [0.0002, 0.0456]}, 'x0.9': {'successes': 33, 'trials': 120, 'per_run': [9, 8, 16], 'ci95': [0.1975, 0.364]}, 'fit': {'successes': 52, 'trials': 120, 'per_run': [18, 13, 21], 'ci95': [0.3432, 0.5269]}, 'x1.1': {'successes': 64, 'trials': 120, 'per_run': [19, 23, 22], 'ci95': [0.4401, 0.6249]}, 'x1.2': {'successes': 63, 'trials': 120, 'per_run': [22, 21, 20], 'ci95': [0.4318, 0.6169]}, 'x1.3': {'successes': 53, 'trials': 120, 'per_run': [20, 14, 19], 'ci95': [0.3511, 0.5352]}, 'pm0.1': {'successes': 53, 'trials': 120, 'per_run': [14, 15, 24], 'ci95': [0.3511, 0.5352]}, 'pm0.3': {'successes': 42, 'trials': 120, 'per_run': [15, 11, 16], 'ci95': [0.2652, 0.4424]}}, 'identified': {'trained_under': 'identified set (refit bundle)', 'runs': 3, 'x0.7': {'successes': 0, 'trials': 120, 'per_run': [0, 0, 0], 'ci95': [0.0, 0.0303]}, 'x0.8': {'successes': 12, 'trials': 120, 'per_run': [8, 0, 4], 'ci95': [0.0527, 0.1682]}, 'x0.9': {'successes': 39, 'trials': 120, 'per_run': [18, 2, 19], 'ci95': [0.2423, 0.4165]}, 'fit': {'successes': 46, 'trials': 120, 'per_run': [19, 4, 23], 'ci95': [0.2961, 0.4765]}, 'x1.1': {'successes': 58, 'trials': 120, 'per_run': [26, 5, 27], 'ci95': [0.3912, 0.5763]}, 'x1.2': {'successes': 54, 'trials': 120, 'per_run': [27, 4, 23], 'ci95': [0.3591, 0.5435]}, 'x1.3': {'successes': 46, 'trials': 120, 'per_run': [24, 2, 20], 'ci95': [0.2961, 0.4765]}, 'pm0.1': {'successes': 53, 'trials': 120, 'per_run': [23, 4, 26], 'ci95': [0.3511, 0.5352]}, 'pm0.3': {'successes': 33, 'trials': 120, 'per_run': [15, 3, 15], 'ci95': [0.1975, 0.364]}}}
+  - effects: [{'condition': 'x0.7', 'a': 'point-refit', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'INSENSITIVE'}, {'condition': 'x0.8', 'a': 'point-refit', 'b': 'identified', 'difference': 0.09166666666666667, 'p': 0.0026756987014068642, 'verdict': 'SENSITIVE'}, {'condition': 'x0.9', 'a': 'point-refit', 'b': 'identified', 'difference': 0.04999999999999999, 'p': 0.481393185582319, 'verdict': 'UNRESOLVED'}, {'condition': 'fit', 'a': 'point-refit', 'b': 'identified', 'difference': -0.04999999999999999, 'p': 0.5115213503940773, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.1', 'a': 'point-refit', 'b': 'identified', 'difference': -0.04999999999999999, 'p': 0.5186362269484305, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.2', 'a': 'point-refit', 'b': 'identified', 'difference': -0.07500000000000001, 'p': 0.30154223641592326, 'verdict': 'UNRESOLVED'}, {'condition': 'x1.3', 'a': 'point-refit', 'b': 'identified', 'difference': -0.05833333333333329, 'p': 0.4315099604349178, 'verdict': 'UNRESOLVED'}, {'condition': 'pm0.1', 'a': 'point-refit', 'b': 'identified', 'difference': 0.0, 'p': 1.0, 'verdict': 'UNRESOLVED'}, {'condition': 'pm0.3', 'a': 'point-refit', 'b': 'identified', 'difference': -0.07499999999999996, 'p': 0.2651798687675723, 'verdict': 'UNRESOLVED'}]
   - alpha: 0.05
   - delta: 0.15
   - missing: []
@@ -88,6 +88,7 @@ not this page.
   - Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately — the per-axis matrices (--judge-param) are the slices.
   - One robot, one gait, one recipe; the policies are the C1 runs (three per arm).
   - The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured — paper 2's bench says how wrong it actually was.
+  - Re-judged 2026-09-07 on the owned RTX 3090 Ti (the same mjlab/mujoco/warp versions; instrument stamps on the certificates) after the DR seam fix; the fit column's six certificates are the pods' originals.
 
 ![walk-mismatch-matrix-refit-2026-09-06](../docs/figures/walk-mismatch-matrix-refit-2026-09-06.png)
 
@@ -95,7 +96,7 @@ not this page.
 
 **C1 on the walk, arms point-refit, identified on actuator xl330-m6@e57c25635c89 — same G3 recipe, trained under [point-refit: none: the bundle's point fit exactly (no law DR); identified: identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)] — each certified AT THE FIT of that bundle (no law DR, pushes on) on 120 matched trials; a second certificate per run judges under ±0.10 law DR.**
 
-- date: 2026-09-06 · commit: `e2da61f-dirty`
+- date: 2026-09-06 · commit: `c4612f7-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-c1-fold.py docs/artifacts/walk-c1 --arms point-refit,identified --id walk-c1-refit --date 2026-09-06`
 - protocol: docs/66 §8 (C1 on the walk: tools/walk-c1-arm.sh, judged at the fit)
@@ -105,9 +106,9 @@ not this page.
   - recipe: g3_agent, 8000 iterations, 4096 envs
 - outcome:
   - arms: {'point-refit': {'successes': 52, 'trials': 120, 'ci95': [0.3432, 0.5269], 'runs': 3, 'per_run': [18, 13, 21], 'funnel': {'survived': 120, 'tracked': 52}, 'median_err_ratio': 0.5393, 'trained_dr_basis': "none: the bundle's point fit exactly (no law DR)", 'judged_at': "the bundle's point fit (no law DR)", 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}, 'identified': {'successes': 46, 'trials': 120, 'ci95': [0.2961, 0.4765], 'runs': 3, 'per_run': [19, 4, 23], 'funnel': {'survived': 120, 'tracked': 46}, 'median_err_ratio': 0.5095, 'trained_dr_basis': 'identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)', 'judged_at': "the bundle's point fit (no law DR)", 'instrument': ['mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda']}}
-  - under_span_0.10: {'point-refit': {'successes': 58, 'trials': 120, 'per_run': [18, 18, 22], 'dr_basis': 'identified-interval'}, 'identified': {'successes': 56, 'trials': 120, 'per_run': [26, 4, 26], 'dr_basis': 'identified-interval'}}
+  - under_span_0.10: {'point-refit': {'successes': 53, 'trials': 120, 'per_run': [14, 15, 24], 'dr_basis': "caller-declared span ±0.1 around the bundle's point (its interval not used)"}, 'identified': {'successes': 53, 'trials': 120, 'per_run': [23, 4, 26], 'dr_basis': "caller-declared span ±0.1 around the bundle's point (its interval not used)"}}
   - replicates: {'point-refit': [{'run': 'point-refit#1', 'seed': 42, 'successes': 18, 'trials': 40, 'ci95': [0.2926, 0.6151], 'funnel': {'survived': 40, 'tracked': 18}}, {'run': 'point-refit#2', 'seed': 43, 'successes': 13, 'trials': 40, 'ci95': [0.1857, 0.4913], 'funnel': {'survived': 40, 'tracked': 13}}, {'run': 'point-refit#3', 'seed': 44, 'successes': 21, 'trials': 40, 'ci95': [0.3613, 0.6849], 'funnel': {'survived': 40, 'tracked': 21}}], 'identified': [{'run': 'identified#1', 'seed': 42, 'successes': 19, 'trials': 40, 'ci95': [0.3151, 0.6387], 'funnel': {'survived': 40, 'tracked': 19}}, {'run': 'identified#2', 'seed': 43, 'successes': 4, 'trials': 40, 'ci95': [0.0279, 0.2366], 'funnel': {'survived': 40, 'tracked': 4}}, {'run': 'identified#3', 'seed': 44, 'successes': 23, 'trials': 40, 'ci95': [0.4089, 0.7296], 'funnel': {'survived': 40, 'tracked': 23}}]}
-  - effects: [{'a': 'point-refit', 'b': 'identified', 'difference': -0.04999999999999999, 'p': 0.5115213503941369, 'verdict': 'UNRESOLVED'}]
+  - effects: [{'a': 'point-refit', 'b': 'identified', 'difference': -0.04999999999999999, 'p': 0.5115213503940773, 'verdict': 'UNRESOLVED'}]
   - alpha: 0.05
   - delta: 0.15
 - artifacts:
@@ -124,7 +125,7 @@ not this page.
 - caveats:
   - The identified arm draws from the bundle's bootstrap interval (docs/e2e-research/72): log-sampling variability on one unit and one bench, not unit-to-unit spread; its point arm is the same bundle with no draw, so the comparison is at one point.
   - Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.
-  - The second certificate per run (`under_span_0.10`) was judged under the bundle's marginal interval boxes, not ±0.10: the DR event preferred a bundle's interval over a declared span (fixed in commit 62b999b). The at-fit column is unaffected. Those six certificates are being re-judged.
+  - The second certificate per run (`under_span_0.10`) was first judged under the bundle's marginal interval boxes (the DR event preferred a bundle's interval over a declared span; fixed in commit 62b999b) and re-judged 2026-09-07 under ±0.10 around the point on the owned RTX 3090 Ti; the at-fit column is the pods' originals.
 
 ![walk-c1-refit-2026-09-06](../docs/figures/walk-c1-refit-2026-09-06.png)
 
@@ -513,6 +514,42 @@ not this page.
   - The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured — paper 2's bench says how wrong it actually was.
 
 ![walk-mismatch-matrix-R-2026-09-05](../docs/figures/walk-mismatch-matrix-R-2026-09-05.png)
+
+## walk-latency-budget-2026-09-05
+
+**The campaign 3 vision student certified under an inference budget of n control ticks (SmoothRL's timed loop, emulated in the scheduler), 40 matched trials on the shared seed - teacher 32/40 [0.644, 0.909]; teacher-delay-1 0/40 [0.000, 0.088]; teacher-delay-2 0/40 [0.000, 0.088]; teacher-delay-4 0/40 [0.000, 0.088]; latency-0 25/40 [0.458, 0.773]; latency-1 0/40 [0.000, 0.088]; latency-2 0/40 [0.000, 0.088]; latency-4 0/40 [0.000, 0.088]; latency-8 0/40 [0.000, 0.088]; horizon-3-latency-0 13/40 [0.186, 0.491]; horizon-1-latency-1 0/40 [0.000, 0.088].**
+
+- date: 2026-09-05 · commit: `39568b2`
+- instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
+- command: `tools/walk-latency-fold.py runs/microduck-walk/20260901-163412/verdict --date 2026-09-05`
+- protocol: docs/e2e-research/71 §4 E1 (walk_verdict --latency n; the scheduler's timed loop)
+- inputs:
+  - verdict_dir: runs/microduck-walk/20260901-163412/verdict
+  - student: runs/campaign-3/student (student-last@c39a1b54c06b)
+- outcome:
+  - arms: {'teacher': {'successes': 32, 'trials': 40, 'ci95': [0.6435219813207658, 0.9094775906000101], 'survived': 40, 'tracked': 32, 'median_steps': 1000.0, 'median_rms_jerk': 272658.0, 'policy': 'model_7999', 'latency': None, 'horizon': None, 'delay': 0}, 'teacher-delay-1': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 17, 'tracked': 0, 'median_steps': 790.0, 'median_rms_jerk': 309575.9, 'policy': 'model_7999', 'latency': None, 'horizon': None, 'delay': 1}, 'teacher-delay-2': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 0, 'median_steps': 25.5, 'median_rms_jerk': 349006.2, 'policy': 'model_7999', 'latency': None, 'horizon': None, 'delay': 2}, 'teacher-delay-4': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 0, 'median_steps': 24.0, 'median_rms_jerk': 313489.4, 'policy': 'model_7999', 'latency': None, 'horizon': None, 'delay': 4}, 'latency-0': {'successes': 25, 'trials': 40, 'ci95': [0.4580147522326117, 0.7727372775181738], 'survived': 28, 'tracked': 33, 'median_steps': 1000.0, 'median_rms_jerk': 267036.1, 'policy': 'student-student@c39a1b54c06b', 'latency': 0, 'horizon': 2}, 'latency-1': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 3, 'median_steps': 60.5, 'median_rms_jerk': 290577.7, 'policy': 'student-student@c39a1b54c06b', 'latency': 1, 'horizon': 2}, 'latency-2': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 4, 'median_steps': 72.0, 'median_rms_jerk': 253614.3, 'policy': 'student-student@c39a1b54c06b', 'latency': 2, 'horizon': 2}, 'latency-4': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 2, 'median_steps': 61.0, 'median_rms_jerk': 246360.9, 'policy': 'student-student@c39a1b54c06b', 'latency': 4, 'horizon': 2}, 'latency-8': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 4, 'median_steps': 53.0, 'median_rms_jerk': 220475.3, 'policy': 'student-student@c39a1b54c06b', 'latency': 8, 'horizon': 2}, 'horizon-3-latency-0': {'successes': 13, 'trials': 40, 'ci95': [0.18572896676335393, 0.49129487547844775], 'survived': 22, 'tracked': 22, 'median_steps': 1000.0, 'median_rms_jerk': 255217.1, 'policy': 'student-student@c39a1b54c06b', 'latency': 0, 'horizon': 3}, 'horizon-1-latency-1': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.08809730287880185], 'survived': 0, 'tracked': 5, 'median_steps': 60.5, 'median_rms_jerk': 258104.3, 'policy': 'student-student@c39a1b54c06b', 'latency': 1, 'horizon': 1}}
+  - effects: [{'key': 'latency-1', 'side_a': 'latency-0', 'side_b': 'latency-1', 'successes_a': 25, 'trials_a': 40, 'successes_b': 0, 'trials_b': 40, 'interval_a': [0.4580147522326117, 0.7727372775181738], 'interval_b': [0.0, 0.08809730287880185], 'difference': -0.625, 'p_value': 2.2137493226721965e-10, 'verdict': 'SENSITIVE'}, {'key': 'latency-2', 'side_a': 'latency-0', 'side_b': 'latency-2', 'successes_a': 25, 'trials_a': 40, 'successes_b': 0, 'trials_b': 40, 'interval_a': [0.4580147522326117, 0.7727372775181738], 'interval_b': [0.0, 0.08809730287880185], 'difference': -0.625, 'p_value': 2.2137493226721965e-10, 'verdict': 'SENSITIVE'}, {'key': 'latency-4', 'side_a': 'latency-0', 'side_b': 'latency-4', 'successes_a': 25, 'trials_a': 40, 'successes_b': 0, 'trials_b': 40, 'interval_a': [0.4580147522326117, 0.7727372775181738], 'interval_b': [0.0, 0.08809730287880185], 'difference': -0.625, 'p_value': 2.2137493226721965e-10, 'verdict': 'SENSITIVE'}, {'key': 'latency-8', 'side_a': 'latency-0', 'side_b': 'latency-8', 'successes_a': 25, 'trials_a': 40, 'successes_b': 0, 'trials_b': 40, 'interval_a': [0.4580147522326117, 0.7727372775181738], 'interval_b': [0.0, 0.08809730287880185], 'difference': -0.625, 'p_value': 2.2137493226721965e-10, 'verdict': 'SENSITIVE'}]
+  - latencies: [0, 1, 2, 4, 8]
+  - controls: [[3, 0], [1, 1]]
+  - delays: [1, 2, 4]
+- artifacts:
+  - latency-0: runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl
+  - latency-1: runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl
+  - latency-2: runs/microduck-walk/20260901-163412/verdict/records-student-latency-2-cuda.jsonl
+  - latency-4: runs/microduck-walk/20260901-163412/verdict/records-student-latency-4-cuda.jsonl
+  - latency-8: runs/microduck-walk/20260901-163412/verdict/records-student-latency-8-cuda.jsonl
+  - horizon-3-latency-0: runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl
+  - horizon-1-latency-1: runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl
+  - figure.svg: docs/figures/walk-latency-budget-2026-09-05.svg
+  - figure.pdf: docs/figures/walk-latency-budget-2026-09-05.pdf
+  - figure.png: docs/figures/walk-latency-budget-2026-09-05.png
+  - figure.csv: docs/figures/walk-latency-budget-2026-09-05.csv
+- caveats:
+  - One student, one box; the budget is emulated in the scheduler (the chunk in flight keeps supplying its own later rows, one request in flight at a time), the first chunk taking over at once.
+  - Zero latency executes rows [0, h) of each chunk; a budget n executes rows [n, n + h), or [n, 2n) once n exceeds h: the controls separate staleness from row depth.
+  - Smoothness is the RMS jerk of the issued targets per trial (docs/71 E0).
+
+![walk-latency-budget-2026-09-05](../docs/figures/walk-latency-budget-2026-09-05.png)
 
 ## bam-xl330-refit-2026-09-05
 

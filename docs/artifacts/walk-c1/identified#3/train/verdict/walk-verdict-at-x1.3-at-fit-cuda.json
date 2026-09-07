@@ -1,5 +1,5 @@
 {
- "source": "microduck-walk@f2a9a3b8e242",
+ "source": "microduck-walk@c5ea91ce4542",
  "policy": "model_7999",
  "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
  "protocol": {
@@ -14,12 +14,13 @@
   "robot": "microduck@14b51b63c52e",
   "actuator": "xl330-m6@e57c25635c89",
   "dr_basis": "pinned: every law parameter at fit x 1.3, the rest at the fit (no draw)",
+  "head": "free",
   "trained_dr_basis": "identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)",
   "seed": 44
  },
  "funnel": {
-  "survived": 39,
-  "tracked": 21
+  "survived": 40,
+  "tracked": 20
  },
  "successes": 20,
  "trials": 40,
@@ -27,5 +28,5 @@
   0.338,
   0.662
  ],
- "median_err_ratio": 0.4997
+ "median_err_ratio": 0.5007
 }

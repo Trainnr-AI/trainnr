@@ -1,5 +1,5 @@
 {
- "source": "microduck-walk@0b880f20d82f",
+ "source": "microduck-walk@8e79e142d907",
  "policy": "model_7999",
  "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
  "protocol": {
@@ -14,6 +14,7 @@
   "robot": "microduck@14b51b63c52e",
   "actuator": "xl330-m6@e57c25635c89",
   "dr_basis": "pinned: every law parameter at fit x 1.1, the rest at the fit (no draw)",
+  "head": "free",
   "trained_dr_basis": "none: the bundle's point fit exactly (no law DR)",
   "seed": 44
  },
@@ -27,5 +28,5 @@
   0.3849,
   0.7074
  ],
- "median_err_ratio": 0.4751
+ "median_err_ratio": 0.4824
 }
