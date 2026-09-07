@@ -539,17 +539,21 @@ not this page.
   - controls: [[3, 0], [1, 1]]
   - delays: [1, 2, 4]
 - artifacts:
-  - latency-0: runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl
-  - latency-1: runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl
-  - latency-2: runs/microduck-walk/20260901-163412/verdict/records-student-latency-2-cuda.jsonl
-  - latency-4: runs/microduck-walk/20260901-163412/verdict/records-student-latency-4-cuda.jsonl
-  - latency-8: runs/microduck-walk/20260901-163412/verdict/records-student-latency-8-cuda.jsonl
-  - horizon-3-latency-0: runs/microduck-walk/20260901-163412/verdict/records-student-cuda.jsonl
-  - horizon-1-latency-1: runs/microduck-walk/20260901-163412/verdict/records-student-latency-1-cuda.jsonl
+  - latency-0: docs/artifacts/walk-verdicts/latency/records-student-cuda.jsonl
+  - latency-1: docs/artifacts/walk-verdicts/latency/records-student-latency-1-cuda.jsonl
+  - latency-2: docs/artifacts/walk-verdicts/latency/records-student-latency-2-cuda.jsonl
+  - latency-4: docs/artifacts/walk-verdicts/latency/records-student-latency-4-cuda.jsonl
+  - latency-8: docs/artifacts/walk-verdicts/latency/records-student-latency-8-cuda.jsonl
+  - horizon-3-latency-0: docs/artifacts/walk-verdicts/latency/records-student-cuda.jsonl
+  - horizon-1-latency-1: docs/artifacts/walk-verdicts/latency/records-student-latency-1-cuda.jsonl
   - figure.svg: docs/figures/walk-latency-budget-2026-09-05.svg
   - figure.pdf: docs/figures/walk-latency-budget-2026-09-05.pdf
   - figure.png: docs/figures/walk-latency-budget-2026-09-05.png
   - figure.csv: docs/figures/walk-latency-budget-2026-09-05.csv
+  - teacher: docs/artifacts/walk-verdicts/latency/records-cuda.jsonl
+  - teacher-delay-1: docs/artifacts/walk-verdicts/latency/records-delay-1-cuda.jsonl
+  - teacher-delay-2: docs/artifacts/walk-verdicts/latency/records-delay-2-cuda.jsonl
+  - teacher-delay-4: docs/artifacts/walk-verdicts/latency/records-delay-4-cuda.jsonl
 - caveats:
   - One student, one box; the budget is emulated in the scheduler (the chunk in flight keeps supplying its own later rows, one request in flight at a time), the first chunk taking over at once.
   - Zero latency executes rows [0, h) of each chunk; a budget n executes rows [n, n + h), or [n, 2n) once n exceeds h: the controls separate staleness from row depth.
