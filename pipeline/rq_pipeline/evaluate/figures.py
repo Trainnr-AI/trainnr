@@ -43,6 +43,7 @@ TITLE_HEAD_CHARS = 90  # a claim's lead clause is the title when it fits
 TITLE_WRAP = (
     64  # characters per title line: 110 on one line ran off the canvas (2026-09-04)
 )
+INTERVAL_TITLE_WRAP = 44  # the interval figure's axes start right of its labels
 LINE_PT = 1.6
 DPI = 200
 
@@ -359,8 +360,14 @@ def render_interval(finding: Finding, root: Path) -> dict[str, str]:
         ax,
         finding,
         grid_axis="x",
-        title=f"Bootstrap intervals of the fit ({refits} refits), as ratios to the "
-        f"published parameters\n{finding.id}",
+        # Wrapped narrower than a success-rate title: the long parameter
+        # names push these axes to the right half of the canvas.
+        title=textwrap.fill(
+            f"Bootstrap intervals of the fit ({refits} refits), "
+            "as ratios to the published parameters",
+            INTERVAL_TITLE_WRAP,
+        )
+        + f"\n{finding.id}",
     )
 
     written: dict[str, str] = {}
