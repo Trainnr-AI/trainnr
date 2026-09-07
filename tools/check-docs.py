@@ -94,12 +94,16 @@ for doc in docs:
     if doc.name == HISTORY:
         continue
     body = doc.read_text(encoding="utf-8")
+    # An archived doc (restored from a retired branch, banner in its
+    # first lines) describes code that never merged: its paths are not
+    # promises about this tree. Links and identifiers are still checked.
+    archived = "> **Archived" in body[:1200]
 
     # ---- 1. file paths ----
     for path in set(
         re.findall(r"`([A-Za-z0-9_./-]+\.(?:rs|toml|sh|py|md|ts|uf2))`", body)
     ):
-        if path in PLACEHOLDERS or path in tracked:
+        if archived or path in PLACEHOLDERS or path in tracked:
             continue
         # a bare basename mentioned in prose is fine if git tracks it anywhere
         if Path(path).name in tracked_basenames:
