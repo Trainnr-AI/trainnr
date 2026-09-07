@@ -127,10 +127,12 @@ def _style(fig: Any, ax: Any, finding: Finding) -> None:
     _frame(fig, ax, finding, grid_axis="y")
 
 
-def _frame(fig: Any, ax: Any, finding: Finding, *, grid_axis: str) -> None:
+def _frame(
+    fig: Any, ax: Any, finding: Finding, *, grid_axis: str, title: str | None = None
+) -> None:
     """The study's name as a left-aligned title with the record id
     beneath, grid and spines in the grid tone, the provenance footer."""
-    ax.set_title(title_of(finding), fontsize=9, color=INK, loc="left")
+    ax.set_title(title or title_of(finding), fontsize=9, color=INK, loc="left")
     ax.grid(True, axis=grid_axis, color=GRID, linewidth=0.6)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -293,7 +295,14 @@ def interval_rows(finding: Finding) -> list[dict[str, Any]]:
                 "rel_high": high / shipped if positive else None,
             }
         )
-    rows.sort(key=lambda r: (not r["identified"], r["parameter"]))
+    halfwidth = finding.outcome.get("relative_halfwidth", {})
+    rows.sort(
+        key=lambda r: (
+            not r["identified"],
+            halfwidth.get(r["parameter"], 0.0),
+            r["parameter"],
+        )
+    )
     return rows
 
 
@@ -342,10 +351,17 @@ def render_interval(finding: Finding, root: Path) -> dict[str, str]:
         fontsize=8,
     )
     ax.set_xlabel(
-        "bootstrap 95 % interval, as a ratio to the published fit (dotted = 1)",
-        color=INK,
+        "95 % bootstrap interval / published fit (dotted line = 1)", color=INK
     )
-    _frame(fig, ax, finding, grid_axis="x")
+    refits = finding.outcome.get("replicates", "?")
+    _frame(
+        fig,
+        ax,
+        finding,
+        grid_axis="x",
+        title=f"Bootstrap intervals of the fit ({refits} refits), as ratios to the "
+        f"published parameters\n{finding.id}",
+    )
 
     written: dict[str, str] = {}
     for fmt in FORMATS:
