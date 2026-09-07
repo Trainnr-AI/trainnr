@@ -21,6 +21,7 @@ TIER = {
     "cloud": 1,  # rented machines: stdlib HTTP over the plugin door, nothing above
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
+    "rl": 2,  # SmoothRL's pure and torch halves (docs/71); nothing above stats
     "physics": 3,
     "tasks": 3,
     "collect": 3,

@@ -13,7 +13,9 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from rq_mjlab.linter import SilentNoOp, lint
 from rq_mjlab.microduck_walk import (
+    HEAD_PINNED,
     LAW_DR_SPAN,
+    LEG_ACTUATORS,
     microduck_walk_env_cfg,
 )
 
@@ -28,6 +30,19 @@ class TheWalkCfg(unittest.TestCase):
         self.assertTrue(self.stamps["actuator"].startswith("xl330-m6@"))
         self.assertIn("declared", self.stamps["dr_basis"])
         self.assertIn(str(LAW_DR_SPAN), self.stamps["dr_basis"])
+
+    def test_a_free_head_is_the_default_and_the_identity_says_so(self) -> None:
+        self.assertEqual(self.stamps["head"], "free")
+        self.assertEqual(self.cfg.actions["joint_pos"].actuator_names, (".*",))
+
+    def test_a_pinned_head_leaves_the_action_space(self) -> None:
+        # docs/07 2026-09-05: free heads park at their limits and pass
+        # through the shoulders; pinned, the policy commands legs only.
+        cfg, stamps = microduck_walk_env_cfg(head=HEAD_PINNED)
+        self.assertEqual(cfg.actions["joint_pos"].actuator_names, LEG_ACTUATORS)
+        self.assertEqual(stamps["head"], HEAD_PINNED)
+        with self.assertRaises(ValueError):
+            microduck_walk_env_cfg(head="sideways")
 
     def test_the_action_scale_is_one_explicitly(self) -> None:
         # The number their deploy flag contradicts (57 §5) — pinned.

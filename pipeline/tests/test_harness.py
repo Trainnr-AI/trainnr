@@ -232,6 +232,43 @@ class GateAInSimulation(unittest.TestCase):
                 source="pendulum-unstamped",
             )
 
+    def test_every_sensor_row_carries_its_smoothness(self) -> None:
+        # docs/e2e-research/71 E0: the columns ride on the harness's rows
+        # in the action's units per second, from the engine's own timestep.
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
+            EpisodeProtocol,
+            SimPolicy,
+            evaluate_policies,
+        )
+        from rq_pipeline.evaluate.records import read_records  # noqa: PLC0415
+        from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+
+        backend = MuJoCoBackend()
+        backend.load_mjcf_string(PENDULUM)
+        protocol = EpisodeProtocol(
+            trials=1,
+            steps=10,
+            control_interval=1,
+            perturb=lambda _trial, home: home,
+            success=lambda _states, _sensors: True,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rows.jsonl"
+            evaluate_policies(
+                backend,
+                [SimPolicy("ramp", lambda step, _sense: [0.01 * step])],
+                protocol,
+                source="pendulum@000000000000",
+                record_to=path,
+            )
+            (row,) = read_records(path)
+        dt = float(backend.model.opt.timestep)
+        self.assertAlmostEqual(row.variations["rms_velocity"], 0.01 / dt, places=3)
+        self.assertAlmostEqual(row.variations["rms_acceleration"], 0.0, places=6)
+
     def test_mismatched_policy_sets_are_refused(self) -> None:
         from rq_pipeline.evaluate.harness import (  # noqa: PLC0415
             SimScore,

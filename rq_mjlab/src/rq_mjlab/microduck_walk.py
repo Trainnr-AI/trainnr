@@ -79,6 +79,17 @@ XL330_REFIT_BUNDLE = REPO / "robots" / "actuator-bundles" / "xl330-refit.m6.bund
 # fourteen are XL330s (57 §2, confirmed against the compiled model).
 SERVO_JOINTS = (r"^(?!trunk_base_freejoint).*",)
 TRUNK = "trunk_base"
+# The head (docs/07 2026-09-05): four actuated joints - neck_pitch,
+# head_pitch, head_yaw, head_roll - that the walk rewards nowhere
+# (upstream's head is command-driven at deployment, and that command is
+# not part of the walk), so the policy parks them at their limits and
+# waves; the model has no collision geometry above the feet, so the
+# head passes through the shoulders - on hardware a self-collision.
+# `pinned` takes them out of the action space: their position servos
+# hold zero (the neutral pose) and the policy commands the legs only.
+HEAD_FREE, HEAD_PINNED = "free", "pinned"
+HEAD_ACTUATORS = (r".*neck.*", r".*head.*")
+LEG_ACTUATORS = (r"^(?!.*neck.*|.*head.*).*",)
 FOOT_SITES = ("left_foot", "right_foot")
 FOOT_GEOMS = ("left_foot_collision", "right_foot_collision")
 
@@ -164,13 +175,14 @@ PIN_AXES: dict[str, tuple[str, ...] | None] = {
 PHYSICS_DT = 0.005
 
 
-def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each statement a cited number
+def microduck_walk_env_cfg(  # noqa: PLR0913, PLR0915 - the recipe's knobs; one linear transcription, each statement a cited number
     *,
     play: bool = False,
     law_dr_span: float | str | None = LAW_DR_SPAN,
     law_pin_scale: float | None = None,
     law_pin_only: tuple[str, ...] | None = None,
     bundle: Path | None = None,
+    head: str = HEAD_FREE,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The walk cfg and its identity: robot stamp, actuator stamp, and
     the law-DR basis — the three strings a run's record must carry.
@@ -246,6 +258,10 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
     joint_pos_action = cfg.actions["joint_pos"]
     assert isinstance(joint_pos_action, JointPositionActionCfg)
     joint_pos_action.scale = 1.0
+    if head not in (HEAD_FREE, HEAD_PINNED):
+        raise ValueError(f"head must be {HEAD_FREE!r} or {HEAD_PINNED!r}, got {head!r}")
+    if head == HEAD_PINNED:
+        joint_pos_action.actuator_names = LEG_ACTUATORS
 
     # Commands: their ranges; heading control off (their duck steers by
     # yaw-rate command, not heading pursuit).
@@ -394,4 +410,5 @@ def microduck_walk_env_cfg(  # noqa: PLR0915 - one linear transcription, each st
         "robot": robot_stamp,
         "actuator": actuator.stamp,
         "dr_basis": dr_basis,
+        "head": head,
     }

@@ -56,6 +56,9 @@ class EpisodeOutcome:
     fell: bool
     mean_err: float  # mean |v_xy - v*_xy| over the episode, m/s
     mean_cmd: float  # mean ‖v*_xy‖ over the episode, m/s
+    # RMS velocity / acceleration / jerk of the issued targets (docs/
+    # e2e-research/71 E0): the smoothness a video shows, as numbers.
+    smoothness: Any = None
 
     @property
     def err_ratio(self) -> float:
@@ -127,11 +130,15 @@ def rollout_episodes(
     device_qpos = as_torch(unwrapped.sim.data.qpos) if capture else None
     trace: list[list[tuple[Any, Any, Any]]] = [[] for _ in range(trials)]
 
+    from rq_pipeline.evaluate.smoothness import SmoothnessMeter  # noqa: PLC0415
+
+    meter = SmoothnessMeter(trials, dt=float(unwrapped.step_dt))
     obs = env.get_observations()  # a TensorDict, not the (obs, extras) pair
     first_command = unwrapped.command_manager.get_command("twist").clone()
     while open_worlds.any():
         with torch.inference_mode():
             actions = policy(obs)
+        meter.observe(actions.detach().cpu().numpy(), active=open_worlds.cpu().numpy())
         if capture and device_qpos is not None:
             actor = obs[ACTOR_OBS_GROUP].detach().cpu().numpy()
             act = actions.detach().cpu().numpy()
@@ -160,6 +167,7 @@ def rollout_episodes(
             fell=bool(fell[i]),
             mean_err=float(err_sum[i] / recorded_steps[i]),
             mean_cmd=float(cmd_sum[i] / recorded_steps[i]),
+            smoothness=meter.result(i),
         )
         arrays: dict[str, Any] = {}
         if capture and trace[i]:
@@ -256,22 +264,35 @@ STATE_GIVEN = "actor"
 STATE_BLANKED = "blanked"
 
 
-def verdict_suffix(
-    devicetag: str, *, student: bool, blank_camera: bool, blank_state: bool = False
+def verdict_suffix(  # noqa: PLR0913 - every control that earns its own file, named
+    devicetag: str,
+    *,
+    student: bool,
+    blank_camera: bool,
+    blank_state: bool = False,
+    latency: int = 0,
+    delay: int = 0,
 ) -> str:
     """The certificate file's suffix — a control run must never land on
     the sighted run's file (`walk-verdict-student-cuda.json` is a
     campaign's headline number): `blank-` for the camera control,
-    `blank-state-` for the state control, `blank-both-` for both."""
+    `blank-state-` for the state control, `blank-both-` for both,
+    `latency-N-` for a run under an inference budget."""
     if not student:
-        return devicetag
+        return teacher_suffix(devicetag, delay)
     control = {
         (False, False): "",
         (True, False): "blank-",
         (False, True): "blank-state-",
         (True, True): "blank-both-",
     }[(blank_camera, blank_state)]
-    return f"student-{control}{devicetag}"
+    budget = f"latency-{latency}-" if latency else ""
+    return f"student-{control}{budget}{devicetag}"
+
+
+def teacher_suffix(devicetag: str, delay: int = 0) -> str:
+    """The teacher's file, its own when judged under an action delay."""
+    return f"delay-{delay}-{devicetag}" if delay else devicetag
 
 
 class StudentPolicy:
@@ -293,6 +314,7 @@ class StudentPolicy:
         device: str,
         blank_camera: bool = False,
         blank_state: bool = False,
+        latency: int = 0,
     ) -> None:
         from rq_pipeline.envs.policy_bridge import BridgePolicy  # noqa: PLC0415
 
@@ -303,7 +325,12 @@ class StudentPolicy:
         self._qpos = as_torch(env.unwrapped.sim.data.qpos)
         self._camera = ChaseCamera(*frame_size)
         self._bridge = BridgePolicy(
-            python, checkpoint, camera=CAMERA_KEY, horizon=horizon, device=device
+            python,
+            checkpoint,
+            camera=CAMERA_KEY,
+            horizon=horizon,
+            device=device,
+            latency=latency,
         )
         self._first = True
         self.feed: VerdictFeed | None = None
@@ -371,6 +398,21 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--horizon", type=int, default=2, help="executed chunk steps before a replan"
+    )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=0,
+        help="the TEACHER's action delay in control ticks (its delay margin, the "
+        "control for the student's --latency; docs/e2e-research/71 E1)",
+    )
+    parser.add_argument(
+        "--latency",
+        type=int,
+        default=0,
+        help="the student's inference budget in control ticks (docs/e2e-research/71 "
+        "E1): its chunk takes over that many ticks after it was asked; 0 = the "
+        "synchronous loop",
     )
     parser.add_argument(
         "--stride",
@@ -525,17 +567,20 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     judge_span = default_span if args.judge_span is None else args.judge_span
     if args.judge_param != "all" and args.judge_at_scale is None:
         raise SystemExit("--judge-param needs --judge-at-scale")
+    trained = args.checkpoint.parent / "identity.json"
+    trained_identity: Any = json.loads(trained.read_text()) if trained.is_file() else {}
     cfg, identity = spec.env_cfg(
         dr_span=None if args.judge_at_fit else judge_span,
         pin_scale=args.judge_at_scale,
         pin_axis=args.judge_param,
         bundle=args.bundle,
+        # A policy trained with its head pinned is judged with it pinned:
+        # the action space is part of what the run's identity records.
+        head=str(trained_identity.get("head", "free")),
     )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
-    trained = args.checkpoint.parent / "identity.json"
-    if trained.is_file():
-        trained_identity = json.loads(trained.read_text())
+    if trained_identity:
         # Robot and actuator must match; the DR basis may differ on
         # purpose (a policy trained under one span is judged at the fit),
         # and the certificate records both.
@@ -574,6 +619,14 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         map_location=device,
     )
     policy: Any = runner.get_inference_policy(device=device)
+    if args.delay:
+        # The teacher's delay margin, the way the student's budget is
+        # measured (docs/e2e-research/71 E1): its action from the
+        # observation at t reaches the robot at t + delay.
+        from rq_pipeline.evaluate.scheduler import Delayed  # noqa: PLC0415
+
+        policy = Delayed(policy, args.delay)
+        protocol["delay"] = args.delay
     policy_name = args.checkpoint.stem
     if args.student is not None:
         # The student's identity: its checkpoint directory's content hash
@@ -590,12 +643,14 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
             device=devicetag,
             blank_camera=args.blank_camera,
             blank_state=args.blank_state,
+            latency=args.latency,
         )
         policy_name = stamp_of(f"student-{args.student.parent.name}", args.student)
         protocol["student"] = {
             "teacher": args.checkpoint.stem,
             "horizon": args.horizon,
             "stride": args.stride,
+            "latency": args.latency,
             # Every row says what the student SAW: the camera, or nothing.
             "camera": CAMERA_BLANKED if args.blank_camera else CAMERA_SIGHTED,
             "state": STATE_BLANKED if args.blank_state else STATE_GIVEN,
@@ -628,6 +683,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
                 "mean_err_mps": round(outcome.mean_err, 4),
                 "mean_cmd_mps": round(outcome.mean_cmd, 4),
                 "err_ratio": round(outcome.err_ratio, 4),
+                **(outcome.smoothness.columns() if outcome.smoothness else {}),
             },
         )
         for trial, outcome in enumerate(outcomes)
@@ -639,6 +695,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         student=args.student is not None,
         blank_camera=args.blank_camera,
         blank_state=args.blank_state,
+        latency=args.latency if args.student is not None else 0,
+        delay=args.delay if args.student is None else 0,
     )
     if args.judge_at_fit:
         suffix = f"at-fit-{suffix}"

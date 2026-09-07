@@ -41,35 +41,68 @@ class ActionScheduler:
     train-watch drive; `reset()` drops the held chunk — call it where
     the policy's own `reset` is called, before every episode."""
 
-    def __init__(self, policy: ChunkPolicy, *, executed_horizon: int, nu: int) -> None:
+    def __init__(
+        self, policy: ChunkPolicy, *, executed_horizon: int, nu: int, latency: int = 0
+    ) -> None:
         if executed_horizon <= 0:
             raise ValueError(
                 f"executed_horizon must be positive, got {executed_horizon}"
             )
+        if latency < 0:
+            raise ValueError(f"latency must be >= 0 ticks, got {latency}")
         if nu <= 0:
             raise ValueError(f"nu must be positive, got {nu}")
         self.policy = policy
         self.executed_horizon = executed_horizon
         self.nu = nu
-        self._chunk: Any = None
-        self._cursor = 0
+        # The inference budget in ticks (docs/e2e-research/71): a chunk
+        # asked at tick t takes over at t + latency, and until then the
+        # chunk in flight keeps supplying its own later rows - the
+        # committed / execution / discarded partition of a real robot,
+        # emulated exactly. 0 is the synchronous loop (the default).
+        self.latency = latency
+        self._tick = 0
+        self._current: tuple[Any, int] | None = None  # (chunk, origin tick)
+        self._pending: tuple[Any, int, int] | None = None  # (chunk, origin, arrival)
+        self._asked_at = 0
         self.fetches = (
             0  # how often the policy was asked: the replan count a record can carry
         )
 
     def reset(self) -> None:
-        self._chunk = None
-        self._cursor = 0
+        self._tick = 0
+        self._current = None
+        self._pending = None
+        self._asked_at = 0
         self.fetches = 0
         self.policy.reset()
 
     def act(self, observation: Mapping[str, Any]) -> Any:
-        if self._chunk is None or self._cursor >= self.executed_horizon:
-            self._chunk = self._checked(self.policy.predict(observation))
-            self._cursor = 0
+        tick = self._tick
+        if self._pending is not None and self._pending[2] <= tick:
+            self._current = self._pending[:2]
+            self._pending = None
+        first = self._current is None
+        # One request in flight at a time: while a chunk is being
+        # "inferred" nothing new is asked, so a budget longer than the
+        # executed horizon makes the budget the execution window - the
+        # paper's regime, execution [n, 2n) (docs/e2e-research/71 §1).
+        if first or (
+            self._pending is None and tick - self._asked_at >= self.executed_horizon
+        ):
+            chunk = self._checked(self.policy.predict(observation))
+            self._asked_at = tick
             self.fetches += 1
-        action = self._chunk[self._cursor]
-        self._cursor += 1
+            if first or self.latency == 0:
+                # The first chunk takes over at once: nothing is in flight
+                # to bridge the wait (SmoothRL holds the robot still).
+                self._current = (chunk, tick)
+            else:
+                self._pending = (chunk, tick, tick + self.latency)
+        assert self._current is not None
+        chunk, origin = self._current
+        action = chunk[tick - origin]
+        self._tick += 1
         return action
 
     def _checked(self, chunk: Any) -> Any:
@@ -84,9 +117,32 @@ class ActionScheduler:
                 f"{self.policy.name}: chunk is {width} wide, the model has "
                 f"{self.nu} actuators"
             )
-        if horizon < self.executed_horizon:
+        needed = self.executed_horizon + self.latency
+        if horizon < needed:
             raise ValueError(
                 f"{self.policy.name}: chunk has {horizon} steps, fewer than the "
-                f"protocol's executed_horizon {self.executed_horizon}"
+                f"protocol's executed_horizon {self.executed_horizon} plus the "
+                f"latency {self.latency}"
             )
         return chunk
+
+
+class Delayed:
+    """Any per-tick policy, its actions arriving `ticks` later: the
+    action computed from the observation at t is applied at t + ticks,
+    the first action holding until then (docs/e2e-research/71 E1's
+    control for a policy that is not chunked - the walk teacher's
+    delay margin, measured the way the student's budget is)."""
+
+    def __init__(self, policy: Callable[[Any], Any], ticks: int) -> None:
+        if ticks < 0:
+            raise ValueError(f"delay must be >= 0 ticks, got {ticks}")
+        self.policy = policy
+        self.ticks = ticks
+        self._queue: list[Any] = []
+
+    def __call__(self, observation: Any) -> Any:
+        self._queue.append(self.policy(observation))
+        if len(self._queue) <= self.ticks:
+            return self._queue[0]  # nothing has arrived yet: hold the first
+        return self._queue.pop(0)

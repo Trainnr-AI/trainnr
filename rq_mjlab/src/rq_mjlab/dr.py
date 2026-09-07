@@ -27,7 +27,7 @@ from typing import Any
 
 import torch
 from mjlab.managers.event_manager import EventTermCfg
-from rq_pipeline.robot.actuator_bundle import declared_ranges
+from rq_pipeline.robot.actuator_bundle import declared_ranges, declared_span_ranges
 
 from rq_mjlab.actuator import BamActuator, BamActuatorCfg
 from rq_mjlab.bundle import verified_bundle
@@ -121,14 +121,10 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
         basis = f"pinned: {which} at fit x {pin_scale:g}, the rest at the fit (no draw)"
     elif fallback_span is not None:
         # An explicit span is the caller's declaration, around the point,
-        # whatever interval the bundle carries.
-        ranges = {
-            name: (low * (1.0 - fallback_span), low * (1.0 + fallback_span))
-            for name, (low, _high) in point.items()
-        }
-        basis = f"caller-declared span ±{fallback_span:g} around the bundle's point" + (
-            " (its interval not used)" if bundle.get("uncertainty") else ""
-        )
+        # whatever interval the bundle carries - the pipeline's one
+        # spelling of that region and its basis (rig and firmware
+        # parameters are not in it; the law cannot draw them either).
+        ranges, basis = declared_span_ranges(bundle, fallback_span)
     else:
         ranges, basis = dr_from_bundle(
             actuator_cfg.bundle_path, fallback_span=fallback_span

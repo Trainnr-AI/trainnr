@@ -8,7 +8,7 @@ import unittest
 
 import gymnasium as gym
 
-from tests._extras import needs_sim
+from tests._extras import needs_train_sim
 
 
 class _Counting(gym.Env):
@@ -43,7 +43,7 @@ class TheHold(unittest.TestCase):
             ActionHold(_Counting(stop=1), 0)
 
 
-@needs_sim
+@needs_train_sim  # the plugin's config imports lerobot
 class TheFlag(unittest.TestCase):
     def test_frame_every_sets_fps_and_refuses_a_non_divisor(self) -> None:
         from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415

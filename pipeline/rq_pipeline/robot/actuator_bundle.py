@@ -353,6 +353,19 @@ def declared_ranges(
     except ValueError:
         if fallback_span is None:
             raise
+    return declared_span_ranges(bundle, fallback_span)
+
+
+def declared_span_ranges(
+    bundle: Mapping[str, Any], span: float
+) -> tuple[dict[str, tuple[float, float]], str]:
+    """A caller-declared span around the bundle's POINT (its params),
+    whatever interval the bundle carries, and the basis that says so -
+    spelled once: `declared_ranges` takes it when there is no interval,
+    and mjlab's DR event takes it for any declared span (docs/07
+    2026-09-06: preferring the interval over a declared span judged
+    the refit arms in the wrong world). Rig and firmware parameters
+    are not part of the region."""
     numeric = {
         key: float(value)
         for key, value in bundle["params"].items()
@@ -365,13 +378,14 @@ def declared_ranges(
     # caught by the first test that sampled a real bundle.
     ranges = {
         param: (
-            min(value * (1 - fallback_span), value * (1 + fallback_span)),
-            max(value * (1 - fallback_span), value * (1 + fallback_span)),
+            min(value * (1 - span), value * (1 + span)),
+            max(value * (1 - span), value * (1 + span)),
         )
         for param, value in numeric.items()
     }
     return ranges, (
-        f"caller-declared span ±{fallback_span:g} (bundle is point estimates)"
+        f"caller-declared span ±{span:g} around the bundle's point"
+        + (" (its interval not used)" if bundle.get("uncertainty") else "")
     )
 
 

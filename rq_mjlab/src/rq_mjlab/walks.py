@@ -26,13 +26,14 @@ class WalkSpec:
     source_prefix: str  # the record's task source: "<prefix>@<identity hash>"
 
 
-def _microduck_env(
+def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     *,
     play: bool = False,
     dr_span: float | str | None,
     pin_scale: float | None,
     pin_axis: str = "all",
     bundle: Any = None,
+    head: str = "free",
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import (  # noqa: PLC0415
         PIN_AXES,
@@ -45,6 +46,7 @@ def _microduck_env(
         law_pin_scale=pin_scale,
         law_pin_only=_axis(PIN_AXES, pin_axis),
         bundle=bundle,
+        head=head,
     )
 
 
@@ -60,20 +62,23 @@ def _microduck_agent(iterations: int) -> Any:
     return g3_agent(iterations)
 
 
-def _go1_env(
+def _go1_env(  # noqa: PLR0913 - the walk's knobs, named
     *,
     play: bool = False,
     dr_span: float | str | None,
     pin_scale: float | None,
     pin_axis: str = "all",
     bundle: Any = None,
+    head: str = "free",
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
 
     if bundle is not None:
         raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
-    if dr_span == "identified":
+    if isinstance(dr_span, str):  # "identified" names the bundle's interval
         raise ValueError("the Go1 walk has no identified interval (derived PD)")
+    if head != "free":
+        raise ValueError("the Go1 has no head to pin")
 
     return go1_walk_env_cfg(
         play=play,

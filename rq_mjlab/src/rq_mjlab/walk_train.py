@@ -110,6 +110,14 @@ def main() -> None:
         help="which walk (rq_mjlab.walks): the microduck on its certified bundle, "
         "or mjlab's own Go1 flat task around its derived gains",
     )
+    parser.add_argument(
+        "--head",
+        choices=("free", "pinned"),
+        default="free",
+        help="pinned takes the four head joints out of the action space - their "
+        "servos hold neutral (docs/07 2026-09-05: free heads park at their "
+        "limits and pass through the shoulders); recorded in the identity",
+    )
     parser.add_argument("--envs", type=int, default=None)
     parser.add_argument("--iterations", type=int, default=None)
     parser.add_argument(
@@ -170,7 +178,7 @@ def main() -> None:
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
     cfg, identity = spec.env_cfg(
-        dr_span=span or None, pin_scale=None, bundle=args.bundle
+        dr_span=span or None, pin_scale=None, bundle=args.bundle, head=args.head
     )
     print(f"[train] actuator {identity['actuator']}; dr_basis: {identity['dr_basis']}")
     log_root = args.log_root or Path(f"../runs/{args.robot}-walk")
