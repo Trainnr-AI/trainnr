@@ -165,6 +165,10 @@ not this page.
   - replicates: docs/artifacts/bam/xl330/bootstrap-replicates/
   - bundle: robots/actuator-bundles/xl330-refit.m6.bundle.json
   - interval_file: robots/actuators/xl330-refit/m6.uncertainty.json
+  - figure.svg: docs/figures/bam-xl330-bootstrap-interval-2026-09-06.svg
+  - figure.pdf: docs/figures/bam-xl330-bootstrap-interval-2026-09-06.pdf
+  - figure.png: docs/figures/bam-xl330-bootstrap-interval-2026-09-06.png
+  - figure.csv: docs/figures/bam-xl330-bootstrap-interval-2026-09-06.csv
 - caveats:
   - The interval is log-sampling variability on Rhoban's single unit and bench (their rig's q_offset and command_delay included), not unit-to-unit or temperature spread.
   - Each replicate is one optimiser run at the stated trial budget; optimiser variance is inside the interval, not separated from it.
@@ -175,6 +179,8 @@ not this page.
   - The identified arm draws the twelve LAW parameters jointly from these replicates; armature is drawn by mjlab's joint_armature event from the declared ±0.10 (microduck_walk.ARMATURE) in every arm, and viscous friction sits at the bundle's point — so the two parameters the bootstrap identifies most tightly are the two not drawn from the set (record walk-c1-refit).
   - The bundle's `metrics` section carries the bootstrap summary as emitted (sampler, worker count, optuna version and machine are on this record and docs/artifacts/bam/xl330/bootstrap.json, not in the bundle; re-wrapping would change the stamp the six refit arms trained under).
   - Relative half-widths are (high − low) / (2 · median): kt 3.5 %, R 8.8 %, armature 7.2 %, friction_viscous 22.8 %.
+
+![bam-xl330-bootstrap-interval-2026-09-06](../docs/figures/bam-xl330-bootstrap-interval-2026-09-06.png)
 
 ## walk-mismatch-matrix-kt-2026-09-05
 

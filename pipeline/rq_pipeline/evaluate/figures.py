@@ -37,6 +37,7 @@ SURFACE = "#fcfcfb"
 
 MARKER_PT = 7.0
 MIN_CURVE_ARMS = 3  # fewer points is a row, not a curve
+MANY_ARMS = 6  # more arms than this: a wider canvas, slanted labels
 TITLE_CHARS = 110  # the claim, trimmed
 TITLE_HEAD_CHARS = 90  # a claim's lead clause is the title when it fits
 TITLE_WRAP = (
@@ -86,11 +87,18 @@ def is_curve(rows: list[dict[str, Any]]) -> bool:
 
 
 def footer(finding: Finding) -> str:
-    trials = sorted({r["trials"] for r in arm_rows(finding)})
-    n = "/".join(str(t) for t in trials)
+    if "arms" in finding.outcome:
+        trials = sorted({r["trials"] for r in arm_rows(finding)})
+        what = (
+            "/".join(str(t) for t in trials)
+            + " paired trials per arm, exact 95% intervals"
+        )
+    else:
+        refits = finding.outcome.get("replicates", "?")
+        what = f"{refits} bootstrap refits, 2.5-97.5 % of the replicates"
     return (
         f"{finding.id} · commit {finding.repo_commit} · {finding.instrument} · "
-        f"{n} paired trials per arm, exact 95% intervals · {finding.protocol}"
+        f"{what} · {finding.protocol}"
     )
 
 
@@ -112,13 +120,18 @@ def title_of(finding: Finding) -> str:
 
 
 def _style(fig: Any, ax: Any, finding: Finding) -> None:
-    """The recessive frame every figure shares: y in [0, 1], the study's
-    name as a left-aligned title with the record id beneath, grid and
-    spines in the grid tone, the provenance footer."""
+    """The recessive frame every success-rate figure shares: y in [0, 1]
+    and the frame of `_frame`."""
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("success rate (exact 95% interval)", color=INK)
+    _frame(fig, ax, finding, grid_axis="y")
+
+
+def _frame(fig: Any, ax: Any, finding: Finding, *, grid_axis: str) -> None:
+    """The study's name as a left-aligned title with the record id
+    beneath, grid and spines in the grid tone, the provenance footer."""
     ax.set_title(title_of(finding), fontsize=9, color=INK, loc="left")
-    ax.grid(True, axis="y", color=GRID, linewidth=0.6)
+    ax.grid(True, axis=grid_axis, color=GRID, linewidth=0.6)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
@@ -141,7 +154,13 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     curve = is_curve(rows)
 
-    fig, ax = plt.subplots(figsize=(6.4, 3.6), dpi=DPI)
+    # A row of more than MANY_ARMS arms gets a wider canvas and slanted
+    # labels; eleven arm names printed over each other were unreadable
+    # in the latency figure (2026-09-07).
+    width = (
+        6.4 if curve or len(rows) <= MANY_ARMS else 6.4 + 0.45 * (len(rows) - MANY_ARMS)
+    )
+    fig, ax = plt.subplots(figsize=(width, 3.6), dpi=DPI)
     fig.patch.set_facecolor(SURFACE)
     ax.set_facecolor(SURFACE)
     xs = [r["episodes"] for r in rows] if curve else list(range(len(rows)))
@@ -191,7 +210,13 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
                 linestyle="none",
             )
         ax.set_xticks(xs)
-        ax.set_xticklabels([r["arm"] for r in rows], color=INK)
+        slant = len(rows) > MANY_ARMS
+        ax.set_xticklabels(
+            [r["arm"] for r in rows],
+            color=INK,
+            rotation=30 if slant else 0,
+            ha="right" if slant else "center",
+        )
         ax.set_xlim(-0.6, len(rows) - 0.4)
     # One label per x: replicates that share an x get one line listing
     # each run's count over the shared trial count, above the highest
@@ -231,3 +256,117 @@ def render(finding: Finding, root: Path) -> dict[str, str]:
         writer.writerows(rows)
     written["csv"] = str(csv_path.relative_to(root))
     return written
+
+
+def interval_rows(finding: Finding) -> list[dict[str, Any]]:
+    """One row per parameter of a bootstrap-interval record: the 2.5 %,
+    median and 97.5 % values, the shipped (published) value, whether the
+    bench identifies it, and the three as ratios to the shipped value -
+    what the figure draws. Parameters with a non-positive value anywhere
+    cannot sit on the log axis and are kept in the CSV with `plotted`
+    false."""
+    interval = finding.outcome.get("interval", {})
+    if not interval:
+        raise ValueError(f"finding {finding.id} carries no interval to plot")
+    unidentified = set(finding.outcome.get("unidentified", []))
+    rows = []
+    for name, v in interval.items():
+        values = (
+            float(v["low"]),
+            float(v["median"]),
+            float(v["high"]),
+            float(v["shipped"]),
+        )
+        positive = all(x > 0 for x in values)
+        low, median, high, shipped = values
+        rows.append(
+            {
+                "parameter": name,
+                "low": low,
+                "median": median,
+                "high": high,
+                "shipped": shipped,
+                "identified": name not in unidentified,
+                "plotted": positive,
+                "rel_low": low / shipped if positive else None,
+                "rel_median": median / shipped if positive else None,
+                "rel_high": high / shipped if positive else None,
+            }
+        )
+    rows.sort(key=lambda r: (not r["identified"], r["parameter"]))
+    return rows
+
+
+def render_interval(finding: Finding, root: Path) -> dict[str, str]:
+    """The bootstrap-interval figure: one horizontal whisker per
+    parameter on a log axis of value / published fit, the published fit
+    at 1; identified parameters in the first hue, the ones the bench
+    does not pin in the secondary ink. Same formats and CSV as
+    `render`."""
+    import matplotlib  # noqa: PLC0415 - the train extra
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    rows = interval_rows(finding)
+    shown = [r for r in rows if r["plotted"]]
+    out_dir = Path(root) / FIGURES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(6.4, 0.32 * len(shown) + 1.9), dpi=DPI)
+    fig.patch.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+    ys = list(range(len(shown)))[::-1]
+    for y, r in zip(ys, shown, strict=True):
+        colour = SERIES[0] if r["identified"] else INK_SECONDARY
+        ax.plot([r["rel_low"], r["rel_high"]], [y, y], color=colour, linewidth=LINE_PT)
+        ax.plot(
+            [r["rel_median"]], [y], color=colour, marker="o", markersize=MARKER_PT - 2
+        )
+        ax.annotate(
+            f"{r['rel_low']:.2f}-{r['rel_high']:.2f}×",  # noqa: RUF001 - a ratio
+            (r["rel_high"], y),
+            textcoords="offset points",
+            xytext=(5, -3),
+            fontsize=7,
+            color=INK_SECONDARY,
+        )
+    ax.axvline(1.0, color=INK, linewidth=0.8, linestyle=":")
+    ax.set_xscale("log")
+    ax.set_yticks(ys)
+    ax.set_yticklabels(
+        [
+            r["parameter"] + ("" if r["identified"] else " (not identified)")
+            for r in shown
+        ],
+        fontsize=8,
+    )
+    ax.set_xlabel(
+        "bootstrap 95 % interval, as a ratio to the published fit (dotted = 1)",
+        color=INK,
+    )
+    _frame(fig, ax, finding, grid_axis="x")
+
+    written: dict[str, str] = {}
+    for fmt in FORMATS:
+        path = out_dir / f"{finding.id}.{fmt}"
+        fig.savefig(path, format=fmt, dpi=DPI, facecolor=SURFACE)
+        written[fmt] = str(path.relative_to(root))
+    plt.close(fig)
+    csv_path = out_dir / f"{finding.id}.csv"
+    with csv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    written["csv"] = str(csv_path.relative_to(root))
+    return written
+
+
+def render_any(finding: Finding, root: Path) -> dict[str, str]:
+    """Dispatch by the record's shape: arms → `render`, an interval →
+    `render_interval`."""
+    if "arms" in finding.outcome:
+        return render(finding, root)
+    if "interval" in finding.outcome:
+        return render_interval(finding, root)
+    raise ValueError(f"finding {finding.id} has neither arms nor an interval to draw")

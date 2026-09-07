@@ -197,7 +197,11 @@
   "summary": "docs/artifacts/bam/xl330/bootstrap.json",
   "replicates": "docs/artifacts/bam/xl330/bootstrap-replicates/",
   "bundle": "robots/actuator-bundles/xl330-refit.m6.bundle.json",
-  "interval_file": "robots/actuators/xl330-refit/m6.uncertainty.json"
+  "interval_file": "robots/actuators/xl330-refit/m6.uncertainty.json",
+  "figure.svg": "docs/figures/bam-xl330-bootstrap-interval-2026-09-06.svg",
+  "figure.pdf": "docs/figures/bam-xl330-bootstrap-interval-2026-09-06.pdf",
+  "figure.png": "docs/figures/bam-xl330-bootstrap-interval-2026-09-06.png",
+  "figure.csv": "docs/figures/bam-xl330-bootstrap-interval-2026-09-06.csv"
  },
  "sources": {},
  "protocol": "docs/e2e-research/72 \u00a74 and \u00a76 (block bootstrap; the identified arm draws whole replicate vectors, not marginal boxes)",

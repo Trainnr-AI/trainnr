@@ -36,3 +36,11 @@ runs/
 
 # coverage databases carry absolute paths; per machine, never tracked
 .coverage*
+# LaTeX build products of tools/paper-tex.py (main.tex and main.pdf are tracked)
+docs/paper/latex/figures/
+docs/paper/latex/*.aux
+docs/paper/latex/*.log
+docs/paper/latex/*.out
+docs/paper/latex/*.fls
+docs/paper/latex/*.fdb_latexmk
+docs/paper/latex/*.toc
