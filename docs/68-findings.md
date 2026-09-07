@@ -177,9 +177,9 @@ not this page.
 
 ## walk-mismatch-matrix-kt-2026-09-05
 
-**The mismatch matrix on the walk: every C1 policy (trained under no law DR, ±0.1, ±0.3; replicates pooled) judged pinned at the fit scaled by s (only kt moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 19/120, x0.8 74/120, x0.9 99/120, fit 108/120, x1.1 98/120, x1.2 91/120, x1.3 78/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 40/120, x0.8 96/120, x0.9 104/120, fit 108/120, x1.1 107/120, x1.2 104/120, x1.3 103/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 57/120, x0.8 82/120, x0.9 87/120, fit 84/120, x1.1 91/120, x1.2 90/120, x1.3 92/120, pm0.1 87/120, pm0.3 90/120.**
+**The mismatch matrix on the walk (kt alone): the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (only kt moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 19/120, x0.8 74/120, x0.9 99/120, fit 108/120, x1.1 98/120, x1.2 91/120, x1.3 78/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 40/120, x0.8 96/120, x0.9 104/120, fit 108/120, x1.1 107/120, x1.2 104/120, x1.3 103/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 57/120, x0.8 82/120, x0.9 87/120, fit 84/120, x1.1 91/120, x1.2 90/120, x1.3 92/120, pm0.1 87/120, pm0.3 90/120.**
 
-- date: 2026-09-05 · commit: `3c9a86b-dirty`
+- date: 2026-09-05 · commit: `d989135-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --param kt --span 0.30 --date 2026-09-05`
 - protocol: docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)
@@ -290,9 +290,9 @@ not this page.
 
 ## walk-mismatch-matrix-friction-2026-09-05
 
-**The mismatch matrix on the walk: every C1 policy (trained under no law DR, ±0.1, ±0.3; replicates pooled) judged pinned at the fit scaled by s (only friction moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 106/120, x0.8 102/120, x0.9 104/120, fit 108/120, x1.1 104/120, x1.2 103/120, x1.3 105/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 106/120, x0.8 106/120, x0.9 106/120, fit 108/120, x1.1 108/120, x1.2 108/120, x1.3 107/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 88/120, x0.8 84/120, x0.9 87/120, fit 84/120, x1.1 87/120, x1.2 88/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.**
+**The mismatch matrix on the walk (friction alone): the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (only friction moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 106/120, x0.8 102/120, x0.9 104/120, fit 108/120, x1.1 104/120, x1.2 103/120, x1.3 105/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 106/120, x0.8 106/120, x0.9 106/120, fit 108/120, x1.1 108/120, x1.2 108/120, x1.3 107/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 88/120, x0.8 84/120, x0.9 87/120, fit 84/120, x1.1 87/120, x1.2 88/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.**
 
-- date: 2026-09-05 · commit: `3c9a86b-dirty`
+- date: 2026-09-05 · commit: `d989135-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --param friction --span 0.30 --date 2026-09-05`
 - protocol: docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)
@@ -403,9 +403,9 @@ not this page.
 
 ## walk-mismatch-matrix-R-2026-09-05
 
-**The mismatch matrix on the walk: every C1 policy (trained under no law DR, ±0.1, ±0.3; replicates pooled) judged pinned at the fit scaled by s (only R moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 91/120, x0.8 97/120, x0.9 100/120, fit 108/120, x1.1 103/120, x1.2 100/120, x1.3 101/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 94/120, x0.8 102/120, x0.9 102/120, fit 108/120, x1.1 107/120, x1.2 107/120, x1.3 106/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 87/120, x0.8 88/120, x0.9 88/120, fit 84/120, x1.1 86/120, x1.2 87/120, x1.3 84/120, pm0.1 87/120, pm0.3 90/120.**
+**The mismatch matrix on the walk (R alone): the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (only R moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 91/120, x0.8 97/120, x0.9 100/120, fit 108/120, x1.1 103/120, x1.2 100/120, x1.3 101/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 94/120, x0.8 102/120, x0.9 102/120, fit 108/120, x1.1 107/120, x1.2 107/120, x1.3 106/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 87/120, x0.8 88/120, x0.9 88/120, fit 84/120, x1.1 86/120, x1.2 87/120, x1.3 84/120, pm0.1 87/120, pm0.3 90/120.**
 
-- date: 2026-09-05 · commit: `3c9a86b-dirty`
+- date: 2026-09-05 · commit: `d989135-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --param R --span 0.30 --date 2026-09-05`
 - protocol: docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)
@@ -548,9 +548,9 @@ not this page.
 
 ## walk-mismatch-matrix-2026-09-04
 
-**The mismatch matrix on the walk: every C1 policy (trained under no law DR, ±0.1, ±0.3; replicates pooled) judged pinned at the fit scaled by s and under drawn spans, 40 matched trials per run — point (trained none): x0.7 17/120, x0.8 78/120, x0.9 99/120, fit 108/120, x1.1 103/120, x1.2 103/120, x1.3 99/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 39/120, x0.8 89/120, x0.9 103/120, fit 108/120, x1.1 108/120, x1.2 106/120, x1.3 105/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 56/120, x0.8 79/120, x0.9 85/120, fit 84/120, x1.1 88/120, x1.2 87/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.**
+**The mismatch matrix on the walk: the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point (trained none): x0.7 17/120, x0.8 78/120, x0.9 99/120, fit 108/120, x1.1 103/120, x1.2 103/120, x1.3 99/120, pm0.1 101/120, pm0.3 85/120; narrow (trained ±0.1): x0.7 39/120, x0.8 89/120, x0.9 103/120, fit 108/120, x1.1 108/120, x1.2 106/120, x1.3 105/120, pm0.1 105/120, pm0.3 95/120; wide (trained ±0.3): x0.7 56/120, x0.8 79/120, x0.9 85/120, fit 84/120, x1.1 88/120, x1.2 87/120, x1.3 87/120, pm0.1 87/120, pm0.3 90/120.**
 
-- date: 2026-09-04 · commit: `9fbf3f8-dirty`
+- date: 2026-09-04 · commit: `d989135-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --date 2026-09-04`
 - protocol: docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)
@@ -653,7 +653,7 @@ not this page.
   - figure.png: docs/figures/walk-mismatch-matrix-2026-09-04.png
   - figure.csv: docs/figures/walk-mismatch-matrix-2026-09-04.csv
 - caveats:
-  - Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately.
+  - Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately — the per-axis matrices (--judge-param) are the slices.
   - One robot, one gait, one recipe; the policies are the C1 runs (three per arm).
   - The fit is a point estimate: 'how wrong the measurement is' is simulated, not measured — paper 2's bench says how wrong it actually was.
 
@@ -1309,7 +1309,7 @@ not this page.
   - applier: pipeline/rq_pipeline/physics/variations.py
   - log: docs/07-progress-log.md 2026-09-02 (D1)
 - sources:
-  - pollen-robotics/microduck_rl: repomix pack read 2026-08-31 (163 files; commit unrecorded — record it before publication)
+  - pollen-robotics/microduck_rl: repomix pack read 2026-08-31 (163 files); commit bf19b34a1ef6 (2026-08-31 12:27 UTC — the latest commit not after the read date; pinned 2026-09-07 from the GitHub history; the pack itself carried no hash)
   - Rhoban/bam: v1.0.2
   - mujocolab/mjlab: v1.6.0 (the pack read 2026-08-31; release date not verified in-repo)
   - prior sightings: mjlab #971, #1043, #1168; IsaacLab #7272, #5063, #7538, #7511; mujoco_playground v0.0.4 (docs/e2e-research/67 §5)
