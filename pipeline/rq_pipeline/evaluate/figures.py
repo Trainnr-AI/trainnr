@@ -52,6 +52,7 @@ MANY_ARMS = 6  # more arms than this: a wider canvas, slanted labels
 TITLE_CHARS = 110  # the claim, trimmed
 TITLE_HEAD_CHARS = 90  # a claim's lead clause is the title when it fits
 TITLE_WRAP = 44  # characters per title line at the panel width
+TITLE_ACRONYMS = frozenset({"PPO", "ACT", "BAM", "RSS", "DR", "GPU", "CPU", "MJX"})
 INTERVAL_TITLE_WRAP = 44  # the interval figure's axes start right of its labels
 LINE_PT = 1.1
 DPI = 220
@@ -178,7 +179,14 @@ def panel_title(finding: Finding) -> str:
     claim up to its first colon, dash or parenthesis, at most two
     lines at the panel width."""
     claim = finding.claim.replace("WITHDRAWN: ", "")
-    head = re.split(r": | — | \(| - ", claim, maxsplit=1)[0].strip()
+    head = re.split(r": | — | - ", claim, maxsplit=1)[0].strip()
+    # A claim's shouted phrase ("NEAR THE EXPERT'S EDGE") reads as a
+    # title in sentence case; acronyms keep their capitals.
+    head = re.sub(
+        r"\b([A-Z]{3,}(?:'S)?)\b(?![-\d])",
+        lambda m: m.group(1) if m.group(1) in TITLE_ACRONYMS else m.group(1).lower(),
+        head,
+    )
     if len(head) > 2 * TITLE_WRAP:
         head = head[: 2 * TITLE_WRAP - 1].rstrip() + "…"
     return textwrap.fill(head, TITLE_WRAP)
