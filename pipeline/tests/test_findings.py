@@ -206,7 +206,11 @@ class TheFigure(unittest.TestCase):
                 for fmt in ("svg", "pdf", "png", "csv"):
                     self.assertTrue((Path(tmp) / written[fmt]).exists(), fmt)
                 svg = (Path(tmp) / written["svg"]).read_text()
-                self.assertIn("abc1234", svg)  # the commit, on the canvas
+                # The canvas is clean since 2026-09-08 (the paper's figures carry no
+        # repository footer); the provenance line still exists for the tools
+        # that print it, and names the commit.
+        self.assertNotIn("abc1234", svg)
+        self.assertIn("abc1234", fx.footer(finding))
                 self.assertIn("mujoco-3.11.0+x86_64", svg)
                 rows = list(csv.DictReader((Path(tmp) / written["csv"]).open()))
                 self.assertEqual([r["arm"] for r in rows], list(record.outcome["arms"]))
