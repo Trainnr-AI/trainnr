@@ -39,8 +39,6 @@ FILL_GREEN, EDGE_GREEN = "#b9dcc5", "#5fae7c"
 FILL_GREY, EDGE_GREY = "#dcdcdc", "#8a8a8a"
 SERIES = (EDGE_BLUE, EDGE_RED, EDGE_GREEN)
 FILLS = (FILL_BLUE, FILL_RED, FILL_GREEN)
-HIGHLIGHT_ARMS = ("narrow", "identified", "±0.1", "±10")
-CONTROL_ARMS = ("random", "control")
 INK = "#0b0b0b"
 INK_SECONDARY = "#52514e"
 GRID = "#e6e5e1"
@@ -176,17 +174,47 @@ def title_of(finding: Finding) -> str:
     return textwrap.fill(head, TITLE_WRAP) + f"\n{finding.id}{status}"
 
 
+def rank_colours(rates: dict[str, float]) -> dict[str, tuple[str, str]]:
+    """Fill and edge per arm by its success rate (Prakhar's rule,
+    2026-09-08): the best arm green, the worst red, the rest blue; ties
+    at the top are all green, and arms that all tie are blue."""
+    if not rates:
+        return {}
+    best, worst = max(rates.values()), min(rates.values())
+    colours = {}
+    for arm, rate in rates.items():
+        if best == worst:
+            colours[arm] = (FILL_BLUE, EDGE_BLUE)
+        elif rate == best:
+            colours[arm] = (FILL_GREEN, EDGE_GREEN)
+        elif rate == worst:
+            colours[arm] = (FILL_RED, EDGE_RED)
+        else:
+            colours[arm] = (FILL_BLUE, EDGE_BLUE)
+    return colours
+
+
 def arm_colours(arm: str, finding: Finding | None = None) -> tuple[str, str]:
-    """Fill and edge for an arm: red for the measured or identified arm
-    the text argues for (the walk's narrow span and bootstrap set), grey
-    for a control, blue otherwise."""
-    name = arm.lower()
-    walk = finding is None or finding.id.startswith("walk-")
-    if walk and any(k in name for k in HIGHLIGHT_ARMS):
-        return FILL_RED, EDGE_RED
-    if any(k in name for k in CONTROL_ARMS):
-        return FILL_GREY, EDGE_GREY
-    return FILL_BLUE, EDGE_BLUE
+    """Fill and edge for one arm of a record, by its rank among the
+    record's arms (see `rank_colours`); a record-less call is blue."""
+    if finding is None or "arms" not in finding.outcome:
+        return FILL_BLUE, EDGE_BLUE
+    if "conditions" in finding.outcome:
+        rates = matrix_rank_rates(finding)
+    else:
+        rates = {r["arm"]: r["rate"] for r in arm_rows(finding)}
+    return rank_colours(rates).get(arm, (FILL_BLUE, EDGE_BLUE))
+
+
+def matrix_rank_rates(finding: Finding) -> dict[str, float]:
+    """An arm's rate for ranking in a matrix record: its mean over the
+    pinned conditions, so the colour says which arm holds up best
+    across the scale."""
+    rates: dict[str, list[float]] = {}
+    for r in matrix_rows(finding):
+        if r["scale"] is not None:
+            rates.setdefault(r["arm"], []).append(r["rate"])
+    return {arm: sum(v) / len(v) for arm, v in rates.items()}
 
 
 def panel_title(finding: Finding) -> str:
@@ -545,9 +573,8 @@ def render_matrix(  # noqa: PLR0915 - two panels, each statement a mark
         sharey=True,
     )
     fig.patch.set_facecolor(SURFACE)
-    for i, arm in enumerate(arms):
-        line_colour = SERIES[i % len(SERIES)]
-        band_colour = FILLS[i % len(FILLS)]
+    for arm in arms:
+        band_colour, line_colour = arm_colours(arm, finding)
         pinned = sorted(
             (r for r in rows if r["arm"] == arm and r["scale"] is not None),
             key=lambda r: r["scale"],
@@ -576,7 +603,7 @@ def render_matrix(  # noqa: PLR0915 - two panels, each statement a mark
             )
             if cell is None:
                 continue
-            x = j * (len(arms) + 1) + i
+            x = j * (len(arms) + 1) + arms.index(arm)
             ax2.bar(
                 x,
                 cell["rate"],
