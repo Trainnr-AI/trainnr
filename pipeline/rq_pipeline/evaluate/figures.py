@@ -56,6 +56,7 @@ TITLE_ACRONYMS = frozenset({"PPO", "ACT", "BAM", "RSS", "DR", "GPU", "CPU", "MJX
 INTERVAL_TITLE_WRAP = 44  # the interval figure's axes start right of its labels
 LINE_PT = 1.1
 DPI = 220
+LABEL_INSIDE_ABOVE = 0.45  # a bar taller than this carries its count inside
 PANEL = (2.9, 2.15)  # one panel, inches: three fit the 5.5 in text width side by side
 BAR_WIDTH = 0.62
 FOOTER_WRAP = 88  # characters per footer line at the panel width
