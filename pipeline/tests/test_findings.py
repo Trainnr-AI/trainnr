@@ -173,8 +173,8 @@ class TheFigure(unittest.TestCase):
         except ImportError:
             self.skipTest("matplotlib (train extra)")
         from rq_pipeline.evaluate.figures import (
-            footer,  # noqa: PLC0415
             arm_rows,
+            footer,
             is_curve,
             render,
         )
