@@ -23,6 +23,8 @@ import numpy as np
 
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.recording import (
+    COLLECTION_SCRIPTED,
+    COLLECTION_TELEOP,
     JOINT_COMMAND,
     JOINT_POSITION,
     UNKNOWN_UNIT,
@@ -109,12 +111,23 @@ class LeRobotAdapter:
                     unit=UNKNOWN_UNIT,
                     components=tuple(spec.get("names") or ()),
                 )
+        # A dataset this repo exported from a sim press carries its provenance
+        # sidecar with an expert stamp: that is scripted collection, not teleop.
+        collection = COLLECTION_TELEOP
+        sidecar = source / "provenance.json"
+        if sidecar.is_file():
+            try:
+                if json.loads(sidecar.read_text()).get("expert"):
+                    collection = COLLECTION_SCRIPTED
+            except ValueError:
+                pass
         cameras = [
             k for k, v in features.items() if v.get("dtype") in ("video", "image")
         ]
         return Recording(
             source=source.name,
             adapter=NAME,
+            collection=collection,
             channels=channels,
             census={
                 "codebase_version": info.get("codebase_version"),

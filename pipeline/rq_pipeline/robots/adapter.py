@@ -24,6 +24,7 @@ BUILTIN_MODULES = (
     "rq_pipeline.robots.adapters.wire",
     "rq_pipeline.robots.adapters.lerobot",
     "rq_pipeline.robots.adapters.mcap",
+    "rq_pipeline.robots.adapters.mocap",
 )
 
 

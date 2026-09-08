@@ -15,7 +15,12 @@ import numpy as np
 from rq_pipeline.collect.frames import STATUS_HZ
 from rq_pipeline.collect.wire import parse_recording
 from rq_pipeline.robots.adapter import adapter
-from rq_pipeline.robots.recording import JOINT_COMMAND, Channel, Recording
+from rq_pipeline.robots.recording import (
+    COLLECTION_ROBOT_OP,
+    JOINT_COMMAND,
+    Channel,
+    Recording,
+)
 
 NAME = "wire"
 SUFFIX = ".wire"
@@ -66,6 +71,7 @@ class WireAdapter:
             return Recording(
                 source=source.name,
                 adapter=NAME,
+                collection=COLLECTION_ROBOT_OP,
                 channels=channels,
                 census=_census(parsed),
                 notes=[NOTE_CLOCK],
@@ -119,6 +125,7 @@ class WireAdapter:
         return Recording(
             source=source.name,
             adapter=NAME,
+            collection=COLLECTION_ROBOT_OP,
             channels=channels,
             census=_census(parsed),
             notes=[NOTE_CLOCK],

@@ -145,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Box::new(StudioShell {
                 rerun_app,
                 viewport,
-                shell: Shell::new(Model::open(&repo_root())),
+                shell: Shell::new(Model::open(&repo_root()), repo_root()),
                 seen_recording: false,
             }))
         }),
@@ -210,8 +210,9 @@ impl eframe::App for StudioShell {
         // A recording arriving while another page is up switches to Live:
         // a run streaming in is the thing to look at.
         let has_recording = self.rerun_app.recording_db().is_some();
-        if has_recording && !self.seen_recording {
+        if has_recording && (!self.seen_recording || self.shell.show_requested) {
             self.shell.section = Section::Live;
+            self.shell.show_requested = false;
         }
         self.seen_recording = has_recording;
 

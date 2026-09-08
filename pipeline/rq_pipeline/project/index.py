@@ -301,7 +301,7 @@ def _summary_recording(path: Path) -> dict[str, Any]:
     from rq_pipeline.project.kinds import RECORDING_FILE  # noqa: PLC0415
 
     raw = _read(path / RECORDING_FILE)
-    out = _take(raw, ("adapter", "source", "duration_s"))
+    out = _take(raw, ("adapter", "source", "duration_s", "collection"))
     if "channels" in raw:
         out["channels"] = len(raw["channels"])
     return out

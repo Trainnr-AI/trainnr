@@ -1,0 +1,44 @@
+"""The presenter: the one Python process the Studio asks to show things.
+
+    cd pipeline && uv run --extra sim --extra viz \\
+        python ../tools/studio-present.py [--project <dir>] [--once]
+
+Watches `<project>/.index/present.json` — the Studio writes `{"stamp":
+...}` when the user clicks Show on an artifact — and streams that artifact
+into the embedded viewer as itself (`rq_pipeline.project.present`). The
+Studio spawns this once per open project; a headless caller uses the
+`show_in_studio` MCP tool or the function directly.
+"""
+
+import argparse
+import os
+from pathlib import Path
+
+from _lab import bootstrap
+
+bootstrap()
+
+from rq_pipeline.project import PROJECT_ENV, current_project  # noqa: E402
+from rq_pipeline.project.present import serve  # noqa: E402
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--project", type=Path, default=None)
+    parser.add_argument(
+        "--once", action="store_true", help="present one intent and exit"
+    )
+    args = parser.parse_args()
+    if args.project is not None:
+        os.environ[PROJECT_ENV] = str(args.project)
+    project = current_project()
+    print(
+        f"presenter watching {project.root} (write .index/present.json to show)",
+        flush=True,
+    )
+    serve(project, once=args.once)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

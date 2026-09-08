@@ -95,6 +95,25 @@ class ChannelInfo(JsonRecord):
     components: list[str] = field(default_factory=list)
 
 
+# How a recording was COLLECTED — the data-collection source (docs/76 §5).
+# An adapter sets the one it knows; a caller may override (a LeRobot
+# dataset pressed in sim is "scripted", not "teleop").
+COLLECTION_TELEOP = "teleop"  # a human drove a leader device
+COLLECTION_ROBOT_OP = "robot-operation"  # the robot ran (operator, script or policy)
+COLLECTION_MOCAP = "mocap"  # optical or inertial motion capture of a human
+COLLECTION_WEARABLE = "wearable"  # IMUs, gloves, suits worn by a human (designed)
+COLLECTION_SCRIPTED = "scripted"  # a scripted expert in sim
+COLLECTION_UNKNOWN = "unknown"
+COLLECTIONS = (
+    COLLECTION_TELEOP,
+    COLLECTION_ROBOT_OP,
+    COLLECTION_MOCAP,
+    COLLECTION_WEARABLE,
+    COLLECTION_SCRIPTED,
+    COLLECTION_UNKNOWN,
+)
+
+
 @dataclass(frozen=True)
 class RecordingManifest(JsonRecord):
     """`recording.json`: where this came from and what it holds."""
@@ -106,6 +125,7 @@ class RecordingManifest(JsonRecord):
     channels: list[ChannelInfo]
     census: dict[str, Any] = field(default_factory=dict)  # what the robot reported
     notes: list[str] = field(default_factory=list)  # honest caveats, per adapter
+    collection: str = COLLECTION_UNKNOWN  # one of COLLECTIONS
 
 
 @dataclass(frozen=True)
@@ -117,6 +137,7 @@ class Recording:
     channels: dict[str, Channel]
     census: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    collection: str = COLLECTION_UNKNOWN
 
     @property
     def duration_s(self) -> float:
@@ -143,6 +164,7 @@ class Recording:
             ],
             census=dict(self.census),
             notes=list(self.notes),
+            collection=self.collection,
         )
 
     def write(self, out: Path) -> Path:
@@ -189,6 +211,7 @@ class Recording:
             channels=channels,
             census=dict(manifest.census),
             notes=list(manifest.notes),
+            collection=manifest.collection,
         )
 
     def excitation(

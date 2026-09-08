@@ -380,9 +380,9 @@ def list_project_dirs() -> list[dict[str, Any]]:
 def list_robot_adapters() -> list[dict[str, str]]:
     """Every source format a recording can enter through: this repo's
     wire telemetry, a LeRobot dataset, a ROS 2 MCAP bag, plus plugins."""
-    from rq_pipeline.robots import adapters  # noqa: PLC0415
+    from rq_pipeline.robots import list_adapters  # noqa: PLC0415
 
-    return [{"name": e.name, "doc": e.doc} for e in adapters().values()]
+    return [{"name": e.name, "doc": e.doc} for e in list_adapters().values()]
 
 
 def ingest_recording(

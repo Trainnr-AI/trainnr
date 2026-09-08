@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from rq_pipeline.project import Kind, create_project, index_project
-from rq_pipeline.robots import Channel, Recording, adapters, resolve
+from rq_pipeline.robots import Channel, Recording, list_adapters, resolve
 from rq_pipeline.robots.adapter import detect
 from rq_pipeline.robots.adapters import mcap as mcap_mod
 from rq_pipeline.robots.ingest import ingest
@@ -279,9 +279,9 @@ class TheRecording(unittest.TestCase):
 
 
 class TheRegistry(unittest.TestCase):
-    def test_the_three_builtins_register_and_resolve(self) -> None:
-        names = set(adapters())
-        self.assertTrue({"wire", "lerobot", "mcap"} <= names, names)
+    def test_the_builtins_register_and_resolve(self) -> None:
+        names = set(list_adapters())
+        self.assertTrue({"wire", "lerobot", "mcap", "mocap"} <= names, names)
         self.assertEqual(resolve("wire").name, "wire")
         with self.assertRaisesRegex(KeyError, "unknown robot adapter"):
             resolve("carrier-pigeon")

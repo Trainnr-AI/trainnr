@@ -191,6 +191,43 @@ that adds them is authored work. This repo's own ALOHA 2 bundle is the
 honest pattern: include the upstream scene unmodified, add only what is
 missing, and say so in the bundle's README.
 
+### 5.1 Data collection: where recordings come from
+
+A recording says how it was collected, because a policy trained on human
+demonstrations and one trained on a scripted expert are different claims.
+The manifest carries one of six words, set by the adapter and overridable
+by the caller:
+
+| collection | what it means | source today |
+|---|---|---|
+| teleop | a human drove a leader device; the follower's joints and cameras were recorded | a LeRobot dataset (`lerobot` adapter). LeRobot's leader-arm flow is the community standard; the pipeline ingests its recordings rather than rebuilding teleop |
+| robot-operation | the robot ran, under an operator, a script or a policy, and its telemetry was captured | this repo's rig over UDP, captured live (`robots/capture`: listen, append, ingest, with the Studio watching); a ROS 2 graph via `ros2 bag record` into MCAP, ingested afterwards |
+| mocap | optical or inertial motion capture of a human | a marker or joint CSV, or a BVH skeleton (`mocap` adapter): positions in metres, rotations in radians, the capture rate and marker set in the census. **Not retargeted to any robot** — that mapping, with the sim-replay honesty check the Unitree review named (docs/e2e-research/65 §4), is the retargeting step, designed and not built |
+| wearable | IMUs, gloves, suits worn by a human | **designed only.** A wearable produces the same channels an IMU on a robot does (`imu.angular_velocity`, `imu.linear_acceleration`, `imu.orientation`) plus per-segment poses; an adapter for a device is one module and one entry point, written when a device is on hand |
+| scripted | a scripted expert pressed demonstrations in simulation | every batch the press writes; a LeRobot dataset this repo exported carries an expert stamp and is marked scripted, not teleop |
+| unknown | the adapter could not say | never invented into one of the others |
+
+Live capture is a small state machine with its state on disk (idle,
+listening with datagrams so far, ingested with the stamp, failed with the
+reason), so the Studio shows it and a tool can poll it, the way jobs
+work. There is one live listener today, this repo's rig over UDP; a live
+ROS 2 listener would need a ROS installation, which is what the seam
+avoids, and a Unitree listener waits on its SDK research.
+
+### 5.2 Showing an artifact as itself
+
+The Studio can index a project and launch the viewer; `present`
+(`pipeline/rq_pipeline/project/present.py`, the door docs/64 §3 named `show_in_studio`) points
+the viewer at one artifact: a robot as its meshes in a 3D view posed at
+its keyframe, a recording's channels as time series on its own clock, an
+experiment's curves from its log, a batch's kept frames beside its
+datasheet, a dataset's video, a task's scene with its spawn bands drawn as
+boxes, a certificate's funnel as bars beside its interval. Every artifact
+is its own Rerun recording named by its stamp, so the viewer's recording
+list is the project's artifact list. The Studio asks by writing an intent
+file the presenter watches — the same file contract as the index, so a
+headless caller uses the function directly.
+
 ## 6. Identify
 
 The fitter exists and is good: parameters with confidence intervals, a

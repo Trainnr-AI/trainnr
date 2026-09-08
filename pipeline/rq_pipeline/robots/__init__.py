@@ -10,7 +10,9 @@ entry-point group, and built-in adapters.
 - `recording`: the seam's unit. A recording is named CHANNELS — each a
   timestamped array with a unit — plus a census of what the robot
   reported. Nothing downstream knows what a rosbag or a wire file is.
-- `adapter`: the `RobotAdapter` Protocol and the registry.
+- `adapter`: the `RobotAdapter` Protocol and the registry (`list_adapters`
+  here — the `adapters` sub-package holds the built-in modules, so the
+  registry function travels under an unambiguous name).
 - `adapters/`: `wire` (this repo's Pico rig), `lerobot` (a recorded
   dataset directory), `mcap` (a ROS 2 bag — MCAP is rosbag2's default
   storage since Iron, 2023-05-23, and carries its schemas inside the
@@ -24,9 +26,9 @@ from rq_pipeline.robots.adapter import (
     AdapterEntry,
     RobotAdapter,
     adapter,
-    adapters,
     resolve,
 )
+from rq_pipeline.robots.adapter import adapters as list_adapters
 from rq_pipeline.robots.recording import Channel, Recording, RecordingManifest
 
 __all__ = [
@@ -37,6 +39,6 @@ __all__ = [
     "RecordingManifest",
     "RobotAdapter",
     "adapter",
-    "adapters",
+    "list_adapters",
     "resolve",
 ]

@@ -773,7 +773,13 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
 /// One section as a grid of picture cards (Rerun's example-card shape):
 /// the artifact's preview or its kind's icon, the name, its facts, the
 /// version hash. Click to select; the detail drawer opens beneath.
-pub fn section(ui: &mut egui::Ui, model: &Model, section: Section, selected: &mut Option<String>) {
+pub fn section(
+    ui: &mut egui::Ui,
+    model: &Model,
+    section: Section,
+    selected: &mut Option<String>,
+    show: &mut Option<String>,
+) {
     let Some(index) = model.index() else {
         return;
     };
@@ -838,7 +844,9 @@ pub fn section(ui: &mut egui::Ui, model: &Model, section: Section, selected: &mu
         if let Some(stamp) = selected.clone() {
             if let Some(artifact) = rows.iter().find(|a| a.stamp == stamp) {
                 ui.add_space(24.0);
-                detail(ui, model, artifact);
+                if detail(ui, model, artifact) {
+                    *show = Some(stamp);
+                }
             }
         }
     });
@@ -849,8 +857,9 @@ pub fn section(ui: &mut egui::Ui, model: &Model, section: Section, selected: &mu
 /// facts. The rich per-kind views (a fit's intervals, a certificate's
 /// funnel) read the artifact itself and arrive with the tools that write
 /// them.
-fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) {
+fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) -> bool {
     let (name, hash) = split_stamp(&artifact.stamp);
+    let mut show = false;
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal_top(|ui| {
@@ -882,6 +891,18 @@ fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) {
                             .strong(),
                     );
                     tag(ui, &artifact.kind);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // The artifact as itself: a robot in 3D, a recording as
+                        // plots, a run's curves, a certificate's funnel — in the
+                        // viewer, via the presenter (docs/76 §5.2).
+                        if ui
+                            .primary_button(("▶", " Show in viewer"))
+                            .on_hover_text("Stream this artifact into the Live view")
+                            .clicked()
+                        {
+                            show = true;
+                        }
+                    });
                 });
                 ui.label(
                     egui::RichText::new(format!("@{hash}"))
@@ -902,6 +923,7 @@ fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) {
             });
         });
     });
+    show
 }
 
 /// A two-column key/value grid; stamps in monospace, `unrecorded` in the

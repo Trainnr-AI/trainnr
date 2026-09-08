@@ -21,6 +21,10 @@ const INDEX_RELATIVE: &str = ".index/project.json";
 const MANIFEST_FILE: &str = "project.json";
 /// Mirrored from `rq_pipeline/mcp_jobs.py` (`JOBS_DIR_NAME`).
 const JOBS_DIR: &str = "mcp-jobs";
+/// Mirrored from `rq_pipeline/project/present.py` (`INTENT_FILE`): the
+/// Studio writes `{"stamp": ...}` here; the presenter streams that
+/// artifact into the viewer and clears it.
+const INTENT_RELATIVE: &str = ".index/present.json";
 /// The environment variable both halves honour (`PROJECT_ENV`).
 pub const PROJECT_ENV: &str = "TRAINNR_PROJECT";
 const DEFAULT_PROJECT: &str = "projects/default";
@@ -284,6 +288,19 @@ impl Model {
 
     pub fn running_jobs(&self) -> usize {
         self.jobs.iter().filter(|j| j.running()).count()
+    }
+
+    /// Ask the presenter to show an artifact: write the intent file. The
+    /// presenter (spawned by the shell) streams it and deletes the file.
+    pub fn request_show(&self, stamp: &str) -> std::io::Result<()> {
+        let path = self.project_root.join(INTENT_RELATIVE);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let body = serde_json::json!({ "stamp": stamp }).to_string();
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, body)?;
+        std::fs::rename(tmp, path)
     }
 
     /// Poll at most once a second; re-read whatever moved.

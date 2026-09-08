@@ -27,15 +27,62 @@ pub struct Shell {
     pub selected: Option<String>,
     /// A project the user picked; applied at the top of the next frame.
     switch_to: Option<std::path::PathBuf>,
+    /// The presenter process for the open project (`tools/studio-present.py`),
+    /// spawned on first Show and killed with the shell or on a project switch.
+    presenter: Option<std::process::Child>,
+    /// Set when the user asked to show an artifact; the frame loop
+    /// switches to Live once the viewer has a recording.
+    pub show_requested: bool,
+    repo_root: std::path::PathBuf,
 }
 
 impl Shell {
-    pub fn new(model: Model) -> Self {
+    pub fn new(model: Model, repo_root: std::path::PathBuf) -> Self {
         Self {
             model,
             section: Section::Overview,
             selected: None,
             switch_to: None,
+            presenter: None,
+            show_requested: false,
+            repo_root,
+        }
+    }
+
+    /// Show an artifact in the viewer: make sure the presenter runs for
+    /// this project, then write the intent it watches for.
+    pub fn show(&mut self, stamp: &str) {
+        self.ensure_presenter();
+        if self.model.request_show(stamp).is_ok() {
+            self.show_requested = true;
+        }
+    }
+
+    fn ensure_presenter(&mut self) {
+        if let Some(child) = self.presenter.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                return;
+            }
+        }
+        let pipeline = self.repo_root.join("pipeline");
+        let script = self.repo_root.join("tools").join("studio-present.py");
+        let child = std::process::Command::new("uv")
+            .current_dir(&pipeline)
+            .args(["run", "--extra", "sim", "--extra", "viz", "python"])
+            .arg(&script)
+            .arg("--project")
+            .arg(&self.model.project_root)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::inherit())
+            .spawn();
+        self.presenter = child.ok();
+    }
+
+    fn kill_presenter(&mut self) {
+        if let Some(mut child) = self.presenter.take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 
@@ -191,6 +238,7 @@ impl Shell {
     /// renders (it owns the viewer and the viewport).
     pub fn page(&mut self, ui: &mut egui::Ui) {
         if let Some(root) = self.switch_to.take() {
+            self.kill_presenter();
             self.model.switch(root);
             self.selected = None;
             self.section = Section::Overview;
@@ -218,7 +266,19 @@ impl Shell {
                 }
             }
             Section::Live => {}
-            section => pages::section(ui, &self.model, section, &mut self.selected),
+            section => {
+                let mut show: Option<String> = None;
+                pages::section(ui, &self.model, section, &mut self.selected, &mut show);
+                if let Some(stamp) = show {
+                    self.show(&stamp);
+                }
+            }
         }
+    }
+}
+
+impl Drop for Shell {
+    fn drop(&mut self) {
+        self.kill_presenter();
     }
 }

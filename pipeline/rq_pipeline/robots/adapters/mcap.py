@@ -31,6 +31,7 @@ import numpy as np
 
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.recording import (
+    COLLECTION_ROBOT_OP,
     IMU_ANGULAR_VELOCITY,
     IMU_LINEAR_ACCELERATION,
     IMU_ORIENTATION,
@@ -142,6 +143,7 @@ class McapAdapter:
         return Recording(
             source=source.name,
             adapter=NAME,
+            collection=COLLECTION_ROBOT_OP,
             channels=channels,
             census={"topics": topics, "files": [f.name for f in files]},
             notes=notes,
