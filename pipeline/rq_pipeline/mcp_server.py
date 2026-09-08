@@ -434,18 +434,21 @@ def build_server() -> Any:
         describe_actuator
     )
     server.tool(
-        description="Certified actuator bundles: stamps, rail/floor checks, advisories"
+        description="Identified actuator models: versions, parameter-bound checks, "
+        "advisories"
     )(describe_actuator_bundles)
     server.tool(
-        description="One certified bundle in full (BAM params verbatim + envelope)"
+        description="One identified actuator model in full (fit parameters + "
+        "provenance)"
     )(describe_actuator_bundle)
     server.tool(
-        description="A demo batch's datasheet: keep-rate bound, stamps, draw bases"
+        description="A generated dataset's datasheet: success-rate bound, versions, "
+        "randomization ranges"
     )(describe_datasheet)
     server.tool(description="The task registry: ids, names, rigs")(describe_tasks)
-    server.tool(description="One task built for real: its spec and content stamp")(
-        describe_task
-    )
+    server.tool(
+        description="One environment built for real: its task spec and version"
+    )(describe_task)
     server.tool(description="The physics-engine registry")(describe_engines)
 
     # A typed no-arg wrapper: describe_runs' `runs_root` parameter exists
@@ -483,7 +486,7 @@ def build_server() -> Any:
     # The PROJECT family (docs/76): where one effort lives and where it
     # stands in the loop.
     server.tool(
-        description="The current project: artifacts by kind with stamps and "
+        description="The current project: artifacts by kind with versions and "
         "lineage, the loop map (each state proved or missing), the next move."
     )(describe_project)
     server.tool(
@@ -513,32 +516,33 @@ def build_server() -> Any:
     # works exactly as before.
     actions = Actions(JobManager(_jobs_root()))
     server.tool(
-        description="Press referee-gated demonstrations (scripted expert, DR "
-        "draws recorded). Returns a job handle."
+        description="Generate demonstrations with a scripted policy; only successful "
+        "episodes are kept (DR draws recorded). Returns a job handle."
     )(actions.generate_demos)
     server.tool(
-        description="Multiply seed demos (device filters, CPU verifies, referee "
-        "gates). Needs the GPU box. Returns a job handle."
+        description="Augment seed demonstrations (device filters, CPU verifies, "
+        "success criterion gates). Needs the GPU box. Returns a job handle."
     )(actions.multiply_demos)
     server.tool(
-        description="The whole chain: press -> dataset -> train -> paired eval "
-        "-> fold with intervals. smoke scale runs on a laptop. Job handle."
+        description="The whole chain: generate -> dataset -> train -> paired "
+        "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train the microduck walk on the certified stack (rq_mjlab). "
-        "agent=smoke is minutes; agent=g3 is the flagship recipe. Job handle."
+        description="Train the microduck walk policy with identified actuator models "
+        "(rq_mjlab). agent=smoke is minutes; agent=g3 is the flagship recipe. Job "
+        "handle."
     )(actions.train_walk)
     server.tool(
-        description="The locomotion certificate: paired episodes, exact "
+        description="Evaluate the walk policy: paired episodes, exact confidence "
         "intervals, stamps on every row. Job handle."
     )(actions.certify_walk)
     server.tool(
-        description="The RL teacher presses demonstrations (docs/66 D2): the walk "
+        description="The RL teacher generates demonstrations (docs/66 D2): the walk "
         "checkpoint rolls out, keepers become a stamped batch with chase-camera "
         "frames, discards a failures.jsonl. Job handle."
     )(actions.press_walk)
     server.tool(
-        description="The planner expert presses demonstrations (docs/66 D3) on an "
+        description="The planner policy generates demonstrations (docs/66 D3) on an "
         "SO-101 task: beats written from the seated scene, executed by chained IK, "
         "kept by the task's referee, streamed to the Studio. Job handle."
     )(actions.press_planned)

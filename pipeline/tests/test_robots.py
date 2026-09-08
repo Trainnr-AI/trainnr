@@ -397,7 +397,7 @@ class Ingest(unittest.TestCase):
             self.assertEqual(rec.summary["adapter"], "mcap")
             self.assertEqual(rec.summary["channels"], len(record["channels"]))
             self.assertIn(
-                "telemetry ingested", {s.name for s in index.states if s.present}
+                "telemetry recorded", {s.name for s in index.states if s.present}
             )
             with self.assertRaises(FileExistsError):
                 ingest(project, bag)

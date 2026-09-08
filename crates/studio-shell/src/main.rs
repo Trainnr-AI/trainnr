@@ -22,6 +22,7 @@
 //! verdict — "use exactly what Rerun does, don't reinvent the wheel" —
 //! replaced it with the wheel.
 
+mod detail;
 mod model;
 mod pages;
 mod shell;

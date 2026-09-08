@@ -231,7 +231,7 @@ class TheProjectDoors(unittest.TestCase):
             self.assertEqual(index["project"], "p")
             self.assertEqual(index["artifacts"], [])
             self.assertFalse(any(s["present"] for s in index["states"]))
-            self.assertIn("ingest", index["next_move"])
+            self.assertIn("record", index["next_move"])
             self.assertTrue((Path(made["root"]) / ".index" / "project.json").is_file())
 
     def test_describe_returns_the_written_index_with_its_previews(self) -> None:

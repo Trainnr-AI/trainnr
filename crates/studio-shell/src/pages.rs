@@ -83,7 +83,7 @@ impl Section {
             Self::Datasets => "Datasets",
             Self::Experiments => "Experiments",
             Self::Policies => "Policies",
-            Self::Certificates => "Certificates",
+            Self::Certificates => "Evaluations",
             Self::Deployments => "Deployments",
             Self::Monitoring => "Monitoring",
             Self::Findings => "Findings",
@@ -150,16 +150,16 @@ impl Section {
     /// agent would do to fill it.
     pub fn empty_hint(self) -> &'static str {
         match self {
-            Self::Robots => "No robot assets yet. Ask your agent to onboard a robot (an MJCF or URDF) or ingest a recording.",
-            Self::Environments => "No environments yet. Ask your agent to declare a task spec and run acceptance.",
-            Self::Recordings => "No recordings yet. Ingest telemetry from a robot, a ROS 2 bag, or a LeRobot dataset.",
-            Self::Datasets => "No datasets yet. Ask your agent to press demonstrations.",
+            Self::Robots => "No assets yet. Ask your agent to onboard a robot model (MJCF or URDF) or record its telemetry.",
+            Self::Environments => "No environments yet. Ask your agent to define a task and run acceptance.",
+            Self::Recordings => "No recordings yet. Record telemetry from a robot, a ROS 2 bag, a LeRobot dataset, or motion capture.",
+            Self::Datasets => "No datasets yet. Ask your agent to generate demonstrations.",
             Self::Experiments => "No experiments yet. Ask your agent to train a policy on a dataset.",
             Self::Policies => "No policies yet. A training experiment leaves checkpoints here.",
-            Self::Certificates => "No certificates yet. Ask your agent to certify a policy with paired trials.",
-            Self::Deployments => "No deployments yet. Export a deploy manifest and pass the sim2sim gate.",
-            Self::Monitoring => "Nothing monitored yet. Ingest fresh telemetry and run the drift check.",
-            Self::Findings => "No findings yet. A finding is a tracked claim with its commit, command and instrument.",
+            Self::Certificates => "No evaluations yet. Ask your agent to evaluate a policy with paired trials.",
+            Self::Deployments => "No deployments yet. Export a deployment manifest and pass the sim-to-sim check.",
+            Self::Monitoring => "Nothing monitored yet. Record fresh telemetry and check for parameter drift.",
+            Self::Findings => "No findings yet. A finding is a recorded result with its commit, command line and simulator build.",
             Self::Projects => "No projects yet. Ask your agent to run `create_project`.",
             Self::Overview | Self::Live => "",
         }
@@ -170,15 +170,15 @@ impl Section {
 /// state names (`rq_pipeline/project/index.py::STATES`).
 fn stage_label(name: &str) -> &str {
     match name {
-        "telemetry ingested" => "Telemetry",
-        "robot known" => "Asset",
-        "dynamics identified" => "Identified",
-        "task declared" => "Environment",
-        "data pressed" => "Data",
+        "telemetry recorded" => "Telemetry",
+        "asset onboarded" => "Asset",
+        "system identified" => "Sys ID",
+        "environment defined" => "Environment",
+        "data generated" => "Dataset",
         "policy trained" => "Policy",
-        "policy certified" => "Certified",
-        "deployable" => "Deployment",
-        "loop watched" => "Monitoring",
+        "policy evaluated" => "Evaluation",
+        "deployment exported" => "Deployment",
+        "drift monitored" => "Monitoring",
         other => other,
     }
 }
@@ -904,25 +904,44 @@ fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) -> bool {
                         }
                     });
                 });
-                ui.label(
-                    egui::RichText::new(format!("@{hash}"))
-                        .monospace()
-                        .color(ui.visuals().weak_text_color()),
-                );
+                ui.horizontal(|ui| {
+                    weak_body(ui, "version");
+                    ui.label(
+                        egui::RichText::new(hash)
+                            .monospace()
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                });
                 weak_body(ui, &artifact.path);
                 if !artifact.cites.is_empty() {
                     ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Lineage").strong());
+                    ui.label(egui::RichText::new("Provenance").strong());
                     fact_grid(ui, ("cites", &artifact.stamp), &artifact.cites, true);
-                }
-                if !artifact.summary.is_empty() {
-                    ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Facts").strong());
-                    fact_grid(ui, ("summary", &artifact.stamp), &artifact.summary, false);
                 }
             });
         });
     });
+    // The artifact itself, in the field's terms: the sections the Python
+    // side wrote for it (detail.rs). Falls back to the index's summary
+    // for a kind that has no detail writer yet.
+    match model
+        .detail_path(artifact)
+        .and_then(|p| crate::detail::Detail::load(&p))
+    {
+        Some(detail) => {
+            ui.add_space(14.0);
+            crate::detail::show(ui, &detail, &artifact.stamp);
+        }
+        None if !artifact.summary.is_empty() => {
+            ui.add_space(14.0);
+            card(ui, None).show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Summary").strong());
+                fact_grid(ui, ("summary", &artifact.stamp), &artifact.summary, false);
+            });
+        }
+        None => {}
+    }
     show
 }
 
@@ -983,9 +1002,9 @@ mod tests {
 
     #[test]
     fn stages_speak_the_fields_words() {
-        assert_eq!(stage_label("robot known"), "Asset");
-        assert_eq!(stage_label("task declared"), "Environment");
-        assert_eq!(stage_label("loop watched"), "Monitoring");
+        assert_eq!(stage_label("asset onboarded"), "Asset");
+        assert_eq!(stage_label("environment defined"), "Environment");
+        assert_eq!(stage_label("drift monitored"), "Monitoring");
         assert_eq!(stage_label("new state"), "new state");
     }
 }

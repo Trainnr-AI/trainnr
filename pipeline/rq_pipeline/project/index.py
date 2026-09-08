@@ -46,35 +46,37 @@ UNRECORDED = "unrecorded"
 # (docs/76 §3). `identified` is proved by a fit OR by a robot bundle that
 # carries fit records; the checker below handles the second case.
 STATES: tuple[tuple[str, Kind], ...] = (
-    ("telemetry ingested", Kind.RECORDING),
-    ("robot known", Kind.ROBOT),
-    ("dynamics identified", Kind.FIT),
-    ("task declared", Kind.TASK),
-    ("data pressed", Kind.BATCH),
+    ("telemetry recorded", Kind.RECORDING),
+    ("asset onboarded", Kind.ROBOT),
+    ("system identified", Kind.FIT),
+    ("environment defined", Kind.TASK),
+    ("data generated", Kind.BATCH),
     ("policy trained", Kind.RUN),
-    ("policy certified", Kind.CERTIFICATE),
-    ("deployable", Kind.DEPLOY),
-    ("loop watched", Kind.DRIFT),
+    ("policy evaluated", Kind.CERTIFICATE),
+    ("deployment exported", Kind.DEPLOY),
+    ("drift monitored", Kind.DRIFT),
 )
 
 # What an agent does next when a state is the first missing one.
 NEXT_MOVE: dict[str, str] = {
-    "telemetry ingested": (
-        "ingest a recording of the robot (ingest_recording: a .wire file, a "
-        "LeRobot dataset, a ROS 2 .mcap bag) — or skip to onboarding its model"
+    "telemetry recorded": (
+        "record the robot's telemetry (ingest_recording: a .wire file, a LeRobot "
+        "dataset, a ROS 2 .mcap bag, a mocap CSV or BVH) — or start from its model"
     ),
-    "robot known": "onboard a robot bundle (onboard_robot)",
-    "dynamics identified": (
-        "identify dynamics from a recording, or name a certified actuator bundle"
+    "asset onboarded": "onboard the robot's model as an asset (onboard_robot)",
+    "system identified": (
+        "run system identification on a recording, or name an identified actuator model"
     ),
-    "task declared": "declare a task spec and run acceptance",
-    "data pressed": (
-        "press demonstrations (generate_demos / press_planned / press_walk)"
+    "environment defined": "define the environment (task spec) and run acceptance",
+    "data generated": (
+        "generate demonstrations (generate_demos / press_planned / press_walk)"
     ),
-    "policy trained": "train a policy on the pressed data (run_chain / train_walk)",
-    "policy certified": "certify the policy with paired trials",
-    "deployable": "export a deploy manifest and pass the sim2sim gate",
-    "loop watched": "ingest fresh telemetry and run the drift check",
+    "policy trained": "train a policy on the dataset (run_chain / train_walk)",
+    "policy evaluated": (
+        "evaluate the policy with paired trials and a confidence interval"
+    ),
+    "deployment exported": "export a deployment manifest and pass the sim-to-sim check",
+    "drift monitored": "record fresh telemetry and check for parameter drift",
 }
 
 
@@ -89,6 +91,9 @@ class Artifact:
     # A picture, relative to the project root, when the kind has one
     # (`project/previews.py`); None otherwise — never a placeholder.
     preview: str | None = None
+    # The detail view's path, relative to the project root
+    # (`project/details.py`); None when the kind has no writer yet.
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -173,12 +178,17 @@ def write_index(
 
     index = index if index is not None else index_project(project)
     if previews:
+        from rq_pipeline.project.details import write_details  # noqa: PLC0415
         from rq_pipeline.project.previews import write_previews  # noqa: PLC0415
 
         found = write_previews(project, index)
+        details = write_details(project, index)
         index = replace(
             index,
-            artifacts=[replace(a, preview=found.get(a.stamp)) for a in index.artifacts],
+            artifacts=[
+                replace(a, preview=found.get(a.stamp), detail=details.get(a.stamp))
+                for a in index.artifacts
+            ],
         )
     out = project.index_path
     out.parent.mkdir(parents=True, exist_ok=True)

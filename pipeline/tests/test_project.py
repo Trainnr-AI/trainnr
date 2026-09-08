@@ -162,7 +162,7 @@ class Indexing(unittest.TestCase):
             index = index_project(make_project(Path(tmp)))
             self.assertEqual(index.artifacts, [])
             self.assertEqual([s.present for s in index.states], [False] * len(STATES))
-            self.assertIn("ingest", index.next_move or "")
+            self.assertIn("record", index.next_move or "")
 
     def test_artifacts_are_stamped_cited_and_prove_states(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -178,7 +178,7 @@ class Indexing(unittest.TestCase):
             present = {s.name for s in index.states if s.present}
             # The robot carries fits, so identification is proved by it.
             self.assertEqual(
-                present, {"robot known", "dynamics identified", "data pressed"}
+                present, {"asset onboarded", "system identified", "data generated"}
             )
             self.assertIn("task", index.next_move or "")
 
@@ -251,7 +251,9 @@ class Indexing(unittest.TestCase):
             task = index.by_kind(Kind.TASK)[0]
             self.assertEqual(task.summary["stamp"], "kitting@aaaaaaaaaaaa")
             self.assertEqual(task.summary["kind"], "registered")
-            self.assertIn("task declared", {s.name for s in index.states if s.present})
+            self.assertIn(
+                "environment defined", {s.name for s in index.states if s.present}
+            )
             # Unstamped is said, never invented; ids are namespaced.
             write_task_reference(project, "robotiq/reach", None)
             self.assertEqual(

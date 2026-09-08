@@ -22,7 +22,7 @@ The answer this repo proposes: **the agent does the assembly, and every
 step leaves a record that a stranger can recompute.** Plug in the robot;
 the agent measures it, builds the scene, presses the data, trains, judges
 with intervals, exports a deployable artifact, and watches for drift.
-The human reads a window, or a certificate, or nothing at all.
+The human reads a window, or an evaluation, or nothing at all.
 
 ## 1. The one contract
 
@@ -46,7 +46,7 @@ Three consequences fall out, and they are the whole reason for the rule:
 - **The agent can always answer "where am I?"** It reads the artifacts
   that exist and their kinds, and the state machine in §3 says what is
   legal next. No hidden workflow state, no session that can be lost.
-- **A stranger can recompute any claim.** The certificate names the
+- **A stranger can recompute any claim.** The evaluation names the
   robot, the task, the policy, the instrument and the protocol by hash;
   re-running with those inputs is a defined operation, not an
   archaeology project.
@@ -55,6 +55,15 @@ Three consequences fall out, and they are the whole reason for the rule:
   replacing it (docs/64 §1).
 
 ## 2. Artifact kinds
+
+*Vocabulary (2026-09-09): the app and the tools speak the field's words —
+Isaac Sim and Isaac Lab for assets and environments, MuJoCo for the model,
+RL and system identification for training and fitting, LeRobot for
+datasets, MLOps for versions. Nothing new is introduced unless the field
+has no word. Code paths and frozen file names keep their internal kind
+names (`certificate`, `batch`); what a user reads says **evaluation**,
+**dataset**, **version**, **success criterion**, **scripted policy**,
+**system identification**.*
 
 The pipeline already stamps some things as wholes and merely *cites*
 stamps in others. That gap is the first thing the harness closes: every
@@ -73,13 +82,13 @@ nothing downstream ever invents a name.
 | dataset | a training dataset with its provenance sidecar | cites, not stamped |
 | run | a training run with its manifest | cites, not stamped |
 | policy | a checkpoint directory or file | sometimes |
-| certificate | trials, interval, funnel, every input stamp | yes for walk |
+| certificate | an evaluation: trials, confidence interval, funnel, every input version | yes for walk |
 | deploy | a manifest making a policy runnable on the robot | no — new |
 | drift | fresh telemetry judged against the identified interval | no — new |
 | finding | a tracked claim with its commit, argv and instrument | yes |
 
 The rule for detecting a kind is the file that must be at its root — a
-batch has a datasheet, a run has an identity file, a certificate has its
+dataset has a datasheet, a run has an identity file, an evaluation has its
 JSON beside its records. An unrecognised shape is refused by name rather
 than guessed at.
 
@@ -106,8 +115,8 @@ is to move right; the tools refuse moves whose inputs are missing.
 | task declared | a task stamp plus an acceptance verdict | a task the scripted expert cannot pass is rejected with its funnel, before any policy is trained on it |
 | data pressed | a batch whose datasheet names the dynamics basis | a dataset mixing two dynamics bases is refused at export |
 | policy trained | a run manifest quoting the dataset's stamps | — |
-| certified | a certificate: successes over trials, the exact interval, the funnel, every input stamp | a certificate cannot be built from records whose trial sets do not pair |
-| deployed | a deploy manifest plus a passing simulation-to-simulation gate | a manifest whose policy stamp does not match the certificate's is refused |
+| evaluated | an evaluation: successes over trials, the exact confidence interval, the funnel, every input version | an evaluation cannot be built from records whose trial sets do not pair |
+| deployed | a deployment manifest plus a passing sim-to-sim check | a manifest whose policy version does not match the evaluation's is refused |
 | loop closed | a drift record, or a clean check | — |
 
 The two nulls this repo has already measured are why the refusals are
@@ -222,7 +231,7 @@ the viewer at one artifact: a robot as its meshes in a 3D view posed at
 its keyframe, a recording's channels as time series on its own clock, an
 experiment's curves from its log, a batch's kept frames beside its
 datasheet, a dataset's video, a task's scene with its spawn bands drawn as
-boxes, a certificate's funnel as bars beside its interval. Every artifact
+boxes, an evaluation's funnel as bars beside its interval. Every artifact
 is its own Rerun recording named by its stamp, so the viewer's recording
 list is the project's artifact list. The Studio asks by writing an intent
 file the presenter watches — the same file contract as the index, so a
@@ -248,7 +257,7 @@ intervals on the three parameters the bench can see and search-range-wide
 intervals on the three it cannot — and the parameters it cannot identify
 are named on the bundle rather than hidden. A robot whose dynamics are
 guessed is allowed, but the guess is labelled a declared span everywhere
-downstream, in the datasheet and on the certificate.
+downstream, in the datasheet and on the evaluation.
 
 ## 7. Scene and task
 
@@ -283,13 +292,13 @@ baked into the exported model so every runtime scale is 1.0.
 
 Ours adds what that prior art lacks: the stamps. The manifest names the
 policy, the robot bundle it was trained against, the task and the
-certificate, so a robot can answer "what physics trained this, and what
+evaluation, so a robot can answer "what physics trained this, and what
 was it measured at" — a question a policy cannot answer anywhere else
 today.
 
 The gate is the part that matters for building without hardware: **the
 exported policy, driven only through its manifest, is re-certified
-against the simulator and must reproduce the original certificate's
+against the simulator and must reproduce the original evaluation's
 interval within a stated tolerance.** If the manifest is wrong — a
 transposed joint order, a missing scale — the numbers move and the gate
 fails. That is a full test of the deployment contract with no robot
@@ -324,14 +333,14 @@ rented machine or in continuous integration has none.
 - **Headless**: every feed also writes a recording file beside its live
   stream, so a windowless run leaves something to open later, and a tool
   reads that file back. The parity requirement: a headless run reports
-  the same facts a window shows — the datasheet, the certificate, the
+  the same facts a window shows — the datasheet, the evaluation, the
   findings record.
 - **Web**: serving a saved recording to a browser. Designed, gated on a
   research pass that did not complete. Nothing else depends on it.
 
 ## 11. What this refuses to claim
 
-- Simulation is not reality. A certificate is sim-only at a named fit on
+- Simulation is not reality. An evaluation is sim-only at a named fit on
   a named instrument, and says so.
 - Success is the referee's definition, not the buyer's operational one.
 - The dynamics basis is stated verbatim: an identified interval and a

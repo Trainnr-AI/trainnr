@@ -66,6 +66,10 @@ pub struct Artifact {
     /// A picture, relative to the project root, when the kind has one.
     #[serde(default)]
     pub preview: Option<String>,
+    /// The detail view's file, relative to the project root, when the
+    /// kind has a writer (`rq_pipeline/project/details.py`).
+    #[serde(default)]
+    pub detail: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -208,6 +212,15 @@ impl Model {
     /// Switch to another project directory, keeping the projects home.
     pub fn switch(&mut self, root: PathBuf) {
         *self = Self::at(root, self.projects_home.clone());
+    }
+
+    /// An artifact's detail file as an absolute path, when it has one.
+    pub fn detail_path(&self, artifact: &Artifact) -> Option<PathBuf> {
+        artifact
+            .detail
+            .as_ref()
+            .map(|rel| self.project_root.join(rel))
+            .filter(|p| p.is_file())
     }
 
     /// An artifact's preview as an absolute path, when it has one.
