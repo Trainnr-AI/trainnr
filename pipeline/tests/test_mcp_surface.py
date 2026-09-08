@@ -231,7 +231,7 @@ class TheProjectDoors(unittest.TestCase):
             self.assertEqual(index["project"], "p")
             self.assertEqual(index["artifacts"], [])
             self.assertFalse(any(s["present"] for s in index["states"]))
-            self.assertIn("onboard", index["next_move"])
+            self.assertIn("ingest", index["next_move"])
             self.assertTrue((Path(made["root"]) / ".index" / "project.json").is_file())
 
     def test_the_committed_sample_describes(self) -> None:

@@ -170,6 +170,7 @@ impl Section {
 /// state names (`rq_pipeline/project/index.py::STATES`).
 fn stage_label(name: &str) -> &str {
     match name {
+        "telemetry ingested" => "Telemetry",
         "robot known" => "Asset",
         "dynamics identified" => "Identified",
         "task declared" => "Environment",

@@ -73,6 +73,13 @@ mjx-warp = "rq_pipeline.physics.mjx_backend"
 [project.entry-points."rq_pipeline.gpu_providers"]
 runpod = "rq_pipeline.cloud.runpod"
 
+# The robot-adapter registry's plugin door (rq_pipeline/robots/adapter.py):
+# a source format registers itself with @adapter(name) and is listed here.
+[project.entry-points."rq_pipeline.robot_adapters"]
+wire = "rq_pipeline.robots.adapters.wire"
+lerobot = "rq_pipeline.robots.adapters.lerobot"
+mcap = "rq_pipeline.robots.adapters.mcap"
+
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
 

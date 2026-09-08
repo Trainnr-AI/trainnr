@@ -26,6 +26,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from rq_pipeline.project.index import ProjectIndex
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
@@ -178,7 +180,51 @@ def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _save_pil(image, out)
 
 
+def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """The recording's first joint channel as small traces — a signal's
+    shape, the way a platform's log tile shows one."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+
+        from rq_pipeline.robots.recording import Recording  # noqa: PLC0415
+    except ImportError:
+        return False
+    recording = Recording.read(source)
+    channel = next(
+        (c for n, c in recording.channels.items() if "position" in n or "ticks" in n),
+        next(iter(recording.channels.values()), None),
+    )
+    if channel is None or len(channel.times) < MIN_CURVE_POINTS:
+        return False
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), (24, 26, 31))
+    draw = ImageDraw.Draw(image)
+    values = channel.values.reshape(len(channel.times), -1)
+    finite = values[np.isfinite(values).all(axis=1)] if values.size else values
+    lo = float(np.nanmin(values)) if values.size else 0.0
+    hi = float(np.nanmax(values)) if values.size else 1.0
+    span = (hi - lo) or 1.0
+    margin = 40
+    t0, t1 = float(channel.times[0]), float(channel.times[-1])
+    tspan = (t1 - t0) or 1.0
+    palette = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
+    for col in range(min(values.shape[1], 8)):
+        pts = [
+            (
+                margin + (float(t) - t0) / tspan * (width - 2 * margin),
+                height - margin - (float(v) - lo) / span * (height - 2 * margin),
+            )
+            for t, v in zip(channel.times, values[:, col], strict=True)
+            if np.isfinite(v)
+        ]
+        if len(pts) >= MIN_CURVE_POINTS:
+            draw.line(pts, fill=palette[col % len(palette)], width=4, joint="curve")
+    del finite
+    return _save_pil(image, out)
+
+
 _RENDERERS = {
+    "recording": _render_recording,
     "robot": _render_robot,
     "batch": _render_batch,
     "dataset": _render_dataset,

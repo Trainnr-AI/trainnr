@@ -380,6 +380,27 @@ def list_project_dirs() -> list[dict[str, Any]]:
     return listed
 
 
+def list_robot_adapters() -> list[dict[str, str]]:
+    """Every source format a recording can enter through: this repo's
+    wire telemetry, a LeRobot dataset, a ROS 2 MCAP bag, plus plugins."""
+    from rq_pipeline.robots import adapters  # noqa: PLC0415
+
+    return [{"name": e.name, "doc": e.doc} for e in adapters().values()]
+
+
+def ingest_recording(
+    source: str, name: str | None = None, adapter: str | None = None
+) -> dict[str, Any]:
+    """Read a robot's telemetry (a .wire file, a LeRobot dataset directory,
+    a ROS 2 .mcap bag) into the current project as a stamped recording:
+    named channels with units and rates, a census of what the robot
+    reported, and the adapter's honest notes. The first move of the loop."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
+
+    return ingest(current_project(), Path(source), name=name, adapter=adapter)
+
+
 def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
     """Make a project directory: the manifest and one folder per artifact
     kind. Never overwrites an existing project."""
@@ -472,6 +493,13 @@ def build_server() -> Any:
         name="list_projects",
         description="Every project under projects/: name, root, stages proved, count.",
     )(list_project_dirs)
+    server.tool(description="Every source format a recording can enter through.")(
+        list_robot_adapters
+    )
+    server.tool(
+        description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap) "
+        "into the project as a stamped recording with channels, units, census."
+    )(ingest_recording)
     server.tool(
         name="create_project",
         description="Make a project directory with its manifest and one folder "

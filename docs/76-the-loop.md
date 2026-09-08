@@ -66,7 +66,7 @@ nothing downstream ever invents a name.
 | robot | a bundle directory: model, assets, profile, fits | yes |
 | actuator | a certified actuator bundle: fit parameters, provenance, checks, uncertainty | yes, content-derived |
 | task | a specification, stamped over its fields | yes |
-| recording | telemetry from a real robot, with its source and clock | no — new |
+| recording | telemetry from a real robot, with its source and clock | yes (2026-09-09): `robots/ingest` |
 | fit | an identification record: estimates, intervals, pinned verdict, anchor | yes |
 | scene | a captured or composed environment | no — reserved, see §7 |
 | batch | pressed episodes with a datasheet and per-episode manifests | cites, not stamped |
@@ -89,7 +89,7 @@ Each state is *proved by an artifact*, never by a flag. The agent's job
 is to move right; the tools refuse moves whose inputs are missing.
 
 ```
-   robot known ──▶ dynamics identified ──▶ task declared ──▶ data pressed
+   telemetry ingested ──▶ robot known ──▶ dynamics identified ──▶ task declared ──▶ data pressed
         │                                        │                │
         │                                        ▼                ▼
         │                                  (acceptance)      policy trained
@@ -100,6 +100,7 @@ is to move right; the tools refuse moves whose inputs are missing.
 
 | state | proved by | refusal when it is skipped |
 |---|---|---|
+| telemetry ingested | a recording: named channels with units and rates, from a robot adapter | optional when the robot entered as a model; the identifier refuses a channel whose unit it cannot place |
 | robot known | a robot bundle stamp and a capability census | a task cannot name a robot that is not stamped |
 | dynamics identified | fit records with intervals and a pinned verdict, or a certified actuator bundle with an uncertainty section | randomization over an unmeasured span must be *declared* as such; a bundle with no uncertainty refuses interval sampling |
 | task declared | a task stamp plus an acceptance verdict | a task the scripted expert cannot pass is rejected with its funnel, before any policy is trained on it |

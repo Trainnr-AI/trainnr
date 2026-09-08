@@ -46,6 +46,7 @@ UNRECORDED = "unrecorded"
 # (docs/76 §3). `identified` is proved by a fit OR by a robot bundle that
 # carries fit records; the checker below handles the second case.
 STATES: tuple[tuple[str, Kind], ...] = (
+    ("telemetry ingested", Kind.RECORDING),
     ("robot known", Kind.ROBOT),
     ("dynamics identified", Kind.FIT),
     ("task declared", Kind.TASK),
@@ -58,7 +59,11 @@ STATES: tuple[tuple[str, Kind], ...] = (
 
 # What an agent does next when a state is the first missing one.
 NEXT_MOVE: dict[str, str] = {
-    "robot known": "onboard a robot bundle (onboard_robot) or ingest a recording",
+    "telemetry ingested": (
+        "ingest a recording of the robot (ingest_recording: a .wire file, a "
+        "LeRobot dataset, a ROS 2 .mcap bag) — or skip to onboarding its model"
+    ),
+    "robot known": "onboard a robot bundle (onboard_robot)",
     "dynamics identified": (
         "identify dynamics from a recording, or name a certified actuator bundle"
     ),
@@ -139,6 +144,13 @@ def index_project(project: Project) -> ProjectIndex:
             )
     states = _states(artifacts)
     missing = [s.name for s in states if not s.present]
+    # Telemetry is the loop's first state but not a prerequisite: a robot
+    # that entered as a model (a Menagerie bundle) has no recording yet
+    # and does not need one before a task is declared. The next move is
+    # the first missing state AFTER the first proved one.
+    first_proved = next((i for i, s in enumerate(states) if s.present), None)
+    if first_proved is not None:
+        missing = [s.name for s in states[first_proved:] if not s.present]
     return ProjectIndex(
         schema=INDEX_SCHEMA,
         project=manifest.name,
@@ -285,7 +297,18 @@ def _summary_run(path: Path) -> dict[str, Any]:
     return _take(_read(path / IDENTITY_FILE), ("dr_basis", "seed"))
 
 
+def _summary_recording(path: Path) -> dict[str, Any]:
+    from rq_pipeline.project.kinds import RECORDING_FILE  # noqa: PLC0415
+
+    raw = _read(path / RECORDING_FILE)
+    out = _take(raw, ("adapter", "source", "duration_s"))
+    if "channels" in raw:
+        out["channels"] = len(raw["channels"])
+    return out
+
+
 _SUMMARY_READERS: dict[Kind, Any] = {
+    Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},
     Kind.RUN: _summary_run,
     Kind.CERTIFICATE: lambda p: _take(

@@ -162,7 +162,7 @@ class Indexing(unittest.TestCase):
             index = index_project(make_project(Path(tmp)))
             self.assertEqual(index.artifacts, [])
             self.assertEqual([s.present for s in index.states], [False] * len(STATES))
-            self.assertIn("onboard", index.next_move or "")
+            self.assertIn("ingest", index.next_move or "")
 
     def test_artifacts_are_stamped_cited_and_prove_states(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
