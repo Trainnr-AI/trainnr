@@ -192,13 +192,13 @@ def panel_title(finding: Finding) -> str:
     return textwrap.fill(head, TITLE_WRAP)
 
 
-def _style(fig: Any, ax: Any, finding: Finding) -> None:
+def _style(fig: Any, ax: Any, finding: Finding, *, title: str | None = None) -> None:
     """The frame every success-rate figure shares: y in [0, 1] with
     room for the counts above the whiskers, and the frame of `_frame`."""
     ax.set_ylim(0.0, 1.12)
     ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.set_ylabel("success rate (\u2191)", color=INK, fontsize=7)
-    _frame(fig, ax, finding, grid_axis="y")
+    _frame(fig, ax, finding, grid_axis="y", title=title)
 
 
 def _frame(
@@ -215,11 +215,7 @@ def _frame(
         ax.spines[side].set_color(INK_SECONDARY)
         ax.spines[side].set_linewidth(0.5)
     ax.tick_params(colors=INK_SECONDARY, labelsize=6.5, length=2, width=0.5)
-    note = textwrap.fill(footer(finding), FOOTER_WRAP)
-    fig.text(
-        0.01, 0.006, note, fontsize=3.6, color=INK_SECONDARY, ha="left", va="bottom"
-    )
-    fig.tight_layout(rect=(0, 0.03 + 0.03 * note.count("\n"), 1, 1))
+    fig.tight_layout()
 
 
 def _count_label(group: list[dict[str, Any]]) -> str:
@@ -229,7 +225,9 @@ def _count_label(group: list[dict[str, Any]]) -> str:
     return "/".join(str(r["successes"]) for r in group) + f" of {trials[0]}"
 
 
-def render(finding: Finding, root: Path) -> dict[str, str]:  # noqa: PLR0915 - one drawing, each statement a mark
+def render(  # noqa: PLR0915 - one drawing, each statement a mark
+    finding: Finding, root: Path, *, title: str | None = None
+) -> dict[str, str]:
     """Write the figure in every format plus its CSV; returns the paths
     (relative to `root`) keyed by format — the finding's artifacts.
     A categorical row of arms is drawn as bars with the exact interval
@@ -323,7 +321,7 @@ def render(finding: Finding, root: Path) -> dict[str, str]:  # noqa: PLR0915 - o
             fontweight="bold" if inside else "normal",
             color=INK if inside else INK_SECONDARY,
         )
-    _style(fig, ax, finding)
+    _style(fig, ax, finding, title=title)
 
     written: dict[str, str] = {}
     for fmt in FORMATS:
@@ -387,7 +385,9 @@ def interval_rows(finding: Finding) -> list[dict[str, Any]]:
     return rows
 
 
-def render_interval(finding: Finding, root: Path) -> dict[str, str]:
+def render_interval(
+    finding: Finding, root: Path, *, title: str | None = None
+) -> dict[str, str]:
     """The bootstrap-interval figure: one horizontal whisker per
     parameter on a log axis of value / published fit, the published fit
     at 1; identified parameters in the first hue, the ones the bench
@@ -442,12 +442,12 @@ def render_interval(finding: Finding, root: Path) -> dict[str, str]:
         grid_axis="x",
         # Wrapped narrower than a success-rate title: the long parameter
         # names push these axes to the right half of the canvas.
-        title=textwrap.fill(
+        title=title
+        or textwrap.fill(
             f"Bootstrap intervals of the fit ({refits} refits), "
             "as ratios to the published parameters",
             INTERVAL_TITLE_WRAP,
-        )
-        + f"\n{finding.id}",
+        ),
     )
 
     written: dict[str, str] = {}
@@ -504,7 +504,9 @@ def matrix_rows(finding: Finding) -> list[dict[str, Any]]:
     return rows
 
 
-def render_matrix(finding: Finding, root: Path) -> dict[str, str]:  # noqa: PLR0915 - two panels, each statement a mark
+def render_matrix(  # noqa: PLR0915 - two panels, each statement a mark
+    finding: Finding, root: Path, *, title: str | None = None
+) -> dict[str, str]:
     """The mismatch matrix: per arm a thin line over the pinned scale
     with the exact interval as a shaded band (the reference's curves),
     and the drawn-span conditions as bars beside it."""
@@ -607,18 +609,8 @@ def render_matrix(finding: Finding, root: Path) -> dict[str, str]:  # noqa: PLR0
             axis.spines[side].set_linewidth(0.5)
         axis.tick_params(colors=INK_SECONDARY, labelsize=6.5, length=2, width=0.5)
     ax.set_ylabel("success rate (\u2191)", color=INK, fontsize=7)
-    fig.suptitle(panel_title(finding), fontsize=7.5, color=INK, y=0.99)
-    note = textwrap.fill(footer(finding), 150)
-    fig.text(
-        0.01, 0.006, note, fontsize=3.6, color=INK_SECONDARY, ha="left", va="bottom"
-    )
-    fig.subplots_adjust(
-        left=0.09,
-        right=0.985,
-        bottom=0.17 + 0.035 * note.count("\n"),
-        top=0.88,
-        wspace=0.08,
-    )
+    fig.suptitle(title or panel_title(finding), fontsize=7.5, color=INK, y=0.99)
+    fig.subplots_adjust(left=0.09, right=0.985, bottom=0.17, top=0.88, wspace=0.08)
     written: dict[str, str] = {}
     for fmt in FORMATS:
         path = out_dir / f"{finding.id}.{fmt}"
@@ -634,13 +626,15 @@ def render_matrix(finding: Finding, root: Path) -> dict[str, str]:  # noqa: PLR0
     return written
 
 
-def render_any(finding: Finding, root: Path) -> dict[str, str]:
+def render_any(
+    finding: Finding, root: Path, *, title: str | None = None
+) -> dict[str, str]:
     """Dispatch by the record's shape: arms → `render`, an interval →
     `render_interval`."""
     if "conditions" in finding.outcome:
-        return render_matrix(finding, root)
+        return render_matrix(finding, root, title=title)
     if "arms" in finding.outcome:
-        return render(finding, root)
+        return render(finding, root, title=title)
     if "interval" in finding.outcome:
-        return render_interval(finding, root)
+        return render_interval(finding, root, title=title)
     raise ValueError(f"finding {finding.id} has neither arms nor an interval to draw")
