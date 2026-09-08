@@ -324,7 +324,7 @@ def render(  # noqa: PLR0915 - one drawing, each statement a mark
         ax.set_xlabel("demonstrations pressed (referee-gated)", color=INK, fontsize=7)
     else:
         for x, r, lo, hi in zip(xs, rows, lower, upper, strict=True):
-            fill, edge = arm_colours(r["arm"])
+            fill, edge = arm_colours(r["arm"], finding)
             ax.bar(
                 x, r["rate"], width=BAR_WIDTH, color=fill, edgecolor=edge, linewidth=0.7
             )
