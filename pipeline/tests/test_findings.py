@@ -172,7 +172,8 @@ class TheFigure(unittest.TestCase):
             import matplotlib  # noqa: F401, PLC0415
         except ImportError:
             self.skipTest("matplotlib (train extra)")
-        from rq_pipeline.evaluate.figures import (  # noqa: PLC0415
+        from rq_pipeline.evaluate.figures import (
+            footer,  # noqa: PLC0415
             arm_rows,
             is_curve,
             render,
@@ -206,12 +207,13 @@ class TheFigure(unittest.TestCase):
                 for fmt in ("svg", "pdf", "png", "csv"):
                     self.assertTrue((Path(tmp) / written[fmt]).exists(), fmt)
                 svg = (Path(tmp) / written["svg"]).read_text()
-                # The canvas is clean since 2026-09-08 (the paper's figures carry no
-        # repository footer); the provenance line still exists for the tools
-        # that print it, and names the commit.
-        self.assertNotIn("abc1234", svg)
-        self.assertIn("abc1234", fx.footer(finding))
-                self.assertIn("mujoco-3.11.0+x86_64", svg)
+                # The canvas is clean since 2026-09-08 (the paper's figures
+                # carry no repository footer); the provenance line still
+                # exists for the tools that print it, and names the commit
+                # and the instrument.
+                self.assertNotIn("abc1234", svg)
+                self.assertIn("abc1234", footer(record))
+                self.assertIn("mujoco-3.11.0+x86_64", footer(record))
                 rows = list(csv.DictReader((Path(tmp) / written["csv"]).open()))
                 self.assertEqual([r["arm"] for r in rows], list(record.outcome["arms"]))
 
