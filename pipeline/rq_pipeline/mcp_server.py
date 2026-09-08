@@ -233,6 +233,17 @@ def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
     return described
 
 
+def _jobs_root() -> Path:
+    """Where the MCP job table lives: the current project's root, else
+    the legacy `pipeline/runs`. The job manager appends `mcp-jobs/`."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    try:
+        return current_project().root
+    except FileNotFoundError:
+        return _runs_root(None)
+
+
 def _runs_root(runs_root: Path | None) -> Path:
     return runs_root if runs_root is not None else Path(__file__).parents[1] / "runs"
 
@@ -349,6 +360,26 @@ def describe_project(refresh: bool = True) -> dict[str, Any]:
     return asdict(index)
 
 
+def list_project_dirs() -> list[dict[str, Any]]:
+    """Every project under `projects/`: name, root, and its loop progress
+    (stages proved of eight) from its index when one exists."""
+    from rq_pipeline.project import list_projects  # noqa: PLC0415
+
+    listed = []
+    for project in list_projects():
+        entry: dict[str, Any] = {"name": project.name, "root": str(project.root)}
+        if project.index_path.is_file():
+            raw = json.loads(project.index_path.read_text())
+            entry["stages_proved"] = sum(
+                1 for s in raw.get("states", []) if s.get("present")
+            )
+            entry["stages"] = len(raw.get("states", []))
+            entry["artifacts"] = len(raw.get("artifacts", []))
+            entry["indexed"] = raw.get("indexed")
+        listed.append(entry)
+    return listed
+
+
 def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
     """Make a project directory: the manifest and one folder per artifact
     kind. Never overwrites an existing project."""
@@ -438,6 +469,10 @@ def build_server() -> Any:
         "lineage, the loop map (each state proved or missing), the next move."
     )(describe_project)
     server.tool(
+        name="list_projects",
+        description="Every project under projects/: name, root, stages proved, count.",
+    )(list_project_dirs)
+    server.tool(
         name="create_project",
         description="Make a project directory with its manifest and one folder "
         "per artifact kind; never overwrites.",
@@ -448,7 +483,10 @@ def build_server() -> Any:
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
-    actions = Actions(JobManager(_runs_root(None)))
+    # Jobs live in the PROJECT when one is open (its Overview shows them);
+    # otherwise the legacy runs root, so a checkout with no project still
+    # works exactly as before.
+    actions = Actions(JobManager(_jobs_root()))
     server.tool(
         description="Press referee-gated demonstrations (scripted expert, DR "
         "draws recorded). Returns a job handle."

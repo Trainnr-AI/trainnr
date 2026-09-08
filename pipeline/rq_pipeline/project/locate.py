@@ -24,6 +24,8 @@ PROJECT_ENV = "TRAINNR_PROJECT"
 MANIFEST_FILE = "project.json"
 INDEX_DIR = ".index"
 INDEX_FILE = "project.json"
+# The MCP job table (`rq_pipeline.mcp_jobs`) lives beside the kinds.
+JOBS_DIR = "mcp-jobs"
 PROJECTS_DIR_NAME = "projects"
 DEFAULT_PROJECT = "default"
 SCHEMA = "trainnr-project/1"
@@ -147,3 +149,14 @@ def create_project(root: Path, name: str, description: str = "") -> Project:
     )
     manifest_path.write_text(json.dumps(asdict(manifest), indent=1) + "\n")
     return Project(root)
+
+
+def list_projects(root: Path | None = None) -> list[Project]:
+    """Every project directory under `projects/` (or `root`), by name."""
+    home = Path(root) if root is not None else projects_dir()
+    if not home.is_dir():
+        return []
+    return sorted(
+        (Project(p) for p in home.iterdir() if (p / MANIFEST_FILE).is_file()),
+        key=lambda p: p.root.name,
+    )

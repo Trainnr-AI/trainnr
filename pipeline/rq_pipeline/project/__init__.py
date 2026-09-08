@@ -26,6 +26,7 @@ from rq_pipeline.project.locate import (
     Project,
     create_project,
     current_project,
+    list_projects,
 )
 from rq_pipeline.project.task_ref import write_task_reference
 
@@ -38,6 +39,7 @@ __all__ = [
     "current_project",
     "detect",
     "index_project",
+    "list_projects",
     "stamp_kind",
     "write_index",
     "write_task_reference",

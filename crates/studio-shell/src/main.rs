@@ -1,12 +1,18 @@
 //! The Studio's shell (the-studio doc, phase 1).
 //!
-//! One window, two real things: a MuJoCo-rendered viewport (via
+//! One window with a shell (`shell.rs`: top bar, a rail in the field's
+//! vocabulary — Assets, Data, Training, Evaluation, Deployment — and a
+//! page router) over three real things: the project's pages (`pages.rs`,
+//! read from the index and job table the Python side writes —
+//! `model.rs`), a MuJoCo-rendered viewport (via
 //! `viewport::ViewportFeed` — MuJoCo never runs in-process, see that
 //! module) and — filling the rest — **the actual Rerun viewer,
-//! embedded**, not an imitation of it. No chat panel, deliberately
-//! (docs/64, 2026-09-02): the agent lives in the developer's own tool
-//! and drives this window through the MCP surface; the Studio is the
-//! open window onto the data, not another place to talk. The embed
+//! embedded**, not an imitation of it. No chat panel (docs/64,
+//! 2026-09-02) and no code panel (2026-09-09), deliberately: the agent
+//! lives in the developer's own tool and drives this window through the
+//! MCP surface; code stays on the developer's laptop or GitHub; the
+//! Studio is the window where the magic shows, not another place to
+//! talk or type. The embed
 //! follows Rerun's own `extend_viewer_ui` example (Apache-2.0, 0.36.3)
 //! line for line where it matters: a gRPC server on the standard :9876
 //! feeds it, so every tool this repo already has that speaks the Rerun
@@ -16,12 +22,17 @@
 //! verdict — "use exactly what Rerun does, don't reinvent the wheel" —
 //! replaced it with the wheel.
 
-mod code;
+mod model;
+mod pages;
+mod shell;
 mod viewport;
+mod widgets;
 
-use code::CodePanel;
+use model::Model;
+use pages::Section;
 use re_ui::UiExt as _;
 use rerun::external::{re_crash_handler, re_grpc_server, re_log, re_memory, re_viewer};
+use shell::Shell;
 use viewport::ViewportFeed;
 
 // Rerun's own allocator setup, verbatim: the accounting wrapper is what
@@ -34,19 +45,12 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 // a genuine dual-arm pick-and-place cycling the protocol's own paired
 // trial starts, not placeholder motion (tools/studio-render-stream.py).
 
-/// Width of the macOS traffic-light cluster the brand bar must clear
-/// (the window uses a fullsize content view).
-#[cfg(target_os = "macos")]
-const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
 /// The MuJoCo viewport's starting height above the Rerun viewer, and the
 /// floor it can be dragged down to — a panel that can collapse to an
 /// invisible sliver looks like a missing feature, not a closed panel
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 420.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 160.0;
-/// The code editor's starting width when toggled on (file tree + a
-/// readable column of code).
-const CODE_PANEL_DEFAULT_WIDTH: f32 = 640.0;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -109,6 +113,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut startup_options = re_viewer::StartupOptions::default();
             startup_options.panel_state_overrides.top =
                 Some(rerun::external::re_sdk_types::blueprint::components::PanelState::Hidden);
+            // Rerun's welcome screen (its marketing splash, example
+            // recordings, Hub promotion) is not this app's front page.
+            // The project home (project.rs) is the empty state instead;
+            // the viewer's panes appear the moment a recording exists.
+            startup_options.hide_welcome_screen = true;
 
             let mut rerun_app = re_viewer::App::new(
                 main_thread_token,
@@ -136,8 +145,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Box::new(StudioShell {
                 rerun_app,
                 viewport,
-                code: CodePanel::new(repo_root()),
-                show_code: false,
+                shell: Shell::new(Model::open(&repo_root())),
+                seen_recording: false,
             }))
         }),
     )?;
@@ -147,15 +156,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct StudioShell {
     rerun_app: re_viewer::App,
     viewport: ViewportFeed,
-    code: CodePanel,
-    /// Header toggle: when on, the left side is the code editor.
-    show_code: bool,
+    shell: Shell,
+    /// Whether a recording was loaded last frame — a fresh arrival
+    /// switches the page to Live once, without trapping the user there.
+    seen_recording: bool,
 }
 
 /// `crates/studio-shell` is always two directories under the repo root —
 /// true regardless of the shell's own current working directory, unlike
-/// relying on `std::env::current_dir()`. One home; both the viewport's
-/// render subprocess and the agent's MCP server config build on it.
+/// relying on `std::env::current_dir()`. One home; the viewport's render
+/// subprocess and the default project both build on it.
 fn repo_root() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -176,88 +186,79 @@ impl eframe::App for StudioShell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        self.brand_bar(ui);
+        // One header, ours: the viewer's own top bar is hidden (startup
+        // override above); its panel toggles ride on ours, and matter on
+        // the Live view.
+        let sender = self.rerun_app.command_sender.clone();
+        self.shell.top_bar(ui, |ui| {
+            use re_ui::{UICommand, UICommandSender as _};
+            if ui
+                .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
+                .clicked()
+            {
+                sender.send_ui(UICommand::ToggleSelectionPanel);
+            }
+            if ui
+                .small_icon_button(&re_ui::icons::LEFT_PANEL_TOGGLE, "Blueprint panel")
+                .clicked()
+            {
+                sender.send_ui(UICommand::ToggleBlueprintPanel);
+            }
+        });
+        self.shell.rail(ui);
 
-        // The code editor claims the left side when toggled on — laid
-        // out before the viewport so it runs full height and the
-        // sim/viewer split shares what remains.
-        if self.show_code {
-            egui::Panel::left("code_panel")
-                .resizable(true)
-                .default_size(CODE_PANEL_DEFAULT_WIDTH)
-                .show(ui, |ui| self.code.show(ui));
+        // A recording arriving while another page is up switches to Live:
+        // a run streaming in is the thing to look at.
+        let has_recording = self.rerun_app.recording_db().is_some();
+        if has_recording && !self.seen_recording {
+            self.shell.section = Section::Live;
         }
+        self.seen_recording = has_recording;
 
-        // The MuJoCo sim viewport on top; the whole rest of the window IS
-        // the Rerun viewer — blueprint panel, timeline, views, exactly as
-        // the standalone app renders them.
-        // Two panel ids on purpose: egui remembers a panel's size by id,
-        // and the idle strip must not inherit a 420 px preview height.
-        let active = self.viewport.is_active();
-        egui::Panel::top(if active {
-            "sim_viewport"
-        } else {
-            "sim_viewport_idle"
-        })
-        .resizable(active)
-        .default_size(if active {
-            VIEWPORT_DEFAULT_HEIGHT
-        } else {
-            36.0
-        })
-        .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
-        .show(ui, |ui| {
-            self.viewport.show(ui);
-        });
-        self.rerun_app.ui(ui, frame);
-    }
-}
-
-impl StudioShell {
-    /// The window's one header: wordmark left, the viewer's panel
-    /// toggles and the code toggle right (the viewer's own top bar is
-    /// hidden — see the startup override). Same icons, same commands as
-    /// the native bar.
-    fn brand_bar(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("brand_bar").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                #[cfg(target_os = "macos")]
-                ui.add_space(TRAFFIC_LIGHTS_INSET);
-                ui.add_space(4.0);
-                let accent = ui.tokens().alert_info.icon;
-                ui.label(egui::RichText::new("●").color(accent));
-                ui.label(egui::RichText::new("robotiq studio").strong().size(15.0));
-                ui.weak("· measure, don't guess");
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    use re_ui::{UICommand, UICommandSender as _};
-                    let sender = &self.rerun_app.command_sender;
-                    if ui
-                        .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
-                        .clicked()
-                    {
-                        sender.send_ui(UICommand::ToggleSelectionPanel);
-                    }
-                    // No ToggleTimePanel command exists — the time panel
-                    // carries its own collapse control at its left edge.
-                    if ui
-                        .small_icon_button(&re_ui::icons::LEFT_PANEL_TOGGLE, "Blueprint panel")
-                        .clicked()
-                    {
-                        sender.send_ui(UICommand::ToggleBlueprintPanel);
-                    }
-                    // The code editor toggle — the left side becomes a
-                    // syntax-highlighted view of the repo (code.rs; NOT
-                    // an embedded Lapce, see that module's header).
-                    if ui
-                        .selectable_label(self.show_code, egui::RichText::new("code").small())
-                        .on_hover_text("Code editor")
-                        .clicked()
-                    {
-                        self.show_code = !self.show_code;
-                    }
-                });
+        if self.shell.section == Section::Live {
+            // The MuJoCo sim viewport on top; the rest IS the Rerun
+            // viewer — blueprint panel, timeline, views, exactly as the
+            // standalone app renders them. Two panel ids on purpose:
+            // egui remembers a panel's size by id, and the idle strip
+            // must not inherit a 420 px preview height.
+            let active = self.viewport.is_active();
+            egui::Panel::top(if active {
+                "sim_viewport"
+            } else {
+                "sim_viewport_idle"
+            })
+            .resizable(active)
+            .default_size(if active {
+                VIEWPORT_DEFAULT_HEIGHT
+            } else {
+                36.0
+            })
+            .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
+            .show(ui, |ui| {
+                self.viewport.show(ui);
             });
-        });
+            if has_recording {
+                self.rerun_app.ui(ui, frame);
+            } else {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    pages::page(ui, |ui| {
+                        pages::heading(ui, "Live view");
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(
+                                "Nothing is streaming. Anything speaking the Rerun SDK lands \
+                                 here on :9876 — a press, a training run, a certificate's \
+                                 trials — and the viewer's panes appear the moment it does. \
+                                 Preview a scene from the strip above meanwhile.",
+                            )
+                            .text_style(re_ui::DesignTokens::welcome_screen_body())
+                            .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                });
+            }
+        } else {
+            egui::CentralPanel::default().show(ui, |ui| self.shell.page(ui));
+        }
     }
 }

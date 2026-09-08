@@ -81,6 +81,9 @@ class Artifact:
     # Stamps (or `unrecorded`) of the artifacts this one cites.
     cites: dict[str, str] = field(default_factory=dict)
     summary: dict[str, Any] = field(default_factory=dict)
+    # A picture, relative to the project root, when the kind has one
+    # (`project/previews.py`); None otherwise — never a placeholder.
+    preview: str | None = None
 
 
 @dataclass(frozen=True)
@@ -148,8 +151,23 @@ def index_project(project: Project) -> ProjectIndex:
     )
 
 
-def write_index(project: Project, index: ProjectIndex | None = None) -> Path:
+def write_index(
+    project: Project, index: ProjectIndex | None = None, *, previews: bool = True
+) -> Path:
+    """Write the index; with `previews`, render each artifact's picture
+    first and record its path on the artifact (a cache keyed by stamp, so
+    unchanged artifacts are never re-rendered)."""
+    from dataclasses import replace  # noqa: PLC0415
+
     index = index if index is not None else index_project(project)
+    if previews:
+        from rq_pipeline.project.previews import write_previews  # noqa: PLC0415
+
+        found = write_previews(project, index)
+        index = replace(
+            index,
+            artifacts=[replace(a, preview=found.get(a.stamp)) for a in index.artifacts],
+        )
     out = project.index_path
     out.parent.mkdir(parents=True, exist_ok=True)
     staging = out.with_name(out.name + ".tmp")
