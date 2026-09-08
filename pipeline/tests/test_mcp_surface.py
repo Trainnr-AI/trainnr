@@ -234,6 +234,29 @@ class TheProjectDoors(unittest.TestCase):
             self.assertIn("ingest", index["next_move"])
             self.assertTrue((Path(made["root"]) / ".index" / "project.json").is_file())
 
+    def test_describe_returns_the_written_index_with_its_previews(self) -> None:
+        """The agent must see the same index the Studio reads — including
+        the preview paths write_index records (a stale in-memory copy once
+        said None while the file on disk had the picture, 2026-09-09)."""
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.project import current_project  # noqa: PLC0415
+        from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
+
+        repo = Path(__file__).resolve().parents[2]
+        wire = repo / "recordings" / "chase-arm-2026-08-17.wire"
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
+                ingest(current_project(), wire, name="chase")
+                index = describe_project()
+            rec = next(a for a in index["artifacts"] if a["kind"] == "recording")
+            self.assertIsNotNone(
+                rec["preview"], "preview path missing from the returned index"
+            )
+            self.assertTrue((Path(made["root"]) / rec["preview"]).is_file())
+
     def test_the_committed_sample_describes(self) -> None:
         import os  # noqa: PLC0415
         from unittest import mock  # noqa: PLC0415

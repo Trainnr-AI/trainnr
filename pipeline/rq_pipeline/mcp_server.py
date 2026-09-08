@@ -343,8 +343,6 @@ def describe_project(refresh: bool = True) -> dict[str, Any]:
     every artifact by kind with its stamp and the stamps it cites, the
     loop map with each state proved or missing, and the next legal move.
     Re-indexes from the files by default; the index is a cache."""
-    from dataclasses import asdict  # noqa: PLC0415
-
     from rq_pipeline.project import (  # noqa: PLC0415
         current_project,
         index_project,
@@ -352,12 +350,11 @@ def describe_project(refresh: bool = True) -> dict[str, Any]:
     )
 
     project = current_project()
-    index = index_project(project) if refresh else None
-    if index is not None:
-        write_index(project, index)
-    else:
-        index = index_project(project)
-    return asdict(index)
+    if refresh or not project.index_path.is_file():
+        # write_index renders previews and records their paths; return
+        # what was WRITTEN, so the agent sees the same index the Studio does.
+        write_index(project, index_project(project))
+    return dict(json.loads(project.index_path.read_text(encoding="utf-8")))
 
 
 def list_project_dirs() -> list[dict[str, Any]]:
