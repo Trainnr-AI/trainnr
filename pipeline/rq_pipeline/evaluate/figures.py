@@ -60,8 +60,11 @@ PANEL = (2.9, 2.15)  # one panel, inches: three fit the 5.5 in text width side b
 BAR_WIDTH = 0.62
 FOOTER_WRAP = 88  # characters per footer line at the panel width
 # Display names for arms whose record names are the study's shorthand;
-# the paper's tables use these words (the record keeps its own).
-ARM_LABELS = {
+# the paper's tables use these words (the record keeps its own). The
+# walk's "point / narrow / wide" are spans; the lift's "point /
+# identified / guessed / wide" are randomization bases, and its
+# "identified" is the declared ±5 % span the paper says it was.
+WALK_ARM_LABELS = {
     "point": "none",
     "narrow": "±10 %",
     "wide": "±30 %",
@@ -78,7 +81,17 @@ ARM_LABELS = {
     "horizon-3-latency-0": "student, 3 rows",
     "horizon-1-latency-1": "student, 1 row +1",
 }
-LABEL_INSIDE_ABOVE = 0.45  # a bar taller than this carries its count inside
+LIFT_ARM_LABELS = {"identified": "declared ±5 %"}
+ARM_LABELS = WALK_ARM_LABELS  # the walk's, for callers that predate the split
+
+
+def arm_label(arm: str, finding: Finding) -> str:
+    """The paper's word for an arm, by study."""
+    if finding.id.startswith("walk-"):
+        return WALK_ARM_LABELS.get(arm, arm)
+    if "lift" in finding.id:
+        return LIFT_ARM_LABELS.get(arm, re.sub(r"^n(\d+)$", r"\1", arm))
+    return arm
 
 
 def arm_rows(finding: Finding) -> list[dict[str, Any]]:
@@ -162,11 +175,13 @@ def title_of(finding: Finding) -> str:
     return textwrap.fill(head, TITLE_WRAP) + f"\n{finding.id}{status}"
 
 
-def arm_colours(arm: str) -> tuple[str, str]:
+def arm_colours(arm: str, finding: Finding | None = None) -> tuple[str, str]:
     """Fill and edge for an arm: red for the measured or identified arm
-    the text argues for, grey for a control, blue otherwise."""
+    the text argues for (the walk's narrow span and bootstrap set), grey
+    for a control, blue otherwise."""
     name = arm.lower()
-    if any(k in name for k in HIGHLIGHT_ARMS):
+    walk = finding is None or finding.id.startswith("walk-")
+    if walk and any(k in name for k in HIGHLIGHT_ARMS):
         return FILL_RED, EDGE_RED
     if any(k in name for k in CONTROL_ARMS):
         return FILL_GREY, EDGE_GREY
@@ -296,7 +311,7 @@ def render(  # noqa: PLR0915 - one drawing, each statement a mark
             )
         ax.set_xticks(xs)
         ax.set_xticklabels(
-            [ARM_LABELS.get(r["arm"], r["arm"]) for r in rows],
+            [arm_label(r["arm"], finding) for r in rows],
             color=INK,
             rotation=30 if many else 0,
             ha="right" if many else "center",
@@ -544,7 +559,7 @@ def render_matrix(  # noqa: PLR0915 - two panels, each statement a mark
             linewidth=LINE_PT,
             marker="o",
             markersize=MARKER_PT - 1,
-            label=ARM_LABELS.get(arm, arm),
+            label=arm_label(arm, finding),
         )
         ax.fill_between(
             xs,
