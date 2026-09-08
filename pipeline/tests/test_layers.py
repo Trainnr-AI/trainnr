@@ -25,6 +25,7 @@ TIER = {
     "tasks": 3,
     "collect": 3,
     "envs": 4,
+    "project": 4,  # the index over every kind: imports their marker constants
 }
 # Modules placed below their package: stdlib gates the lower tiers import.
 MODULE_TIER = {"rq_pipeline.robot.model_checks": 1}

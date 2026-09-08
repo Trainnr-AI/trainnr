@@ -11,6 +11,7 @@ from pathlib import Path
 
 from rq_pipeline.mcp_server import (
     bundle_names,
+    create_project_dir,
     describe_actuator,
     describe_actuator_bundle,
     describe_actuator_bundles,
@@ -20,12 +21,14 @@ from rq_pipeline.mcp_server import (
     describe_datasheet,
     describe_engines,
     describe_eval,
+    describe_project,
     describe_runs,
     describe_task,
     describe_tasks,
     friction_curve,
     list_eval_records,
 )
+from rq_pipeline.project import PROJECT_ENV
 from tests._extras import needs_mcp, needs_numpy, needs_sim
 
 
@@ -213,6 +216,32 @@ class Runs(unittest.TestCase):
 
     def test_a_missing_runs_directory_is_empty_not_an_error(self) -> None:
         self.assertEqual(describe_runs(Path("/nonexistent/runs")), [])
+
+
+class TheProjectDoors(unittest.TestCase):
+    def test_create_then_describe_names_every_state_missing(self) -> None:
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            self.assertEqual(made["name"], "p")
+            with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
+                index = describe_project()
+            self.assertEqual(index["project"], "p")
+            self.assertEqual(index["artifacts"], [])
+            self.assertFalse(any(s["present"] for s in index["states"]))
+            self.assertIn("onboard", index["next_move"])
+            self.assertTrue((Path(made["root"]) / ".index" / "project.json").is_file())
+
+    def test_the_committed_sample_describes(self) -> None:
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        sample = Path(__file__).resolve().parents[2] / "projects" / "sample"
+        with mock.patch.dict(os.environ, {PROJECT_ENV: str(sample)}):
+            index = describe_project(refresh=False)
+        self.assertEqual(index["project"], "sample")
 
 
 class ServerFraming(unittest.TestCase):

@@ -1,0 +1,7 @@
+{
+ "schema": "trainnr-project/1",
+ "name": "sample",
+ "created": "2026-09-08T19:19:28+00:00",
+ "description": "The committed sample: a fresh clone opens this in the Studio and sees the loop map with every state missing and the first move named. Artifacts a run produces here are gitignored.",
+ "library": {}
+}

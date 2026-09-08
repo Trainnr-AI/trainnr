@@ -327,6 +327,37 @@ def friction_curve(
     }
 
 
+def describe_project(refresh: bool = True) -> dict[str, Any]:
+    """The current project (`$TRAINNR_PROJECT`, else `projects/default`):
+    every artifact by kind with its stamp and the stamps it cites, the
+    loop map with each state proved or missing, and the next legal move.
+    Re-indexes from the files by default; the index is a cache."""
+    from dataclasses import asdict  # noqa: PLC0415
+
+    from rq_pipeline.project import (  # noqa: PLC0415
+        current_project,
+        index_project,
+        write_index,
+    )
+
+    project = current_project()
+    index = index_project(project) if refresh else None
+    if index is not None:
+        write_index(project, index)
+    else:
+        index = index_project(project)
+    return asdict(index)
+
+
+def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
+    """Make a project directory: the manifest and one folder per artifact
+    kind. Never overwrites an existing project."""
+    from rq_pipeline.project import create_project  # noqa: PLC0415
+
+    project = create_project(Path(path), name, description)
+    return {"root": str(project.root), "name": project.name}
+
+
 def build_server() -> Any:
     """The MCP server over the query functions. Needs the `mcp` extra."""
     from mcp.server import MCPServer  # noqa: PLC0415 - mcp extra
@@ -399,6 +430,18 @@ def build_server() -> Any:
     server.tool(
         description="An actuator's friction-torque curves over velocity, from its model"
     )(friction_curve)
+
+    # The PROJECT family (docs/76): where one effort lives and where it
+    # stands in the loop.
+    server.tool(
+        description="The current project: artifacts by kind with stamps and "
+        "lineage, the loop map (each state proved or missing), the next move."
+    )(describe_project)
+    server.tool(
+        name="create_project",
+        description="Make a project directory with its manifest and one folder "
+        "per artifact kind; never overwrites.",
+    )(create_project_dir)
 
     # The ACT family — S2's doors (docs/64 §3 stage 1), each spawning
     # the CLI that owns the work as a job.
