@@ -87,6 +87,9 @@ class ExportDemos(unittest.TestCase):
             self.assertEqual(provenance["fps"], CONTROL_HZ // FRAME_EVERY)
             self.assertEqual(provenance["episodes"], 2)
             self.assertIn("@", provenance["bundle"])
+            # The batch by NAME (the union check's key) and by STAMP (lineage).
+            self.assertEqual(provenance["source"], demos.name)
+            self.assertTrue(provenance["source_stamp"].startswith(f"{demos.name}@"))
             self.assertIn(str(STATE_WIDTH), provenance["state_semantics"])
             dataset = LeRobotDataset("test/hold", root=root)
             self.assertEqual(len(dataset), 8)  # 2 episodes x 4 frames

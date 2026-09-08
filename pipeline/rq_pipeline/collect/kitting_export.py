@@ -111,6 +111,11 @@ class DatasetProvenance(JsonRecord):
         "metres) — what the harness's vision rollout observes with state_width=14"
     )
     action_semantics: str = "fourteen commanded actuator positions, ctrl order"
+    # The batch's content stamp (`name@hash`, the hashed-files rule of
+    # bundles/hashing). `source` stays the NAME for the union check;
+    # this is the lineage a project index reads. Empty on datasets
+    # exported before 2026-09-09 — reported as unrecorded, never invented.
+    source_stamp: str = ""
 
 
 def write_episode(  # noqa: PLR0913 - the whole episode, every part named
