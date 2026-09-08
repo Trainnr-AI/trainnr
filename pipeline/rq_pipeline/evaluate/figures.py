@@ -82,7 +82,7 @@ WALK_ARM_LABELS = {
     "horizon-3-latency-0": "student, 3 rows",
     "horizon-1-latency-1": "student, 1 row +1",
 }
-LIFT_ARM_LABELS = {"identified": "declared ±5 %"}
+LIFT_ARM_LABELS = {"identified": "±5 %"}
 ARM_LABELS = WALK_ARM_LABELS  # the walk's, for callers that predate the split
 
 
