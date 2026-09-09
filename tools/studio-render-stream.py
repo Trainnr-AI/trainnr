@@ -13,6 +13,13 @@ MuJoCo already renders correctly from Python everywhere this repo runs it
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
 any language can display it without touching MuJoCo's C API directly.
 
+Process shape (2026-09-09): TWO processes. This one renders; it spawns
+itself again with `--physics=<ring>` for the physics loop, and the two
+meet in a memory-mapped state ring (`StateRing`): physics publishes
+time/qpos/mocap each step, the renderer publishes the perturbation
+wrench each frame. One interpreter could not do both — MuJoCo's render
+holds the GIL (finding studio-viewport-pipe-2026-09-09).
+
 Frame transport (2026-09-02, the Rust piping rebuild): with `--shm
 <path>` frames go through a MEMORY-MAPPED ring the controller created —
 16-byte header (magic u32, seq u32, width u32, height u32, all LE) then
@@ -28,6 +35,10 @@ Fallback wire format, stdout, per frame, flushed immediately:
     width  : u32 little-endian
     height : u32 little-endian
     pixels : width * height * 3 raw RGB8 bytes, row-major, no padding
+
+Flags: `--shm=<ring>` (the controller's frame ring), `--shadows=on|off|auto`
+(auto, the default, keeps shadows while the measured render fits one
+60 Hz frame), `--no-rerun` (no narration into the viewer).
 
 Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
 
@@ -70,10 +81,27 @@ import time
 # an operator override either platform's choice via their own environment.
 if sys.platform.startswith("linux"):
     os.environ.setdefault("MUJOCO_GL", "egl")
+elif sys.platform == "darwin":
+    # CGL, not GLFW: a CGL offscreen context is not bound to Cocoa's main
+    # thread, so the render lane can be a thread here too (measured
+    # 2026-09-09: 12 ms/frame from a background thread on Apple Silicon;
+    # finding studio-viewport-pipe-2026-09-09). An operator's own
+    # MUJOCO_GL still wins.
+    os.environ.setdefault("MUJOCO_GL", "cgl")
 
 from _lab import bootstrap
 
 bootstrap()
+
+# Two threads share the interpreter: physics with the scripted policy
+# (long Python stretches) and the render lane (a few short Python
+# stretches between C calls that release the GIL). At CPython's default
+# 5 ms switch interval each of the lane's GIL acquisitions can wait 5 ms
+# behind the policy thread — measured 2026-09-09 on kitting: a 10.6 ms
+# render took 25 ms per lane frame (finding studio-viewport-pipe). A
+# shorter interval hands the GIL over sooner at a cost the physics thread
+# never notices (mj_step releases the GIL).
+sys.setswitchinterval(0.0005)
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
@@ -88,7 +116,10 @@ DEFAULT_TASK = "kitting"
 WIDTH, HEIGHT = 1024, 576
 # 60 with the shared-memory ring (a frame is one memcpy); the stdout
 # fallback stays honest at 30 (6 MB/frame through a pipe, measured).
-TARGET_HZ = 60.0
+# Above the display's 60 on purpose: Event.wait overshoots its timeout by
+# 2-3 ms on macOS (measured 2026-09-09: a 2.6 ms render paced to 60 Hz
+# delivered 52 fps), and the Studio's vsync caps what is drawn anyway.
+TARGET_HZ = 75.0
 FALLBACK_HZ = 30.0
 SHM_HEADER = 16  # magic u32, seq u32, width u32, height u32 - all LE
 SHM_MAGIC = 0x524A4D51  # "QMJR"
@@ -138,9 +169,20 @@ NARRATE_HZ = 10.0  # scalar series: plots need no more
 MIRROR_HZ = 20.0  # the 3D twin: fluid motion; 30 Hz of per-mesh
 # messages (~275 ms/s of Python serialization) blew the loop's realtime
 # budget and slowed BOTH panes (2026-09-01)
-# Past this geom count the shadow pass costs more than it lights (43 vs
-# 10.5 ms/frame on the 20-duck flock, 2026-09-01).
-SHADOW_GEOM_BUDGET = 400
+# Shadows are on until the render lane measures that it cannot keep the
+# display rate with them: a shadow pass is a flat cost per frame on some
+# GPUs (17 ms of a 26 ms frame on the kitting scene, Apple Silicon,
+# 2026-09-09, finding studio-viewport-pipe-2026-09-09), proportional to
+# geoms on others (43 vs 10.5 ms on the 20-duck flock, 2026-09-01). A
+# geom count cannot tell the two apart; the frame time can. `--shadows=`
+# on|off|auto overrides.
+SHADOW_BUDGET_MS = 14.0  # the render lane must fit under one 60 Hz display frame
+SHADOW_PROBE_FRAMES = 30  # frames averaged before shadows are judged
+SHADOW_PROBE_MS = 1000.0  # or this much render time, whichever comes first
+SHADOWS_MODE = "auto"
+# The lane reports itself on stderr this often: frames, render and ship
+# times — the same facts MuJoCo's simulate shows in its Info overlay.
+LANE_STATS_EVERY_S = 5.0
 
 
 class PhysicsNarrator:
@@ -457,15 +499,19 @@ class Perturber:
     def _body_pos(self) -> "np.ndarray":
         return self._live_xpos[self.pert.select].copy()
 
-    # -- physics side -----------------------------------------------------
-    def apply(self, data: "mujoco.MjData") -> None:
-        """Each physics step: the standard simulate.cc ritual — clear,
-        then let MuJoCo turn the reference offset into a force."""
-        data.xfrc_applied[:] = 0.0
-        if self.pert.active:
-            mujoco.mjv_applyPerturbForce(self._model, data, self.pert)
-        # The render lane draws the connector from the LIVE body pose.
-        self._live_xpos = data.xpos
+    # -- render-process side: the force, computed where the scene is ----
+    def force(self, local: "mujoco.MjData") -> "tuple[int, np.ndarray] | None":
+        """The wrench the reference offset asks for, on the render side's
+        copy of the state (one frame behind the physics — the native
+        viewer's own lag, since it too resolves against the last drawn
+        scene). The physics process applies exactly this wrench."""
+        self._live_xpos = local.xpos
+        if not self.pert.active:
+            return None
+        local.xfrc_applied[:] = 0.0
+        mujoco.mjv_applyPerturbForce(self._model, local, self.pert)
+        body = int(self.pert.select)
+        return body, local.xfrc_applied[body].copy()
 
 
 # The stdin protocol's tags, one home (mirrored by viewport.rs).
@@ -555,124 +601,217 @@ class FrameSink:
         out.flush()
 
 
-class RenderPump:
-    """Everything one observed physics step needs: resize, orbit, render,
-    frame out, narration — shared by the expert's `on_control` hook and
-    the no-expert idle loop, so both paths behave identically."""
+STATE_MAGIC = 0x5354_4154  # "STAT": the physics -> render state ring
+# The ring header, all u32 LE: magic, seq, nq, nmocap, then the
+# perturbation seqlock, active, body, paused.
+STATE_HEADER = 32
+PERTURB_FLOATS = 6  # one wrench: force xyz, torque xyz
 
-    def __init__(
-        self,
-        model: "mujoco.MjModel",
-        orbit: OrbitCamera,
-        narrator,
-        perturber: Perturber | None = None,
-        sink: FrameSink | None = None,
+
+class StateRing:
+    """The seam between the physics process and the render process: one
+    memory-mapped file the render side creates. Physics publishes its
+    state (time, qpos, mocap) under a seqlock; the render side reads the
+    newest stable one. The render side publishes the perturbation wrench
+    (which body, which force) under its own seqlock; physics applies it
+    every step. Two processes because two threads share one
+    interpreter, and MuJoCo's render holds the interpreter lock: measured
+    2026-09-09, a 12 ms render took 41 ms beside a busy Python thread
+    and a 109 ms flock render slowed the physics to a crawl (finding
+    studio-viewport-pipe-2026-09-09). The native viewer's physics thread
+    is C and shares nothing; a second process is the same thing here."""
+
+    def __init__(self, path: str, model: "mujoco.MjModel", *, create: bool) -> None:
+        import mmap  # noqa: PLC0415
+
+        self.nq, self.nmocap = int(model.nq), int(model.nmocap)
+        floats = 1 + self.nq + 7 * self.nmocap  # time, qpos, mocap pos + quat
+        self._state_off = STATE_HEADER
+        self._pert_off = self._state_off + 8 * floats
+        size = self._pert_off + 8 * PERTURB_FLOATS
+        if create:
+            with open(path, "wb") as f:
+                f.write(b"\0" * size)
+        with open(path, "r+b") as handle:  # mmap keeps its own reference
+            self._mm = mmap.mmap(handle.fileno(), size)
+        if create:
+            struct.pack_into("<IIII", self._mm, 0, STATE_MAGIC, 0, self.nq, self.nmocap)
+        else:
+            magic, _, nq, nmocap = struct.unpack_from("<IIII", self._mm, 0)
+            if (magic, nq, nmocap) != (STATE_MAGIC, self.nq, self.nmocap):
+                raise RuntimeError(
+                    f"state ring {path}: header {(magic, nq, nmocap)} does not match "
+                    f"this model {(STATE_MAGIC, self.nq, self.nmocap)}"
+                )
+        self._seq = 0
+        self._pseq = 0
+        self._buf = np.zeros(floats)
+
+    # -- physics side --------------------------------------------------------
+    def publish(self, data: "mujoco.MjData") -> None:
+        self._seq += 1
+        struct.pack_into("<I", self._mm, 4, self._seq * 2 - 1)  # odd: writing
+        buf = self._buf
+        buf[0] = data.time
+        buf[1 : 1 + self.nq] = data.qpos
+        if self.nmocap:
+            k = 1 + self.nq
+            buf[k : k + 3 * self.nmocap] = data.mocap_pos.ravel()
+            buf[k + 3 * self.nmocap :] = data.mocap_quat.ravel()
+        self._mm[self._state_off : self._state_off + 8 * len(buf)] = buf.tobytes()
+        struct.pack_into("<I", self._mm, 4, self._seq * 2)  # even: stable
+
+    def read_perturbation(self) -> "tuple[int, np.ndarray] | None":
+        """The wrench the render side asks for, or None; also the pause."""
+        for _ in range(3):
+            pseq, active, body, _paused = struct.unpack_from("<IIII", self._mm, 16)
+            if pseq % 2:
+                continue
+            wrench = np.frombuffer(
+                self._mm, dtype="<f8", count=PERTURB_FLOATS, offset=self._pert_off
+            ).copy()
+            if struct.unpack_from("<I", self._mm, 16)[0] == pseq:
+                return (int(body), wrench) if active else None
+        return None
+
+    def paused(self) -> bool:
+        return bool(struct.unpack_from("<I", self._mm, 28)[0])
+
+    # -- render side ---------------------------------------------------------
+    def read_into(self, local: "mujoco.MjData") -> bool:
+        """The newest stable state into `local`; False when none yet."""
+        for _ in range(3):
+            seq = struct.unpack_from("<I", self._mm, 4)[0]
+            if seq == 0 or seq % 2:
+                continue
+            buf = np.frombuffer(
+                self._mm, dtype="<f8", count=len(self._buf), offset=self._state_off
+            ).copy()
+            if struct.unpack_from("<I", self._mm, 4)[0] != seq:
+                continue
+            local.time = buf[0]
+            local.qpos[:] = buf[1 : 1 + self.nq]
+            if self.nmocap:
+                k = 1 + self.nq
+                local.mocap_pos[:] = buf[k : k + 3 * self.nmocap].reshape(-1, 3)
+                local.mocap_quat[:] = buf[k + 3 * self.nmocap :].reshape(-1, 4)
+            return True
+        return False
+
+    def write_perturbation(
+        self, wrench: "tuple[int, np.ndarray] | None", paused: bool
     ) -> None:
+        self._pseq += 1
+        struct.pack_into("<I", self._mm, 16, self._pseq * 2 - 1)
+        body, force = wrench if wrench is not None else (0, np.zeros(PERTURB_FLOATS))
+        struct.pack_into(
+            "<III", self._mm, 20, int(wrench is not None), body, int(paused)
+        )
+        self._mm[self._pert_off : self._pert_off + 8 * PERTURB_FLOATS] = force.tobytes()
+        struct.pack_into("<I", self._mm, 16, self._pseq * 2)
+
+
+class PhysicsPump:
+    """What one observed physics step does in the PHYSICS process: apply
+    the render side's perturbation, narrate, publish the state, pace to
+    real time. Same `tick` the scene loops call; no pixels here."""
+
+    def __init__(self, model: "mujoco.MjModel", narrator, ring: StateRing) -> None:
         self.model = model
-        self.orbit = orbit
         self.narrator = narrator
-        self.perturber = perturber or Perturber(model)
-        self.sink = sink or FrameSink(None)
-        self.hz = TARGET_HZ if self.sink.shared else FALLBACK_HZ
+        self.ring = ring
         self.last_narrated = 0.0
-        # Episodes reset `data.time` to zero; the narration timeline must
-        # not rewind with them, so it runs on an offset the episode loop
-        # advances at each boundary.
         self.time_offset = 0.0
         self.last_sim_time = 0.0
-        # The render lane: its own THREAD with its own MjData — physics
-        # never waits for the GPU, drags track at true frame rate, and
-        # the two big budget lines overlap instead of queueing (the
-        # leanest fix, 2026-09-01: mj_step/render/pipe-write all release
-        # the GIL, so a second thread is real parallelism). The staging
-        # MjData carries the latest state; the render thread copies it
-        # under the lock, forwards, and draws. The EGL context is
-        # thread-affine, so the Renderer is BUILT in the render thread.
-        self._staging = mujoco.MjData(model)
-        self._staging_lock = threading.Lock()
-        self._fresh = threading.Event()
-        # macOS: Cocoa wants GL on the main thread (MuJoCo's offscreen
-        # path rides GLFW there) — render inline instead of in a lane.
-        self._threaded = sys.platform != "darwin"
-        if self._threaded:
-            threading.Thread(target=self._render_lane, daemon=True).start()
-        else:
-            self._inline_state = None  # built lazily by _render_once
 
     def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
-        """Observe one step: narrate (rate-limited), hand the render lane
-        a snapshot, then sleep toward real time — `pace_seconds` is how
-        much simulated time this step advanced."""
         self.last_sim_time = data.time
-        # The shove, if one is active: xfrc for the caller's NEXT steps.
-        self.perturber.apply(data)
         now = time.monotonic()
+        data.xfrc_applied[:] = 0.0
+        wrench = self.ring.read_perturbation()
+        if wrench is not None:
+            body, force = wrench
+            if 0 < body < self.model.nbody:
+                data.xfrc_applied[body] = force
         if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
             self.last_narrated = now
             self.narrator.log(data, self.time_offset + data.time)
-
-        with self._staging_lock:
-            self._staging.qpos[:] = data.qpos
-            if self.model.nmocap:
-                self._staging.mocap_pos[:] = data.mocap_pos
-                self._staging.mocap_quat[:] = data.mocap_quat
-        self._fresh.set()
-        if not self._threaded:
-            self._render_inline(now)
-
+        self.ring.publish(data)
         # Pace toward real time: sleep off whatever of this step's
         # simulated duration wall time hasn't already consumed.
         remaining = pace_seconds - (time.monotonic() - now)
         if remaining > 0:
             time.sleep(remaining)
+        # Paused (the viewer's space bar): hold here, still publishing so
+        # a drag on a paused scene still shows its connector.
+        while self.ring.paused():
+            time.sleep(0.02)
+            self.ring.publish(data)
 
-    def _render_inline(self, now: float) -> None:
-        """The Darwin path: one render lane's body, run synchronously at
-        the pump's rate inside tick (Cocoa's main-thread GL rule)."""
-        if self._inline_state is None:
-            self._inline_state = {"last": 0.0}
-        if now - self._inline_state["last"] < 1.0 / self.hz:
-            return
-        self._inline_state["last"] = now
-        self._render_step(self._inline_state)
 
-    def _render_lane(self) -> None:
+class RenderPump:
+    """The RENDER process: reads the newest physics state from the ring,
+    resolves camera and perturbation against the freshly drawn scene,
+    renders at the display's rate, ships the frame. The perturbation
+    wrench it computes goes back through the ring."""
+
+    def __init__(
+        self,
+        model: "mujoco.MjModel",
+        orbit: OrbitCamera,
+        perturber: Perturber,
+        sink: "FrameSink",
+        ring: StateRing,
+    ) -> None:
+        self.model = model
+        self.orbit = orbit
+        self.perturber = perturber
+        self.sink = sink
+        self.ring = ring
+        self.hz = TARGET_HZ if self.sink.shared else FALLBACK_HZ
+        # A camera or perturb gesture re-renders NOW (the stdin reader
+        # sets it), not at the next lane tick.
+        self._fresh = threading.Event()
+
+    def run_forever(self) -> None:
+        """The lane, on the calling thread (GL contexts are thread-affine;
+        the main thread works under every backend, GLFW included)."""
         state: dict = {}
         interval = 1.0 / self.hz
-        while True:
-            self._fresh.wait(timeout=interval)
-            self._fresh.clear()
-            began = time.monotonic()
-            self._render_step(state)
-            # Hold the lane to the target rate.
-            leftover = interval - (time.monotonic() - began)
-            if leftover > 0:
-                time.sleep(leftover)
+        try:
+            while True:
+                began = time.monotonic()
+                self._render_step(state)
+                # One frame per interval; a poke (camera, perturbation)
+                # ends the wait early and re-renders at once.
+                remaining = interval - (time.monotonic() - began)
+                if remaining > 0:
+                    self._fresh.wait(timeout=remaining)
+                self._fresh.clear()
+        except BrokenPipeError:
+            # The Studio closed the frame pipe: we are done. A hard exit,
+            # because the stdin reader (a daemon thread) holds stdin's
+            # buffer lock and a normal shutdown trips over it.
+            os._exit(0)
 
     def _render_step(self, state: dict) -> None:
-        """One frame: snapshot -> forward -> (re)size -> render -> ship.
-        `state` persists the renderer/camera between calls; built on
-        first use IN THE CALLING THREAD (GL contexts are thread-affine).
-        Shadow budget: measured on the 20-duck flock at 1300x400,
-        43 ms/frame with shadows vs 10.5 without (2026-09-01)."""
+        """One frame: ring -> forward -> (re)size -> render -> ship.
+        `state` persists the renderer/camera between calls."""
         model = self.model
         if "renderer" not in state:
             state["width"], state["height"] = WIDTH, HEIGHT
             state["renderer"] = mujoco.Renderer(
                 model, height=state["height"], width=state["width"]
             )
-            state["shadows"] = model.ngeom <= SHADOW_GEOM_BUDGET
+            state["shadows"] = SHADOWS_MODE != "off"
+            state["render_ms"] = []  # the last SHADOW_PROBE_FRAMES render times
             cam = mujoco.MjvCamera()
             cam.type = mujoco.mjtCamera.mjCAMERA_FREE
             cam.lookat = list(self.orbit.lookat)
             state["cam"] = cam
             state["local"] = mujoco.MjData(model)
         local = state["local"]
-        with self._staging_lock:
-            local.qpos[:] = self._staging.qpos
-            if model.nmocap:
-                local.mocap_pos[:] = self._staging.mocap_pos
-                local.mocap_quat[:] = self._staging.mocap_quat
+        self.ring.read_into(local)  # before the first publish: the zero pose
         mujoco.mj_forward(model, local)
         want_width, want_height = self.orbit.size()
         # Clamp to the compiled framebuffer no matter what the viewer
@@ -701,14 +840,71 @@ class RenderPump:
         self.perturber.resolve(
             local, renderer.scene, state["vopt"], state["width"] / state["height"]
         )
+        self.ring.write_perturbation(self.perturber.force(local), self.perturber.paused)
         self.perturber.draw(renderer.scene)
         if not state["shadows"]:
             renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        began = time.monotonic()
         frame = renderer.render()  # HxWx3 uint8, C-contiguous
+        rendered = time.monotonic()
+        self._judge_shadows(state, (rendered - began) * 1000.0)
         self.sink.ship(frame, state["width"], state["height"])
+        self._lane_stats(
+            state, (rendered - began) * 1000.0, (time.monotonic() - rendered) * 1000.0
+        )
+
+    def _lane_stats(self, state: dict, render_ms: float, ship_ms: float) -> None:
+        """One stderr line per LANE_STATS_EVERY_S: what the lane actually
+        achieves, so a slow viewport is diagnosed from the log, not guessed."""
+        stats = state.setdefault(
+            "lane", {"since": time.monotonic(), "render": [], "ship": []}
+        )
+        stats["render"].append(render_ms)
+        stats["ship"].append(ship_ms)
+        elapsed = time.monotonic() - stats["since"]
+        if elapsed < LANE_STATS_EVERY_S:
+            return
+        r = sorted(stats["render"])
+        sh = sorted(stats["ship"])
+        n = len(r)
+        print(
+            f"lane: {n} frames in {elapsed:.1f} s ({n / elapsed:.1f} fps); "
+            f"render p50 {r[n // 2]:.1f} ms p90 {r[int(n * 0.9)]:.1f} ms; "
+            f"ship p50 {sh[n // 2]:.2f} ms; "
+            f"shadows {'on' if state['shadows'] else 'off'}; "
+            f"{state['width']}x{state['height']}",
+            file=sys.stderr,
+            flush=True,
+        )
+        stats["since"] = time.monotonic()
+        stats["render"].clear()
+        stats["ship"].clear()
+
+    def _judge_shadows(self, state: dict, render_ms: float) -> None:
+        """Shadows stay while the measured render fits the display budget;
+        past it they go, once, and the decision is logged with the number."""
+        if SHADOWS_MODE != "auto" or not state["shadows"]:
+            return
+        times = state["render_ms"]
+        times.append(render_ms)
+        # Judge after the probe window, or sooner when the frames are so
+        # slow that waiting for the window would itself take seconds (the
+        # 20-duck flock: 274 ms/frame with shadows).
+        if len(times) < SHADOW_PROBE_FRAMES and sum(times) < SHADOW_PROBE_MS:
+            return
+        mean = sum(times) / len(times)
+        if mean > SHADOW_BUDGET_MS:
+            state["shadows"] = False
+            print(
+                f"shadows off: render averaged {mean:.1f} ms over {len(times)} frames, "
+                f"budget {SHADOW_BUDGET_MS:g} ms",
+                file=sys.stderr,
+                flush=True,
+            )
+        del times[:]  # judge again on the next window if shadows survived
 
 
-def run_expert_forever(task: "object", pump: RenderPump) -> None:
+def run_expert_forever(task: "object", pump: PhysicsPump) -> None:
     """The real thing: the task's accepted scripted expert drives the sim,
     cycling the protocol's own paired trial starts — the same
     `perturb(trial, home)` draws the acceptance verdict ran on. The pump
@@ -742,7 +938,7 @@ def run_expert_forever(task: "object", pump: RenderPump) -> None:
         trial = (trial + 1) % protocol.trials
 
 
-def run_idle_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+def run_idle_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None:
     """No expert registered for this task: a slow sinusoid on every
     actuator — visible, harmless placeholder motion so 'streaming' and
     'stalled' can be told apart at a glance."""
@@ -830,7 +1026,7 @@ PARADE_SPEED = 0.12  # m/s along +x, wrapping at the floor's edge
 PARADE_WRAP_X = 2.4
 
 
-def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+def run_flock_parade_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None:
     """The duck parade: a scripted waddle on every duck's leg servos
     (phase-offset per duck) while each mocap stand glides forward -
     the legs are real physics under weak real servos; the forward
@@ -897,7 +1093,10 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
         pump.tick(data, dt * substeps)
 
 
-def stream(task_name: str, shm_path: str | None) -> None:
+def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
+    """The task (or None for the duck preview), its compiled model with
+    the offscreen budget raised to the viewer's cap, and its rig name.
+    Both processes build the same model from the same spec path."""
     if task_name == DUCK:
         task, spec, rig = None, duck_scene(), "microduck"
     else:
@@ -908,22 +1107,60 @@ def stream(task_name: str, shm_path: str | None) -> None:
     # MAX_RENDER_SIDE's comment for the measured failure without this.
     spec.visual.global_.offwidth = max(spec.visual.global_.offwidth, MAX_RENDER_SIDE)
     spec.visual.global_.offheight = max(spec.visual.global_.offheight, MAX_RENDER_SIDE)
-    model = spec.compile()
+    return task, spec.compile(), rig
+
+
+def stream(task_name: str, shm_path: str | None) -> None:
+    """The render process: the one the Studio spawns. It creates the
+    state ring, spawns the physics process on it, and renders."""
+    import subprocess  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    _task, model, rig = build_scene(task_name)
+    fd, ring_path = tempfile.mkstemp(prefix="studio-state-", suffix=".ring")
+    os.close(fd)
+    ring = StateRing(ring_path, model, create=True)
+    physics_args = [
+        sys.executable,
+        os.path.abspath(__file__),
+        task_name,
+        f"--physics={ring_path}",
+    ]
+    if "--no-rerun" in sys.argv:
+        physics_args.append("--no-rerun")
+    # The child's stdin is a pipe this process never writes: when this
+    # process dies, the pipe closes and the child exits on EOF — no
+    # orphaned physics at 100 % of a core.
+    physics = subprocess.Popen(physics_args, stdin=subprocess.PIPE)
 
     orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
     perturber = Perturber(model)
-    pump = RenderPump(
-        model, orbit, narrator_for(model, task_name), perturber, FrameSink(shm_path)
-    )
-    # `poke` = the render lane's own event: a camera or perturb gesture
-    # re-renders NOW, not at the next physics tick (the native viewer's
-    # decoupling, reproduced across the process boundary).
+    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring)
     threading.Thread(
         target=_read_control_messages,
         args=(orbit, perturber, pump._fresh.set, pump.sink.shared),
         daemon=True,
     ).start()
+    try:
+        pump.run_forever()
+    finally:
+        physics.terminate()
+        pathlib.Path(ring_path).unlink(missing_ok=True)
 
+
+def physics_main(task_name: str, ring_path: str) -> None:
+    """The physics process: the scene loop with the narrator, publishing
+    into the ring the render process created; exits when its stdin
+    closes (the render process is gone)."""
+    task, model, _rig = build_scene(task_name)
+    ring = StateRing(ring_path, model, create=False)
+
+    def watch_parent() -> None:
+        sys.stdin.buffer.read()  # EOF when the render process dies
+        os._exit(0)
+
+    threading.Thread(target=watch_parent, daemon=True).start()
+    pump = PhysicsPump(model, narrator_for(model, task_name), ring)
     if task is not None and task_name in TASKS_WITH_EXPERTS:
         run_expert_forever(task, pump)
     elif task_name == DUCK:
@@ -938,7 +1175,18 @@ if __name__ == "__main__":
     for flag in sys.argv[1:]:
         if flag.startswith("--shm="):
             shm = flag.removeprefix("--shm=")
+        elif flag.startswith("--shadows="):
+            SHADOWS_MODE = flag.removeprefix("--shadows=")
+            if SHADOWS_MODE not in ("on", "off", "auto"):
+                sys.exit(f"--shadows must be on, off or auto, not {SHADOWS_MODE!r}")
+    physics_ring = None
+    for flag in sys.argv[1:]:
+        if flag.startswith("--physics="):
+            physics_ring = flag.removeprefix("--physics=")
     task_name = arguments[0] if arguments else DEFAULT_TASK
     if task_name != DUCK and task_name not in BUILDERS:
         sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")
-    stream(task_name, shm)
+    if physics_ring:
+        physics_main(task_name, physics_ring)
+    else:
+        stream(task_name, shm)

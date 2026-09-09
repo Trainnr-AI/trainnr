@@ -292,6 +292,7 @@ class StudioDoors(unittest.TestCase):
             set_studio_panels,
             set_studio_time,
             show_in_studio,
+            simulate_in_studio,
         )
         from rq_pipeline.project import PROJECT_ENV, create_project  # noqa: PLC0415
 
@@ -307,6 +308,7 @@ class StudioDoors(unittest.TestCase):
                     set_studio_time(play=True),
                     set_studio_panels(blueprint="expand"),
                     screenshot_studio(),
+                    simulate_in_studio("kitting"),
                 ):
                     self.assertEqual(answer["status"], "refused")
                     self.assertIn("launch_studio", answer["reason"])

@@ -137,19 +137,23 @@ pub struct ViewportFeed {
     /// request killed the renderer and the panel just... stopped) —
     /// `show` turns this into a visible error instead.
     stream_ended: Arc<AtomicBool>,
+    /// The scene this feed runs (a preview task name), for the state file.
+    task: Option<String>,
+    /// When each of the last frames was drawn, for the on-screen rate.
+    drawn_at: std::collections::VecDeque<std::time::Instant>,
 }
 
 /// The scene previews the idle strip offers — pipeline-registry tasks
 /// `studio-render-stream.py` can run. The LIVE scene never comes from
 /// here: a training run mirrors itself into the Rerun 3D view below
 /// (`world/robot`, the recorder's mirror).
-const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
+pub const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 
 /// The RL view: `rq_mjlab.walk_view` rolls the newest trained walk
 /// checkpoint (policy-driven worlds on the GPU, CPU mirror into the
 /// same frame ring, Ctrl+drag shoves land in the batched sim). Its own
 /// spawn shape: the rq_mjlab venv, not the pipeline's.
-const WALK_TASK: &str = "walk";
+pub const WALK_TASK: &str = "walk";
 
 impl ViewportFeed {
     /// No subprocess, no canned scene: the panel starts as a slim strip
@@ -169,11 +173,29 @@ impl ViewportFeed {
             last_resize_sent: None,
             perturbing: false,
             stream_ended: Arc::new(AtomicBool::new(false)),
+            task: None,
+            drawn_at: std::collections::VecDeque::new(),
         }
     }
 
     /// Whether a preview is running (or died trying) — the panel sizes
     /// itself by this.
+    /// The preview task running, if any.
+    pub fn task(&self) -> Option<&str> {
+        self.task.as_deref()
+    }
+
+    /// Frames drawn to the screen in the last second, once any were.
+    pub fn fps(&self) -> Option<f32> {
+        let now = std::time::Instant::now();
+        let recent = self
+            .drawn_at
+            .iter()
+            .filter(|t| now.duration_since(**t) <= std::time::Duration::from_secs(1))
+            .count();
+        (!self.drawn_at.is_empty()).then_some(recent as f32)
+    }
+
     pub fn is_active(&self) -> bool {
         self.child.is_some() || self.spawn_error.is_some() || self.texture.is_some()
     }
@@ -281,6 +303,8 @@ impl ViewportFeed {
                     last_resize_sent: None,
                     perturbing: false,
                     stream_ended,
+                    task: Some(task_name.to_owned()),
+                    drawn_at: std::collections::VecDeque::new(),
                 }
             }
             (Ok(mut child), Err(err)) => {
@@ -342,6 +366,15 @@ impl ViewportFeed {
         if published != self.frames_drawn {
             if let Some(image) = self.shm.as_mut().and_then(ShmReader::latest) {
                 self.frames_drawn = published;
+                let now = std::time::Instant::now();
+                self.drawn_at.push_back(now);
+                while self
+                    .drawn_at
+                    .front()
+                    .is_some_and(|t| now.duration_since(*t) > std::time::Duration::from_secs(2))
+                {
+                    self.drawn_at.pop_front();
+                }
                 match &mut self.texture {
                     // Update in place: `load_texture` allocates a brand-new
                     // texture every call, and this runs at frame rate.

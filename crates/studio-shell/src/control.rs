@@ -81,6 +81,12 @@ pub enum Command {
         #[serde(default)]
         time: Option<String>,
     },
+    /// Run a scene in the MuJoCo viewport (a preview task by name), or
+    /// stop it when `task` is absent.
+    Simulate {
+        #[serde(default)]
+        task: Option<String>,
+    },
     Screenshot {
         /// The written image's width in pixels; taller frames scale to it.
         #[serde(default)]
@@ -127,6 +133,10 @@ pub struct StudioState {
     pub live: Live,
     pub presenter_running: bool,
     pub jobs_running: usize,
+    /// The MuJoCo viewport: which preview scene runs, and the frames it
+    /// drew to the screen in the last second (the on-screen rate).
+    pub viewport_task: Option<String>,
+    pub viewport_fps: Option<f32>,
 }
 
 pub struct Control {
@@ -457,6 +467,8 @@ mod tests {
             live: Live::default(),
             presenter_running: false,
             jobs_running: 0,
+            viewport_task: None,
+            viewport_fps: None,
         };
         control.record_state(state.clone());
         let text = std::fs::read_to_string(root.join(STATE_RELATIVE)).unwrap();

@@ -15,6 +15,9 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 *2026-09-09, measured (finding `studio-viewport-pipe-2026-09-09`): the viewport pipe delivers 32.6 fps on the kitting scene; the offscreen render is 26 ms/frame at any size, 17 ms of it shadows; shadows off gives 41 fps; on macOS the render is inline with physics, and a CGL context renders from a background thread at 12 ms, so the two fixes are known. The native window was not measured.*
 
+
+*2026-09-09, later: the stream is two processes (physics and render, a shared-memory state ring between them) because MuJoCo's Python render holds the GIL; kitting reaches 60-70 fps on screen (finding `studio-viewport-two-process-2026-09-09`). The 20-duck flock stays slow: 109 ms a frame of geometry on this GL path.*
+
 ## 0. What the Studio is
 
 One native desktop application, `crates/studio-shell`, about 1,200 lines

@@ -526,6 +526,25 @@ impl StudioShell {
                 }
                 Ok(())
             }
+            Command::Simulate { task } => {
+                match task {
+                    Some(name) => {
+                        let known = viewport::PREVIEW_TASKS.contains(&name.as_str())
+                            || name == viewport::WALK_TASK;
+                        if !known {
+                            return Err(format!(
+                                "no preview scene {name:?}; one of {:?} or {:?}",
+                                viewport::PREVIEW_TASKS,
+                                viewport::WALK_TASK
+                            ));
+                        }
+                        self.viewport = ViewportFeed::spawn(ui.ctx(), &name);
+                        self.shell.section = Section::Live;
+                    }
+                    None => self.viewport = ViewportFeed::idle(),
+                }
+                Ok(())
+            }
             Command::Screenshot { .. } => {
                 unreachable!("screenshots are taken in apply_commands, after the page")
             }
@@ -663,6 +682,8 @@ impl StudioShell {
             live,
             presenter_running: self.shell.presenter_running(),
             jobs_running: self.shell.model.running_jobs(),
+            viewport_task: self.viewport.task().map(str::to_owned),
+            viewport_fps: self.viewport.fps(),
         };
         self.control.record_state(state);
     }

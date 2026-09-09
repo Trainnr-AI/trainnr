@@ -1,0 +1,65 @@
+{
+ "id": "studio-viewport-two-process-2026-09-09",
+ "claim": "Splitting the Studio's MuJoCo stream into a physics process and a render process joined by a shared-memory state ring, with shadows judged by measured frame time, raises the kitting scene from 32.6 fps at the pipe and ~33 on screen to 53.7 fps at the pipe (p50 18.4 ms, p90 21.4 ms) and 60-70 fps on screen; the physics paces itself at real time regardless of render. The 20-duck flock stays at 4.6-9 fps because its render alone is 109 ms/frame on this Mac (Apple M1 Pro, GL 2.1 over Metal, CGL offscreen).",
+ "date": "2026-09-09",
+ "repo_commit": "af7ef98",
+ "argv": [
+  "tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (15 s)",
+  "simulate_in_studio('kitting'); describe_studio()['viewport_fps'] sampled 12 x 1 s",
+  "simulate_in_studio('duck'); same"
+ ],
+ "instrument": "mujoco-3.11.0 (python, MUJOCO_GL=cgl), macOS 25.5.0 Apple M1 Pro, Python 3.12, rerun narration on; Studio release build",
+ "outcome": {
+  "cause": "MuJoCo's Python render holds the GIL: a 12.1 ms render measured 41.2 ms beside a pure-Python spinner thread; physics and render in one interpreter starve each other both ways (the flock's 109 ms render slowed physics to slow motion).",
+  "pipe_fps": {
+   "before_single_process": 32.6,
+   "threaded_lane_same_process": 39.8,
+   "two_process": 53.7,
+   "two_process_lift": 51.6
+  },
+  "pipe_interval_ms_two_process": {
+   "p50": 18.4,
+   "p90": 21.4
+  },
+  "on_screen_fps": {
+   "kitting_before": 40.3,
+   "kitting_after": {
+    "mean": 59.5,
+    "min": 36,
+    "max": 77,
+    "note": "the min is a viewport resize rebuilding the renderer"
+   },
+   "duck_after": {
+    "mean": 6.3,
+    "max": 9
+   }
+  },
+  "lane_render_ms": {
+   "kitting_p50": 10.4,
+   "lift_p50": 2.6,
+   "duck_p50": 109.2
+  },
+  "gl_renderer": "Apple M1 Pro, 2.1 Metal - 90.5 (hardware, via mujoco.cgl)",
+  "resolution_dependence_cgl_ms": {
+   "256x144": 11.6,
+   "1024x576": 12.1,
+   "1920x1080": 15.0
+  },
+  "gil_switch_interval_effect": "none: 39.8 fps at 5 ms and at 0.5 ms",
+  "shadow_judge": "auto: off after the first 30 frames or 1 s of render time averaging above 14 ms; kitting judged off (30.9 ms mean incl. warm-up), lift kept on (2.6 ms)"
+ },
+ "artifacts": {
+  "script": "tools/studio-render-stream.py",
+  "studio": "crates/studio-shell/src/viewport.rs",
+  "previous": "docs/findings/studio-viewport-pipe-2026-09-09.json"
+ },
+ "sources": {
+  "finding": "studio-viewport-pipe-2026-09-09 (the before)"
+ },
+ "protocol": "as studio-viewport-pipe-2026-09-09, plus the on-screen rate read from the Studio's state file (frames drawn in the last second, viewport_fps) through describe_studio",
+ "caveats": [
+  "One machine, three scenes.",
+  "The on-screen counter counts frames drawn into the texture; the display's own refresh caps what a human sees at 60 (ProMotion excepted).",
+  "The flock's 109 ms is geometry-bound on this GL path; a native simulate window on the same machine was not measured."
+ ]
+}

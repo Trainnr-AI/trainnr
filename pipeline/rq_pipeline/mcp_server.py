@@ -546,6 +546,18 @@ def set_studio_panels(
     )
 
 
+def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
+    """Run a scene in the Studio's MuJoCo viewport — a preview task by name
+    (kitting, lift, duck) or `walk` for the newest trained walk policy —
+    and switch to the Live view; with no task, stop the viewport. The
+    state file then reports `viewport_task` and `viewport_fps`, the
+    frames drawn to the screen in the last second."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(current_project(), "simulate", task=task)
+
+
 def screenshot_studio(
     section: str | None = None, artifact: str | None = None, width: int = 1600
 ) -> dict[str, Any]:
@@ -712,6 +724,10 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Expand or toggle the viewer's blueprint (left) and selection "
         "(right) panels."
     )(set_studio_panels)
+    server.tool(
+        description="Run a scene in the MuJoCo viewport (kitting, lift, duck, walk) "
+        "and open the Live view; no task stops it. State reports viewport_fps."
+    )(simulate_in_studio)
     server.tool(
         description="See the window: a PNG of the whole Studio (optionally after "
         "opening a page or an artifact); read the returned path to look at it."
