@@ -113,6 +113,12 @@ pub enum Command {
         flag: Option<String>,
         #[serde(default)]
         on: Option<bool>,
+        /// The Inspect drawer: control, joints, physics, or close.
+        #[serde(default)]
+        inspect: Option<String>,
+        /// The camera to a named view: front, side, top, reset.
+        #[serde(default)]
+        view: Option<String>,
     },
     Screenshot {
         /// The written image's width in pixels; taller frames scale to it.

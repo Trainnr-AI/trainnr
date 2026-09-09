@@ -605,15 +605,33 @@ def set_simulator_input(
     )
 
 
-def set_simulator_view(flag: str, on: bool) -> dict[str, Any]:
-    """A MuJoCo visualization or rendering flag by its own name —
-    contactpoint, contactforce, joint, actuator, constraint, inertia, com,
-    transparent, perturbforce, camera, light, tendon… (mjtVisFlag) or
-    shadow, reflection, skybox, fog, wireframe… (mjtRndFlag)."""
+def set_simulator_view(
+    flag: str | None = None,
+    on: bool | None = None,
+    camera: str | None = None,
+    inspect: str | None = None,
+) -> dict[str, Any]:
+    """What the simulator shows: a MuJoCo visualization or rendering
+    `flag` by its own name with `on` (contactpoint, contactforce, joint,
+    actuator, constraint, inertia, com, transparent, perturbforce, camera,
+    light, tendon… or shadow, reflection, skybox, fog, wireframe…); the
+    `camera` to a named view (front, side, top, reset); the Inspect drawer
+    by tab (control, joints, physics) or close."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
-    return command(current_project(), "simulator", flag=flag, on=on)
+    if flag is not None and on is None:
+        return {"status": "refused", "reason": "a flag needs `on`"}
+    if flag is None and camera is None and inspect is None:
+        return {"status": "refused", "reason": "name a flag, a camera view or inspect"}
+    return command(
+        current_project(),
+        "simulator",
+        flag=flag,
+        on=on,
+        view=camera,
+        inspect=inspect,
+    )
 
 
 def screenshot_studio(
@@ -795,8 +813,9 @@ def build_server() -> Any:  # noqa: PLR0915
         "or a joint's position; takes manual control."
     )(set_simulator_input)
     server.tool(
-        description="A MuJoCo visualization or rendering flag by its own name "
-        "(contactforce, joint, inertia, shadow, wireframe...)."
+        description="What the simulator shows: a MuJoCo flag by name with on, a "
+        "camera view (front/side/top/reset), the Inspect drawer "
+        "(control/joints/physics/close)."
     )(set_simulator_view)
     server.tool(
         description="See the window: a PNG of the whole Studio (optionally after "

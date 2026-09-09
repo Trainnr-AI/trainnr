@@ -580,6 +580,8 @@ impl StudioShell {
                 value,
                 flag,
                 on,
+                inspect,
+                view,
             } => {
                 if !self.viewport.is_active() {
                     return Err("no scene runs in the simulator; simulate a task first".into());
@@ -595,6 +597,8 @@ impl StudioShell {
                     actuator.as_ref().map(|_| "actuator"),
                     joint.as_ref().map(|_| "joint"),
                     flag.as_ref().map(|_| "overlay"),
+                    inspect.as_ref().map(|_| "inspect"),
+                    view.as_ref().map(|_| "view"),
                 ]
                 .into_iter()
                 .flatten()
@@ -652,6 +656,21 @@ impl StudioShell {
                         self.viewport.send_qpos(j.qpos as u32, value);
                         self.viewport.stop_editing(0, j.qpos);
                     }
+                }
+                if let Some(what) = inspect {
+                    simulator::inspect(ui.ctx(), &what)?;
+                }
+                if let Some(name) = view {
+                    let preset = match name.as_str() {
+                        "reset" => 0,
+                        "front" => 1,
+                        "side" => 2,
+                        "top" => 3,
+                        other => {
+                            return Err(format!("view {other:?}: one of front, side, top, reset"))
+                        }
+                    };
+                    self.viewport.send_view(preset);
                 }
                 if let Some(name) = flag {
                     let on = on.ok_or("a flag needs `on`")?;

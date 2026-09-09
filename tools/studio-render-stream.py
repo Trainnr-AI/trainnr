@@ -1028,6 +1028,12 @@ class SimControl:
         self.speed = 1.0
         self._model_sent = False
         self._last_status = 0.0
+        # The live ctrl and qpos as last drawn: what the sliders start
+        # from when the human takes control (without this the first
+        # slider sent every OTHER actuator as zero — arms collapsed onto
+        # the table in a burst of contact arrows, 2026-09-09).
+        self._live_ctrl = np.zeros(model.nu)
+        self._live_qpos = np.zeros(model.nq)
 
     # -- reader thread ----------------------------------------------------
     def handle(self, tag: int, payload: bytes) -> None:
@@ -1048,7 +1054,10 @@ class SimControl:
             self.speed = max(SPEED_MIN, min(SPEED_MAX, factor))
             self.ring.post_command("speed", 0, self.speed)
         elif tag == TAG_MANUAL:
-            self.manual = bool(payload[0])
+            on = bool(payload[0])
+            if on and not self.manual:
+                self.ring.seed_manual(self._live_ctrl, self._live_qpos)
+            self.manual = on
             self.ring.post_command("manual", int(self.manual))
         elif tag == TAG_CTRL:
             index, value = struct.unpack("<If", payload)
@@ -1068,8 +1077,10 @@ class SimControl:
                 self._rnd[flag] = bool(on)
 
     def _take_control(self) -> None:
-        """A slider moved: the human drives the scene from here on."""
+        """A slider moved: the human drives the scene from here on, from
+        the pose and controls it had."""
         if not self.manual:
+            self.ring.seed_manual(self._live_ctrl, self._live_qpos)
             self.manual = True
             self.ring.post_command("manual", 1)
 
@@ -1088,6 +1099,9 @@ class SimControl:
         """The JSON status, or None until STATUS_EVERY_S has passed."""
         import json  # noqa: PLC0415
 
+        if not self.manual:
+            self._live_ctrl[:] = local.ctrl
+            self._live_qpos[:] = local.qpos
         now = time.monotonic()
         if now - self._last_status < STATUS_EVERY_S:
             return None

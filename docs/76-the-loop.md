@@ -459,7 +459,7 @@ to (0.01–100), reported back as the factor achieved.
 
 **The agent's doors.** `simulate_in_studio(task)` starts or stops a
 scene; `control_simulator(run, step, reset, keyframe, speed, manual)`;
-`set_simulator_input(value, actuator= | joint=)`; `set_simulator_view(flag, on)`.
+`set_simulator_input(value, actuator= | joint=)`; `set_simulator_view(flag, on | camera= | inspect=)` — a MuJoCo flag, a named camera view (front, side, top, reset), or the Inspect drawer's tab (control, joints, physics, close).
 Names are the model's own and a wrong one is refused naming the
 choices; nothing runs → refused with "simulate_in_studio first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,

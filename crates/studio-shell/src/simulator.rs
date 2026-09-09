@@ -70,6 +70,23 @@ enum Tab {
     Physics,
 }
 
+/// Open the drawer on a tab by name, or close it — the agent's door.
+pub fn inspect(ctx: &egui::Context, what: &str) -> Result<(), String> {
+    let (_, tab) = drawer_state(ctx);
+    match what {
+        "close" | "" => set_drawer(ctx, false, tab),
+        "control" => set_drawer(ctx, true, Tab::Control),
+        "joints" => set_drawer(ctx, true, Tab::Joints),
+        "physics" => set_drawer(ctx, true, Tab::Physics),
+        other => {
+            return Err(format!(
+                "inspect {other:?}: one of control, joints, physics, close"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The drawer's open state and tab live in egui's memory, keyed here.
 fn drawer_state(ctx: &egui::Context) -> (bool, Tab) {
     ctx.data(|d| {
@@ -99,7 +116,7 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         ui.spacing_mut().item_spacing.x = 8.0;
         // The scene picker: a named menu, the empty state's only door.
         let current = viewport.task().unwrap_or("Scene");
-        ui.menu_button(format!("{current}  ▾"), |ui| {
+        menu(ui, current, |ui| {
             for task in PREVIEW_TASKS {
                 if ui.button(*task).clicked() {
                     action = Some(Action::Spawn((*task).to_owned()));
@@ -165,7 +182,7 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
             viewport.send_reset(None);
         }
         if let Some(model) = model.as_ref().filter(|m| !m.keyframes.is_empty()) {
-            ui.menu_button("keyframe ▾", |ui| {
+            menu(ui, "keyframe", |ui| {
                 for (k, name) in model.keyframes.iter().enumerate() {
                     if ui.button(name).clicked() {
                         viewport.send_reset(Some(k as u32));
@@ -201,11 +218,7 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         } else {
             "the scene runs its own motion; click, or move a slider, to drive it yourself"
         };
-        if ui
-            .selectable_label(status.manual, mode)
-            .on_hover_text(hint)
-            .clicked()
-        {
+        if toggle(ui, status.manual, mode, hint) {
             viewport.send_manual(!status.manual);
         }
         // The chips: never move.
@@ -230,16 +243,42 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         // Inspect, at the right end.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let (open, tab) = drawer_state(ui.ctx());
-            if ui
-                .selectable_label(open, "Inspect")
-                .on_hover_text("Control, Joints, Physics")
-                .clicked()
-            {
+            if toggle(ui, open, "Inspect", "Control, Joints, Physics  (I)") {
                 set_drawer(ui.ctx(), !open, tab);
             }
         });
     });
     action
+}
+
+/// A quiet toggle: text that brightens and underlines when on — never a
+/// solid block of accent colour behind a word.
+fn toggle(ui: &mut egui::Ui, on: bool, text: &str, hint: &str) -> bool {
+    let color = if on {
+        ui.visuals().strong_text_color()
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    let label = egui::RichText::new(text).color(color);
+    let response = ui
+        .add(egui::Button::new(label).frame(false))
+        .on_hover_text(hint);
+    if on {
+        let rect = response.rect;
+        let stroke = egui::Stroke::new(1.5, ui.visuals().hyperlink_color);
+        ui.painter()
+            .hline(rect.x_range().shrink(2.0), rect.bottom() - 1.0, stroke);
+    }
+    response.clicked()
+}
+
+/// A menu whose arrow is an icon, not a glyph the font may lack.
+fn menu<R>(
+    ui: &mut egui::Ui,
+    text: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<Option<R>> {
+    ui.menu_image_text_button(re_ui::icons::DROPDOWN_ARROW.as_image(), text, add)
 }
 
 fn chip(ui: &mut egui::Ui, key: &str, value: String) {
@@ -271,7 +310,9 @@ pub fn overlays(ctx: &egui::Context, picture: egui::Rect, viewport: &mut Viewpor
         .fixed_pos(picture.right_top() + egui::vec2(-8.0, 8.0))
         .pivot(egui::Align2::RIGHT_TOP)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
+            egui::Frame::new()
+                .fill(ui.visuals().panel_fill.gamma_multiply(0.85))
+                .corner_radius(6.0)
                 .inner_margin(4.0)
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
@@ -296,11 +337,7 @@ pub fn overlays(ctx: &egui::Context, picture: egui::Rect, viewport: &mut Viewpor
                                 false
                             };
                             let on = map.get(&index.to_string()).copied().unwrap_or(default_on);
-                            if ui
-                                .selectable_label(on, *label)
-                                .on_hover_text(format!("MuJoCo {flag}"))
-                                .clicked()
-                            {
+                            if toggle(ui, on, label, &format!("MuJoCo {flag}")) {
                                 if *rendering {
                                     viewport.send_rnd(index as u32, !on);
                                 } else {
@@ -341,7 +378,10 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
         .fixed_pos(picture.right_bottom() + egui::vec2(-8.0, -8.0))
         .pivot(egui::Align2::RIGHT_BOTTOM)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
+            egui::Frame::new()
+                .fill(ui.visuals().panel_fill.gamma_multiply(0.92))
+                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                .corner_radius(8.0)
                 .inner_margin(10.0)
                 .show(ui, |ui| {
                     ui.set_width(DRAWER_WIDTH);
@@ -353,7 +393,7 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                             (Tab::Joints, "Joints"),
                             (Tab::Physics, "Physics"),
                         ] {
-                            if ui.selectable_label(tab == t, name).clicked() {
+                            if toggle(ui, tab == t, name, "") {
                                 tab = t;
                             }
                         }
@@ -462,9 +502,15 @@ fn row(
             }
             stopped = response.drag_stopped();
         } else {
+            // A quiet bar: the value's place in its range, in a muted
+            // fill — not the accent of something you could drag.
             let span = (range[1] - range[0]).max(1e-9);
             let frac = ((v - range[0]) / span).clamp(0.0, 1.0) as f32;
-            ui.add_sized([width, 10.0], egui::ProgressBar::new(frac));
+            ui.add_sized(
+                [width, 8.0],
+                egui::ProgressBar::new(frac)
+                    .fill(ui.visuals().weak_text_color().gamma_multiply(0.55)),
+            );
         }
         mono(ui, format!("{v:>8.3}"), VALUE_WIDTH);
     });
@@ -583,13 +629,18 @@ pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
     }
     let (status, _) = viewport.report();
     let Some(status) = status else { return };
-    let (space, right, reset) = ctx.input(|i| {
+    let (space, right, reset, inspect_key) = ctx.input(|i| {
         (
             i.key_pressed(egui::Key::Space),
             i.key_pressed(egui::Key::ArrowRight),
             i.key_pressed(egui::Key::R),
+            i.key_pressed(egui::Key::I),
         )
     });
+    if inspect_key {
+        let (open, tab) = drawer_state(ctx);
+        set_drawer(ctx, !open, tab);
+    }
     if space {
         viewport.send_run(status.paused);
     }
