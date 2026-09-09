@@ -26,13 +26,14 @@ no MCP import anywhere near them — the suite tests them directly and the
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
-from rq_pipeline.bundles.locate import robots_dir
+from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
 from rq_pipeline.physics.registry import engines
 
 # BUNDLE_STORE has ONE home (the bundle module itself); it was spelled
@@ -48,22 +49,28 @@ from rq_pipeline.tasks.registry import resolve, tasks
 # robots/actuators is the actuator LIBRARY (per-servo friction models,
 # grown by tools/sync-bam-actuators.py), not a robot bundle — it has its
 # own two tools below and stays out of the bundle census.
-NOT_A_BUNDLE = ("actuators",)
+NOT_A_BUNDLE = ("actuators", "actuator-bundles")
 
 
 def bundle_names() -> list[str]:
-    return sorted(
-        entry.name
-        for entry in robots_dir().iterdir()
-        if entry.is_dir() and entry.name not in NOT_A_BUNDLE
-    )
+    _use_project_if_any()
+    return sorted(name for name in bundle_dirs() if name not in NOT_A_BUNDLE)
+
+
+def _use_project_if_any() -> None:
+    """Search the current project's robots first, when there is one."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    with contextlib.suppress(FileNotFoundError):
+        current_project()
 
 
 def describe_bundles() -> list[dict[str, Any]]:
-    """Every robot bundle: name@hash identity and a file census."""
+    """Every robot bundle the project or the library holds: name@hash
+    identity and a file census."""
     described = []
     for name in bundle_names():
-        root = robots_dir() / name
+        root = bundle_dirs()[name]
         files = sorted(p.name for p in root.iterdir())
         described.append(
             {
@@ -79,8 +86,9 @@ def describe_bundles() -> list[dict[str, Any]]:
 
 def describe_bundle(name: str) -> dict[str, Any]:
     """One bundle in full: identity, profile, every fit record, SPREAD."""
-    root = robots_dir() / name
-    if not root.is_dir() or name in NOT_A_BUNDLE:
+    _use_project_if_any()
+    root = find_bundle(name)
+    if root is None or name in NOT_A_BUNDLE:
         raise KeyError(f"no bundle {name!r}; one of {bundle_names()}")
     detail: dict[str, Any] = {
         "stamp": stamp(name, root),
@@ -234,6 +242,32 @@ def create_task(
         return {"status": "refused", "reason": _reason(why)}
     write_index(project, index_project(project))
     return {"status": "done", **out, "next": f"accept_task({name!r})"}
+
+
+def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any]:
+    """A robot enters as a hash-stamped bundle: the MJCF's directory
+    copied whole (meshes and includes ride along), compiled once as the
+    honesty check, its model file recorded in `bundle.json`. Into the
+    current project's `robots/` when a project is open, else the library.
+    Never overwrites; refuses by name."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    into: Path | None = None
+    with contextlib.suppress(FileNotFoundError):
+        into = current_project().folder("robots")
+    actions = Actions(JobManager(_jobs_root()))
+    try:
+        out = actions.onboard_robot(mjcf_path, name, into=str(into) if into else None)
+    except (FileNotFoundError, FileExistsError, ValueError) as why:
+        return {"status": "refused", "reason": str(why)}
+    if into is not None:
+        from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+
+        project = current_project()
+        write_index(project, index_project(project))
+    return {"status": "done", **out}
 
 
 def accept_task(name: str) -> dict[str, Any]:
@@ -1218,7 +1252,7 @@ def build_server() -> Any:  # noqa: PLR0915
     server.tool(
         description="Onboard a robot: its MJCF directory becomes a hash-stamped "
         "bundle under robots/, compiled once as the honesty check."
-    )(actions.onboard_robot)
+    )(onboard_robot)
     server.tool(description="A job's state and log tail")(actions.job_status)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
     server.tool(description="Every job on record, newest first")(actions.list_jobs)

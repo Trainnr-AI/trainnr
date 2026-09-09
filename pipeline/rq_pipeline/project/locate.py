@@ -88,6 +88,14 @@ class Project:
     def name(self) -> str:
         return self.manifest().name
 
+    def use(self) -> Project:
+        """Make this the project the bundle locator searches first, so a
+        robot onboarded here builds tasks like a library rig."""
+        from rq_pipeline.bundles.locate import add_search_root  # noqa: PLC0415
+
+        add_search_root(self.folder("robots"))
+        return self
+
     def folder(self, kind_folder: str) -> Path:
         if kind_folder not in FOLDERS:
             raise KeyError(f"no folder {kind_folder!r} in a project; one of {FOLDERS}")
@@ -126,6 +134,7 @@ def current_project() -> Project:
             f"no project at {root} (no {MANIFEST_FILE}) — set {PROJECT_ENV} to a "
             f"project directory, or create one with `create_project`"
         )
+    project.use()
     return project
 
 

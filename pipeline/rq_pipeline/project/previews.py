@@ -156,16 +156,14 @@ def _render_model(model: Any, out: Path, camera_spec: dict[str, float]) -> bool:
 
 
 def _robot_model_file(source: Path) -> Path | None:
-    """The MJCF to render: a profile's `model_file`, else the one XML at
-    the root that is not an include-only fragment, else the largest."""
-    profile = source / "profile.json"
-    if profile.is_file():
-        try:
-            named = json.loads(profile.read_text()).get("model_file")
-        except ValueError:
-            named = None
-        if named and (source / named).is_file():
-            return source / named
+    """The MJCF to render: the one the bundle record or the rig profile
+    names, else the largest XML at the root (a library rig onboarded
+    before records existed)."""
+    from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
+
+    named = model_file_of(source)
+    if named is not None:
+        return named
     candidates = sorted(
         source.glob("*.xml"), key=lambda p: p.stat().st_size, reverse=True
     )

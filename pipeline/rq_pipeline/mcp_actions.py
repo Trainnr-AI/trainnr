@@ -282,15 +282,22 @@ class Actions:
 
     # -- onboarding ----------------------------------------------------
 
-    def onboard_robot(self, mjcf_path: str, name: str) -> dict[str, Any]:
+    def onboard_robot(
+        self, mjcf_path: str, name: str, into: str | None = None
+    ) -> dict[str, Any]:
         """A new robot enters as a hash-stamped bundle: the MJCF's whole
-        directory copied under `robots/<name>/`, compiled once as the
-        honesty check, stamped. Synchronous — seconds, and the caller
+        directory copied under `<into or the library>/<name>/`, compiled
+        once as the honesty check, its model file and census recorded in
+        `bundle.json`, stamped. Synchronous — seconds, and the caller
         wants the stamp in the reply."""
+        from rq_pipeline.bundles.bundle import write_bundle_record  # noqa: PLC0415
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "robot name")
         source = Path(mjcf_path).expanduser()
         if not source.is_file():
             raise FileNotFoundError(f"no MJCF at {source}")
-        destination = robots_dir() / name
+        destination = (Path(into) if into else robots_dir()) / name
         if destination.exists():
             raise FileExistsError(
                 f"robots/{name} already exists (stamp: {stamp(name, destination)}) "
@@ -305,6 +312,7 @@ class Actions:
         # The whole directory rides along: meshes and includes resolve
         # relative to the MJCF, and a bundle must be self-contained.
         shutil.copytree(source.parent, destination)
+        write_bundle_record(destination, name, source.name, model, source=source)
         bundle_stamp = stamp(name, destination)
         return {
             "stamp": bundle_stamp,

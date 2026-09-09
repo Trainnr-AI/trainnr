@@ -86,7 +86,7 @@ def main() -> None:
 
 def review_declared(project_root: Path, name: str) -> bool:
     """Review the project's declared task `name`; write its verdict."""
-    project = Project(project_root.resolve())
+    project = Project(project_root.resolve()).use()
     folder = project.folder("tasks") / name
     ref_path = folder / TASK_FILE
     if not ref_path.is_file():

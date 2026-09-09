@@ -77,19 +77,27 @@ read differently, and the window must say so rather than show a gap.
 
 ## 3. Frictions found, in the order the loop found them
 
-1. **Onboarding ignores the open project** (2026-09-10). `onboard_robot`
-   writes to the checkout's robot library (`$RQ_ROBOTS_DIR` or
-   `robots/`), while the loop says the project holds its robots and the
-   Studio lists the project's. Worked around by pointing the library
-   variable at the project; the fix is a project-aware locator: a
-   project's `robots/` first, the library second, so a task can build
-   from either.
-2. **Onboarding picks the wrong model file** (2026-09-10). The Go2
-   directory holds `go2.xml`, `go2_mjx.xml`, `scene.xml` and
-   `scene_mjx.xml`; the door was told `go2.xml`, but no profile records
-   it, so the reader's "largest XML" rule chose the MJX variant. The
-   drawer then shows the wrong file's counts. Fix: onboarding writes a
-   profile naming the model file it compiled.
+1. **Onboarding ignores the open project** (found and fixed
+   2026-09-10). `onboard_robot` wrote to the checkout's robot library
+   (`$RQ_ROBOTS_DIR` or `robots/`), while the loop says the project holds
+   its robots and the Studio lists the project's. Fixed: the bundle
+   locator (`rq_pipeline/bundles/locate.py`) searches registered roots
+   before the library — a project registers its `robots/` when it is
+   made current (`Project.use`) — so a robot onboarded into a project
+   builds tasks like a library rig; the door lands the bundle in the
+   open project and reindexes; the describe doors list both.
+2. **Onboarding picks the wrong model file** (found and fixed
+   2026-09-10). The Go2 directory holds `go2.xml`, `go2_mjx.xml`,
+   `scene.xml` and `scene_mjx.xml`; the door was told `go2.xml`, but
+   nothing recorded it, so the reader's "largest XML" rule chose the MJX
+   twin and the drawer showed its counts (30 sensors the base model
+   does not have). Fixed: onboarding writes `bundle.json` (schema
+   `trainnr-robot/1`: the model file compiled, the source path, the
+   census; no timestamps, so two onboardings of one directory are one
+   version) and every reader asks it first
+   (`rq_pipeline/bundles/bundle.py`). The rig's `profile.json` stays what
+   it is, a measurement, not provenance. Also found: the actuator store
+   was listed as a robot bundle.
 3. **The pipeline strip assumes every loop has a dataset stage.** A
    reinforcement-learning loop has none; "Dataset" reads as a gap
    forever. The state machine needs a per-project loop kind (imitation
