@@ -413,24 +413,34 @@ and after the measurements (findings `studio-viewport-pipe` and
 MuJoCo in a subprocess — now two: physics and render, on a
 shared-memory state ring.
 
-**The page.** The MuJoCo viewport on top, the Rerun viewer below it
-(every stream still lands there), and on the right the control panel
-built from `simulate`'s own sections, by their names: *Simulation*
-(Run / Pause, Step, Step 10, Reset, the keyframes, Speed, manual
-control), the clock (sim time, real-time factor, frames on screen and
-render time, shadows), the physics facts (timestep, integrator, solver
-and iterations, gravity, bodies and geoms), *Joint* (a slider per hinge
-or slide joint, in its range; free and ball joints have none —
-simulate's rule), *Control* (a slider per actuator in its control
-range, Clear all), *Visualization* and *Rendering* (MuJoCo's flag names
-as checkboxes: contactpoint, contactforce, joint, actuator, constraint,
-inertia, com, transparent, perturbforce, camera, light, tendon; shadow,
-reflection, skybox, fog, wireframe). Ctrl+drag on the picture still
-shoves a body (`mjvPerturb`).
+**The page** (redesigned the same evening after Prakhar's verdict on the
+first cut — "there is no user based thinking in terms of delight and how
+easy and simple things are for user to see and interact" — around what
+a person does in a simulator, in order of how often: watch; pause,
+step, reset, change speed; poke the robot; flip an overlay; look up a
+fact). The picture is the page: the MuJoCo viewport fills the strip and
+nothing permanent sits beside it. Under it a **transport bar**, the
+video-player shape and the shape of Rerun's timeline right below: the
+scene picker (a named menu, the empty state's only door), play or
+pause, one step, ten steps, reset, the keyframes as a menu, a compact
+speed control, the **mode** said plainly as a toggle ("runs itself" /
+"you drive"), three chips that never move (sim time, real-time factor,
+frames per second), and an *agent · pause* tag for 1.8 s whenever the
+agent presses something. Space, → and R do what they do in `simulate`.
+In the picture's corner an **overlay toolbar**: contacts, forces,
+joints, inertia, transparent, shadows as one-click lit toggles, and a
+camera menu with Front, Side, Top, Reset view. An **Inspect** button
+opens a drawer over the right of the picture with three tabs: Control
+(a row per actuator, grouped by the name's prefix — an arm, a leg),
+Joints (a row per hinge or slide joint; free and ball joints have none,
+simulate's rule), Physics (timestep, integrator, solver, gravity,
+counts, keyframes). While the scene runs itself the rows are read-only
+bars showing what the policy does; in drive mode they are sliders with
+a typed value. Ctrl+drag on the picture still shoves a body.
 
 **The wire** (`tools/studio-render-stream.py`, `crates/studio-shell/src/viewport.rs`):
-the same tagged stdin the camera uses, nine new tags — RUN, STEP, RESET,
-SPEED, MANUAL, CTRL, QPOS, VIS, RND. RUN, STEP, RESET, SPEED, MANUAL,
+the same tagged stdin the camera uses, ten new tags — RUN, STEP, RESET,
+SPEED, MANUAL, CTRL, QPOS, VIS, RND, VIEW (a named camera view). RUN, STEP, RESET, SPEED, MANUAL,
 CTRL and QPOS cross into the physics process through the ring (a
 mailbox for commands, seqlocked arrays for the sliders); VIS and RND
 stay with the renderer. Back over stdout, beside the frame token, a

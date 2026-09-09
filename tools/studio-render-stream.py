@@ -354,6 +354,7 @@ class OrbitCamera:
 
     def __init__(self, defaults: dict) -> None:
         self._lock = threading.Lock()
+        self._defaults = defaults
         self.azimuth = defaults["azimuth"]
         self.elevation = defaults["elevation"]
         self.distance = defaults["distance"]
@@ -372,6 +373,22 @@ class OrbitCamera:
     def size(self) -> tuple[int, int]:
         with self._lock:
             return self.width, self.height
+
+    def set_view(self, preset: str) -> None:
+        """A named view from the rig's default: `reset` restores it, `front`
+        looks along the rig's default azimuth, `side` a quarter turn on,
+        `top` straight down; the distance is the default's."""
+        d = self._defaults
+        with self._lock:
+            self.distance = d["distance"]
+            if preset == "front":
+                self.azimuth, self.elevation = d["azimuth"], -15.0
+            elif preset == "side":
+                self.azimuth, self.elevation = d["azimuth"] + 90.0, -15.0
+            elif preset == "top":
+                self.azimuth, self.elevation = d["azimuth"], -MAX_ELEVATION_DEG
+            else:
+                self.azimuth, self.elevation = d["azimuth"], d["elevation"]
 
     def apply_deltas(
         self,
@@ -527,7 +544,8 @@ TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
 # reach the physics process through the ring; VIS/RND stay on the render
 # side.
 TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
-TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND = 11, 12, 13, 14
+TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
+VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
     TAG_CAMERA: 20,
     TAG_SELECT: 8,
@@ -543,12 +561,13 @@ TAG_PAYLOAD_BYTES = {
     TAG_QPOS: 8,  # u32 qpos address, f32 value (manual)
     TAG_VIS: 5,  # u32 mjtVisFlag, u8 on
     TAG_RND: 5,  # u32 mjtRndFlag, u8 on
+    TAG_VIEW: 1,  # u8 VIEW_PRESETS index: the camera to a named view
 }
 STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
 STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
 
 
-def _read_control_messages(
+def _read_control_messages(  # noqa: PLR0912 - one branch per wire tag
     camera: OrbitCamera,
     perturber,
     poke,
@@ -580,6 +599,10 @@ def _read_control_messages(
             return
         if tag == TAG_CAMERA:
             camera.apply_deltas(*struct.unpack("<fffII", payload))
+        elif tag == TAG_VIEW:
+            index = payload[0]
+            if index < len(VIEW_PRESETS):
+                camera.set_view(VIEW_PRESETS[index])
         elif tag == TAG_SELECT:
             perturber.queue_select(*struct.unpack("<ff", payload))
         elif tag == TAG_DRAG:

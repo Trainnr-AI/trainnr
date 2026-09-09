@@ -270,17 +270,27 @@ impl eframe::App for StudioShell {
             })
             .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
             .show(ui, |ui| {
-                // The controls sit INSIDE the strip beside the picture
-                // (simulator.rs says why not at the window's edge).
-                if active {
-                    egui::Panel::right("simulator_controls")
-                        .resizable(false)
-                        .exact_size(simulator::PANEL_WIDTH)
-                        .show(ui, |ui| {
-                            simulator::controls(ui, &mut self.viewport);
-                        });
+                // The transport bar under the picture; the overlays and the
+                // Inspect drawer float over it (simulator.rs).
+                let mut action = None;
+                egui::Panel::bottom("simulator_transport")
+                    .resizable(false)
+                    .show(ui, |ui| {
+                        action = simulator::transport(ui, &mut self.viewport);
+                    });
+                let picture = self.viewport.show(ui);
+                if let Some(picture) = picture {
+                    simulator::overlays(ui.ctx(), picture, &mut self.viewport);
+                    simulator::drawer(ui.ctx(), picture, &mut self.viewport);
                 }
-                self.viewport.show(ui);
+                simulator::shortcuts(ui.ctx(), &mut self.viewport);
+                match action {
+                    Some(simulator::Action::Spawn(task)) => {
+                        self.viewport = ViewportFeed::spawn(ui.ctx(), &task);
+                    }
+                    Some(simulator::Action::Stop) => self.viewport = ViewportFeed::idle(),
+                    None => {}
+                }
             });
             if has_recording {
                 self.rerun_app.ui(ui, frame);
@@ -575,6 +585,24 @@ impl StudioShell {
                     return Err("no scene runs in the simulator; simulate a task first".into());
                 }
                 let (_, model) = self.viewport.report();
+                let pressed = [
+                    run.map(|r| if r { "run" } else { "pause" }),
+                    step.map(|_| "step"),
+                    keyframe.as_ref().map(|_| "keyframe"),
+                    reset.filter(|r| *r).map(|_| "reset"),
+                    speed.map(|_| "speed"),
+                    manual.map(|m| if m { "drive" } else { "hand back" }),
+                    actuator.as_ref().map(|_| "actuator"),
+                    joint.as_ref().map(|_| "joint"),
+                    flag.as_ref().map(|_| "overlay"),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(", ");
+                if !pressed.is_empty() {
+                    self.viewport.flash(&pressed);
+                }
                 if let Some(run) = run {
                     self.viewport.send_run(run);
                 }

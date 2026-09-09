@@ -111,6 +111,8 @@ const MAX_RENDER_SIDE: u32 = 1920;
 /// Orbit/zoom are exempt: they're cheap per-frame camera fields, and
 /// holding them back would make dragging feel laggy.
 const RESIZE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+/// How long the bar shows what the agent just did.
+const AGENT_FLASH: std::time::Duration = std::time::Duration::from_millis(1800);
 
 /// Owns the render-stream subprocess, the shared-memory frame ring, and
 /// the orbit/perturb state the user drives with the mouse over the image.
@@ -143,6 +145,8 @@ pub struct ViewportFeed {
     drawn_at: std::collections::VecDeque<std::time::Instant>,
     /// The rate as last shown to a panel, and when (see `fps_settled`).
     fps_shown: std::cell::Cell<(Option<f32>, Option<std::time::Instant>)>,
+    /// The agent's last action on the simulator, and when (see `flash`).
+    agent_flash: Option<(String, std::time::Instant)>,
     /// The stream's status and model description (reader thread writes).
     report: Arc<std::sync::Mutex<SimReport>>,
     /// Slider values the human is editing, so a drag does not fight
@@ -269,6 +273,7 @@ impl ViewportFeed {
             task: None,
             drawn_at: std::collections::VecDeque::new(),
             fps_shown: std::cell::Cell::new((None, None)),
+            agent_flash: None,
             report: Arc::new(std::sync::Mutex::new(SimReport::default())),
             editing: std::collections::HashMap::new(),
         }
@@ -417,6 +422,7 @@ impl ViewportFeed {
                     task: Some(task_name.to_owned()),
                     drawn_at: std::collections::VecDeque::new(),
                     fps_shown: std::cell::Cell::new((None, None)),
+                    agent_flash: None,
                     report,
                     editing: std::collections::HashMap::new(),
                 }
@@ -445,37 +451,20 @@ impl ViewportFeed {
     /// Draws the newest frame into `ui`, or a placeholder/error message
     /// before the first frame arrives or if the subprocess never started.
     /// Dragging orbits the camera; scrolling while hovered zooms it.
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    /// Returns the rect the picture occupies, for overlays drawn on it.
+    pub fn show(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
         if !self.is_active() {
-            ui.horizontal(|ui| {
+            ui.centered_and_justified(|ui| {
                 ui.label(
-                    "Live physics streams into the 3D view below while a run is on. \
-                     Preview a pipeline scene:",
-                );
-                for task in PREVIEW_TASKS {
-                    if ui.button(*task).clicked() {
-                        *self = Self::spawn(ui.ctx(), task);
-                    }
-                }
-                if ui
-                    .button(WALK_TASK)
-                    .on_hover_text(
-                        "the newest trained walk checkpoint, live — \
-                         Ctrl+drag shoves a duck and the policy recovers",
+                    egui::RichText::new(
+                        "No scene is running. Pick one from the bar below — a training \
+                         run streams into the viewer underneath on its own.",
                     )
-                    .clicked()
-                {
-                    *self = Self::spawn(ui.ctx(), WALK_TASK);
-                }
+                    .color(ui.visuals().weak_text_color()),
+                );
             });
-            return;
+            return None;
         }
-        ui.horizontal(|ui| {
-            ui.label("scene preview (not the live run)");
-            if ui.button("✕ stop").clicked() {
-                *self = Self::idle();
-            }
-        });
         let published = self.frames_published.load(Ordering::Relaxed);
         if published != self.frames_drawn {
             if let Some(image) = self.shm.as_mut().and_then(ShmReader::latest) {
@@ -517,7 +506,7 @@ impl ViewportFeed {
             } else {
                 ui.info_label("Waiting for the first frame from MuJoCo…");
             }
-            return;
+            return None;
         };
 
         // `max_size` only ever caps — it never grows an image up to fill
@@ -617,6 +606,7 @@ impl ViewportFeed {
         {
             self.send_update(d_azimuth, d_elevation, d_distance);
         }
+        Some(image_rect)
     }
 
     /// The stream's latest status and model, for the panel and the state file.
@@ -673,6 +663,25 @@ impl ViewportFeed {
 
     pub fn send_rnd(&mut self, flag: u32, on: bool) {
         self.send_message(&encode_flag(TAG_RND, flag, on));
+    }
+
+    /// The camera to a named view: 0 reset, 1 front, 2 side, 3 top
+    /// (`VIEW_PRESETS` in the stream).
+    pub fn send_view(&mut self, preset: u8) {
+        self.send_message(&[TAG_VIEW, preset]);
+    }
+
+    /// The agent pressed something: the bar shows it for a moment.
+    pub fn flash(&mut self, what: &str) {
+        self.agent_flash = Some((what.to_owned(), std::time::Instant::now()));
+    }
+
+    /// What the agent last did, while it is worth showing.
+    pub fn flashing(&self) -> Option<&str> {
+        self.agent_flash
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() < AGENT_FLASH)
+            .map(|(what, _)| what.as_str())
     }
 
     /// The value a slider shows: what the human is dragging, else the
@@ -827,6 +836,7 @@ const TAG_CTRL: u8 = 11;
 const TAG_QPOS: u8 = 12;
 const TAG_VIS: u8 = 13;
 const TAG_RND: u8 = 14;
+const TAG_VIEW: u8 = 15;
 /// The stdout tokens: a frame published, a status message follows.
 const FRAME_TOKEN: u8 = 0xF7;
 const STATUS_TOKEN: u8 = 0xF8;
