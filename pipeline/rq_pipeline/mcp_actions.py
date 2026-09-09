@@ -64,6 +64,11 @@ def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     return [*argv, "python"]
 
 
+# The walks rq_mjlab knows (`rq_mjlab.walks.ROBOTS`), pinned here so the
+# door refuses by name without importing the other venv's package.
+WALK_ROBOTS = ("microduck", "go1", "go2")
+
+
 class Actions:
     """The doors, bound to one JobManager (tests inject a fake spawner)
     and to the platform's launch environment (tests pass None)."""
@@ -180,21 +185,38 @@ class Actions:
 
     # -- the walk (flagship RL) ----------------------------------------
 
-    def train_walk(
+    def train_walk(  # noqa: PLR0913 - the trainer's own knobs, each named
         self,
         agent: str = "smoke",
         envs: int | None = None,
         iterations: int | None = None,
+        *,
+        robot: str = "microduck",
+        project: str | None = None,
+        log_dir: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
-        """Train the microduck walk through rq_mjlab (the certified
-        stack: stamped bundles, declared DR bases, the linter green by
-        construction). `agent="smoke"` is the box's 2-minute check;
-        `agent="g3"` is the flagship recipe."""
+        """Train a walk through rq_mjlab (the certified stack: stamped
+        bundles, declared DR bases, the linter green by construction).
+        `robot` names the walk (microduck, go1, go2); `project` is where
+        the robot's bundle is searched first and where `log_dir` — the
+        run's own folder — should live so the project's index sees it.
+        `agent="smoke"` is the box's 2-minute check; `agent="g3"` is the
+        flagship recipe."""
+        if robot not in WALK_ROBOTS:
+            raise ValueError(f"robot is one of {', '.join(WALK_ROBOTS)}, got {robot!r}")
         argv = [*self._uv(RQ_MJLAB_DIR), "-m", "rq_mjlab.walk_train", "--agent", agent]
+        argv += ["--robot", robot]
+        if project is not None:
+            argv += ["--project", project]
         if envs is not None:
             argv += ["--envs", str(envs)]
         if iterations is not None:
             argv += ["--iterations", str(iterations)]
+        if seed is not None:
+            argv += ["--seed", str(seed)]
+        if log_dir is not None:
+            argv += ["--log-dir", log_dir]
         return self.jobs.start("train-walk", argv, RQ_MJLAB_DIR)
 
     def certify_walk(  # noqa: PLR0913 - the certificate's knobs, each named
@@ -206,6 +228,8 @@ class Actions:
         device: str | None = None,
         student: str | None = None,
         horizon: int = 20,
+        robot: str = "microduck",
+        project: str | None = None,
     ) -> dict[str, Any]:
         """The locomotion certificate (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
@@ -222,7 +246,13 @@ class Actions:
             str(trials),
             "--seed",
             str(seed),
+            "--robot",
+            robot,
         ]
+        if robot not in WALK_ROBOTS:
+            raise ValueError(f"robot is one of {', '.join(WALK_ROBOTS)}, got {robot!r}")
+        if project is not None:
+            argv += ["--project", project]
         if device is not None:
             argv += ["--device", device]
         if student is not None:

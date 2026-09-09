@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
@@ -100,9 +100,15 @@ def _span(text: str) -> float | str:
     return float(text)
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--agent", choices=sorted(DEFAULTS), default="g3")
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
     parser.add_argument(
         "--robot",
         choices=ROBOTS,
@@ -167,6 +173,7 @@ def main() -> None:
 
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
+    use_project(args.project)
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
     cfg, identity = spec.env_cfg(

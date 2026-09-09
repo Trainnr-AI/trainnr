@@ -270,6 +270,92 @@ def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any]:
     return {"status": "done", **out}
 
 
+def _project_root_if_any() -> Path | None:
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    with contextlib.suppress(FileNotFoundError):
+        return current_project().root
+    return None
+
+
+def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
+    agent: str = "smoke",
+    envs: int | None = None,
+    iterations: int | None = None,
+    robot: str = "microduck",
+    name: str | None = None,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Train a walk policy through rq_mjlab. `robot` names the walk:
+    microduck (its certified bundle), go1 (mjlab's own asset), go2 (the
+    robot onboarded into the project). With a project open the trainer
+    searches its robots first, and `name` — the experiment's folder under
+    the project's `runs/` — makes the run an artifact the index sees
+    (`agent="g3"` only; a smoke archives nothing). Minutes to hours;
+    returns a job handle."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    root = _project_root_if_any()
+    log_dir = None
+    if name is not None:
+        try:
+            plain_name(name, "experiment name")
+        except ValueError as why:
+            return {"status": "refused", "reason": str(why)}
+        if root is None:
+            return {
+                "status": "refused",
+                "reason": "an experiment name needs an open project",
+            }
+        log_dir = str(root / "runs" / name)
+    try:
+        return Actions(JobManager(_jobs_root())).train_walk(
+            agent,
+            envs,
+            iterations,
+            robot=robot,
+            project=str(root) if root else None,
+            log_dir=log_dir,
+            seed=seed,
+        )
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+
+
+def certify_walk(  # noqa: PLR0913, PLR0917 - the certificate's knobs, each named
+    checkpoint: str,
+    trials: int = 40,
+    seed: int = 1000,
+    device: str | None = None,
+    student: str | None = None,
+    horizon: int = 20,
+    robot: str = "microduck",
+) -> dict[str, Any]:
+    """Evaluate a walk policy: seeded paired episodes, exact intervals,
+    the run's stamps on every row; `robot` names the walk the checkpoint
+    belongs to. With a project open its robots are searched first. Job
+    handle."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+
+    root = _project_root_if_any()
+    try:
+        return Actions(JobManager(_jobs_root())).certify_walk(
+            checkpoint,
+            trials=trials,
+            seed=seed,
+            device=device,
+            student=student,
+            horizon=horizon,
+            robot=robot,
+            project=str(root) if root else None,
+        )
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+
+
 def accept_task(name: str) -> dict[str, Any]:
     """Review a declared environment with the acceptance critic (the
     scripted policy must succeed on every paired trial, the floor policy
@@ -1235,14 +1321,14 @@ def build_server() -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train the microduck walk policy with identified actuator models "
-        "(rq_mjlab). agent=smoke is minutes; agent=g3 is the flagship recipe. Job "
-        "handle."
-    )(actions.train_walk)
+        description="Train a walk policy (microduck, go1, or the project's go2) "
+        "through rq_mjlab; name the experiment to archive it in the project. "
+        "agent=smoke is minutes; agent=g3 is the flagship recipe. Job handle."
+    )(train_walk)
     server.tool(
-        description="Evaluate the walk policy: paired episodes, exact confidence "
-        "intervals, stamps on every row. Job handle."
-    )(actions.certify_walk)
+        description="Evaluate a walk policy: paired episodes, exact confidence "
+        "intervals, stamps on every row; robot names the walk. Job handle."
+    )(certify_walk)
     server.tool(
         description="The RL teacher generates demonstrations (docs/66 D2): the walk "
         "checkpoint rolls out, keepers become a stamped batch with chase-camera "

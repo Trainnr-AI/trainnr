@@ -12,6 +12,7 @@ the study's words onto them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 EnvFactory = Callable[..., tuple[Any, dict[str, str]]]
@@ -101,6 +102,41 @@ def _go1_span() -> float:
     return ACTUATOR_DR_SPAN
 
 
+def _go2_env(
+    *,
+    play: bool = False,
+    dr_span: float | str | None,
+    pin_scale: float | None,
+    pin_axis: str = "all",
+    bundle: Any = None,
+) -> tuple[Any, dict[str, str]]:
+    from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
+    from rq_mjlab.go2_walk import go2_walk_env_cfg  # noqa: PLC0415
+
+    if bundle is not None:
+        raise ValueError("the Go2 walk has no actuator bundle to swap (declared PD)")
+    if dr_span == "identified":
+        raise ValueError("the Go2 walk has no identified interval (declared PD)")
+    return go2_walk_env_cfg(
+        play=play,
+        dr_span=dr_span,
+        pin_scale=pin_scale,
+        pin_only=_axis(PIN_AXES, pin_axis),
+    )
+
+
+def _go2_agent(iterations: int) -> Any:
+    from rq_mjlab.go2_walk import go2_agent  # noqa: PLC0415
+
+    return go2_agent(iterations)
+
+
+def _go2_span() -> float:
+    from rq_mjlab.go2_walk import ACTUATOR_DR_SPAN  # noqa: PLC0415
+
+    return ACTUATOR_DR_SPAN
+
+
 DEFAULT_ROBOT = "microduck"
 
 
@@ -117,7 +153,18 @@ def walk_spec(robot: str = DEFAULT_ROBOT) -> WalkSpec:
         )
     if robot == "go1":
         return WalkSpec("go1", _go1_env, _go1_agent, _go1_span(), "go1-walk")
+    if robot == "go2":
+        return WalkSpec("go2", _go2_env, _go2_agent, _go2_span(), "go2-walk")
     raise KeyError(f"no walk for robot {robot!r}; known: {sorted(ROBOTS)}")
 
 
-ROBOTS = ("microduck", "go1")
+ROBOTS = ("microduck", "go1", "go2")
+
+
+def use_project(root: Path | None) -> None:
+    """Search a project's robots first (the walk tools' `--project`), so
+    a robot onboarded there — the Go2 — is found by name."""
+    if root is not None:
+        from rq_pipeline.project.locate import Project  # noqa: PLC0415
+
+        Project(Path(root).expanduser().resolve()).use()

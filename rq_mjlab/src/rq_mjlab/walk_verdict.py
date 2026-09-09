@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 # The judgment's constants, declared where the certificate cites them.
 ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
@@ -354,6 +354,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
+    parser.add_argument(
         "--robot",
         choices=ROBOTS,
         default=DEFAULT_ROBOT,
@@ -520,6 +526,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
 
     if args.judge_at_fit and args.judge_span is not None:
         raise SystemExit("--judge-at-fit and --judge-span exclude each other")
+    use_project(args.project)
     spec = walk_spec(args.robot)
     default_span = spec.default_span
     judge_span = default_span if args.judge_span is None else args.judge_span

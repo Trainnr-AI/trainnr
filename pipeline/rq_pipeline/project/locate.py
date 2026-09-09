@@ -195,7 +195,7 @@ def plain_name(name: str, what: str = "name") -> str:
         or name in (".", "..")
         or name.startswith(".")
     ):
-        raise ValueError(f"a {what} is a plain word, got {name!r}")
+        raise ValueError(f"{what}: one plain word, no separators; got {name!r}")
     return name
 
 

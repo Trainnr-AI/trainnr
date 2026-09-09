@@ -170,6 +170,8 @@ class TheDoors(unittest.TestCase):
                     "rq_mjlab.walk_train",
                     "--agent",
                     "smoke",
+                    "--robot",
+                    "microduck",
                     "--iterations",
                     "5",
                 ],
@@ -179,6 +181,30 @@ class TheDoors(unittest.TestCase):
                 cert_argv[cert_argv.index("-m") + 1], "rq_mjlab.walk_verdict"
             )
             self.assertIn("--device", cert_argv)
+            self.assertEqual(cert_argv[cert_argv.index("--robot") + 1], "microduck")
+
+    def test_the_go2_walk_trains_in_its_project(self) -> None:
+        with harness() as (actions, spawner):
+            actions.train_walk(
+                "g3", robot="go2", project="/p/go2", log_dir="/p/go2/runs/first", seed=7
+            )
+            [(argv, _cwd)] = spawner.calls
+            tail = argv[argv.index("--robot") :]
+            self.assertEqual(
+                tail,
+                [
+                    "--robot",
+                    "go2",
+                    "--project",
+                    "/p/go2",
+                    "--seed",
+                    "7",
+                    "--log-dir",
+                    "/p/go2/runs/first",
+                ],
+            )
+            with self.assertRaises(ValueError):
+                actions.train_walk("smoke", robot="spot")
 
     def test_the_studio_launches_release_in_its_crate(self) -> None:
         with harness() as (actions, spawner):

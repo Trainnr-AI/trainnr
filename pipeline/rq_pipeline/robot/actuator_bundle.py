@@ -371,7 +371,7 @@ def declared_ranges(
         for param, value in numeric.items()
     }
     return ranges, (
-        f"caller-declared span ±{fallback_span:g} (bundle is point estimates)"
+        f"caller-declared span ±{fallback_span:g} around the bundle's point"
     )
 
 

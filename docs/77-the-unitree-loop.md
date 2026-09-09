@@ -68,9 +68,9 @@ read differently, and the window must say so rather than show a gap.
 | asset onboarded | Menagerie `go2.xml` into `projects/go2-walk/robots/go2` | `onboard_robot` | done by the door; two frictions (§3) |
 | telemetry recorded | none — no Go2 in the room; the SDK2 adapter (A2, gated) is the door when one arrives | `ingest_recording` | honest gap, shown as such |
 | system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `rq_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists | declared |
-| environment defined | a `robotiq/go2-walk` family in the registry whose spec is the velocity task's knobs (command ranges, span, terrain flat/rough, episode length), built by rq_mjlab | `create_task`, `accept_task` (a walk's critic is the reference gait, not a scripted expert — §3) | to build |
+| environment defined | the Go2 walk (`rq_mjlab/src/rq_mjlab/go2_walk.py`): mjlab 1.6's velocity task wired to the Go2's names over the project's bundle, the reference's constants declared; a registry family with a stamped spec is the next step | `create_task`, `accept_task` (a walk's critic is the learnability smoke — §3) | walk built 2026-09-10; family to build |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
-| policy trained | rq_mjlab's walk trainer with `ROBOTS += go2`, 4096 envs, 8000 iterations on the pod | `train_walk` → generic `train_policy` (A5) | to build |
+| policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `certify_walk` → generic `evaluate_policy`, `certify` (A5) | to build |
 | deployment exported | the deploy manifest (A6): joint-order map, gains, scale, offset, ordered observations, control rate, limits; ONNX; the sim-to-sim gate re-certifying through the manifest in MuJoCo | `export_deployment`, `gate_deployment` | to build |
 | drift monitored | synthetic drift into the declared basis until a Go2 exists; then the SDK2 adapter | `monitor_drift` (A7) | to build |
@@ -106,11 +106,29 @@ read differently, and the window must say so rather than show a gap.
    what it learned by), the index marks the stage `needed: false` with
    the reason, the next move never names it, and the strip draws it dim
    with the reason on hover and counts "1 of 8 stages".
-4. **A walk has no scripted expert.** Acceptance for a locomotion task
-   cannot be "the expert passes every trial"; the equivalent gate is the
-   reference gait (a stand-still policy must fall the "floor" test, and
-   the task must be learnable — the reference stack's own smoke
-   training). To design in the environment stage.
+4. **A walk has no scripted expert** (settled 2026-09-10). Acceptance
+   for a locomotion task cannot be "the expert passes every trial". Its
+   honest gate is learnability: the walk's smoke — two environments, two
+   iterations, the environment built from the project's bundle, the
+   actor's twelve outputs and the critic's seventy-two inputs shaped by
+   the declared constants — which the train door runs in ten seconds on
+   a laptop CPU. `accept_task` on a walk family will run exactly that and
+   record it as the verdict; a `floor` half (hold home, must not track)
+   comes with the verdict tool.
+5. **The Menagerie Go2 is not in the simulator's shape** (2026-09-10).
+   Its collision geoms are unnamed, it has no foot sites, and its trunk
+   is `base`; mjlab's velocity task wants `*_collision` geoms, foot
+   sites and a trunk body by name. The reference's `go2.xml` has all
+   three and no actuators or keyframe (mjlab injects them from the
+   constants), so it is the project's robot; Menagerie's stays the
+   viewer-friendly twin. Onboarding should say which shape a model is
+   in — a census of named collision geoms and sites — so the agent learns
+   this before training, not from a traceback.
+6. **A second venv, a second world** (2026-09-10). The walk runs in
+   rq_mjlab's own environment (mjlab pins), so the train door spawns it
+   with `--project` and the walk resolves the robot through the same
+   project-first locator the pipeline uses; nothing about the project's
+   layout is known to the walk package.
 
 ## 4. Decisions to take before building (asked 2026-09-10)
 
