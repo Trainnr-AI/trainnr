@@ -617,6 +617,66 @@ after launch (env build, checkpoint load). Not done: a per-world scope
 on the sliders, the "worlds per wall second" number, and manual drive
 of one world while the policy runs the rest.
 
+
+### 10.4 The window from first principles (proposed 2026-09-09, not built)
+
+Prakhar, after the data pages filled: "we have to look at everything
+from first principles and users current window and view and interaction
+and delight and amazing easy access to data in visuals." The pass was
+made against the captures of duck-walk (15 runs, 15 policies, 297
+evaluations, 10 findings), page by page, asking one question of each:
+what does the person at this window need to learn here, and how many
+steps does it take today?
+
+What the window does well today: every artifact has a real picture
+(the robot it drives, its reward curve, its rate and interval, its
+conditions), the loop strip says where the project stands and what is
+next, and every number in a drawer traces to a file the agent wrote.
+
+Where it fails the question, ranked by what the user learns:
+
+1. **Evaluations are a comparison, shown as a pile.** The study asks
+   "which policy, under which condition" — and the page answers with
+   297 look-alike cards in 75 rows. A comparison wants a matrix: rows
+   the policies, columns the conditions (`judged at`), each cell the
+   rate with its interval, coloured by the rate; sortable by any column;
+   a click opens the evaluation. Every page then gets a view switch,
+   Cards / Table, the table being the sortable, filterable view the
+   modal already draws — the cards stay for browsing pictures, the
+   table for finding a number.
+2. **Lineage is written but not walkable.** A drawer prints its cites
+   (run, robot, policy, environment) as text. Each should be a link that
+   opens that artifact, with a back step; and every drawer should show
+   both directions — what this came from and what was made from it
+   ("Evaluations of this policy" is the first instance; a run's
+   policies, a robot's runs, a recording's fits follow the same shape).
+3. **The Overview does not answer "what happened, what is best, what is
+   the agent doing".** "Latest" is meaningless at 297 evaluations: show
+   the best policy per condition and the study's spread instead. "Recent
+   activity" says "No jobs yet" while the command log and the event log
+   on disk hold everything the agent did — read them back into the
+   panel (open, show, simulate, screenshot; who asked, when, the
+   outcome).
+4. **A page with one artifact makes the user click.** Robots and
+   Environments hold one card on an empty page; when a page has one
+   artifact its drawer is the page.
+5. **Some kinds still have no picture.** The environment card is an
+   icon though the presenter already builds the scene; datasets and
+   deployments will need theirs when they arrive.
+6. **A finding card is a wall of text.** A finding is a headline and a
+   chart: title (the record's human title, not its id), the chart, the
+   id and date in the footer; the claim belongs in the drawer.
+7. **The Simulator's empty state is stale.** It still says "Live view"
+   and "Nothing is streaming" and points at a port; it should offer the
+   scenes the project can run, in one click.
+8. **No way to jump or to move.** A command palette (⌘K: any artifact
+   by name, any page), arrow keys between cards, Esc closing the drawer,
+   and a card-size control the page remembers.
+
+Proposed order: 1–3 first (they change what the user can learn), 4–7
+as one polish pass, 8 after. Each lands with captures through the
+agent's own door, the standing rule.
+
 ## 11. What this refuses to claim
 
 - Simulation is not reality. An evaluation is sim-only at a named fit on
