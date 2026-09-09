@@ -170,6 +170,8 @@ def _f(x: Any, digits: int = 4) -> Any:
         return x
     if v == 0:
         return 0
+    if v.is_integer() and isinstance(x, (int, float)) and not isinstance(x, bool):
+        return int(v)  # 8000, not 8000.0
     return round(v, digits) if abs(v) >= SMALL else float(f"{v:.3g}")
 
 
