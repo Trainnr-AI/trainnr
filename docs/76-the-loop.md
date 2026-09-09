@@ -731,6 +731,20 @@ agent's own door, the standing rule.
   window's event log — who did what, how long ago — and comes before
   "Latest", which is now truly the latest (sorted by `updated`).
 
+**Built 2026-09-09, items 4–7 (the polish pass):** a page with one
+artifact opens its drawer on arrival (a click still closes it; the flag
+is set only when the page is entered, so the user is never fought);
+an environment's card is its scene — the registered task built and
+compiled, one offscreen frame from a camera facing the table
+(`previews.py`, `_render_task`, sharing `_render_model` with the robot
+card); a task that does not build simply has no picture, as duck-walk's
+walk task (registered nowhere) shows. A finding with no numbers to draw
+shows its headline — the claim's first sentence, large, under the
+record's id — and keeps the rest for the drawer. The Simulator's empty
+page names the Scene strip and the agent's door instead of a port. And
+"Used by" is one wrapped row per kind (a grid cannot size a wrapped
+cell: 297 evaluation links overlapped the rows beneath).
+
 Found on the way, by measuring rather than guessing: the Overview ran
 past the window's right edge whenever the window was narrower than the
 content cap plus margins. Two causes. The page column kept its cap but

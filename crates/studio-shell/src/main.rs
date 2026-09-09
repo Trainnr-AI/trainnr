@@ -303,14 +303,15 @@ impl eframe::App for StudioShell {
             } else {
                 egui::CentralPanel::default().show(ui, |ui| {
                     pages::page(ui, |ui| {
-                        pages::heading(ui, "Live view");
+                        pages::heading(ui, "Simulator");
                         ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new(
-                                "Nothing is streaming. Anything speaking the Rerun SDK lands \
-                                 here on :9876 — a press, a training run, a certificate's \
-                                 trials — and the viewer's panes appear the moment it does. \
-                                 Preview a scene from the strip above meanwhile.",
+                                "No scene is running. Open the Scene strip at the top of \
+                                 this page and pick one, or ask your agent to simulate an \
+                                 environment. A data generation, a training run or an \
+                                 evaluation streams into the viewer here on its own the \
+                                 moment it starts.",
                             )
                             .text_style(re_ui::DesignTokens::welcome_screen_body())
                             .color(ui.visuals().weak_text_color()),
@@ -400,6 +401,7 @@ impl StudioShell {
                         Section::parse(&name).ok_or_else(|| format!("no page named {name:?}"))?;
                     self.shell.section = page;
                     self.shell.selected = None;
+                    self.shell.entered = true;
                     pages::scroll_to_top(ui.ctx());
                     self.control.event(
                         "open",

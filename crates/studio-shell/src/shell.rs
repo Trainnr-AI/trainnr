@@ -44,6 +44,10 @@ pub struct Shell {
     /// Where the user came from, for the back button: a lineage link
     /// pushes the page and selection it left.
     history: Vec<(Section, Option<String>)>,
+    /// True on the first frame of a freshly opened page: a page with a
+    /// single artifact opens its drawer then, and only then, so the
+    /// user can still close it.
+    pub entered: bool,
     repo_root: std::path::PathBuf,
 }
 
@@ -60,6 +64,7 @@ impl Shell {
             table: None,
             scroll_to_detail: false,
             history: Vec::new(),
+            entered: true,
             repo_root,
         }
     }
@@ -290,6 +295,7 @@ impl Shell {
             self.section = item;
             self.selected = None;
             self.history.clear();
+            self.entered = true;
             crate::pages::scroll_to_top(ui.ctx());
         }
     }
@@ -324,6 +330,7 @@ impl Shell {
                     self.section = section;
                     self.scroll_to_detail = stamp.is_some();
                     self.selected = stamp;
+                    self.entered = true;
                     pages::scroll_to_top(ui.ctx());
                 }
             }
@@ -335,6 +342,7 @@ impl Shell {
                 let mut nav = pages::Nav {
                     can_back: !self.history.is_empty(),
                     scroll_to_detail: scroll,
+                    entered: std::mem::take(&mut self.entered),
                     ..Default::default()
                 };
                 pages::section(

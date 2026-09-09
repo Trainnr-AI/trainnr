@@ -37,6 +37,7 @@ PREVIEWS_DIR = "previews"
 # Retina and let the card scale down.
 PREVIEW_SIZE = (674, 500)
 ROBOT_CAMERA = {"distance_scale": 2.2, "azimuth": 135.0, "elevation": -20.0}
+SCENE_CAMERA = {"distance_scale": 1.3, "azimuth": 90.0, "elevation": -35.0}
 LOSS_LINE = re.compile(r"\bloss:\s*([0-9.eE+-]+)")
 MIN_CURVE_POINTS = 2  # a line needs two
 # The preview palette, named once: the ground, the series in order, the
@@ -86,13 +87,50 @@ def _render_robot(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     """The bundle's model, posed at its keyframe or zero, offscreen."""
     try:
         import mujoco  # noqa: PLC0415
-        import numpy as np  # noqa: PLC0415
     except ImportError:
         return False
     model_file = _robot_model_file(source)
     if model_file is None:
         return False
-    model = mujoco.MjModel.from_xml_path(str(model_file))
+    return _render_model(
+        mujoco.MjModel.from_xml_path(str(model_file)), out, ROBOT_CAMERA
+    )
+
+
+def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """The environment's scene — the registered task built and compiled —
+    from a wider camera than a robot's, so the table and the parts read."""
+    try:
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+    except ImportError:
+        return False
+    ref = (
+        json.loads((source / "task.json").read_text())
+        if (source / "task.json").is_file()
+        else {}
+    )
+    task_id = ref.get("task_id")
+    if not task_id:
+        return False
+    try:
+        task = resolve(task_id).build()
+        model = task.spec.compile()
+    except Exception:  # an unbuildable task simply has no picture
+        return False
+    if not isinstance(model, mujoco.MjModel):
+        return False
+    return _render_model(model, out, SCENE_CAMERA)
+
+
+def _render_model(model: Any, out: Path, camera_spec: dict[str, float]) -> bool:
+    """One offscreen frame of a compiled model at its first keyframe (or
+    zero), from a free camera placed by `camera_spec` around the model's
+    own centre and extent."""
+    import mujoco  # noqa: PLC0415
+    import numpy as np  # noqa: PLC0415
+
     data = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)
@@ -104,9 +142,9 @@ def _render_robot(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     try:
         camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(model, camera)
-        camera.distance = model.stat.extent * ROBOT_CAMERA["distance_scale"]
-        camera.azimuth = ROBOT_CAMERA["azimuth"]
-        camera.elevation = ROBOT_CAMERA["elevation"]
+        camera.distance = model.stat.extent * camera_spec["distance_scale"]
+        camera.azimuth = camera_spec["azimuth"]
+        camera.elevation = camera_spec["elevation"]
         camera.lookat[:] = model.stat.center
         renderer.update_scene(data, camera=camera)
         pixels = renderer.render()
@@ -412,20 +450,39 @@ def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
             )
             y += step
         return _save_pil(image, out)
-    text = str(raw.get("claim", ""))
+    # A claim with no numbers to draw: its first sentence, large — the
+    # headline — under the record's id; the rest waits in the drawer.
+    draw.text((48, 32), raw.get("id", ""), fill=(160, 166, 178), font=_font(24))
+    headline = _first_sentence(str(raw.get("claim", "")))
+    y = 96
+    for row in _wrap(headline, HEADLINE_CHARS)[:HEADLINE_LINES]:
+        draw.text((48, y), row, fill=(236, 238, 242), font=_font(34))
+        y += 52
+    return _save_pil(image, out)
+
+
+HEADLINE_CHARS = 34  # characters per line at the headline size
+HEADLINE_LINES = 6
+
+
+def _first_sentence(text: str) -> str:
+    """Up to the first full stop that ends a sentence (not a decimal)."""
+    for i, ch in enumerate(text):
+        if ch in ".!?" and (i + 1 == len(text) or text[i + 1].isspace()):
+            return text[: i + 1]
+    return text
+
+
+def _wrap(text: str, chars: int) -> list[str]:
     words, lines, line = text.split(), [], ""
     for word in words:
-        if len(line) + len(word) + 1 > 44:  # noqa: PLR2004 - characters per line at this size
+        if len(line) + len(word) + 1 > chars:
             lines.append(line)
             line = word
         else:
             line = f"{line} {word}".strip()
     lines.append(line)
-    y = 48
-    for row in lines[:9]:
-        draw.text((48, y), row, fill=(236, 238, 242), font=_font(28))
-        y += 44
-    return _save_pil(image, out)
+    return lines
 
 
 def _font(size: int) -> Any:
@@ -451,6 +508,7 @@ _RENDERERS = {
     "finding": _render_finding,
     "dataset": _render_dataset,
     "run": _render_run,
+    "task": _render_task,
 }
 
 

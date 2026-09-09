@@ -314,6 +314,8 @@ pub struct Nav {
     /// Bring the drawer into view this frame (an artifact opened by the
     /// agent, a link, or a card far down the grid).
     pub scroll_to_detail: bool,
+    /// The page was just opened: a lone artifact opens its own drawer.
+    pub entered: bool,
 }
 
 struct CardText<'a> {
@@ -1052,6 +1054,7 @@ pub fn section(
         return;
     };
     let scroll_to_detail = nav.scroll_to_detail;
+    let entered = nav.entered;
     let mut rows: Vec<&Artifact> = section
         .kinds()
         .iter()
@@ -1090,6 +1093,11 @@ pub fn section(
                 weak_body(ui, section.empty_hint());
             });
             return;
+        }
+        // A page with one artifact is that artifact: its drawer opens on
+        // arrival (a click still closes it).
+        if entered && selected.is_none() && rows.len() == 1 {
+            *selected = Some(rows[0].stamp.clone());
         }
         let mut scroll = scroll_to_detail;
         let mut drawer = Drawer { show, explore, nav };
@@ -1426,29 +1434,26 @@ fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav)
             None => groups.push((a.kind.clone(), vec![a])),
         }
     }
-    egui::Grid::new(("used_by", &artifact.stamp))
-        .num_columns(2)
-        .spacing([16.0, 4.0])
-        .show(ui, |ui| {
-            for (kind, members) in &groups {
-                let word = Section::for_kind(kind)
-                    .map(|s| s.title().to_lowercase())
-                    .unwrap_or_else(|| kind.clone());
-                ui.label(
-                    egui::RichText::new(format!("{} {word}", members.len()))
-                        .color(ui.visuals().weak_text_color()),
-                );
-                ui.horizontal_wrapped(|ui| {
-                    for a in members.iter().take(USED_BY_SHOWN) {
-                        stamp_link(ui, model, &a.stamp, true, nav);
-                    }
-                    if members.len() > USED_BY_SHOWN {
-                        weak_body(ui, format!("… and {} more", members.len() - USED_BY_SHOWN));
-                    }
-                });
-                ui.end_row();
+    // One wrapped row per kind (a grid cannot size a wrapped cell, and
+    // rows would overlap): the count and the kind, then the links.
+    for (kind, members) in &groups {
+        let word = Section::for_kind(kind)
+            .map(|s| s.title().to_lowercase())
+            .unwrap_or_else(|| kind.clone());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(format!("{} {word}", members.len()))
+                    .color(ui.visuals().weak_text_color()),
+            );
+            ui.add_space(8.0);
+            for a in members.iter().take(USED_BY_SHOWN) {
+                stamp_link(ui, model, &a.stamp, true, nav);
+            }
+            if members.len() > USED_BY_SHOWN {
+                weak_body(ui, format!("… and {} more", members.len() - USED_BY_SHOWN));
             }
         });
+    }
 }
 
 /// How many links a "Used by" row shows before folding.
