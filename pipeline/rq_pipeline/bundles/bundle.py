@@ -60,7 +60,8 @@ def read_bundle_record(bundle_dir: Path) -> dict[str, Any]:
 
 def model_file_of(bundle_dir: Path) -> Path | None:
     """The MJCF a bundle names: `bundle.json` first, then the rig
-    profile's `model_file`; None when neither names one that exists."""
+    profile's `model_file`, else the largest XML at the root; None for a
+    bundle with no XML at all."""
     bundle_dir = Path(bundle_dir)
     named = read_bundle_record(bundle_dir).get("model_file")
     if not named:
@@ -74,4 +75,9 @@ def model_file_of(bundle_dir: Path) -> Path | None:
                 named = None
     if named and (bundle_dir / named).is_file():
         return bundle_dir / named
-    return None
+    # A library rig onboarded before records existed: the largest XML at
+    # the root (a scene includes its robot, so it is the biggest file).
+    candidates = sorted(
+        bundle_dir.glob("*.xml"), key=lambda p: p.stat().st_size, reverse=True
+    )
+    return candidates[0] if candidates else None

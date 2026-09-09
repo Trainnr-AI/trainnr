@@ -68,7 +68,7 @@ read differently, and the window must say so rather than show a gap.
 | asset onboarded | Menagerie `go2.xml` into `projects/go2-walk/robots/go2` | `onboard_robot` | done by the door; two frictions (§3) |
 | telemetry recorded | none — no Go2 in the room; the SDK2 adapter (A2, gated) is the door when one arrives | `ingest_recording` | honest gap, shown as such |
 | system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `rq_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists | declared |
-| environment defined | the Go2 walk (`rq_mjlab/src/rq_mjlab/go2_walk.py`): mjlab 1.6's velocity task wired to the Go2's names over the project's bundle, the reference's constants declared; a registry family with a stamped spec is the next step | `create_task`, `accept_task` (a walk's critic is the learnability smoke — §3) | walk built 2026-09-10; family to build |
+| environment defined | the walk families (`rq_pipeline/tasks/walks.py`): `robotiq/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; rq_mjlab builds the simulator environment from it (`rq_mjlab/src/rq_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `certify_walk` → generic `evaluate_policy`, `certify` (A5) | to build |
@@ -144,5 +144,32 @@ read differently, and the window must say so rather than show a gap.
   ours, and its configs cannot be hashed).
 - **Compute: the RunPod pod for training and evaluation, the Mac for
   everything else**, per the standing rule (short local runs).
+  Amended 2026-09-10: the pod launch was refused (account balance too
+  low), and Prakhar: "we will do the training run tomorrow on wsl gpu"
+  — the RTX 3090 Ti box. §5 is the runbook for it.
 - **Hardware: none in this pass.** The rig connects at A6/A7 per the
   earlier call; a Go2's SDK2 adapter is gated research.
+
+## 5. Tomorrow on the WSL box: the run, by the doors
+
+What exists by the end of 2026-09-10, all pushed on the branch: the Go2
+onboarded into `projects/go2-walk` (the reference's `go2.xml`,
+`go2@b6170cf88b09`); the walk declared as `go2-flat`
+(`go2-walk@0e7e123a7de7`, span 0.10, flat, 20 s episodes, 40 trials)
+and accepted by the learnability smoke; the train door taking the
+declared task. The box needs what a pod needed: the rq_mjlab venv
+(mjlab 1.6, mujoco-warp, torch with CUDA — `cd rq_mjlab && uv sync`)
+and the project directory (gitignored; copy `projects/go2-walk`, the
+bundle is 24 MB of meshes). Then, with `TRAINNR_PROJECT` set to the
+project, by the door:
+
+    train_walk(agent="g3", task="go2-flat", name="go2-c1", seed=42)
+
+which the trainer receives as `--robot go2 --project <root> --dr-span
+0.1 --task-stamp go2-walk@0e7e… --log-dir <root>/runs/go2-c1 --seed 42`;
+4096 environments, 8000 iterations (the walk study took 1.9 h on an
+RTX PRO 6000; expect longer on the 3090 Ti). The run's `identity.json`
+cites the task; the index shows the experiment with its reward curve as
+it trains (the tensorboard log is not read yet — the console log is,
+once the run ends). Then `certify_walk(<checkpoint>, robot="go2")` for
+the evaluation, and the loop reaches "policy evaluated".

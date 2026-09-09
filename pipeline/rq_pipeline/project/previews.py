@@ -156,18 +156,11 @@ def _render_model(model: Any, out: Path, camera_spec: dict[str, float]) -> bool:
 
 
 def _robot_model_file(source: Path) -> Path | None:
-    """The MJCF to render: the one the bundle record or the rig profile
-    names, else the largest XML at the root (a library rig onboarded
-    before records existed)."""
+    """The MJCF to render: what the bundle record, the rig profile, or the
+    largest-XML rule names (`bundles.bundle.model_file_of`)."""
     from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
 
-    named = model_file_of(source)
-    if named is not None:
-        return named
-    candidates = sorted(
-        source.glob("*.xml"), key=lambda p: p.stat().st_size, reverse=True
-    )
-    return candidates[0] if candidates else None
+    return model_file_of(source)
 
 
 def _render_batch(source: Path, out: Path, _summary: dict[str, Any]) -> bool:

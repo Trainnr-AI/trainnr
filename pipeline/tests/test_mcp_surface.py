@@ -141,7 +141,8 @@ class Datasheets(unittest.TestCase):
 class Registries(unittest.TestCase):
     def test_tasks_include_both_rigs(self) -> None:
         rigs = {entry["rig"] for entry in describe_tasks()}
-        self.assertEqual(rigs, {"aloha2", "so101"})
+        self.assertTrue({"aloha2", "so101"} <= rigs)
+        self.assertIn("go2", rigs)  # the walk families (docs/77)
 
     def test_engines_include_both_backends(self) -> None:
         names = {entry["name"] for entry in describe_engines()}
@@ -154,7 +155,17 @@ class Registries(unittest.TestCase):
         # has content to hash, and a code-only task saying "no stamp" is
         # the honest answer, not a gap. Both kinds must exist and both
         # must round-trip through the window unchanged.
-        details = [describe_task(t["task_id"]) for t in describe_tasks()]
+        from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+        details = []
+        for t in describe_tasks():
+            try:
+                details.append(describe_task(t["task_id"]))
+            except FileNotFoundError as why:
+                # A walk family builds on the project's robot; with no
+                # project open it refuses by name, which is the answer.
+                self.assertIsNotNone(walk_robot(t["task_id"]))
+                self.assertIn("onboard_robot", str(why))
         with_spec = [d for d in details if "spec" in d]
         self.assertTrue(with_spec, "no spec-carrying task in the registry?")
         for detail in details:

@@ -285,20 +285,34 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     robot: str = "microduck",
     name: str | None = None,
     seed: int | None = None,
+    task: str | None = None,
 ) -> dict[str, Any]:
     """Train a walk policy through rq_mjlab. `robot` names the walk:
     microduck (its certified bundle), go1 (mjlab's own asset), go2 (the
     robot onboarded into the project). With a project open the trainer
     searches its robots first, and `name` — the experiment's folder under
     the project's `runs/` — makes the run an artifact the index sees
-    (`agent="g3"` only; a smoke archives nothing). Minutes to hours;
-    returns a job handle."""
+    (`agent="g3"` only; a smoke archives nothing). `task` names a
+    declared walk in the project: its robot and randomization span are
+    used and its version cited by the run. Minutes to hours; returns a
+    job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
 
     root = _project_root_if_any()
     log_dir = None
+    dr_span: float | None = None
+    task_stamp: str | None = None
+    if task is not None:
+        declared = _declared_walk(root, task)
+        if "reason" in declared:
+            return {"status": "refused", **declared}
+        robot, dr_span, task_stamp = (
+            declared["robot"],
+            declared["dr_span"],
+            declared["stamp"],
+        )
     if name is not None:
         try:
             plain_name(name, "experiment name")
@@ -319,9 +333,36 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             project=str(root) if root else None,
             log_dir=log_dir,
             seed=seed,
+            dr_span=dr_span,
+            task_stamp=task_stamp,
         )
     except ValueError as why:
         return {"status": "refused", "reason": str(why)}
+
+
+def _declared_walk(root: Path | None, task: str) -> dict[str, Any]:
+    """A declared walk's robot, span and version — or the reason it is
+    not one (`reason`)."""
+    from rq_pipeline.project.kinds import TASK_FILE  # noqa: PLC0415
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+    if root is None:
+        return {"reason": "a declared task needs an open project"}
+    ref_path = root / "tasks" / task / TASK_FILE
+    if not ref_path.is_file():
+        return {"reason": f"no task {task!r} in this project"}
+    ref = json.loads(ref_path.read_text())
+    try:
+        walk = walk_robot(ref.get("task_id", ""))
+    except KeyError as why:
+        return {"reason": _reason(why)}
+    if walk is None:
+        return {"reason": f"{task!r} is not a walk"}
+    return {
+        "robot": walk,
+        "dr_span": float((ref.get("spec") or {}).get("dr_span", 0.0)),
+        "stamp": ref.get("stamp"),
+    }
 
 
 def certify_walk(  # noqa: PLR0913, PLR0917 - the certificate's knobs, each named
@@ -379,8 +420,11 @@ def accept_task(name: str) -> dict[str, Any]:
     if not (folder / TASK_FILE).is_file():
         return {"status": "refused", "reason": f"no task {name!r} in this project"}
     ref = json.loads((folder / TASK_FILE).read_text())
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
     try:
-        expert_for(ref.get("task_id", ""))
+        if walk_robot(ref.get("task_id", "")) is None:
+            expert_for(ref.get("task_id", ""))
     except (KeyError, ValueError) as why:
         return {"status": "refused", "reason": str(why)}
     return Actions(JobManager(_jobs_root())).accept_task(name, str(project.root))

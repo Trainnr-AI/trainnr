@@ -195,6 +195,8 @@ class Actions:
         project: str | None = None,
         log_dir: str | None = None,
         seed: int | None = None,
+        dr_span: float | None = None,
+        task_stamp: str | None = None,
     ) -> dict[str, Any]:
         """Train a walk through rq_mjlab (the certified stack: stamped
         bundles, declared DR bases, the linter green by construction).
@@ -217,6 +219,10 @@ class Actions:
             argv += ["--seed", str(seed)]
         if log_dir is not None:
             argv += ["--log-dir", log_dir]
+        if dr_span is not None:
+            argv += ["--dr-span", str(dr_span)]
+        if task_stamp is not None:
+            argv += ["--task-stamp", task_stamp]
         return self.jobs.start("train-walk", argv, RQ_MJLAB_DIR)
 
     def certify_walk(  # noqa: PLR0913 - the certificate's knobs, each named

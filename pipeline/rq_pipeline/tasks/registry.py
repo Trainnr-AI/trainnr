@@ -28,7 +28,11 @@ BUILTIN_NAMESPACE = "robotiq"
 ENTRY_POINT_GROUP = "rq_pipeline.tasks"
 # The modules that register the built-in tasks; imported by `tasks()` so
 # a checkout works before its entry points are installed.
-BUILTIN_MODULES = ("rq_pipeline.tasks.aloha2", "rq_pipeline.tasks.so101")
+BUILTIN_MODULES = (
+    "rq_pipeline.tasks.aloha2",
+    "rq_pipeline.tasks.so101",
+    "rq_pipeline.tasks.walks",
+)
 
 
 @dataclass(frozen=True)

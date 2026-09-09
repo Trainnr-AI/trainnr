@@ -33,7 +33,9 @@ from rq_pipeline.project.kinds import ACCEPTANCE_FILE, TASK_FILE
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 DETAILS_DIR = "details"
-SCHEMA = "trainnr-detail/3"  # /3 (2026-09-09): fit records read as written
+# /4 (2026-09-10): a walk's gate and episode; /3 (2026-09-09): fit records
+# read as written.
+SCHEMA = "trainnr-detail/4"
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
@@ -424,12 +426,22 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
         return f"{k} / {n}" if k is not None and n is not None else "unrecorded"
 
     rows: list[tuple[str, Any]] = [
-        ("verdict", "accepted" if a.get("accepted") else "rejected"),
-        ("scripted policy successes", count("expert_successes")),
-        ("floor policy successes", count("floor_successes")),
+        ("verdict", "accepted" if a.get("accepted") else "rejected")
+    ]
+    gate = a.get("gate")
+    if gate:
+        rows.append(("gate", gate))
+    else:
+        rows += [
+            ("scripted policy successes", count("expert_successes")),
+            ("floor policy successes", count("floor_successes")),
+        ]
+    rows += [
         ("judged", a.get("judged", "unrecorded")),
         ("simulator build", a.get("instrument", "unrecorded")),
     ]
+    for key, value in (a.get("identity") or {}).items():
+        rows.append((f"identity · {key}", value))
     milestones = a.get("milestones") or []
     trials = a.get("trials")
     for name, counts in funnel.items():
@@ -445,8 +457,13 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
     return _kv(
         "Acceptance",
         rows,
-        note="The scripted policy must succeed on every paired trial and the "
-        "floor policy (holding home) on none.",
+        note=(
+            "A walk is accepted when its environment builds from the project's "
+            "robot and PPO iterations run: learnability, not a scripted expert."
+            if gate
+            else "The scripted policy must succeed on every paired trial and the "
+            "floor policy (holding home) on none."
+        ),
     )
 
 
@@ -491,6 +508,10 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     control_hz = getattr(task, "control_hz", None)
     steps = getattr(proto, "steps", None)
     episode_s = (steps / control_hz) if (steps and control_hz) else None
+    walk_spec = getattr(task, "task_spec", None) if proto is None else None
+    if walk_spec is not None:  # a walk: the episode is the spec's
+        episode_s = getattr(walk_spec, "episode_s", None)
+        steps = int(episode_s * control_hz) if (episode_s and control_hz) else None
     sections.append(
         _kv(
             "Episode",
@@ -499,10 +520,21 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ("control rate (Hz)", control_hz),
                 ("episode length (steps)", steps),
                 ("episode length (s)", _f(episode_s, 2) if episode_s else ""),
-                ("paired trials per evaluation", getattr(proto, "trials", None)),
+                (
+                    "paired trials per evaluation",
+                    getattr(proto, "trials", None)
+                    if proto is not None
+                    else getattr(walk_spec, "trials", None),
+                ),
                 ("instruction", getattr(task, "instruction", "")),
-                ("cameras", list(getattr(task, "cameras", []) or [])),
-                ("state dimension", getattr(task, "state_width", None)),
+                *(
+                    []
+                    if walk_spec is not None
+                    else [
+                        ("cameras", list(getattr(task, "cameras", []) or [])),
+                        ("state dimension", getattr(task, "state_width", None)),
+                    ]
+                ),
             ],
         )
     )

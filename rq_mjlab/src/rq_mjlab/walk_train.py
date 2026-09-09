@@ -153,6 +153,11 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         help="archive here instead of <log-root>/<timestamp> (a study names its arms)",
     )
     parser.add_argument(
+        "--task-stamp",
+        default=None,
+        help="the declared environment's version (a project's task): cited by the run",
+    )
+    parser.add_argument(
         "--no-recorder",
         action="store_true",
         help="headless run (a pod with no Studio listening on :9876)",
@@ -185,6 +190,8 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     if args.seed is not None:
         cfg.seed = args.seed
     identity = {**identity, "seed": cfg.seed}
+    if args.task_stamp:
+        identity["task"] = args.task_stamp
     cfg.recorders = (
         {}
         if args.no_recorder

@@ -66,8 +66,11 @@ class TheGate(unittest.TestCase):
         from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
         from rq_pipeline.physics.placement import start_verdicts  # noqa: PLC0415
         from rq_pipeline.tasks.registry import tasks  # noqa: PLC0415
+        from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
         for task_id, entry in tasks().items():
+            if walk_robot(task_id) is not None:
+                continue  # a walk has no placements to admit
             task = entry.build()
             if not task.protocol.placements:
                 continue

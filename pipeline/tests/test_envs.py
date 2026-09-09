@@ -275,12 +275,15 @@ class GymnasiumContract(unittest.TestCase):
 
         from rq_pipeline.envs.contract import gym_id  # noqa: PLC0415
         from rq_pipeline.tasks.registry import tasks  # noqa: PLC0415
+        from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
         registry = tasks()
         self.assertEqual(
             gym_id("robotiq/kitting"), "robotiq/kitting-v0"
         )  # the one literal pin
         for task_id, entry in registry.items():
+            if walk_robot(task_id) is not None:
+                continue  # walks are not gymnasium environments
             env = gym.make(gym_id(task_id))
             try:
                 self.assertEqual(env.unwrapped.task, entry.name)

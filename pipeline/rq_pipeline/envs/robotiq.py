@@ -376,8 +376,12 @@ def register_gym_ids() -> tuple[str, ...]:
     """Every registered task as a gymnasium id, idempotently — so
     `gym.make("robotiq/kitting-v0")` (or a plugin's `acme/pour-v0`) works
     for any gymnasium client, LeRobot or not."""
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
     ids = []
     for task_id in tasks():
+        if walk_robot(task_id) is not None:
+            continue  # a walk is a simulator environment, not a gymnasium one
         env_id = gym_id(task_id)
         if env_id not in gym.registry:
             gym.register(

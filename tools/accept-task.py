@@ -16,7 +16,10 @@ verdict is written as `acceptance.json` for the index and the Studio.
 """
 
 import argparse
+import ast
+import contextlib
 import json
+import subprocess
 import sys
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -40,6 +43,7 @@ from rq_pipeline.tasks.acceptance import accept  # noqa: E402
 from rq_pipeline.tasks.aloha2 import KITTING_SPEC  # noqa: E402
 from rq_pipeline.tasks.experts import EXPERTS, expert_for  # noqa: E402
 from rq_pipeline.tasks.overlay import build_from_reference  # noqa: E402
+from rq_pipeline.tasks.walks import walk_robot  # noqa: E402
 
 
 def main() -> None:
@@ -84,6 +88,83 @@ def main() -> None:
     sys.exit(0 if verdict.accepted else 1)
 
 
+SMOKE_ENVS = 2
+SMOKE_ITERATIONS = 2
+RQ_MJLAB_DIR = Path(__file__).resolve().parents[1] / "rq_mjlab"
+
+
+def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
+    """A walk's acceptance is learnability: the environment builds from
+    the project's robot and a few PPO iterations run — rq_mjlab's smoke,
+    in its own venv, with the declared span. The identity it prints is
+    the record."""
+    spec = ref.get("spec") or {}
+    argv = [
+        "uv",
+        "run",
+        "--project",
+        str(RQ_MJLAB_DIR),
+        "python",
+        "-m",
+        "rq_mjlab.walk_train",
+        "--agent",
+        "smoke",
+        "--robot",
+        robot,
+        "--project",
+        str(project.root),
+        "--envs",
+        str(SMOKE_ENVS),
+        "--iterations",
+        str(SMOKE_ITERATIONS),
+        "--dr-span",
+        str(spec.get("dr_span", 0.0)),
+        "--no-recorder",
+    ]
+    log_path = folder / "acceptance.log"
+    with log_path.open("w") as log:
+        result = subprocess.run(
+            argv, cwd=RQ_MJLAB_DIR, stdout=log, stderr=subprocess.STDOUT, check=False
+        )
+    lines = log_path.read_text(errors="replace").splitlines()
+    identity: dict = {}
+    for line in lines:
+        if "identity:" in line:
+            with contextlib.suppress(ValueError, SyntaxError):
+                identity = ast.literal_eval(line.split("identity:", 1)[1].strip())
+    accepted = result.returncode == 0 and any("[smoke] done" in line for line in lines)
+    reasons = (
+        []
+        if accepted
+        else [f"the learnability smoke exited {result.returncode}; see acceptance.log"]
+    )
+    record = {
+        "schema": ACCEPTANCE_SCHEMA,
+        "task": ref.get("stamp"),
+        "accepted": accepted,
+        "gate": (
+            f"learnability smoke: {SMOKE_ENVS} environments, "
+            f"{SMOKE_ITERATIONS} PPO iterations"
+        ),
+        "reasons": reasons,
+        "refusals": [],
+        "identity": identity,
+        "instrument": identity.get("actuator", "unrecorded"),
+        "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "log": log_path.name,
+    }
+    print(
+        ("ACCEPTED" if accepted else "REJECTED")
+        + f": {ref.get('stamp')} — {record['gate']}",
+        flush=True,
+    )
+    staging = folder / (ACCEPTANCE_FILE + ".tmp")
+    staging.write_text(json.dumps(record, indent=1) + "\n")
+    staging.replace(folder / ACCEPTANCE_FILE)
+    write_index(project, index_project(project))
+    return accepted
+
+
 def review_declared(project_root: Path, name: str) -> bool:
     """Review the project's declared task `name`; write its verdict."""
     project = Project(project_root.resolve()).use()
@@ -92,6 +173,9 @@ def review_declared(project_root: Path, name: str) -> bool:
     if not ref_path.is_file():
         raise SystemExit(f"no task {name!r} in {project.root} (no {ref_path})")
     ref = json.loads(ref_path.read_text())
+    robot = walk_robot(ref["task_id"])
+    if robot is not None:
+        return review_walk(project, folder, ref, robot)
     task = build_from_reference(ref)
     expert = expert_for(ref["task_id"])
     spec = task.task_spec
