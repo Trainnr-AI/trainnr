@@ -324,6 +324,9 @@ class StudioDoors(unittest.TestCase):
                     open_in_studio(section="evaluations", view="matrix")["reason"],
                 )
                 self.assertIn(
+                    "launch_studio", open_in_studio(search="narrow")["reason"]
+                )
+                self.assertIn(
                     "not one of", set_studio_panels(selection="hide")["reason"]
                 )
                 self.assertEqual(read_studio_events(), [])

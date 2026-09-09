@@ -445,12 +445,13 @@ def quit_studio() -> dict[str, Any]:
     return quit_(current_project())
 
 
-def open_in_studio(
+def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing it can open
     section: str | None = None,
     artifact: str | None = None,
     project: str | None = None,
     table: str | None = None,
     view: str | None = None,
+    search: str | None = None,
 ) -> dict[str, Any]:
     """Navigate the Studio: a page by name (projects, overview, robots,
     environments, recordings, datasets, experiments, policies, evaluations,
@@ -459,7 +460,9 @@ def open_in_studio(
     of the selected artifact's tables by title (Joints, Actuators,
     Episodes…) in the exploration modal — an empty string closes it — or
     the page's view: cards, table, or matrix (evaluations judged under
-    two or more conditions: policies by condition)."""
+    two or more conditions: policies by condition). `search` opens the
+    command palette (the user's ⌘K) with that query typed, to point the
+    user at something by name."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import SECTIONS, command  # noqa: PLC0415
 
@@ -476,6 +479,7 @@ def open_in_studio(
         project=project,
         table=table,
         view=view,
+        search=search,
     )
 
 

@@ -48,6 +48,9 @@ pub enum Command {
         /// How the page lists its artifacts: cards, table or matrix.
         #[serde(default)]
         view: Option<String>,
+        /// Open the command palette with this query typed.
+        #[serde(default)]
+        search: Option<String>,
     },
     Show {
         artifact: String,
@@ -477,6 +480,7 @@ mod tests {
                 artifact: None,
                 table: None,
                 view: None,
+                search: None,
             }
         );
         let time = parse_command(r#"{"verb":"time","seconds":1.5,"play":true}"#).expect("parses");

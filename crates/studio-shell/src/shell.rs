@@ -48,6 +48,8 @@ pub struct Shell {
     /// single artifact opens its drawer then, and only then, so the
     /// user can still close it.
     pub entered: bool,
+    /// The command palette, while open.
+    pub palette: Option<crate::palette::Palette>,
     repo_root: std::path::PathBuf,
 }
 
@@ -65,6 +67,7 @@ impl Shell {
             scroll_to_detail: false,
             history: Vec::new(),
             entered: true,
+            palette: None,
             repo_root,
         }
     }
@@ -376,6 +379,68 @@ impl Shell {
         if let Some(view) = self.table.as_mut() {
             if !crate::detail::table_modal(ui.ctx(), view) {
                 self.table = None;
+            }
+        }
+        self.keys(ui.ctx());
+        if let Some(palette) = self.palette.as_mut() {
+            let (chosen, close) = crate::palette::show(ui.ctx(), palette, self.model.index());
+            if close {
+                self.palette = None;
+            }
+            match chosen {
+                Some(crate::palette::Hit::Page(section)) => {
+                    self.section = section;
+                    self.selected = None;
+                    self.history.clear();
+                    self.entered = true;
+                    pages::scroll_to_top(ui.ctx());
+                }
+                Some(crate::palette::Hit::Artifact { stamp, .. }) => self.navigate(&stamp),
+                None => {}
+            }
+        }
+    }
+
+    /// The keys that move the window: ⌘K / Ctrl+K opens the palette, Esc
+    /// closes what is open (the palette, the table, then the drawer), and
+    /// ←/→ walk the page's artifacts in the order they are listed. Text
+    /// boxes keep their keys.
+    fn keys(&mut self, ctx: &egui::Context) {
+        let typing = ctx.memory(|m| m.focused().is_some());
+        let (palette_key, escape, left, right) = ctx.input_mut(|i| {
+            (
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::K),
+                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
+                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft),
+                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight),
+            )
+        });
+        if palette_key {
+            self.palette = Some(crate::palette::Palette::open(None));
+        }
+        if escape {
+            if self.palette.is_some() {
+                self.palette = None;
+            } else if self.table.is_some() {
+                self.table = None;
+            } else {
+                self.selected = None;
+            }
+        }
+        if (left || right) && self.palette.is_none() && self.table.is_none() {
+            let stamps = pages::ordered(&self.model, self.section);
+            if !stamps.is_empty() {
+                let at = self
+                    .selected
+                    .as_ref()
+                    .and_then(|s| stamps.iter().position(|x| x == s));
+                let next = match (at, right) {
+                    (None, _) => 0,
+                    (Some(i), true) => (i + 1).min(stamps.len() - 1),
+                    (Some(i), false) => i.saturating_sub(1),
+                };
+                self.selected = Some(stamps[next].clone());
+                self.scroll_to_detail = true;
             }
         }
     }

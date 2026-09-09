@@ -1041,6 +1041,29 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
 /// One section as a grid of picture cards (Rerun's example-card shape):
 /// the artifact's preview or its kind's icon, the name, its facts, the
 /// version hash. Click to select; the detail drawer opens beneath.
+/// The page's artifacts in the order it lists them: newest first, then
+/// by stamp (the order the arrow keys walk).
+pub fn ordered(model: &Model, section: Section) -> Vec<String> {
+    let Some(index) = model.index() else {
+        return Vec::new();
+    };
+    let mut rows: Vec<&Artifact> = section
+        .kinds()
+        .iter()
+        .flat_map(|k| index.by_kind(k))
+        .collect();
+    sort_newest(&mut rows);
+    rows.into_iter().map(|a| a.stamp.clone()).collect()
+}
+
+fn sort_newest(rows: &mut [&Artifact]) {
+    rows.sort_by(|a, b| {
+        b.updated_epoch()
+            .total_cmp(&a.updated_epoch())
+            .then_with(|| a.stamp.cmp(&b.stamp))
+    });
+}
+
 pub fn section(
     ui: &mut egui::Ui,
     model: &Model,
@@ -1061,11 +1084,7 @@ pub fn section(
         .flat_map(|k| index.by_kind(k))
         .collect();
     // Newest first: what changed last is what the user came to see.
-    rows.sort_by(|a, b| {
-        b.updated_epoch()
-            .total_cmp(&a.updated_epoch())
-            .then_with(|| a.stamp.cmp(&b.stamp))
-    });
+    sort_newest(&mut rows);
     page(ui, |ui| {
         let view = ui
             .horizontal(|ui| {

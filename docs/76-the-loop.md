@@ -745,6 +745,17 @@ page names the Scene strip and the agent's door instead of a port. And
 "Used by" is one wrapped row per kind (a grid cannot size a wrapped
 cell: 297 evaluation links overlapped the rows beneath).
 
+**Built 2026-09-09, item 9:** a command palette
+(`crates/studio-shell/src/palette.rs`) on ⌘K (Ctrl+K elsewhere) over
+every page and every artifact by name — pages first, then artifacts
+whose name starts with the query before those that merely hold it,
+newest first — Enter opens the first hit; the agent can open it with a
+query typed (`open_in_studio(search=...)`) to point the user at
+something. Esc closes what is open (the palette, then the table, then
+the drawer); ← and → walk the page's artifacts in the order it lists
+them. Text boxes keep their keys. A card-size control was not built:
+the table view already serves the reader who wants density.
+
 Found on the way, by measuring rather than guessing: the Overview ran
 past the window's right edge whenever the window was narrower than the
 content cap plus margins. Two causes. The page column kept its cap but

@@ -27,6 +27,7 @@ mod detail;
 mod listing;
 mod model;
 mod pages;
+mod palette;
 mod shell;
 mod simulator;
 mod viewport;
@@ -383,7 +384,11 @@ impl StudioShell {
                 artifact,
                 table,
                 view,
+                search,
             } => {
+                if let Some(query) = search {
+                    self.shell.palette = Some(crate::palette::Palette::open(Some(query)));
+                }
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
                     if !root.join("project.json").is_file() {
