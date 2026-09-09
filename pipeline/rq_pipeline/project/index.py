@@ -142,6 +142,8 @@ def index_project(project: Project) -> ProjectIndex:
                 # the artifact's name, not the folder the marker sat in.
                 label = path.parent.name if path.name == "train" else None
                 identity = stamp_kind(kind, path, name=label)
+                if kind is Kind.TASK:
+                    identity = _task_identity(path, identity)
             except UnknownKindError as why:
                 refused.append(
                     {"path": str(path.relative_to(project.root)), "reason": str(why)}
@@ -388,13 +390,29 @@ def _summary_policy(path: Path) -> dict[str, Any]:
 CLAIM_CHARS = 160  # a card's subtitle: the claim's first sentence, this long at most
 
 
+def _task_identity(path: Path, folder_stamp: str) -> str:
+    """A task's version is its spec's content hash (`Task.stamp`, kept
+    in `task.json`), not a hash of its folder — so a review written
+    beside it later does not rename it. The name stays the folder's."""
+    recorded = str(_read(path / TASK_FILE).get("stamp", ""))
+    if "@" not in recorded:
+        return folder_stamp
+    return f"{folder_stamp.split('@', 1)[0]}@{recorded.split('@', 1)[1]}"
+
+
 def _link_cited_by(artifacts: list[Artifact]) -> None:
     """Fill every artifact's `cited_by` from the others' `cites`, so the
-    lineage reads both ways without a second pass over the files."""
+    lineage reads both ways without a second pass over the files. A cite
+    names a version: the hash decides, the name half is a label (a
+    certificate cites `kitting@7d4f…`; the project holds it as
+    `tray-far@7d4f…`)."""
     by_stamp = {a.stamp: a for a in artifacts}
+    by_hash = {a.stamp.split("@", 1)[1]: a for a in artifacts if "@" in a.stamp}
     for a in artifacts:
         for cited in a.cites.values():
             target = by_stamp.get(cited)
+            if target is None and "@" in cited:
+                target = by_hash.get(cited.split("@", 1)[1])
             if target is not None and a.stamp not in target.cited_by:
                 target.cited_by.append(a.stamp)
     for a in artifacts:
@@ -432,6 +450,17 @@ def _iso(epoch: float) -> str:
 DATE_CHARS = len("2026-09-04")
 
 
+def _summary_task(path: Path) -> dict[str, Any]:
+    out = _take(_read(path / TASK_FILE), ("task_id", "stamp", "kind"))
+    verdict = _read(path / "acceptance.json")
+    out["acceptance"] = (
+        ("accepted" if verdict.get("accepted") else "rejected")
+        if verdict
+        else "unreviewed"
+    )
+    return out
+
+
 def _summary_finding(path: Path) -> dict[str, Any]:
     raw = _read(path)
     first = str(raw.get("claim", "")).split(". ", 1)[0]
@@ -449,7 +478,7 @@ _SUMMARY_READERS: dict[Kind, Any] = {
     Kind.ROBOT: lambda p: {
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
     },
-    Kind.TASK: lambda p: _take(_read(p / TASK_FILE), ("task_id", "stamp", "kind")),
+    Kind.TASK: _summary_task,
 }
 
 

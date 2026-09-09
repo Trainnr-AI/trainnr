@@ -103,7 +103,7 @@ def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     try:
         import mujoco  # noqa: PLC0415
 
-        from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+        from rq_pipeline.tasks.overlay import build_from_reference  # noqa: PLC0415
     except ImportError:
         return False
     ref = (
@@ -115,7 +115,7 @@ def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     if not task_id:
         return False
     try:
-        task = resolve(task_id).build()
+        task = build_from_reference(ref)
         model = task.spec.compile()
     except Exception:  # an unbuildable task simply has no picture
         return False

@@ -27,29 +27,33 @@ REGISTERED = "registered"
 DECLARED = "declared"
 
 
-def write_task_reference(
+def write_task_reference(  # noqa: PLR0913 - one record, each field named
     project: Project,
     task_id: str,
     stamp: str | None,
     *,
     kind: str = REGISTERED,
     spec: dict[str, Any] | None = None,
+    name: str | None = None,
 ) -> Path:
     """Record a task in the project. `stamp` is the task's content stamp
     (`Task.stamp`), or None when the task carries no spec — recorded as
-    `unstamped` rather than invented. Idempotent: the same task and stamp
-    write the same bytes."""
+    `unstamped` rather than invented. A declared variant carries its
+    `name` (the folder) and its full `spec`. Idempotent: the same task
+    and stamp write the same bytes."""
     if "/" not in task_id:
         raise ValueError(
             f"task ids are namespaced, like robotiq/kitting; got {task_id!r}"
         )
-    folder = project.folder("tasks") / task_id.replace("/", "--")
+    folder = project.folder("tasks") / (name or task_id.replace("/", "--"))
     folder.mkdir(parents=True, exist_ok=True)
     record: dict[str, Any] = {
         "task_id": task_id,
         "stamp": stamp if stamp is not None else "unstamped",
         "kind": kind,
     }
+    if name is not None:
+        record["name"] = name
     if spec is not None:
         record["spec"] = spec
     out = folder / TASK_FILE
@@ -57,3 +61,41 @@ def write_task_reference(
         json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     return out
+
+
+NAME_FORBIDDEN = "/@"
+
+
+def declare_task(
+    project: Project, task_id: str, name: str, overlay: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Declare a variant into the project under `name`: built for real
+    (the scene compiles or the declaration fails), stamped by content,
+    written as a task reference of kind `declared` with its full spec."""
+    from dataclasses import asdict  # noqa: PLC0415
+
+    from rq_pipeline.tasks.overlay import build_variant, jsonable  # noqa: PLC0415
+    from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+
+    if not name or any(c in name for c in NAME_FORBIDDEN) or name != name.strip():
+        raise ValueError(f"a task name is a plain word, got {name!r}")
+    folder = project.folder("tasks") / name
+    if folder.exists():
+        raise FileExistsError(f"{name!r} is already a task in this project")
+    task, spec = build_variant(task_id, overlay)
+    full_id = resolve(task_id).task_id
+    path = write_task_reference(
+        project,
+        full_id,
+        task.stamp,
+        kind=DECLARED,
+        spec=jsonable(asdict(spec)),
+        name=name,
+    )
+    return {
+        "name": name,
+        "task_id": full_id,
+        "stamp": task.stamp,
+        "path": str(path.parent.relative_to(project.root)),
+        "overlay": jsonable(dict(overlay or {})),
+    }

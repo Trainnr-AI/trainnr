@@ -586,10 +586,9 @@ def _present_task(
     paths = [f"{root}/spec"]
     with _AsDefault(rr_):
         try:
-            from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+            from rq_pipeline.tasks.overlay import build_from_reference  # noqa: PLC0415
 
-            entry = resolve(task_id)
-            task = entry.build()
+            task = build_from_reference(ref)
             spec = getattr(task, "task_spec", None)
             if spec is not None:
                 from dataclasses import asdict  # noqa: PLC0415

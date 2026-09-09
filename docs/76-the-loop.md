@@ -358,6 +358,43 @@ a rejection returns the funnel showing where it failed, so the fix is
 visible. This is the gate that keeps a policy from being trained on a
 task that was never doable.
 
+**Built 2026-09-09 (A4).** Three doors. `describe_task_families` lists
+every registered task whose builder takes a spec — kitting and the lift
+study today — with each spec field's type and default, so the agent
+writes only what it changes. `create_task(task_id, name, overlay)`
+builds the family with the overlay replaced into its spec
+(`rq_pipeline/tasks/overlay.py`: an unknown field is refused naming the
+real ones; a task that composes a fixed scene is refused naming the
+families; JSON lists become the tuples the spec keeps), stamps it by
+content (`Task.stamp`, so two agents writing the same numbers get the
+same version) and writes it into the project as a task reference of kind
+`declared` under `name`, spec and all. `accept_task(name)` runs the
+critic as a job (`tools/accept-task.py --project … --name …`): the
+scripted policy must succeed on every paired trial and the floor policy
+on none; the verdict, counts, funnel and reasons land beside the task as
+`acceptance.json` (schema `trainnr-acceptance/1`), the tool reindexes,
+and the task's card says accepted, rejected or unreviewed with the whole
+verdict in its drawer. The readers that rebuild a task — the drawer, the
+scene card, the presenter — rebuild the variant, not the family default
+(`build_from_reference`).
+
+Two identity rules came with it. A task's version in the index is its
+spec's content hash, not a hash of its folder, so a review written
+beside it later does not rename it; its name is the folder's. And a cite
+names a version: when the name half differs (a certificate cites
+`kitting@7d4f…`, the project holds it as `tray-far@7d4f…`) the hash
+decides, in the index (`_link_cited_by`) and in the Studio's lookup.
+
+The gate, run on the aloha-kitting project by the doors alone
+(2026-09-09): `tray-far` (the tray at y = 0.9, two trials) was rejected
+in 5 s — "IK failed: right arm to (0.09, 0.9, 0.14) — the choreography
+must not pretend a reach happened", the expert 0/2, the floor 0/2 — and
+`kitting-default` was accepted in 10 s, the expert 4/4 with the funnel
+full at every milestone, the floor 0/4. Both read back in the Studio.
+The scripted experts live in `rq_pipeline/tasks/experts.py`; a family
+without one is refused by name, since acceptance is the expert's
+verdict.
+
 **Environment capture stays designed, not built, and the reason is
 recorded.** This repo re-checked the field on 2026-08-25 and amended its
 own verdict: Gaussian splats still do not carry contact, every shipped

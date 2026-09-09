@@ -250,6 +250,23 @@ class Actions:
 
     # -- the Studio ----------------------------------------------------
 
+    def accept_task(self, name: str, project_root: str) -> dict[str, Any]:
+        """Review a declared task with the acceptance critic: the scripted
+        policy must succeed on every paired trial and the floor policy on
+        none. Minutes of simulation: returns a job handle; the verdict
+        lands beside the task as acceptance.json."""
+        if not name or "/" in name:
+            raise ValueError(f"a task name is a plain word, got {name!r}")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim"),
+            str(TOOLS_DIR / "accept-task.py"),
+            "--project",
+            project_root,
+            "--name",
+            name,
+        ]
+        return self.jobs.start("accept-task", argv, PIPELINE_DIR)
+
     def open_studio(self) -> dict[str, Any]:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun

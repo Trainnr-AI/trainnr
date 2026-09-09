@@ -87,6 +87,29 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, PIPELINE_DIR)
             self.assertTrue(str(handle["job_id"]).startswith("generate-demos-"))
 
+    def test_accept_task_reviews_a_declared_task_in_its_project(self) -> None:
+        with harness() as (actions, spawner):
+            handle = actions.accept_task("tray-far", "/p/aloha")
+            [(argv, cwd)] = spawner.calls
+            self.assertEqual(
+                argv,
+                [
+                    *UV_PIPELINE,
+                    "--extra",
+                    "sim",
+                    "python",
+                    str(TOOLS_DIR / "accept-task.py"),
+                    "--project",
+                    "/p/aloha",
+                    "--name",
+                    "tray-far",
+                ],
+            )
+            self.assertEqual(cwd, PIPELINE_DIR)
+            self.assertTrue(str(handle["job_id"]).startswith("accept-task-"))
+            with self.assertRaises(ValueError):
+                actions.accept_task("a/b", "/p")
+
     def test_press_planned_spawns_the_planner_press_on_the_task(self) -> None:
         with harness() as (actions, spawner):
             handle = actions.press_planned("block_stack", episodes=4, seed=9)

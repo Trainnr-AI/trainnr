@@ -193,6 +193,66 @@ def describe_tasks() -> list[dict[str, Any]]:
     ]
 
 
+def describe_task_families() -> dict[str, Any]:
+    """The families a task can be declared over — every registered task
+    whose builder takes a spec — with each spec's fields, types and
+    defaults. Read this, then write only what you change in `create_task`."""
+    from rq_pipeline.tasks.overlay import families, spec_fields  # noqa: PLC0415
+
+    return {
+        task_id: {"rig": entry.rig, "fields": spec_fields(task_id)}
+        for task_id, entry in families().items()
+    }
+
+
+def create_task(
+    task_id: str, name: str, overlay: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Declare an environment into the project: a family (see
+    `describe_task_families`) with `overlay` — only the spec fields you
+    change — built for real and stamped by its content. Refuses, by name,
+    an unknown field, a task with no spec, or a name already taken. The
+    next move is `accept_task(name)`."""
+    from rq_pipeline.project import (  # noqa: PLC0415
+        current_project,
+        index_project,
+        write_index,
+    )
+    from rq_pipeline.project.task_ref import declare_task  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        out = declare_task(project, task_id, name, overlay)
+    except (KeyError, ValueError, FileExistsError) as why:
+        return {"status": "refused", "reason": str(why)}
+    write_index(project, index_project(project))
+    return {"status": "done", **out, "next": f"accept_task({name!r})"}
+
+
+def accept_task(name: str) -> dict[str, Any]:
+    """Review a declared environment with the acceptance critic (the
+    scripted policy must succeed on every paired trial, the floor policy
+    on none). Minutes of simulation: returns a job handle; the verdict,
+    counts, funnel and reasons land beside the task as acceptance.json
+    and in its Studio drawer. Refuses a name the project does not hold,
+    or a family with no scripted expert."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.tasks.experts import expert_for  # noqa: PLC0415
+
+    project = current_project()
+    folder = project.folder("tasks") / name
+    if not (folder / "task.json").is_file():
+        return {"status": "refused", "reason": f"no task {name!r} in this project"}
+    ref = json.loads((folder / "task.json").read_text())
+    try:
+        expert_for(ref.get("task_id", ""))
+    except (KeyError, ValueError) as why:
+        return {"status": "refused", "reason": str(why)}
+    return Actions(JobManager(_jobs_root())).accept_task(name, str(project.root))
+
+
 def describe_task(task_id: str) -> dict[str, Any]:
     """One task built for real: its spec's numbers and its content stamp.
 
@@ -1098,6 +1158,20 @@ def build_server() -> Any:  # noqa: PLR0915
     # otherwise the legacy runs root, so a checkout with no project still
     # works exactly as before.
     actions = Actions(JobManager(_jobs_root()))
+
+    server.tool(
+        description="The families an environment can be declared over, with every "
+        "spec field, type and default."
+    )(describe_task_families)
+    server.tool(
+        description="Declare an environment: a family plus the spec fields you "
+        "change, built for real and stamped by content. Next: accept_task."
+    )(create_task)
+    server.tool(
+        description="Review a declared environment with the acceptance critic "
+        "(scripted policy every trial, floor policy none). Job handle; the "
+        "verdict lands beside the task."
+    )(accept_task)
     server.tool(
         description="Generate demonstrations with a scripted policy; only successful "
         "episodes are kept (DR draws recorded). Returns a job handle."

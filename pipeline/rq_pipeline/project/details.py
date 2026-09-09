@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,22 @@ def details_path(project: Project, stamp: str) -> Path:
     return project.root / INDEX_DIR / DETAILS_DIR / f"{stamp}.json"
 
 
+def _stale(out: Path, artifact: Artifact) -> bool:
+    """The detail predates the artifact's newest file. The index keeps
+    `updated` to the second, so a detail written within that second of
+    the change counts as stale too — one extra write, never a stale view."""
+    if not artifact.updated:
+        return False
+    try:
+        updated = datetime.fromisoformat(artifact.updated).timestamp()
+    except ValueError:
+        return False
+    return out.stat().st_mtime < updated + UPDATED_RESOLUTION_S
+
+
+UPDATED_RESOLUTION_S = 1.0
+
+
 def _schema_of(path: Path) -> str:
     try:
         return str(json.loads(path.read_text()).get("schema", ""))
@@ -66,13 +83,14 @@ def _schema_of(path: Path) -> str:
 
 def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
     """Write a detail file for every artifact whose kind has a writer and
-    that has none yet — or one written by an older schema, since a detail
-    is a view and the writer is its only source; return `{stamp: relative
-    path}` for those present."""
+    that has none yet — or one written by an older schema, or one older
+    than the artifact's last change (a review written beside a task, a
+    record appended to a run) — since a detail is a view and the writer
+    is its only source; return `{stamp: relative path}` for those present."""
     written: dict[str, str] = {}
     for artifact in index.artifacts:
         out = details_path(project, artifact.stamp)
-        if not out.is_file() or _schema_of(out) != SCHEMA:
+        if not out.is_file() or _schema_of(out) != SCHEMA or _stale(out, artifact):
             writer = _WRITERS.get(artifact.kind)
             if writer is None:
                 continue
@@ -395,6 +413,40 @@ def _fit_table(fits: Path) -> dict[str, Any]:
 # -- task (Environment) ------------------------------------------------------------
 
 
+def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
+    """The critic's verdict as facts: accepted or rejected with the
+    reasons, the counts, and the expert's funnel."""
+    funnel = a.get("funnel") or {}
+    rows: list[tuple[str, Any]] = [
+        ("verdict", "accepted" if a.get("accepted") else "rejected"),
+        (
+            "scripted policy successes",
+            f"{a.get('expert_successes')} / {a.get('trials')}",
+        ),
+        ("floor policy successes", f"{a.get('floor_successes')} / {a.get('trials')}"),
+        ("judged", a.get("judged", "unrecorded")),
+        ("simulator build", a.get("instrument", "unrecorded")),
+    ]
+    milestones = a.get("milestones") or []
+    trials = a.get("trials")
+    for name, counts in funnel.items():
+        stages = [
+            f"{milestones[i]} {c}/{trials}" if i < len(milestones) else f"{c}/{trials}"
+            for i, c in enumerate(counts)
+        ]
+        rows.append((f"funnel · {name}", " · ".join(stages)))
+    for i, reason in enumerate(a.get("reasons") or [], start=1):
+        rows.append((f"reason {i}", reason))
+    for i, refusal in enumerate(a.get("refusals") or [], start=1):
+        rows.append((f"refusal {i}", refusal))
+    return _kv(
+        "Acceptance",
+        rows,
+        note="The scripted policy must succeed on every paired trial and the "
+        "floor policy (holding home) on none.",
+    )
+
+
 def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     ref = json.loads((root / "task.json").read_text())
     task_id = ref.get("task_id", "")
@@ -408,13 +460,27 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             ],
         )
     ]
+    acceptance = (
+        json.loads((root / "acceptance.json").read_text())
+        if (root / "acceptance.json").is_file()
+        else None
+    )
+    if acceptance is not None:
+        sections.append(_acceptance(acceptance))
+    else:
+        sections.append(
+            _kv(
+                "Acceptance",
+                [("verdict", "unreviewed")],
+                note="run accept_task to review it",
+            )
+        )
     try:
         from dataclasses import asdict  # noqa: PLC0415
 
-        from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+        from rq_pipeline.tasks.overlay import build_from_reference  # noqa: PLC0415
 
-        entry = resolve(task_id)
-        task = entry.build()
+        task = build_from_reference(ref)
     except Exception as why:
         sections.append(_kv("Scene", [("not built", str(why))]))
         return sections

@@ -336,3 +336,39 @@ class StudioDoors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TaskDoors(unittest.TestCase):
+    """A4: an environment declared by conversation; refusals by name
+    before any scene is built."""
+
+    def test_the_doors_refuse_by_name_without_building(self) -> None:
+        import os  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            accept_task,
+            create_task,
+            describe_task_families,
+        )
+        from rq_pipeline.project import PROJECT_ENV, create_project  # noqa: PLC0415
+
+        families = describe_task_families()
+        self.assertIn("robotiq/kitting", families)
+        self.assertEqual(families["robotiq/kitting"]["fields"]["trials"]["default"], 4)
+        with tempfile.TemporaryDirectory() as tmp:
+            create_project(Path(tmp) / "p", "p")
+            os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
+            try:
+                bad = create_task("kitting", "x", {"tray_centre": [0, 0]})
+                self.assertEqual(bad["status"], "refused")
+                self.assertIn("tray_center", bad["reason"])
+                fixed = create_task("robotiq/reach", "x", {})
+                self.assertEqual(fixed["status"], "refused")
+                self.assertIn("robotiq/kitting", fixed["reason"])
+                self.assertEqual(create_task("acme/pour", "x", {})["status"], "refused")
+                ghost = accept_task("ghost")
+                self.assertEqual(ghost["status"], "refused")
+                self.assertIn("ghost", ghost["reason"])
+            finally:
+                os.environ.pop(PROJECT_ENV, None)
