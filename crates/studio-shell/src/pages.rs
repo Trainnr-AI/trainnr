@@ -223,11 +223,36 @@ fn section_of(kind: &str) -> Option<Section> {
 // ---------------------------------------------------------------------
 // Page frame and type
 
+const SCROLL_TO_TOP: &str = "trainnr.page.scroll_to_top";
+
+/// Ask the next page frame to start at the top — a page opened by name
+/// (the agent's door, the sidebar) must not inherit the last scroll.
+pub fn scroll_to_top(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(SCROLL_TO_TOP), true));
+}
+
+fn take_scroll_to_top(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| {
+        let id = egui::Id::new(SCROLL_TO_TOP);
+        let asked = d.get_temp::<bool>(id).unwrap_or(false);
+        d.remove::<bool>(id);
+        asked
+    })
+}
+
 /// A centred, scrolling content column; every page draws inside one.
 pub fn page<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            if take_scroll_to_top(ui.ctx()) {
+                let top = ui.cursor().min;
+                ui.scroll_to_rect_animation(
+                    egui::Rect::from_min_size(top, egui::vec2(1.0, 1.0)),
+                    Some(egui::Align::TOP),
+                    egui::style::ScrollAnimation::none(),
+                );
+            }
             let available = ui.available_width();
             let width = available.min(MAX_CONTENT_WIDTH);
             let inset = ((available - width) / 2.0).max(PAGE_MARGIN * 0.5);
@@ -810,6 +835,7 @@ pub fn section(
     selected: &mut Option<String>,
     show: &mut Option<String>,
     explore: &mut Option<crate::detail::Section>,
+    scroll_to_detail: bool,
 ) {
     let Some(index) = model.index() else {
         return;
@@ -835,36 +861,79 @@ pub fn section(
         }
         let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
         let mut clicked: Option<String> = None;
-        egui::Grid::new(("section_grid", section.title()))
-            .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-            .min_col_width(width)
-            .max_col_width(width)
-            .show(ui, |ui| {
-                for (i, artifact) in rows.iter().enumerate() {
-                    let (name, hash) = split_stamp(&artifact.stamp);
-                    let facts =
-                        summary_line(&artifact.summary).unwrap_or_else(|| artifact.path.clone());
-                    let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
-                    let response = picture_card(
-                        ui,
-                        width,
-                        model.preview_path(artifact).as_deref(),
-                        Section::icon_for(&artifact.kind),
-                        CardText {
-                            title: name,
-                            facts: &facts,
-                            footer: Some(format!("{} · @{hash}", artifact.kind)),
-                        },
-                        is_selected,
-                    );
-                    if response.clicked() {
-                        clicked = Some(artifact.stamp.clone());
+        let mut scroll = scroll_to_detail;
+        let mut opened: Option<String> = None;
+        // One grid per row, so the drawer can sit right under the row that
+        // holds the selected card — never below hundreds of cards.
+        for (row_index, row) in rows.chunks(columns).enumerate() {
+            if row_index > 0 {
+                ui.add_space(GRID_GAP);
+            }
+            egui::Grid::new(("section_grid", section.title(), row_index))
+                .spacing(egui::vec2(GRID_GAP, GRID_GAP))
+                .min_col_width(width)
+                .max_col_width(width)
+                .show(ui, |ui| {
+                    for artifact in row {
+                        let (name, hash) = split_stamp(&artifact.stamp);
+                        let facts = summary_line(&artifact.summary)
+                            .unwrap_or_else(|| artifact.path.clone());
+                        let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
+                        let response = picture_card(
+                            ui,
+                            width,
+                            model.preview_path(artifact).as_deref(),
+                            Section::icon_for(&artifact.kind),
+                            CardText {
+                                title: name,
+                                facts: &facts,
+                                footer: Some(format!("{} · @{hash}", artifact.kind)),
+                            },
+                            is_selected,
+                        );
+                        if response.clicked() {
+                            clicked = Some(artifact.stamp.clone());
+                        }
                     }
-                    if (i + 1) % columns == 0 {
-                        ui.end_row();
-                    }
-                }
-            });
+                    ui.end_row();
+                });
+            // A click on this row settles the selection before the drawer
+            // is placed, so the drawer opens under the card in the same frame.
+            if let Some(stamp) = clicked.take() {
+                *selected = if selected.as_deref() == Some(stamp.as_str()) {
+                    None
+                } else {
+                    scroll = true;
+                    Some(stamp)
+                };
+            }
+            let Some(stamp) = selected.clone() else {
+                continue;
+            };
+            let Some(artifact) = row.iter().find(|a| a.stamp == stamp) else {
+                continue;
+            };
+            opened = Some(stamp.clone());
+            ui.add_space(GRID_GAP);
+            if scroll {
+                // Instant, not animated: the agent's capture on the next
+                // frame must already be looking at the drawer.
+                let top = ui.cursor().min;
+                ui.scroll_to_rect_animation(
+                    egui::Rect::from_min_size(top, egui::vec2(1.0, 1.0)),
+                    Some(egui::Align::TOP),
+                    egui::style::ScrollAnimation::none(),
+                );
+            }
+            let (show_clicked, table) = detail(ui, model, artifact);
+            if show_clicked {
+                *show = Some(stamp);
+            }
+            if table.is_some() {
+                *explore = table;
+            }
+        }
+        // A click on a card whose row came after the drawer was placed.
         if let Some(stamp) = clicked {
             *selected = if selected.as_deref() == Some(stamp.as_str()) {
                 None
@@ -872,18 +941,7 @@ pub fn section(
                 Some(stamp)
             };
         }
-        if let Some(stamp) = selected.clone() {
-            if let Some(artifact) = rows.iter().find(|a| a.stamp == stamp) {
-                ui.add_space(24.0);
-                let (show_clicked, table) = detail(ui, model, artifact);
-                if show_clicked {
-                    *show = Some(stamp);
-                }
-                if table.is_some() {
-                    *explore = table;
-                }
-            }
-        }
+        let _ = opened;
     });
 }
 

@@ -37,7 +37,7 @@ rerun = { version = "0.36.3", default-features = false, features = ["native_view
 # side (rq_pipeline.project) — the Studio never speaks MCP itself
 # (decision 2026-09-08). Both crates are already in Rerun's tree.
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 # Tables for the section views; already in the tree via re_ui (which
 # styles them: `setup_table_body`). No new dependency weight.
 egui_extras = "0.36.1"

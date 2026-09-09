@@ -275,12 +275,20 @@ def _cites_batch(path: Path) -> dict[str, str]:
     return _pick(_read(first), ("task", "expert", "instrument"))
 
 
+def _cites_policy(path: Path) -> dict[str, str]:
+    manifest = _read(path / "policy.json")
+    if manifest:
+        return _pick(manifest, ("run", "robot", "actuator"))
+    return _pick(_read(path / IDENTITY_FILE), ("robot", "actuator"))
+
+
 _CITE_READERS: dict[Kind, Any] = {
     Kind.DATASET: _cites_dataset,
     Kind.RUN: _cites_run,
     Kind.BATCH: _cites_batch,
+    Kind.POLICY: _cites_policy,
     Kind.CERTIFICATE: lambda p: _pick(
-        _read(p / CERTIFICATE_FILE), ("robot", "task", "policy", "source")
+        _read(p / CERTIFICATE_FILE), ("robot", "task", "policy", "run")
     ),
     Kind.DEPLOY: lambda p: _pick(
         _read(p / DEPLOY_FILE), ("policy", "robot", "task", "certificate")
@@ -304,7 +312,22 @@ def _summary_run(path: Path) -> dict[str, Any]:
     run = _read(path / RUN_MANIFEST_FILE)
     if run:
         return _take(run, ("policy", "steps", "started"))
-    return _take(_read(path / IDENTITY_FILE), ("dr_basis", "seed"))
+    training = _read(path / "training.json")
+    ident = _read(path / IDENTITY_FILE)
+    out: dict[str, Any] = {}
+    if training:
+        out["iterations"] = training.get("iterations_logged") or training.get(
+            "iterations"
+        )
+        reward = (training.get("final") or {}).get("reward")
+        if reward is not None:
+            out["final reward"] = round(float(reward), 1)
+    basis = ident.get("dr_basis") or ""
+    if basis:
+        out["randomization"] = _basis_name(basis)
+    if "seed" in ident:
+        out["seed"] = ident["seed"]
+    return out
 
 
 def _summary_recording(path: Path) -> dict[str, Any]:
@@ -317,14 +340,55 @@ def _summary_recording(path: Path) -> dict[str, Any]:
     return out
 
 
+def _summary_certificate(path: Path) -> dict[str, Any]:
+    """What a card says about an evaluation: the rate and its interval."""
+    c = _read(path / CERTIFICATE_FILE)
+    out: dict[str, Any] = {}
+    if "successes" in c and "trials" in c:
+        out["success"] = f"{c['successes']} / {c['trials']}"
+    ci = c.get("ci95") or c.get("ci")
+    if isinstance(ci, list) and len(ci) == 2:  # noqa: PLR2004 - an interval is two numbers
+        out["interval"] = f"[{ci[0]:.2f}, {ci[1]:.2f}]"
+    judged = (c.get("protocol") or {}).get("judged_at")
+    if judged:
+        out["judged at"] = judged
+    return out
+
+
+def _basis_name(basis: str) -> str:
+    """The domain-randomization basis in a few words: the part before its
+    colon or its parenthesis ("identified-set", "caller-declared span ±0.1")."""
+    return basis.split(":", 1)[0].split(" (", 1)[0].strip()
+
+
+def _summary_policy(path: Path) -> dict[str, Any]:
+    manifest = _read(path / "policy.json")
+    if manifest:
+        basis = manifest.get("dr_basis") or ""
+        out: dict[str, Any] = {"iterations": manifest.get("iterations")}
+        out["randomization"] = _basis_name(basis) if basis else "unrecorded"
+        out["format"] = manifest.get("format", "")
+        return out
+    return _take(_read(path / IDENTITY_FILE), ("dr_basis", "seed"))
+
+
+CLAIM_CHARS = 160  # a card's subtitle: the claim's first sentence, this long at most
+
+
+def _summary_finding(path: Path) -> dict[str, Any]:
+    raw = _read(path)
+    first = str(raw.get("claim", "")).split(". ", 1)[0]
+    short = first[:CLAIM_CHARS] + ("…" if len(first) > CLAIM_CHARS else "")
+    return {"claim": short}  # the id carries the date already
+
+
 _SUMMARY_READERS: dict[Kind, Any] = {
     Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},
     Kind.RUN: _summary_run,
-    Kind.CERTIFICATE: lambda p: _take(
-        _read(p / CERTIFICATE_FILE), ("successes", "trials", "ci95", "instrument")
-    ),
-    Kind.FINDING: lambda p: _take(_read(p), ("id", "date", "claim")),
+    Kind.CERTIFICATE: _summary_certificate,
+    Kind.FINDING: _summary_finding,
+    Kind.POLICY: _summary_policy,
     Kind.ROBOT: lambda p: {
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
     },

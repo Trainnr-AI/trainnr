@@ -665,6 +665,56 @@ def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, An
     return events(current_project(), since_ns=since_ns, limit=limit)
 
 
+# -- import what exists: experiments, policies, evaluations, findings ------------
+
+
+def import_experiment(path: str, name: str | None = None) -> dict[str, Any]:
+    """Bring a trained rq_mjlab experiment into the project: its run
+    (identity, log), its checkpoint as a policy citing the run, robot and
+    actuator model, and one evaluation per verdict file with its trial
+    records. `path` is the arm's directory (holding `train/`) or the
+    `train/` directory itself. Refuses a name already in the project."""
+    from rq_pipeline.project import (  # noqa: PLC0415
+        current_project,
+        index_project,
+        write_index,
+    )
+    from rq_pipeline.project.importer import (  # noqa: PLC0415
+        import_experiment as run_import,
+    )
+
+    project = current_project()
+    out = run_import(project, Path(path), name=name)
+    write_index(project, index_project(project))
+    return out
+
+
+def import_finding(record: str) -> dict[str, Any]:
+    """Bring a record from the repository's findings ledger into the
+    project, by id (e.g. walk-c1-2026-09-04) or by path."""
+    from rq_pipeline.project import (  # noqa: PLC0415
+        current_project,
+        index_project,
+        write_index,
+    )
+    from rq_pipeline.project.importer import (  # noqa: PLC0415
+        import_finding as run_import,
+    )
+
+    project = current_project()
+    out = run_import(project, record)
+    write_index(project, index_project(project))
+    return out
+
+
+def list_ledger_findings(prefix: str = "") -> list[dict[str, str]]:
+    """The repository's findings ledger: id, date and claim of every
+    record, optionally those whose id starts with `prefix`."""
+    from rq_pipeline.project.importer import ledger_findings  # noqa: PLC0415
+
+    return ledger_findings(prefix)
+
+
 # -- system identification (stage ②, the door: docs/76 §6) ----------------------
 
 
@@ -926,6 +976,16 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap) "
         "into the project as a stamped recording with channels, units, census."
     )(ingest_recording)
+    server.tool(
+        description="Bring a trained rq_mjlab experiment into the project: run, policy "
+        "and one evaluation per verdict, each citing the others by version."
+    )(import_experiment)
+    server.tool(
+        description="Bring a findings-ledger record into the project by id or path."
+    )(import_finding)
+    server.tool(
+        description="The findings ledger: id, date, claim; optional id prefix."
+    )(list_ledger_findings)
     server.tool(
         description="Every way a robot's dynamics can be identified from a recording."
     )(list_identification_methods)

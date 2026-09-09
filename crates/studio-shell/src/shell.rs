@@ -38,6 +38,9 @@ pub struct Shell {
     pub shown: Option<String>,
     /// A table opened for exploration (the modal over the page).
     pub table: Option<crate::detail::TableView>,
+    /// Bring the drawer into view on the next frame (an artifact opened
+    /// by the agent, or a card far down the grid).
+    pub scroll_to_detail: bool,
     repo_root: std::path::PathBuf,
 }
 
@@ -52,6 +55,7 @@ impl Shell {
             show_requested: false,
             shown: None,
             table: None,
+            scroll_to_detail: false,
             repo_root,
         }
     }
@@ -281,6 +285,7 @@ impl Shell {
         if response.clicked() {
             self.section = item;
             self.selected = None;
+            crate::pages::scroll_to_top(ui.ctx());
         }
     }
 
@@ -319,6 +324,7 @@ impl Shell {
             section => {
                 let mut show: Option<String> = None;
                 let mut explore = None;
+                let scroll = std::mem::take(&mut self.scroll_to_detail);
                 pages::section(
                     ui,
                     &self.model,
@@ -326,6 +332,7 @@ impl Shell {
                     &mut self.selected,
                     &mut show,
                     &mut explore,
+                    scroll,
                 );
                 if let Some(stamp) = show {
                     self.show(&stamp);

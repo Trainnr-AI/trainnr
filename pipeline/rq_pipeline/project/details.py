@@ -20,6 +20,7 @@ is not re-read, and deleting `.index/` loses nothing.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,10 @@ ACTUATOR_TRN = {
 }
 INTEGRATORS = {0: "Euler", 1: "RK4", 2: "implicit", 3: "implicitfast"}
 INTERVAL_ENDS = 2  # a confidence interval is two numbers
+# The protocol fields with a field-word label; the rest are shown as recorded.
+PROTOCOL_KEYS = frozenset(
+    {"trials", "seed", "criterion", "err_floor_mps", "dr_basis", "judged_at"}
+)
 
 
 def details_path(project: Project, stamp: str) -> Path:
@@ -738,21 +743,51 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         if (root / "identity.json").is_file()
         else {}
     )
-    weights = sorted(root.glob("*.pt"))
-    return [
+    training = (
+        json.loads((root / "training.json").read_text())
+        if (root / "training.json").is_file()
+        else {}
+    )
+    final = training.get("final") or {}
+    wall = training.get("wall_seconds")
+    sections = [
         _kv(
             "Experiment (reinforcement learning)",
             [
                 ("version", artifact.stamp),
+                ("trainer", training.get("trainer", "unrecorded")),
+                ("iterations", training.get("iterations_logged") or "unrecorded"),
+                ("parallel environments", training.get("envs", "unrecorded")),
+                ("device", training.get("device", "unrecorded")),
+                ("wall time", f"{wall / 3600:.1f} h" if wall else "unrecorded"),
+                ("final mean reward", final.get("reward", "unrecorded")),
+                ("best mean reward", training.get("best_reward", "unrecorded")),
+                ("final episode length", final.get("episode_length", "unrecorded")),
+                ("steps per second", final.get("steps_per_second", "unrecorded")),
                 ("robot asset", ident.get("robot", "unrecorded")),
                 ("actuator model", ident.get("actuator", "unrecorded")),
                 ("domain randomization", ident.get("dr_basis", "")),
                 ("seed", ident.get("seed")),
-                ("checkpoints", [w.name for w in weights]),
             ],
         ),
-        _kv("Identity", [(k, _jsonable(v)) for k, v in ident.items()]),
     ]
+    columns = training.get("columns") or []
+    if columns:
+        sections.append(
+            _table(
+                "Training curve",
+                [c.replace("_", " ") for c in columns],
+                [[_round(v) for v in row] for row in training.get("curve", [])],
+                note="sampled from the console log; the full log is train.log",
+            )
+        )
+    return sections
+
+
+def _round(v: Any) -> Any:
+    if isinstance(v, float):
+        return int(v) if v.is_integer() else round(v, 4)
+    return v
 
 
 def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
@@ -781,6 +816,7 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ]
             )
     funnel = c.get("funnel") or {}
+    protocol = c.get("protocol") if isinstance(c.get("protocol"), dict) else {}
     return [
         _kv(
             "Evaluation",
@@ -795,16 +831,25 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ("robot asset", c.get("robot", c.get("identity", {}).get("robot", ""))),
                 ("environment", c.get("task", c.get("source", ""))),
                 ("simulator build", c.get("instrument", "")),
-                ("protocol version", c.get("protocol", "")),
+                *[(f"{stage} (of {n})", count) for stage, count in funnel.items()],
             ],
         ),
-        _table(
-            "Funnel (trials reaching each stage)",
-            ["stage", "trials"],
-            [[k2, v] for k2, v in funnel.items()],
-        )
-        if funnel
-        else _kv("Funnel", []),
+        _kv(
+            "Protocol",
+            [
+                ("trials", protocol.get("trials")),
+                ("seed", protocol.get("seed")),
+                ("success criterion", protocol.get("criterion")),
+                ("error floor (m/s)", protocol.get("err_floor_mps")),
+                ("domain randomization", protocol.get("dr_basis")),
+                ("judged at", protocol.get("judged_at")),
+                *[
+                    (k2, _jsonable(v))
+                    for k2, v in protocol.items()
+                    if k2 not in PROTOCOL_KEYS
+                ],
+            ],
+        ),
         _table(
             "Trials", ["trial", "seed", "policy", "outcome", "steps", "events"], rows
         ),
@@ -836,6 +881,134 @@ def _jsonable(v: Any) -> Any:
     return str(v)
 
 
+def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+    manifest = (
+        json.loads((root / "policy.json").read_text())
+        if (root / "policy.json").is_file()
+        else {}
+    )
+    identity = (
+        json.loads((root / "identity.json").read_text())
+        if (root / "identity.json").is_file()
+        else {}
+    )
+    weights = sorted(
+        p.name for p in root.iterdir() if p.suffix in (".pt", ".safetensors")
+    )
+    facts = _kv(
+        "Policy",
+        [
+            ("version", artifact.stamp),
+            (
+                "checkpoint",
+                manifest.get("checkpoint") or (weights[0] if weights else ""),
+            ),
+            ("format", manifest.get("format", "")),
+            ("training iterations", manifest.get("iterations")),
+            ("experiment", manifest.get("run", "")),
+            ("robot asset", manifest.get("robot") or identity.get("robot", "")),
+            (
+                "actuator model",
+                manifest.get("actuator") or identity.get("actuator", ""),
+            ),
+            (
+                "domain randomization",
+                manifest.get("dr_basis") or identity.get("dr_basis", ""),
+            ),
+            ("seed", manifest.get("seed") if manifest else identity.get("seed")),
+        ],
+    )
+    # Every evaluation in the project that judged this policy.
+    rows = []
+    for cert in sorted(
+        (root.parent.parent / "certificates").glob("*/certificate.json")
+    ):
+        c = json.loads(cert.read_text())
+        if c.get("policy") != artifact.stamp:
+            continue
+        ci = c.get("ci95") or c.get("ci") or []
+        rows.append(
+            [
+                cert.parent.name,
+                f"{c.get('successes')} / {c.get('trials')}",
+                _rng(*ci) if len(ci) == INTERVAL_ENDS else "",
+                (c.get("protocol") or {}).get("judged_at", ""),
+                c.get("instrument", ""),
+            ]
+        )
+    return [
+        facts,
+        _table(
+            "Evaluations of this policy",
+            ["evaluation", "success", "95% interval", "judged at", "simulator build"],
+            rows,
+            note="Success is the environment's own criterion; the interval is exact "
+            "(Clopper-Pearson) for the trials run.",
+        ),
+    ]
+
+
+def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+    raw = json.loads(root.read_text())
+    outcome = raw.get("outcome")
+    if isinstance(outcome, str):
+        with contextlib.suppress(ValueError):
+            outcome = json.loads(outcome)
+    sections: list[dict[str, Any]] = [
+        _markdown("Claim", f"**{raw.get('claim', '')}**"),
+        _kv(
+            "Record",
+            [
+                ("id", raw.get("id", "")),
+                ("date", raw.get("date", "")),
+                ("repository commit", raw.get("repo_commit", "")),
+                ("simulator build", raw.get("instrument", "")),
+                ("protocol", raw.get("protocol", "")),
+                (
+                    "command",
+                    " ".join(raw.get("argv", []))
+                    if isinstance(raw.get("argv"), list)
+                    else raw.get("argv", ""),
+                ),
+            ],
+        ),
+    ]
+    arms = (outcome or {}).get("arms") if isinstance(outcome, dict) else None
+    if isinstance(arms, dict) and all(isinstance(a, dict) for a in arms.values()):
+        keys: list[str] = []
+        for arm in arms.values():
+            for key in arm:
+                if key not in keys and isinstance(arm[key], (int, float, str, list)):
+                    keys.append(key)
+        keys = [k for k in keys if k not in ("per_run", "instrument")][:8]
+        sections.append(
+            _table(
+                "Outcome by condition",
+                ["condition", *keys],
+                [
+                    [name, *[_jsonable(arm.get(k)) for k in keys]]
+                    for name, arm in arms.items()
+                ],
+            )
+        )
+    elif isinstance(outcome, dict):
+        sections.append(_kv("Outcome", [(k, _jsonable(v)) for k, v in outcome.items()]))
+    elif outcome is not None:
+        sections.append(_markdown("Outcome", str(outcome)))
+    for title, key in (
+        ("Inputs", "inputs"),
+        ("Artifacts", "artifacts"),
+        ("Sources", "sources"),
+    ):
+        block = raw.get(key)
+        if isinstance(block, dict) and block:
+            sections.append(_kv(title, [(k, _jsonable(v)) for k, v in block.items()]))
+    caveats = raw.get("caveats")
+    if isinstance(caveats, list) and caveats:
+        sections.append(_markdown("Caveats", "\n".join(f"- {c}" for c in caveats)))
+    return sections
+
+
 _WRITERS = {
     "robot": _robot,
     "task": _task,
@@ -844,4 +1017,6 @@ _WRITERS = {
     "dataset": _dataset,
     "run": _run,
     "certificate": _certificate,
+    "policy": _policy,
+    "finding": _finding,
 }

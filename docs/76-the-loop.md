@@ -92,6 +92,66 @@ dataset has a datasheet, a run has an identity file, an evaluation has its
 JSON beside its records. An unrecognised shape is refused by name rather
 than guessed at.
 
+### 2.1 Policies, evaluations and findings as artifacts (2026-09-09)
+
+Prakhar: "I want to see data and proper visually appealing data and
+sections that are meaningful and delightful to users in policies,
+evaluations, findings, deployments, monitoring." Filled from what exists
+first (his call): the flagship study's fifteen trained arms and the
+findings ledger. `pipeline/rq_pipeline/project/importer.py`:
+
+- `import_experiment(project, arm_dir)` — an rq_mjlab run (`train/`
+  with `identity.json`, `model_*.pt`, `verdict/`) becomes three kinds:
+  a **run** (the identity, the log when kept), a **policy** (the
+  checkpoint plus `policy.json`, schema `trainnr-policy/1`: checkpoint,
+  format, iterations, and the run, robot, actuator model, domain
+  randomization basis and seed it cites — no `identity.json` inside,
+  since that file marks a run to the kind detector), and one
+  **evaluation** per verdict file (`certificate.json`, schema
+  `trainnr-evaluation/1`: the verdict's successes, trials, exact
+  interval, funnel and protocol, citing the policy, robot, environment
+  and run; the trial records copied beside it).
+- `import_finding(project, id)` — a ledger record into `findings/`.
+- Doors: `import_experiment`, `import_finding`, `list_ledger_findings`.
+- The run's console log comes along: its own `train.log`, else the
+  segment of a study log whose `log_dir:` banner names the run (a study
+  launches several runs into one log; a restarted run leaves two
+  segments and the longer wins). `rq_pipeline/envs/rsl_rl_log.py` reads
+  it once into `training.json` (schema `trainnr-training/1`: trainer,
+  iterations, parallel environments, device, wall time, the final and
+  best mean reward, and the curve sampled to 400 rows), so the index
+  never re-reads a 330,000-line log. Three of the fifteen arms (the
+  first replicates of point, narrow and wide) have no log in the repo
+  and say so.
+
+What the Studio shows for them: an experiment card is its reward curve
+(the picture every RL platform shows for a run) with iterations and the
+final reward under it; its drawer holds the training facts and the
+sampled curve as a table. A policy card is the robot it drives
+(rendered from the project's bundle), subtitled by iterations,
+randomization and format; its drawer lists its facts and every
+evaluation in the project that judged it. An evaluation card draws the
+rate large, the exact interval as a bar on 0–1 with the point on it,
+and the funnel as bars; its drawer holds the facts, the funnel and the
+trial table. A finding card draws a bar per condition when its outcome
+has conditions with successes over trials, else the claim; its drawer
+holds the claim, the record's facts (date, commit, simulator build,
+protocol, command), the outcome by condition, inputs, artifacts,
+sources and caveats. Measured on duck-walk: 15 policies, 15 runs, 297
+evaluations, 10 findings, and the loop's "policy trained" and "policy
+evaluated" states proved by them.
+
+Two rules of the grid learned by capture: the drawer opens directly
+under the row that holds the selected card (one grid per row), never
+below hundreds of cards; and a page opened by name — the agent's door or
+the sidebar — starts at the top, while opening an artifact scrolls its
+drawer into view in the same frame, so the agent's capture is already
+looking at it.
+
+Deployments and Monitoring stay empty on purpose: a deployment manifest
+with its sim-to-sim gate is A6 and drift monitoring is A7, and both end
+at a real robot — the rig connects when they start.
+
 ## 3. The state machine
 
 Each state is *proved by an artifact*, never by a flag. The agent's job

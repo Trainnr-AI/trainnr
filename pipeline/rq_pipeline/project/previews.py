@@ -143,7 +143,57 @@ def _render_dataset(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _render_batch(batch, out, {})
 
 
+def _render_training_curve(source: Path, out: Path) -> bool:
+    """The reward curve of an rsl_rl run from its training record: the one
+    picture every RL platform shows for a run."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+    except ImportError:
+        return False
+    record = json.loads((source / "training.json").read_text())
+    columns = record.get("columns") or []
+    if "reward" not in columns:
+        return False
+    it, rw = columns.index("iteration"), columns.index("reward")
+    points = [
+        (float(row[it]), float(row[rw]))
+        for row in record.get("curve", [])
+        if len(row) > max(it, rw) and np.isfinite(row[rw])
+    ]
+    if len(points) < MIN_CURVE_POINTS:
+        return False
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), (24, 26, 31))
+    draw = ImageDraw.Draw(image)
+    margin = 40
+    x0, x1 = points[0][0], points[-1][0]
+    lo = min(v for _, v in points)
+    hi = max(v for _, v in points)
+    xspan, yspan = (x1 - x0) or 1.0, (hi - lo) or 1.0
+    # A zero line when the reward crosses it, so the sign reads at a glance.
+    if lo < 0 < hi:
+        y = height - margin - (0 - lo) / yspan * (height - 2 * margin)
+        draw.line([(margin, y), (width - margin, y)], fill=(60, 64, 72), width=2)
+    pts = [
+        (
+            margin + (x - x0) / xspan * (width - 2 * margin),
+            height - margin - (v - lo) / yspan * (height - 2 * margin),
+        )
+        for x, v in points
+    ]
+    draw.line(pts, fill=(88, 166, 255), width=4, joint="curve")
+    draw.text(
+        (margin, 10),
+        f"reward {points[-1][1]:.1f}",
+        fill=(200, 205, 215),
+        font=_font(22),
+    )
+    return _save_pil(image, out)
+
+
 def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    if (source / "training.json").is_file():
+        return _render_training_curve(source, out)
     """The loss curve from the chain log, as a small line plot with no
     axes — a shape, the way a platform's run tile shows one."""
     try:
@@ -223,10 +273,169 @@ def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool
     return _save_pil(image, out)
 
 
+def _render_policy(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """The robot the policy drives, from the project's own bundle (a
+    checkpoint has no picture of its own; the robot it moves is the
+    honest one), else nothing."""
+    manifest = source / "policy.json"
+    identity = source / "identity.json"
+    raw = (
+        json.loads(manifest.read_text())
+        if manifest.is_file()
+        else (json.loads(identity.read_text()) if identity.is_file() else {})
+    )
+    robot = str(raw.get("robot") or "")
+    if "@" not in robot:
+        return False
+    bundle = source.parent.parent / "robots" / robot.split("@", 1)[0]
+    if not bundle.is_dir():
+        return False
+    return _render_robot(bundle, out, {})
+
+
+def _bars(
+    draw: Any, box: tuple[int, int, int, int], fraction: float, color: tuple
+) -> None:
+    """A track and a filled share of it: `box` is (x, y, width, height)."""
+    x, y, w, h = box
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=6, fill=(44, 48, 56))
+    if fraction > 0:
+        draw.rounded_rectangle(
+            [x, y, x + max(12, int(w * min(1.0, fraction))), y + h],
+            radius=6,
+            fill=color,
+        )
+
+
+def _render_certificate(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """The evaluation at a glance: the success rate large, its exact
+    interval as a bar on 0..1, the funnel as stacked bars."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+    except ImportError:
+        return False
+    c = json.loads((source / "certificate.json").read_text())
+    k, n = c.get("successes"), c.get("trials")
+    if k is None or not n:
+        return False
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), (24, 26, 31))
+    draw = ImageDraw.Draw(image)
+    big = _font(96)
+    small = _font(30)
+    tiny = _font(24)
+    rate = k / n
+    draw.text((48, 40), f"{k} / {n}", fill=(236, 238, 242), font=big)
+    draw.text((48, 150), f"{rate:.0%} success", fill=(160, 166, 178), font=small)
+    ci = c.get("ci95") or c.get("ci") or []
+    if len(ci) == 2:  # noqa: PLR2004 - an interval is two numbers
+        x0, x1 = 48, width - 48
+        y = 230
+        draw.rounded_rectangle([x0, y, x1, y + 14], radius=7, fill=(44, 48, 56))
+        lo, hi = ci
+        draw.rounded_rectangle(
+            [x0 + int((x1 - x0) * lo), y - 2, x0 + int((x1 - x0) * hi), y + 16],
+            radius=8,
+            fill=(88, 166, 255),
+        )
+        px = x0 + int((x1 - x0) * rate)
+        draw.ellipse([px - 9, y - 2, px + 9, y + 16], fill=(236, 238, 242))
+        draw.text(
+            (x0, y + 26),
+            f"exact 95 % interval [{lo:.2f}, {hi:.2f}]",
+            fill=(160, 166, 178),
+            font=tiny,
+        )
+    funnel = c.get("funnel") or {}
+    if funnel:
+        y = 320
+        top = max(v for v in funnel.values() if isinstance(v, (int, float))) or 1
+        for name, value in funnel.items():
+            if not isinstance(value, (int, float)):
+                continue
+            draw.text((48, y), f"{name}", fill=(160, 166, 178), font=tiny)
+            _bars(draw, (200, y + 4, width - 248, 22), value / top, (70, 200, 110))
+            draw.text(
+                (width - 44 - 60, y), f"{int(value)}", fill=(236, 238, 242), font=tiny
+            )
+            y += 44
+    return _save_pil(image, out)
+
+
+def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """A finding at a glance: when its outcome holds arms with successes
+    over trials, a bar per arm; otherwise the claim, wrapped."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+    except ImportError:
+        return False
+    raw = json.loads(source.read_text())
+    outcome = raw.get("outcome")
+    if isinstance(outcome, str):
+        try:
+            outcome = json.loads(outcome)
+        except ValueError:
+            outcome = None
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), (24, 26, 31))
+    draw = ImageDraw.Draw(image)
+    arms = (outcome or {}).get("arms") if isinstance(outcome, dict) else None
+    rows = []
+    if isinstance(arms, dict):
+        for name, arm in arms.items():
+            if isinstance(arm, dict) and "successes" in arm and "trials" in arm:
+                rows.append((name, arm["successes"], arm["trials"]))
+    if rows:
+        draw.text((48, 32), raw.get("id", ""), fill=(160, 166, 178), font=_font(24))
+        y = 90
+        step = max(44, min(70, (height - 120) // max(1, len(rows))))
+        for name, k, n in rows[:6]:
+            draw.text((48, y), name, fill=(236, 238, 242), font=_font(26))
+            _bars(
+                draw, (220, y + 4, width - 340, 24), k / n if n else 0, (88, 166, 255)
+            )
+            draw.text(
+                (width - 112, y), f"{k}/{n}", fill=(236, 238, 242), font=_font(24)
+            )
+            y += step
+        return _save_pil(image, out)
+    text = str(raw.get("claim", ""))
+    words, lines, line = text.split(), [], ""
+    for word in words:
+        if len(line) + len(word) + 1 > 44:  # noqa: PLR2004 - characters per line at this size
+            lines.append(line)
+            line = word
+        else:
+            line = f"{line} {word}".strip()
+    lines.append(line)
+    y = 48
+    for row in lines[:9]:
+        draw.text((48, y), row, fill=(236, 238, 242), font=_font(28))
+        y += 44
+    return _save_pil(image, out)
+
+
+def _font(size: int) -> Any:
+    from PIL import ImageFont  # noqa: PLC0415
+
+    for candidate in (
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ):
+        try:
+            return ImageFont.truetype(candidate, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
 _RENDERERS = {
     "recording": _render_recording,
     "robot": _render_robot,
     "batch": _render_batch,
+    "policy": _render_policy,
+    "certificate": _render_certificate,
+    "finding": _render_finding,
     "dataset": _render_dataset,
     "run": _render_run,
 }

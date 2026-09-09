@@ -376,6 +376,7 @@ impl StudioShell {
                         Section::parse(&name).ok_or_else(|| format!("no page named {name:?}"))?;
                     self.shell.section = page;
                     self.shell.selected = None;
+                    pages::scroll_to_top(ui.ctx());
                     self.control.event(
                         "open",
                         serde_json::json!({"section": page.slug(), "by": "agent"}),
@@ -392,6 +393,7 @@ impl StudioShell {
                         .ok_or_else(|| format!("no page lists a {kind}"))?;
                     self.shell.section = page;
                     self.shell.selected = Some(stamp.clone());
+                    self.shell.scroll_to_detail = true;
                     self.control.event(
                         "select",
                         serde_json::json!({"artifact": stamp, "by": "agent"}),

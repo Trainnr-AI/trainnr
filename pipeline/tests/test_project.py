@@ -235,7 +235,7 @@ class Indexing(unittest.TestCase):
             index = index_project(project)
             run = index.by_kind(Kind.RUN)[0]
             self.assertEqual(run.cites["robot"], "microduck@14b51b63c52e")
-            self.assertEqual(run.summary["dr_basis"], "identified")
+            self.assertEqual(run.summary["randomization"], "identified")
             self.assertEqual(run.path, "runs/identified#1/train")
             # The ARM names the run, not the folder the marker sat in.
             self.assertTrue(run.stamp.startswith("identified#1@"))

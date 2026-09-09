@@ -419,7 +419,11 @@ pub fn summary_line(summary: &serde_json::Map<String, serde_json::Value>) -> Opt
     let parts: Vec<String> = summary
         .iter()
         .filter(|(k, _)| *k != "files")
-        .map(|(k, v)| format!("{k} {}", render_value(v)))
+        // A claim or a success rate reads on its own; a key would be noise.
+        .map(|(k, v)| match k.as_str() {
+            "claim" | "success" => render_value(v),
+            _ => format!("{k} {}", render_value(v)),
+        })
         .collect();
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
