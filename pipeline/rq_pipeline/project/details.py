@@ -30,7 +30,7 @@ from rq_pipeline.project.index import Artifact, ProjectIndex
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 DETAILS_DIR = "details"
-SCHEMA = "trainnr-detail/2"  # /2 (2026-09-09): markdown sections, field words
+SCHEMA = "trainnr-detail/3"  # /3 (2026-09-09): fit records read as written
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
@@ -316,36 +316,72 @@ def _robot(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 
 
 def _fit_table(fits: Path) -> dict[str, Any]:
+    """Every fit record as the record writer wrote it (`robot/fit_record`):
+    a row per parameter with its estimate, confidence interval, identified
+    or not, and unit; then the cross-run spread verdict per parameter when
+    two or more records exist. (Until 2026-09-09 this guessed a dict shape
+    the records never had and showed only the SPREAD line.)"""
+    from rq_pipeline.robot.fit_record import (  # noqa: PLC0415
+        load_fit_records,
+        spread_verdicts,
+    )
+
     rows: list[list[Any]] = []
-    for record in sorted(fits.glob("*.json")):
-        raw = json.loads(record.read_text())
-        params = raw.get("parameters") or raw.get("params") or {}
-        if isinstance(params, dict):
-            for pname, p in params.items():
-                if isinstance(p, dict):
-                    rows.append(
-                        [
-                            record.stem,
-                            pname,
-                            _f(p.get("estimate")),
-                            _rng(
-                                p.get("low", p.get("lower")),
-                                p.get("high", p.get("upper")),
-                            )
-                            if "low" in p or "lower" in p
-                            else "",
-                            "identified" if p.get("pinned") else "unidentified",
-                            p.get("unit", ""),
-                        ]
-                    )
-    if (fits / "SPREAD.json").is_file():
-        rows.append(["SPREAD", "(cross-run spread verdict on file)", "", "", "", ""])
+    try:
+        records = load_fit_records(fits.parent)
+    except Exception as why:  # a malformed record is a row, not a crash
+        return _table(
+            "System identification",
+            [
+                "record",
+                "parameter",
+                "estimate",
+                "confidence interval",
+                "status",
+                "unit",
+            ],
+            [["unreadable", str(why), "", "", "", ""]],
+        )
+    for record in records:
+        units = record.units or {}
+        for parameter in record.parameters:
+            interval = (
+                "unbounded"
+                if parameter.half_width == float("inf")
+                else _rng(parameter.lower, parameter.upper)
+            )
+            rows.append(
+                [
+                    record.recording,
+                    parameter.name,
+                    _f(parameter.estimate, 6),
+                    interval,
+                    "identified" if parameter.pinned else "unidentified",
+                    units.get(parameter.name, ""),
+                ]
+            )
+    if len(records) >= 2:  # noqa: PLR2004 - a spread needs two fits to disagree
+        for name, verdict in spread_verdicts(records).items():
+            rows.append(
+                [
+                    "SPREAD",
+                    name,
+                    _rng(verdict.lowest, verdict.highest),
+                    ""
+                    if verdict.mean_half_width is None
+                    else f"mean half-width {_f(verdict.mean_half_width, 4)}",
+                    "trust the spread" if verdict.exceeds else "runs agree",
+                    "",
+                ]
+            )
     return _table(
         "System identification",
         ["record", "parameter", "estimate", "confidence interval", "status", "unit"],
         rows,
-        note="From telemetry recorded on the real robot; 'unidentified' means the "
-        "interval exceeds 10% of the estimate.",
+        note="From telemetry recorded on the real robot. 'identified': the confidence "
+        "half-width is within 10 % of the parameter's allowed range. SPREAD rows: "
+        "the estimate's span across records against the mean interval; 'trust the "
+        "spread' means the runs disagree by more than their intervals claim.",
     )
 
 

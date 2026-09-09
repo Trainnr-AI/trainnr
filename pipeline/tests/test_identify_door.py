@@ -94,6 +94,14 @@ class Door(unittest.TestCase):
                 self.assertIn("verdict", again["spread"]["left_gear_per_damp"])
                 robot = again["robot"]
                 self.assertIsNotNone(describe_identification(robot)["spread"])
+                # The Studio's table shows every record and the spread.
+                from rq_pipeline.project.details import _fit_table  # noqa: PLC0415
+
+                table = _fit_table(project.folder("robots") / "rig-drivetrain" / "fits")
+                params = {row[1] for row in table["rows"] if row[0] != "SPREAD"}
+                self.assertIn("left_gear_per_damp", params)
+                self.assertGreaterEqual(len(table["rows"]), 2 * 5 + 5)
+                self.assertTrue(any(row[0] == "SPREAD" for row in table["rows"]))
                 self.assertEqual(
                     described["records"][0]["recording"].split("@")[0],
                     "sweep-2026-08-24-b",
