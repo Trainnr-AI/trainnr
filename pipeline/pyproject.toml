@@ -80,6 +80,9 @@ wire = "rq_pipeline.robots.adapters.wire"
 lerobot = "rq_pipeline.robots.adapters.lerobot"
 mcap = "rq_pipeline.robots.adapters.mcap"
 
+[project.entry-points."rq_pipeline.identification_methods"]
+drivetrain-ratio = "rq_pipeline.robot.methods:DrivetrainRatio"
+
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
 

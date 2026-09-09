@@ -259,6 +259,27 @@ are named on the bundle rather than hidden. A robot whose dynamics are
 guessed is allowed, but the guess is labelled a declared span everywhere
 downstream, in the datasheet and on the evaluation.
 
+**The door, built 2026-09-09.** `pipeline/rq_pipeline/robot/methods.py` is
+the third registry seam, the adapters' shape: an `IdentificationMethod`
+answers whether it can fit this bundle from this recording (and why not,
+in a sentence) and runs the fit; `@method(name)`, the built-ins, and the
+`rq_pipeline.identification_methods` entry-point group. One built-in
+today, `drivetrain-ratio`, the rig's ratio-form fit from a `.wire`
+sweep — and because a fit reads the original bytes, ingest now keeps
+the raw source file inside the recording artifact (`raw/`). Three MCP
+doors: `list_identification_methods`, `identify_system(robot,
+recording, method?)` — both by version; writes the fit record into the
+bundle's `fits/`, the spread past two records, re-indexes so "system
+identified" is proved by the record, and returns the parameters with
+intervals and identified-or-not, the anchor verbatim, and the robot's
+NEW version (the record lives inside the bundle, so an identified robot
+is a different artifact from an unidentified one) — and
+`describe_identification(robot)`. Refused by name: an unknown version,
+a robot no method can fit from this recording, with every method's
+reason. What the door does not do: define the parameters for a new
+robot family — that is a method, authored once per family, and the
+seam is where it goes.
+
 ## 7. Scene and task
 
 Task authoring becomes conversational: declare a specification over an

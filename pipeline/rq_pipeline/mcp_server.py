@@ -233,6 +233,9 @@ def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
     return described
 
 
+MIN_FITS_FOR_SPREAD = 2  # a spread needs two fits to disagree (tools/fit-report.py)
+
+
 def _jobs_root() -> Path:
     """Where the MCP job table lives: the current project's root, else
     the legacy `pipeline/runs`. The job manager appends `mcp-jobs/`."""
@@ -662,6 +665,164 @@ def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, An
     return events(current_project(), since_ns=since_ns, limit=limit)
 
 
+# -- system identification (stage ②, the door: docs/76 §6) ----------------------
+
+
+def _project_artifact(stamp: str, kind: str) -> Any:
+    from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
+
+    project = current_project()
+    artifact = next(
+        (a for a in index_project(project).artifacts if a.stamp == stamp), None
+    )
+    if artifact is None:
+        raise KeyError(f"no artifact {stamp!r} in {project.root}")
+    if artifact.kind != kind:
+        raise ValueError(f"{stamp} is a {artifact.kind}, not a {kind}")
+    return project, artifact
+
+
+def list_identification_methods() -> list[dict[str, str]]:
+    """Every way a robot's dynamics can be identified from a recording:
+    the built-in drivetrain ratio fit, and any method a package registers
+    under the rq_pipeline.identification_methods entry-point group."""
+    from rq_pipeline.robot.methods import methods  # noqa: PLC0415
+
+    return [
+        {"name": e.name, "doc": " ".join(e.doc.split())} for e in methods().values()
+    ]
+
+
+def identify_system(
+    robot: str, recording: str, method: str | None = None
+) -> dict[str, Any]:
+    """System identification as a door: fit the robot's dynamics from a
+    recording in this project (both by version), with a method by name
+    or the one that accepts the pair. Writes a fit record into the
+    robot's bundle — every parameter's estimate and confidence interval,
+    identified or not (interval within 10 % of its allowed range), the
+    anchor statement verbatim — and, past two records, the cross-run
+    spread verdict; re-indexes so the loop's 'system identified' state is
+    proved by the record. Refused by name: an unknown version, a robot
+    no method can fit from this recording."""
+    from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+    from rq_pipeline.robot.fit_record import (  # noqa: PLC0415
+        load_fit_records,
+        spread_verdicts,
+        write_spread_record,
+    )
+    from rq_pipeline.robot.methods import detect, resolve  # noqa: PLC0415
+
+    project, bundle = _project_artifact(robot, "robot")
+    _, rec = _project_artifact(recording, "recording")
+    bundle_dir = project.root / bundle.path
+    recording_dir = project.root / rec.path
+    entry = resolve(method) if method else detect(bundle_dir, recording_dir)
+    fitter = entry.build()
+    why = fitter.accepts(bundle_dir, recording_dir)
+    if why is not None:
+        raise ValueError(f"{entry.name} cannot fit {robot} from {recording}: {why}")
+    result, path = fitter.fit(bundle_dir, recording_dir, write=True)
+    records = load_fit_records(bundle_dir)
+    spread = None
+    if len(records) >= MIN_FITS_FOR_SPREAD:
+        write_spread_record(bundle_dir)
+        spread = {
+            name: {
+                "lowest": v.lowest,
+                "highest": v.highest,
+                "mean_half_width": v.mean_half_width,
+                "exceeds": v.exceeds,
+                "verdict": v.verdict,
+            }
+            for name, v in spread_verdicts(records).items()
+        }
+    index = index_project(project)
+    write_index(project, index)
+    state = next(s for s in index.states if s.name == "system identified")
+    # The record lives inside the bundle, so the robot's version moved:
+    # an identified robot is a different artifact from an unidentified
+    # one, and every later citation names the identified version.
+    robot_now = next(
+        (
+            a.stamp
+            for a in index.artifacts
+            if a.kind == "robot" and a.path == bundle.path
+        ),
+        robot,
+    )
+    return {
+        "method": entry.name,
+        "robot": robot_now,
+        "robot_before": robot,
+        "recording": recording,
+        "record": str(path.relative_to(project.root)) if path else None,
+        "summary": result.summary(),
+        "parameters": [
+            {
+                "name": p.name,
+                "estimate": p.estimate,
+                "half_width": p.half_width,
+                "allowed_range": p.allowed_range,
+                "identified": p.pinned,
+            }
+            for p in result.parameters
+        ],
+        "confidence": result.confidence,
+        "anchor": records[-1].anchor if records else None,
+        "records": len(records),
+        "spread": spread,
+        "state": {"system identified": state.present, "proved_by": state.proved_by},
+    }
+
+
+def describe_identification(robot: str) -> dict[str, Any]:
+    """A robot's system identification as recorded: every fit record with
+    its parameters, intervals and verdicts, the anchor statements, and the
+    cross-run spread verdict when two or more records exist."""
+    from rq_pipeline.robot.fit_record import (  # noqa: PLC0415
+        load_fit_records,
+        spread_verdicts,
+    )
+
+    project, bundle = _project_artifact(robot, "robot")
+    records = load_fit_records(project.root / bundle.path)
+    return {
+        "robot": robot,
+        "records": [
+            {
+                "recording": r.recording,
+                "created_utc": r.created_utc,
+                "confidence": r.confidence,
+                "anchor": r.anchor,
+                "parameters": [
+                    {
+                        "name": p.name,
+                        "estimate": p.estimate,
+                        "half_width": p.half_width,
+                        "identified": p.pinned,
+                        "unit": (r.units or {}).get(p.name),
+                    }
+                    for p in r.parameters
+                ],
+            }
+            for r in records
+        ],
+        "spread": {
+            name: {
+                "lowest": v.lowest,
+                "highest": v.highest,
+                "mean_half_width": v.mean_half_width,
+                "exceeds": v.exceeds,
+                "verdict": v.verdict,
+            }
+            for name, v in spread_verdicts(records).items()
+        }
+        if len(records) >= MIN_FITS_FOR_SPREAD
+        else None,
+    }
+
+
 def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
     """Make a project directory: the manifest and one folder per artifact
     kind. Never overwrites an existing project."""
@@ -765,6 +926,17 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap) "
         "into the project as a stamped recording with channels, units, census."
     )(ingest_recording)
+    server.tool(
+        description="Every way a robot's dynamics can be identified from a recording."
+    )(list_identification_methods)
+    server.tool(
+        description="System identification: fit a robot's dynamics from a recording "
+        "(both by version); writes the fit record with intervals and verdicts."
+    )(identify_system)
+    server.tool(
+        description="A robot's fit records: parameters, intervals, identified or not, "
+        "anchors, the cross-run spread."
+    )(describe_identification)
     server.tool(
         name="create_project",
         description="Make a project directory with its manifest and one folder "
