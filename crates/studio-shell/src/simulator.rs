@@ -35,6 +35,73 @@ pub enum Action {
     Stop,
 }
 
+/// Which world the camera keeps in view, in a many-worlds scene.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Follow {
+    #[default]
+    None,
+    World(u32),
+    /// The lowest reward right now.
+    Worst,
+    /// A world whose episode just ended (fallen, timed out).
+    Failing,
+    /// Every world in turn, a few seconds each.
+    Cycle,
+}
+
+const CYCLE_EVERY: std::time::Duration = std::time::Duration::from_secs(4);
+
+fn follow_state(ctx: &egui::Context) -> Follow {
+    ctx.data(|d| {
+        d.get_temp(egui::Id::new("simulator-follow"))
+            .unwrap_or_default()
+    })
+}
+
+pub fn set_follow(ctx: &egui::Context, follow: Follow) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("simulator-follow"), follow));
+}
+
+/// The rule's answer this frame: which world index to follow.
+fn follow_target(ctx: &egui::Context, rule: Follow, worlds: &[crate::viewport::SimWorld]) -> i32 {
+    match rule {
+        Follow::None => -1,
+        Follow::World(w) => w as i32,
+        Follow::Worst => worlds
+            .iter()
+            .enumerate()
+            .min_by(|a, b| a.1.reward.total_cmp(&b.1.reward))
+            .map_or(-1, |(i, _)| i as i32),
+        Follow::Failing => worlds.iter().position(|w| w.done).map_or(-1, |i| i as i32),
+        Follow::Cycle => {
+            // The clock is read BEFORE the memory lock: egui's context is
+            // one lock, and reading input inside `data_mut` deadlocked the
+            // frame (the hang, 2026-09-09).
+            let now = ctx.input(|i| i.time);
+            let n = worlds.len().max(1) as u64;
+            let started: f64 = ctx.data_mut(|d| {
+                *d.get_temp_mut_or_insert_with(egui::Id::new("simulator-cycle-start"), || now)
+            });
+            ctx.request_repaint_after(CYCLE_EVERY);
+            (((now - started) / CYCLE_EVERY.as_secs_f64()) as u64 % n) as i32
+        }
+    }
+}
+
+/// Apply the follow rule: send the world to the renderer when it changes.
+pub fn apply_follow(ctx: &egui::Context, viewport: &mut ViewportFeed) {
+    let (Some(status), _) = viewport.report() else {
+        return;
+    };
+    if status.worlds.is_empty() {
+        return;
+    }
+    let target = follow_target(ctx, follow_state(ctx), &status.worlds);
+    if target != status.follow as i32 {
+        viewport.send_follow(target);
+    }
+}
+
 // Sliders never clamp on display: egui would otherwise pull a value that
 // sits outside its nominal range back inside and report it as a change —
 // which took manual control of the scene before anyone touched anything.
@@ -221,6 +288,10 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         if toggle(ui, status.manual, mode, hint) {
             viewport.send_manual(!status.manual);
         }
+        if !status.worlds.is_empty() {
+            ui.separator();
+            worlds_row(ui, viewport, &status);
+        }
         // The chips: never move.
         ui.separator();
         chip(ui, "t", format!("{:>8.2} s", status.time));
@@ -279,6 +350,66 @@ fn menu<R>(
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<Option<R>> {
     ui.menu_image_text_button(re_ui::icons::DROPDOWN_ARROW.as_image(), text, add)
+}
+
+/// Many worlds: a dot per world (green running, red fallen, the followed
+/// one ringed) — click one to follow it — and the follow rule as a menu.
+fn worlds_row(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus) {
+    let rule = follow_state(ui.ctx());
+    let label = match rule {
+        Follow::None => "follow".to_owned(),
+        Follow::World(w) => format!("w{w}"),
+        Follow::Worst => "worst".to_owned(),
+        Follow::Failing => "failing".to_owned(),
+        Follow::Cycle => "cycle".to_owned(),
+    };
+    menu(ui, &label, |ui| {
+        for (name, choice) in [
+            ("none", Follow::None),
+            ("worst reward", Follow::Worst),
+            ("a failing world", Follow::Failing),
+            ("cycle through", Follow::Cycle),
+        ] {
+            if ui.button(name).clicked() {
+                set_follow(ui.ctx(), choice);
+                ui.close();
+            }
+        }
+    });
+    let followed = status.follow;
+    ui.spacing_mut().item_spacing.x = 3.0;
+    for (i, world) in status.worlds.iter().enumerate() {
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click());
+        let color = if world.done {
+            egui::Color32::from_rgb(220, 60, 60)
+        } else {
+            egui::Color32::from_rgb(70, 200, 110)
+        };
+        ui.painter().circle_filled(rect.center(), 4.0, color);
+        if i as i64 == followed {
+            ui.painter().circle_stroke(
+                rect.center(),
+                5.5,
+                egui::Stroke::new(1.5, ui.visuals().strong_text_color()),
+            );
+        }
+        let response = response.on_hover_text(format!(
+            "w{i}: reward {:.2}{}",
+            world.reward,
+            if world.done { ", ended" } else { "" }
+        ));
+        if response.clicked() {
+            set_follow(ui.ctx(), Follow::World(i as u32));
+        }
+    }
+    ui.spacing_mut().item_spacing.x = 8.0;
+    let n = status.worlds.len();
+    ui.label(
+        egui::RichText::new(format!("{n} worlds"))
+            .small()
+            .color(ui.visuals().weak_text_color()),
+    );
+    let _ = viewport;
 }
 
 fn chip(ui: &mut egui::Ui, key: &str, value: String) {

@@ -566,12 +566,15 @@ def control_simulator(  # noqa: PLR0913, PLR0917
     keyframe: str | None = None,
     speed: float | None = None,
     manual: bool | None = None,
+    follow: str | None = None,
 ) -> dict[str, Any]:
     """MuJoCo simulate's Simulation section on the running scene: `run`
     (True runs, False pauses), `step` n physics steps (pauses and takes
     manual control), `reset` to the initial state or to a `keyframe` by
     name, `speed` as a real-time factor (0.01..100), `manual` (True: the
-    sliders drive the scene; False: its own motion, from its start).
+    sliders drive the scene; False: its own motion, from its start). In a
+    many-worlds scene (walk), `follow` keeps the camera on a world: an
+    index, worst (lowest reward), failing (an ended episode), cycle, none.
     Refused when no scene runs — simulate_in_studio first."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import command  # noqa: PLC0415
@@ -585,6 +588,7 @@ def control_simulator(  # noqa: PLR0913, PLR0917
         keyframe=keyframe,
         speed=speed,
         manual=manual,
+        follow=follow,
     )
 
 
@@ -806,7 +810,7 @@ def build_server() -> Any:  # noqa: PLR0915
     )(simulate_in_studio)
     server.tool(
         description="simulate's Simulation section on the running scene: run/pause, "
-        "step n, reset (to a keyframe), speed, manual control."
+        "step n, reset (to a keyframe), speed, manual control; follow a world."
     )(control_simulator)
     server.tool(
         description="One Control or Joint slider by name: an actuator's control value "

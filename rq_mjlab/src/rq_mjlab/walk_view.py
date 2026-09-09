@@ -1,21 +1,28 @@
-"""The trained walk policy in the Studio's viewport — the RL view.
+"""The trained walk policy in the Studio's simulator — the RL view.
 
     cd rq_mjlab && LD_LIBRARY_PATH=/usr/lib/wsl/lib MUJOCO_GL=egl \\
         uv run python -m rq_mjlab.walk_view --latest [--envs 9] [--shm=PATH]
 
-The batched mjlab env steps N policy-driven worlds on the GPU; a CPU
-MIRROR (one copy of the robot MJCF per world, on one ground plane)
-takes every world's qpos each control step and rides the SAME
-transport the scene previews use — the shared-memory frame ring, the
-tagged stdin protocol, the orbit camera, contact-force arrows
-(imported from tools/studio-render-stream.py, the transport's one
-home). Ctrl+drag shoves a POLICY-DRIVEN duck for real: the gesture
-resolves on the mirror (mjv_select / mjvPerturb), and the force it
-produces is copied into the batched sim's `xfrc_applied` for that
-world every step — the policy must recover live, in the panel.
+The batched mjlab env steps N policy-driven worlds (GPU where there is
+one, CPU here on the Mac at about a third of real time for nine). This
+process is the PHYSICS side of the Studio's two-process stream
+(docs/76 §10.2): it creates the state ring for a mirror model — one
+copy of the walk robot per world on one ground plane, the same model
+`tools/studio-render-stream.py` builds by recipe — spawns that script
+as the render process on the Studio's own stdin and stdout, and each
+control step publishes every world's qpos plus per-world reward and
+done into the ring. The renderer draws at the display's rate, follows
+a world when asked, and reports the worlds in its status.
 
-Identity-gated like every checkpoint door: a run whose identity.json
-differs from this env is refused.
+Ctrl+drag shoves a POLICY-DRIVEN duck for real: the gesture resolves on
+the renderer's copy (mjv_select / mjvPerturb), the wrench comes back
+through the ring, and it lands in the batched sim's `xfrc_applied` for
+that world every step — the policy must recover, live.
+
+The env is built from the CHECKPOINT's identity (its actuator bundle and
+its DR basis), and the identity gate then holds exactly as walk_play and
+walk_verdict hold it: a checkpoint whose identity this env cannot
+reproduce is refused by name.
 """
 
 from __future__ import annotations
@@ -23,17 +30,20 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
+import subprocess
 import sys
-import threading
+import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+OVERVIEW_HZ = 10.0  # the per-world markers into the Studio's viewer
 
 
 def transport():
-    """The viewport transport (FrameSink, OrbitCamera, Perturber, the
-    stdin reader) from its one home — a hyphenated tool file, hence
-    importlib rather than an import statement."""
+    """The viewport transport (StateRing, PhysicsPump, the mirror scene)
+    from its one home — a hyphenated tool file, hence importlib."""
     tools = REPO / "tools"
     sys.path.insert(0, str(tools))
     spec = importlib.util.spec_from_file_location(
@@ -46,40 +56,64 @@ def transport():
 
 
 def latest_checkpoint() -> Path:
-    """The newest model_*.pt under runs/microduck-walk — what the
-    Studio's walk button rolls without naming a file."""
+    """The newest model_*.pt under runs/microduck-walk, else the flagship
+    study's arms under docs/artifacts/walk-c1 — what the Studio's walk
+    scene rolls without naming a file."""
     checkpoints = sorted(
-        REPO.glob("runs/microduck-walk/*/model_*.pt"),
+        [
+            *REPO.glob("runs/microduck-walk/*/model_*.pt"),
+            *REPO.glob("docs/artifacts/walk-c1/*/train/model_*.pt"),
+        ],
         key=lambda p: p.stat().st_mtime,
     )
     if not checkpoints:
         raise SystemExit(
-            "no checkpoint under runs/microduck-walk - train one (walk_train) "
-            "or pull a run from the pod first"
+            "no checkpoint under runs/microduck-walk or docs/artifacts/walk-c1 - "
+            "train one (walk_train) or pull a run from the pod first"
         )
     return checkpoints[-1]
 
 
-def mirror_of(worlds: int, offscreen_side: int):
-    """One CPU model holding `worlds` copies of the walk robot on one
-    ground plane. Every frame sits at the origin: the batched env's
-    world ORIGINS are already baked into each free joint's global qpos,
-    so the copies land on their own env origins by the copy alone."""
-    import mujoco  # noqa: PLC0415
-    from rq_pipeline.tasks.scene import grid_of  # noqa: PLC0415
-
-    xml = str(REPO / "robots" / "microduck" / "robot_walk.xml")
-    scene, _ = grid_of(
-        f"microduck-rl-{worlds}",
-        (mujoco.MjSpec.from_file(xml) for _ in range(worlds)),
-        pitch=0.0,
+def dr_span_of(identity: dict) -> float:
+    """The DR span the checkpoint was trained under, from its identity's
+    basis string: none (a point fit), or a caller-declared ±span. An
+    identified-set basis needs the bootstrap replicates and is refused."""
+    basis = str(identity.get("dr_basis", ""))
+    if basis.startswith("none"):
+        return 0.0
+    match = re.search(r"span ±([0-9.]+)", basis)
+    if match:
+        return float(match.group(1))
+    raise SystemExit(
+        f"this view cannot rebuild the env for basis {basis!r}; "
+        "run a point or caller-declared-span checkpoint"
     )
-    for geom in scene.geoms:
-        if geom.name == "ground":
-            geom.pos[2] = 0.0  # the display grids' table offset; ducks walk at z=0
-    scene.visual.global_.offwidth = offscreen_side
-    scene.visual.global_.offheight = offscreen_side
-    return scene.compile()
+
+
+def same_identity(trained: dict, env: dict) -> bool:
+    """The gate: robot and actuator bundle byte-for-byte; the DR basis by
+    what it MEANS (the same span, or both a point fit), since the basis
+    string's wording changed on 2026-09-06 ("(bundle is point estimates)"
+    became "around the bundle's point") and a checkpoint trained before
+    that is the same physics. A wording difference is said on stderr."""
+    for key in ("robot", "actuator"):
+        if trained.get(key) != env.get(key):
+            return False
+    a, b = str(trained.get("dr_basis", "")), str(env.get("dr_basis", ""))
+    if a != b:
+        try:
+            same = dr_span_of({"dr_basis": a}) == dr_span_of({"dr_basis": b})
+        except SystemExit:
+            return False
+        if same:
+            print(
+                f"[walk-view] basis wording differs, same span: "
+                f"trained {a!r}, env {b!r}",
+                file=sys.stderr,
+                flush=True,
+            )
+        return same
+    return True
 
 
 def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
@@ -103,8 +137,8 @@ def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
 
 
 def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduck"):
-    """The env and its inference policy, identity-gated (the same door
-    walk_play and walk_verdict use)."""
+    """The env built from the checkpoint's identity, and its inference
+    policy, identity-gated (the same door walk_play and walk_verdict use)."""
     from dataclasses import asdict  # noqa: PLC0415
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
@@ -112,12 +146,17 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduc
 
     from rq_mjlab.walks import walk_spec  # noqa: PLC0415
 
+    trained_file = checkpoint.parent / "identity.json"
+    trained = json.loads(trained_file.read_text()) if trained_file.is_file() else {}
     spec = walk_spec(robot)
-    cfg, identity = spec.env_cfg(dr_span=spec.default_span, pin_scale=None)
+    cfg, identity = spec.env_cfg(
+        dr_span=dr_span_of(trained) if trained else spec.default_span, pin_scale=None
+    )
+    if trained and not same_identity(trained, identity):
+        raise SystemExit(
+            f"identity mismatch: this env is {identity}, trained {trained}"
+        )
     cfg.scene.num_envs = envs
-    trained = checkpoint.parent / "identity.json"
-    if trained.is_file() and json.loads(trained.read_text()) != identity:
-        raise SystemExit(f"identity mismatch: this env is {identity}")
     agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
@@ -129,12 +168,62 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduc
     return env, runner.get_inference_policy(device=device)
 
 
-def main() -> None:
+class Overview:
+    """The worlds in the Studio's viewer: one marker per world at its
+    root, coloured by reward (green good, red fallen), and a reward
+    series per world — the many-worlds overview the picture cannot be."""
+
+    def __init__(self, worlds: int) -> None:
+        import rerun as rr  # noqa: PLC0415
+        import rerun.blueprint as rrb  # noqa: PLC0415
+
+        self.rr = rr
+        self.worlds = worlds
+        rr.init("robotiq-walk-worlds", spawn=False)
+        rr.connect_grpc()
+        rr.send_blueprint(
+            rrb.Blueprint(
+                rrb.Horizontal(
+                    rrb.Spatial3DView(origin="worlds", name="worlds"),
+                    rrb.TimeSeriesView(origin="worlds/reward", name="reward per world"),
+                    column_shares=[2, 1],
+                ),
+                collapse_panels=True,
+            )
+        )
+        for w in range(worlds):
+            rr.log(f"worlds/reward/w{w}", rr.SeriesLines(names=[f"w{w}"]), static=True)
+        self.last = 0.0
+
+    def log(self, sim_time: float, roots, rewards, dones) -> None:
+        now = time.monotonic()
+        if now - self.last < 1.0 / OVERVIEW_HZ:
+            return
+        self.last = now
+        rr = self.rr
+        rr.set_time("sim", duration=sim_time)
+        colors = [(220, 60, 60) if d else (70, 200, 110) for d in dones]
+        rr.log(
+            "worlds/markers",
+            rr.Points3D(
+                roots,
+                radii=0.03,
+                colors=colors,
+                labels=[f"w{w}" for w in range(self.worlds)],
+            ),
+        )
+        for w, r in enumerate(rewards):
+            rr.log(f"worlds/reward/w{w}", rr.Scalars(float(r)))
+
+
+# One process, one loop, read top to bottom: the physics side of the RL view.
+def main() -> None:  # noqa: PLR0915
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", nargs="?", type=Path, default=None)
     parser.add_argument("--latest", action="store_true")
     parser.add_argument("--envs", type=int, default=9)
     parser.add_argument("--shm", default=None)
+    parser.add_argument("--no-rerun", action="store_true")
     args = parser.parse_args()
     checkpoint = args.checkpoint if args.checkpoint else latest_checkpoint()
     streamer = transport()
@@ -149,14 +238,14 @@ def main() -> None:
 
     from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
-    # stderr: stdout is the frame-token channel the controller reads.
+    # stderr: stdout is the render process's token channel.
     print(
         f"[walk-view] {checkpoint.name} on {device}, {args.envs} worlds",
         file=sys.stderr,
         flush=True,
     )
     env, policy = load_policy(checkpoint, args.envs, device)
-    mirror = mirror_of(args.envs, streamer.MAX_RENDER_SIDE)
+    mirror = streamer.walk_scene(args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
     device_xfrc = as_torch(env.unwrapped.sim.data.xfrc_applied)
@@ -164,36 +253,76 @@ def main() -> None:
     if mirror.nq != args.envs * nq:
         raise SystemExit(f"mirror nq {mirror.nq} != {args.envs} x {nq}")
     world_of, device_of = body_maps(mirror, env.unwrapped.sim.mj_model)
+    roots = [
+        body
+        for body in range(1, mirror.nbody)
+        if mirror.body(body).name.endswith("/trunk_base")
+        or mirror.body(body).name.split("/")[-1] == mirror.body(1).name.split("/")[-1]
+    ][: args.envs]
 
-    orbit = streamer.OrbitCamera(
-        {"azimuth": 120.0, "elevation": -20.0, "distance": 3.0, "lookat": (0, 0, 0.1)}
+    # The ring, then the render process on the Studio's own pipes.
+    fd, ring_path = tempfile.mkstemp(prefix="studio-state-walk-", suffix=".ring")
+    import os  # noqa: PLC0415
+
+    os.close(fd)
+    ring = streamer.StateRing(ring_path, mirror, create=True, nworld=args.envs)
+    renderer = subprocess.Popen(
+        [
+            "uv",
+            "run",
+            "--extra",
+            "sim",
+            "--extra",
+            "viz",
+            "python",
+            str(REPO / "tools" / "studio-render-stream.py"),
+            streamer.WALK,
+            f"--scene={streamer.WALK}:{args.envs}",
+            f"--ring={ring_path}",
+            *([f"--shm={args.shm}"] if args.shm else []),
+            "--rig=microduck-rl",
+        ],
+        cwd=str(REPO / "pipeline"),
     )
-    perturber = streamer.Perturber(mirror)
-    pump = streamer.RenderPump(
-        mirror, orbit, None, perturber, streamer.FrameSink(args.shm)
-    )
-    threading.Thread(
-        target=streamer._read_control_messages,
-        # exit_on_eof: this leg only ever runs under the Studio; a
-        # closed stdin means the controller died - never orphan the GPU.
-        args=(orbit, perturber, pump._fresh.set, True),
-        daemon=True,
-    ).start()
+    overview = None if args.no_rerun else Overview(args.envs)
+    pump = streamer.PhysicsPump(mirror, None, ring)
 
     step_seconds = float(env.unwrapped.step_dt)
     obs = env.get_observations()
-    while True:
-        with torch.inference_mode():
-            actions = policy(obs)
-        obs, _, _, _ = env.step(actions)
-        mirror_data.qpos[:] = device_qpos.reshape(-1).cpu().numpy()
-        # The shove's round trip: forward the mirror so the perturb has
-        # fresh poses, let it write the mirror's xfrc, route the one
-        # loaded row into the batched sim's world.
-        mujoco.mj_forward(mirror, mirror_data)
-        device_xfrc[:] = 0.0
-        pump.tick(mirror_data, step_seconds)
-        if perturber.pert.active:
+    sim_time = 0.0
+    rewards = torch.zeros(args.envs)
+    dones = torch.zeros(args.envs, dtype=torch.bool)
+    try:
+        while renderer.poll() is None:
+            if not ring.paused():
+                with torch.inference_mode():
+                    actions = policy(obs)
+                obs, rewards, dones, _ = env.step(actions)
+                sim_time += step_seconds
+            mirror_data.qpos[:] = device_qpos.reshape(-1).cpu().numpy()
+            mujoco.mj_forward(mirror, mirror_data)
+            ring.world_stats[:, 0] = rewards.cpu().numpy()
+            ring.world_stats[:, 1] = dones.cpu().numpy()
+            mirror_data.time = sim_time
+            device_xfrc[:] = 0.0
+            try:
+                pump.tick(mirror_data, step_seconds, hold_when_paused=False)
+            except streamer.ResetScene:
+                obs = (
+                    env.reset()[0]
+                    if isinstance(env.reset(), tuple)
+                    else env.get_observations()
+                )
+                sim_time = 0.0
+            except streamer.TakeOver:
+                print(
+                    "[walk-view] manual control is not available in the RL view: the "
+                    "policy drives every world",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            # The shove's round trip: the wrench the pump wrote on the mirror
+            # goes to the batched sim's world.
             loaded = mirror_data.xfrc_applied.any(axis=1).nonzero()[0]
             for body in loaded:
                 world = world_of.get(int(body))
@@ -202,6 +331,18 @@ def main() -> None:
                     device_xfrc[world, target] = torch.from_numpy(
                         mirror_data.xfrc_applied[body]
                     ).to(device_xfrc)
+            if overview is not None:
+                overview.log(
+                    sim_time,
+                    mirror_data.xpos[roots],
+                    rewards.cpu().numpy(),
+                    dones.cpu().numpy(),
+                )
+            if ring.paused():
+                time.sleep(0.02)
+    finally:
+        renderer.terminate()
+        Path(ring_path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

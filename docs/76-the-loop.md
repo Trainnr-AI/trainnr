@@ -471,6 +471,53 @@ Align, the profiler and sensor overlays, and loading a scene that is
 not a registered task or the duck preview. Each is a tag away; each
 waits for the loop stage that needs it.
 
+### 10.3 Many worlds (2026-09-09)
+
+Prakhar: "how would this look with tens of simultaneous simulations?" —
+then "ok walk scene." Built on the RL view, the one many-worlds scene
+that exists: nine policy-driven worlds in a batched mjlab env. The
+shape follows Isaac Lab's own answer (`ViewerCfg.origin_type = env`,
+`env_index`) and the flock's lesson (twenty full-mesh robots are a
+slideshow on this GL path in every viewer):
+
+- **Physics, one process, N worlds.** `rq_mjlab.walk_view` is the physics
+  side of the two-process stream: it builds the env from the
+  checkpoint's own identity (the basis string's wording changed on
+  2026-09-06, so the gate compares the basis by what it means — the
+  same span, or both a point fit — and says so on stderr), creates the
+  state ring for a mirror model (one copy of the robot per world,
+  `wNN/` prefixed, built by recipe in the stream so the render process
+  can build the same one without mjlab), spawns the renderer on the
+  Studio's own pipes, and each control step publishes every world's
+  qpos plus per-world reward and done. A shove on the picture routes
+  back into that world's batched `xfrc_applied`.
+- **The picture, one world at a time, by rule.** The bar shows a dot
+  per world (green running, red ended, the followed one ringed — click
+  one to follow it) and a follow menu: none, worst reward, a failing
+  world, cycle (four seconds each). The renderer keeps the camera on
+  the followed world's root and closes in to 0.9 m; unfollow returns to
+  the rig's distance. On the wire: `TAG_FOLLOW`; in the status: `follow`
+  and `worlds: [{reward, done}]`; in the model: `nworld`.
+- **The overview, in the Rerun view.** The physics side logs one marker
+  per world at its root, coloured by done, and a reward series per
+  world — the picture that scales past tens without a thought, with the
+  timeline scrubbing every world together.
+- **The drawer.** The mirror's joints and actuators are named
+  `wNN/...`, so the Control and Joints tabs group by world for free;
+  manual control is refused in the RL view (the policy drives every
+  world) and says so on stderr.
+- **The door.** `control_simulator(follow="worst" | "failing" | "cycle" |
+  "none" | "w4")`.
+
+Measured on this Mac (Apple M1 Pro, warp on CPU): nine worlds step at
+a real-time factor of 0.27–0.34 (70 ms per 20 ms control step; the GPU
+box runs this at rate), the mirror renders in 49–61 ms a frame
+(16–21 fps on screen — nine copies of the 431,750-face duck, the
+asset-weight problem again), and the first frame arrives about 17 s
+after launch (env build, checkpoint load). Not done: a per-world scope
+on the sliders, the "worlds per wall second" number, and manual drive
+of one world while the policy runs the rest.
+
 ## 11. What this refuses to claim
 
 - Simulation is not reality. An evaluation is sim-only at a named fit on

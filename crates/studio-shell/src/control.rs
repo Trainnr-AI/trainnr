@@ -119,6 +119,9 @@ pub enum Command {
         /// The camera to a named view: front, side, top, reset.
         #[serde(default)]
         view: Option<String>,
+        /// Many-worlds: none, worst, failing, cycle, or a world index.
+        #[serde(default)]
+        follow: Option<String>,
     },
     Screenshot {
         /// The written image's width in pixels; taller frames scale to it.

@@ -129,6 +129,12 @@ FRAME_TOKEN = b"\xf7"  # one byte on stdout per published shm frame
 # (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
 # a starting pose the operator immediately corrects by dragging.
 RIG_CAMERAS = {
+    "microduck-rl": {  # the RL view: nine worlds on a grid, seen from above the corner
+        "azimuth": 120.0,
+        "elevation": -20.0,
+        "distance": 3.0,
+        "lookat": (0.0, 0.0, 0.1),
+    },
     "microduck": {
         "azimuth": 120.0,
         "elevation": -15.0,
@@ -355,6 +361,7 @@ class OrbitCamera:
     def __init__(self, defaults: dict) -> None:
         self._lock = threading.Lock()
         self._defaults = defaults
+        self.default_distance = defaults["distance"]
         self.azimuth = defaults["azimuth"]
         self.elevation = defaults["elevation"]
         self.distance = defaults["distance"]
@@ -373,6 +380,12 @@ class OrbitCamera:
     def size(self) -> tuple[int, int]:
         with self._lock:
             return self.width, self.height
+
+    def zoom_to(self, distance: float) -> None:
+        """A followed world is small: the camera closes in on it; an
+        unfollow returns to the rig's default distance."""
+        with self._lock:
+            self.distance = max(MIN_DISTANCE_M, min(MAX_DISTANCE_M, distance))
 
     def set_view(self, preset: str) -> None:
         """A named view from the rig's default: `reset` restores it, `front`
@@ -545,6 +558,8 @@ TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
 # side.
 TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
 TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
+TAG_FOLLOW = 16  # i32 world to keep the camera on, -1 for none
+FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
 VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
     TAG_CAMERA: 20,
@@ -562,6 +577,7 @@ TAG_PAYLOAD_BYTES = {
     TAG_VIS: 5,  # u32 mjtVisFlag, u8 on
     TAG_RND: 5,  # u32 mjtRndFlag, u8 on
     TAG_VIEW: 1,  # u8 VIEW_PRESETS index: the camera to a named view
+    TAG_FOLLOW: 4,  # i32 world index, -1 none (many-worlds scenes)
 }
 STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
 STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
@@ -666,8 +682,11 @@ class FrameSink:
 
 STATE_MAGIC = 0x5354_4154  # "STAT": the physics -> render state ring
 # The ring header, all u32 LE: magic, seq, nq, nmocap, then the
-# perturbation seqlock, active, body, paused.
-STATE_HEADER = 32
+# perturbation seqlock, active, body, paused; then nworld and reserved
+# words. A many-worlds scene (the RL view) publishes per-world stats —
+# reward, done — after the state floats.
+STATE_HEADER = 48
+WORLD_STATS = 2  # floats per world: reward, done
 PERTURB_FLOATS = 6  # one wrench: force xyz, torque xyz
 STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, spare
 MAILBOX_BYTES = 24  # cseq u32, cmd u32, arg i32, pad u32, arg f64
@@ -687,12 +706,24 @@ class StateRing:
     studio-viewport-pipe-2026-09-09). The native viewer's physics thread
     is C and shares nothing; a second process is the same thing here."""
 
-    def __init__(self, path: str, model: "mujoco.MjModel", *, create: bool) -> None:
+    def __init__(
+        self, path: str, model: "mujoco.MjModel", *, create: bool, nworld: int = 0
+    ) -> None:
         import mmap  # noqa: PLC0415
 
         self.nq, self.nmocap, self.nu = int(model.nq), int(model.nmocap), int(model.nu)
-        # State: time, rtf, manual flag, spare; then qpos; then mocap pos + quat.
-        floats = STATE_STATS + self.nq + 7 * self.nmocap + self.nu
+        if not create:
+            nworld = self._peek_nworld(path)
+        self.nworld = int(nworld)
+        # State: time, rtf, manual flag, spare; then qpos; then mocap pos +
+        # quat; then ctrl; then per-world stats.
+        floats = (
+            STATE_STATS
+            + self.nq
+            + 7 * self.nmocap
+            + self.nu
+            + WORLD_STATS * self.nworld
+        )
         self._state_off = STATE_HEADER
         self._pert_off = self._state_off + 8 * floats
         # The mailbox (render -> physics): cseq u32, cmd u32, arg i32, pad, arg f64.
@@ -707,6 +738,7 @@ class StateRing:
             self._mm = mmap.mmap(handle.fileno(), size)
         if create:
             struct.pack_into("<IIII", self._mm, 0, STATE_MAGIC, 0, self.nq, self.nmocap)
+            struct.pack_into("<I", self._mm, 32, self.nworld)
         else:
             magic, _, nq, nmocap = struct.unpack_from("<IIII", self._mm, 0)
             if (magic, nq, nmocap) != (STATE_MAGIC, self.nq, self.nmocap):
@@ -714,6 +746,7 @@ class StateRing:
                     f"state ring {path}: header {(magic, nq, nmocap)} does not match "
                     f"this model {(STATE_MAGIC, self.nq, self.nmocap)}"
                 )
+        self.world_stats = np.zeros((self.nworld, WORLD_STATS))
         self._seq = 0
         self._pseq = 0
         self._cseq = 0
@@ -723,6 +756,12 @@ class StateRing:
         self._manual_qpos = np.zeros(self.nq)
         self._seen_cseq = 0
         self._seen_mseq = 0
+
+    @staticmethod
+    def _peek_nworld(path: str) -> int:
+        with open(path, "rb") as f:
+            f.seek(32)
+            return struct.unpack("<I", f.read(4))[0]
 
     # -- physics side --------------------------------------------------------
     def publish(
@@ -740,8 +779,11 @@ class StateRing:
             k = k0 + self.nq
             buf[k : k + 3 * self.nmocap] = data.mocap_pos.ravel()
             buf[k + 3 * self.nmocap : k + 7 * self.nmocap] = data.mocap_quat.ravel()
+        k1 = k0 + self.nq + 7 * self.nmocap
         if self.nu:
-            buf[k0 + self.nq + 7 * self.nmocap :] = data.ctrl
+            buf[k1 : k1 + self.nu] = data.ctrl
+        if self.nworld:
+            buf[k1 + self.nu :] = self.world_stats.ravel()
         self._mm[self._state_off : self._state_off + 8 * len(buf)] = buf.tobytes()
         struct.pack_into("<I", self._mm, 4, self._seq * 2)  # even: stable
 
@@ -808,8 +850,13 @@ class StateRing:
                 local.mocap_quat[:] = buf[
                     k + 3 * self.nmocap : k + 7 * self.nmocap
                 ].reshape(-1, 4)
+            k1 = k0 + self.nq + 7 * self.nmocap
             if self.nu:
-                local.ctrl[:] = buf[k0 + self.nq + 7 * self.nmocap :]
+                local.ctrl[:] = buf[k1 : k1 + self.nu]
+            if self.nworld:
+                self.world_stats[:] = buf[k1 + self.nu :].reshape(
+                    self.nworld, WORLD_STATS
+                )
             return True
         return False
 
@@ -1017,9 +1064,15 @@ class SimControl:
     toggles and forwards the rest through the ring; every STATUS_EVERY_S
     it reports the clock, the inputs and, once, the model."""
 
-    def __init__(self, model: "mujoco.MjModel", ring: StateRing) -> None:
+    def __init__(
+        self,
+        model: "mujoco.MjModel",
+        ring: StateRing,
+        camera: "OrbitCamera | None" = None,
+    ) -> None:
         self.model = model
         self.ring = ring
+        self.camera = camera
         self._lock = threading.Lock()
         self._vis: dict[int, bool] = {}
         self._rnd: dict[int, bool] = {}
@@ -1034,6 +1087,15 @@ class SimControl:
         # the table in a burst of contact arrows, 2026-09-09).
         self._live_ctrl = np.zeros(model.nu)
         self._live_qpos = np.zeros(model.nq)
+        # Many-worlds scenes: the world the camera keeps in view (-1 none);
+        # its root is the first body named `wNN/...` for that world.
+        self.follow = -1
+        self._world_roots = {}
+        for body in range(1, model.nbody):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body) or ""
+            prefix, sep, _ = name.partition("/")
+            if sep and prefix.startswith("w") and prefix[1:].isdigit():
+                self._world_roots.setdefault(int(prefix[1:]), body)
 
     # -- reader thread ----------------------------------------------------
     def handle(self, tag: int, payload: bytes) -> None:
@@ -1067,6 +1129,15 @@ class SimControl:
             index, value = struct.unpack("<If", payload)
             self._take_control()
             self.ring.set_manual_input(None, index, value)
+        elif tag == TAG_FOLLOW:
+            (world,) = struct.unpack("<i", payload)
+            self.follow = world if world in self._world_roots else -1
+            if self.camera is not None:
+                self.camera.zoom_to(
+                    FOLLOW_DISTANCE_M
+                    if self.follow >= 0
+                    else self.camera.default_distance
+                )
         elif tag == TAG_VIS:
             flag, on = struct.unpack("<IB", payload)
             with self._lock:
@@ -1095,6 +1166,11 @@ class SimControl:
             if 0 <= flag < len(scene.flags):
                 scene.flags[flag] = on
 
+    def follow_lookat(self, local: "mujoco.MjData") -> "np.ndarray | None":
+        """Where the camera should look: the followed world's root, if any."""
+        body = self._world_roots.get(self.follow)
+        return None if body is None else local.xpos[body].copy()
+
     def status(self, local: "mujoco.MjData", lane: dict, state: dict) -> bytes | None:
         """The JSON status, or None until STATUS_EVERY_S has passed."""
         import json  # noqa: PLC0415
@@ -1121,6 +1197,10 @@ class SimControl:
             "render_ms": float(lane.get("last_render_ms", 0.0)),
             "vis": vis,
             "rnd": rnd,
+            "follow": self.follow,
+            "worlds": [
+                {"reward": float(r), "done": bool(d)} for r, d in self.ring.world_stats
+            ],
         }
         if not self._model_sent:
             self._model_sent = True
@@ -1202,6 +1282,7 @@ class SimControl:
             "ngeom": int(m.ngeom),
             "vis_flags": vis_names,
             "rnd_flags": rnd_names,
+            "nworld": self.ring.nworld,
         }
 
 
@@ -1252,6 +1333,15 @@ class RenderPump:
             # buffer lock and a normal shutdown trips over it.
             os._exit(0)
 
+    def _aim(self, state: dict, local: "mujoco.MjData") -> None:
+        """A followed world keeps the camera's lookat on its root."""
+        if self.sim is None:
+            return
+        target = self.sim.follow_lookat(local)
+        if target is not None:
+            self.orbit.lookat = target
+            state["cam"].lookat = list(target)
+
     def _render_step(self, state: dict) -> None:
         """One frame: ring -> forward -> (re)size -> render -> ship.
         `state` persists the renderer/camera between calls."""
@@ -1292,6 +1382,7 @@ class RenderPump:
             # 2026-09-02 to 2026-09-09; at the model's force scale a
             # collapsed arm drew metre-long arrows across the whole frame.
             state["vopt"] = mujoco.MjvOption()
+        self._aim(state, local)
         self.orbit.apply_to(state["cam"])
         renderer = state["renderer"]
         if self.sim is not None:
@@ -1567,6 +1658,34 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None
         pump.tick(data, dt * substeps)
 
 
+WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched sim
+
+
+def walk_scene(worlds: int, offscreen_side: int = MAX_RENDER_SIDE) -> "mujoco.MjModel":
+    """One CPU model holding `worlds` copies of the walk robot on one
+    ground plane, each under a `wNN/` prefix at its grid cell (the RL
+    view's mirror; rq_mjlab.walk_view fills its qpos from the batched
+    sim). The batched env's world origins are already in each free
+    joint's global qpos, so the copies land on their origins by the copy
+    alone. Built here, not in rq_mjlab, so the render process — the
+    pipeline venv, no mjlab — can build the same model."""
+    from rq_pipeline.tasks.scene import grid_of  # noqa: PLC0415
+
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
+    scene, _ = grid_of(
+        f"microduck-rl-{worlds}",
+        (mujoco.MjSpec.from_file(xml) for _ in range(worlds)),
+        pitch=0.0,
+    )
+    for geom in scene.geoms:
+        if geom.name == "ground":
+            geom.pos[2] = 0.0  # the display grids' table offset; ducks walk at z=0
+    scene.visual.global_.offwidth = offscreen_side
+    scene.visual.global_.offheight = offscreen_side
+    return scene.compile()
+
+
 def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
     """The task (or None for the duck preview), its compiled model with
     the offscreen budget raised to the viewer's cap, and its rig name.
@@ -1582,6 +1701,28 @@ def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
     spec.visual.global_.offwidth = max(spec.visual.global_.offwidth, MAX_RENDER_SIDE)
     spec.visual.global_.offheight = max(spec.visual.global_.offheight, MAX_RENDER_SIDE)
     return task, spec.compile(), rig
+
+
+def render_on(scene: str, ring_path: str, shm_path: str | None, rig: str) -> None:
+    """Render-only, for a physics process that already exists (the RL
+    view's batched worlds): `scene` is `walk:<worlds>` or a model file,
+    the ring was created by that process, the wire and status are the
+    same."""
+    if scene.startswith(f"{WALK}:"):
+        model = walk_scene(int(scene.split(":", 1)[1]))
+    else:
+        model = mujoco.MjModel.from_xml_path(scene)
+    ring = StateRing(ring_path, model, create=False)
+    orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
+    perturber = Perturber(model)
+    sim = SimControl(model, ring, orbit)
+    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
+    threading.Thread(
+        target=_read_control_messages,
+        args=(orbit, perturber, pump._fresh.set, pump.sink.shared, sim),
+        daemon=True,
+    ).start()
+    pump.run_forever()
 
 
 def stream(task_name: str, shm_path: str | None) -> None:
@@ -1609,7 +1750,7 @@ def stream(task_name: str, shm_path: str | None) -> None:
 
     orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
     perturber = Perturber(model)
-    sim = SimControl(model, ring)
+    sim = SimControl(model, ring, orbit)
     pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
     threading.Thread(
         target=_read_control_messages,
@@ -1707,9 +1848,21 @@ if __name__ == "__main__":
             if SHADOWS_MODE not in ("on", "off", "auto"):
                 sys.exit(f"--shadows must be on, off or auto, not {SHADOWS_MODE!r}")
     physics_ring = None
+    model_path = None
+    ring_path = None
+    rig = "so101"
     for flag in sys.argv[1:]:
         if flag.startswith("--physics="):
             physics_ring = flag.removeprefix("--physics=")
+        elif flag.startswith("--scene="):
+            model_path = flag.removeprefix("--scene=")
+        elif flag.startswith("--ring="):
+            ring_path = flag.removeprefix("--ring=")
+        elif flag.startswith("--rig="):
+            rig = flag.removeprefix("--rig=")
+    if model_path and ring_path:
+        render_on(model_path, ring_path, shm, rig)
+        raise SystemExit(0)
     task_name = arguments[0] if arguments else DEFAULT_TASK
     if task_name != DUCK and task_name not in BUILDERS:
         sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")

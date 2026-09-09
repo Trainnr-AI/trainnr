@@ -202,6 +202,9 @@ pub struct SimModel {
     pub vis_flags: Vec<String>,
     #[serde(default)]
     pub rnd_flags: Vec<String>,
+    /// Worlds in a many-worlds scene (0 for a single world).
+    #[serde(default)]
+    pub nworld: u32,
 }
 
 /// The clock and the inputs, every 100 ms (the stream's status message).
@@ -230,7 +233,20 @@ pub struct SimStatus {
     #[serde(default)]
     pub rnd: std::collections::BTreeMap<String, bool>,
     #[serde(default)]
+    pub follow: i64,
+    #[serde(default)]
+    pub worlds: Vec<SimWorld>,
+    #[serde(default)]
     pub model: Option<SimModel>,
+}
+
+/// One world of a many-worlds scene, as the status reports it.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimWorld {
+    #[serde(default)]
+    pub reward: f64,
+    #[serde(default)]
+    pub done: bool,
 }
 
 /// What the reader thread learned from the stream's status messages.
@@ -671,6 +687,14 @@ impl ViewportFeed {
         self.send_message(&[TAG_VIEW, preset]);
     }
 
+    /// Keep the camera on one world of a many-worlds scene (-1: none).
+    pub fn send_follow(&mut self, world: i32) {
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_FOLLOW;
+        bytes[1..5].copy_from_slice(&world.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
     /// The agent pressed something: the bar shows it for a moment.
     pub fn flash(&mut self, what: &str) {
         self.agent_flash = Some((what.to_owned(), std::time::Instant::now()));
@@ -837,6 +861,7 @@ const TAG_QPOS: u8 = 12;
 const TAG_VIS: u8 = 13;
 const TAG_RND: u8 = 14;
 const TAG_VIEW: u8 = 15;
+const TAG_FOLLOW: u8 = 16;
 /// The stdout tokens: a frame published, a status message follows.
 const FRAME_TOKEN: u8 = 0xF7;
 const STATUS_TOKEN: u8 = 0xF8;

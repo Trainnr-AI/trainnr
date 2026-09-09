@@ -284,6 +284,7 @@ impl eframe::App for StudioShell {
                     simulator::drawer(ui.ctx(), picture, &mut self.viewport);
                 }
                 simulator::shortcuts(ui.ctx(), &mut self.viewport);
+                simulator::apply_follow(ui.ctx(), &mut self.viewport);
                 match action {
                     Some(simulator::Action::Spawn(task)) => {
                         self.viewport = ViewportFeed::spawn(ui.ctx(), &task);
@@ -582,6 +583,7 @@ impl StudioShell {
                 on,
                 inspect,
                 view,
+                follow,
             } => {
                 if !self.viewport.is_active() {
                     return Err("no scene runs in the simulator; simulate a task first".into());
@@ -599,6 +601,7 @@ impl StudioShell {
                     flag.as_ref().map(|_| "overlay"),
                     inspect.as_ref().map(|_| "inspect"),
                     view.as_ref().map(|_| "view"),
+                    follow.as_ref().map(|_| "follow"),
                 ]
                 .into_iter()
                 .flatten()
@@ -659,6 +662,22 @@ impl StudioShell {
                 }
                 if let Some(what) = inspect {
                     simulator::inspect(ui.ctx(), &what)?;
+                }
+                if let Some(rule) = follow {
+                    let choice = match rule.trim() {
+                        "none" | "" => simulator::Follow::None,
+                        "worst" => simulator::Follow::Worst,
+                        "failing" => simulator::Follow::Failing,
+                        "cycle" => simulator::Follow::Cycle,
+                        n => simulator::Follow::World(n.trim_start_matches('w').parse().map_err(
+                            |_| {
+                                format!(
+                                    "follow {rule:?}: none, worst, failing, cycle or a world index"
+                                )
+                            },
+                        )?),
+                    };
+                    simulator::set_follow(ui.ctx(), choice);
                 }
                 if let Some(name) = view {
                     let preset = match name.as_str() {
