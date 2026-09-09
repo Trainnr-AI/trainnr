@@ -26,6 +26,7 @@ from rq_pipeline.project.control import (
     events_path,
     launch,
     quit,
+    screenshot,
     send,
     state,
     state_path,
@@ -140,6 +141,51 @@ class State(unittest.TestCase):
             self.assertEqual([e["kind"] for e in events(project)], ["open", "select"])
             self.assertEqual([e["t"] for e in events(project, since_ns=10)], [20])
             self.assertEqual(len(events(project, limit=1)), 1)
+
+
+class Screenshot(unittest.TestCase):
+    def test_a_screenshot_navigates_first_and_carries_the_answer_through(self) -> None:
+        """With a fake Studio answering on a thread: the open command lands
+        before the capture, and the capture's path comes back verbatim."""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            _write_state(project)
+            seen: list[str] = []
+            expected = 2  # the open, then the screenshot
+
+            def studio() -> None:
+                deadline = time.time() + 5
+                while time.time() < deadline and len(seen) < expected:
+                    for path in sorted(commands_dir(project).glob("*.json")):
+                        if path.name.endswith(".ack.json") or path.name in seen:
+                            continue
+                        seen.append(path.name)
+                        body = json.loads(path.read_text())
+                        answer = {"id": body["id"], "status": "done"}
+                        if body["verb"] == "screenshot":
+                            answer.update(
+                                {"path": "/x/shot.png", "width": 800, "height": 500}
+                            )
+                        (commands_dir(project) / f"{body['id']}.ack.json").write_text(
+                            json.dumps(answer)
+                        )
+                    time.sleep(0.01)
+
+            threading.Thread(target=studio).start()
+            answer = screenshot(project, section="robots", width=800)
+            self.assertEqual(answer["status"], "done")
+            self.assertEqual(answer["path"], "/x/shot.png")
+            self.assertIn("read", answer)
+            self.assertEqual(
+                [n.split("-", 1)[1] for n in seen], ["open.json", "screenshot.json"]
+            )
+
+    def test_a_failed_navigation_stops_the_screenshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            answer = screenshot(project, section="robots")
+            self.assertEqual(answer["status"], "refused")
+            self.assertEqual(list(commands_dir(project).glob("*.json")), [])
 
 
 class Lifecycle(unittest.TestCase):

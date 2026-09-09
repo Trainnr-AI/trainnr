@@ -10017,6 +10017,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_extras",
+ "image",
  "mimalloc",
  "re_ui",
  "rerun",

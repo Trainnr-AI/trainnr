@@ -288,6 +288,7 @@ class StudioDoors(unittest.TestCase):
             describe_studio,
             open_in_studio,
             read_studio_events,
+            screenshot_studio,
             set_studio_panels,
             set_studio_time,
             show_in_studio,
@@ -305,6 +306,7 @@ class StudioDoors(unittest.TestCase):
                     compare_in_studio("a@000000000000", "b@000000000000"),
                     set_studio_time(play=True),
                     set_studio_panels(blueprint="expand"),
+                    screenshot_studio(),
                 ):
                     self.assertEqual(answer["status"], "refused")
                     self.assertIn("launch_studio", answer["reason"])

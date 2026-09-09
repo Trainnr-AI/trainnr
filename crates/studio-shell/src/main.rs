@@ -152,6 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shell,
                 control,
                 before: (Section::Overview, None),
+                shot: None,
                 seen_recording: false,
             }))
         }),
@@ -169,6 +170,10 @@ struct StudioShell {
     /// The page and selection before this frame's page ran, so a change
     /// the human made (not a command) becomes an event.
     before: (Section, Option<String>),
+    /// A screenshot command waiting for its frame: the command id, the
+    /// width asked, and when it was asked (a capture that never arrives
+    /// is answered `failed`, not left hanging).
+    shot: Option<(String, u32, std::time::Instant)>,
     /// Whether a recording was loaded last frame — a fresh arrival
     /// switches the page to Live once, without trapping the user there.
     seen_recording: bool,
@@ -198,6 +203,7 @@ impl eframe::App for StudioShell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.answer_screenshot(ui);
         self.apply_commands(ui);
         self.before = (self.shell.section, self.shell.selected.clone());
         // One header, ours: the viewer's own top bar is hidden (startup
@@ -299,6 +305,13 @@ impl StudioShell {
         self.control.set_root(self.shell.model.project_root.clone());
         for pending in self.control.poll() {
             let outcome = match pending.command {
+                Ok(control::Command::Screenshot { width }) => {
+                    // Answered when the frame arrives, not now.
+                    match self.request_screenshot(ui, &pending.id, width) {
+                        Ok(()) => continue,
+                        Err(why) => Err(why),
+                    }
+                }
                 Ok(command) => self.apply(ui, command),
                 Err(why) => Err(why),
             };
@@ -502,10 +515,86 @@ impl StudioShell {
                 }
                 Ok(())
             }
+            Command::Screenshot { .. } => {
+                unreachable!("screenshots are taken in apply_commands, after the page")
+            }
             Command::Quit => {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 Ok(())
             }
+        }
+    }
+
+    /// Ask egui for the frame; the answer comes through `Event::Screenshot`
+    /// on a later frame and is written then (`answer_screenshot`).
+    fn request_screenshot(
+        &mut self,
+        ui: &egui::Ui,
+        id: &str,
+        width: Option<u32>,
+    ) -> Result<(), String> {
+        if let Some((pending, _, _)) = &self.shot {
+            return Err(format!("a screenshot ({pending}) is still being taken"));
+        }
+        let width = width.unwrap_or(control::SCREENSHOT_WIDTH);
+        if width == 0 || width > control::SCREENSHOT_WIDTH_MAX {
+            return Err(format!(
+                "width must be 1..={}",
+                control::SCREENSHOT_WIDTH_MAX
+            ));
+        }
+        ui.ctx()
+            .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
+                id.to_owned(),
+            )));
+        self.shot = Some((id.to_owned(), width, std::time::Instant::now()));
+        Ok(())
+    }
+
+    /// The captured frame, if one arrived: write it and answer the command.
+    fn answer_screenshot(&mut self, ui: &egui::Ui) {
+        const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+        let Some((id, width, asked)) = self.shot.clone() else {
+            return;
+        };
+        let captured = ui.ctx().input(|input| {
+            input.events.iter().find_map(|event| match event {
+                egui::Event::Screenshot {
+                    image, user_data, ..
+                } if user_data
+                    .data
+                    .as_ref()
+                    .and_then(|d| d.downcast_ref::<String>())
+                    .is_some_and(|got| *got == id) =>
+                {
+                    Some(image.clone())
+                }
+                _ => None,
+            })
+        });
+        match captured {
+            Some(frame) => {
+                self.shot = None;
+                match self.control.save_screenshot(&id, &frame, width) {
+                    Ok((path, w, h)) => {
+                        let mut extra = serde_json::Map::new();
+                        extra.insert("path".into(), serde_json::json!(path.display().to_string()));
+                        extra.insert("width".into(), serde_json::json!(w));
+                        extra.insert("height".into(), serde_json::json!(h));
+                        self.control.ack_with(&id, "done", None, extra);
+                    }
+                    Err(why) => self.control.ack(&id, "failed", Some(&why)),
+                }
+            }
+            None if asked.elapsed() > CAPTURE_TIMEOUT => {
+                self.shot = None;
+                self.control.ack(
+                    &id,
+                    "failed",
+                    Some("the window produced no frame within 3 s (a hidden or minimized window cannot be captured)"),
+                );
+            }
+            None => {}
         }
     }
 

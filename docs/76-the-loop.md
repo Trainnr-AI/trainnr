@@ -369,7 +369,15 @@ The verbs, and the MCP door over each (`pipeline/rq_pipeline/mcp_server.py`):
 | `compare` | `compare_in_studio` | two artifacts side by side in one recording, `a` left and `b` right, each presenter under its own entity root (`a/robot`, `b/robot`) | either is missing |
 | `time` | `set_studio_time` | the viewer's own time control: active timeline, cursor in `seconds` or `sequence` (refused if the timeline counts the other way), play or pause, speed, a `start`..`end` selection, follow, step | nothing is streaming |
 | `panels` | `set_studio_panels` | expand or toggle the blueprint (left) and selection (right) panels | the time panel, which has no command in this viewer build |
+| `screenshot` | `screenshot_studio` | the whole window as a PNG under `.index/screenshots/`, scaled to a stated width (default 1600, never upscaled); with a page or an artifact named, it navigates first, lets the page draw, then captures — the agent reads the file and sees what the human sees | a capture is already in flight; no frame arrives within 3 s (a hidden or minimized window) |
 | — | `read_studio_events` | the event log after a time | never |
+
+How the agent sees the window (asked 2026-09-09, "how will the agent see
+the window?"): the state file is a description, the screenshot is the
+picture, and the detail tables and recordings stay the source of
+numbers — a picture is for layout and sanity, never for reading a
+value off. Measured: navigate-and-capture round trip 515 ms for a
+1600-wide PNG on this machine, 100 ms for the capture alone.
 
 Two things the design refuses. A door never waits on a Studio that
 is not alive: every act tool checks the heartbeat first and answers

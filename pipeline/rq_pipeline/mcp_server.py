@@ -538,6 +538,20 @@ def set_studio_panels(
     )
 
 
+def screenshot_studio(
+    section: str | None = None, artifact: str | None = None, width: int = 1600
+) -> dict[str, Any]:
+    """See the window: capture the whole Studio as a PNG (scaled to `width`,
+    never upscaled) and return its path — read that file to look at it.
+    Pass a page name or an artifact version to navigate there first."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import screenshot  # noqa: PLC0415
+
+    return screenshot(
+        current_project(), section=section, artifact=artifact, width=width
+    )
+
+
 def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, Any]]:
     """What the human did in the Studio after `since_ns` (epoch nanoseconds;
     0 for everything): page opened, artifact selected, artifact shown,
@@ -690,6 +704,10 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Expand or toggle the viewer's blueprint (left) and selection "
         "(right) panels."
     )(set_studio_panels)
+    server.tool(
+        description="See the window: a PNG of the whole Studio (optionally after "
+        "opening a page or an artifact); read the returned path to look at it."
+    )(screenshot_studio)
     server.tool(
         description="What the human did in the Studio since a time: pages opened, "
         "artifacts selected or shown, project switches, time scrubs."

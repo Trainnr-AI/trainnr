@@ -77,8 +77,19 @@ pub enum Command {
         #[serde(default)]
         time: Option<String>,
     },
+    Screenshot {
+        /// The written image's width in pixels; taller frames scale to it.
+        #[serde(default)]
+        width: Option<u32>,
+    },
     Quit,
 }
+
+pub const SCREENSHOTS_RELATIVE: &str = ".index/screenshots";
+/// The default and the ceiling for a screenshot's width: one image an
+/// agent reads whole, never a retina frame verbatim.
+pub const SCREENSHOT_WIDTH: u32 = 1600;
+pub const SCREENSHOT_WIDTH_MAX: u32 = 4000;
 
 /// A command file read from disk: its id and the parse (an unparseable
 /// file is acknowledged as refused, with the reason, never ignored).
@@ -205,16 +216,59 @@ impl Control {
 
     /// Answer a command: `done`, `refused` or `failed`, with the reason.
     pub fn ack(&self, id: &str, status: &str, reason: Option<&str>) {
+        self.ack_with(id, status, reason, serde_json::Map::new());
+    }
+
+    /// An answer carrying data (a screenshot's path and size).
+    pub fn ack_with(
+        &self,
+        id: &str,
+        status: &str,
+        reason: Option<&str>,
+        extra: serde_json::Map<String, serde_json::Value>,
+    ) {
         let dir = self.root.join(COMMANDS_RELATIVE);
         let _ = std::fs::create_dir_all(&dir);
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "id": id,
             "status": status,
             "reason": reason,
             "t": epoch_seconds(),
         });
+        if let Some(into) = body.as_object_mut() {
+            into.extend(extra);
+        }
         let path = dir.join(format!("{id}.ack.json"));
         let _ = write_atomic(&path, &body.to_string());
+    }
+
+    /// Write a captured frame as a PNG under the project, scaled to
+    /// `width` (never upscaled); returns the path and the written size.
+    pub fn save_screenshot(
+        &self,
+        id: &str,
+        frame: &egui::ColorImage,
+        width: u32,
+    ) -> Result<(PathBuf, u32, u32), String> {
+        let [w, h] = frame.size;
+        let (w, h) = (w as u32, h as u32);
+        if w == 0 || h == 0 {
+            return Err("the captured frame is empty".into());
+        }
+        let image = image::RgbaImage::from_raw(w, h, frame.as_raw().to_vec())
+            .ok_or_else(|| "the captured frame has a wrong byte count".to_owned())?;
+        let width = width.clamp(1, SCREENSHOT_WIDTH_MAX).min(w);
+        let height = (u64::from(h) * u64::from(width) / u64::from(w)).max(1) as u32;
+        let scaled = if width == w {
+            image
+        } else {
+            image::imageops::resize(&image, width, height, image::imageops::FilterType::Triangle)
+        };
+        let dir = self.root.join(SCREENSHOTS_RELATIVE);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join(format!("{id}.png"));
+        scaled.save(&path).map_err(|e| e.to_string())?;
+        Ok((path, width, height))
     }
 
     /// Write the state when it changed, or when the heartbeat is due.
@@ -410,6 +464,27 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("\"kind\":\"select\""));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_frame_is_written_as_a_png_scaled_to_the_asked_width_never_up() {
+        let root = temp_root("shot");
+        let control = Control::new(root.clone());
+        let frame = egui::ColorImage::filled([400, 200], egui::Color32::from_rgb(10, 20, 30));
+        let (path, w, h) = control
+            .save_screenshot("1-screenshot", &frame, 100)
+            .expect("saved");
+        assert_eq!((w, h), (100, 50));
+        assert!(path.ends_with("1-screenshot.png"));
+        let back = image::open(&path).expect("a real png");
+        assert_eq!((back.width(), back.height()), (100, 50));
+        let (_, w, h) = control
+            .save_screenshot("2-screenshot", &frame, 9000)
+            .expect("saved");
+        assert_eq!((w, h), (400, 200), "never upscaled");
+        let empty = egui::ColorImage::filled([0, 0], egui::Color32::BLACK);
+        assert!(control.save_screenshot("3", &empty, 100).is_err());
         let _ = std::fs::remove_dir_all(root);
     }
 

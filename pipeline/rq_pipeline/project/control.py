@@ -42,12 +42,15 @@ SCHEMA = "trainnr-command/1"
 
 STALE_S = 3.0  # a heartbeat older than this is a Studio that died
 ACK_TIMEOUT_S = 3.0
+SCREENSHOT_TIMEOUT_S = 6.0  # a capture waits for a frame, then encodes
+SCREENSHOT_WIDTH = 1600
 LAUNCH_TIMEOUT_S = 15.0
 QUIT_TIMEOUT_S = 5.0
 POLL_S = 0.02
 KEEP_COMMANDS = 200  # older command + ack files are pruned on send
+SETTLE_S = 0.15  # after navigating, before a capture: the page must draw
 
-VERBS = ("open", "show", "compare", "time", "panels", "quit")
+VERBS = ("open", "show", "compare", "time", "panels", "screenshot", "quit")
 # The rail's page names as the Studio parses them (pages.rs `Section::parse`).
 SECTIONS = (
     "projects",
@@ -178,7 +181,9 @@ def wait(
     }
 
 
-def command(project: Project, verb: str, /, **args: Any) -> dict[str, Any]:
+def command(
+    project: Project, verb: str, /, timeout_s: float = ACK_TIMEOUT_S, **args: Any
+) -> dict[str, Any]:
     """Send a command to a live Studio and wait for its answer. Refuses by
     name when no Studio is alive on the project."""
     current = state(project)
@@ -189,8 +194,28 @@ def command(project: Project, verb: str, /, **args: Any) -> dict[str, Any]:
             f"{current.get('reason')}; launch_studio first",
         }
     cid = send(project, verb, **args)
-    answer = wait(project, cid)
+    answer = wait(project, cid, timeout_s=timeout_s)
     answer["command"] = cid
+    return answer
+
+
+def screenshot(
+    project: Project,
+    section: str | None = None,
+    artifact: str | None = None,
+    width: int = SCREENSHOT_WIDTH,
+) -> dict[str, Any]:
+    """Navigate first when asked (a page, or an artifact whose drawer
+    opens), let the page render, then capture the whole window as a PNG
+    under `.index/screenshots/`. The answer names the file and its size."""
+    if section is not None or artifact is not None:
+        opened = command(project, "open", section=section, artifact=artifact)
+        if opened.get("status") != "done":
+            return opened
+        time.sleep(SETTLE_S)  # two frames: the page lays out, the pictures load
+    answer = command(project, "screenshot", timeout_s=SCREENSHOT_TIMEOUT_S, width=width)
+    if answer.get("status") == "done" and "path" in answer:
+        answer["read"] = "open the PNG at `path` to see the window"
     return answer
 
 
