@@ -184,7 +184,7 @@ def _present_robot(
     mujoco.mj_forward(model, data)
     with _AsDefault(rr_):
         mirror = RigMirror(model, model_colors=True)
-        mirror.log(data, path=root)
+        mirror.log(data, path=root, static=True)
         rr_.log(
             f"{root}/census",
             _doc(
@@ -194,6 +194,7 @@ def _present_robot(
                 f"- model `{model_file.name}` · timestep {model.opt.timestep:g} s\n"
                 + _lineage(artifact)
             ),
+            static=True,
         )
     return {
         "paths": [root],
@@ -338,6 +339,7 @@ def _present_batch(
         rr_.log(
             f"{root}/datasheet",
             _doc(datasheet.read_text() if datasheet.is_file() else "no datasheet"),
+            static=True,
         )
     return {
         "paths": [f"{root}/camera", f"{root}/datasheet"],
@@ -376,6 +378,7 @@ def _present_dataset(
         rr_.log(
             f"{root}/provenance",
             _doc(f"# {artifact.stamp}\n\n```json\n{prov_text}\n```"),
+            static=True,
         )
     views = [
         rrb.Spatial2DView(origin=p, name=p.split("/", 1)[1])
@@ -399,6 +402,7 @@ def _present_task(
 ) -> dict[str, Any]:
     """A task: its registered spec rendered as a document, and — when the
     task builds — its scene's spawn bands as boxes in 3D over the model."""
+    import mujoco  # noqa: PLC0415
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
@@ -436,16 +440,28 @@ def _present_task(
                         static=True,
                     )
                     paths.append(f"{root}/spawn/{arm}")
+            # The task carries its scene as an MjSpec: compile it and draw
+            # the rig, table and parts at the home pose (until 2026-09-09
+            # this looked for a `model` attribute no task has, and the
+            # view showed the spawn bands on an empty grid).
             model = getattr(task, "model", None)
             data = getattr(task, "data", None)
+            if model is None and getattr(task, "spec", None) is not None:
+                model = task.spec.compile()
+                data = mujoco.MjData(model)
+                if model.nkey > 0:
+                    mujoco.mj_resetDataKeyframe(model, data, 0)
+                mujoco.mj_forward(model, data)
             if model is not None and data is not None:
                 from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
-                RigMirror(model, model_colors=True).log(data, path=f"{root}/scene")
+                RigMirror(model, model_colors=True).log(
+                    data, path=f"{root}/scene", static=True
+                )
                 paths.append(f"{root}/scene")
         except Exception as why:  # a task that will not build still shows its reference
             doc += f"\n_scene not rendered: {why}_\n"
-        rr_.log(f"{root}/spec", _doc(doc))
+        rr_.log(f"{root}/spec", _doc(doc), static=True)
     has_scene = any(
         p.startswith(f"{root}/scene") or p.startswith(f"{root}/spawn") for p in paths
     )
@@ -490,7 +506,7 @@ def _present_certificate(
             for key in ("robot", "task", "policy", "source", "instrument", "protocol")
             if key in cert
         ]
-        rr_.log(f"{root}/reading", _doc("\n".join(lines)))
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
     return {
         "paths": [f"{root}/funnel", f"{root}/reading"],
         "view": "funnel + reading",

@@ -124,7 +124,10 @@ class RigMirror:
             else:
                 self.colors.append([90, 130, 220])
 
-    def log(self, data: Any, path: str = RIG_PATH) -> None:
+    def log(self, data: Any, path: str = RIG_PATH, *, static: bool = False) -> None:
+        """`static=True` for a snapshot (an artifact shown as itself): the
+        poses then hold at every time, instead of landing at the clock's
+        current instant and vanishing behind a paused cursor (2026-09-09)."""
         import rerun as rr  # noqa: PLC0415 - viz extra
 
         if self.geoms:
@@ -140,6 +143,7 @@ class RigMirror:
                     colors=self.colors,
                     fill_mode="solid",
                 ),
+                static=static,
             )
         for g, name, verts, faces, rgba in self.meshes:
             entity = f"{path}/{name}"
@@ -160,4 +164,5 @@ class RigMirror:
                     translation=data.geom_xpos[g],
                     mat3x3=data.geom_xmat[g].reshape(3, 3),
                 ),
+                static=static,
             )
