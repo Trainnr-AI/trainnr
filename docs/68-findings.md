@@ -7,7 +7,7 @@ not this page.
 
 ## studio-viewport-two-process-2026-09-09
 
-**Splitting the Studio's MuJoCo stream into a physics process and a render process joined by a shared-memory state ring, with shadows judged by measured frame time, raises the kitting scene from 32.6 fps at the pipe and ~33 on screen to 53.7 fps at the pipe (p50 18.4 ms, p90 21.4 ms) and 60-70 fps on screen; the physics paces itself at real time regardless of render. The 20-duck flock stays at 4.6-9 fps because its render alone is 109 ms/frame on this Mac (Apple M1 Pro, GL 2.1 over Metal, CGL offscreen).**
+**Splitting the Studio's MuJoCo stream into a physics process and a render process joined by a shared-memory state ring, with shadows judged by measured frame time, raises the kitting scene from 32.6 fps at the pipe and ~33 on screen to 53.7 fps at the pipe (p50 18.4 ms, p90 21.4 ms) and 60-70 fps on screen; the physics paces itself at real time regardless of render. The 20-duck flock stays at 4.6-9 fps because its render alone is 109 ms/frame on this Mac (Apple M1 Pro, GL 2.1 over Metal, CGL offscreen). With the physics paced against a drift-free deadline and the narration on a 25 % budget, kitting runs at RTF 1.00 (50 ticks/s) with 66.7 fps on screen; the flock's physics is cheap (0.73 ms/step for 20 ducks) but its narration cost the whole budget (RTF 0.06 with, 1.00 without) and its render is asset weight (431,750 faces per microduck), so the preview flock is four ducks: 37 fps on screen, RTF 0.82-0.90.**
 
 - date: 2026-09-09 · commit: `af7ef98`
 - instrument: `mujoco-3.11.0 (python, MUJOCO_GL=cgl), macOS 25.5.0 Apple M1 Pro, Python 3.12, rerun narration on; Studio release build`
@@ -23,6 +23,7 @@ not this page.
   - resolution_dependence_cgl_ms: {'256x144': 11.6, '1024x576': 12.1, '1920x1080': 15.0}
   - gil_switch_interval_effect: none: 39.8 fps at 5 ms and at 0.5 ms
   - shadow_judge: auto: off after the first 30 frames or 1 s of render time averaging above 14 ms; kitting judged off (30.9 ms mean incl. warm-up), lift kept on (2.6 ms)
+  - after_pacing_and_narration_budget: {'kitting': {'rtf': 1.0, 'ticks_per_s': 50, 'lane_fps': 66, 'on_screen_fps_mean': 66.7}, 'kitting_before_deadline_pacing': {'rtf': 0.79, 'cause': 'time.sleep overshoot accumulated per 20 ms tick; the policy alone runs 22.5x real time'}, 'duck_20_physics': {'mj_step_ms': 0.73, 'rtf_with_narration': 0.06, 'rtf_without_narration': 1.0}, 'duck_render_ms_by_count': {'1': 11.5, '4': 39.0, '6': 52.3, '8': 61.7, '20': 156.0}, 'microduck_asset': {'meshes': 38, 'vertices': 215291, 'faces': 431750, 'largest_mesh_faces': 20970, 'visual_only_geoms': 70}, 'duck_4_preview': {'rtf': '0.82-0.90', 'lane_fps': 31.8, 'on_screen_fps_mean': 37.1}, 'native_viewer_on_20_ducks': {'rtf': '0.02-0.07', 'note': "mjpython launch_passive with the same parade loop; the human called it 'super laggy'"}}
 - artifacts:
   - script: tools/studio-render-stream.py
   - studio: crates/studio-shell/src/viewport.rs
@@ -33,6 +34,7 @@ not this page.
   - One machine, three scenes.
   - The on-screen counter counts frames drawn into the texture; the display's own refresh caps what a human sees at 60 (ProMotion excepted).
   - The flock's 109 ms is geometry-bound on this GL path; a native simulate window on the same machine was not measured.
+  - The flock's remaining RTF gap (0.82-0.90 at four ducks) is the narration's mirror pass, which runs on the physics thread; a stall longer than one tick resets the deadline by design and shows as RTF < 1 rather than a catch-up burst.
 
 ## studio-viewport-pipe-2026-09-09
 

@@ -166,6 +166,7 @@ RIG_CAMERAS = {
 # 10 Hz is ample for glanceable telemetry and stays far under the drain
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0  # scalar series: plots need no more
+NARRATE_SHARE = 0.25  # narration may take this share of the physics thread, no more
 MIRROR_HZ = 20.0  # the 3D twin: fluid motion; 30 Hz of per-mesh
 # messages (~275 ms/s of Python serialization) blew the loop's realtime
 # budget and slowed BOTH panes (2026-09-01)
@@ -183,6 +184,8 @@ SHADOWS_MODE = "auto"
 # The lane reports itself on stderr this often: frames, render and ship
 # times — the same facts MuJoCo's simulate shows in its Info overlay.
 LANE_STATS_EVERY_S = 5.0
+# The last slice of each physics tick is spun, not slept, for accuracy.
+PACE_SPIN_S = 0.0015
 
 
 class PhysicsNarrator:
@@ -723,30 +726,78 @@ class PhysicsPump:
         self.last_narrated = 0.0
         self.time_offset = 0.0
         self.last_sim_time = 0.0
+        self._stats_since = time.monotonic()
+        self._stats_sim = 0.0
+        self._stats_ticks = 0
+        # Pacing runs against an absolute deadline, not a per-tick sleep:
+        # time.sleep overshoots by several ms on macOS and a per-tick sleep
+        # accumulates it (measured 2026-09-09: a 20 ms tick paced at
+        # 25 ms, RTF 0.79, for a policy that alone runs 22x real time).
+        self._deadline: float | None = None
+        self._narrate_every = 1.0 / MIRROR_HZ
 
     def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
         self.last_sim_time = data.time
         now = time.monotonic()
+        self._stats_ticks += 1
+        self._stats_sim += pace_seconds
+        if now - self._stats_since >= LANE_STATS_EVERY_S:
+            wall = now - self._stats_since
+            # The real-time factor, the number Gazebo's World Stats and
+            # simulate's info overlay show: simulated seconds per wall second.
+            print(
+                f"physics: sim +{self._stats_sim:.2f} s in {wall:.2f} s wall "
+                f"(RTF {self._stats_sim / wall:.2f}); "
+                f"{self._stats_ticks / wall:.0f} ticks/s",
+                file=sys.stderr,
+                flush=True,
+            )
+            self._stats_since, self._stats_sim, self._stats_ticks = now, 0.0, 0
         data.xfrc_applied[:] = 0.0
         wrench = self.ring.read_perturbation()
         if wrench is not None:
             body, force = wrench
             if 0 < body < self.model.nbody:
                 data.xfrc_applied[body] = force
-        if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
+        if (
+            self.narrator is not None
+            and now - self.last_narrated >= self._narrate_every
+        ):
             self.last_narrated = now
             self.narrator.log(data, self.time_offset + data.time)
+            # Narration on a budget: it may take at most NARRATE_SHARE of
+            # the physics thread, so its rate falls where a log is slow
+            # (the 20-duck flock: a mirror pass over 1500 geoms cost the
+            # whole real-time budget at 20 Hz — RTF 0.06 with it, 1.00
+            # without, measured 2026-09-09).
+            took = time.monotonic() - now
+            self._narrate_every = max(1.0 / MIRROR_HZ, took / NARRATE_SHARE)
         self.ring.publish(data)
-        # Pace toward real time: sleep off whatever of this step's
-        # simulated duration wall time hasn't already consumed.
-        remaining = pace_seconds - (time.monotonic() - now)
-        if remaining > 0:
-            time.sleep(remaining)
+        self._pace(pace_seconds)
         # Paused (the viewer's space bar): hold here, still publishing so
         # a drag on a paused scene still shows its connector.
-        while self.ring.paused():
-            time.sleep(0.02)
-            self.ring.publish(data)
+        if self.ring.paused():
+            while self.ring.paused():
+                time.sleep(0.02)
+                self.ring.publish(data)
+            self._deadline = None  # resume from now, not from before the pause
+
+    def _pace(self, pace_seconds: float) -> None:
+        """Hold the loop to real time against a running deadline: sleep
+        for all but the last slice, spin for that slice (sleep's
+        granularity is coarser than a physics tick). A loop that has
+        fallen behind by more than one tick does not try to catch up —
+        the deadline is reset, so a stall shows as a low RTF in the
+        statistics line instead of a burst of fast motion afterwards."""
+        now = time.monotonic()
+        if self._deadline is None or now - self._deadline > pace_seconds:
+            self._deadline = now
+        self._deadline += pace_seconds
+        remaining = self._deadline - now
+        if remaining > PACE_SPIN_S:
+            time.sleep(remaining - PACE_SPIN_S)
+        while time.monotonic() < self._deadline:
+            pass
 
 
 class RenderPump:
@@ -985,7 +1036,14 @@ def duck_scene() -> "object":
     # sits ~0.144 m ABOVE the root origin (onshape's export frame), so
     # the stand goes just below zero and the weld's sag rests the feet
     # onto ground contact.
-    count, spacing = 20, 0.4
+    # The flock's size is a render budget, not a taste: each microduck is
+    # 431,750 faces (onshape's export, 21k-face PCBs and bearings), and
+    # the offscreen path draws ~7 ms per duck here (1 duck 11.5 ms, 4
+    # ducks 39 ms, 20 ducks 156 ms; Apple M1 Pro, 2026-09-09). Twenty is
+    # a slideshow in every viewer, MuJoCo's own included; four is a
+    # parade at ~25 fps. Decimated preview meshes at onboarding would
+    # give the twenty back — an asset job, not a viewer one.
+    count, spacing = FLOCK_COUNT, 0.4
     columns = 5
     xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
     for index in range(count):
@@ -1021,6 +1079,7 @@ def duck_scene() -> "object":
     return scene
 
 
+FLOCK_COUNT = 4
 GAIT_HZ = 1.6  # step frequency of the parade waddle
 PARADE_SPEED = 0.12  # m/s along +x, wrapping at the floor's edge
 PARADE_WRAP_X = 2.4
