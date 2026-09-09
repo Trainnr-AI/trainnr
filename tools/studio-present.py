@@ -4,10 +4,12 @@
         python ../tools/studio-present.py [--project <dir>] [--once]
 
 Watches `<project>/.index/present.json` — the Studio writes `{"stamp":
-...}` when the user clicks Show on an artifact — and streams that artifact
-into the embedded viewer as itself (`rq_pipeline.project.present`). The
-Studio spawns this once per open project; a headless caller uses the
-`show_in_studio` MCP tool or the function directly.
+...}` when the user clicks Show on an artifact, or `{"stamps": [a, b]}`
+for a compare — and streams that into the embedded viewer as itself
+(`rq_pipeline.project.present`). The Studio spawns this once per open
+project; an agent reaches it through the `show_in_studio` and
+`compare_in_studio` MCP tools (docs/76 §10.1), which command the Studio, which
+writes the intent here.
 """
 
 import argparse

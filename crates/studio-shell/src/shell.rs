@@ -33,6 +33,9 @@ pub struct Shell {
     /// Set when the user asked to show an artifact; the frame loop
     /// switches to Live once the viewer has a recording.
     pub show_requested: bool,
+    /// What was last sent to the viewer (a version, or `a vs b`), taken
+    /// by the frame loop to log the event.
+    pub shown: Option<String>,
     repo_root: std::path::PathBuf,
 }
 
@@ -45,6 +48,7 @@ impl Shell {
             switch_to: None,
             presenter: None,
             show_requested: false,
+            shown: None,
             repo_root,
         }
     }
@@ -55,6 +59,29 @@ impl Shell {
         self.ensure_presenter();
         if self.model.request_show(stamp).is_ok() {
             self.show_requested = true;
+            self.shown = Some(stamp.to_owned());
+        }
+    }
+
+    /// Two artifacts side by side in the viewer.
+    pub fn compare(&mut self, a: &str, b: &str) {
+        self.ensure_presenter();
+        if self.model.request_compare(a, b).is_ok() {
+            self.show_requested = true;
+            self.shown = Some(format!("{a} vs {b}"));
+        }
+    }
+
+    /// Switch projects at the top of the next frame (what the switcher does).
+    pub fn switch_project(&mut self, root: std::path::PathBuf) {
+        self.switch_to = Some(root);
+    }
+
+    /// Whether the presenter process is alive right now.
+    pub fn presenter_running(&mut self) -> bool {
+        match self.presenter.as_mut() {
+            Some(child) => matches!(child.try_wait(), Ok(None)),
+            None => false,
         }
     }
 

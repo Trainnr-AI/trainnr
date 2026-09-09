@@ -276,5 +276,46 @@ class ServerFraming(unittest.TestCase):
         self.assertEqual(server._lowlevel_server.name, "robotiq")
 
 
+class StudioDoors(unittest.TestCase):
+    def test_every_studio_door_answers_without_a_studio(self) -> None:
+        """No window, no waiting: describe reports it, every act door refuses
+        by name and points at launch_studio, the event log is empty."""
+        import os  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            compare_in_studio,
+            describe_studio,
+            open_in_studio,
+            read_studio_events,
+            set_studio_panels,
+            set_studio_time,
+            show_in_studio,
+        )
+        from rq_pipeline.project import PROJECT_ENV, create_project  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            create_project(Path(tmp) / "p", "p")
+            os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
+            try:
+                self.assertFalse(describe_studio()["alive"])
+                for answer in (
+                    open_in_studio(section="robots"),
+                    show_in_studio("a@000000000000"),
+                    compare_in_studio("a@000000000000", "b@000000000000"),
+                    set_studio_time(play=True),
+                    set_studio_panels(blueprint="expand"),
+                ):
+                    self.assertEqual(answer["status"], "refused")
+                    self.assertIn("launch_studio", answer["reason"])
+                self.assertIn("no page", open_in_studio(section="dance")["reason"])
+                self.assertIn(
+                    "not one of", set_studio_panels(selection="hide")["reason"]
+                )
+                self.assertEqual(read_studio_events(), [])
+            finally:
+                os.environ.pop(PROJECT_ENV, None)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,9 @@ rewrite states what the Studio IS, why each superseded decision was
 reversed and when, and keeps the design content that survived. Every
 reversal is dated and reasoned; nothing is quietly dropped.*
 
+
+*2026-09-09: the agent drives the window in real time through files — commands in, state and events out; the contract and the nine MCP doors are in docs/76 §10.1.*
+
 ## 0. What the Studio is
 
 One native desktop application, `crates/studio-shell`, about 1,200 lines

@@ -327,9 +327,9 @@ The Studio (docs/35) is the human's live view and comes first. But the
 harness must be equally usable with no window at all, because a run on a
 rented machine or in continuous integration has none.
 
-- **Native**: the app, streamed into by every stage. Missing piece: a
-  tool that points it at a named artifact rather than merely launching
-  it.
+- **Native**: the app, streamed into by every stage, and driven by the
+  agent in real time through the control surface below (§10.1, built
+  2026-09-09).
 - **Headless**: every feed also writes a recording file beside its live
   stream, so a windowless run leaves something to open later, and a tool
   reads that file back. The parity requirement: a headless run reports
@@ -337,6 +337,52 @@ rented machine or in continuous integration has none.
   findings record.
 - **Web**: serving a saved recording to a browser. Designed, gated on a
   research pass that did not complete. Nothing else depends on it.
+
+### 10.1 The control surface (2026-09-09)
+
+Prakhar's requirement, verbatim: "we have to make sure everything the
+users claude agent must be able to completely control on the studio in
+real time." Three decisions, taken the same day: the channel is a
+**command log on disk** (not a socket), what the human does **flows back
+as an event log**, and the agent **may launch and quit** the window.
+
+The one law holds: the Studio reads files and never talks to the MCP
+server. So control is three records under `<project>/.index/`, all
+mirrored between `pipeline/rq_pipeline/project/control.py` and
+`crates/studio-shell/src/control.rs`:
+
+| record | direction | shape | cadence |
+|---|---|---|---|
+| `commands/<id>.json` | agent → Studio | `{"schema": "trainnr-command/1", "id", "verb", …args}`; the id is the send time in nanoseconds plus the verb, so a directory listing is the session in order | the Studio reads the directory at 20 Hz and answers each with `<id>.ack.json`: `done`, `refused` (with the reason) or `failed`; an unparseable file is refused, never dropped; the last 200 are kept |
+| `studio-state.json` | Studio → agent | `{"schema": "trainnr-studio-state/1", "pid", "heartbeat", "project", "project_name", "section", "selected", "live": {"recording", "timeline", "seconds" or "sequence"}, "presenter_running", "jobs_running"}` | on every change, and at least once a second; a heartbeat older than 3 s, or a dead pid, is a dead Studio |
+| `events.jsonl` | Studio → agent | one line per human action: `open` (a page, a project), `select` / `deselect` (a card), `show` (the viewer button), `time` (a scrub, reported once the cursor rests 250 ms and only when no command of ours moved it); each carries `t` in epoch nanoseconds and `by: user` or `by: agent` | appended, never rewritten |
+
+The verbs, and the MCP door over each (`pipeline/rq_pipeline/mcp_server.py`):
+
+| verb | door | what it does in the window | refused when |
+|---|---|---|---|
+| — | `describe_studio` | reads the state file, adds `alive` and the presenter's last status | never; a missing Studio is reported, not raised |
+| — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/studio-shell/target/release/studio-shell`) on the project and waits for its first heartbeat | one already runs; no binary |
+| `quit` | `quit_studio` | closes the window; past 5 s, terminates the pid | never |
+| `open` | `open_in_studio` | a page by its rail name; an artifact by version (its page opens with the drawer); a project by root | no such page, artifact or project |
+| `show` | `show_in_studio` | the presenter streams the artifact as itself; the Live view opens | no such artifact |
+| `compare` | `compare_in_studio` | two artifacts side by side in one recording, `a` left and `b` right, each presenter under its own entity root (`a/robot`, `b/robot`) | either is missing |
+| `time` | `set_studio_time` | the viewer's own time control: active timeline, cursor in `seconds` or `sequence` (refused if the timeline counts the other way), play or pause, speed, a `start`..`end` selection, follow, step | nothing is streaming |
+| `panels` | `set_studio_panels` | expand or toggle the blueprint (left) and selection (right) panels | the time panel, which has no command in this viewer build |
+| — | `read_studio_events` | the event log after a time | never |
+
+Two things the design refuses. A door never waits on a Studio that
+is not alive: every act tool checks the heartbeat first and answers
+"launch_studio first" in a word. And the state is not the truth: it is
+what the window shows, rebuilt every second; the project's truth stays
+in the artifacts and the index (docs/76 §1).
+
+What this does not do yet, said plainly: a time selection on a
+sequence timeline is passed through as raw steps; the viewer's own
+selection (which entity is highlighted) is neither reported nor
+settable; the presenter's layouts are fixed per kind and `compare` is
+the only composition an agent can ask for. Each is a verb away, and
+each waits for the loop stage that needs it.
 
 ## 11. What this refuses to claim
 

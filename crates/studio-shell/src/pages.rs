@@ -45,7 +45,7 @@ const CARD_DESCRIPTION_HEIGHT: f32 = 78.0;
 /// The detail drawer's picture width.
 const DETAIL_PICTURE_WIDTH: f32 = 320.0;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Section {
     Projects,
     Overview,
@@ -94,6 +94,36 @@ impl Section {
     /// The internal artifact kinds this section lists. Environments hold
     /// tasks (a task is a scene plus a referee); Datasets hold pressed
     /// batches and exported datasets alike; Experiments are training runs.
+    /// The page's name as the control surface spells it (lowercase title);
+    /// `Section::parse` reads the same word back.
+    pub fn slug(self) -> String {
+        match self {
+            Self::Live => "live".to_owned(),
+            other => other.title().to_lowercase().replace(' ', "-"),
+        }
+    }
+
+    /// A page by its name, as an agent's `open` command spells it; the
+    /// older internal name for Evaluations is accepted too.
+    pub fn parse(name: &str) -> Option<Self> {
+        let wanted = name.trim().to_lowercase();
+        if wanted == "certificates" {
+            return Some(Self::Certificates);
+        }
+        Self::RAIL
+            .iter()
+            .flat_map(|(_, items)| items.iter().copied())
+            .find(|s| s.slug() == wanted)
+    }
+
+    /// The page that lists artifacts of this kind.
+    pub fn for_kind(kind: &str) -> Option<Self> {
+        Self::RAIL
+            .iter()
+            .flat_map(|(_, items)| items.iter().copied())
+            .find(|s| s.kinds().contains(&kind))
+    }
+
     pub fn kinds(self) -> &'static [&'static str] {
         match self {
             Self::Robots => &["robot"],
@@ -984,6 +1014,22 @@ fn fact_grid(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pages_parse_from_their_names_and_kinds_find_their_page() {
+        assert_eq!(Section::parse("robots"), Some(Section::Robots));
+        assert_eq!(Section::parse(" Evaluations "), Some(Section::Certificates));
+        assert_eq!(Section::parse("certificates"), Some(Section::Certificates));
+        assert_eq!(Section::parse("live"), Some(Section::Live));
+        assert_eq!(Section::parse("dance"), None);
+        assert_eq!(Section::for_kind("batch"), Some(Section::Datasets));
+        assert_eq!(
+            Section::for_kind("certificate"),
+            Some(Section::Certificates)
+        );
+        assert_eq!(Section::for_kind("nothing"), None);
+        assert_eq!(Section::Overview.slug(), "overview");
+    }
 
     #[test]
     fn every_kind_the_index_can_emit_has_a_section() {

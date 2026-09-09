@@ -306,14 +306,27 @@ impl Model {
     /// Ask the presenter to show an artifact: write the intent file. The
     /// presenter (spawned by the shell) streams it and deletes the file.
     pub fn request_show(&self, stamp: &str) -> std::io::Result<()> {
+        self.write_intent(serde_json::json!({ "stamp": stamp }))
+    }
+
+    /// Ask the presenter for two artifacts side by side (`{"stamps": [a, b]}`).
+    pub fn request_compare(&self, a: &str, b: &str) -> std::io::Result<()> {
+        self.write_intent(serde_json::json!({ "stamps": [a, b] }))
+    }
+
+    fn write_intent(&self, body: serde_json::Value) -> std::io::Result<()> {
         let path = self.project_root.join(INTENT_RELATIVE);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let body = serde_json::json!({ "stamp": stamp }).to_string();
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, body)?;
+        std::fs::write(&tmp, body.to_string())?;
         std::fs::rename(tmp, path)
+    }
+
+    /// The artifact with this version, if the index knows it.
+    pub fn artifact(&self, stamp: &str) -> Option<&Artifact> {
+        self.index()?.artifacts.iter().find(|a| a.stamp == stamp)
     }
 
     /// Poll at most once a second; re-read whatever moved.

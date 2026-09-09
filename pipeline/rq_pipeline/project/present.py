@@ -39,6 +39,7 @@ FLUSH_S = 10.0
 # so a 14-joint arm plots as fourteen lines and not one unreadable braid.
 MAX_TRACES = 16
 INTERVAL_ENDS = 2  # a confidence interval is two numbers
+PAIR = 2  # a compare view holds two artifacts
 
 
 def intent_path(project: Project) -> Path:
@@ -62,11 +63,13 @@ def present(
     presenter = _PRESENTERS.get(kind)
     if presenter is None:
         raise ValueError(f"nothing to show for a {kind.value} yet")
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
     recording = rr.RecordingStream(application_id=stamp)
     recording.connect_grpc(STUDIO_ADDRESS)
     try:
         shown = presenter(project, artifact, recording)
-        recording.send_blueprint(shown["blueprint"])
+        recording.send_blueprint(rrb.Blueprint(shown["layout"]))
         recording.flush(timeout_sec=FLUSH_S)
     finally:
         recording.disconnect()
@@ -75,6 +78,49 @@ def present(
         "kind": kind.value,
         "paths": shown["paths"],
         "view": shown["view"],
+    }
+
+
+def compare(
+    project: Project, a: str, b: str, index: ProjectIndex | None = None
+) -> dict[str, Any]:
+    """Two artifacts side by side in one recording (`a` left, `b` right),
+    each under its own entity root so two of a kind never collide."""
+    import rerun as rr  # noqa: PLC0415 - viz extra
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: PLC0415
+
+    index = index or index_project(project)
+    halves = []
+    for side, stamp in (("a", a), ("b", b)):
+        artifact = next((x for x in index.artifacts if x.stamp == stamp), None)
+        if artifact is None:
+            raise KeyError(f"no artifact {stamp!r} in {project.root}")
+        kind = Kind(artifact.kind)
+        presenter = _PRESENTERS.get(kind)
+        if presenter is None:
+            raise ValueError(f"nothing to show for a {kind.value} yet")
+        halves.append((side, artifact, kind, presenter))
+    recording = rr.RecordingStream(application_id=f"{a} vs {b}")
+    recording.connect_grpc(STUDIO_ADDRESS)
+    shown = []
+    try:
+        for side, artifact, kind, presenter in halves:
+            shown.append(
+                presenter(project, artifact, recording, root=f"{side}/{kind.value}")
+            )
+        recording.send_blueprint(
+            rrb.Blueprint(rrb.Horizontal(*(s["layout"] for s in shown)))
+        )
+        recording.flush(timeout_sec=FLUSH_S)
+    finally:
+        recording.disconnect()
+    return {
+        "stamps": [a, b],
+        "kinds": [h[2].value for h in halves],
+        "paths": [p for s in shown for p in s["paths"]],
+        "view": " | ".join(s["view"] for s in shown),
     }
 
 
@@ -87,7 +133,11 @@ def serve(project: Project, *, once: bool = False) -> None:
             try:
                 intent = json.loads(path.read_text(encoding="utf-8"))
                 stamp = intent.get("stamp")
-                if stamp:
+                stamps = intent.get("stamps") or []
+                if len(stamps) == PAIR:
+                    stamp = " vs ".join(stamps)
+                    compare(project, *stamps)
+                elif stamp:
                     present(project, stamp)
             except Exception as why:  # a bad intent must not kill the presenter
                 _write_status(project, {"error": str(why), "stamp": stamp})
@@ -106,7 +156,9 @@ def _write_status(project: Project, status: dict[str, Any]) -> None:
 # -- per kind -------------------------------------------------------------------
 
 
-def _present_robot(project: Project, artifact: Artifact, rr_: Any) -> dict[str, Any]:
+def _present_robot(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "robot"
+) -> dict[str, Any]:
     """The bundle's model as meshes in a 3D view, posed at its keyframe."""
     import mujoco  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
@@ -114,10 +166,10 @@ def _present_robot(project: Project, artifact: Artifact, rr_: Any) -> dict[str, 
     from rq_pipeline.project.previews import _robot_model_file  # noqa: PLC0415
     from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    model_file = _robot_model_file(root)
+    folder = project.root / artifact.path
+    model_file = _robot_model_file(folder)
     if model_file is None:
-        raise ValueError(f"{root}: no MJCF to show")
+        raise ValueError(f"{folder}: no MJCF to show")
     model = mujoco.MjModel.from_xml_path(str(model_file))
     data = mujoco.MjData(model)
     if model.nkey > 0:
@@ -125,9 +177,9 @@ def _present_robot(project: Project, artifact: Artifact, rr_: Any) -> dict[str, 
     mujoco.mj_forward(model, data)
     with _AsDefault(rr_):
         mirror = RigMirror(model, model_colors=True)
-        mirror.log(data, path="robot")
+        mirror.log(data, path=root)
         rr_.log(
-            "robot/census",
+            f"{root}/census",
             _doc(
                 f"# {artifact.stamp}\n\n"
                 f"- bodies {model.nbody} · joints {model.njnt} · actuators {model.nu} "
@@ -137,20 +189,18 @@ def _present_robot(project: Project, artifact: Artifact, rr_: Any) -> dict[str, 
             ),
         )
     return {
-        "paths": ["robot"],
+        "paths": [root],
         "view": "3D",
-        "blueprint": rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.Spatial3DView(origin="robot", name=artifact.stamp),
-                rrb.TextDocumentView(origin="robot/census", name="census"),
-                column_shares=[3, 1],
-            )
+        "layout": rrb.Horizontal(
+            rrb.Spatial3DView(origin=root, name=artifact.stamp),
+            rrb.TextDocumentView(origin=f"{root}/census", name="census"),
+            column_shares=[3, 1],
         ),
     }
 
 
 def _present_recording(
-    project: Project, artifact: Artifact, rr_: Any
+    project: Project, artifact: Artifact, rr_: Any, root: str = "recording"
 ) -> dict[str, Any]:
     """Every channel as a time-series view on the recording's own clock."""
     import rerun as rr  # noqa: PLC0415
@@ -163,7 +213,7 @@ def _present_recording(
     paths = []
     with _AsDefault(rr_):
         for name, channel in recording.channels.items():
-            base = f"recording/{name}"
+            base = f"{root}/{name}"
             paths.append(base)
             labels = channel.components or tuple(str(i) for i in range(channel.width))
             values = channel.values.reshape(len(channel.times), -1)
@@ -182,7 +232,7 @@ def _present_recording(
                 rrb.TimeSeriesView(origin=base, name=f"{name} [{channel.unit}]")
             )
         rr_.log(
-            "recording/manifest",
+            f"{root}/manifest",
             _doc(
                 f"# {artifact.stamp}\n\n"
                 f"- source `{recording.source}` via `{recording.adapter}`"
@@ -194,27 +244,27 @@ def _present_recording(
     return {
         "paths": paths,
         "view": "time series",
-        "blueprint": rrb.Blueprint(
-            rrb.Vertical(
-                rrb.Grid(*views)
-                if views
-                else rrb.TextDocumentView(origin="recording/manifest"),
-                rrb.TextDocumentView(origin="recording/manifest", name="manifest"),
-                row_shares=[4, 1],
-            )
+        "layout": rrb.Vertical(
+            rrb.Grid(*views)
+            if views
+            else rrb.TextDocumentView(origin=f"{root}/manifest"),
+            rrb.TextDocumentView(origin=f"{root}/manifest", name="manifest"),
+            row_shares=[4, 1],
         ),
     }
 
 
-def _present_run(project: Project, artifact: Artifact, rr_: Any) -> dict[str, Any]:
+def _present_run(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "run"
+) -> dict[str, Any]:
     """A training run's curves from its chain log, plus its manifest."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
     from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    log = root / "chain.log"
+    folder = project.root / artifact.path
+    log = folder / "chain.log"
     metrics: dict[str, list[tuple[int, float]]] = {}
     if log.is_file():
         for line in log.read_text(errors="replace").splitlines():
@@ -226,42 +276,42 @@ def _present_run(project: Project, artifact: Artifact, rr_: Any) -> dict[str, An
     paths = []
     with _AsDefault(rr_):
         for key, points in metrics.items():
-            path = f"run/{key}"
+            path = f"{root}/{key}"
             paths.append(path)
             rr_.log(path, rr.SeriesLines(names=[key]), static=True)
             for step, value in points:
                 rr_.set_time("step", sequence=step)
                 rr_.log(path, rr.Scalars(value))
-        manifest = root / "run.json"
+        manifest = folder / "run.json"
         text = manifest.read_text() if manifest.is_file() else "{}"
         rr_.log(
-            "run/manifest",
+            f"{root}/manifest",
             _doc(f"# {artifact.stamp}\n\n```json\n{text}\n```\n" + _lineage(artifact)),
         )
     views = [rrb.TimeSeriesView(origin=p, name=p.split("/", 1)[1]) for p in paths]
     return {
         "paths": paths,
         "view": "time series",
-        "blueprint": rrb.Blueprint(
-            rrb.Vertical(
-                rrb.Grid(*views)
-                if views
-                else rrb.TextDocumentView(origin="run/manifest"),
-                rrb.TextDocumentView(origin="run/manifest", name="manifest"),
-                row_shares=[3, 1],
-            )
+        "layout": rrb.Vertical(
+            rrb.Grid(*views)
+            if views
+            else rrb.TextDocumentView(origin=f"{root}/manifest"),
+            rrb.TextDocumentView(origin=f"{root}/manifest", name="manifest"),
+            row_shares=[3, 1],
         ),
     }
 
 
-def _present_batch(project: Project, artifact: Artifact, rr_: Any) -> dict[str, Any]:
+def _present_batch(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "batch"
+) -> dict[str, Any]:
     """A pressed batch: its kept episodes' frames on a tick timeline, its
     datasheet as the document beside them."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    episodes = sorted(root.glob("episode_*"))
+    folder = project.root / artifact.path
+    episodes = sorted(folder.glob("episode_*"))
     with _AsDefault(rr_):
         for k, episode in enumerate(episodes):
             frames = sorted(episode.glob("frames/*.jpg")) or sorted(
@@ -270,52 +320,54 @@ def _present_batch(project: Project, artifact: Artifact, rr_: Any) -> dict[str, 
             for i, frame in enumerate(frames[:: max(1, len(frames) // 60)]):
                 rr_.set_time("episode", sequence=k)
                 rr_.set_time("frame", sequence=i)
-                rr_.log("batch/camera", rr.EncodedImage(path=frame))
+                rr_.log(f"{root}/camera", rr.EncodedImage(path=frame))
             manifest = episode / "manifest.json"
             if manifest.is_file():
                 rr_.set_time("episode", sequence=k)
-                rr_.log("batch/manifest", _doc(f"```json\n{manifest.read_text()}\n```"))
-        datasheet = root / "datasheet.md"
+                rr_.log(
+                    f"{root}/manifest", _doc(f"```json\n{manifest.read_text()}\n```")
+                )
+        datasheet = folder / "datasheet.md"
         rr_.log(
-            "batch/datasheet",
+            f"{root}/datasheet",
             _doc(datasheet.read_text() if datasheet.is_file() else "no datasheet"),
         )
     return {
-        "paths": ["batch/camera", "batch/datasheet"],
+        "paths": [f"{root}/camera", f"{root}/datasheet"],
         "view": "frames + datasheet",
-        "blueprint": rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.Spatial2DView(origin="batch/camera", name="kept episodes"),
-                rrb.Vertical(
-                    rrb.TextDocumentView(origin="batch/datasheet", name="datasheet"),
-                    rrb.TextDocumentView(
-                        origin="batch/manifest", name="episode manifest"
-                    ),
+        "layout": rrb.Horizontal(
+            rrb.Spatial2DView(origin=f"{root}/camera", name="successful episodes"),
+            rrb.Vertical(
+                rrb.TextDocumentView(origin=f"{root}/datasheet", name="datasheet"),
+                rrb.TextDocumentView(
+                    origin=f"{root}/manifest", name="episode manifest"
                 ),
-                column_shares=[2, 1],
-            )
+            ),
+            column_shares=[2, 1],
         ),
     }
 
 
-def _present_dataset(project: Project, artifact: Artifact, rr_: Any) -> dict[str, Any]:
+def _present_dataset(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "dataset"
+) -> dict[str, Any]:
     """A LeRobot dataset: its videos as video assets, its provenance."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    videos = sorted(root.glob("videos/*/chunk-*/*.mp4"))
+    folder = project.root / artifact.path
+    videos = sorted(folder.glob("videos/*/chunk-*/*.mp4"))
     paths = []
     with _AsDefault(rr_):
         for video in videos[:8]:
-            camera = video.relative_to(root / "videos").parts[0]
-            path = f"dataset/{camera}"
+            camera = video.relative_to(folder / "videos").parts[0]
+            path = f"{root}/{camera}"
             paths.append(path)
             rr_.log(path, rr.AssetVideo(path=video), static=True)
-        prov = root / "provenance.json"
+        prov = folder / "provenance.json"
         prov_text = prov.read_text() if prov.is_file() else "{}"
         rr_.log(
-            "dataset/provenance",
+            f"{root}/provenance",
             _doc(f"# {artifact.stamp}\n\n```json\n{prov_text}\n```"),
         )
     views = [
@@ -325,29 +377,29 @@ def _present_dataset(project: Project, artifact: Artifact, rr_: Any) -> dict[str
     return {
         "paths": paths,
         "view": "video + provenance",
-        "blueprint": rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.Grid(*views)
-                if views
-                else rrb.TextDocumentView(origin="dataset/provenance"),
-                rrb.TextDocumentView(origin="dataset/provenance", name="provenance"),
-                column_shares=[2, 1],
-            )
+        "layout": rrb.Horizontal(
+            rrb.Grid(*views)
+            if views
+            else rrb.TextDocumentView(origin=f"{root}/provenance"),
+            rrb.TextDocumentView(origin=f"{root}/provenance", name="provenance"),
+            column_shares=[2, 1],
         ),
     }
 
 
-def _present_task(project: Project, artifact: Artifact, rr_: Any) -> dict[str, Any]:
+def _present_task(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "task"
+) -> dict[str, Any]:
     """A task: its registered spec rendered as a document, and — when the
     task builds — its scene's spawn bands as boxes in 3D over the model."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    ref = json.loads((root / "task.json").read_text())
+    folder = project.root / artifact.path
+    ref = json.loads((folder / "task.json").read_text())
     task_id = ref.get("task_id", "")
     doc = f"# {task_id}\n\n- stamp `{ref.get('stamp')}` · {ref.get('kind')}\n"
-    paths = ["task/spec"]
+    paths = [f"{root}/spec"]
     with _AsDefault(rr_):
         try:
             from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
@@ -368,7 +420,7 @@ def _present_task(project: Project, artifact: Artifact, rr_: Any) -> dict[str, A
                 for arm, band in spawn.items():
                     (x0, x1), (y0, y1) = band
                     rr_.log(
-                        f"task/spawn/{arm}",
+                        f"{root}/spawn/{arm}",
                         rr.Boxes3D(
                             centers=[[(x0 + x1) / 2, (y0 + y1) / 2, 0.02]],
                             half_sizes=[[(x1 - x0) / 2, (y1 - y0) / 2, 0.005]],
@@ -376,49 +428,47 @@ def _present_task(project: Project, artifact: Artifact, rr_: Any) -> dict[str, A
                         ),
                         static=True,
                     )
-                    paths.append(f"task/spawn/{arm}")
+                    paths.append(f"{root}/spawn/{arm}")
             model = getattr(task, "model", None)
             data = getattr(task, "data", None)
             if model is not None and data is not None:
                 from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
-                RigMirror(model, model_colors=True).log(data, path="task/scene")
-                paths.append("task/scene")
+                RigMirror(model, model_colors=True).log(data, path=f"{root}/scene")
+                paths.append(f"{root}/scene")
         except Exception as why:  # a task that will not build still shows its reference
             doc += f"\n_scene not rendered: {why}_\n"
-        rr_.log("task/spec", _doc(doc))
+        rr_.log(f"{root}/spec", _doc(doc))
     has_scene = any(
-        p.startswith("task/scene") or p.startswith("task/spawn") for p in paths
+        p.startswith(f"{root}/scene") or p.startswith(f"{root}/spawn") for p in paths
     )
     return {
         "paths": paths,
         "view": "3D + spec" if has_scene else "spec",
-        "blueprint": rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.Spatial3DView(origin="task", name=task_id),
-                rrb.TextDocumentView(origin="task/spec", name="spec"),
-                column_shares=[2, 1],
-            )
-            if has_scene
-            else rrb.TextDocumentView(origin="task/spec", name=task_id)
-        ),
+        "layout": rrb.Horizontal(
+            rrb.Spatial3DView(origin=root, name=task_id),
+            rrb.TextDocumentView(origin=f"{root}/spec", name="spec"),
+            column_shares=[2, 1],
+        )
+        if has_scene
+        else rrb.TextDocumentView(origin=f"{root}/spec", name=task_id),
     }
 
 
 def _present_certificate(
-    project: Project, artifact: Artifact, rr_: Any
+    project: Project, artifact: Artifact, rr_: Any, root: str = "certificate"
 ) -> dict[str, Any]:
     """A certificate: funnel bars, the interval, every input stamp."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    root = project.root / artifact.path
-    cert = json.loads((root / "certificate.json").read_text())
+    folder = project.root / artifact.path
+    cert = json.loads((folder / "certificate.json").read_text())
     with _AsDefault(rr_):
         funnel = cert.get("funnel") or {}
         counts = [v for v in funnel.values() if isinstance(v, (int, float))]
         if counts:
-            rr_.log("certificate/funnel", rr.BarChart(counts), static=True)
+            rr_.log(f"{root}/funnel", rr.BarChart(counts), static=True)
         k, n = cert.get("successes"), cert.get("trials")
         ci = cert.get("ci95") or cert.get("ci") or []
         lines = [f"# {artifact.stamp}", ""]
@@ -433,15 +483,13 @@ def _present_certificate(
             for key in ("robot", "task", "policy", "source", "instrument", "protocol")
             if key in cert
         ]
-        rr_.log("certificate/reading", _doc("\n".join(lines)))
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)))
     return {
-        "paths": ["certificate/funnel", "certificate/reading"],
+        "paths": [f"{root}/funnel", f"{root}/reading"],
         "view": "funnel + reading",
-        "blueprint": rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.BarChartView(origin="certificate/funnel", name="funnel"),
-                rrb.TextDocumentView(origin="certificate/reading", name="certificate"),
-            )
+        "layout": rrb.Horizontal(
+            rrb.BarChartView(origin=f"{root}/funnel", name="funnel"),
+            rrb.TextDocumentView(origin=f"{root}/reading", name="evaluation"),
         ),
     }
 

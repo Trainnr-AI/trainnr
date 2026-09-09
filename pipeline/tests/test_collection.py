@@ -245,7 +245,7 @@ class Presenter(unittest.TestCase):
             ]
             self.assertEqual(len(scalars), 3 * 2)  # 3 samples x 2 joints
             self.assertTrue(all(tl == "time" for tl, _ in fake.times))
-            self.assertIn("Blueprint", type(shown["blueprint"]).__name__)
+            self.assertIn("Vertical", type(shown["layout"]).__name__)
 
 
 class _RerunFake:

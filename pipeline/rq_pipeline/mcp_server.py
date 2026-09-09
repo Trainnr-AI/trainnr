@@ -398,6 +398,156 @@ def ingest_recording(
     return ingest(current_project(), Path(source), name=name, adapter=adapter)
 
 
+# -- the Studio's control surface (docs/76 §10.1) ----------------------------------
+
+
+def describe_studio() -> dict[str, Any]:
+    """What the Studio shows right now — project, page, selected artifact,
+    the viewer's recording and time cursor, whether the presenter runs —
+    with `alive` (a fresh heartbeat from a live pid) and the presenter's
+    last status. Read from `<project>/.index/studio-state.json`."""
+    import json  # noqa: PLC0415
+
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import state  # noqa: PLC0415
+    from rq_pipeline.project.locate import INDEX_DIR  # noqa: PLC0415
+
+    project = current_project()
+    out = state(project)
+    status = project.root / INDEX_DIR / "present-status.json"
+    if status.is_file():
+        try:
+            out["presenter"] = json.loads(status.read_text(encoding="utf-8"))
+        except ValueError:
+            out["presenter"] = {"error": "unreadable present-status.json"}
+    return out
+
+
+def launch_studio() -> dict[str, Any]:
+    """Start the Studio window on the current project (the built binary:
+    `$TRAINNR_STUDIO`, else crates/studio-shell/target/release) and wait
+    for its first heartbeat. Refuses when one already runs."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import launch  # noqa: PLC0415
+
+    return launch(current_project())
+
+
+def quit_studio() -> dict[str, Any]:
+    """Close the Studio: a `quit` command first; past the timeout, the
+    process is terminated by pid."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import quit as quit_  # noqa: PLC0415
+
+    return quit_(current_project())
+
+
+def open_in_studio(
+    section: str | None = None,
+    artifact: str | None = None,
+    project: str | None = None,
+) -> dict[str, Any]:
+    """Navigate the Studio: a page by name (projects, overview, robots,
+    environments, recordings, datasets, experiments, policies, evaluations,
+    findings, deployments, monitoring, live), an artifact by version (its
+    page opens with the detail drawer), or another project by root path."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import SECTIONS, command  # noqa: PLC0415
+
+    if section is not None and section.strip().lower() not in SECTIONS:
+        return {
+            "status": "refused",
+            "reason": f"no page {section!r}; one of {', '.join(SECTIONS)}",
+        }
+    return command(
+        current_project(), "open", section=section, artifact=artifact, project=project
+    )
+
+
+def show_in_studio(artifact: str) -> dict[str, Any]:
+    """Stream one artifact into the Studio's viewer as itself (a robot as
+    its meshes in 3D, a recording as time series, an experiment as its
+    curves, an evaluation as its funnel) and switch to the Live view."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(current_project(), "show", artifact=artifact)
+
+
+def compare_in_studio(a: str, b: str) -> dict[str, Any]:
+    """Two artifacts side by side in the viewer, `a` left and `b` right —
+    two robots, two recordings, an experiment beside its evaluation."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(current_project(), "compare", a=a, b=b)
+
+
+# One door, one timeline: every knob the viewer's own time panel has.
+def set_studio_time(  # noqa: PLR0913, PLR0917
+    timeline: str | None = None,
+    seconds: float | None = None,
+    sequence: int | None = None,
+    play: bool | None = None,
+    speed: float | None = None,
+    start: float | None = None,
+    end: float | None = None,
+    follow: bool | None = None,
+    step: int | None = None,
+) -> dict[str, Any]:
+    """Drive the viewer's timeline: pick a timeline by name, put the cursor
+    at `seconds` (duration or timestamp timelines) or `sequence` (step,
+    frame, episode), play or pause, set the playback speed, select a
+    time range (`start`..`end`, seconds), follow the newest data, or step
+    by frames. Refused when nothing is streaming."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(
+        current_project(),
+        "time",
+        timeline=timeline,
+        seconds=seconds,
+        sequence=sequence,
+        play=play,
+        speed=speed,
+        start=start,
+        end=end,
+        follow=follow,
+        step=step,
+    )
+
+
+def set_studio_panels(
+    blueprint: str | None = None, selection: str | None = None
+) -> dict[str, Any]:
+    """The viewer's side panels: `expand` or `toggle` the blueprint panel
+    (left: what each view shows) and the selection panel (right: the
+    selected entity's properties)."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import PANEL_ACTIONS, command  # noqa: PLC0415
+
+    for name, value in (("blueprint", blueprint), ("selection", selection)):
+        if value is not None and value not in PANEL_ACTIONS:
+            return {
+                "status": "refused",
+                "reason": f"{name}: {value!r} is not one of {', '.join(PANEL_ACTIONS)}",
+            }
+    return command(
+        current_project(), "panels", blueprint=blueprint, selection=selection
+    )
+
+
+def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, Any]]:
+    """What the human did in the Studio after `since_ns` (epoch nanoseconds;
+    0 for everything): page opened, artifact selected, artifact shown,
+    project switched, time scrubbed. The agent's context for 'look at this'."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import events  # noqa: PLC0415
+
+    return events(current_project(), since_ns=since_ns, limit=limit)
+
+
 def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
     """Make a project directory: the manifest and one folder per artifact
     kind. Never overwrites an existing project."""
@@ -407,7 +557,8 @@ def create_project_dir(path: str, name: str, description: str = "") -> dict[str,
     return {"root": str(project.root), "name": project.name}
 
 
-def build_server() -> Any:
+# A registration list: one statement per door, read top to bottom.
+def build_server() -> Any:  # noqa: PLR0915
     """The MCP server over the query functions. Needs the `mcp` extra."""
     from mcp.server import MCPServer  # noqa: PLC0415 - mcp extra
 
@@ -505,6 +656,44 @@ def build_server() -> Any:
         description="Make a project directory with its manifest and one folder "
         "per artifact kind; never overwrites.",
     )(create_project_dir)
+
+    # The Studio's control surface: every door a file under <project>/.index
+    # (commands in, state and events out), so the agent drives the window
+    # in real time and reads back what it shows (docs/76 §10.1).
+    server.tool(
+        description="What the Studio shows now: project, page, selected artifact, "
+        "viewer recording and time cursor, presenter; with alive/heartbeat."
+    )(describe_studio)
+    server.tool(
+        description="Start the Studio window on the current project; waits for "
+        "its heartbeat. Refuses when one already runs."
+    )(launch_studio)
+    server.tool(description="Close the Studio (a quit command, then by pid).")(
+        quit_studio
+    )
+    server.tool(
+        description="Navigate the Studio: a page by name, an artifact by version "
+        "(its drawer opens), or another project by root path."
+    )(open_in_studio)
+    server.tool(
+        description="Stream one artifact into the viewer as itself (3D robot, "
+        "time-series recording, experiment curves, evaluation funnel); Live view."
+    )(show_in_studio)
+    server.tool(
+        description="Two artifacts side by side in the viewer, a left and b right."
+    )(compare_in_studio)
+    server.tool(
+        description="Drive the viewer timeline: cursor (seconds or sequence), "
+        "play/pause, speed, time selection, follow, step. Refused if nothing streams."
+    )(set_studio_time)
+    server.tool(
+        description="Expand or toggle the viewer's blueprint (left) and selection "
+        "(right) panels."
+    )(set_studio_panels)
+    server.tool(
+        description="What the human did in the Studio since a time: pages opened, "
+        "artifacts selected or shown, project switches, time scrubs."
+    )(read_studio_events)
 
     # The ACT family — S2's doors (docs/64 §3 stage 1), each spawning
     # the CLI that owns the work as a job.
