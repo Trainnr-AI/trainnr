@@ -243,8 +243,35 @@ def studio_binary() -> Path | None:
     return path if path.is_file() else None
 
 
+VIEWER_PORT = (
+    9876  # the Studio's embedded Rerun server (rq_pipeline.viz.STUDIO_ADDRESS)
+)
+PORT_FREE_TIMEOUT_S = 8.0
+
+
+def viewer_port_free(port: int | None = None) -> bool:
+    """Whether the viewer's port can be bound right now (the module's
+    VIEWER_PORT, read at call time so a test can point it elsewhere)."""
+    import socket  # noqa: PLC0415
+
+    port = VIEWER_PORT if port is None else port
+
+    # No SO_REUSEADDR: on macOS it lets the probe bind beside a live
+    # listener, which is the one case the check exists for.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("0.0.0.0", port))
+        except OSError:
+            return False
+    return True
+
+
 def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
-    """Start the Studio on the project; wait for its first heartbeat."""
+    """Start the Studio on the project; wait for its first heartbeat.
+    Waits for the viewer's port first: a window quit a moment ago can
+    still hold it, and a Studio started then runs without a viewer
+    server ("Address already in use" in its log; nothing streams in —
+    seen 2026-09-09)."""
     current = state(project)
     if current.get("alive"):
         return {
@@ -263,6 +290,15 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
                 else "no Studio binary: build it with "
                 "`cargo build --release -p studio-shell` or set $TRAINNR_STUDIO"
             ),
+        }
+    deadline = time.monotonic() + PORT_FREE_TIMEOUT_S
+    while not viewer_port_free() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if not viewer_port_free():
+        return {
+            "status": "refused",
+            "reason": f"port {VIEWER_PORT} (the viewer server) is held by another "
+            "process; quit the other Studio or Rerun viewer first",
         }
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)

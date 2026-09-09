@@ -65,7 +65,12 @@ def present(
         raise ValueError(f"nothing to show for a {kind.value} yet")
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    recording = rr.RecordingStream(application_id=stamp)
+    # A stable recording id per artifact: showing it again lands in the
+    # same recording instead of stacking a new copy in the viewer's
+    # source list (four copies of one robot, seen 2026-09-09).
+    recording = rr.RecordingStream(
+        application_id=stamp, recording_id=_recording_id(stamp)
+    )
     recording.connect_grpc(STUDIO_ADDRESS)
     try:
         shown = presenter(project, artifact, recording)
@@ -102,7 +107,9 @@ def compare(
         if presenter is None:
             raise ValueError(f"nothing to show for a {kind.value} yet")
         halves.append((side, artifact, kind, presenter))
-    recording = rr.RecordingStream(application_id=f"{a} vs {b}")
+    recording = rr.RecordingStream(
+        application_id=f"{a} vs {b}", recording_id=_recording_id(f"{a} vs {b}")
+    )
     recording.connect_grpc(STUDIO_ADDRESS)
     shown = []
     try:
@@ -528,6 +535,12 @@ class _AsDefault:
 
         if self._prev is not None:
             rr.set_global_data_recording(self._prev)
+
+
+def _recording_id(name: str) -> str:
+    """Rerun wants a recording id it can put in a path: the stamp's own
+    characters, with `@`, `#` and spaces made safe."""
+    return "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
 
 
 def _doc(markdown: str) -> Any:

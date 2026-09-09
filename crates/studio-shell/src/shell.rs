@@ -96,21 +96,41 @@ impl Shell {
         }
         let pipeline = self.repo_root.join("pipeline");
         let script = self.repo_root.join("tools").join("studio-present.py");
-        let child = std::process::Command::new("uv")
+        let mut command = std::process::Command::new("uv");
+        command
             .current_dir(&pipeline)
             .args(["run", "--extra", "sim", "--extra", "viz", "python"])
             .arg(&script)
             .arg("--project")
             .arg(&self.model.project_root)
+            // The presenter exits on its own when this window is gone —
+            // six of them outlived their Studios on 2026-09-09, because
+            // killing the `uv` wrapper leaves the python grandchild.
+            .arg("--parent-pid")
+            .arg(std::process::id().to_string())
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::inherit())
-            .spawn();
-        self.presenter = child.ok();
+            .stderr(std::process::Stdio::inherit());
+        // Its own process group, so the whole tree can be reaped (the
+        // viewport's spawn does the same).
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            command.process_group(0);
+        }
+        self.presenter = command.spawn().ok();
     }
 
     fn kill_presenter(&mut self) {
         if let Some(mut child) = self.presenter.take() {
+            #[cfg(unix)]
+            {
+                // `-s TERM -- -PGID`: the group, wrapper and grandchild
+                // alike (viewport.rs says why the `--` matters).
+                let _ = std::process::Command::new("kill")
+                    .args(["-s", "TERM", "--", &format!("-{}", child.id())])
+                    .status();
+            }
             let _ = child.kill();
             let _ = child.wait();
         }

@@ -189,6 +189,28 @@ class Screenshot(unittest.TestCase):
 
 
 class Lifecycle(unittest.TestCase):
+    def test_launch_refuses_while_the_viewer_port_is_held(self) -> None:
+        import socket  # noqa: PLC0415
+
+        from rq_pipeline.project import control as ctl  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp, socket.socket() as holder:
+            holder.bind(("127.0.0.1", 0))
+            holder.listen(1)
+            port = holder.getsockname()[1]
+            project = create_project(Path(tmp) / "p", "p")
+            fake = Path(tmp) / "studio-shell"
+            fake.write_text("#!/bin/sh\nsleep 1\n")
+            fake.chmod(0o755)
+            old = (ctl.VIEWER_PORT, ctl.PORT_FREE_TIMEOUT_S)
+            ctl.VIEWER_PORT, ctl.PORT_FREE_TIMEOUT_S = port, 0.2
+            try:
+                answer = launch(project, binary=fake)
+            finally:
+                ctl.VIEWER_PORT, ctl.PORT_FREE_TIMEOUT_S = old
+            self.assertEqual(answer["status"], "refused")
+            self.assertIn("viewer server", answer["reason"])
+
     def test_launch_refuses_a_running_studio_and_a_missing_binary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")
@@ -200,12 +222,21 @@ class Lifecycle(unittest.TestCase):
             self.assertIn("nowhere", answer["reason"])
 
     def test_a_fake_studio_that_exits_at_once_is_reported_with_its_log(self) -> None:
+        from rq_pipeline.project import control as ctl  # noqa: PLC0415
+
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")
             fake = Path(tmp) / "studio-shell"
             fake.write_text("#!/bin/sh\necho 'no display'\nexit 3\n")
             fake.chmod(0o755)
-            answer = launch(project, binary=fake)
+            # A real Studio may hold the real port on this machine; the
+            # fake one needs no port, so the check runs on a free one.
+            old = ctl.VIEWER_PORT
+            ctl.VIEWER_PORT = 0
+            try:
+                answer = launch(project, binary=fake)
+            finally:
+                ctl.VIEWER_PORT = old
             self.assertEqual(answer["status"], "failed")
             self.assertIn("code 3", answer["reason"])
             log = project.root / INDEX_DIR / "studio.log"

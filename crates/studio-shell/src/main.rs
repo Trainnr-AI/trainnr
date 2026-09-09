@@ -664,6 +664,13 @@ impl StudioShell {
                     simulator::inspect(ui.ctx(), &what)?;
                 }
                 if let Some(rule) = follow {
+                    let many = model.as_ref().is_some_and(|m| m.nworld > 1);
+                    if !many {
+                        return Err(
+                            "follow needs a many-worlds scene (walk); this scene has one world"
+                                .into(),
+                        );
+                    }
                     let choice = match rule.trim() {
                         "none" | "" => simulator::Follow::None,
                         "worst" => simulator::Follow::Worst,

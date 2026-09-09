@@ -689,7 +689,9 @@ STATE_HEADER = 48
 WORLD_STATS = 2  # floats per world: reward, done
 PERTURB_FLOATS = 6  # one wrench: force xyz, torque xyz
 STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, spare
-MAILBOX_BYTES = 24  # cseq u32, cmd u32, arg i32, pad u32, arg f64
+MAILBOX_SLOTS = 16  # commands queued between two physics polls; older ones are dropped
+MAILBOX_SLOT_BYTES = 16  # cmd u32, arg i32, arg f64
+MAILBOX_BYTES = 8 + MAILBOX_SLOTS * MAILBOX_SLOT_BYTES  # cseq u32, pad; then the slots
 MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual")
 
 
@@ -814,13 +816,19 @@ class StateRing:
         return bool(struct.unpack_from("<I", self._mm, 28)[0])
 
     def take_command(self) -> "tuple[str, int, float] | None":
-        """The newest mailbox command not yet taken: (name, int arg, float arg)."""
-        cseq, cmd, arg_i, _pad, arg_f = struct.unpack_from(
-            "<IIiId", self._mm, self._mail_off
-        )
-        if cseq == self._seen_cseq or cseq % 2:
+        """The oldest mailbox command not yet taken: (name, int arg, float
+        arg). A queue, not a slot: a reset followed at once by a speed
+        change lost the reset when the slot held only the newest
+        (2026-09-09); commands older than MAILBOX_SLOTS are dropped."""
+        cseq = struct.unpack_from("<I", self._mm, self._mail_off)[0]
+        if cseq % 2 or cseq <= self._seen_cseq:
             return None
-        self._seen_cseq = cseq
+        self._seen_cseq = max(self._seen_cseq, cseq - 2 * MAILBOX_SLOTS)
+        self._seen_cseq += 2
+        slot = (self._seen_cseq // 2) % MAILBOX_SLOTS
+        cmd, arg_i, arg_f = struct.unpack_from(
+            "<Iid", self._mm, self._mail_off + 8 + slot * MAILBOX_SLOT_BYTES
+        )
         return (MAILBOX_COMMANDS[cmd], arg_i, arg_f)
 
     def manual_inputs(self) -> "tuple[np.ndarray, np.ndarray] | None":
@@ -881,16 +889,16 @@ class StateRing:
         struct.pack_into("<I", self._mm, 28, int(paused))
 
     def post_command(self, name: str, arg_i: int = 0, arg_f: float = 0.0) -> None:
-        """One command into the mailbox; the newest wins if two race."""
+        """One command into the queue, in order."""
         self._cseq += 2
+        slot = (self._cseq // 2) % MAILBOX_SLOTS
         struct.pack_into("<I", self._mm, self._mail_off, self._cseq - 1)
         struct.pack_into(
-            "<IiId",
+            "<Iid",
             self._mm,
-            self._mail_off + 4,
+            self._mail_off + 8 + slot * MAILBOX_SLOT_BYTES,
             MAILBOX_COMMANDS.index(name),
             arg_i,
-            0,
             arg_f,
         )
         struct.pack_into("<I", self._mm, self._mail_off, self._cseq)

@@ -24,13 +24,40 @@ from rq_pipeline.project import PROJECT_ENV, current_project  # noqa: E402
 from rq_pipeline.project.present import serve  # noqa: E402
 
 
+def watch_parent(pid: int) -> None:
+    """A daemon thread: when the Studio's pid is gone, so are we."""
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    def watch() -> None:
+        while True:
+            time.sleep(1.0)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                os._exit(0)
+            except PermissionError:
+                continue
+
+    threading.Thread(target=watch, daemon=True).start()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--project", type=Path, default=None)
     parser.add_argument(
         "--once", action="store_true", help="present one intent and exit"
     )
+    parser.add_argument(
+        "--parent-pid",
+        type=int,
+        default=None,
+        help="exit when this process (the Studio) is gone — six presenters "
+        "outlived their windows on 2026-09-09",
+    )
     args = parser.parse_args()
+    if args.parent_pid:
+        watch_parent(args.parent_pid)
     if args.project is not None:
         os.environ[PROJECT_ENV] = str(args.project)
     project = current_project()
