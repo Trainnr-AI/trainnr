@@ -958,7 +958,14 @@ fn fact_grid(
         .spacing([16.0, 4.0])
         .show(ui, |ui| {
             for (key, value) in map {
-                ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
+                // The index writes cites keys in the repo's older vocabulary
+                // (frozen by tests); the reader sees the field's word.
+                let shown = if stamps {
+                    crate::detail::field_word(key)
+                } else {
+                    key
+                };
+                ui.label(egui::RichText::new(shown).color(ui.visuals().weak_text_color()));
                 if stamps {
                     let text = value.as_str().unwrap_or_default();
                     if text == "unrecorded" {

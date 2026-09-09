@@ -30,8 +30,9 @@ from rq_pipeline.project.index import Artifact, ProjectIndex
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 DETAILS_DIR = "details"
-SCHEMA = "trainnr-detail/1"
+SCHEMA = "trainnr-detail/2"  # /2 (2026-09-09): markdown sections, field words
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
+MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
 
 JOINT_TYPES = {0: "free", 1: "ball", 2: "slide", 3: "hinge"}
@@ -51,13 +52,22 @@ def details_path(project: Project, stamp: str) -> Path:
     return project.root / INDEX_DIR / DETAILS_DIR / f"{stamp}.json"
 
 
+def _schema_of(path: Path) -> str:
+    try:
+        return str(json.loads(path.read_text()).get("schema", ""))
+    except (OSError, ValueError):
+        return ""
+
+
 def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
     """Write a detail file for every artifact whose kind has a writer and
-    that has none yet; return `{stamp: relative path}` for those present."""
+    that has none yet — or one written by an older schema, since a detail
+    is a view and the writer is its only source; return `{stamp: relative
+    path}` for those present."""
     written: dict[str, str] = {}
     for artifact in index.artifacts:
         out = details_path(project, artifact.stamp)
-        if not out.is_file():
+        if not out.is_file() or _schema_of(out) != SCHEMA:
             writer = _WRITERS.get(artifact.kind)
             if writer is None:
                 continue
@@ -85,6 +95,43 @@ def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
 
 
 # -- section builders ------------------------------------------------------------
+
+
+# Words that older artifacts carry inside their data (an episode's verdict
+# string, a datasheet written before 2026-09-09) and that the field says
+# differently. The data is not rewritten; what a reader sees is (docs/76 §2).
+FIELD_WORDS: tuple[tuple[str, str], ...] = (
+    ("task referee", "success criterion"),
+    ("referee", "success criterion"),
+    ("expert retries", "scripted-policy retries"),
+    ("expert", "scripted policy"),
+    ("episodes kept", "successful episodes"),
+    ("keep rate", "success rate"),
+    ("last keep", "last success"),
+    ("## Stamps", "## Versions"),
+    ("instrument", "simulator build"),
+    ("Dynamics draws", "Domain randomization draws"),
+    ("Basis:", "Range:"),
+)
+
+
+def field_words(text: str) -> str:
+    """The field's word for each house word inside a displayed string."""
+    for ours, theirs in FIELD_WORDS:
+        text = text.replace(ours, theirs)
+    return text
+
+
+def _markdown(title: str, text: str, note: str | None = None) -> dict[str, Any]:
+    """A section rendered as markdown (a datasheet, a README)."""
+    return {
+        "title": title,
+        "kind": "markdown",
+        "columns": [],
+        "rows": [],
+        "text": text,
+        "note": note,
+    }
 
 
 def _kv(
@@ -489,7 +536,7 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 raw.get("seed"),
                 raw.get("attempt", 1),
                 frames,
-                raw.get("verdict", ""),
+                field_words(str(raw.get("verdict", ""))),
                 _jsonable(dyn),
                 raw.get("dynamics_basis")
                 or ("hand-set ±" + str(raw["dr_span"]) if "dr_span" in raw else ""),
@@ -526,16 +573,13 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             note="'hand-set' ranges were chosen by the author; 'identified' ranges "
             "come from system identification.",
         ),
-        _kv(
+        _markdown(
             "Datasheet",
-            [
-                (
-                    "markdown",
-                    (root / "datasheet.md").read_text()[:4000]
-                    if (root / "datasheet.md").is_file()
-                    else "",
-                )
-            ],
+            field_words((root / "datasheet.md").read_text()[:MAX_MARKDOWN])
+            if (root / "datasheet.md").is_file()
+            else "",
+            note="The datasheet as written at generation time; house words in an "
+            "older file are shown in the field's terms.",
         ),
     ]
 
