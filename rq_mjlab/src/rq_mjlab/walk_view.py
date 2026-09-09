@@ -248,6 +248,8 @@ def main() -> None:  # noqa: PLR0915
     mirror = streamer.walk_scene(args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
+    device_qvel = as_torch(env.unwrapped.sim.data.qvel)
+    device_ctrl = as_torch(env.unwrapped.sim.data.ctrl)
     device_xfrc = as_torch(env.unwrapped.sim.data.xfrc_applied)
     nq = device_qpos.shape[1]
     if mirror.nq != args.envs * nq:
@@ -300,6 +302,9 @@ def main() -> None:  # noqa: PLR0915
                 obs, rewards, dones, _ = env.step(actions)
                 sim_time += step_seconds
             mirror_data.qpos[:] = device_qpos.reshape(-1).cpu().numpy()
+            mirror_data.qvel[:] = device_qvel.reshape(-1).cpu().numpy()
+            if mirror.nu == device_ctrl.numel():
+                mirror_data.ctrl[:] = device_ctrl.reshape(-1).cpu().numpy()
             mujoco.mj_forward(mirror, mirror_data)
             ring.world_stats[:, 0] = rewards.cpu().numpy()
             ring.world_stats[:, 1] = dones.cpu().numpy()

@@ -712,16 +712,22 @@ class StateRing:
         import mmap  # noqa: PLC0415
 
         self.nq, self.nmocap, self.nu = int(model.nq), int(model.nmocap), int(model.nu)
+        self.nv, self.na = int(model.nv), int(model.na)
         if not create:
             nworld = self._peek_nworld(path)
         self.nworld = int(nworld)
         # State: time, rtf, manual flag, spare; then qpos; then mocap pos +
         # quat; then ctrl; then per-world stats.
+        # qvel and act travel too: a forward pass on the render side then
+        # reproduces the physics' contact forces (at zero velocity it drew
+        # the support force of a frozen pose, up to 13 % off, 2026-09-09).
         floats = (
             STATE_STATS
             + self.nq
             + 7 * self.nmocap
             + self.nu
+            + self.nv
+            + self.na
             + WORLD_STATS * self.nworld
         )
         self._state_off = STATE_HEADER
@@ -782,8 +788,12 @@ class StateRing:
         k1 = k0 + self.nq + 7 * self.nmocap
         if self.nu:
             buf[k1 : k1 + self.nu] = data.ctrl
+        k2 = k1 + self.nu
+        buf[k2 : k2 + self.nv] = data.qvel
+        if self.na:
+            buf[k2 + self.nv : k2 + self.nv + self.na] = data.act
         if self.nworld:
-            buf[k1 + self.nu :] = self.world_stats.ravel()
+            buf[k2 + self.nv + self.na :] = self.world_stats.ravel()
         self._mm[self._state_off : self._state_off + 8 * len(buf)] = buf.tobytes()
         struct.pack_into("<I", self._mm, 4, self._seq * 2)  # even: stable
 
@@ -853,8 +863,12 @@ class StateRing:
             k1 = k0 + self.nq + 7 * self.nmocap
             if self.nu:
                 local.ctrl[:] = buf[k1 : k1 + self.nu]
+            k2 = k1 + self.nu
+            local.qvel[:] = buf[k2 : k2 + self.nv]
+            if self.na:
+                local.act[:] = buf[k2 + self.nv : k2 + self.nv + self.na]
             if self.nworld:
-                self.world_stats[:] = buf[k1 + self.nu :].reshape(
+                self.world_stats[:] = buf[k2 + self.nv + self.na :].reshape(
                     self.nworld, WORLD_STATS
                 )
             return True
@@ -1182,9 +1196,19 @@ class SimControl:
         if now - self._last_status < STATUS_EVERY_S:
             return None
         self._last_status = now
-        with self._lock:
-            vis = {str(k): v for k, v in self._vis.items()}
-            rnd = {str(k): v for k, v in self._rnd.items()}
+        # Every flag's value as rendered — the toolbar shows the truth,
+        # not the ones the human touched.
+        vopt, scene = state.get("vopt"), lane.get("scene")
+        vis = (
+            {str(i): bool(v) for i, v in enumerate(vopt.flags)}
+            if vopt is not None
+            else {}
+        )
+        rnd = (
+            {str(i): bool(v) for i, v in enumerate(scene.flags)}
+            if scene is not None
+            else {}
+        )
         body: dict = {
             "time": float(local.time),
             "rtf": float(self.ring.rtf),
@@ -1406,6 +1430,7 @@ class RenderPump:
         if self.sim is not None:
             lane = state.setdefault("lane", {})
             lane["last_render_ms"] = (rendered - began) * 1000.0
+            lane["scene"] = renderer.scene  # its flags, as rendered, for the status
             status = self.sim.status(local, lane, state)
             if status is not None:
                 self.sink.status(status)

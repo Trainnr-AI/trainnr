@@ -465,6 +465,24 @@ choices; nothing runs → refused with "simulate_in_studio first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,
 render_ms}` beside `viewport_task` and `viewport_fps`.
 
+**Are the overlays true?** (Prakhar, 2026-09-09: "is the contact
+forces joints section all correct and showing correct info?") The
+renderer draws MuJoCo's own visualization (`mjv_updateScene` with the
+flag set) on a forward pass over the state the ring carries — qpos,
+mocap, ctrl, and since that question qvel and act as well. Measured on
+the kitting scene, ten states, random controls: with velocity carried,
+the renderer's contact forces equal the physics' at the published pose
+to 0.000 % with identical contact counts; without velocity they were
+within 0.5 %. (A first comparison read 13 % — against `MjData` after
+`mj_step`, whose contact list belongs to the pose BEFORE the integration
+while `qpos` is already advanced; that stale list is also what MuJoCo's
+native window draws. Ours draws the contacts of the pose on screen.)
+The flag indices follow `mjtVisFlag` and `mjtRndFlag` exactly, and the
+status now reports every flag's value as rendered, so the toolbar
+shows MuJoCo's state rather than a default. Arrow lengths are MuJoCo's
+own `visual.map.force` scale — metre-long arrows under a collapsed arm
+are the model's, not an error.
+
 **Not built, and said so:** simulate's history scrubber (a state buffer
 to rewind through), Reload (re-read the model file), the Watch field,
 Align, the profiler and sensor overlays, and loading a scene that is
