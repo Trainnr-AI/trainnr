@@ -41,6 +41,10 @@ pub enum Command {
         section: Option<String>,
         #[serde(default)]
         artifact: Option<String>,
+        /// A table of the selected artifact to open in the modal, by its
+        /// title; an empty string closes the modal.
+        #[serde(default)]
+        table: Option<String>,
     },
     Show {
         artifact: String,
@@ -118,6 +122,8 @@ pub struct StudioState {
     pub project_name: String,
     pub section: String,
     pub selected: Option<String>,
+    /// The table open in the modal, by title.
+    pub table: Option<String>,
     pub live: Live,
     pub presenter_running: bool,
     pub jobs_running: usize,
@@ -397,7 +403,8 @@ mod tests {
             Command::Open {
                 project: None,
                 section: Some("robots".into()),
-                artifact: None
+                artifact: None,
+                table: None,
             }
         );
         let time = parse_command(r#"{"verb":"time","seconds":1.5,"play":true}"#).expect("parses");
@@ -446,6 +453,7 @@ mod tests {
             project_name: "p".into(),
             section: "overview".into(),
             selected: None,
+            table: None,
             live: Live::default(),
             presenter_running: false,
             jobs_running: 0,

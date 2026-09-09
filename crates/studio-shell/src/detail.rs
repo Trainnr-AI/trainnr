@@ -15,8 +15,14 @@ use crate::widgets::card;
 /// A row taller than this many rendered lines in one cell is clipped;
 /// long values (a datasheet, a command line) get their own block instead.
 const LONG_VALUE_CHARS: usize = 160;
-/// A table with more rows than this scrolls inside its card.
-const SCROLL_ROWS: usize = 24;
+/// A table in its card shows this many rows; the rest live in the modal
+/// (`table_modal`), which the table itself and its expand button open.
+const PREVIEW_ROWS: usize = 8;
+/// The modal's share of the window, each way.
+const MODAL_SHARE: f32 = 0.86;
+/// A column never grows past these in the card and in the modal.
+const PREVIEW_COLUMN_CAP: f32 = 260.0;
+const MODAL_COLUMN_CAP: f32 = 420.0;
 
 #[derive(Deserialize, Default)]
 pub struct Detail {
@@ -26,7 +32,7 @@ pub struct Detail {
     pub sections: Vec<Section>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Section {
     pub title: String,
     pub kind: String, // "kv" | "table"
@@ -70,26 +76,49 @@ impl Detail {
 
 /// Every section, one card each. `expected` is the artifact's current
 /// version; a detail file written for another version is flagged, not
-/// trusted silently.
-pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) {
+/// trusted silently. Returns the table section the human asked to
+/// explore (a click on it, or its expand button), if any.
+pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Section> {
     if !detail.version.is_empty() && detail.version != expected {
         ui.warning_label(format!(
             "detail was written for version {} — re-index to refresh",
             detail.version
         ));
     }
+    let mut explore = None;
     for (i, section) in detail.sections.iter().enumerate() {
         ui.add_space(if i == 0 { 0.0 } else { 14.0 });
         card(ui, None).show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(
-                egui::RichText::new(&section.title)
-                    .text_style(DesignTokens::welcome_screen_example_title())
-                    .strong(),
-            );
+            let is_table = section.kind == "table";
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(&section.title)
+                        .text_style(DesignTokens::welcome_screen_example_title())
+                        .strong(),
+                );
+                if is_table {
+                    ui.label(
+                        egui::RichText::new(format!("{} rows", section.rows.len()))
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .small_icon_button(&re_ui::icons::EXPAND, "Explore the whole table")
+                            .clicked()
+                        {
+                            explore = Some(section.clone());
+                        }
+                    });
+                }
+            });
             ui.add_space(6.0);
             match section.kind.as_str() {
-                "table" => table(ui, section, i),
+                "table" => {
+                    if table_preview(ui, section, i) {
+                        explore = Some(section.clone());
+                    }
+                }
                 "markdown" => markdown(ui, section),
                 _ => key_values(ui, section, i),
             }
@@ -103,6 +132,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) {
             }
         });
     }
+    explore
 }
 
 /// A key/value list: keys weak on the left, values on the right; a long
@@ -150,68 +180,300 @@ fn markdown(ui: &mut egui::Ui, section: &Section) {
     }
 }
 
-/// A table in Rerun's dense table style; scrolls past `SCROLL_ROWS`.
-fn table(ui: &mut egui::Ui, section: &Section, idx: usize) {
+/// The first rows of a table in Rerun's dense style, column names on
+/// top, nothing scrolling. A click anywhere on it, or on the footer,
+/// opens the modal; returns true when it was asked for.
+fn table_preview(ui: &mut egui::Ui, section: &Section, idx: usize) -> bool {
     let tokens = ui.tokens();
     let style = TableStyle::Dense;
     let row_h = tokens.table_row_height(style) + 2.0;
     let cols = section.columns.len().max(1);
-    let shown = (section.rows.len() + 1).min(SCROLL_ROWS + 1);
-    let max_height = row_h * shown as f32 + 6.0;
-    ui.push_id(("table", &section.title, idx), |ui| {
-        egui::ScrollArea::both()
-            .max_height(max_height)
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                let mut builder = TableBuilder::new(ui).striped(true).vscroll(false);
-                for c in 0..cols {
-                    let at_least = if c == 0 { 150.0 } else { 80.0 };
-                    builder = builder.column(if c + 1 == cols {
-                        Column::remainder().at_least(at_least)
-                    } else {
-                        Column::auto().at_least(at_least).resizable(true)
+    let shown = section.rows.len().min(PREVIEW_ROWS);
+    let mut asked = false;
+    let inner = ui.push_id(("table", &section.title, idx), |ui| {
+        let mut builder = TableBuilder::new(ui).striped(true).vscroll(false);
+        for c in 0..cols {
+            let width = column_width(section, c, shown, PREVIEW_COLUMN_CAP);
+            builder = builder.column(if c + 1 == cols {
+                Column::remainder().at_least(width)
+            } else {
+                Column::exact(width).clip(true)
+            });
+        }
+        builder
+            .header(row_h, |mut header| {
+                for name in &section.columns {
+                    header.col(|ui| {
+                        column_name(ui, name, None);
                     });
                 }
-                builder.body(|mut body| {
-                    tokens.setup_table_body(&mut body, style);
+            })
+            .body(|mut body| {
+                tokens.setup_table_body(&mut body, style);
+                for row in &section.rows[..shown] {
                     body.row(row_h, |mut r| {
-                        for name in &section.columns {
-                            r.col(|ui| {
-                                ui.label(
-                                    egui::RichText::new(name)
-                                        .strong()
-                                        .color(ui.visuals().weak_text_color()),
-                                );
-                            });
+                        for c in 0..cols {
+                            r.col(|ui| cell(ui, row.get(c)));
                         }
                     });
-                    for row in &section.rows {
-                        body.row(row_h, |mut r| {
-                            for c in 0..cols {
-                                let text = row.get(c).map(render_inline).unwrap_or_default();
-                                r.col(|ui| {
-                                    if text.is_empty() {
-                                        ui.label(
-                                            egui::RichText::new("–")
-                                                .color(ui.visuals().weak_text_color()),
-                                        );
-                                        return;
-                                    }
-                                    let rich = egui::RichText::new(&text);
-                                    let rich = if is_version(&text) || looks_numeric(&text) {
-                                        rich.monospace()
-                                    } else {
-                                        rich
-                                    };
-                                    ui.add(egui::Label::new(rich).truncate())
-                                        .on_hover_text(&text);
-                                });
-                            }
-                        });
+                }
+            });
+        let hidden = section.rows.len().saturating_sub(shown);
+        ui.add_space(4.0);
+        let label = if hidden > 0 {
+            format!("Explore all {} rows", section.rows.len())
+        } else {
+            "Explore".to_owned()
+        };
+        if ui.small(label).clicked() {
+            asked = true;
+        }
+    });
+    // The table itself is the button: a click on the rows opens the modal.
+    let hit = ui.interact(
+        inner.response.rect,
+        inner.response.id.with("open"),
+        egui::Sense::click(),
+    );
+    if hit.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    asked || hit.clicked()
+}
+
+/// Pixels per character of the table font, for sizing a column to its
+/// longest value instead of its first (a range `[-1.5708, 1.5708]` must
+/// not clip behind a header that says `range`).
+const PX_PER_CHAR: f32 = 7.2;
+const COLUMN_PADDING: f32 = 18.0;
+const COLUMN_MIN: f32 = 80.0;
+
+/// The width a column needs to show every value whole, capped at `cap`.
+fn column_width(section: &Section, col: usize, rows: usize, cap: f32) -> f32 {
+    let header = section.columns.get(col).map_or(0, |n| n.chars().count());
+    let longest = section
+        .rows
+        .iter()
+        .take(rows)
+        .filter_map(|r| r.get(col))
+        .map(|v| render_inline(v).chars().count())
+        .max()
+        .unwrap_or(0);
+    // The floor wins over a cap below it (`clamp` would panic there).
+    (header.max(longest) as f32 * PX_PER_CHAR + COLUMN_PADDING)
+        .min(cap.max(COLUMN_MIN))
+        .max(COLUMN_MIN)
+}
+
+/// A column name in the header; `sorted` draws the direction it sorts by.
+fn column_name(ui: &mut egui::Ui, name: &str, sorted: Option<bool>) {
+    let text = match sorted {
+        Some(true) => format!("{name} ▲"),
+        Some(false) => format!("{name} ▼"),
+        None => name.to_owned(),
+    };
+    ui.label(
+        egui::RichText::new(text)
+            .strong()
+            .color(ui.visuals().weak_text_color()),
+    );
+}
+
+/// One cell: the full value on hover, a dash for nothing.
+fn cell(ui: &mut egui::Ui, value: Option<&serde_json::Value>) {
+    let text = value.map(render_inline).unwrap_or_default();
+    if text.is_empty() {
+        ui.label(egui::RichText::new("–").color(ui.visuals().weak_text_color()));
+        return;
+    }
+    let rich = egui::RichText::new(&text);
+    let rich = if is_version(&text) || looks_numeric(&text) {
+        rich.monospace()
+    } else {
+        rich
+    };
+    ui.add(egui::Label::new(rich).truncate())
+        .on_hover_text(&text);
+}
+
+// -- the table modal: the whole table, sortable, filterable -----------------
+
+/// A table opened for exploration: which one, how it is sorted, what
+/// the filter box holds.
+#[derive(Clone, Debug)]
+pub struct TableView {
+    pub section: Section,
+    /// The column sorted by, and whether ascending.
+    pub sort: Option<(usize, bool)>,
+    pub filter: String,
+}
+
+impl TableView {
+    pub fn new(section: Section) -> Self {
+        Self {
+            section,
+            sort: None,
+            filter: String::new(),
+        }
+    }
+
+    /// The rows the modal lists: those matching the filter, in sort order.
+    pub fn rows(&self) -> Vec<&Vec<serde_json::Value>> {
+        let needle = self.filter.trim().to_lowercase();
+        let mut rows: Vec<&Vec<serde_json::Value>> = self
+            .section
+            .rows
+            .iter()
+            .filter(|row| {
+                needle.is_empty()
+                    || row
+                        .iter()
+                        .any(|v| render_inline(v).to_lowercase().contains(&needle))
+            })
+            .collect();
+        if let Some((col, ascending)) = self.sort {
+            rows.sort_by(|a, b| {
+                let (x, y) = (
+                    a.get(col).map(render_inline).unwrap_or_default(),
+                    b.get(col).map(render_inline).unwrap_or_default(),
+                );
+                let order = match (leading_number(&x), leading_number(&y)) {
+                    (Some(p), Some(q)) => p.total_cmp(&q),
+                    _ => x.cmp(&y),
+                };
+                if ascending {
+                    order
+                } else {
+                    order.reverse()
+                }
+            });
+        }
+        rows
+    }
+
+    /// Click a column: sort ascending, then descending, then not at all.
+    pub fn toggle_sort(&mut self, col: usize) {
+        self.sort = match self.sort {
+            Some((c, true)) if c == col => Some((col, false)),
+            Some((c, false)) if c == col => None,
+            _ => Some((col, true)),
+        };
+    }
+}
+
+/// The modal: title, row count, a filter box, the whole table with a
+/// fixed header, resizable columns and sort on click. Returns false
+/// when it was closed (the × button, Escape, or a click outside).
+pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
+    let screen = ctx.content_rect();
+    let mut close = false;
+    let modal = egui::Modal::new(egui::Id::new("table-modal")).show(ctx, |ui| {
+        ui.set_width(screen.width() * MODAL_SHARE);
+        ui.set_max_height(screen.height() * MODAL_SHARE);
+        let (matching, total) = (view.rows().len(), view.section.rows.len());
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(&view.section.title)
+                    .text_style(DesignTokens::welcome_screen_h2())
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new(if view.filter.trim().is_empty() {
+                    format!("{total} rows")
+                } else {
+                    format!("{matching} of {total} rows")
+                })
+                .color(ui.visuals().weak_text_color()),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .small_icon_button(&re_ui::icons::CLOSE, "Close")
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.add(
+                    egui::TextEdit::singleline(&mut view.filter)
+                        .hint_text("filter rows")
+                        .desired_width(220.0),
+                );
+            });
+        });
+        if let Some(note) = &view.section.note {
+            ui.label(
+                egui::RichText::new(note)
+                    .text_style(DesignTokens::welcome_screen_tag())
+                    .color(ui.visuals().weak_text_color()),
+            );
+        }
+        ui.add_space(8.0);
+        let rows = view.rows();
+        let tokens = ui.tokens();
+        let style = TableStyle::Dense;
+        let row_h = tokens.table_row_height(style) + 2.0;
+        let cols = view.section.columns.len().max(1);
+        let mut clicked_col = None;
+        let mut builder = TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            .vscroll(true)
+            .max_scroll_height(screen.height() * MODAL_SHARE - 96.0);
+        for c in 0..cols {
+            let width = column_width(&view.section, c, usize::MAX, MODAL_COLUMN_CAP);
+            builder = builder.column(if c + 1 == cols {
+                Column::remainder().at_least(width)
+            } else {
+                Column::initial(width).at_least(COLUMN_MIN).clip(true)
+            });
+        }
+        builder
+            .header(row_h + 4.0, |mut header| {
+                for (c, name) in view.section.columns.iter().enumerate() {
+                    header.col(|ui| {
+                        let sorted = view.sort.filter(|(col, _)| *col == c).map(|(_, asc)| asc);
+                        let text = match sorted {
+                            Some(true) => format!("{name} ▲"),
+                            Some(false) => format!("{name} ▼"),
+                            None => name.clone(),
+                        };
+                        if ui
+                            .add(
+                                egui::Label::new(egui::RichText::new(text).strong())
+                                    .sense(egui::Sense::click()),
+                            )
+                            .on_hover_text("sort by this column")
+                            .clicked()
+                        {
+                            clicked_col = Some(c);
+                        }
+                    });
+                }
+            })
+            .body(|mut body| {
+                tokens.setup_table_body(&mut body, style);
+                body.rows(row_h, rows.len(), |mut r| {
+                    let row = rows[r.index()];
+                    for c in 0..cols {
+                        r.col(|ui| cell(ui, row.get(c)));
                     }
                 });
             });
+        if let Some(c) = clicked_col {
+            view.toggle_sort(c);
+        }
     });
+    !(close || modal.should_close())
+}
+
+/// The number a cell starts with (`0.053`, `[-1.57, 1.57]`, `4.2e-6`),
+/// for sorting numerically where it can.
+fn leading_number(text: &str) -> Option<f64> {
+    let t = text.trim_start_matches(['[', ' ']);
+    let end = t
+        .char_indices()
+        .find(|(_, ch)| !(ch.is_ascii_digit() || matches!(ch, '-' | '+' | '.' | 'e' | 'E')))
+        .map_or(t.len(), |(i, _)| i);
+    t[..end].parse().ok()
 }
 
 /// One line for a table cell: an object reads as `k: v, k: v`, never as
@@ -286,6 +548,65 @@ mod tests {
         assert_eq!(
             render_inline(&serde_json::json!({"damping": 1.1, "gain": [0.7, 0.9]})),
             "damping: 1.1, gain: 0.7, 0.9"
+        );
+    }
+
+    #[test]
+    fn a_table_view_filters_and_sorts_numerically_where_it_can() {
+        let section = Section {
+            title: "Joints".into(),
+            kind: "table".into(),
+            columns: vec!["joint".into(), "damping".into(), "range".into()],
+            rows: vec![
+                vec![
+                    serde_json::json!("knee"),
+                    serde_json::json!(0.053),
+                    serde_json::json!("[-1.5, 1.5]"),
+                ],
+                vec![
+                    serde_json::json!("ankle"),
+                    serde_json::json!(0.0048),
+                    serde_json::json!("[-0.5, 0.5]"),
+                ],
+                vec![
+                    serde_json::json!("hip"),
+                    serde_json::json!(0.11),
+                    serde_json::json!("[-2.0, 2.0]"),
+                ],
+            ],
+            text: None,
+            note: None,
+        };
+        let mut view = TableView::new(section);
+        assert_eq!(view.rows().len(), 3);
+        view.toggle_sort(1);
+        let by_damping: Vec<String> = view.rows().iter().map(|r| render_inline(&r[0])).collect();
+        assert_eq!(
+            by_damping,
+            vec!["ankle", "knee", "hip"],
+            "ascending by number"
+        );
+        view.toggle_sort(1);
+        assert_eq!(render_inline(&view.rows()[0][0]), "hip", "descending");
+        view.toggle_sort(1);
+        assert!(view.sort.is_none(), "third click clears");
+        view.toggle_sort(2);
+        assert_eq!(
+            render_inline(&view.rows()[0][0]),
+            "hip",
+            "a range sorts by its low end"
+        );
+        view.filter = "KNE".into();
+        assert_eq!(view.rows().len(), 1);
+        assert_eq!(leading_number("4.2e-6, 3.4"), Some(4.2e-6));
+        assert_eq!(leading_number("hinge"), None);
+        let range_col = column_width(&view.section, 2, usize::MAX, 420.0);
+        let short_col = column_width(&view.section, 0, usize::MAX, 420.0);
+        assert!(range_col > short_col, "a range needs more room than a name");
+        assert_eq!(
+            column_width(&view.section, 0, usize::MAX, 50.0),
+            80.0,
+            "never under the floor"
         );
     }
 

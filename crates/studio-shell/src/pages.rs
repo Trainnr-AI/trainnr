@@ -809,6 +809,7 @@ pub fn section(
     section: Section,
     selected: &mut Option<String>,
     show: &mut Option<String>,
+    explore: &mut Option<crate::detail::Section>,
 ) {
     let Some(index) = model.index() else {
         return;
@@ -874,8 +875,12 @@ pub fn section(
         if let Some(stamp) = selected.clone() {
             if let Some(artifact) = rows.iter().find(|a| a.stamp == stamp) {
                 ui.add_space(24.0);
-                if detail(ui, model, artifact) {
+                let (show_clicked, table) = detail(ui, model, artifact);
+                if show_clicked {
                     *show = Some(stamp);
+                }
+                if table.is_some() {
+                    *explore = table;
                 }
             }
         }
@@ -887,9 +892,14 @@ pub fn section(
 /// facts. The rich per-kind views (a fit's intervals, a certificate's
 /// funnel) read the artifact itself and arrive with the tools that write
 /// them.
-fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) -> bool {
+fn detail(
+    ui: &mut egui::Ui,
+    model: &Model,
+    artifact: &Artifact,
+) -> (bool, Option<crate::detail::Section>) {
     let (name, hash) = split_stamp(&artifact.stamp);
     let mut show = false;
+    let mut explore = None;
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal_top(|ui| {
@@ -960,7 +970,7 @@ fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) -> bool {
     {
         Some(detail) => {
             ui.add_space(14.0);
-            crate::detail::show(ui, &detail, &artifact.stamp);
+            explore = crate::detail::show(ui, &detail, &artifact.stamp);
         }
         None if !artifact.summary.is_empty() => {
             ui.add_space(14.0);
@@ -972,7 +982,7 @@ fn detail(ui: &mut egui::Ui, model: &Model, artifact: &Artifact) -> bool {
         }
         None => {}
     }
-    show
+    (show, explore)
 }
 
 /// A two-column key/value grid; stamps in monospace, `unrecorded` in the

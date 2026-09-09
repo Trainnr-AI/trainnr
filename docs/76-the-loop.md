@@ -364,13 +364,25 @@ The verbs, and the MCP door over each (`pipeline/rq_pipeline/mcp_server.py`):
 | — | `describe_studio` | reads the state file, adds `alive` and the presenter's last status | never; a missing Studio is reported, not raised |
 | — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/studio-shell/target/release/studio-shell`) on the project and waits for its first heartbeat | one already runs; no binary |
 | `quit` | `quit_studio` | closes the window; past 5 s, terminates the pid | never |
-| `open` | `open_in_studio` | a page by its rail name; an artifact by version (its page opens with the drawer); a project by root | no such page, artifact or project |
+| `open` | `open_in_studio` | a page by its rail name; an artifact by version (its page opens with the drawer); a project by root; a `table` of the selected artifact by title (Joints, Actuators, Episodes…) in the exploration modal, an empty string closes it | no such page, artifact, project or table; a table with nothing selected |
 | `show` | `show_in_studio` | the presenter streams the artifact as itself; the Live view opens | no such artifact |
 | `compare` | `compare_in_studio` | two artifacts side by side in one recording, `a` left and `b` right, each presenter under its own entity root (`a/robot`, `b/robot`) | either is missing |
 | `time` | `set_studio_time` | the viewer's own time control: active timeline, cursor in `seconds` or `sequence` (refused if the timeline counts the other way), play or pause, speed, a `start`..`end` selection, follow, step | nothing is streaming |
 | `panels` | `set_studio_panels` | expand or toggle the blueprint (left) and selection (right) panels | the time panel, which has no command in this viewer build |
 | `screenshot` | `screenshot_studio` | the whole window as a PNG under `.index/screenshots/`, scaled to a stated width (default 1600, never upscaled); with a page or an artifact named, it navigates first, lets the page draw, then captures — the agent reads the file and sees what the human sees | a capture is already in flight; no frame arrives within 3 s (a hidden or minimized window) |
 | — | `read_studio_events` | the event log after a time | never |
+
+The tables (2026-09-09, Prakhar: "when a user clicks on the table, or
+click on the small expand button on table, a new modal popup opened
+with proper table visible for exploration"): a section's table shows
+its first eight rows in the card, column names on top, nothing
+scrolling, each column sized to its longest value; the table itself,
+the expand button beside its title and the "Explore all N rows" footer
+open a modal over the page with the whole table — a fixed header, sort
+on a column click (ascending, descending, off; numbers sort as numbers,
+a range by its low end), a filter box that keeps matching rows, resizable
+columns, the full value on hover, closed by ×, Escape or a click outside.
+The state file reports the open table; the agent opens one by title.
 
 How the agent sees the window (asked 2026-09-09, "how will the agent see
 the window?"): the state file is a description, the screenshot is the

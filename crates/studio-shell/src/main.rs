@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 viewport,
                 shell,
                 control,
-                before: (Section::Overview, None),
+                before: (Section::Overview, None, None),
                 shot: None,
                 seen_recording: false,
             }))
@@ -169,7 +169,7 @@ struct StudioShell {
     control: control::Control,
     /// The page and selection before this frame's page ran, so a change
     /// the human made (not a command) becomes an event.
-    before: (Section, Option<String>),
+    before: (Section, Option<String>, Option<String>),
     /// A screenshot command waiting for its frame: the command id, the
     /// width asked, and when it was asked (a capture that never arrives
     /// is answered `failed`, not left hanging).
@@ -205,7 +205,11 @@ impl eframe::App for StudioShell {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.answer_screenshot(ui);
         self.apply_commands(ui);
-        self.before = (self.shell.section, self.shell.selected.clone());
+        self.before = (
+            self.shell.section,
+            self.shell.selected.clone(),
+            self.shell.table.as_ref().map(|t| t.section.title.clone()),
+        );
         // One header, ours: the viewer's own top bar is hidden (startup
         // override above); its panel toggles ride on ours, and matter on
         // the Live view.
@@ -329,6 +333,7 @@ impl StudioShell {
                 project,
                 section,
                 artifact,
+                table,
             } => {
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
@@ -367,6 +372,12 @@ impl StudioShell {
                         "select",
                         serde_json::json!({"artifact": stamp, "by": "agent"}),
                     );
+                }
+                if let Some(title) = table {
+                    let wanted = (!title.trim().is_empty()).then_some(title.as_str());
+                    self.shell.open_table(wanted)?;
+                    self.control
+                        .event("table", serde_json::json!({"table": wanted, "by": "agent"}));
                 }
                 Ok(())
             }
@@ -601,7 +612,14 @@ impl StudioShell {
     /// After the page ran: what the human changed becomes an event, and
     /// the state file says what the window shows.
     fn report(&mut self, _ui: &mut egui::Ui) {
-        let (section_before, selected_before) = self.before.clone();
+        let (section_before, selected_before, table_before) = self.before.clone();
+        let table_now = self.shell.table.as_ref().map(|t| t.section.title.clone());
+        if table_now != table_before {
+            self.control.event(
+                "table",
+                serde_json::json!({"table": table_now, "by": "user"}),
+            );
+        }
         if self.shell.section != section_before {
             self.control.event(
                 "open",
@@ -641,6 +659,7 @@ impl StudioShell {
             project_name: self.shell.model.name(),
             section: self.shell.section.slug(),
             selected: self.shell.selected.clone(),
+            table: table_now,
             live,
             presenter_running: self.shell.presenter_running(),
             jobs_running: self.shell.model.running_jobs(),

@@ -36,6 +36,8 @@ pub struct Shell {
     /// What was last sent to the viewer (a version, or `a vs b`), taken
     /// by the frame loop to log the event.
     pub shown: Option<String>,
+    /// A table opened for exploration (the modal over the page).
+    pub table: Option<crate::detail::TableView>,
     repo_root: std::path::PathBuf,
 }
 
@@ -49,6 +51,7 @@ impl Shell {
             presenter: None,
             show_requested: false,
             shown: None,
+            table: None,
             repo_root,
         }
     }
@@ -295,12 +298,58 @@ impl Shell {
             Section::Live => {}
             section => {
                 let mut show: Option<String> = None;
-                pages::section(ui, &self.model, section, &mut self.selected, &mut show);
+                let mut explore = None;
+                pages::section(
+                    ui,
+                    &self.model,
+                    section,
+                    &mut self.selected,
+                    &mut show,
+                    &mut explore,
+                );
                 if let Some(stamp) = show {
                     self.show(&stamp);
                 }
+                if let Some(table) = explore {
+                    self.table = Some(crate::detail::TableView::new(table));
+                }
             }
         }
+        if let Some(view) = self.table.as_mut() {
+            if !crate::detail::table_modal(ui.ctx(), view) {
+                self.table = None;
+            }
+        }
+    }
+
+    /// Open one of the selected artifact's tables by title (the agent's
+    /// door); `None` closes whatever is open.
+    pub fn open_table(&mut self, title: Option<&str>) -> Result<(), String> {
+        let Some(title) = title else {
+            self.table = None;
+            return Ok(());
+        };
+        let stamp = self
+            .selected
+            .clone()
+            .ok_or_else(|| "no artifact is selected; open one first".to_owned())?;
+        let artifact = self
+            .model
+            .artifact(&stamp)
+            .ok_or_else(|| format!("{stamp} is not in the index"))?;
+        let detail = self
+            .model
+            .detail_path(artifact)
+            .and_then(|p| crate::detail::Detail::load(&p))
+            .ok_or_else(|| format!("{stamp} has no detail file"))?;
+        let wanted = title.trim().to_lowercase();
+        let section = detail
+            .sections
+            .into_iter()
+            .find(|s| s.kind == "table" && s.title.to_lowercase() == wanted)
+            .ok_or_else(|| format!("{stamp} has no table named {title:?}"))?;
+        self.table = Some(crate::detail::TableView::new(section));
+        Ok(())
     }
 }
 

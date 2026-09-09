@@ -446,11 +446,14 @@ def open_in_studio(
     section: str | None = None,
     artifact: str | None = None,
     project: str | None = None,
+    table: str | None = None,
 ) -> dict[str, Any]:
     """Navigate the Studio: a page by name (projects, overview, robots,
     environments, recordings, datasets, experiments, policies, evaluations,
     findings, deployments, monitoring, live), an artifact by version (its
-    page opens with the detail drawer), or another project by root path."""
+    page opens with the detail drawer), another project by root path, or
+    one of the selected artifact's tables by title (Joints, Actuators,
+    Episodes…) in the exploration modal — an empty string closes it."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import SECTIONS, command  # noqa: PLC0415
 
@@ -460,7 +463,12 @@ def open_in_studio(
             "reason": f"no page {section!r}; one of {', '.join(SECTIONS)}",
         }
     return command(
-        current_project(), "open", section=section, artifact=artifact, project=project
+        current_project(),
+        "open",
+        section=section,
+        artifact=artifact,
+        project=project,
+        table=table,
     )
 
 
@@ -687,7 +695,7 @@ def build_server() -> Any:  # noqa: PLR0915
     )
     server.tool(
         description="Navigate the Studio: a page by name, an artifact by version "
-        "(its drawer opens), or another project by root path."
+        "(its drawer opens), a table of it by title (the modal), or another project."
     )(open_in_studio)
     server.tool(
         description="Stream one artifact into the viewer as itself (3D robot, "
