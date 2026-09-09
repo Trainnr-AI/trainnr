@@ -12,6 +12,9 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 *2026-09-09: the agent drives the window in real time through files — commands in, state and events out; the contract and the nine MCP doors are in docs/76 §10.1.*
 
+
+*2026-09-09, measured (finding `studio-viewport-pipe-2026-09-09`): the viewport pipe delivers 32.6 fps on the kitting scene; the offscreen render is 26 ms/frame at any size, 17 ms of it shadows; shadows off gives 41 fps; on macOS the render is inline with physics, and a CGL context renders from a background thread at 12 ms, so the two fixes are known. The native window was not measured.*
+
 ## 0. What the Studio is
 
 One native desktop application, `crates/studio-shell`, about 1,200 lines
