@@ -327,9 +327,9 @@ The Studio (docs/35) is the human's live view and comes first. But the
 harness must be equally usable with no window at all, because a run on a
 rented machine or in continuous integration has none.
 
-- **Native**: the app, streamed into by every stage, and driven by the
-  agent in real time through the control surface below (§10.1, built
-  2026-09-09).
+- **Native**: the app, streamed into by every stage, driven by the
+  agent in real time through the control surface (§10.1), with the
+  simulator's own page (§10.2) — both built 2026-09-09.
 - **Headless**: every feed also writes a recording file beside its live
   stream, so a windowless run leaves something to open later, and a tool
   reads that file back. The parity requirement: a headless run reports
@@ -403,6 +403,63 @@ selection (which entity is highlighted) is neither reported nor
 settable; the presenter's layouts are fixed per kind and `compare` is
 the only composition an agent can ask for. Each is a verb away, and
 each waits for the loop stage that needs it.
+
+### 10.2 The Simulator page (2026-09-09)
+
+Prakhar's call after the research pass (docs/e2e-research/74): a
+**SIMULATION** group with one page, **Simulator**, absorbing Live view;
+and after the measurements (findings `studio-viewport-pipe` and
+`studio-viewport-two-process`), the engine stays the pipeline's own
+MuJoCo in a subprocess — now two: physics and render, on a
+shared-memory state ring.
+
+**The page.** The MuJoCo viewport on top, the Rerun viewer below it
+(every stream still lands there), and on the right the control panel
+built from `simulate`'s own sections, by their names: *Simulation*
+(Run / Pause, Step, Step 10, Reset, the keyframes, Speed, manual
+control), the clock (sim time, real-time factor, frames on screen and
+render time, shadows), the physics facts (timestep, integrator, solver
+and iterations, gravity, bodies and geoms), *Joint* (a slider per hinge
+or slide joint, in its range; free and ball joints have none —
+simulate's rule), *Control* (a slider per actuator in its control
+range, Clear all), *Visualization* and *Rendering* (MuJoCo's flag names
+as checkboxes: contactpoint, contactforce, joint, actuator, constraint,
+inertia, com, transparent, perturbforce, camera, light, tendon; shadow,
+reflection, skybox, fog, wireframe). Ctrl+drag on the picture still
+shoves a body (`mjvPerturb`).
+
+**The wire** (`tools/studio-render-stream.py`, `crates/studio-shell/src/viewport.rs`):
+the same tagged stdin the camera uses, nine new tags — RUN, STEP, RESET,
+SPEED, MANUAL, CTRL, QPOS, VIS, RND. RUN, STEP, RESET, SPEED, MANUAL,
+CTRL and QPOS cross into the physics process through the ring (a
+mailbox for commands, seqlocked arrays for the sliders); VIS and RND
+stay with the renderer. Back over stdout, beside the frame token, a
+status message every 100 ms: sim time, real-time factor, paused,
+manual, speed, qpos, ctrl, shadows, render time, the flags — and once,
+the model: joints with qpos addresses and ranges, actuators with control
+ranges, keyframes, the physics facts, the flag tables in MuJoCo's names.
+
+**Taking control.** A slider, or Step, hands the scene to the human:
+the physics process leaves the scene's own loop (the scripted policy,
+the parade) and runs simulate's loop — ctrl from the sliders, qpos edits
+with a forward pass, Run on or off, Step n while paused. Manual off, or
+Reset, returns the scene to its own motion from its start; Reset to a
+keyframe stays manual. Speed is a real-time factor the physics paces
+to (0.01–100), reported back as the factor achieved.
+
+**The agent's doors.** `simulate_in_studio(task)` starts or stops a
+scene; `control_simulator(run, step, reset, keyframe, speed, manual)`;
+`set_simulator_input(value, actuator= | joint=)`; `set_simulator_view(flag, on)`.
+Names are the model's own and a wrong one is refused naming the
+choices; nothing runs → refused with "simulate_in_studio first". The
+state file carries `simulator: {time, rtf, paused, manual, speed,
+render_ms}` beside `viewport_task` and `viewport_fps`.
+
+**Not built, and said so:** simulate's history scrubber (a state buffer
+to rewind through), Reload (re-read the model file), the Watch field,
+Align, the profiler and sensor overlays, and loading a scene that is
+not a registered task or the duck preview. Each is a tag away; each
+waits for the loop stage that needs it.
 
 ## 11. What this refuses to claim
 

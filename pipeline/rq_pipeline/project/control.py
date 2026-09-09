@@ -50,7 +50,17 @@ POLL_S = 0.02
 KEEP_COMMANDS = 200  # older command + ack files are pruned on send
 SETTLE_S = 0.15  # after navigating, before a capture: the page must draw
 
-VERBS = ("open", "show", "compare", "time", "panels", "simulate", "screenshot", "quit")
+VERBS = (
+    "open",
+    "show",
+    "compare",
+    "time",
+    "panels",
+    "simulate",
+    "simulator",
+    "screenshot",
+    "quit",
+)
 # The rail's page names as the Studio parses them (pages.rs `Section::parse`).
 SECTIONS = (
     "projects",

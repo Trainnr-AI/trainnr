@@ -18,6 +18,9 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 *2026-09-09, later: the stream is two processes (physics and render, a shared-memory state ring between them) because MuJoCo's Python render holds the GIL; kitting reaches 66 fps on screen at real-time factor 1.00 (finding `studio-viewport-two-process-2026-09-09`). The duck preview is four ducks: each microduck is 431,750 faces and this GL path draws ~7 ms per duck; MuJoCo's own viewer crawled on twenty too.*
 
+
+*2026-09-09, the Simulator page: Live view became the SIMULATION group's Simulator, with MuJoCo simulate's own sections as a control panel over the stream's status — run, step, reset, keyframes, speed, joint and control sliders, visualization and rendering flags; the agent drives the same through three doors (docs/76 §10.2).*
+
 ## 0. What the Studio is
 
 One native desktop application, `crates/studio-shell`, about 1,200 lines

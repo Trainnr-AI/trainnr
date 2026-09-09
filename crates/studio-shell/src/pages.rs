@@ -70,7 +70,7 @@ impl Section {
         ("TRAINING", &[Section::Experiments, Section::Policies]),
         ("EVALUATION", &[Section::Certificates, Section::Findings]),
         ("DEPLOYMENT", &[Section::Deployments, Section::Monitoring]),
-        ("", &[Section::Live]),
+        ("SIMULATION", &[Section::Live]),
     ];
 
     pub fn title(self) -> &'static str {
@@ -87,7 +87,7 @@ impl Section {
             Self::Deployments => "Deployments",
             Self::Monitoring => "Monitoring",
             Self::Findings => "Findings",
-            Self::Live => "Live view",
+            Self::Live => "Simulator",
         }
     }
 
@@ -97,10 +97,7 @@ impl Section {
     /// The page's name as the control surface spells it (lowercase title);
     /// `Section::parse` reads the same word back.
     pub fn slug(self) -> String {
-        match self {
-            Self::Live => "live".to_owned(),
-            other => other.title().to_lowercase().replace(' ', "-"),
-        }
+        self.title().to_lowercase().replace(' ', "-")
     }
 
     /// A page by its name, as an agent's `open` command spells it; the
@@ -109,6 +106,9 @@ impl Section {
         let wanted = name.trim().to_lowercase();
         if wanted == "certificates" {
             return Some(Self::Certificates);
+        }
+        if wanted == "live" || wanted == "live view" {
+            return Some(Self::Live); // the page's name until 2026-09-09
         }
         Self::RAIL
             .iter()
@@ -1031,6 +1031,8 @@ mod tests {
         assert_eq!(Section::parse(" Evaluations "), Some(Section::Certificates));
         assert_eq!(Section::parse("certificates"), Some(Section::Certificates));
         assert_eq!(Section::parse("live"), Some(Section::Live));
+        assert_eq!(Section::parse("simulator"), Some(Section::Live));
+        assert_eq!(Section::Live.slug(), "simulator");
         assert_eq!(Section::parse("dance"), None);
         assert_eq!(Section::for_kind("batch"), Some(Section::Datasets));
         assert_eq!(

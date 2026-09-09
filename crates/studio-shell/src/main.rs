@@ -27,6 +27,7 @@ mod detail;
 mod model;
 mod pages;
 mod shell;
+mod simulator;
 mod viewport;
 mod widgets;
 
@@ -51,8 +52,8 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 /// floor it can be dragged down to — a panel that can collapse to an
 /// invisible sliver looks like a missing feature, not a closed panel
 /// (seen live on the embed's first launch).
-const VIEWPORT_DEFAULT_HEIGHT: f32 = 420.0;
-const VIEWPORT_MIN_HEIGHT: f32 = 160.0;
+const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
+const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -248,8 +249,10 @@ impl eframe::App for StudioShell {
         self.seen_recording = has_recording;
 
         if self.shell.section == Section::Live {
-            // The MuJoCo sim viewport on top; the rest IS the Rerun
-            // viewer — blueprint panel, timeline, views, exactly as the
+            // The simulator's controls (simulate's own sections: Simulation,
+            // Physics, Joint, Control, Visualization, Rendering) on the
+            // right; the viewport on top of the rest; the Rerun viewer
+            // below it — blueprint panel, timeline, views, exactly as the
             // standalone app renders them. Two panel ids on purpose:
             // egui remembers a panel's size by id, and the idle strip
             // must not inherit a 420 px preview height.
@@ -267,6 +270,16 @@ impl eframe::App for StudioShell {
             })
             .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
             .show(ui, |ui| {
+                // The controls sit INSIDE the strip beside the picture
+                // (simulator.rs says why not at the window's edge).
+                if active {
+                    egui::Panel::right("simulator_controls")
+                        .resizable(false)
+                        .exact_size(simulator::PANEL_WIDTH)
+                        .show(ui, |ui| {
+                            simulator::controls(ui, &mut self.viewport);
+                        });
+                }
                 self.viewport.show(ui);
             });
             if has_recording {
@@ -545,6 +558,89 @@ impl StudioShell {
                 }
                 Ok(())
             }
+            Command::Simulator {
+                run,
+                step,
+                reset,
+                keyframe,
+                speed,
+                manual,
+                actuator,
+                joint,
+                value,
+                flag,
+                on,
+            } => {
+                if !self.viewport.is_active() {
+                    return Err("no scene runs in the simulator; simulate a task first".into());
+                }
+                let (_, model) = self.viewport.report();
+                if let Some(run) = run {
+                    self.viewport.send_run(run);
+                }
+                if let Some(n) = step {
+                    self.viewport.send_step(n.clamp(1, 100_000));
+                }
+                if let Some(name) = keyframe {
+                    let model = model.as_ref().ok_or("the model is not described yet")?;
+                    let key = model
+                        .keyframes
+                        .iter()
+                        .position(|k| *k == name)
+                        .ok_or_else(|| {
+                            format!("no keyframe {name:?}; one of {:?}", model.keyframes)
+                        })?;
+                    self.viewport.send_reset(Some(key as u32));
+                } else if reset == Some(true) {
+                    self.viewport.send_reset(None);
+                }
+                if let Some(factor) = speed {
+                    if !(0.01..=100.0).contains(&factor) {
+                        return Err("speed must be within 0.01..=100".into());
+                    }
+                    self.viewport.send_speed(factor);
+                }
+                if let Some(on) = manual {
+                    self.viewport.send_manual(on);
+                }
+                if actuator.is_some() || joint.is_some() {
+                    let value = value.ok_or("an actuator or joint needs a `value`")?;
+                    let model = model.as_ref().ok_or("the model is not described yet")?;
+                    if let Some(name) = actuator {
+                        let index = model
+                            .actuators
+                            .iter()
+                            .position(|a| a.name == name)
+                            .ok_or_else(|| format!("no actuator {name:?}"))?;
+                        self.viewport.send_ctrl(index as u32, value);
+                        self.viewport.stop_editing(1, index);
+                    }
+                    if let Some(name) = joint {
+                        let j = model
+                            .joints
+                            .iter()
+                            .find(|j| j.name == name)
+                            .ok_or_else(|| format!("no sliding joint {name:?} (free and ball joints have no scalar)"))?;
+                        self.viewport.send_qpos(j.qpos as u32, value);
+                        self.viewport.stop_editing(0, j.qpos);
+                    }
+                }
+                if let Some(name) = flag {
+                    let on = on.ok_or("a flag needs `on`")?;
+                    let model = model.as_ref().ok_or("the model is not described yet")?;
+                    if let Some(i) = model.vis_flags.iter().position(|f| *f == name) {
+                        self.viewport.send_vis(i as u32, on);
+                    } else if let Some(i) = model.rnd_flags.iter().position(|f| *f == name) {
+                        self.viewport.send_rnd(i as u32, on);
+                    } else {
+                        return Err(format!(
+                            "no flag {name:?}; visualization {:?}, rendering {:?}",
+                            model.vis_flags, model.rnd_flags
+                        ));
+                    }
+                }
+                Ok(())
+            }
             Command::Screenshot { .. } => {
                 unreachable!("screenshots are taken in apply_commands, after the page")
             }
@@ -684,6 +780,14 @@ impl StudioShell {
             jobs_running: self.shell.model.running_jobs(),
             viewport_task: self.viewport.task().map(str::to_owned),
             viewport_fps: self.viewport.fps(),
+            simulator: self.viewport.report().0.map(|s| control::SimulatorState {
+                time: s.time,
+                rtf: s.rtf,
+                paused: s.paused,
+                manual: s.manual,
+                speed: s.speed,
+                render_ms: s.render_ms,
+            }),
         };
         self.control.record_state(state);
     }

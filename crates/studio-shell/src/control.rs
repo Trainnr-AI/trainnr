@@ -87,6 +87,33 @@ pub enum Command {
         #[serde(default)]
         task: Option<String>,
     },
+    /// The simulate controls: run or pause, step, reset (to a keyframe
+    /// or the initial state), speed, manual, one actuator or joint
+    /// value, one visualization or rendering flag.
+    Simulator {
+        #[serde(default)]
+        run: Option<bool>,
+        #[serde(default)]
+        step: Option<u32>,
+        #[serde(default)]
+        reset: Option<bool>,
+        #[serde(default)]
+        keyframe: Option<String>,
+        #[serde(default)]
+        speed: Option<f32>,
+        #[serde(default)]
+        manual: Option<bool>,
+        #[serde(default)]
+        actuator: Option<String>,
+        #[serde(default)]
+        joint: Option<String>,
+        #[serde(default)]
+        value: Option<f32>,
+        #[serde(default)]
+        flag: Option<String>,
+        #[serde(default)]
+        on: Option<bool>,
+    },
     Screenshot {
         /// The written image's width in pixels; taller frames scale to it.
         #[serde(default)]
@@ -137,6 +164,18 @@ pub struct StudioState {
     /// drew to the screen in the last second (the on-screen rate).
     pub viewport_task: Option<String>,
     pub viewport_fps: Option<f32>,
+    /// The simulator's clock and mode, from the stream's status.
+    pub simulator: Option<SimulatorState>,
+}
+
+#[derive(Serialize, Clone, PartialEq, Debug)]
+pub struct SimulatorState {
+    pub time: f64,
+    pub rtf: f64,
+    pub paused: bool,
+    pub manual: bool,
+    pub speed: f64,
+    pub render_ms: f64,
 }
 
 pub struct Control {
@@ -469,6 +508,7 @@ mod tests {
             jobs_running: 0,
             viewport_task: None,
             viewport_fps: None,
+            simulator: None,
         };
         control.record_state(state.clone());
         let text = std::fs::read_to_string(root.join(STATE_RELATIVE)).unwrap();

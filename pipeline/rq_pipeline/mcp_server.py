@@ -558,6 +558,64 @@ def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
     return command(current_project(), "simulate", task=task)
 
 
+# One door, one simulate section: every knob of simulate's Simulation panel.
+def control_simulator(  # noqa: PLR0913, PLR0917
+    run: bool | None = None,
+    step: int | None = None,
+    reset: bool | None = None,
+    keyframe: str | None = None,
+    speed: float | None = None,
+    manual: bool | None = None,
+) -> dict[str, Any]:
+    """MuJoCo simulate's Simulation section on the running scene: `run`
+    (True runs, False pauses), `step` n physics steps (pauses and takes
+    manual control), `reset` to the initial state or to a `keyframe` by
+    name, `speed` as a real-time factor (0.01..100), `manual` (True: the
+    sliders drive the scene; False: its own motion, from its start).
+    Refused when no scene runs — simulate_in_studio first."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(
+        current_project(),
+        "simulator",
+        run=run,
+        step=step,
+        reset=reset,
+        keyframe=keyframe,
+        speed=speed,
+        manual=manual,
+    )
+
+
+def set_simulator_input(
+    value: float, actuator: str | None = None, joint: str | None = None
+) -> dict[str, Any]:
+    """One slider of simulate's Control or Joint panel: an actuator's
+    control value by name, or a hinge/slide joint's position by name
+    (free and ball joints have no scalar). Takes manual control of the
+    scene. Names come from the robot's Actuators and Joints tables."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    if (actuator is None) == (joint is None):
+        return {"status": "refused", "reason": "name exactly one of actuator, joint"}
+    return command(
+        current_project(), "simulator", actuator=actuator, joint=joint, value=value
+    )
+
+
+def set_simulator_view(flag: str, on: bool) -> dict[str, Any]:
+    """A MuJoCo visualization or rendering flag by its own name —
+    contactpoint, contactforce, joint, actuator, constraint, inertia, com,
+    transparent, perturbforce, camera, light, tendon… (mjtVisFlag) or
+    shadow, reflection, skybox, fog, wireframe… (mjtRndFlag)."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import command  # noqa: PLC0415
+
+    return command(current_project(), "simulator", flag=flag, on=on)
+
+
 def screenshot_studio(
     section: str | None = None, artifact: str | None = None, width: int = 1600
 ) -> dict[str, Any]:
@@ -728,6 +786,18 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Run a scene in the MuJoCo viewport (kitting, lift, duck, walk) "
         "and open the Live view; no task stops it. State reports viewport_fps."
     )(simulate_in_studio)
+    server.tool(
+        description="simulate's Simulation section on the running scene: run/pause, "
+        "step n, reset (to a keyframe), speed, manual control."
+    )(control_simulator)
+    server.tool(
+        description="One Control or Joint slider by name: an actuator's control value "
+        "or a joint's position; takes manual control."
+    )(set_simulator_input)
+    server.tool(
+        description="A MuJoCo visualization or rendering flag by its own name "
+        "(contactforce, joint, inertia, shadow, wireframe...)."
+    )(set_simulator_view)
     server.tool(
         description="See the window: a PNG of the whole Studio (optionally after "
         "opening a page or an artifact); read the returned path to look at it."

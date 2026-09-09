@@ -141,6 +141,99 @@ pub struct ViewportFeed {
     task: Option<String>,
     /// When each of the last frames was drawn, for the on-screen rate.
     drawn_at: std::collections::VecDeque<std::time::Instant>,
+    /// The rate as last shown to a panel, and when (see `fps_settled`).
+    fps_shown: std::cell::Cell<(Option<f32>, Option<std::time::Instant>)>,
+    /// The stream's status and model description (reader thread writes).
+    report: Arc<std::sync::Mutex<SimReport>>,
+    /// Slider values the human is editing, so a drag does not fight
+    /// the 100 ms status echo: keyed by qpos address / actuator index.
+    editing: std::collections::HashMap<(u8, usize), f64>,
+}
+
+/// One joint the Joint panel can slide (hinge or slide; free and ball
+/// joints have no scalar, simulate's own rule) — from the stream's
+/// `model` status.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SimJoint {
+    pub name: String,
+    pub qpos: usize,
+    pub range: [f64; 2],
+    pub limited: bool,
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SimActuator {
+    pub name: String,
+    pub range: [f64; 2],
+    pub limited: bool,
+}
+
+/// The model as the stream describes it once: what the panels need.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimModel {
+    #[serde(default)]
+    pub joints: Vec<SimJoint>,
+    #[serde(default)]
+    pub actuators: Vec<SimActuator>,
+    #[serde(default)]
+    pub keyframes: Vec<String>,
+    #[serde(default)]
+    pub timestep: f64,
+    #[serde(default)]
+    pub integrator: String,
+    #[serde(default)]
+    pub solver: String,
+    #[serde(default)]
+    pub iterations: u32,
+    #[serde(default)]
+    pub gravity: [f64; 3],
+    #[serde(default)]
+    pub nbody: u32,
+    #[serde(default)]
+    pub ngeom: u32,
+    /// MuJoCo's own flag names in index order (`mjtVisFlag`, `mjtRndFlag`).
+    #[serde(default)]
+    pub vis_flags: Vec<String>,
+    #[serde(default)]
+    pub rnd_flags: Vec<String>,
+}
+
+/// The clock and the inputs, every 100 ms (the stream's status message).
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimStatus {
+    #[serde(default)]
+    pub time: f64,
+    #[serde(default)]
+    pub rtf: f64,
+    #[serde(default)]
+    pub paused: bool,
+    #[serde(default)]
+    pub manual: bool,
+    #[serde(default)]
+    pub speed: f64,
+    #[serde(default)]
+    pub qpos: Vec<f64>,
+    #[serde(default)]
+    pub ctrl: Vec<f64>,
+    #[serde(default)]
+    pub shadows: bool,
+    #[serde(default)]
+    pub render_ms: f64,
+    #[serde(default)]
+    pub vis: std::collections::BTreeMap<String, bool>,
+    #[serde(default)]
+    pub rnd: std::collections::BTreeMap<String, bool>,
+    #[serde(default)]
+    pub model: Option<SimModel>,
+}
+
+/// What the reader thread learned from the stream's status messages.
+#[derive(Default)]
+pub struct SimReport {
+    pub status: Option<SimStatus>,
+    pub model: Option<SimModel>,
 }
 
 /// The scene previews the idle strip offers — pipeline-registry tasks
@@ -175,6 +268,9 @@ impl ViewportFeed {
             stream_ended: Arc::new(AtomicBool::new(false)),
             task: None,
             drawn_at: std::collections::VecDeque::new(),
+            fps_shown: std::cell::Cell::new((None, None)),
+            report: Arc::new(std::sync::Mutex::new(SimReport::default())),
+            editing: std::collections::HashMap::new(),
         }
     }
 
@@ -183,6 +279,19 @@ impl ViewportFeed {
     /// The preview task running, if any.
     pub fn task(&self) -> Option<&str> {
         self.task.as_deref()
+    }
+
+    /// The frame rate for a panel: refreshed once a second, so the
+    /// number does not change under the reader's eyes every frame.
+    pub fn fps_settled(&self) -> Option<f32> {
+        let now = std::time::Instant::now();
+        let (shown, at) = self.fps_shown.get();
+        if at.is_some_and(|t| now.duration_since(t) < std::time::Duration::from_secs(1)) {
+            return shown;
+        }
+        let fresh = self.fps().map(f32::round);
+        self.fps_shown.set((fresh, Some(now)));
+        fresh
     }
 
     /// Frames drawn to the screen in the last second, once any were.
@@ -285,10 +394,12 @@ impl ViewportFeed {
             (Ok(mut child), Ok(shm)) => {
                 let stdout = child.stdout.take().expect("piped stdout, always present");
                 let stdin = child.stdin.take().expect("piped stdin, always present");
+                let report = Arc::new(std::sync::Mutex::new(SimReport::default()));
                 spawn_token_reader(
                     stdout,
                     Arc::clone(&frames_published),
                     Arc::clone(&stream_ended),
+                    Arc::clone(&report),
                     ctx.clone(),
                 );
                 Self {
@@ -305,6 +416,9 @@ impl ViewportFeed {
                     stream_ended,
                     task: Some(task_name.to_owned()),
                     drawn_at: std::collections::VecDeque::new(),
+                    fps_shown: std::cell::Cell::new((None, None)),
+                    report,
+                    editing: std::collections::HashMap::new(),
                 }
             }
             (Ok(mut child), Err(err)) => {
@@ -505,6 +619,73 @@ impl ViewportFeed {
         }
     }
 
+    /// The stream's latest status and model, for the panel and the state file.
+    pub fn report(&self) -> (Option<SimStatus>, Option<SimModel>) {
+        self.report
+            .lock()
+            .map(|r| (r.status.clone(), r.model.clone()))
+            .unwrap_or((None, None))
+    }
+
+    pub fn send_run(&mut self, run: bool) {
+        self.send_message(&[TAG_RUN, u8::from(run)]);
+    }
+
+    pub fn send_step(&mut self, steps: u32) {
+        self.send_message(&encode_u32(TAG_STEP, steps));
+    }
+
+    /// Reset to a keyframe, or to the model's initial state with `None`.
+    pub fn send_reset(&mut self, keyframe: Option<u32>) {
+        let key = keyframe.map_or(-1i32, |k| k as i32);
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_RESET;
+        bytes[1..5].copy_from_slice(&key.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
+    pub fn send_speed(&mut self, factor: f32) {
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_SPEED;
+        bytes[1..5].copy_from_slice(&factor.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
+    pub fn send_manual(&mut self, on: bool) {
+        self.send_message(&[TAG_MANUAL, u8::from(on)]);
+    }
+
+    pub fn send_ctrl(&mut self, actuator: u32, value: f32) {
+        self.editing
+            .insert((1, actuator as usize), f64::from(value));
+        self.send_message(&encode_index_value(TAG_CTRL, actuator, value));
+    }
+
+    pub fn send_qpos(&mut self, qpos_address: u32, value: f32) {
+        self.editing
+            .insert((0, qpos_address as usize), f64::from(value));
+        self.send_message(&encode_index_value(TAG_QPOS, qpos_address, value));
+    }
+
+    pub fn send_vis(&mut self, flag: u32, on: bool) {
+        self.send_message(&encode_flag(TAG_VIS, flag, on));
+    }
+
+    pub fn send_rnd(&mut self, flag: u32, on: bool) {
+        self.send_message(&encode_flag(TAG_RND, flag, on));
+    }
+
+    /// The value a slider shows: what the human is dragging, else the
+    /// stream's echo. Kind 0 = a joint (qpos address), 1 = an actuator.
+    pub fn slider_value(&self, kind: u8, index: usize, echoed: f64) -> f64 {
+        self.editing.get(&(kind, index)).copied().unwrap_or(echoed)
+    }
+
+    /// The drag ended: the stream's echo is the truth again.
+    pub fn stop_editing(&mut self, kind: u8, index: usize) {
+        self.editing.remove(&(kind, index));
+    }
+
     fn send_update(&mut self, d_azimuth: f32, d_elevation: f32, d_distance: f32) {
         let message = encode_camera_update(d_azimuth, d_elevation, d_distance, self.sent_size);
         self.send_message(&message);
@@ -553,13 +734,38 @@ fn spawn_token_reader(
     mut stdout: ChildStdout,
     frames_published: Arc<AtomicU64>,
     stream_ended: Arc<AtomicBool>,
+    report: Arc<std::sync::Mutex<SimReport>>,
     ctx: egui::Context,
 ) {
     thread::spawn(move || {
         let mut token = [0u8; 1];
         while stdout.read_exact(&mut token).is_ok() {
-            frames_published.fetch_add(1, Ordering::Relaxed);
-            ctx.request_repaint();
+            match token[0] {
+                FRAME_TOKEN => {
+                    frames_published.fetch_add(1, Ordering::Relaxed);
+                    ctx.request_repaint();
+                }
+                STATUS_TOKEN => {
+                    // u32 LE length, then JSON (the stream's `SimControl.status`).
+                    let mut len = [0u8; 4];
+                    if stdout.read_exact(&mut len).is_err() {
+                        break;
+                    }
+                    let mut body = vec![0u8; u32::from_le_bytes(len) as usize];
+                    if stdout.read_exact(&mut body).is_err() {
+                        break;
+                    }
+                    if let Ok(mut status) = serde_json::from_slice::<SimStatus>(&body) {
+                        if let Ok(mut slot) = report.lock() {
+                            if let Some(model) = status.model.take() {
+                                slot.model = Some(model);
+                            }
+                            slot.status = Some(status);
+                        }
+                    }
+                }
+                _ => {} // a token this build does not know: skip it
+            }
         }
         // Loud, not quiet: a dead stream shows as an error in the panel
         // rather than a frame silently frozen mid-motion.
@@ -609,6 +815,21 @@ const TAG_CAMERA: u8 = 1;
 const TAG_SELECT: u8 = 2;
 const TAG_DRAG: u8 = 3;
 const TAG_RELEASE: u8 = 4;
+// The simulate controls (studio-render-stream.py `TAG_RUN` …): run,
+// step, reset, speed, manual, an actuator value, a joint value, a
+// visualization flag, a rendering flag.
+const TAG_RUN: u8 = 6;
+const TAG_STEP: u8 = 7;
+const TAG_RESET: u8 = 8;
+const TAG_SPEED: u8 = 9;
+const TAG_MANUAL: u8 = 10;
+const TAG_CTRL: u8 = 11;
+const TAG_QPOS: u8 = 12;
+const TAG_VIS: u8 = 13;
+const TAG_RND: u8 = 14;
+/// The stdout tokens: a frame published, a status message follows.
+const FRAME_TOKEN: u8 = 0xF7;
+const STATUS_TOKEN: u8 = 0xF8;
 
 /// One camera+size update: tag then Python's `struct.unpack("<fffII", …)`
 /// exactly — three little-endian f32 deltas, two little-endian u32
@@ -651,9 +872,63 @@ fn encode_perturb_drag(dx: f32, dy: f32) -> [u8; 9] {
     bytes
 }
 
+fn encode_u32(tag: u8, value: u32) -> [u8; 5] {
+    let mut bytes = [0u8; 5];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&value.to_le_bytes());
+    bytes
+}
+
+/// `struct.pack("<If", index, value)` after the tag.
+fn encode_index_value(tag: u8, index: u32, value: f32) -> [u8; 9] {
+    let mut bytes = [0u8; 9];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&index.to_le_bytes());
+    bytes[5..9].copy_from_slice(&value.to_le_bytes());
+    bytes
+}
+
+/// `struct.pack("<IB", flag, on)` after the tag.
+fn encode_flag(tag: u8, flag: u32, on: bool) -> [u8; 6] {
+    let mut bytes = [0u8; 6];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&flag.to_le_bytes());
+    bytes[5] = u8::from(on);
+    bytes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_simulate_controls_match_pythons_struct_formats() {
+        // struct.pack("<If", 3, 0.5) and struct.pack("<IB", 14, 1), tag first.
+        assert_eq!(
+            encode_index_value(TAG_CTRL, 3, 0.5),
+            [11, 3, 0, 0, 0, 0, 0, 0, 0x3F]
+        );
+        assert_eq!(encode_flag(TAG_VIS, 14, true), [13, 14, 0, 0, 0, 1]);
+        assert_eq!(encode_u32(TAG_STEP, 10), [7, 10, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_status_message_parses_with_its_model_once() {
+        let text = r#"{"time":1.5,"rtf":0.99,"paused":false,"manual":true,"speed":1.0,
+            "qpos":[0.1],"ctrl":[0.2],"shadows":false,"render_ms":10.4,"vis":{"14":true},"rnd":{},
+            "model":{"joints":[{"name":"hip","qpos":7,"range":[-1.0,1.0],"limited":true,"type":"hinge"}],
+            "actuators":[{"name":"hip","range":[-1.0,1.0],"limited":true}],"keyframes":["home"],
+            "timestep":0.002,"integrator":"EULER","solver":"NEWTON","iterations":100,
+            "gravity":[0.0,0.0,-9.81],"nbody":2,"ngeom":3,"vis_flags":["convexhull"],"rnd_flags":["shadow"]}}"#;
+        let status: SimStatus = serde_json::from_str(text).expect("parses");
+        assert!(status.manual);
+        let model = status.model.expect("model once");
+        assert_eq!(model.joints[0].qpos, 7);
+        assert_eq!(model.keyframes, vec!["home"]);
+        assert_eq!(model.integrator, "EULER");
+        let bare: SimStatus = serde_json::from_str(r#"{"time":2.0}"#).expect("parses");
+        assert!(bare.model.is_none());
+    }
 
     #[test]
     fn the_wire_matches_pythons_struct_format() {

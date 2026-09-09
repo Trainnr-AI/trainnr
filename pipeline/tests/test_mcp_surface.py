@@ -285,10 +285,13 @@ class StudioDoors(unittest.TestCase):
 
         from rq_pipeline.mcp_server import (  # noqa: PLC0415
             compare_in_studio,
+            control_simulator,
             describe_studio,
             open_in_studio,
             read_studio_events,
             screenshot_studio,
+            set_simulator_input,
+            set_simulator_view,
             set_studio_panels,
             set_studio_time,
             show_in_studio,
@@ -309,6 +312,9 @@ class StudioDoors(unittest.TestCase):
                     set_studio_panels(blueprint="expand"),
                     screenshot_studio(),
                     simulate_in_studio("kitting"),
+                    control_simulator(run=False),
+                    set_simulator_input(0.5, actuator="left/waist"),
+                    set_simulator_view("contactforce", True),
                 ):
                     self.assertEqual(answer["status"], "refused")
                     self.assertIn("launch_studio", answer["reason"])

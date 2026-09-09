@@ -184,8 +184,10 @@ SHADOWS_MODE = "auto"
 # The lane reports itself on stderr this often: frames, render and ship
 # times — the same facts MuJoCo's simulate shows in its Info overlay.
 LANE_STATS_EVERY_S = 5.0
+RTF_WINDOW_S = 1.0  # the real-time factor the status reports, over this window
 # The last slice of each physics tick is spun, not slept, for accuracy.
 PACE_SPIN_S = 0.0015
+SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
 
 
 class PhysicsNarrator:
@@ -519,17 +521,39 @@ class Perturber:
 
 # The stdin protocol's tags, one home (mirrored by viewport.rs).
 TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
+# The simulate controls (2026-09-09, docs/76 §10.2): what MuJoCo's own
+# window offers in its Simulation, Joint, Control, Visualization and
+# Rendering sections, one tag each. RUN/STEP/RESET/SPEED/MANUAL/CTRL/QPOS
+# reach the physics process through the ring; VIS/RND stay on the render
+# side.
+TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
+TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND = 11, 12, 13, 14
 TAG_PAYLOAD_BYTES = {
     TAG_CAMERA: 20,
     TAG_SELECT: 8,
     TAG_DRAG: 8,
     TAG_RELEASE: 0,
     TAG_PAUSE: 0,
+    TAG_RUN: 1,  # u8: 1 run, 0 pause
+    TAG_STEP: 4,  # u32 steps (pauses first; takes manual control)
+    TAG_RESET: 4,  # i32 keyframe, -1 for the model's initial state
+    TAG_SPEED: 4,  # f32 real-time factor asked for
+    TAG_MANUAL: 1,  # u8: 1 the sliders drive the scene, 0 its own motion again
+    TAG_CTRL: 8,  # u32 actuator, f32 value (manual)
+    TAG_QPOS: 8,  # u32 qpos address, f32 value (manual)
+    TAG_VIS: 5,  # u32 mjtVisFlag, u8 on
+    TAG_RND: 5,  # u32 mjtRndFlag, u8 on
 }
+STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
+STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
 
 
 def _read_control_messages(
-    camera: OrbitCamera, perturber, poke, exit_on_eof: bool = False
+    camera: OrbitCamera,
+    perturber,
+    poke,
+    exit_on_eof: bool = False,
+    sim: "SimControl | None" = None,
 ) -> None:
     """The tagged stdin protocol (module docstring): camera deltas,
     perturbation gestures, pause. `poke` wakes the render lane so a
@@ -564,6 +588,10 @@ def _read_control_messages(
             perturber.queue_release()
         elif tag == TAG_PAUSE:
             perturber.toggle_pause()
+            if sim is not None:
+                sim.handle(TAG_RUN, bytes([int(sim.paused)]))  # toggles Run
+        elif sim is not None:
+            sim.handle(tag, payload)
         poke()
 
 
@@ -585,6 +613,15 @@ class FrameSink:
     @property
     def shared(self) -> bool:
         return self._mm is not None
+
+    def status(self, payload: bytes) -> None:
+        """A JSON status to the controller (only on the token wire: the
+        raw-frame fallback has no room for a second message kind)."""
+        if not self.shared:
+            return
+        out = sys.stdout.buffer
+        out.write(STATUS_TOKEN + struct.pack("<I", len(payload)) + payload)
+        out.flush()
 
     def ship(self, frame: "np.ndarray", width: int, height: int) -> None:
         out = sys.stdout.buffer
@@ -609,6 +646,9 @@ STATE_MAGIC = 0x5354_4154  # "STAT": the physics -> render state ring
 # perturbation seqlock, active, body, paused.
 STATE_HEADER = 32
 PERTURB_FLOATS = 6  # one wrench: force xyz, torque xyz
+STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, spare
+MAILBOX_BYTES = 24  # cseq u32, cmd u32, arg i32, pad u32, arg f64
+MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual")
 
 
 class StateRing:
@@ -627,11 +667,16 @@ class StateRing:
     def __init__(self, path: str, model: "mujoco.MjModel", *, create: bool) -> None:
         import mmap  # noqa: PLC0415
 
-        self.nq, self.nmocap = int(model.nq), int(model.nmocap)
-        floats = 1 + self.nq + 7 * self.nmocap  # time, qpos, mocap pos + quat
+        self.nq, self.nmocap, self.nu = int(model.nq), int(model.nmocap), int(model.nu)
+        # State: time, rtf, manual flag, spare; then qpos; then mocap pos + quat.
+        floats = STATE_STATS + self.nq + 7 * self.nmocap + self.nu
         self._state_off = STATE_HEADER
         self._pert_off = self._state_off + 8 * floats
-        size = self._pert_off + 8 * PERTURB_FLOATS
+        # The mailbox (render -> physics): cseq u32, cmd u32, arg i32, pad, arg f64.
+        self._mail_off = self._pert_off + 8 * PERTURB_FLOATS
+        # The manual arrays (render -> physics): mseq u32, pad; ctrl[nu]; qpos[nq].
+        self._manual_off = self._mail_off + MAILBOX_BYTES
+        size = self._manual_off + 8 + 8 * (self.nu + self.nq)
         if create:
             with open(path, "wb") as f:
                 f.write(b"\0" * size)
@@ -648,19 +693,32 @@ class StateRing:
                 )
         self._seq = 0
         self._pseq = 0
+        self._cseq = 0
+        self._mseq = 0
         self._buf = np.zeros(floats)
+        self._manual_ctrl = np.zeros(self.nu)
+        self._manual_qpos = np.zeros(self.nq)
+        self._seen_cseq = 0
+        self._seen_mseq = 0
 
     # -- physics side --------------------------------------------------------
-    def publish(self, data: "mujoco.MjData") -> None:
+    def publish(
+        self, data: "mujoco.MjData", rtf: float = 0.0, manual: bool = False
+    ) -> None:
         self._seq += 1
         struct.pack_into("<I", self._mm, 4, self._seq * 2 - 1)  # odd: writing
         buf = self._buf
         buf[0] = data.time
-        buf[1 : 1 + self.nq] = data.qpos
+        buf[1] = rtf
+        buf[2] = 1.0 if manual else 0.0
+        k0 = STATE_STATS
+        buf[k0 : k0 + self.nq] = data.qpos
         if self.nmocap:
-            k = 1 + self.nq
+            k = k0 + self.nq
             buf[k : k + 3 * self.nmocap] = data.mocap_pos.ravel()
-            buf[k + 3 * self.nmocap :] = data.mocap_quat.ravel()
+            buf[k + 3 * self.nmocap : k + 7 * self.nmocap] = data.mocap_quat.ravel()
+        if self.nu:
+            buf[k0 + self.nq + 7 * self.nmocap :] = data.ctrl
         self._mm[self._state_off : self._state_off + 8 * len(buf)] = buf.tobytes()
         struct.pack_into("<I", self._mm, 4, self._seq * 2)  # even: stable
 
@@ -680,6 +738,31 @@ class StateRing:
     def paused(self) -> bool:
         return bool(struct.unpack_from("<I", self._mm, 28)[0])
 
+    def take_command(self) -> "tuple[str, int, float] | None":
+        """The newest mailbox command not yet taken: (name, int arg, float arg)."""
+        cseq, cmd, arg_i, _pad, arg_f = struct.unpack_from(
+            "<IIiId", self._mm, self._mail_off
+        )
+        if cseq == self._seen_cseq or cseq % 2:
+            return None
+        self._seen_cseq = cseq
+        return (MAILBOX_COMMANDS[cmd], arg_i, arg_f)
+
+    def manual_inputs(self) -> "tuple[np.ndarray, np.ndarray] | None":
+        """The sliders' ctrl and qpos, when they moved since last read."""
+        mseq = struct.unpack_from("<I", self._mm, self._manual_off)[0]
+        if mseq == self._seen_mseq or mseq % 2:
+            return None
+        off = self._manual_off + 8
+        ctrl = np.frombuffer(self._mm, dtype="<f8", count=self.nu, offset=off).copy()
+        qpos = np.frombuffer(
+            self._mm, dtype="<f8", count=self.nq, offset=off + 8 * self.nu
+        ).copy()
+        if struct.unpack_from("<I", self._mm, self._manual_off)[0] != mseq:
+            return None
+        self._seen_mseq = mseq
+        return ctrl, qpos
+
     # -- render side ---------------------------------------------------------
     def read_into(self, local: "mujoco.MjData") -> bool:
         """The newest stable state into `local`; False when none yet."""
@@ -693,31 +776,100 @@ class StateRing:
             if struct.unpack_from("<I", self._mm, 4)[0] != seq:
                 continue
             local.time = buf[0]
-            local.qpos[:] = buf[1 : 1 + self.nq]
+            self.rtf, self.manual = float(buf[1]), bool(buf[2])
+            k0 = STATE_STATS
+            local.qpos[:] = buf[k0 : k0 + self.nq]
             if self.nmocap:
-                k = 1 + self.nq
+                k = k0 + self.nq
                 local.mocap_pos[:] = buf[k : k + 3 * self.nmocap].reshape(-1, 3)
-                local.mocap_quat[:] = buf[k + 3 * self.nmocap :].reshape(-1, 4)
+                local.mocap_quat[:] = buf[
+                    k + 3 * self.nmocap : k + 7 * self.nmocap
+                ].reshape(-1, 4)
+            if self.nu:
+                local.ctrl[:] = buf[k0 + self.nq + 7 * self.nmocap :]
             return True
         return False
 
-    def write_perturbation(
-        self, wrench: "tuple[int, np.ndarray] | None", paused: bool
+    rtf = 0.0
+    manual = False
+
+    def set_paused(self, paused: bool) -> None:
+        struct.pack_into("<I", self._mm, 28, int(paused))
+
+    def post_command(self, name: str, arg_i: int = 0, arg_f: float = 0.0) -> None:
+        """One command into the mailbox; the newest wins if two race."""
+        self._cseq += 2
+        struct.pack_into("<I", self._mm, self._mail_off, self._cseq - 1)
+        struct.pack_into(
+            "<IiId",
+            self._mm,
+            self._mail_off + 4,
+            MAILBOX_COMMANDS.index(name),
+            arg_i,
+            0,
+            arg_f,
+        )
+        struct.pack_into("<I", self._mm, self._mail_off, self._cseq)
+
+    def set_manual_input(
+        self, ctrl_index: int | None, qpos_index: int | None, value: float
     ) -> None:
+        """One slider moved: rewrite the manual arrays under their seqlock."""
+        if ctrl_index is not None and 0 <= ctrl_index < self.nu:
+            self._manual_ctrl[ctrl_index] = value
+        if qpos_index is not None and 0 <= qpos_index < self.nq:
+            self._manual_qpos[qpos_index] = value
+        self._mseq += 2
+        struct.pack_into("<I", self._mm, self._manual_off, self._mseq - 1)
+        off = self._manual_off + 8
+        self._mm[off : off + 8 * self.nu] = self._manual_ctrl.tobytes()
+        self._mm[off + 8 * self.nu : off + 8 * (self.nu + self.nq)] = (
+            self._manual_qpos.tobytes()
+        )
+        struct.pack_into("<I", self._mm, self._manual_off, self._mseq)
+
+    def seed_manual(self, ctrl: "np.ndarray", qpos: "np.ndarray") -> None:
+        """Start the manual arrays from the live state, so taking control
+        does not snap the scene to zero."""
+        self._manual_ctrl[:] = ctrl
+        self._manual_qpos[:] = qpos
+
+    def write_perturbation(self, wrench: "tuple[int, np.ndarray] | None") -> None:
+        """The wrench only: the pause word at offset 28 belongs to
+        `set_paused` (writing it here every frame erased a pause, 2026-09-09)."""
         self._pseq += 1
         struct.pack_into("<I", self._mm, 16, self._pseq * 2 - 1)
         body, force = wrench if wrench is not None else (0, np.zeros(PERTURB_FLOATS))
-        struct.pack_into(
-            "<III", self._mm, 20, int(wrench is not None), body, int(paused)
-        )
+        struct.pack_into("<II", self._mm, 20, int(wrench is not None), body)
         self._mm[self._pert_off : self._pert_off + 8 * PERTURB_FLOATS] = force.tobytes()
         struct.pack_into("<I", self._mm, 16, self._pseq * 2)
 
 
+class TakeOver(Exception):  # noqa: N818 - a hand-over, not an error
+    """Raised out of a scene loop when the human takes the controls (a
+    slider, a step): the physics process continues in the manual loop
+    from the state the loop had reached."""
+
+    def __init__(self, data: "mujoco.MjData", steps: int = 0) -> None:
+        super().__init__("manual control")
+        self.data = data
+        self.steps = steps
+
+
+class ResetScene(Exception):  # noqa: N818 - a hand-over, not an error
+    """Raised out of any loop on Reset: the scene restarts from its
+    initial state (or a keyframe), under its own motion again."""
+
+    def __init__(self, keyframe: int = -1) -> None:
+        super().__init__("reset")
+        self.keyframe = keyframe
+
+
 class PhysicsPump:
     """What one observed physics step does in the PHYSICS process: apply
-    the render side's perturbation, narrate, publish the state, pace to
-    real time. Same `tick` the scene loops call; no pixels here."""
+    the render side's perturbation, take the mailbox's command, narrate,
+    publish the state, pace to real time (times the asked speed). Same
+    `tick` the scene loops call; no pixels here."""
 
     def __init__(self, model: "mujoco.MjModel", narrator, ring: StateRing) -> None:
         self.model = model
@@ -735,12 +887,47 @@ class PhysicsPump:
         # 25 ms, RTF 0.79, for a policy that alone runs 22x real time).
         self._deadline: float | None = None
         self._narrate_every = 1.0 / MIRROR_HZ
+        self._rtf_since = time.monotonic()
+        self._rtf_sim = 0.0
+        self.speed = 1.0  # the real-time factor asked for (simulate's Speed)
+        self.rtf = 0.0  # the one achieved, over the last statistics window
+        self.manual = False
 
-    def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
+    def take_mail(self, data: "mujoco.MjData") -> None:
+        """The mailbox: speed applies here; step, reset and manual hand
+        the loop over (exceptions, because the scene loops own their
+        stepping and cannot be told from inside a callback)."""
+        command = self.ring.take_command()
+        if command is None:
+            return
+        name, arg_i, arg_f = command
+        if name == "speed":
+            self.speed = max(SPEED_MIN, min(SPEED_MAX, arg_f))
+            self._deadline = None
+        elif name == "reset":
+            raise ResetScene(arg_i)
+        elif name == "step":
+            raise TakeOver(data, steps=max(1, arg_i))
+        elif name == "manual":
+            if arg_i and not self.manual:
+                raise TakeOver(data)
+            if not arg_i and self.manual:
+                raise ResetScene(-1)
+
+    def tick(
+        self, data: "mujoco.MjData", pace_seconds: float, hold_when_paused: bool = True
+    ) -> None:
+        """`hold_when_paused=False` is the manual loop stepping through a
+        pause on purpose (Step n): observe and publish, do not hold."""
         self.last_sim_time = data.time
         now = time.monotonic()
         self._stats_ticks += 1
         self._stats_sim += pace_seconds
+        self.take_mail(data)
+        self._rtf_sim += pace_seconds
+        if now - self._rtf_since >= RTF_WINDOW_S:
+            self.rtf = self._rtf_sim / (now - self._rtf_since)
+            self._rtf_since, self._rtf_sim = now, 0.0
         if now - self._stats_since >= LANE_STATS_EVERY_S:
             wall = now - self._stats_since
             # The real-time factor, the number Gazebo's World Stats and
@@ -772,14 +959,15 @@ class PhysicsPump:
             # without, measured 2026-09-09).
             took = time.monotonic() - now
             self._narrate_every = max(1.0 / MIRROR_HZ, took / NARRATE_SHARE)
-        self.ring.publish(data)
-        self._pace(pace_seconds)
-        # Paused (the viewer's space bar): hold here, still publishing so
-        # a drag on a paused scene still shows its connector.
-        if self.ring.paused():
+        self.ring.publish(data, self.rtf, self.manual)
+        self._pace(pace_seconds / self.speed)
+        # Paused (Run off): hold here, still publishing so a drag on a
+        # paused scene shows its connector; a step or reset gets out.
+        if hold_when_paused and self.ring.paused():
             while self.ring.paused():
                 time.sleep(0.02)
-                self.ring.publish(data)
+                self.take_mail(data)
+                self.ring.publish(data, 0.0, self.manual)
             self._deadline = None  # resume from now, not from before the pause
 
     def _pace(self, pace_seconds: float) -> None:
@@ -800,25 +988,207 @@ class PhysicsPump:
             pass
 
 
+class SimControl:
+    """The render process's half of the simulate controls: the stdin
+    tags land here (reader thread); the lane applies the visualization
+    toggles and forwards the rest through the ring; every STATUS_EVERY_S
+    it reports the clock, the inputs and, once, the model."""
+
+    def __init__(self, model: "mujoco.MjModel", ring: StateRing) -> None:
+        self.model = model
+        self.ring = ring
+        self._lock = threading.Lock()
+        self._vis: dict[int, bool] = {}
+        self._rnd: dict[int, bool] = {}
+        self.paused = False
+        self.manual = False
+        self.speed = 1.0
+        self._model_sent = False
+        self._last_status = 0.0
+
+    # -- reader thread ----------------------------------------------------
+    def handle(self, tag: int, payload: bytes) -> None:
+        if tag == TAG_RUN:
+            self.paused = not bool(payload[0])
+            self.ring.set_paused(self.paused)
+        elif tag == TAG_STEP:
+            (n,) = struct.unpack("<I", payload)
+            self.paused = True
+            self.manual = True
+            self.ring.set_paused(True)
+            self.ring.post_command("step", n)
+        elif tag == TAG_RESET:
+            (key,) = struct.unpack("<i", payload)
+            self.ring.post_command("reset", key)
+        elif tag == TAG_SPEED:
+            (factor,) = struct.unpack("<f", payload)
+            self.speed = max(SPEED_MIN, min(SPEED_MAX, factor))
+            self.ring.post_command("speed", 0, self.speed)
+        elif tag == TAG_MANUAL:
+            self.manual = bool(payload[0])
+            self.ring.post_command("manual", int(self.manual))
+        elif tag == TAG_CTRL:
+            index, value = struct.unpack("<If", payload)
+            self._take_control()
+            self.ring.set_manual_input(index, None, value)
+        elif tag == TAG_QPOS:
+            index, value = struct.unpack("<If", payload)
+            self._take_control()
+            self.ring.set_manual_input(None, index, value)
+        elif tag == TAG_VIS:
+            flag, on = struct.unpack("<IB", payload)
+            with self._lock:
+                self._vis[flag] = bool(on)
+        elif tag == TAG_RND:
+            flag, on = struct.unpack("<IB", payload)
+            with self._lock:
+                self._rnd[flag] = bool(on)
+
+    def _take_control(self) -> None:
+        """A slider moved: the human drives the scene from here on."""
+        if not self.manual:
+            self.manual = True
+            self.ring.post_command("manual", 1)
+
+    # -- render lane ------------------------------------------------------
+    def apply_flags(self, vopt: "mujoco.MjvOption", scene: "mujoco.MjvScene") -> None:
+        with self._lock:
+            vis, rnd = dict(self._vis), dict(self._rnd)
+        for flag, on in vis.items():
+            if 0 <= flag < len(vopt.flags):
+                vopt.flags[flag] = on
+        for flag, on in rnd.items():
+            if 0 <= flag < len(scene.flags):
+                scene.flags[flag] = on
+
+    def status(self, local: "mujoco.MjData", lane: dict, state: dict) -> bytes | None:
+        """The JSON status, or None until STATUS_EVERY_S has passed."""
+        import json  # noqa: PLC0415
+
+        now = time.monotonic()
+        if now - self._last_status < STATUS_EVERY_S:
+            return None
+        self._last_status = now
+        with self._lock:
+            vis = {str(k): v for k, v in self._vis.items()}
+            rnd = {str(k): v for k, v in self._rnd.items()}
+        body: dict = {
+            "time": float(local.time),
+            "rtf": float(self.ring.rtf),
+            "paused": self.paused,
+            "manual": bool(self.ring.manual),
+            "speed": self.speed,
+            "qpos": [float(v) for v in local.qpos],
+            "ctrl": [float(v) for v in local.ctrl],
+            "shadows": bool(state.get("shadows", True)),
+            "render_ms": float(lane.get("last_render_ms", 0.0)),
+            "vis": vis,
+            "rnd": rnd,
+        }
+        if not self._model_sent:
+            self._model_sent = True
+            body["model"] = self.describe_model()
+        return json.dumps(body).encode()
+
+    def describe_model(self) -> dict:
+        """What the panels need once: joints with their qpos addresses
+        and ranges, actuators with their control ranges, keyframes, the
+        physics facts, and the flag tables in MuJoCo's own names."""
+        m = self.model
+        joints = []
+        for j in range(m.njnt):
+            jtype = int(m.jnt_type[j])
+            if jtype not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+                continue  # free and ball joints have no scalar slider (simulate's rule)
+            joints.append(
+                {
+                    "name": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j)
+                    or f"joint{j}",
+                    "qpos": int(m.jnt_qposadr[j]),
+                    "range": [float(m.jnt_range[j][0]), float(m.jnt_range[j][1])],
+                    "limited": bool(m.jnt_limited[j]),
+                    "type": "hinge"
+                    if jtype == mujoco.mjtJoint.mjJNT_HINGE
+                    else "slide",
+                }
+            )
+        actuators = [
+            {
+                "name": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
+                or f"actuator{a}",
+                "range": [
+                    float(m.actuator_ctrlrange[a][0]),
+                    float(m.actuator_ctrlrange[a][1]),
+                ],
+                "limited": bool(m.actuator_ctrllimited[a]),
+            }
+            for a in range(m.nu)
+        ]
+        keyframes = [
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_KEY, k) or f"key{k}"
+            for k in range(m.nkey)
+        ]
+        vis_names = [
+            name.removeprefix("mjVIS_").lower()
+            for name, _ in sorted(
+                (
+                    (n, int(v))
+                    for n, v in mujoco.mjtVisFlag.__members__.items()
+                    if n != "mjNVISFLAG"
+                ),
+                key=lambda kv: kv[1],
+            )
+        ]
+        rnd_names = [
+            name.removeprefix("mjRND_").lower()
+            for name, _ in sorted(
+                (
+                    (n, int(v))
+                    for n, v in mujoco.mjtRndFlag.__members__.items()
+                    if n != "mjNRNDFLAG"
+                ),
+                key=lambda kv: kv[1],
+            )
+        ]
+        return {
+            "joints": joints,
+            "actuators": actuators,
+            "keyframes": keyframes,
+            "timestep": float(m.opt.timestep),
+            "integrator": mujoco.mjtIntegrator(m.opt.integrator).name.removeprefix(
+                "mjINT_"
+            ),
+            "solver": mujoco.mjtSolver(m.opt.solver).name.removeprefix("mjSOL_"),
+            "iterations": int(m.opt.iterations),
+            "gravity": [float(g) for g in m.opt.gravity],
+            "nbody": int(m.nbody),
+            "ngeom": int(m.ngeom),
+            "vis_flags": vis_names,
+            "rnd_flags": rnd_names,
+        }
+
+
 class RenderPump:
     """The RENDER process: reads the newest physics state from the ring,
     resolves camera and perturbation against the freshly drawn scene,
     renders at the display's rate, ships the frame. The perturbation
     wrench it computes goes back through the ring."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917 - the lane's five collaborators, by name
         self,
         model: "mujoco.MjModel",
         orbit: OrbitCamera,
         perturber: Perturber,
         sink: "FrameSink",
         ring: StateRing,
+        sim: "SimControl | None" = None,
     ) -> None:
         self.model = model
         self.orbit = orbit
         self.perturber = perturber
         self.sink = sink
         self.ring = ring
+        self.sim = sim
         self.hz = TARGET_HZ if self.sink.shared else FALLBACK_HZ
         # A camera or perturb gesture re-renders NOW (the stdin reader
         # sets it), not at the next lane tick.
@@ -879,19 +1249,21 @@ class RenderPump:
                 model, height=state["height"], width=state["width"]
             )
         if "vopt" not in state:
-            # The physics made visible (rung 1, 2026-09-02): the same
-            # scene-option flags the native viewer toggles with F -
-            # contact forces as arrows, drawn by mjv_updateScene itself.
-            vopt = mujoco.MjvOption()
-            vopt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
-            state["vopt"] = vopt
+            # MuJoCo's own defaults, as simulate starts: the Visualization
+            # panel (and the agent's set_simulator_view) turns contact
+            # forces and the rest on. They were on by default from
+            # 2026-09-02 to 2026-09-09; at the model's force scale a
+            # collapsed arm drew metre-long arrows across the whole frame.
+            state["vopt"] = mujoco.MjvOption()
         self.orbit.apply_to(state["cam"])
         renderer = state["renderer"]
+        if self.sim is not None:
+            self.sim.apply_flags(state["vopt"], renderer.scene)
         renderer.update_scene(local, camera=state["cam"], scene_option=state["vopt"])
         self.perturber.resolve(
             local, renderer.scene, state["vopt"], state["width"] / state["height"]
         )
-        self.ring.write_perturbation(self.perturber.force(local), self.perturber.paused)
+        self.ring.write_perturbation(self.perturber.force(local))
         self.perturber.draw(renderer.scene)
         if not state["shadows"]:
             renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
@@ -903,6 +1275,12 @@ class RenderPump:
         self._lane_stats(
             state, (rendered - began) * 1000.0, (time.monotonic() - rendered) * 1000.0
         )
+        if self.sim is not None:
+            lane = state.setdefault("lane", {})
+            lane["last_render_ms"] = (rendered - began) * 1000.0
+            status = self.sim.status(local, lane, state)
+            if status is not None:
+                self.sink.status(status)
 
     def _lane_stats(self, state: dict, render_ms: float, ship_ms: float) -> None:
         """One stderr line per LANE_STATS_EVERY_S: what the lane actually
@@ -1194,10 +1572,11 @@ def stream(task_name: str, shm_path: str | None) -> None:
 
     orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
     perturber = Perturber(model)
-    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring)
+    sim = SimControl(model, ring)
+    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
     threading.Thread(
         target=_read_control_messages,
-        args=(orbit, perturber, pump._fresh.set, pump.sink.shared),
+        args=(orbit, perturber, pump._fresh.set, pump.sink.shared, sim),
         daemon=True,
     ).start()
     try:
@@ -1207,10 +1586,43 @@ def stream(task_name: str, shm_path: str | None) -> None:
         pathlib.Path(ring_path).unlink(missing_ok=True)
 
 
+def run_manual_forever(
+    model: "mujoco.MjModel", data: "mujoco.MjData", pump: PhysicsPump, steps: int = 0
+) -> None:
+    """The human's loop (simulate's own): ctrl from the Control sliders,
+    qpos edits from the Joint sliders applied with a forward pass, Run
+    on or off, Step n while paused. Leaves by ResetScene (Reset, or
+    manual off) — the scene's own motion resumes from its start."""
+    pump.manual = True
+    dt = model.opt.timestep
+    pending = steps
+    while True:
+        inputs = pump.ring.manual_inputs()
+        if inputs is not None:
+            ctrl, qpos = inputs
+            if not np.array_equal(qpos, data.qpos):
+                data.qpos[:] = qpos
+                data.qvel[:] = 0.0
+                mujoco.mj_forward(model, data)
+            data.ctrl[:] = ctrl
+        if pending > 0 or not pump.ring.paused():
+            mujoco.mj_step(model, data)
+            pending = max(0, pending - 1)
+            pump.tick(data, dt, hold_when_paused=False)
+        else:
+            try:
+                pump.take_mail(data)
+            except TakeOver as more:  # a further step while paused
+                pending += more.steps
+            pump.ring.publish(data, 0.0, True)
+            time.sleep(0.02)
+
+
 def physics_main(task_name: str, ring_path: str) -> None:
     """The physics process: the scene loop with the narrator, publishing
     into the ring the render process created; exits when its stdin
-    closes (the render process is gone)."""
+    closes (the render process is gone). Hand-overs (TakeOver, ResetScene)
+    move it between the scene's own loop and the manual loop."""
     task, model, _rig = build_scene(task_name)
     ring = StateRing(ring_path, model, create=False)
 
@@ -1220,12 +1632,31 @@ def physics_main(task_name: str, ring_path: str) -> None:
 
     threading.Thread(target=watch_parent, daemon=True).start()
     pump = PhysicsPump(model, narrator_for(model, task_name), ring)
-    if task is not None and task_name in TASKS_WITH_EXPERTS:
-        run_expert_forever(task, pump)
-    elif task_name == DUCK:
-        run_flock_parade_forever(model, pump)
-    else:
-        run_idle_forever(model, pump)
+    manual: tuple[mujoco.MjData, int] | None = None
+    while True:
+        try:
+            if manual is not None:
+                data, steps = manual
+                run_manual_forever(model, data, pump, steps)
+            elif task is not None and task_name in TASKS_WITH_EXPERTS:
+                run_expert_forever(task, pump)
+            elif task_name == DUCK:
+                run_flock_parade_forever(model, pump)
+            else:
+                run_idle_forever(model, pump)
+        except TakeOver as hand:
+            ring.seed_manual(hand.data.ctrl.copy(), hand.data.qpos.copy())
+            manual = (hand.data, hand.steps)
+        except ResetScene as reset:
+            pump.manual = False
+            pump.time_offset += pump.last_sim_time
+            if manual is not None and reset.keyframe >= 0:
+                data = manual[0]
+                mujoco.mj_resetDataKeyframe(model, data, reset.keyframe)
+                mujoco.mj_forward(model, data)
+                manual = (data, 0)
+            else:
+                manual = None  # the scene's own loop, from its start
 
 
 if __name__ == "__main__":
