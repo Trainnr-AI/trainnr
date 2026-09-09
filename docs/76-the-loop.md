@@ -669,12 +669,23 @@ Where it fails the question, ranked by what the user learns:
 7. **The Simulator's empty state is stale.** It still says "Live view"
    and "Nothing is streaming" and points at a port; it should offer the
    scenes the project can run, in one click.
-8. **No way to jump or to move.** A command palette (⌘K: any artifact
+8. **Nothing is ordered by time.** Prakhar, same day: "things are not
+   structured based on time like when it was added or updated." The
+   index records no time (`Artifact` has kind, stamp, path, cites,
+   summary, preview, detail) and every page sorts by name, so the newest
+   evaluation sits wherever the alphabet puts it. Every artifact gets
+   `created` and `updated`: the record's own date where it has one (a
+   verdict's `judged`, a finding's `date`, a run's log start), else the
+   directory's newest file; pages sort newest first by default, group
+   the cards by day ("today", "yesterday", then dates), show the time on
+   the card and in the drawer, and the Overview's activity reads in the
+   same order.
+9. **No way to jump or to move.** A command palette (⌘K: any artifact
    by name, any page), arrow keys between cards, Esc closing the drawer,
    and a card-size control the page remembers.
 
-Proposed order: 1–3 first (they change what the user can learn), 4–7
-as one polish pass, 8 after. Each lands with captures through the
+Proposed order: 1–3 and 8 first (they change what the user can learn),
+4–7 as one polish pass, 9 after. Each lands with captures through the
 agent's own door, the standing rule.
 
 ## 11. What this refuses to claim
