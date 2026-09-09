@@ -123,6 +123,20 @@ impl Event {
 /// How many events the activity feed keeps in memory.
 pub const EVENTS_KEPT: usize = 60;
 
+/// The presenter's last answer (`.index/present-status.json`): what it
+/// showed, or why it could not.
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct PresentStatus {
+    #[serde(default)]
+    pub shown: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub stamp: Option<String>,
+}
+
+const PRESENT_STATUS_RELATIVE: &str = ".index/present-status.json";
+
 #[derive(Deserialize)]
 pub struct State {
     pub name: String,
@@ -220,6 +234,9 @@ pub struct Model {
     /// The newest window events (`.index/events.jsonl`), newest first.
     pub events: Vec<Event>,
     events_seen: Option<std::time::SystemTime>,
+    /// The presenter's last answer, and when its file last changed.
+    pub present_status: Option<PresentStatus>,
+    present_seen: Option<std::time::SystemTime>,
     /// Why there is no index, when there is none.
     pub problem: Option<String>,
     last_poll: Option<std::time::Instant>,
@@ -252,6 +269,8 @@ impl Model {
             jobs: Vec::new(),
             events: Vec::new(),
             events_seen: None,
+            present_status: None,
+            present_seen: None,
             problem: None,
             project_root: root,
             last_poll: None,
@@ -414,6 +433,16 @@ impl Model {
         if events_modified != self.events_seen {
             self.events_seen = events_modified;
             self.reload_events(&events_path);
+        }
+        let status_path = self.project_root.join(PRESENT_STATUS_RELATIVE);
+        let status_modified = std::fs::metadata(&status_path)
+            .and_then(|m| m.modified())
+            .ok();
+        if status_modified != self.present_seen {
+            self.present_seen = status_modified;
+            self.present_status = std::fs::read_to_string(&status_path)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok());
         }
     }
 

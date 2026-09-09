@@ -36,6 +36,9 @@ pub struct Shell {
     /// What was last sent to the viewer (a version, or `a vs b`), taken
     /// by the frame loop to log the event.
     pub shown: Option<String>,
+    /// The last artifact asked for, kept after `shown` is taken by the
+    /// frame loop, so a late presenter answer still finds its click.
+    pub last_shown: Option<String>,
     /// A table opened for exploration (the modal over the page).
     pub table: Option<crate::detail::TableView>,
     /// Bring the drawer into view on the next frame (an artifact opened
@@ -50,6 +53,8 @@ pub struct Shell {
     pub entered: bool,
     /// The command palette, while open.
     pub palette: Option<crate::palette::Palette>,
+    /// A presenter failure the user has dismissed (its stamp and reason).
+    dismissed_failure: Option<(String, String)>,
     repo_root: std::path::PathBuf,
 }
 
@@ -63,11 +68,13 @@ impl Shell {
             presenter: None,
             show_requested: false,
             shown: None,
+            last_shown: None,
             table: None,
             scroll_to_detail: false,
             history: Vec::new(),
             entered: true,
             palette: None,
+            dismissed_failure: None,
             repo_root,
         }
     }
@@ -79,6 +86,8 @@ impl Shell {
         if self.model.request_show(stamp).is_ok() {
             self.show_requested = true;
             self.shown = Some(stamp.to_owned());
+            self.last_shown = Some(stamp.to_owned());
+            self.dismissed_failure = None;
         }
     }
 
@@ -320,6 +329,7 @@ impl Shell {
                 return;
             }
         }
+        self.presenter_failure(ui);
         match self.section {
             Section::Projects => {
                 if let Some(root) = pages::projects(ui, &self.model) {
@@ -443,6 +453,46 @@ impl Shell {
                 self.scroll_to_detail = true;
             }
         }
+    }
+
+    /// When "Show in viewer" could not be honoured, say so where the
+    /// click happened, with the presenter's reason, until dismissed.
+    fn presenter_failure(&mut self, ui: &mut egui::Ui) {
+        let Some(status) = self.model.present_status.clone() else {
+            return;
+        };
+        let (Some(stamp), Some(error)) = (status.stamp, status.error) else {
+            return;
+        };
+        if self.shown.as_deref() != Some(stamp.as_str())
+            && self.last_shown.as_deref() != Some(stamp.as_str())
+        {
+            return;
+        }
+        if self.dismissed_failure.as_ref() == Some(&(stamp.clone(), error.clone())) {
+            return;
+        }
+        egui::Frame::new()
+            .fill(ui.visuals().warn_fg_color.linear_multiply(0.12))
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.small_icon(&icons::WARNING, Some(ui.visuals().warn_fg_color));
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "The viewer could not show {}: {error}",
+                            crate::model::split_stamp(&stamp).0
+                        ))
+                        .color(ui.visuals().warn_fg_color),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("dismiss").clicked() {
+                            self.dismissed_failure = Some((stamp.clone(), error.clone()));
+                        }
+                    });
+                });
+            });
     }
 
     /// Go to an artifact by its stamp, from a lineage link: the page it

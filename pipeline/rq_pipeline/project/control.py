@@ -232,6 +232,45 @@ def screenshot(
 # -- lifecycle -----------------------------------------------------------------
 
 
+PRESENT_STATUS_FILE = "present-status.json"
+PRESENT_TIMEOUT_S = 20.0
+
+
+def present_status_path(project: Project) -> Path:
+    return project.root / INDEX_DIR / PRESENT_STATUS_FILE
+
+
+def wait_presented(
+    project: Project, stamp: str, *, since: float, timeout_s: float = PRESENT_TIMEOUT_S
+) -> dict[str, Any]:
+    """The presenter's answer for `stamp` written after `since` (a
+    modification time): `shown`, or `failed` with the reason; `pending`
+    when none came within the timeout (a big scene still streaming, or
+    no presenter running)."""
+    deadline = time.monotonic() + timeout_s
+    path = present_status_path(project)
+    while time.monotonic() < deadline:
+        try:
+            if path.stat().st_mtime > since:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                if raw.get("stamp") == stamp and raw.get("error"):
+                    return {
+                        "status": "failed",
+                        "reason": raw["error"],
+                        "artifact": stamp,
+                    }
+                if raw.get("shown") == stamp:
+                    return {"status": "shown", "artifact": stamp}
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.2)
+    return {
+        "status": "pending",
+        "reason": f"no answer from the presenter within {timeout_s:g} s",
+        "artifact": stamp,
+    }
+
+
 def studio_binary() -> Path | None:
     """The built Studio: `$TRAINNR_STUDIO`, else the repo's release build."""
     named = os.environ.get(STUDIO_ENV)

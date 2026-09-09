@@ -272,6 +272,9 @@ def _present_run(
     from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: PLC0415
 
     folder = project.root / artifact.path
+    training = folder / "training.json"
+    if training.is_file():
+        return _present_rl_run(artifact, folder, rr_, root)
     log = folder / "chain.log"
     metrics: dict[str, list[tuple[int, float]]] = {}
     if log.is_file():
@@ -307,6 +310,176 @@ def _present_run(
             rrb.TextDocumentView(origin=f"{root}/manifest", name="manifest"),
             row_shares=[3, 1],
         ),
+    }
+
+
+def _present_rl_run(
+    artifact: Artifact, folder: Path, rr_: Any, root: str
+) -> dict[str, Any]:
+    """A reinforcement-learning run: every curve the training record kept
+    (reward, episode length, steps per second, losses) on the iteration
+    timeline, and the run's facts as a document."""
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    record = json.loads((folder / "training.json").read_text())
+    columns: list[str] = record.get("columns") or []
+    curve: list[list[Any]] = record.get("curve") or []
+    paths = []
+    with _AsDefault(rr_):
+        if "iteration" in columns:
+            it = columns.index("iteration")
+            for c, name in enumerate(columns):
+                if name == "iteration":
+                    continue
+                path = f"{root}/{name}"
+                paths.append(path)
+                rr_.log(
+                    path, rr.SeriesLines(names=[name.replace("_", " ")]), static=True
+                )
+                for row in curve:
+                    if row[it] is None or row[c] is None:
+                        continue
+                    rr_.set_time("iteration", sequence=int(row[it]))
+                    rr_.log(path, rr.Scalars(float(row[c])))
+        identity = folder / "identity.json"
+        facts = {k: v for k, v in record.items() if k not in ("columns", "curve")}
+        text = json.dumps(facts, indent=1)
+        ident = identity.read_text() if identity.is_file() else "{}"
+        rr_.log(
+            f"{root}/manifest",
+            _doc(
+                f"# {artifact.stamp}\n\n## training\n\n```json\n{text}\n```\n"
+                f"\n## identity\n\n```json\n{ident}\n```\n" + _lineage(artifact)
+            ),
+            static=True,
+        )
+    views = [rrb.TimeSeriesView(origin=p, name=p.split("/", 1)[1]) for p in paths]
+    return {
+        "paths": [*paths, f"{root}/manifest"],
+        "view": "time series",
+        "layout": rrb.Vertical(
+            rrb.Grid(*views)
+            if views
+            else rrb.TextDocumentView(origin=f"{root}/manifest"),
+            rrb.TextDocumentView(origin=f"{root}/manifest", name="manifest"),
+            row_shares=[3, 1],
+        ),
+    }
+
+
+def _present_policy(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "policy"
+) -> dict[str, Any]:
+    """A policy: the robot it drives in 3D (when the project holds it),
+    its facts, and every evaluation of it in the project as bars."""
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    index = index_project(project)
+    by_stamp = {a.stamp: a for a in index.artifacts}
+    robot = by_stamp.get(artifact.cites.get("robot", ""))
+    folder = project.root / artifact.path
+    manifest = folder / "policy.json"
+    text = manifest.read_text() if manifest.is_file() else "{}"
+    evaluations = sorted(
+        (
+            a
+            for a in index.artifacts
+            if a.kind == Kind.CERTIFICATE.value and a.stamp in artifact.cited_by
+        ),
+        key=lambda a: a.stamp,
+    )
+    paths = [f"{root}/facts"]
+    panes: list[Any] = []
+    with _AsDefault(rr_):
+        if robot is not None:
+            shown = _present_robot(project, robot, rr_, root=f"{root}/robot")
+            paths += shown["paths"]
+            panes.append(rrb.Spatial3DView(origin=f"{root}/robot", name=robot.stamp))
+        lines = [f"# {artifact.stamp}", "", "```json", text, "```", _lineage(artifact)]
+        if evaluations:
+            rates = []
+            lines += ["", "## evaluations", ""]
+            for e in evaluations:
+                success = str(e.summary.get("success", ""))
+                k, _, n = success.partition("/")
+                try:
+                    rates.append(float(k) / float(n))
+                except (ValueError, ZeroDivisionError):
+                    rates.append(0.0)
+                name = e.stamp.split("@", 1)[0]
+                judged = e.summary.get("judged at", "")
+                lines.append(f"- {name}: **{success}** · {judged}")
+            rr_.log(f"{root}/evaluations", rr.BarChart(rates), static=True)
+            paths.append(f"{root}/evaluations")
+        else:
+            lines += ["", "_no evaluation of this policy in the project yet_"]
+        rr_.log(f"{root}/facts", _doc("\n".join(lines)), static=True)
+    right: list[Any] = [rrb.TextDocumentView(origin=f"{root}/facts", name="policy")]
+    if evaluations:
+        right.insert(
+            0,
+            rrb.BarChartView(
+                origin=f"{root}/evaluations", name="success rate per evaluation"
+            ),
+        )
+    panes.append(rrb.Vertical(*right))
+    return {
+        "paths": paths,
+        "view": "3D + evaluations" if robot is not None else "evaluations",
+        "layout": rrb.Horizontal(
+            *panes, column_shares=[3, 2] if robot is not None else None
+        ),
+    }
+
+
+def _present_finding(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "finding"
+) -> dict[str, Any]:
+    """A finding: its claim and record as a document, and its outcome by
+    condition as bars (success rate per condition) when it has one."""
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.project.details import outcome_of  # noqa: PLC0415
+
+    raw = json.loads((project.root / artifact.path).read_text())
+    outcome = outcome_of(raw.get("outcome"))
+    arms = outcome.get("arms") if isinstance(outcome, dict) else None
+    lines = [f"# {raw.get('id', artifact.stamp)}", "", str(raw.get("claim", "")), ""]
+    for key in ("date", "repo_commit", "instrument", "protocol", "argv"):
+        if key in raw:
+            lines.append(f"- {key}: `{raw[key]}`")
+    rates = []
+    if isinstance(arms, dict):
+        lines += ["", "## outcome by condition", ""]
+        for name, arm in arms.items():
+            if isinstance(arm, dict) and "successes" in arm and "trials" in arm:
+                k, n = arm["successes"], arm["trials"]
+                rates.append(k / n if n else 0.0)
+                lines.append(f"- {name}: **{k} / {n}**")
+    if raw.get("caveats"):
+        lines += ["", "## caveats", ""] + [f"- {c}" for c in raw["caveats"]]
+    with _AsDefault(rr_):
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
+        if rates:
+            rr_.log(f"{root}/outcome", rr.BarChart(rates), static=True)
+    paths = [f"{root}/reading"] + ([f"{root}/outcome"] if rates else [])
+    layout = (
+        rrb.Horizontal(
+            rrb.BarChartView(
+                origin=f"{root}/outcome", name="success rate by condition"
+            ),
+            rrb.TextDocumentView(origin=f"{root}/reading", name="finding"),
+        )
+        if rates
+        else rrb.TextDocumentView(origin=f"{root}/reading", name="finding")
+    )
+    return {
+        "paths": paths,
+        "view": "outcome + reading" if rates else "reading",
+        "layout": layout,
     }
 
 
@@ -525,6 +698,8 @@ _PRESENTERS = {
     Kind.DATASET: _present_dataset,
     Kind.TASK: _present_task,
     Kind.CERTIFICATE: _present_certificate,
+    Kind.POLICY: _present_policy,
+    Kind.FINDING: _present_finding,
 }
 
 

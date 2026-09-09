@@ -488,9 +488,21 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
     its meshes in 3D, a recording as time series, an experiment as its
     curves, an evaluation as its funnel) and switch to the Live view."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.control import command  # noqa: PLC0415
+    from rq_pipeline.project.control import (  # noqa: PLC0415
+        command,
+        present_status_path,
+        wait_presented,
+    )
 
-    return command(current_project(), "show", artifact=artifact)
+    project = current_project()
+    status_path = present_status_path(project)
+    since = status_path.stat().st_mtime if status_path.is_file() else 0.0
+    answer = command(project, "show", artifact=artifact)
+    if answer.get("status") != "done":
+        return answer
+    # The Studio only accepted the request; the presenter answers later,
+    # and a kind it cannot show is a failure the agent must hear about.
+    return {**answer, **wait_presented(project, artifact, since=since)}
 
 
 def compare_in_studio(a: str, b: str) -> dict[str, Any]:

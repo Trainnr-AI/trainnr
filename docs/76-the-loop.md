@@ -769,6 +769,23 @@ cursor to the right edge, since `available_width` in a wrapped row is
 the whole row. The state file now records the window's size and pixel
 ratio, so a capture's pixels read back as layout.
 
+**"Show in viewer" (2026-09-09, Prakhar: "the show in viewer button is
+not working").** It worked for robots, recordings, runs, datasets, tasks
+and evaluations; for a policy or a finding the presenter had nothing to
+show and said so only in `present-status.json`, which the Studio never
+read — so the click looked dead. Three fixes: presenters for the missing
+kinds (a policy is the robot it drives in 3D, its facts, and every
+evaluation of it as bars; a finding is its outcome by condition as bars
+and its record as a document; a reinforcement-learning run is every
+curve of its training record on the iteration timeline); the Studio now
+reads the presenter's answer and, when it is a failure for the artifact
+last asked for, says so in a banner over the page with the reason,
+dismissable; and the `show_in_studio` door waits for that answer
+(`control.wait_presented`) and returns shown, failed with the reason, or
+pending after 20 s, instead of "done" the moment the Studio took the
+request. Deployments and drift records stay unpresentable until A6/A7
+(tested by name in `tests/test_present.py`).
+
 Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left
 the render surface at the old size, so every later capture came out
