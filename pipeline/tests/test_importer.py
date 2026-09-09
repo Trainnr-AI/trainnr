@@ -5,10 +5,12 @@ record becomes a finding; the index, previews and details know all three."""
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
+import rq_pipeline.mcp_server as server
 from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log
 from rq_pipeline.project import Kind, create_project, index_project, write_index
 from rq_pipeline.project.details import details_path
@@ -132,10 +134,6 @@ class Finding(unittest.TestCase):
             )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class RslRlLogTest(unittest.TestCase):
     LOG = (
         "[g3] 4096 envs on cuda:0, 8000 iterations\n"
@@ -184,3 +182,85 @@ class StudyLogTest(unittest.TestCase):
             self.assertEqual(seg.count("Learning iteration"), 2)
             self.assertNotIn("point#2", seg)
             self.assertIsNone(_training_log(study / "point#3", "wide"))
+
+
+class ImportDoorsTest(unittest.TestCase):
+    """The doors answer a refusal record, by name, rather than raising."""
+
+    def test_doors_refuse_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["TRAINNR_PROJECT"] = str(Path(tmp) / "p")
+            try:
+                server.create_project_dir(str(Path(tmp) / "p"), "p")
+                out = server.import_experiment(str(Path(tmp) / "nowhere"))
+                self.assertEqual(out["status"], "refused")
+                self.assertIn("identity.json", out["reason"])
+                out = server.import_finding("no-such-finding")
+                self.assertEqual(out["status"], "refused")
+                self.assertIn("no-such-finding", out["reason"])
+            finally:
+                del os.environ["TRAINNR_PROJECT"]
+
+
+class ImportEdgesTest(unittest.TestCase):
+    def test_train_dir_form_finds_the_study_log_and_copies_its_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            study = Path(tmp) / "study"
+            arm = _arm(study, "point#2")
+            (study / "rep.log").write_text(
+                "[g3] log_dir: /w/point#2/train\n Learning iteration 0/8\n"
+                "   Mean reward: 1.0\n"
+            )
+            project = create_project(Path(tmp) / "p", "p")
+            out = import_experiment(project, arm / "train")
+            self.assertEqual(out["name"], "point#2")
+            run = project.root / "runs" / "point#2"
+            self.assertTrue((run / "training.json").is_file())
+            cert = next((project.root / "certificates").iterdir())
+            self.assertTrue((cert / "records-at-fit-cuda.jsonl").is_file())
+
+    def test_own_log_beats_the_study_log_and_last_checkpoint_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            study = Path(tmp) / "study"
+            arm = _arm(study, "a")
+            (arm / "train" / "train.log").write_text(
+                "[g3] log_dir: /w/a/train\n Learning iteration 0/8\n"
+                "   Mean reward: 7.0\n"
+            )
+            (study / "rep.log").write_text(
+                "[g3] log_dir: /w/a/train\n Learning iteration 0/8\n"
+                "   Mean reward: 1.0\n"
+            )
+            (arm / "train" / "model_3999.pt").write_bytes(b"\x01")
+            project = create_project(Path(tmp) / "p", "p")
+            import_experiment(project, arm)
+            record = json.loads((project.root / "runs/a/training.json").read_text())
+            self.assertEqual(record["final"]["reward"], 7.0)
+            policy = json.loads((project.root / "policies/a/policy.json").read_text())
+            self.assertEqual(policy["checkpoint"], "model_7999.pt")
+
+    def test_a_refused_import_writes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = _arm(Path(tmp) / "study", "b")
+            (arm / "train" / "model_7999.pt").unlink()
+            project = create_project(Path(tmp) / "p", "p")
+            with self.assertRaises(FileNotFoundError):
+                import_experiment(project, arm)
+            self.assertFalse((project.root / "runs" / "b").exists())
+            self.assertFalse((project.root / "policies" / "b").exists())
+
+    def test_a_missing_cell_is_null_not_nan(self) -> None:
+        record = parse_rsl_rl_log(
+            "[g3] log_dir: x\n Learning iteration 0/2\n   Mean reward: 1.0\n"
+            " Learning iteration 1/2\n   Mean episode length: 5\n"
+            "   Time elapsed: 1 day, 2:00:00\n"
+        )
+        assert record is not None
+        text = json.dumps(record.to_json())
+        self.assertNotIn("NaN", text)
+        self.assertIsNone(record.curve[1][record.columns.index("reward")])
+        self.assertEqual(record.wall_seconds, 86400 + 7200)
+
+
+if __name__ == "__main__":
+    unittest.main()

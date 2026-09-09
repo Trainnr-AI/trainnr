@@ -29,7 +29,12 @@ LEDGER = REPO / "docs" / "findings"
 
 
 def _checkpoint(train: Path) -> Path:
-    weights = sorted(train.glob("model_*.pt"), key=lambda p: p.stat().st_mtime)
+    """The last checkpoint by its iteration number in the name (a copied
+    tree's modification times mean nothing), mtime as the tie-break."""
+    weights = sorted(
+        train.glob("model_*.pt"),
+        key=lambda p: (_iterations(p) or -1, p.stat().st_mtime),
+    )
     if not weights:
         raise FileNotFoundError(f"{train}: no model_*.pt checkpoint")
     return weights[-1]
@@ -49,29 +54,32 @@ def import_experiment(
     overwrite a name already in the project."""
     source = Path(source)
     train = source / "train" if (source / "train").is_dir() else source
+    arm = train.parent  # the run's own directory, whichever form was given
     identity_file = train / IDENTITY_FILE
     if not identity_file.is_file():
         raise FileNotFoundError(f"{train}: no {IDENTITY_FILE} (not an rq_mjlab run)")
     identity = json.loads(identity_file.read_text())
-    label = name or (source.name if (source / "train").is_dir() else source.parent.name)
-    if "@" in label or "/" in label:
+    label = name or arm.name
+    if "@" in label or "/" in label or "\\" in label:
         raise ValueError(f"artifact names are plain words, got {label!r}")
     run_dir = project.folder("runs") / label
     policy_dir = project.folder("policies") / label
     if run_dir.exists() or policy_dir.exists():
         raise FileExistsError(f"{label!r} is already in the project")
+    # Everything that can refuse does so before anything is written, so
+    # a refused import leaves the project exactly as it was.
+    checkpoint = _checkpoint(train)
+    text = _training_log(arm, label)
 
     # The run: its identity and, when the study kept one, its log.
     run_dir.mkdir(parents=True)
     shutil.copy2(identity_file, run_dir / IDENTITY_FILE)
-    text = _training_log(source, label)
     if text is not None:
         (run_dir / "train.log").write_text(text)
         _write_training_record(run_dir / "train.log")
     run_stamp = stamp_kind(Kind.RUN, run_dir)
 
     # The policy: the checkpoint, its identity, and a manifest citing the run.
-    checkpoint = _checkpoint(train)
     policy_dir.mkdir(parents=True)
     shutil.copy2(checkpoint, policy_dir / checkpoint.name)
     # No identity.json here: that file marks a RUN to the kind detector;
@@ -127,16 +135,17 @@ TRAINING_FILE = "training.json"
 LOG_DIR_LINE = "log_dir:"
 
 
-def _training_log(source: Path, label: str) -> str | None:
-    """The run's console log: its own `train.log`, else the segment of a
-    study log whose `log_dir:` banner names this run (a study launches
-    several runs into one log, and a restarted run leaves two segments —
-    the longest wins)."""
-    own = source / "train.log"
-    if own.is_file():
-        return own.read_text(errors="replace")
+def _training_log(arm: Path, label: str) -> str | None:
+    """The run's console log: its own `train.log` (beside or inside
+    `train/`), else the segment of a study log — a `*.log` beside the arm
+    — whose `log_dir:` banner names this run (a study launches several
+    runs into one log, and a restarted run leaves two segments: the
+    longest wins)."""
+    for own in (arm / "train.log", arm / "train" / "train.log"):
+        if own.is_file():
+            return own.read_text(errors="replace")
     best: str | None = None
-    for log in sorted(source.parent.glob("*.log")):
+    for log in sorted(arm.parent.glob("*.log")):
         lines = log.read_text(errors="replace").splitlines(keepends=True)
         starts = [i for i, line in enumerate(lines) if LOG_DIR_LINE in line]
         for n, i in enumerate(starts):

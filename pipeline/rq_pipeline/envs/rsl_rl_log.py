@@ -18,9 +18,10 @@ SCHEMA = "trainnr-training/1"
 ITERATION_LINE = re.compile(r"Learning iteration\s+(\d+)/(\d+)")
 FIELD_LINE = re.compile(r"^\s*([A-Za-z][A-Za-z _/]*?):\s*([-+0-9.eE]+)\s*s?\s*$")
 ENVS_LINE = re.compile(r"(\d+) envs on (\S+),\s*(\d+) iterations")
-ELAPSED_LINE = re.compile(r"Time elapsed:\s*(\d+):(\d\d):(\d\d)")
+ELAPSED_LINE = re.compile(r"Time elapsed:\s*(?:(\d+) days?, )?(\d+):(\d\d):(\d\d)")
 # The per-iteration numbers the record keeps, by their name in the log.
 CURVE_FIELDS = {
+    "Total steps": "total_steps",  # environment steps, RL's usual x-axis
     "Mean reward": "reward",
     "Mean episode length": "episode_length",
     "Steps per second": "steps_per_second",
@@ -44,7 +45,7 @@ class TrainingRecord:
     final: dict[str, float] = field(default_factory=dict)
     best_reward: float | None = None
     columns: list[str] = field(default_factory=list)
-    curve: list[list[float]] = field(default_factory=list)
+    curve: list[list[float | None]] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -73,8 +74,8 @@ def parse_rsl_rl_log(
             continue
         m = ELAPSED_LINE.search(line)
         if m:
-            h, mi, s = (int(g) for g in m.groups())
-            record.wall_seconds = h * 3600 + mi * 60 + s
+            days, h, mi, s = (int(g or 0) for g in m.groups())
+            record.wall_seconds = days * 86400 + h * 3600 + mi * 60 + s
             continue
         m = FIELD_LINE.match(line)
         if m and m.group(1).strip() in CURVE_FIELDS:
@@ -97,5 +98,6 @@ def parse_rsl_rl_log(
     sampled = rows[::step]
     if sampled[-1] is not rows[-1]:
         sampled.append(rows[-1])
-    record.curve = [[r.get(c, float("nan")) for c in columns] for r in sampled]
+    # A missing cell is None (a log cut mid-iteration): JSON has no NaN.
+    record.curve = [[r.get(c) for c in columns] for r in sampled]
     return record

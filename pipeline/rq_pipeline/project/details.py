@@ -777,17 +777,11 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             _table(
                 "Training curve",
                 [c.replace("_", " ") for c in columns],
-                [[_round(v) for v in row] for row in training.get("curve", [])],
+                [[_f(v) for v in row] for row in training.get("curve", [])],
                 note="sampled from the console log; the full log is train.log",
             )
         )
     return sections
-
-
-def _round(v: Any) -> Any:
-    if isinstance(v, float):
-        return int(v) if v.is_integer() else round(v, 4)
-    return v
 
 
 def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
@@ -831,7 +825,10 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ("robot asset", c.get("robot", c.get("identity", {}).get("robot", ""))),
                 ("environment", c.get("task", c.get("source", ""))),
                 ("simulator build", c.get("instrument", "")),
-                *[(f"{stage} (of {n})", count) for stage, count in funnel.items()],
+                *[
+                    (f"{stage} (of {n})" if n else f"{stage} (trials)", count)
+                    for stage, count in funnel.items()
+                ],
             ],
         ),
         _kv(
@@ -857,6 +854,15 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 
 
 # -- helpers ------------------------------------------------------------------------
+
+
+def outcome_of(raw: Any) -> Any:
+    """A finding's outcome: a dict, or the dict a record wrote as a JSON
+    string; anything else as it came (the writers stay honest about it)."""
+    if isinstance(raw, str):
+        with contextlib.suppress(ValueError):
+            return json.loads(raw)
+    return raw
 
 
 def _dataclass_dict(obj: Any) -> dict[str, Any]:
@@ -893,7 +899,9 @@ def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         else {}
     )
     weights = sorted(
-        p.name for p in root.iterdir() if p.suffix in (".pt", ".safetensors")
+        p.name
+        for p in (root.iterdir() if root.is_dir() else [root])
+        if p.suffix in (".pt", ".safetensors")
     )
     facts = _kv(
         "Policy",
@@ -951,9 +959,7 @@ def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     raw = json.loads(root.read_text())
     outcome = raw.get("outcome")
-    if isinstance(outcome, str):
-        with contextlib.suppress(ValueError):
-            outcome = json.loads(outcome)
+    outcome = outcome_of(outcome)
     sections: list[dict[str, Any]] = [
         _markdown("Claim", f"**{raw.get('claim', '')}**"),
         _kv(

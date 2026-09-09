@@ -862,7 +862,6 @@ pub fn section(
         let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
         let mut clicked: Option<String> = None;
         let mut scroll = scroll_to_detail;
-        let mut opened: Option<String> = None;
         // One grid per row, so the drawer can sit right under the row that
         // holds the selected card — never below hundreds of cards.
         for (row_index, row) in rows.chunks(columns).enumerate() {
@@ -913,7 +912,6 @@ pub fn section(
             let Some(artifact) = row.iter().find(|a| a.stamp == stamp) else {
                 continue;
             };
-            opened = Some(stamp.clone());
             ui.add_space(GRID_GAP);
             if scroll {
                 // Instant, not animated: the agent's capture on the next
@@ -933,15 +931,6 @@ pub fn section(
                 *explore = table;
             }
         }
-        // A click on a card whose row came after the drawer was placed.
-        if let Some(stamp) = clicked {
-            *selected = if selected.as_deref() == Some(stamp.as_str()) {
-                None
-            } else {
-                Some(stamp)
-            };
-        }
-        let _ = opened;
     });
 }
 

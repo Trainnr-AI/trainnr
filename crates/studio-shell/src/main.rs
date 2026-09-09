@@ -154,6 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 control,
                 before: (Section::Overview, None, None),
                 shot: None,
+                last_navigation: None,
                 seen_recording: false,
             }))
         }),
@@ -174,7 +175,10 @@ struct StudioShell {
     /// A screenshot command waiting for its frame: the command id, the
     /// width asked, and when it was asked (a capture that never arrives
     /// is answered `failed`, not left hanging).
-    shot: Option<(String, u32, std::time::Instant)>,
+    shot: Option<Shot>,
+    /// When the agent last moved the window (a page, an artifact, a
+    /// table, a time): a capture waits for the frame to settle after it.
+    last_navigation: Option<std::time::Instant>,
     /// Whether a recording was loaded last frame — a fresh arrival
     /// switches the page to Live once, without trapping the user there.
     seen_recording: bool,
@@ -322,6 +326,21 @@ impl eframe::App for StudioShell {
 
 // -- the control surface: commands applied, state and events written --------
 
+/// How long a capture waits after the agent's last move, so the frame
+/// it takes is settled (egui's own fades run ~100 ms).
+const SETTLE_AFTER_NAVIGATION: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// A screenshot in flight: asked for, sent to the viewport once the
+/// frame has settled, answered when the frame arrives.
+#[derive(Clone)]
+struct Shot {
+    id: String,
+    width: u32,
+    asked: std::time::Instant,
+    ready_at: std::time::Instant,
+    sent: bool,
+}
+
 impl StudioShell {
     /// Apply every command the agent wrote since the last poll (20 Hz),
     /// answering each on disk. A command that cannot be applied is
@@ -340,7 +359,10 @@ impl StudioShell {
                         Err(why) => Err(why),
                     }
                 }
-                Ok(command) => self.apply(ui, command),
+                Ok(command) => {
+                    self.last_navigation = Some(std::time::Instant::now());
+                    self.apply(ui, command)
+                }
                 Err(why) => Err(why),
             };
             match outcome {
@@ -734,8 +756,8 @@ impl StudioShell {
         id: &str,
         width: Option<u32>,
     ) -> Result<(), String> {
-        if let Some((pending, _, _)) = &self.shot {
-            return Err(format!("a screenshot ({pending}) is still being taken"));
+        if let Some(shot) = &self.shot {
+            return Err(format!("a screenshot ({}) is still being taken", shot.id));
         }
         let width = width.unwrap_or(control::SCREENSHOT_WIDTH);
         if width == 0 || width > control::SCREENSHOT_WIDTH_MAX {
@@ -744,20 +766,47 @@ impl StudioShell {
                 control::SCREENSHOT_WIDTH_MAX
             ));
         }
-        ui.ctx()
-            .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
-                id.to_owned(),
-            )));
-        self.shot = Some((id.to_owned(), width, std::time::Instant::now()));
+        // A capture right after a move would show a fade half done (a
+        // modal opening, a drawer sliding); it waits for the frame to settle.
+        let ready_at = self
+            .last_navigation
+            .map(|t| t + SETTLE_AFTER_NAVIGATION)
+            .unwrap_or_else(std::time::Instant::now);
+        self.shot = Some(Shot {
+            id: id.to_owned(),
+            width,
+            asked: std::time::Instant::now(),
+            ready_at,
+            sent: false,
+        });
+        ui.ctx().request_repaint_after(SETTLE_AFTER_NAVIGATION);
         Ok(())
     }
 
     /// The captured frame, if one arrived: write it and answer the command.
     fn answer_screenshot(&mut self, ui: &egui::Ui) {
         const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
-        let Some((id, width, asked)) = self.shot.clone() else {
+        let Some(shot) = self.shot.clone() else {
             return;
         };
+        if !shot.sent {
+            if std::time::Instant::now() < shot.ready_at {
+                ui.ctx().request_repaint_after(
+                    shot.ready_at
+                        .saturating_duration_since(std::time::Instant::now()),
+                );
+                return;
+            }
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
+                    shot.id.clone(),
+                )));
+            if let Some(s) = self.shot.as_mut() {
+                s.sent = true;
+            }
+            return;
+        }
+        let (id, width, asked) = (shot.id, shot.width, shot.asked);
         let captured = ui.ctx().input(|input| {
             input.events.iter().find_map(|event| match event {
                 egui::Event::Screenshot {

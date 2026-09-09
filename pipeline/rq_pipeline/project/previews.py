@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.project.details import outcome_of
 from rq_pipeline.project.index import ProjectIndex
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
@@ -38,6 +39,20 @@ PREVIEW_SIZE = (674, 500)
 ROBOT_CAMERA = {"distance_scale": 2.2, "azimuth": 135.0, "elevation": -20.0}
 LOSS_LINE = re.compile(r"\bloss:\s*([0-9.eE+-]+)")
 MIN_CURVE_POINTS = 2  # a line needs two
+# The preview palette, named once: the ground, the series in order, the
+# faint reference line, the text.
+GROUND = (24, 26, 31)
+SERIES = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
+REFERENCE_LINE = (60, 64, 72)
+TEXT = (200, 205, 215)
+PLOT_MARGIN = 40
+MAX_TRACES = 8  # a recording's channel shows at most this many components
+FONT_CANDIDATES = (
+    "/System/Library/Fonts/Helvetica.ttc",  # macOS
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian, Ubuntu
+    "C:/Windows/Fonts/segoeui.ttf",  # Windows
+    "C:/Windows/Fonts/arial.ttf",
+)
 
 
 def preview_path(project: Project, stamp: str) -> Path:
@@ -143,6 +158,45 @@ def _render_dataset(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _render_batch(batch, out, {})
 
 
+def _plot_lines(
+    draw: Any,
+    series: list[list[tuple[float, float]]],
+    *,
+    stroke: int = 4,
+    zero_line: bool = False,
+) -> None:
+    """Every series on one shared x and y range inside the preview's
+    margins — a shape, the way a platform's tile shows one; no axes."""
+    width, height = PREVIEW_SIZE
+    xs = [x for pts in series for x, _ in pts]
+    ys = [y for pts in series for _, y in pts]
+    if not xs:
+        return
+    x0, x1, lo, hi = min(xs), max(xs), min(ys), max(ys)
+    xspan, yspan = (x1 - x0) or 1.0, (hi - lo) or 1.0
+    inner_w, inner_h = width - 2 * PLOT_MARGIN, height - 2 * PLOT_MARGIN
+
+    def at(x: float, y: float) -> tuple[float, float]:
+        return (
+            PLOT_MARGIN + (x - x0) / xspan * inner_w,
+            height - PLOT_MARGIN - (y - lo) / yspan * inner_h,
+        )
+
+    if zero_line and lo < 0 < hi:
+        y = at(x0, 0.0)[1]
+        draw.line(
+            [(PLOT_MARGIN, y), (width - PLOT_MARGIN, y)], fill=REFERENCE_LINE, width=2
+        )
+    for i, pts in enumerate(series):
+        if len(pts) >= MIN_CURVE_POINTS:
+            draw.line(
+                [at(x, y) for x, y in pts],
+                fill=SERIES[i % len(SERIES)],
+                width=stroke,
+                joint="curve",
+            )
+
+
 def _render_training_curve(source: Path, out: Path) -> bool:
     """The reward curve of an rsl_rl run from its training record: the one
     picture every RL platform shows for a run."""
@@ -158,44 +212,31 @@ def _render_training_curve(source: Path, out: Path) -> bool:
     points = [
         (float(row[it]), float(row[rw]))
         for row in record.get("curve", [])
-        if len(row) > max(it, rw) and np.isfinite(row[rw])
+        if len(row) > max(it, rw)
+        and row[it] is not None
+        and row[rw] is not None
+        and np.isfinite(row[rw])
     ]
     if len(points) < MIN_CURVE_POINTS:
         return False
-    width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), (24, 26, 31))
+    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
     draw = ImageDraw.Draw(image)
-    margin = 40
-    x0, x1 = points[0][0], points[-1][0]
-    lo = min(v for _, v in points)
-    hi = max(v for _, v in points)
-    xspan, yspan = (x1 - x0) or 1.0, (hi - lo) or 1.0
-    # A zero line when the reward crosses it, so the sign reads at a glance.
-    if lo < 0 < hi:
-        y = height - margin - (0 - lo) / yspan * (height - 2 * margin)
-        draw.line([(margin, y), (width - margin, y)], fill=(60, 64, 72), width=2)
-    pts = [
-        (
-            margin + (x - x0) / xspan * (width - 2 * margin),
-            height - margin - (v - lo) / yspan * (height - 2 * margin),
-        )
-        for x, v in points
-    ]
-    draw.line(pts, fill=(88, 166, 255), width=4, joint="curve")
+    _plot_lines(draw, [points], zero_line=True)
     draw.text(
-        (margin, 10),
+        (PLOT_MARGIN, 10),
         f"reward {points[-1][1]:.1f}",
-        fill=(200, 205, 215),
+        fill=TEXT,
         font=_font(22),
     )
     return _save_pil(image, out)
 
 
 def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """An RL run's reward curve from its training record; an imitation
+    run's loss curve from its chain log. A small line plot with no axes —
+    a shape, the way a platform's run tile shows one."""
     if (source / "training.json").is_file():
         return _render_training_curve(source, out)
-    """The loss curve from the chain log, as a small line plot with no
-    axes — a shape, the way a platform's run tile shows one."""
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
@@ -213,20 +254,9 @@ def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     ]
     if len(losses) < MIN_CURVE_POINTS:
         return False
-    width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), (24, 26, 31))
+    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
     draw = ImageDraw.Draw(image)
-    lo, hi = min(losses), max(losses)
-    span = (hi - lo) or 1.0
-    margin = 40
-    points = [
-        (
-            margin + i * (width - 2 * margin) / (len(losses) - 1),
-            height - margin - (v - lo) / span * (height - 2 * margin),
-        )
-        for i, v in enumerate(losses)
-    ]
-    draw.line(points, fill=(88, 166, 255), width=6, joint="curve")
+    _plot_lines(draw, [[(float(i), v) for i, v in enumerate(losses)]], stroke=6)
     return _save_pil(image, out)
 
 
@@ -246,30 +276,18 @@ def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool
     )
     if channel is None or len(channel.times) < MIN_CURVE_POINTS:
         return False
-    width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), (24, 26, 31))
+    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
     draw = ImageDraw.Draw(image)
     values = channel.values.reshape(len(channel.times), -1)
-    finite = values[np.isfinite(values).all(axis=1)] if values.size else values
-    lo = float(np.nanmin(values)) if values.size else 0.0
-    hi = float(np.nanmax(values)) if values.size else 1.0
-    span = (hi - lo) or 1.0
-    margin = 40
-    t0, t1 = float(channel.times[0]), float(channel.times[-1])
-    tspan = (t1 - t0) or 1.0
-    palette = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
-    for col in range(min(values.shape[1], 8)):
-        pts = [
-            (
-                margin + (float(t) - t0) / tspan * (width - 2 * margin),
-                height - margin - (float(v) - lo) / span * (height - 2 * margin),
-            )
+    series = [
+        [
+            (float(t), float(v))
             for t, v in zip(channel.times, values[:, col], strict=True)
             if np.isfinite(v)
         ]
-        if len(pts) >= MIN_CURVE_POINTS:
-            draw.line(pts, fill=palette[col % len(palette)], width=4, joint="curve")
-    del finite
+        for col in range(min(values.shape[1], MAX_TRACES))
+    ]
+    _plot_lines(draw, series)
     return _save_pil(image, out)
 
 
@@ -319,7 +337,7 @@ def _render_certificate(source: Path, out: Path, _summary: dict[str, Any]) -> bo
     if k is None or not n:
         return False
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), (24, 26, 31))
+    image = Image.new("RGB", (width, height), GROUND)
     draw = ImageDraw.Draw(image)
     big = _font(96)
     small = _font(30)
@@ -370,14 +388,9 @@ def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     except ImportError:
         return False
     raw = json.loads(source.read_text())
-    outcome = raw.get("outcome")
-    if isinstance(outcome, str):
-        try:
-            outcome = json.loads(outcome)
-        except ValueError:
-            outcome = None
+    outcome = outcome_of(raw.get("outcome"))
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), (24, 26, 31))
+    image = Image.new("RGB", (width, height), GROUND)
     draw = ImageDraw.Draw(image)
     arms = (outcome or {}).get("arms") if isinstance(outcome, dict) else None
     rows = []
@@ -418,15 +431,15 @@ def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
 def _font(size: int) -> Any:
     from PIL import ImageFont  # noqa: PLC0415
 
-    for candidate in (
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
+    for candidate in FONT_CANDIDATES:
         try:
             return ImageFont.truetype(candidate, size)
         except OSError:
             continue
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:  # an older Pillow: the bitmap font, one size
+        return ImageFont.load_default()
 
 
 _RENDERERS = {

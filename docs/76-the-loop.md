@@ -141,6 +141,14 @@ sources and caveats. Measured on duck-walk: 15 policies, 15 runs, 297
 evaluations, 10 findings, and the loop's "policy trained" and "policy
 evaluated" states proved by them.
 
+Two rules of the doors learned by the scripted walk (2026-09-09, a
+fresh project, 37 steps): a capture asked right after a move waits
+300 ms for the frame to settle, since egui's fades run about 100 ms and
+the first capture of the table modal showed it half-drawn; and the
+import doors answer a refusal record with the reason (a name already in
+the project, a directory with no `identity.json`, an unknown ledger id)
+the way the Studio doors do, instead of raising.
+
 Two rules of the grid learned by capture: the drawer opens directly
 under the row that holds the selected card (one grid per row), never
 below hundreds of cards; and a page opened by name — the agent's door or

@@ -420,6 +420,8 @@ pub fn summary_line(summary: &serde_json::Map<String, serde_json::Value>) -> Opt
         .iter()
         .filter(|(k, _)| *k != "files")
         // A claim or a success rate reads on its own; a key would be noise.
+        // The keys are the index writer's (`project/index.py`,
+        // `_summary_finding` and `_summary_certificate`).
         .map(|(k, v)| match k.as_str() {
             "claim" | "success" => render_value(v),
             _ => format!("{k} {}", render_value(v)),

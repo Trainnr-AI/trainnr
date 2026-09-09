@@ -673,7 +673,8 @@ def import_experiment(path: str, name: str | None = None) -> dict[str, Any]:
     (identity, log), its checkpoint as a policy citing the run, robot and
     actuator model, and one evaluation per verdict file with its trial
     records. `path` is the arm's directory (holding `train/`) or the
-    `train/` directory itself. Refuses a name already in the project."""
+    `train/` directory itself. Refuses, by name, a name already in the
+    project or a directory that is not an rq_mjlab run."""
     from rq_pipeline.project import (  # noqa: PLC0415
         current_project,
         index_project,
@@ -684,9 +685,12 @@ def import_experiment(path: str, name: str | None = None) -> dict[str, Any]:
     )
 
     project = current_project()
-    out = run_import(project, Path(path), name=name)
+    try:
+        out = run_import(project, Path(path), name=name)
+    except (FileExistsError, FileNotFoundError, ValueError) as why:
+        return {"status": "refused", "reason": str(why)}
     write_index(project, index_project(project))
-    return out
+    return {"status": "done", **out}
 
 
 def import_finding(record: str) -> dict[str, Any]:
@@ -702,9 +706,12 @@ def import_finding(record: str) -> dict[str, Any]:
     )
 
     project = current_project()
-    out = run_import(project, record)
+    try:
+        out = run_import(project, record)
+    except (FileExistsError, FileNotFoundError, ValueError) as why:
+        return {"status": "refused", "reason": str(why)}
     write_index(project, index_project(project))
-    return out
+    return {"status": "done", **out}
 
 
 def list_ledger_findings(prefix: str = "") -> list[dict[str, str]]:

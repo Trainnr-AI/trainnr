@@ -365,7 +365,7 @@ def _summary_policy(path: Path) -> dict[str, Any]:
     manifest = _read(path / "policy.json")
     if manifest:
         basis = manifest.get("dr_basis") or ""
-        out: dict[str, Any] = {"iterations": manifest.get("iterations")}
+        out: dict[str, Any] = {"iterations": manifest.get("iterations") or "unrecorded"}
         out["randomization"] = _basis_name(basis) if basis else "unrecorded"
         out["format"] = manifest.get("format", "")
         return out
