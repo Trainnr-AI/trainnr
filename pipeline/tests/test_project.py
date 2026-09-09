@@ -341,3 +341,31 @@ class TimeAndLineage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoopKinds(unittest.TestCase):
+    def test_a_reinforcement_loop_marks_the_dataset_stage_not_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p", loop="reinforcement")
+            index = index_project(project)
+            data = next(s for s in index.states if s.name == "data generated")
+            self.assertFalse(data.needed)
+            self.assertIn("rollouts", data.note or "")
+            self.assertTrue(
+                all(s.needed for s in index.states if s.name != "data generated")
+            )
+            with self.assertRaises(ValueError):
+                create_project(Path(tmp) / "q", "q", loop="osmosis")
+
+    def test_the_loop_is_read_off_the_runs_when_unset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            arm = project.root / "runs" / "a" / "train"
+            arm.mkdir(parents=True)
+            (arm / "identity.json").write_text(json.dumps({"robot": "r@1", "seed": 1}))
+            (arm / "model_1.pt").write_bytes(b"\x00")
+            index = index_project(project)
+            data = next(s for s in index.states if s.name == "data generated")
+            self.assertFalse(data.needed)
+            # The next move never names a stage the loop does not need.
+            self.assertNotIn("generate demonstrations", index.next_move or "")

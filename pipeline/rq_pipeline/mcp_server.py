@@ -1002,13 +1002,21 @@ def describe_identification(robot: str) -> dict[str, Any]:
     }
 
 
-def create_project_dir(path: str, name: str, description: str = "") -> dict[str, Any]:
+def create_project_dir(
+    path: str, name: str, description: str = "", loop: str = ""
+) -> dict[str, Any]:
     """Make a project directory: the manifest and one folder per artifact
-    kind. Never overwrites an existing project."""
+    kind. `loop` says how its policy learns — `imitation` (from a
+    dataset) or `reinforcement` (from its own rollouts; the dataset stage
+    is then marked not needed) — or is left unset and read off the runs.
+    Never overwrites an existing project."""
     from rq_pipeline.project import create_project  # noqa: PLC0415
 
-    project = create_project(Path(path), name, description)
-    return {"root": str(project.root), "name": project.name}
+    try:
+        project = create_project(Path(path), name, description, loop=loop)
+    except (FileExistsError, ValueError) as why:
+        return {"status": "refused", "reason": str(why)}
+    return {"status": "done", "root": str(project.root), "name": project.name}
 
 
 # A registration list: one statement per door, read top to bottom.

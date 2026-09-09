@@ -62,6 +62,14 @@ class Manifest:
     # Stamps of shared-library bundles this project relies on, recorded
     # so a project moved to another checkout can say what it expects.
     library: dict[str, list[str]] = field(default_factory=dict)
+    # How the policy learns: `imitation` (from a dataset of
+    # demonstrations) or `reinforcement` (from its own rollouts — no
+    # dataset stage). Empty when the project has not said; the index
+    # then reads it off the runs it holds.
+    loop: str = ""
+
+
+LOOPS = ("imitation", "reinforcement")
 
 
 @dataclass(frozen=True)
@@ -138,7 +146,9 @@ def current_project() -> Project:
     return project
 
 
-def create_project(root: Path, name: str, description: str = "") -> Project:
+def create_project(
+    root: Path, name: str, description: str = "", loop: str = ""
+) -> Project:
     """Make a project: the manifest and every kind's folder. Refuses to
     overwrite an existing manifest — a project is never silently reset."""
     root = Path(root)
@@ -155,6 +165,7 @@ def create_project(root: Path, name: str, description: str = "") -> Project:
         name=name,
         created=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         description=description,
+        loop=_loop_or_refuse(loop),
     )
     manifest_path.write_text(json.dumps(asdict(manifest), indent=1) + "\n")
     return Project(root)
@@ -186,3 +197,9 @@ def plain_name(name: str, what: str = "name") -> str:
     ):
         raise ValueError(f"a {what} is a plain word, got {name!r}")
     return name
+
+
+def _loop_or_refuse(loop: str) -> str:
+    if loop and loop not in LOOPS:
+        raise ValueError(f"loop is one of {', '.join(LOOPS)} (or unset), got {loop!r}")
+    return loop

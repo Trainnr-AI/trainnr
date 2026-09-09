@@ -98,11 +98,14 @@ read differently, and the window must say so rather than show a gap.
    (`rq_pipeline/bundles/bundle.py`). The rig's `profile.json` stays what
    it is, a measurement, not provenance. Also found: the actuator store
    was listed as a robot bundle.
-3. **The pipeline strip assumes every loop has a dataset stage.** A
-   reinforcement-learning loop has none; "Dataset" reads as a gap
-   forever. The state machine needs a per-project loop kind (imitation
-   or reinforcement) that marks a stage "not needed", proved by the
-   run's own manifest.
+3. **The pipeline strip assumed every loop has a dataset stage** (fixed
+   2026-09-10). A reinforcement-learning loop has none; "Dataset" read
+   as a gap forever. Now a project says how its policy learns
+   (`project.json` `loop`: imitation or reinforcement, set at
+   `create_project_dir` or read off the first run, whose summary says
+   what it learned by), the index marks the stage `needed: false` with
+   the reason, the next move never names it, and the strip draws it dim
+   with the reason on hover and counts "1 of 8 stages".
 4. **A walk has no scripted expert.** Acceptance for a locomotion task
    cannot be "the expert passes every trial"; the equivalent gate is the
    reference gait (a stand-still policy must fall the "floor" test, and

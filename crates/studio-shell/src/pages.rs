@@ -700,21 +700,30 @@ fn best_by_condition(
 /// accented; the next move spelled out beneath.
 fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
     let tokens = ui.tokens();
-    let first_missing = index.states.iter().position(|s| !s.present);
+    let first_missing = index.states.iter().position(|s| !s.present && s.needed);
     let proved = index.states.iter().filter(|s| s.present).count();
+    let needed = index.states.iter().filter(|s| s.needed).count();
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal(|ui| {
             subheading(ui, "Sim-to-real pipeline");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                tag(ui, &format!("{proved} of {} stages", index.states.len()));
+                tag(ui, &format!("{proved} of {needed} stages"));
             });
         });
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(6.0, 8.0);
             for (i, state) in index.states.iter().enumerate() {
                 let is_next = first_missing == Some(i);
-                let (fill, stroke, text_color) = if state.present {
+                let (fill, stroke, text_color) = if !state.needed {
+                    // A stage this loop never passes through: dim, struck by
+                    // its note on hover, never "the next move".
+                    (
+                        egui::Color32::TRANSPARENT,
+                        tokens.native_frame_stroke.color.linear_multiply(0.5),
+                        ui.visuals().weak_text_color().linear_multiply(0.6),
+                    )
+                } else if state.present {
                     (
                         tokens.alert_success.fill,
                         tokens.alert_success.icon,
@@ -758,7 +767,9 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     .show(ui, |ui| {
                         ui.set_min_width(STAGE_MIN_WIDTH);
                         ui.horizontal(|ui| {
-                            let icon = if state.present {
+                            let icon = if !state.needed {
+                                &icons::REMOVE
+                            } else if state.present {
                                 &icons::SUCCESS
                             } else {
                                 &icons::FLAG_UNTOGGLED
@@ -774,6 +785,10 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     })
                     .response;
                 let mut hover = state.name.clone();
+                if let Some(note) = &state.note {
+                    hover.push_str("\nnot needed: ");
+                    hover.push_str(note);
+                }
                 if !state.proved_by.is_empty() {
                     hover.push_str("\nproved by\n");
                     hover.push_str(&state.proved_by.join("\n"));

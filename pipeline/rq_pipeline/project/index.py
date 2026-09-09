@@ -41,7 +41,7 @@ from rq_pipeline.project.kinds import (
     detect,
     stamp_kind,
 )
-from rq_pipeline.project.locate import FOLDERS, Project
+from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
 
 UNRECORDED = "unrecorded"
 
@@ -113,6 +113,10 @@ class State:
     name: str
     proved_by: list[str]  # stamps
     present: bool
+    # False when this loop never passes through the stage (a
+    # reinforcement-learning loop has no dataset); `note` says why.
+    needed: bool = True
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -165,15 +169,16 @@ def index_project(project: Project) -> ProjectIndex:
                 )
             )
     _link_cited_by(artifacts)
-    states = _states(artifacts)
-    missing = [s.name for s in states if not s.present]
+    loop = manifest.loop or _loop_of(artifacts)
+    states = _states(artifacts, loop)
+    missing = [s.name for s in states if not s.present and s.needed]
     # Telemetry is the loop's first state but not a prerequisite: a robot
     # that entered as a model (a Menagerie bundle) has no recording yet
     # and does not need one before a task is declared. The next move is
     # the first missing state AFTER the first proved one.
     first_proved = next((i for i, s in enumerate(states) if s.present), None)
     if first_proved is not None:
-        missing = [s.name for s in states[first_proved:] if not s.present]
+        missing = [s.name for s in states[first_proved:] if not s.present and s.needed]
     return ProjectIndex(
         schema=INDEX_SCHEMA,
         project=manifest.name,
@@ -329,10 +334,10 @@ def _take(raw: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
 def _summary_run(path: Path) -> dict[str, Any]:
     run = _read(path / RUN_MANIFEST_FILE)
     if run:
-        return _take(run, ("policy", "steps", "started"))
+        return {"learning": "imitation", **_take(run, ("policy", "steps", "started"))}
     training = _read(path / "training.json")
     ident = _read(path / IDENTITY_FILE)
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"learning": "reinforcement"}
     if training:
         out["iterations"] = training.get("iterations_logged") or training.get(
             "iterations"
@@ -506,10 +511,32 @@ _SUMMARY_READERS: dict[Kind, Any] = {
 }
 
 
-def _states(artifacts: list[Artifact]) -> list[State]:
+# The stages a loop kind never passes through, with the reason the
+# window shows in their place.
+NOT_NEEDED: dict[str, dict[str, str]] = {
+    "reinforcement": {
+        "data generated": (
+            "a reinforcement-learning loop has no dataset: the policy learns "
+            "from its own rollouts in simulation"
+        ),
+    },
+}
+
+
+def _loop_of(artifacts: list[Artifact]) -> str:
+    """The loop kind read off the runs when the manifest has not said:
+    what the first run says it learned by; empty with no runs."""
+    for a in artifacts:
+        if a.kind == Kind.RUN.value and a.summary.get("learning") in LOOPS:
+            return str(a.summary["learning"])
+    return ""
+
+
+def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
     by_kind: dict[str, list[str]] = {}
     for a in artifacts:
         by_kind.setdefault(a.kind, []).append(a.stamp)
+    skipped = NOT_NEEDED.get(loop, {})
     # A robot bundle that carries fit records proves identification too.
     states: list[State] = []
     for name, kind in STATES:
@@ -520,5 +547,13 @@ def _states(artifacts: list[Artifact]) -> list[State]:
                 for a in artifacts
                 if a.kind == Kind.ROBOT.value and "fits" in a.summary.get("files", [])
             ]
-        states.append(State(name=name, proved_by=proof, present=bool(proof)))
+        states.append(
+            State(
+                name=name,
+                proved_by=proof,
+                present=bool(proof),
+                needed=name not in skipped,
+                note=skipped.get(name),
+            )
+        )
     return states

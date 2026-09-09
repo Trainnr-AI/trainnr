@@ -150,6 +150,16 @@ pub struct State {
     #[serde(default)]
     pub proved_by: Vec<String>,
     pub present: bool,
+    /// False when this loop never passes through the stage (a
+    /// reinforcement-learning loop has no dataset); `note` says why.
+    #[serde(default = "yes")]
+    pub needed: bool,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -391,7 +401,9 @@ impl Model {
                     stages_proved: index
                         .as_ref()
                         .map_or(0, |i| i.states.iter().filter(|s| s.present).count()),
-                    stages: index.as_ref().map_or(0, |i| i.states.len()),
+                    stages: index
+                        .as_ref()
+                        .map_or(0, |i| i.states.iter().filter(|s| s.needed).count()),
                     artifacts: index.as_ref().map_or(0, |i| i.artifacts.len()),
                     indexed: index.as_ref().map_or(String::new(), |i| i.indexed.clone()),
                     preview,
