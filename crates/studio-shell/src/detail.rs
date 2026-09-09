@@ -413,7 +413,10 @@ pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
         let row_h = tokens.table_row_height(style) + 2.0;
         let cols = view.section.columns.len().max(1);
         let mut clicked_col = None;
+        // egui remembers resized column widths per table id: one id per
+        // table, or the Bodies modal inherits the Joints widths.
         let mut builder = TableBuilder::new(ui)
+            .id_salt(("table-modal", &view.section.title, view.section.rows.len()))
             .striped(true)
             .resizable(true)
             .vscroll(true)
