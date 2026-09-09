@@ -24,6 +24,7 @@
 
 mod control;
 mod detail;
+mod listing;
 mod model;
 mod pages;
 mod shell;
@@ -380,6 +381,7 @@ impl StudioShell {
                 section,
                 artifact,
                 table,
+                view,
             } => {
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
@@ -420,6 +422,17 @@ impl StudioShell {
                         "select",
                         serde_json::json!({"artifact": stamp, "by": "agent"}),
                     );
+                }
+                if let Some(name) = view {
+                    let view = match name.trim().to_lowercase().as_str() {
+                        "cards" => crate::listing::View::Cards,
+                        "table" => crate::listing::View::Table,
+                        "matrix" => crate::listing::View::Matrix,
+                        other => {
+                            return Err(format!("no view {other:?}; one of cards, table, matrix"))
+                        }
+                    };
+                    crate::listing::set_view(ui.ctx(), self.shell.section, view);
                 }
                 if let Some(title) = table {
                     let wanted = (!title.trim().is_empty()).then_some(title.as_str());
@@ -850,7 +863,7 @@ impl StudioShell {
 
     /// After the page ran: what the human changed becomes an event, and
     /// the state file says what the window shows.
-    fn report(&mut self, _ui: &mut egui::Ui) {
+    fn report(&mut self, ui: &mut egui::Ui) {
         let (section_before, selected_before, table_before) = self.before.clone();
         let table_now = self.shell.table.as_ref().map(|t| t.section.title.clone());
         if table_now != table_before {
@@ -904,6 +917,11 @@ impl StudioShell {
             jobs_running: self.shell.model.running_jobs(),
             viewport_task: self.viewport.task().map(str::to_owned),
             viewport_fps: self.viewport.fps(),
+            window: Some(control::WindowState {
+                width: ui.ctx().content_rect().width(),
+                height: ui.ctx().content_rect().height(),
+                pixels_per_point: ui.ctx().pixels_per_point(),
+            }),
             simulator: self.viewport.report().0.map(|s| control::SimulatorState {
                 time: s.time,
                 rtf: s.rtf,

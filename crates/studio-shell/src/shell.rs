@@ -41,6 +41,9 @@ pub struct Shell {
     /// Bring the drawer into view on the next frame (an artifact opened
     /// by the agent, or a card far down the grid).
     pub scroll_to_detail: bool,
+    /// Where the user came from, for the back button: a lineage link
+    /// pushes the page and selection it left.
+    history: Vec<(Section, Option<String>)>,
     repo_root: std::path::PathBuf,
 }
 
@@ -56,6 +59,7 @@ impl Shell {
             shown: None,
             table: None,
             scroll_to_detail: false,
+            history: Vec::new(),
             repo_root,
         }
     }
@@ -285,6 +289,7 @@ impl Shell {
         if response.clicked() {
             self.section = item;
             self.selected = None;
+            self.history.clear();
             crate::pages::scroll_to_top(ui.ctx());
         }
     }
@@ -315,9 +320,11 @@ impl Shell {
             Section::Overview => {
                 let mut go_to = None;
                 pages::overview(ui, &self.model, &mut go_to);
-                if let Some(section) = go_to {
+                if let Some((section, stamp)) = go_to {
                     self.section = section;
-                    self.selected = None;
+                    self.scroll_to_detail = stamp.is_some();
+                    self.selected = stamp;
+                    pages::scroll_to_top(ui.ctx());
                 }
             }
             Section::Live => {}
@@ -325,6 +332,11 @@ impl Shell {
                 let mut show: Option<String> = None;
                 let mut explore = None;
                 let scroll = std::mem::take(&mut self.scroll_to_detail);
+                let mut nav = pages::Nav {
+                    can_back: !self.history.is_empty(),
+                    scroll_to_detail: scroll,
+                    ..Default::default()
+                };
                 pages::section(
                     ui,
                     &self.model,
@@ -332,13 +344,24 @@ impl Shell {
                     &mut self.selected,
                     &mut show,
                     &mut explore,
-                    scroll,
+                    &mut nav,
                 );
                 if let Some(stamp) = show {
                     self.show(&stamp);
                 }
                 if let Some(table) = explore {
                     self.table = Some(crate::detail::TableView::new(table));
+                }
+                if let Some(stamp) = nav.open {
+                    self.navigate(&stamp);
+                }
+                if nav.back {
+                    if let Some((section, selected)) = self.history.pop() {
+                        self.section = section;
+                        self.scroll_to_detail = selected.is_some();
+                        self.selected = selected;
+                        pages::scroll_to_top(ui.ctx());
+                    }
                 }
             }
         }
@@ -347,6 +370,21 @@ impl Shell {
                 self.table = None;
             }
         }
+    }
+
+    /// Go to an artifact by its stamp, from a lineage link: the page it
+    /// belongs to, its drawer open, the way back remembered.
+    pub fn navigate(&mut self, stamp: &str) {
+        let Some(kind) = self.model.artifact(stamp).map(|a| a.kind.clone()) else {
+            return;
+        };
+        let Some(section) = Section::for_kind(&kind) else {
+            return;
+        };
+        self.history.push((self.section, self.selected.clone()));
+        self.section = section;
+        self.selected = Some(stamp.to_owned());
+        self.scroll_to_detail = true;
     }
 
     /// Open one of the selected artifact's tables by title (the agent's

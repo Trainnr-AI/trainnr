@@ -320,6 +320,10 @@ class StudioDoors(unittest.TestCase):
                     self.assertIn("launch_studio", answer["reason"])
                 self.assertIn("no page", open_in_studio(section="dance")["reason"])
                 self.assertIn(
+                    "launch_studio",
+                    open_in_studio(section="evaluations", view="matrix")["reason"],
+                )
+                self.assertIn(
                     "not one of", set_studio_panels(selection="hide")["reason"]
                 )
                 self.assertEqual(read_studio_events(), [])

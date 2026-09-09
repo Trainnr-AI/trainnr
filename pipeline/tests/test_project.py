@@ -270,3 +270,45 @@ class Indexing(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TimeAndLineage(unittest.TestCase):
+    def test_every_artifact_has_times_and_the_lineage_reads_both_ways(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            arm = project.root / "runs" / "a" / "train"
+            arm.mkdir(parents=True)
+            (arm / "identity.json").write_text(
+                json.dumps({"robot": "microduck@14b51b63c52e", "seed": 1})
+            )
+            (arm / "model_1.pt").write_bytes(b"\x00")
+            index = index_project(project)
+            run = index.by_kind(Kind.RUN)[0]
+            self.assertIsNotNone(run.created)
+            self.assertIsNotNone(run.updated)
+            assert run.created is not None and run.updated is not None
+            self.assertLessEqual(run.created, run.updated)
+            self.assertTrue(run.updated.endswith("+00:00"))
+            # A policy citing the run: the run lists it back.
+            policy = project.root / "policies" / "p"
+            policy.mkdir(parents=True)
+            (policy / "model_1.pt").write_bytes(b"\x00")
+            (policy / "policy.json").write_text(
+                json.dumps({"schema": "trainnr-policy/1", "run": run.stamp})
+            )
+            index = index_project(project)
+            run = index.by_kind(Kind.RUN)[0]
+            pol = index.by_kind(Kind.POLICY)[0]
+            self.assertEqual(run.cited_by, [pol.stamp])
+            self.assertEqual(pol.cites["run"], run.stamp)
+
+    def test_a_finding_is_dated_by_its_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            findings = project.root / "findings"
+            findings.mkdir(parents=True, exist_ok=True)
+            (findings / "x.json").write_text(
+                json.dumps({"id": "x", "date": "2026-09-04", "claim": "c"})
+            )
+            finding = index_project(project).by_kind(Kind.FINDING)[0]
+            self.assertEqual(finding.created, "2026-09-04T00:00:00+00:00")

@@ -18,8 +18,8 @@
 use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::{
-    clock, elapsed, render_value, short_time, split_stamp, summary_line, Artifact, Index, Job,
-    Model,
+    ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
+    summary_line, Artifact, Event, Index, Job, Model,
 };
 use crate::widgets::{
     card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_RADIUS,
@@ -33,6 +33,10 @@ const PAGE_MARGIN: f32 = 32.0;
 const GRID_GAP: f32 = 20.0;
 /// A pipeline stage chip.
 const STAGE_MIN_WIDTH: f32 = 116.0;
+/// A chip's horizontal margins (10 + 10), and what its icon and spacing
+/// add to the label's width when measuring it before placement.
+const STAGE_CHIP_MARGIN: f32 = 20.0;
+const STAGE_CHIP_EXTRA: f32 = STAGE_CHIP_MARGIN + 16.0 + 8.0 + 4.0;
 /// How many activity rows the Overview shows.
 const ACTIVITY_ROWS: usize = 8;
 /// Icon sizes: the rail and cards; Rerun's own are 16 and 22.
@@ -253,9 +257,11 @@ pub fn page<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
                     egui::style::ScrollAnimation::none(),
                 );
             }
+            // The column is capped and centred, and always keeps its
+            // margin: in a narrow window the column gives way, not the edge.
             let available = ui.available_width();
-            let width = available.min(MAX_CONTENT_WIDTH);
-            let inset = ((available - width) / 2.0).max(PAGE_MARGIN * 0.5);
+            let inset = ((available - MAX_CONTENT_WIDTH) / 2.0).max(PAGE_MARGIN * 0.5);
+            let width = (available - 2.0 * inset).min(MAX_CONTENT_WIDTH);
             ui.horizontal(|ui| {
                 ui.add_space(inset);
                 ui.vertical(|ui| {
@@ -298,6 +304,18 @@ fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) {
 }
 
 /// What a picture card says under its picture.
+/// Where the user asked to go from inside a page: to an artifact by its
+/// stamp (a lineage link), or back to where they came from.
+#[derive(Default)]
+pub struct Nav {
+    pub open: Option<String>,
+    pub back: bool,
+    pub can_back: bool,
+    /// Bring the drawer into view this frame (an artifact opened by the
+    /// agent, a link, or a card far down the grid).
+    pub scroll_to_detail: bool,
+}
+
 struct CardText<'a> {
     title: &'a str,
     facts: &'a str,
@@ -476,7 +494,7 @@ pub fn projects(ui: &mut egui::Ui, model: &Model) -> Option<std::path::PathBuf> 
 // ---------------------------------------------------------------------
 // Overview
 
-pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<Section>) {
+pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<(Section, Option<String>)>) {
     let Some(index) = model.index() else {
         return;
     };
@@ -499,12 +517,16 @@ pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<Section>) {
         kpi_row(ui, index, go_to);
         ui.add_space(24.0);
 
-        latest_pictures(ui, model, index, go_to);
+        best_by_condition(ui, model, index, go_to);
 
+        // What is happening comes before what exists: the agent's moves
+        // and its jobs, then the newest artifacts.
         ui.columns(2, |cols| {
-            activity(&mut cols[0], &model.jobs);
+            activity(&mut cols[0], &model.jobs, &model.events);
             compute(&mut cols[1], model);
         });
+        ui.add_space(24.0);
+        latest_pictures(ui, model, index, go_to);
 
         if !index.refused.is_empty() {
             ui.add_space(20.0);
@@ -516,8 +538,13 @@ pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<Section>) {
 }
 
 /// The newest pictures in the project: what it looks like, one row.
-fn latest_pictures(ui: &mut egui::Ui, model: &Model, index: &Index, go_to: &mut Option<Section>) {
-    let with_pictures: Vec<&Artifact> = index
+fn latest_pictures(
+    ui: &mut egui::Ui,
+    model: &Model,
+    index: &Index,
+    go_to: &mut Option<(Section, Option<String>)>,
+) {
+    let mut with_pictures: Vec<&Artifact> = index
         .artifacts
         .iter()
         .filter(|a| a.preview.is_some())
@@ -525,6 +552,7 @@ fn latest_pictures(ui: &mut egui::Ui, model: &Model, index: &Index, go_to: &mut 
     if with_pictures.is_empty() {
         return;
     }
+    with_pictures.sort_by(|a, b| b.updated_epoch().total_cmp(&a.updated_epoch()));
     subheading(ui, "Latest");
     let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
     egui::Grid::new("latest_grid")
@@ -544,12 +572,116 @@ fn latest_pictures(ui: &mut egui::Ui, model: &Model, index: &Index, go_to: &mut 
                     CardText {
                         title: name,
                         facts: &facts,
-                        footer: Some(format!("{} · @{hash}", artifact.kind)),
+                        footer: Some(format!(
+                            "{} · @{hash} · {}",
+                            artifact.kind,
+                            ago_iso(artifact.updated.as_deref())
+                        )),
                     },
                     false,
                 );
                 if response.clicked() {
-                    *go_to = section_of(&artifact.kind);
+                    *go_to = section_of(&artifact.kind).map(|s| (s, Some(artifact.stamp.clone())));
+                }
+            }
+        });
+    ui.add_space(24.0);
+}
+
+/// The best evaluation under each condition, when the project judged
+/// its policies under at least two: the comparison the study was run
+/// for, answered on the front page.
+fn best_by_condition(
+    ui: &mut egui::Ui,
+    model: &Model,
+    index: &Index,
+    go_to: &mut Option<(Section, Option<String>)>,
+) {
+    let evaluations = index.by_kind("certificate");
+    if !crate::listing::matrix_available(&evaluations) {
+        return;
+    }
+    let mut best: Vec<(String, &Artifact, f32)> = Vec::new();
+    for a in &evaluations {
+        let Some(condition) = a.summary.get("judged at").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some((k, n)) = a
+            .summary
+            .get("success")
+            .and_then(|v| v.as_str())
+            .and_then(|t| t.split_once('/'))
+            .and_then(|(k, n)| {
+                Some((k.trim().parse::<f32>().ok()?, n.trim().parse::<f32>().ok()?))
+            })
+        else {
+            continue;
+        };
+        let rate = if n > 0.0 { k / n } else { 0.0 };
+        match best.iter_mut().find(|(c, _, _)| c == condition) {
+            Some(entry) if rate > entry.2 => {
+                entry.1 = a;
+                entry.2 = rate;
+            }
+            Some(_) => {}
+            None => best.push((condition.to_owned(), a, rate)),
+        }
+    }
+    if best.is_empty() {
+        return;
+    }
+    let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
+    ui.horizontal(|ui| {
+        subheading(ui, "Best policy by condition");
+        if best.len() > columns {
+            ui.add_space(8.0);
+            if ui
+                .add(egui::Link::new(
+                    egui::RichText::new(format!("{} conditions · open the matrix", best.len()))
+                        .color(ui.tokens().highlight_color),
+                ))
+                .clicked()
+            {
+                crate::listing::set_view(
+                    ui.ctx(),
+                    Section::Certificates,
+                    crate::listing::View::Matrix,
+                );
+                *go_to = Some((Section::Certificates, None));
+            }
+        }
+    });
+    best.truncate(columns);
+    egui::Grid::new("best_by_condition")
+        .spacing(egui::vec2(GRID_GAP, GRID_GAP))
+        .min_col_width(width)
+        .max_col_width(width)
+        .show(ui, |ui| {
+            for (i, (condition, artifact, rate)) in best.iter().enumerate() {
+                let policy = artifact
+                    .cites
+                    .get("policy")
+                    .and_then(|v| v.as_str())
+                    .map(|s| split_stamp(s).0)
+                    .unwrap_or("unrecorded");
+                let facts = format!("{policy} · {:.0}% success", rate * 100.0);
+                let response = picture_card(
+                    ui,
+                    width,
+                    model.preview_path(artifact).as_deref(),
+                    Section::icon_for(&artifact.kind),
+                    CardText {
+                        title: condition,
+                        facts: &facts,
+                        footer: Some(split_stamp(&artifact.stamp).0.to_owned()),
+                    },
+                    false,
+                );
+                if response.clicked() {
+                    *go_to = Some((Section::Certificates, Some(artifact.stamp.clone())));
+                }
+                if (i + 1) % columns == 0 {
+                    ui.end_row();
                 }
             }
         });
@@ -594,6 +726,23 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         ui.visuals().weak_text_color(),
                     )
                 };
+                // A frame never wraps itself in a wrapped row (only a label
+                // does), so the chip is measured first and the row broken
+                // when it would not fit — else it runs past the card.
+                let label = stage_label(&state.name);
+                let font = DesignTokens::welcome_screen_body().resolve(ui.style());
+                let text_w = ui
+                    .painter()
+                    .layout_no_wrap(label.to_owned(), font, text_color)
+                    .size()
+                    .x;
+                let chip_w = (text_w + STAGE_CHIP_EXTRA).max(STAGE_MIN_WIDTH + STAGE_CHIP_MARGIN);
+                // In a wrapped row `available_width` is the whole row; what
+                // remains is the distance from the cursor to the right edge.
+                let remaining = ui.max_rect().right() - ui.cursor().min.x;
+                if remaining < chip_w {
+                    ui.end_row();
+                }
                 let response = egui::Frame::new()
                     .fill(fill)
                     .stroke(egui::Stroke::new(1.0, stroke))
@@ -652,7 +801,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
 
 /// Four KPI cards: what a platform leads with. Each is a button into
 /// its section, with a large icon.
-fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<Section>) {
+fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<(Section, Option<String>)>) {
     let episodes: u64 = index
         .by_kind("batch")
         .iter()
@@ -714,7 +863,7 @@ fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<Section>) {
                 .response
                 .interact(egui::Sense::click());
             if response.clicked() {
-                *go_to = Some(section);
+                *go_to = Some((section, None));
             }
             if response.hovered() {
                 ui.painter().rect_stroke(
@@ -735,56 +884,118 @@ fn first_name(index: &Index, kind: &str) -> Option<String> {
         .map(|a| split_stamp(&a.stamp).0.to_owned())
 }
 
-/// The job table as an activity feed: newest first, running jobs marked.
-fn activity(ui: &mut egui::Ui, jobs: &[Job]) {
+/// What happened in this project, newest first: the agent's tools (the
+/// job table) and what the human and the agent did in the window (the
+/// event log), in one feed.
+fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
     subheading(ui, "Recent activity");
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        if jobs.is_empty() {
-            weak_body(ui, "No jobs yet. Every tool your agent runs appears here.");
+        if jobs.is_empty() && events.is_empty() {
+            weak_body(
+                ui,
+                "Nothing yet. Every tool your agent runs, and every move in this window, appears here.",
+            );
             return;
         }
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
-        for job in jobs.iter().take(ACTIVITY_ROWS) {
+        let now = now_epoch();
+        let mut lines: Vec<(f64, ActivityLine)> = jobs
+            .iter()
+            .map(|j| (j.started, ActivityLine::Job(j)))
+            .chain(events.iter().map(|e| (e.epoch_seconds(), ActivityLine::Event(e))))
+            .collect();
+        lines.sort_by(|a, b| b.0.total_cmp(&a.0));
+        for (at, line) in lines.iter().take(ACTIVITY_ROWS) {
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new(clock(job.started))
-                        .monospace()
+                    egui::RichText::new(ago(*at))
                         .small()
                         .color(ui.visuals().weak_text_color()),
                 );
-                let (icon, tint) = if job.running() {
-                    (&icons::PLAY, ui.tokens().highlight_color)
-                } else if job.exit == Some(0) {
-                    (&icons::SUCCESS, ui.tokens().success_text_color)
-                } else {
-                    (&icons::ERROR, ui.visuals().error_fg_color)
-                };
-                icon_at(ui, icon, 16.0, tint);
-                ui.label(egui::RichText::new(&job.tool).strong())
-                    .on_hover_text(format!("{}\n{}", job.id, job.argv.join(" ")));
-                let status = if job.running() {
-                    format!("running · {}", elapsed(now - job.started))
-                } else if let Some(code) = job.exit {
-                    if code == 0 {
-                        "done".to_owned()
-                    } else {
-                        format!("failed (exit {code})")
+                match line {
+                    ActivityLine::Job(job) => {
+                        let (icon, tint) = if job.running() {
+                            (&icons::PLAY, ui.tokens().highlight_color)
+                        } else if job.exit == Some(0) {
+                            (&icons::SUCCESS, ui.tokens().success_text_color)
+                        } else {
+                            (&icons::ERROR, ui.visuals().error_fg_color)
+                        };
+                        icon_at(ui, icon, 16.0, tint);
+                        ui.label(egui::RichText::new(&job.tool).strong())
+                            .on_hover_text(format!("{}\n{}", job.id, job.argv.join(" ")));
+                        let status = if job.running() {
+                            format!("running · {}", elapsed(now - job.started))
+                        } else if let Some(code) = job.exit {
+                            if code == 0 {
+                                "done".to_owned()
+                            } else {
+                                format!("failed (exit {code})")
+                            }
+                        } else {
+                            String::new()
+                        };
+                        ui.label(
+                            egui::RichText::new(status)
+                                .text_style(DesignTokens::welcome_screen_tag())
+                                .color(ui.visuals().weak_text_color()),
+                        );
                     }
-                } else {
-                    String::new()
-                };
-                ui.label(
-                    egui::RichText::new(status)
-                        .text_style(DesignTokens::welcome_screen_tag())
-                        .color(ui.visuals().weak_text_color()),
-                );
+                    ActivityLine::Event(event) => {
+                        let who = match event.by.as_str() {
+                            "agent" => "agent",
+                            "user" => "you",
+                            _ => "studio",
+                        };
+                        ui.label(egui::RichText::new(who).strong());
+                        ui.label(
+                            egui::RichText::new(event_words(event))
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    }
+                }
             });
         }
     });
+}
+
+enum ActivityLine<'a> {
+    Job(&'a Job),
+    Event(&'a Event),
+}
+
+/// An event in a sentence's tail: "opened Findings", "selected wide#3".
+fn event_words(event: &Event) -> String {
+    let name = |stamp: &Option<String>| {
+        stamp
+            .as_deref()
+            .map(|s| split_stamp(s).0.to_owned())
+            .unwrap_or_default()
+    };
+    let page = |slug: &Option<String>| {
+        slug.as_deref()
+            .and_then(Section::parse)
+            .map(|s| s.title().to_owned())
+            .unwrap_or_else(|| slug.clone().unwrap_or_default())
+    };
+    match event.kind.as_str() {
+        "open" if event.project.is_some() => {
+            format!(
+                "opened project {}",
+                event.project.clone().unwrap_or_default()
+            )
+        }
+        "open" => format!("opened {}", page(&event.section)),
+        "select" => format!("selected {}", name(&event.artifact)),
+        "deselect" => "closed the drawer".to_owned(),
+        "show" => format!("showed {} in the viewer", name(&event.recording)),
+        "table" => match &event.table {
+            Some(t) => format!("explored the {t} table"),
+            None => "closed the table".to_owned(),
+        },
+        "time" => "moved the time cursor".to_owned(),
+        other => other.to_owned(),
+    }
 }
 
 /// Where work runs: local by default; a rented machine when the cloud
@@ -835,22 +1046,43 @@ pub fn section(
     selected: &mut Option<String>,
     show: &mut Option<String>,
     explore: &mut Option<crate::detail::Section>,
-    scroll_to_detail: bool,
+    nav: &mut Nav,
 ) {
     let Some(index) = model.index() else {
         return;
     };
-    let rows: Vec<&Artifact> = section
+    let scroll_to_detail = nav.scroll_to_detail;
+    let mut rows: Vec<&Artifact> = section
         .kinds()
         .iter()
         .flat_map(|k| index.by_kind(k))
         .collect();
+    // Newest first: what changed last is what the user came to see.
+    rows.sort_by(|a, b| {
+        b.updated_epoch()
+            .total_cmp(&a.updated_epoch())
+            .then_with(|| a.stamp.cmp(&b.stamp))
+    });
     page(ui, |ui| {
-        ui.horizontal(|ui| {
-            heading(ui, section.title());
-            ui.add_space(8.0);
-            tag(ui, &rows.len().to_string());
-        });
+        let view = ui
+            .horizontal(|ui| {
+                if nav.can_back && ui.small_button("← back").clicked() {
+                    nav.back = true;
+                }
+                heading(ui, section.title());
+                ui.add_space(8.0);
+                tag(ui, &rows.len().to_string());
+                if rows.is_empty() {
+                    crate::listing::View::Cards
+                } else {
+                    crate::listing::view_switch(
+                        ui,
+                        section,
+                        crate::listing::matrix_available(&rows),
+                    )
+                }
+            })
+            .inner;
         ui.add_space(16.0);
         if rows.is_empty() {
             card(ui, None).show(ui, |ui| {
@@ -859,16 +1091,112 @@ pub fn section(
             });
             return;
         }
-        let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
-        let mut clicked: Option<String> = None;
         let mut scroll = scroll_to_detail;
-        // One grid per row, so the drawer can sit right under the row that
-        // holds the selected card — never below hundreds of cards.
-        for (row_index, row) in rows.chunks(columns).enumerate() {
+        let mut drawer = Drawer { show, explore, nav };
+        match view {
+            crate::listing::View::Cards => {
+                card_rows(ui, model, &rows, selected, &mut scroll, &mut drawer);
+            }
+            crate::listing::View::Table | crate::listing::View::Matrix => {
+                let clicked = if view == crate::listing::View::Table {
+                    crate::listing::table(ui, section, &rows, selected.as_deref())
+                } else {
+                    crate::listing::matrix(ui, &rows, selected.as_deref())
+                };
+                if let Some(stamp) = clicked {
+                    *selected = if selected.as_deref() == Some(stamp.as_str()) {
+                        None
+                    } else {
+                        scroll = true;
+                        Some(stamp)
+                    };
+                }
+                if let Some(stamp) = selected.clone() {
+                    if let Some(artifact) = rows.iter().find(|a| a.stamp == stamp) {
+                        ui.add_space(GRID_GAP);
+                        if scroll {
+                            scroll_here(ui);
+                        }
+                        drawer.open(ui, model, artifact, &stamp);
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// The outputs a drawer can produce, threaded through the page.
+struct Drawer<'a> {
+    show: &'a mut Option<String>,
+    explore: &'a mut Option<crate::detail::Section>,
+    nav: &'a mut Nav,
+}
+
+impl Drawer<'_> {
+    fn open(&mut self, ui: &mut egui::Ui, model: &Model, artifact: &Artifact, stamp: &str) {
+        let (show_clicked, table) = detail(ui, model, artifact, self.nav);
+        if show_clicked {
+            *self.show = Some(stamp.to_owned());
+        }
+        if table.is_some() {
+            *self.explore = table;
+        }
+    }
+}
+
+/// Instant, not animated: the agent's capture on the next frame must
+/// already be looking at what was scrolled to.
+fn scroll_here(ui: &mut egui::Ui) {
+    let top = ui.cursor().min;
+    ui.scroll_to_rect_animation(
+        egui::Rect::from_min_size(top, egui::vec2(1.0, 1.0)),
+        Some(egui::Align::TOP),
+        egui::style::ScrollAnimation::none(),
+    );
+}
+
+/// The cards, grouped by the day they last changed, one grid per row so
+/// the drawer can sit right under the row that holds the selected card —
+/// never below hundreds of cards.
+fn card_rows(
+    ui: &mut egui::Ui,
+    model: &Model,
+    rows: &[&Artifact],
+    selected: &mut Option<String>,
+    scroll: &mut bool,
+    drawer: &mut Drawer<'_>,
+) {
+    let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
+    let mut groups: Vec<(String, Vec<&Artifact>)> = Vec::new();
+    for a in rows {
+        let label = a
+            .updated
+            .as_deref()
+            .and_then(crate::model::epoch_of)
+            .map(day_label)
+            .unwrap_or_else(|| "undated".to_owned());
+        match groups.last_mut() {
+            Some((day, members)) if *day == label => members.push(a),
+            _ => groups.push((label, vec![a])),
+        }
+    }
+    let mut clicked: Option<String> = None;
+    let mut row_index = 0usize;
+    for (day, members) in &groups {
+        if row_index > 0 {
+            ui.add_space(GRID_GAP);
+        }
+        ui.label(
+            egui::RichText::new(day)
+                .text_style(DesignTokens::welcome_screen_tag())
+                .color(ui.visuals().weak_text_color()),
+        );
+        ui.add_space(6.0);
+        for row in members.chunks(columns) {
             if row_index > 0 {
                 ui.add_space(GRID_GAP);
             }
-            egui::Grid::new(("section_grid", section.title(), row_index))
+            egui::Grid::new(("section_grid", row_index))
                 .spacing(egui::vec2(GRID_GAP, GRID_GAP))
                 .min_col_width(width)
                 .max_col_width(width)
@@ -886,7 +1214,11 @@ pub fn section(
                             CardText {
                                 title: name,
                                 facts: &facts,
-                                footer: Some(format!("{} · @{hash}", artifact.kind)),
+                                footer: Some(format!(
+                                    "{} · @{hash} · {}",
+                                    artifact.kind,
+                                    ago_iso(artifact.updated.as_deref())
+                                )),
                             },
                             is_selected,
                         );
@@ -896,13 +1228,14 @@ pub fn section(
                     }
                     ui.end_row();
                 });
+            row_index += 1;
             // A click on this row settles the selection before the drawer
             // is placed, so the drawer opens under the card in the same frame.
             if let Some(stamp) = clicked.take() {
                 *selected = if selected.as_deref() == Some(stamp.as_str()) {
                     None
                 } else {
-                    scroll = true;
+                    *scroll = true;
                     Some(stamp)
                 };
             }
@@ -913,25 +1246,12 @@ pub fn section(
                 continue;
             };
             ui.add_space(GRID_GAP);
-            if scroll {
-                // Instant, not animated: the agent's capture on the next
-                // frame must already be looking at the drawer.
-                let top = ui.cursor().min;
-                ui.scroll_to_rect_animation(
-                    egui::Rect::from_min_size(top, egui::vec2(1.0, 1.0)),
-                    Some(egui::Align::TOP),
-                    egui::style::ScrollAnimation::none(),
-                );
+            if *scroll {
+                scroll_here(ui);
             }
-            let (show_clicked, table) = detail(ui, model, artifact);
-            if show_clicked {
-                *show = Some(stamp);
-            }
-            if table.is_some() {
-                *explore = table;
-            }
+            drawer.open(ui, model, artifact, &stamp);
         }
-    });
+    }
 }
 
 /// The selected artifact in full — its picture large, what the index
@@ -943,6 +1263,7 @@ fn detail(
     ui: &mut egui::Ui,
     model: &Model,
     artifact: &Artifact,
+    nav: &mut Nav,
 ) -> (bool, Option<crate::detail::Section>) {
     let (name, hash) = split_stamp(&artifact.stamp);
     let mut show = false;
@@ -1000,10 +1321,21 @@ fn detail(
                     );
                 });
                 weak_body(ui, &artifact.path);
+                ui.horizontal(|ui| {
+                    weak_body(ui, "added");
+                    weak_body(ui, ago_iso(artifact.created.as_deref()));
+                    weak_body(ui, "· updated");
+                    weak_body(ui, ago_iso(artifact.updated.as_deref()));
+                });
                 if !artifact.cites.is_empty() {
                     ui.add_space(10.0);
                     ui.label(egui::RichText::new("Provenance").strong());
-                    fact_grid(ui, ("cites", &artifact.stamp), &artifact.cites, true);
+                    lineage_grid(ui, ("cites", &artifact.stamp), model, &artifact.cites, nav);
+                }
+                if !artifact.cited_by.is_empty() {
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Used by").strong());
+                    used_by(ui, model, artifact, nav);
                 }
             });
         });
@@ -1031,6 +1363,96 @@ fn detail(
     }
     (show, explore)
 }
+
+/// The cites as a two-column grid; a stamp that names an artifact in
+/// this project is a link that opens it (the back button returns).
+fn lineage_grid(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    model: &Model,
+    map: &serde_json::Map<String, serde_json::Value>,
+    nav: &mut Nav,
+) {
+    egui::Grid::new(id)
+        .num_columns(2)
+        .spacing([16.0, 4.0])
+        .show(ui, |ui| {
+            for (key, value) in map {
+                ui.label(
+                    egui::RichText::new(crate::detail::field_word(key))
+                        .color(ui.visuals().weak_text_color()),
+                );
+                let text = value.as_str().unwrap_or_default();
+                stamp_link(ui, model, text, false, nav);
+                ui.end_row();
+            }
+        });
+}
+
+/// A stamp as a link when the project holds it (`short`: its name only,
+/// the version on hover), in monospace otherwise; `unrecorded` in the
+/// warning colour.
+fn stamp_link(ui: &mut egui::Ui, model: &Model, stamp: &str, short: bool, nav: &mut Nav) {
+    if stamp == "unrecorded" {
+        ui.label(egui::RichText::new(stamp).color(ui.visuals().warn_fg_color));
+    } else if model.artifact(stamp).is_some() {
+        let (name, hash) = split_stamp(stamp);
+        let text = if short { name } else { stamp };
+        if ui
+            .add(egui::Link::new(
+                egui::RichText::new(text)
+                    .monospace()
+                    .color(ui.tokens().highlight_color),
+            ))
+            .on_hover_text(format!("open {name} (version {hash})"))
+            .clicked()
+        {
+            nav.open = Some(stamp.to_owned());
+        }
+    } else {
+        ui.monospace(stamp);
+    }
+}
+
+/// What was made from this artifact, grouped by kind, each a link.
+fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav) {
+    let mut groups: Vec<(String, Vec<&Artifact>)> = Vec::new();
+    for stamp in &artifact.cited_by {
+        let Some(a) = model.artifact(stamp) else {
+            continue;
+        };
+        match groups.iter_mut().find(|(kind, _)| *kind == a.kind) {
+            Some((_, members)) => members.push(a),
+            None => groups.push((a.kind.clone(), vec![a])),
+        }
+    }
+    egui::Grid::new(("used_by", &artifact.stamp))
+        .num_columns(2)
+        .spacing([16.0, 4.0])
+        .show(ui, |ui| {
+            for (kind, members) in &groups {
+                let word = Section::for_kind(kind)
+                    .map(|s| s.title().to_lowercase())
+                    .unwrap_or_else(|| kind.clone());
+                ui.label(
+                    egui::RichText::new(format!("{} {word}", members.len()))
+                        .color(ui.visuals().weak_text_color()),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    for a in members.iter().take(USED_BY_SHOWN) {
+                        stamp_link(ui, model, &a.stamp, true, nav);
+                    }
+                    if members.len() > USED_BY_SHOWN {
+                        weak_body(ui, format!("… and {} more", members.len() - USED_BY_SHOWN));
+                    }
+                });
+                ui.end_row();
+            }
+        });
+}
+
+/// How many links a "Used by" row shows before folding.
+const USED_BY_SHOWN: usize = 12;
 
 /// A two-column key/value grid; stamps in monospace, `unrecorded` in the
 /// warning colour when `stamps` is set.

@@ -70,7 +70,58 @@ pub struct Artifact {
     /// kind has a writer (`rq_pipeline/project/details.py`).
     #[serde(default)]
     pub detail: Option<String>,
+    /// When it entered and when it last changed (ISO 8601 UTC), from the
+    /// index (`rq_pipeline/project/index.py`, `_times`); None when the
+    /// artifact has no files.
+    #[serde(default)]
+    pub created: Option<String>,
+    #[serde(default)]
+    pub updated: Option<String>,
+    /// Stamps of the artifacts in the project that cite this one.
+    #[serde(default)]
+    pub cited_by: Vec<String>,
 }
+
+impl Artifact {
+    /// Seconds since the epoch of the last change, for ordering; an
+    /// artifact with no time sorts last.
+    pub fn updated_epoch(&self) -> f64 {
+        self.updated
+            .as_deref()
+            .and_then(epoch_of)
+            .unwrap_or(f64::NEG_INFINITY)
+    }
+}
+
+/// One line of `events.jsonl`: what the human or the agent did in the
+/// window (`control.rs` writes it).
+#[derive(Deserialize, Clone, Debug)]
+pub struct Event {
+    /// Nanoseconds since the epoch.
+    pub t: f64,
+    pub kind: String,
+    #[serde(default)]
+    pub by: String,
+    #[serde(default)]
+    pub section: Option<String>,
+    #[serde(default)]
+    pub artifact: Option<String>,
+    #[serde(default)]
+    pub recording: Option<String>,
+    #[serde(default)]
+    pub table: Option<String>,
+    #[serde(default)]
+    pub project: Option<String>,
+}
+
+impl Event {
+    pub fn epoch_seconds(&self) -> f64 {
+        self.t / 1e9
+    }
+}
+
+/// How many events the activity feed keeps in memory.
+pub const EVENTS_KEPT: usize = 60;
 
 #[derive(Deserialize)]
 pub struct State {
@@ -166,6 +217,9 @@ pub struct Model {
     jobs_dir: PathBuf,
     jobs_seen: Option<SystemTime>,
     pub jobs: Vec<Job>,
+    /// The newest window events (`.index/events.jsonl`), newest first.
+    pub events: Vec<Event>,
+    events_seen: Option<std::time::SystemTime>,
     /// Why there is no index, when there is none.
     pub problem: Option<String>,
     last_poll: Option<std::time::Instant>,
@@ -196,6 +250,8 @@ impl Model {
             jobs_dir: root.join(JOBS_DIR),
             jobs_seen: None,
             jobs: Vec::new(),
+            events: Vec::new(),
+            events_seen: None,
             problem: None,
             project_root: root,
             last_poll: None,
@@ -351,6 +407,14 @@ impl Model {
             self.jobs_seen = jobs_modified;
             self.reload_jobs();
         }
+        let events_path = self.project_root.join(crate::control::EVENTS_RELATIVE);
+        let events_modified = std::fs::metadata(&events_path)
+            .and_then(|m| m.modified())
+            .ok();
+        if events_modified != self.events_seen {
+            self.events_seen = events_modified;
+            self.reload_events(&events_path);
+        }
     }
 
     fn reload_index(&mut self) {
@@ -384,6 +448,18 @@ impl Model {
                 });
             }
         }
+    }
+
+    fn reload_events(&mut self, path: &Path) {
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let mut events: Vec<Event> = text
+            .lines()
+            .rev()
+            .take(EVENTS_KEPT)
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect();
+        events.sort_by(|a, b| b.t.total_cmp(&a.t));
+        self.events = events;
     }
 
     fn reload_jobs(&mut self) {
@@ -457,15 +533,6 @@ pub fn short_time(iso: &str) -> String {
     }
 }
 
-/// Seconds since the epoch → `HH:MM` local-agnostic UTC, for the
-/// activity list; the date is dropped because activity is today's.
-pub fn clock(epoch_seconds: f64) -> String {
-    let secs = epoch_seconds.max(0.0) as u64;
-    let h = (secs / 3600) % 24;
-    let m = (secs / 60) % 60;
-    format!("{h:02}:{m:02}")
-}
-
 /// A duration in seconds → `4s`, `2m 10s`, `1h 03m`.
 pub fn elapsed(seconds: f64) -> String {
     let s = seconds.max(0.0) as u64;
@@ -513,7 +580,6 @@ mod tests {
         let job: Job = serde_json::from_str(text).expect("parses");
         assert!(job.running());
         assert_eq!(job.tool, "generate-demos");
-        assert_eq!(clock(job.started), "15:33");
     }
 
     #[test]
@@ -535,5 +601,133 @@ mod tests {
         assert_eq!(elapsed(4.0), "4s");
         assert_eq!(elapsed(130.0), "2m 10s");
         assert_eq!(elapsed(3780.0), "1h 03m");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Time, without a calendar crate: the index writes ISO 8601 UTC.
+
+/// `2026-09-08T19:34:51+00:00` (or `...Z`) → seconds since the epoch.
+pub fn epoch_of(iso: &str) -> Option<f64> {
+    let b = iso.as_bytes();
+    if b.len() < 19 {
+        return None;
+    }
+    let num = |s: &str| s.parse::<i64>().ok();
+    let (y, mo, d) = (num(&iso[0..4])?, num(&iso[5..7])?, num(&iso[8..10])?);
+    let (h, mi, s) = (num(&iso[11..13])?, num(&iso[14..16])?, num(&iso[17..19])?);
+    let days = days_from_civil(y, mo, d);
+    let mut secs = days * 86_400 + h * 3600 + mi * 60 + s;
+    // A zone offset, when one is written; the index writes +00:00.
+    if let Some(sign_at) = iso[19..].find(['+', '-']) {
+        let z = &iso[19 + sign_at..];
+        if z.len() >= 6 {
+            let sign = if z.starts_with('-') { -1 } else { 1 };
+            let (zh, zm) = (num(&z[1..3])?, num(&z[4..6])?);
+            secs -= sign * (zh * 3600 + zm * 60);
+        }
+    }
+    Some(secs as f64)
+}
+
+/// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's
+/// `days_from_civil`).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+pub fn now_epoch() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+/// How long ago, in a person's words: `just now`, `4 min ago`,
+/// `3 h ago`, `2 d ago`, then the date.
+pub fn ago(epoch_seconds: f64) -> String {
+    let dt = (now_epoch() - epoch_seconds).max(0.0);
+    if dt < 60.0 {
+        "just now".to_owned()
+    } else if dt < 3600.0 {
+        format!("{} min ago", (dt / 60.0) as u64)
+    } else if dt < 86_400.0 {
+        format!("{} h ago", (dt / 3600.0) as u64)
+    } else if dt < 7.0 * 86_400.0 {
+        format!("{} d ago", (dt / 86_400.0) as u64)
+    } else {
+        date_of(epoch_seconds)
+    }
+}
+
+/// The ISO time's `ago`, or `unrecorded`.
+pub fn ago_iso(iso: Option<&str>) -> String {
+    iso.and_then(epoch_of)
+        .map(ago)
+        .unwrap_or_else(|| "unrecorded".to_owned())
+}
+
+/// `YYYY-MM-DD` (UTC) of an epoch time.
+pub fn date_of(epoch_seconds: f64) -> String {
+    let (y, m, d) = civil_from_days((epoch_seconds / 86_400.0).floor() as i64);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// The day an artifact belongs to on a page grouped by day: `Today`,
+/// `Yesterday`, else the date (UTC days; the index writes UTC).
+pub fn day_label(epoch_seconds: f64) -> String {
+    let today = (now_epoch() / 86_400.0).floor() as i64;
+    let day = (epoch_seconds / 86_400.0).floor() as i64;
+    match today - day {
+        0 => "Today".to_owned(),
+        1 => "Yesterday".to_owned(),
+        _ => date_of(epoch_seconds),
+    }
+}
+
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+#[cfg(test)]
+mod time_tests {
+    use super::*;
+
+    #[test]
+    fn iso_round_trips_through_the_epoch() {
+        let t = epoch_of("2026-09-04T00:00:00+00:00").unwrap();
+        assert_eq!(date_of(t), "2026-09-04");
+        assert_eq!(epoch_of("1970-01-01T00:00:00Z"), Some(0.0));
+        assert_eq!(
+            epoch_of("2026-09-08T19:34:51+00:00"),
+            epoch_of("2026-09-08T21:34:51+02:00")
+        );
+        assert_eq!(epoch_of("junk"), None);
+    }
+
+    #[test]
+    fn ago_speaks_plainly() {
+        let now = now_epoch();
+        assert_eq!(ago(now), "just now");
+        assert_eq!(ago(now - 300.0), "5 min ago");
+        assert_eq!(ago(now - 7200.0), "2 h ago");
+        assert_eq!(ago(now - 3.0 * 86_400.0), "3 d ago");
+        assert_eq!(day_label(now), "Today");
+        assert_eq!(day_label(now - 86_400.0), "Yesterday");
     }
 }

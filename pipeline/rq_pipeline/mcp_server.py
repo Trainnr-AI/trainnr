@@ -450,13 +450,16 @@ def open_in_studio(
     artifact: str | None = None,
     project: str | None = None,
     table: str | None = None,
+    view: str | None = None,
 ) -> dict[str, Any]:
     """Navigate the Studio: a page by name (projects, overview, robots,
     environments, recordings, datasets, experiments, policies, evaluations,
     findings, deployments, monitoring, live), an artifact by version (its
-    page opens with the detail drawer), another project by root path, or
-    one of the selected artifact's tables by title (Joints, Actuators,
-    Episodes…) in the exploration modal — an empty string closes it."""
+    page opens with the detail drawer), another project by root path, one
+    of the selected artifact's tables by title (Joints, Actuators,
+    Episodes…) in the exploration modal — an empty string closes it — or
+    the page's view: cards, table, or matrix (evaluations judged under
+    two or more conditions: policies by condition)."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import SECTIONS, command  # noqa: PLC0415
 
@@ -472,6 +475,7 @@ def open_in_studio(
         artifact=artifact,
         project=project,
         table=table,
+        view=view,
     )
 
 

@@ -45,6 +45,9 @@ pub enum Command {
         /// title; an empty string closes the modal.
         #[serde(default)]
         table: Option<String>,
+        /// How the page lists its artifacts: cards, table or matrix.
+        #[serde(default)]
+        view: Option<String>,
     },
     Show {
         artifact: String,
@@ -175,6 +178,16 @@ pub struct StudioState {
     pub viewport_fps: Option<f32>,
     /// The simulator's clock and mode, from the stream's status.
     pub simulator: Option<SimulatorState>,
+    /// The window's content size in logical points and its pixel ratio,
+    /// so a capture's pixels can be read back as layout.
+    pub window: Option<WindowState>,
+}
+
+#[derive(Serialize, Clone, PartialEq, Debug)]
+pub struct WindowState {
+    pub width: f32,
+    pub height: f32,
+    pub pixels_per_point: f32,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -463,6 +476,7 @@ mod tests {
                 section: Some("robots".into()),
                 artifact: None,
                 table: None,
+                view: None,
             }
         );
         let time = parse_command(r#"{"verb":"time","seconds":1.5,"play":true}"#).expect("parses");
@@ -518,6 +532,7 @@ mod tests {
             viewport_task: None,
             viewport_fps: None,
             simulator: None,
+            window: None,
         };
         control.record_state(state.clone());
         let text = std::fs::read_to_string(root.join(STATE_RELATIVE)).unwrap();

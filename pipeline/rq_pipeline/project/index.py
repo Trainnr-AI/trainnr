@@ -94,6 +94,15 @@ class Artifact:
     # The detail view's path, relative to the project root
     # (`project/details.py`); None when the kind has no writer yet.
     detail: str | None = None
+    # When it entered and when it last changed (ISO 8601, UTC, seconds):
+    # the record's own date where it keeps one (a finding), else the
+    # oldest and newest file under it. Never invented: None when the
+    # artifact has no files at all.
+    created: str | None = None
+    updated: str | None = None
+    # Stamps of the artifacts in this project that cite this one — the
+    # lineage read downstream (a policy's evaluations, a run's policy).
+    cited_by: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -138,6 +147,7 @@ def index_project(project: Project) -> ProjectIndex:
                     {"path": str(path.relative_to(project.root)), "reason": str(why)}
                 )
                 continue
+            created, updated = _times(kind, path)
             artifacts.append(
                 Artifact(
                     kind=kind.value,
@@ -145,8 +155,11 @@ def index_project(project: Project) -> ProjectIndex:
                     path=str(path.relative_to(project.root)),
                     cites=_cites(kind, path),
                     summary=_summary(kind, path),
+                    created=created,
+                    updated=updated,
                 )
             )
+    _link_cited_by(artifacts)
     states = _states(artifacts)
     missing = [s.name for s in states if not s.present]
     # Telemetry is the loop's first state but not a prerequisite: a robot
@@ -373,6 +386,50 @@ def _summary_policy(path: Path) -> dict[str, Any]:
 
 
 CLAIM_CHARS = 160  # a card's subtitle: the claim's first sentence, this long at most
+
+
+def _link_cited_by(artifacts: list[Artifact]) -> None:
+    """Fill every artifact's `cited_by` from the others' `cites`, so the
+    lineage reads both ways without a second pass over the files."""
+    by_stamp = {a.stamp: a for a in artifacts}
+    for a in artifacts:
+        for cited in a.cites.values():
+            target = by_stamp.get(cited)
+            if target is not None and a.stamp not in target.cited_by:
+                target.cited_by.append(a.stamp)
+    for a in artifacts:
+        a.cited_by.sort()
+
+
+def _times(kind: Kind, path: Path) -> tuple[str | None, str | None]:
+    """(created, updated) for an artifact: its own recorded date when it
+    keeps one, else the oldest file under it; the newest file under it."""
+    files = [path] if path.is_file() else [f for f in path.rglob("*") if f.is_file()]
+    stamps = sorted(f.stat().st_mtime for f in files if not f.name.startswith("."))
+    oldest = _iso(stamps[0]) if stamps else None
+    newest = _iso(stamps[-1]) if stamps else None
+    own = _own_date(kind, path)
+    return (own or oldest, newest)
+
+
+def _own_date(kind: Kind, path: Path) -> str | None:
+    """The date a record carries about itself, as an ISO instant."""
+    if kind is Kind.FINDING:
+        date = _read(path).get("date")
+        if isinstance(date, str) and len(date) >= DATE_CHARS:
+            return f"{date[:DATE_CHARS]}T00:00:00+00:00"
+    return None
+
+
+def _iso(epoch: float) -> str:
+    return (
+        datetime.fromtimestamp(epoch, tz=timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+    )
+
+
+DATE_CHARS = len("2026-09-04")
 
 
 def _summary_finding(path: Path) -> dict[str, Any]:

@@ -696,6 +696,59 @@ Proposed order: 1–3 and 8 first (they change what the user can learn),
 4–7 as one polish pass, 9 after. Each lands with captures through the
 agent's own door, the standing rule.
 
+**Built 2026-09-09 (Prakhar: "ok continue"), items 1, 2, 3 and 8:**
+
+- *Time.* The index writes `created` and `updated` on every artifact
+  (`index.py`, `_times`): the record's own date where it keeps one (a
+  finding's `date`), else the oldest file under it; the newest file
+  under it. Never invented — an artifact with no files has none. The
+  index also writes `cited_by`, the reverse of `cites`, in the same pass
+  (`_link_cited_by`). Every page lists newest first, grouped by the day
+  the artifact last changed (Today, Yesterday, then dates; UTC days,
+  since the index writes UTC), and a card's footer says how long ago.
+  The Studio parses the ISO instants without a calendar crate
+  (`model.rs`, `epoch_of`, Hinnant's days-from-civil).
+- *Views.* `crates/studio-shell/src/listing.rs`: every page has a
+  Cards / Table / Matrix switch (remembered per page for the session,
+  and set by the agent: `open_in_studio(view=...)`). The table's columns
+  are the name, the summary keys the artifacts share (first six), and
+  `updated`; a click on a header sorts (numbers by value, so `19 / 40`
+  sorts as 19), a filter box narrows, a click on a row opens the drawer
+  under the table. The matrix appears on Evaluations when they were
+  judged under two or more named conditions: rows the policies, columns
+  the conditions, each cell the newest evaluation of that policy under
+  that condition, its rate as text on a one-hue fill whose strength is
+  the rate; wide matrices scroll sideways inside their own box. On
+  duck-walk that is 15 policies by 27 conditions — the study's question
+  on one screen.
+- *Lineage.* In a drawer, every cite that names an artifact in the
+  project is a link that opens it; "Used by" lists what was made from
+  this one, by kind; a back button returns to the page and selection
+  the link left (the sidebar clears the trail).
+- *Overview.* "Best policy by condition" (one row, with a link that
+  opens the matrix when there are more conditions than fit) sits under
+  the counts; "Recent activity" now merges the job table with the
+  window's event log — who did what, how long ago — and comes before
+  "Latest", which is now truly the latest (sorted by `updated`).
+
+Found on the way, by measuring rather than guessing: the Overview ran
+past the window's right edge whenever the window was narrower than the
+content cap plus margins. Two causes. The page column kept its cap but
+not its margin in a narrow window (now the column gives way, never the
+edge); and the pipeline strip's chips are frames in a wrapped row, and
+a frame never wraps itself — only a label does — so the eighth chip ran
+past the card and widened every block after it (egui grows a
+container's `max_rect` to include an overflowing child). A chip is now
+measured before placement and the row broken by the distance from the
+cursor to the right edge, since `available_width` in a wrapped row is
+the whole row. The state file now records the window's size and pixel
+ratio, so a capture's pixels read back as layout.
+
+Tried and dropped the same day: a `window` verb to resize the Studio so
+a capture could show a whole page. On macOS a programmatic resize left
+the render surface at the old size, so every later capture came out
+clipped; not worth a broken door for a convenience.
+
 ## 11. What this refuses to claim
 
 - Simulation is not reality. An evaluation is sim-only at a named fit on
