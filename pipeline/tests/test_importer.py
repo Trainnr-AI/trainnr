@@ -12,7 +12,13 @@ from pathlib import Path
 
 import rq_pipeline.mcp_server as server
 from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log
-from rq_pipeline.project import Kind, create_project, index_project, write_index
+from rq_pipeline.project import (
+    PROJECT_ENV,
+    Kind,
+    create_project,
+    index_project,
+    write_index,
+)
 from rq_pipeline.project.details import details_path
 from rq_pipeline.project.importer import (
     _training_log,
@@ -160,6 +166,14 @@ class RslRlLogTest(unittest.TestCase):
         self.assertEqual(record.columns[:3], ["iteration", "reward", "episode_length"])
         self.assertEqual(len(record.curve), 2)
 
+    def test_total_steps_is_a_curve_column(self) -> None:
+        record = parse_rsl_rl_log(
+            " Learning iteration 0/2\n   Total steps: 98304 \n   Mean reward: 1.0\n"
+        )
+        assert record is not None
+        self.assertIn("total_steps", record.columns)
+        self.assertEqual(record.curve[0][record.columns.index("total_steps")], 98304.0)
+
     def test_no_iteration_is_none(self) -> None:
         self.assertIsNone(parse_rsl_rl_log("Warp initialized\n"))
 
@@ -177,11 +191,15 @@ class StudyLogTest(unittest.TestCase):
                 "[g3] log_dir: /w/point#3/train\n Learning iteration 0/8\n"
             )
             (study / "point#3" / "train").mkdir(parents=True)
-            seg = _training_log(study / "point#3", "point#3")
+            seg = _training_log(
+                study / "point#3", study / "point#3" / "train", "point#3"
+            )
             assert seg is not None
             self.assertEqual(seg.count("Learning iteration"), 2)
             self.assertNotIn("point#2", seg)
-            self.assertIsNone(_training_log(study / "point#3", "wide"))
+            self.assertIsNone(
+                _training_log(study / "point#3", study / "point#3" / "train", "wide")
+            )
 
 
 class ImportDoorsTest(unittest.TestCase):
@@ -189,7 +207,7 @@ class ImportDoorsTest(unittest.TestCase):
 
     def test_doors_refuse_by_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["TRAINNR_PROJECT"] = str(Path(tmp) / "p")
+            os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
             try:
                 server.create_project_dir(str(Path(tmp) / "p"), "p")
                 out = server.import_experiment(str(Path(tmp) / "nowhere"))
@@ -199,7 +217,7 @@ class ImportDoorsTest(unittest.TestCase):
                 self.assertEqual(out["status"], "refused")
                 self.assertIn("no-such-finding", out["reason"])
             finally:
-                del os.environ["TRAINNR_PROJECT"]
+                os.environ.pop(PROJECT_ENV, None)
 
 
 class ImportEdgesTest(unittest.TestCase):

@@ -44,6 +44,14 @@ class Families(unittest.TestCase):
         with self.assertRaises(KeyError):
             build_variant("acme/pour", {})
 
+    def test_a_wrong_typed_overlay_is_refused_by_name(self) -> None:
+        with self.assertRaises(ValueError) as caught:
+            build_variant("kitting", {"tray_center": "far"})
+        self.assertIn("tray_center", str(caught.exception))
+        self.assertIn("tuple of 2", str(caught.exception))
+        with self.assertRaises(ValueError):
+            build_variant("kitting", {"trials": "four"})
+
     def test_an_expert_exists_for_kitting_only(self) -> None:
         self.assertTrue(callable(expert_for("kitting")))
         with self.assertRaises(ValueError) as caught:

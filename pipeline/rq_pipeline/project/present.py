@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.project.index import Artifact, ProjectIndex, index_project
-from rq_pipeline.project.kinds import Kind
+from rq_pipeline.project.kinds import TASK_FILE, Kind
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 INTENT_FILE = "present.json"
@@ -157,7 +157,11 @@ def serve(project: Project, *, once: bool = False) -> None:
 
 
 def _write_status(project: Project, status: dict[str, Any]) -> None:
-    (project.root / INDEX_DIR / "present-status.json").write_text(json.dumps(status))
+    """The presenter's answer, with the clock it was written at — the
+    door waits on that, not on a filesystem's mtime granularity."""
+    (project.root / INDEX_DIR / "present-status.json").write_text(
+        json.dumps({**status, "t": time.time()})
+    )
 
 
 # -- per kind -------------------------------------------------------------------
@@ -400,19 +404,20 @@ def _present_policy(
         lines = [f"# {artifact.stamp}", "", "```json", text, "```", _lineage(artifact)]
         if evaluations:
             rates = []
-            lines += ["", "## evaluations", ""]
+            lines += ["", "## evaluations (bars: those with a recorded rate)", ""]
             for e in evaluations:
                 success = str(e.summary.get("success", ""))
                 k, _, n = success.partition("/")
-                try:
-                    rates.append(float(k) / float(n))
-                except (ValueError, ZeroDivisionError):
-                    rates.append(0.0)
                 name = e.stamp.split("@", 1)[0]
                 judged = e.summary.get("judged at", "")
-                lines.append(f"- {name}: **{success}** · {judged}")
-            rr_.log(f"{root}/evaluations", rr.BarChart(rates), static=True)
-            paths.append(f"{root}/evaluations")
+                try:
+                    rates.append(float(k) / float(n))
+                    lines.append(f"- {name}: **{success}** · {judged}")
+                except (ValueError, ZeroDivisionError):
+                    lines.append(f"- {name}: rate unrecorded · {judged}")
+            if rates:
+                rr_.log(f"{root}/evaluations", rr.BarChart(rates), static=True)
+                paths.append(f"{root}/evaluations")
         else:
             lines += ["", "_no evaluation of this policy in the project yet_"]
         rr_.log(f"{root}/facts", _doc("\n".join(lines)), static=True)
@@ -457,8 +462,11 @@ def _present_finding(
         for name, arm in arms.items():
             if isinstance(arm, dict) and "successes" in arm and "trials" in arm:
                 k, n = arm["successes"], arm["trials"]
-                rates.append(k / n if n else 0.0)
-                lines.append(f"- {name}: **{k} / {n}**")
+                if n:
+                    rates.append(k / n)
+                    lines.append(f"- {name}: **{k} / {n}**")
+                else:
+                    lines.append(f"- {name}: no trials recorded")
     if raw.get("caveats"):
         lines += ["", "## caveats", ""] + [f"- {c}" for c in raw["caveats"]]
     with _AsDefault(rr_):
@@ -580,7 +588,7 @@ def _present_task(
     import rerun.blueprint as rrb  # noqa: PLC0415
 
     folder = project.root / artifact.path
-    ref = json.loads((folder / "task.json").read_text())
+    ref = json.loads((folder / TASK_FILE).read_text())
     task_id = ref.get("task_id", "")
     doc = f"# {task_id}\n\n- stamp `{ref.get('stamp')}` · {ref.get('kind')}\n"
     paths = [f"{root}/spec"]

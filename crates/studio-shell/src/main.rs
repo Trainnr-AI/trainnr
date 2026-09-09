@@ -210,6 +210,7 @@ impl eframe::App for StudioShell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.shell.tick(ui.ctx());
         self.answer_screenshot(ui);
         self.apply_commands(ui);
         self.before = (
@@ -236,6 +237,8 @@ impl eframe::App for StudioShell {
                 sender.send_ui(UICommand::ToggleBlueprintPanel);
             }
         });
+        // A presenter failure is a panel under the header, before the page.
+        self.shell.presenter_failure(ui);
         self.shell.rail(ui);
 
         // A recording arriving while another page is up switches to Live:
@@ -323,6 +326,7 @@ impl eframe::App for StudioShell {
         } else {
             egui::CentralPanel::default().show(ui, |ui| self.shell.page(ui));
         }
+        self.shell.overlays(ui.ctx());
         self.report(ui);
     }
 }
@@ -363,7 +367,9 @@ impl StudioShell {
                     }
                 }
                 Ok(command) => {
-                    self.last_navigation = Some(std::time::Instant::now());
+                    if command.moves_the_window() {
+                        self.last_navigation = Some(std::time::Instant::now());
+                    }
                     self.apply(ui, command)
                 }
                 Err(why) => Err(why),
@@ -386,9 +392,8 @@ impl StudioShell {
                 view,
                 search,
             } => {
-                if let Some(query) = search {
-                    self.shell.palette = Some(crate::palette::Palette::open(Some(query)));
-                }
+                // A move by the agent closes the palette; a search opens it.
+                self.shell.palette = search.map(|q| crate::palette::Palette::open(Some(q)));
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
                     if !root.join("project.json").is_file() {

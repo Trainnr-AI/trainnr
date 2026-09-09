@@ -268,10 +268,6 @@ class Indexing(unittest.TestCase):
                 write_task_reference(project, "kitting", "kitting@aaaaaaaaaaaa")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TimeAndLineage(unittest.TestCase):
     def test_every_artifact_has_times_and_the_lineage_reads_both_ways(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -302,6 +298,35 @@ class TimeAndLineage(unittest.TestCase):
             self.assertEqual(run.cited_by, [pol.stamp])
             self.assertEqual(pol.cites["run"], run.stamp)
 
+    def test_a_cite_by_hash_under_another_name_links_back(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            task = project.root / "tasks" / "tray-far"
+            task.mkdir(parents=True)
+            (task / "task.json").write_text(
+                json.dumps(
+                    {
+                        "task_id": "robotiq/kitting",
+                        "stamp": "kitting@abc123abc123",
+                        "kind": "declared",
+                        "name": "tray-far",
+                    }
+                )
+            )
+            cert = project.root / "certificates" / "c"
+            cert.mkdir(parents=True)
+            (cert / "certificate.json").write_text(
+                json.dumps(
+                    {"successes": 1, "trials": 2, "task": "kitting@abc123abc123"}
+                )
+            )
+            index = index_project(project)
+            declared = index.by_kind(Kind.TASK)[0]
+            self.assertEqual(declared.stamp, "tray-far@abc123abc123")
+            self.assertEqual(
+                declared.cited_by, [index.by_kind(Kind.CERTIFICATE)[0].stamp]
+            )
+
     def test_a_finding_is_dated_by_its_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = make_project(Path(tmp))
@@ -312,3 +337,7 @@ class TimeAndLineage(unittest.TestCase):
             )
             finding = index_project(project).by_kind(Kind.FINDING)[0]
             self.assertEqual(finding.created, "2026-09-04T00:00:00+00:00")
+
+
+if __name__ == "__main__":
+    unittest.main()

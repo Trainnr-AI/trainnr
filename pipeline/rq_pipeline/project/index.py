@@ -18,7 +18,9 @@ its inputs. Where an older artifact recorded no stamp, the index says
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +30,7 @@ from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.project.kinds import (
+    ACCEPTANCE_FILE,
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
@@ -380,7 +383,10 @@ def _summary_policy(path: Path) -> dict[str, Any]:
     manifest = _read(path / "policy.json")
     if manifest:
         basis = manifest.get("dr_basis") or ""
-        out: dict[str, Any] = {"iterations": manifest.get("iterations") or "unrecorded"}
+        iterations = manifest.get("iterations")
+        out: dict[str, Any] = {
+            "iterations": "unrecorded" if iterations is None else iterations
+        }
         out["randomization"] = _basis_name(basis) if basis else "unrecorded"
         out["format"] = manifest.get("format", "")
         return out
@@ -407,14 +413,18 @@ def _link_cited_by(artifacts: list[Artifact]) -> None:
     certificate cites `kitting@7d4f…`; the project holds it as
     `tray-far@7d4f…`)."""
     by_stamp = {a.stamp: a for a in artifacts}
-    by_hash = {a.stamp.split("@", 1)[1]: a for a in artifacts if "@" in a.stamp}
+    by_hash: dict[str, list[Artifact]] = {}
+    for a in artifacts:
+        if "@" in a.stamp:
+            by_hash.setdefault(a.stamp.split("@", 1)[1], []).append(a)
     for a in artifacts:
         for cited in a.cites.values():
-            target = by_stamp.get(cited)
-            if target is None and "@" in cited:
-                target = by_hash.get(cited.split("@", 1)[1])
-            if target is not None and a.stamp not in target.cited_by:
-                target.cited_by.append(a.stamp)
+            targets = [by_stamp[cited]] if cited in by_stamp else []
+            if not targets and "@" in cited:
+                targets = by_hash.get(cited.split("@", 1)[1], [])
+            for target in targets:
+                if a.stamp not in target.cited_by:
+                    target.cited_by.append(a.stamp)
     for a in artifacts:
         a.cited_by.sort()
 
@@ -422,12 +432,26 @@ def _link_cited_by(artifacts: list[Artifact]) -> None:
 def _times(kind: Kind, path: Path) -> tuple[str | None, str | None]:
     """(created, updated) for an artifact: its own recorded date when it
     keeps one, else the oldest file under it; the newest file under it."""
-    files = [path] if path.is_file() else [f for f in path.rglob("*") if f.is_file()]
-    stamps = sorted(f.stat().st_mtime for f in files if not f.name.startswith("."))
+    stamps = sorted(_file_times(path))
     oldest = _iso(stamps[0]) if stamps else None
     newest = _iso(stamps[-1]) if stamps else None
     own = _own_date(kind, path)
     return (own or oldest, newest)
+
+
+def _file_times(path: Path) -> list[float]:
+    """Modification times of every file under `path`, hidden files and
+    hidden directories (an artifact's own `.index`, a `.git`) left out."""
+    if path.is_file():
+        return [path.stat().st_mtime]
+    times: list[float] = []
+    for dirpath, dirnames, filenames in os.walk(path):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for name in filenames:
+            if not name.startswith("."):
+                with contextlib.suppress(OSError):
+                    times.append((Path(dirpath) / name).stat().st_mtime)
+    return times
 
 
 def _own_date(kind: Kind, path: Path) -> str | None:
@@ -452,7 +476,7 @@ DATE_CHARS = len("2026-09-04")
 
 def _summary_task(path: Path) -> dict[str, Any]:
     out = _take(_read(path / TASK_FILE), ("task_id", "stamp", "kind"))
-    verdict = _read(path / "acceptance.json")
+    verdict = _read(path / ACCEPTANCE_FILE)
     out["acceptance"] = (
         ("accepted" if verdict.get("accepted") else "rejected")
         if verdict

@@ -38,6 +38,10 @@ pub const RELOAD_EVERY: Duration = Duration::from_secs(1);
 /// fields are ignored so an older Studio still opens a newer index.
 #[derive(Deserialize, Default)]
 pub struct Index {
+    #[serde(skip)]
+    by_stamp: std::collections::HashMap<String, usize>,
+    #[serde(skip)]
+    by_hash: std::collections::HashMap<String, Vec<usize>>,
     #[serde(default)]
     pub project: String,
     #[serde(default)]
@@ -80,15 +84,18 @@ pub struct Artifact {
     /// Stamps of the artifacts in the project that cite this one.
     #[serde(default)]
     pub cited_by: Vec<String>,
+    /// `updated` parsed once at load (`Index::finish`); an artifact with
+    /// no time sorts last.
+    #[serde(skip)]
+    updated_epoch: Option<f64>,
 }
 
 impl Artifact {
     /// Seconds since the epoch of the last change, for ordering; an
     /// artifact with no time sorts last.
     pub fn updated_epoch(&self) -> f64 {
-        self.updated
-            .as_deref()
-            .and_then(epoch_of)
+        self.updated_epoch
+            .or_else(|| self.updated.as_deref().and_then(epoch_of))
             .unwrap_or(f64::NEG_INFINITY)
     }
 }
@@ -171,6 +178,41 @@ impl Job {
 }
 
 impl Index {
+    /// Once per load: parse every time, index every stamp and hash, so
+    /// a frame never re-parses or scans the artifact list.
+    pub fn finish(&mut self) {
+        for a in &mut self.artifacts {
+            a.updated_epoch = a.updated.as_deref().and_then(epoch_of);
+        }
+        self.by_stamp = self
+            .artifacts
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a.stamp.clone(), i))
+            .collect();
+        self.by_hash.clear();
+        for (i, a) in self.artifacts.iter().enumerate() {
+            let (_, hash) = split_stamp(&a.stamp);
+            if !hash.is_empty() {
+                self.by_hash.entry(hash.to_owned()).or_default().push(i);
+            }
+        }
+    }
+
+    /// The artifact a stamp names: by the whole stamp, else by its hash
+    /// when exactly one artifact carries it (a cite's name half is a
+    /// label; the project may hold the same version under another name).
+    pub fn artifact(&self, stamp: &str) -> Option<&Artifact> {
+        if let Some(&i) = self.by_stamp.get(stamp) {
+            return self.artifacts.get(i);
+        }
+        let (_, hash) = split_stamp(stamp);
+        match self.by_hash.get(hash).map(Vec::as_slice) {
+            Some([i]) => self.artifacts.get(*i),
+            _ => None,
+        }
+    }
+
     pub fn by_kind(&self, kind: &str) -> Vec<&Artifact> {
         self.artifacts.iter().filter(|a| a.kind == kind).collect()
     }
@@ -381,11 +423,19 @@ impl Model {
     /// Ask the presenter to show an artifact: write the intent file. The
     /// presenter (spawned by the shell) streams it and deletes the file.
     pub fn request_show(&self, stamp: &str) -> std::io::Result<()> {
+        self.forget_present_status();
         self.write_intent(serde_json::json!({ "stamp": stamp }))
+    }
+
+    /// A new request makes the presenter's last answer stale: remove it,
+    /// so an old failure is never shown as this request's.
+    fn forget_present_status(&self) {
+        let _ = std::fs::remove_file(self.project_root.join(PRESENT_STATUS_RELATIVE));
     }
 
     /// Ask the presenter for two artifacts side by side (`{"stamps": [a, b]}`).
     pub fn request_compare(&self, a: &str, b: &str) -> std::io::Result<()> {
+        self.forget_present_status();
         self.write_intent(serde_json::json!({ "stamps": [a, b] }))
     }
 
@@ -400,8 +450,9 @@ impl Model {
     }
 
     /// The artifact with this version, if the index knows it.
+    /// The artifact a stamp names (`Index::artifact`).
     pub fn artifact(&self, stamp: &str) -> Option<&Artifact> {
-        self.index()?.artifacts.iter().find(|a| a.stamp == stamp)
+        self.index()?.artifact(stamp)
     }
 
     /// Poll at most once a second; re-read whatever moved.
@@ -448,7 +499,10 @@ impl Model {
 
     fn reload_index(&mut self) {
         match std::fs::read_to_string(&self.index.path) {
-            Ok(text) => match serde_json::from_str::<Index>(&text) {
+            Ok(text) => match serde_json::from_str::<Index>(&text).map(|mut i| {
+                i.finish();
+                i
+            }) {
                 Ok(index) => {
                     self.index.value = Some(index);
                     self.problem = None;
@@ -638,26 +692,43 @@ mod tests {
 
 /// `2026-09-08T19:34:51+00:00` (or `...Z`) → seconds since the epoch.
 pub fn epoch_of(iso: &str) -> Option<f64> {
-    let b = iso.as_bytes();
-    if b.len() < 19 {
+    if !iso.is_ascii() {
         return None;
     }
-    let num = |s: &str| s.parse::<i64>().ok();
-    let (y, mo, d) = (num(&iso[0..4])?, num(&iso[5..7])?, num(&iso[8..10])?);
-    let (h, mi, s) = (num(&iso[11..13])?, num(&iso[14..16])?, num(&iso[17..19])?);
+    let num = |r: std::ops::Range<usize>| iso.get(r)?.parse::<i64>().ok();
+    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    if !(1..=12).contains(&mo)
+        || !(1..=31).contains(&d)
+        || !(0..24).contains(&h)
+        || !(0..60).contains(&mi)
+        || !(0..61).contains(&s)
+        || !(YEAR_MIN..=YEAR_MAX).contains(&y)
+    {
+        return None;
+    }
     let days = days_from_civil(y, mo, d);
     let mut secs = days * 86_400 + h * 3600 + mi * 60 + s;
     // A zone offset, when one is written; the index writes +00:00.
-    if let Some(sign_at) = iso[19..].find(['+', '-']) {
-        let z = &iso[19 + sign_at..];
-        if z.len() >= 6 {
+    let tail = iso.get(19..).unwrap_or("");
+    if let Some(sign_at) = tail.find(['+', '-']) {
+        let z = &tail[sign_at..];
+        let zn = |r: std::ops::Range<usize>| z.get(r)?.parse::<i64>().ok();
+        if let (Some(zh), Some(zm)) = (zn(1..3), zn(4..6)) {
             let sign = if z.starts_with('-') { -1 } else { 1 };
-            let (zh, zm) = (num(&z[1..3])?, num(&z[4..6])?);
             secs -= sign * (zh * 3600 + zm * 60);
         }
     }
     Some(secs as f64)
 }
+
+/// The years a timestamp may name: nothing before Unix time, nothing
+/// past what a project could plausibly record.
+const YEAR_MIN: i64 = 1970;
+const YEAR_MAX: i64 = 9999;
+/// Epoch seconds outside this window are treated as garbage by the
+/// date helpers rather than overflowing the calendar arithmetic.
+const EPOCH_MAX: f64 = 253_402_300_799.0; // 9999-12-31T23:59:59Z
 
 /// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's
 /// `days_from_civil`).
@@ -704,6 +775,9 @@ pub fn ago_iso(iso: Option<&str>) -> String {
 
 /// `YYYY-MM-DD` (UTC) of an epoch time.
 pub fn date_of(epoch_seconds: f64) -> String {
+    if !(0.0..=EPOCH_MAX).contains(&epoch_seconds) {
+        return "unrecorded".to_owned();
+    }
     let (y, m, d) = civil_from_days((epoch_seconds / 86_400.0).floor() as i64);
     format!("{y:04}-{m:02}-{d:02}")
 }
@@ -711,6 +785,9 @@ pub fn date_of(epoch_seconds: f64) -> String {
 /// The day an artifact belongs to on a page grouped by day: `Today`,
 /// `Yesterday`, else the date (UTC days; the index writes UTC).
 pub fn day_label(epoch_seconds: f64) -> String {
+    if !(0.0..=EPOCH_MAX).contains(&epoch_seconds) {
+        return "undated".to_owned();
+    }
     let today = (now_epoch() / 86_400.0).floor() as i64;
     let day = (epoch_seconds / 86_400.0).floor() as i64;
     match today - day {
@@ -747,6 +824,10 @@ mod time_tests {
             epoch_of("2026-09-08T21:34:51+02:00")
         );
         assert_eq!(epoch_of("junk"), None);
+        assert_eq!(epoch_of("2026-13-40T00:00:00Z"), None);
+        assert_eq!(epoch_of("2026-09-0ʘT00:00:00Z"), None);
+        assert_eq!(date_of(1e30), "unrecorded");
+        assert_eq!(date_of(-5.0), "unrecorded");
     }
 
     #[test]
@@ -758,5 +839,38 @@ mod time_tests {
         assert_eq!(ago(now - 3.0 * 86_400.0), "3 d ago");
         assert_eq!(day_label(now), "Today");
         assert_eq!(day_label(now - 86_400.0), "Yesterday");
+    }
+}
+
+#[cfg(test)]
+mod lookup_tests {
+    use super::*;
+
+    #[test]
+    fn artifact_lookup_by_hash_is_unambiguous() {
+        let mut index: Index = serde_json::from_value(serde_json::json!({
+            "schema": "x", "project": "p", "root": "/p", "indexed": "2026-09-09T00:00:00+00:00",
+            "artifacts": [
+                {"kind": "task", "stamp": "tray-far@abc", "path": "t"},
+                {"kind": "task", "stamp": "kitting-default@def", "path": "u"},
+                {"kind": "policy", "stamp": "other@def", "path": "v"}
+            ],
+            "states": [], "next_move": null, "refused": []
+        }))
+        .unwrap();
+        index.finish();
+        assert_eq!(
+            index.artifact("tray-far@abc").map(|a| a.path.as_str()),
+            Some("t")
+        );
+        assert_eq!(
+            index.artifact("kitting@abc").map(|a| a.path.as_str()),
+            Some("t")
+        );
+        assert!(
+            index.artifact("kitting@def").is_none(),
+            "two artifacts share def"
+        );
+        assert!(index.artifact("ghost@zzz").is_none());
     }
 }

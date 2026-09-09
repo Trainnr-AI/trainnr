@@ -249,6 +249,38 @@ class Lifecycle(unittest.TestCase):
             self.assertEqual(answer["status"], "done")
             self.assertIn("no Studio", answer["reason"])
 
+    def test_wait_presented_reports_shown_failed_and_pending(self) -> None:
+        import json as _json  # noqa: PLC0415
+
+        from rq_pipeline.project.control import (  # noqa: PLC0415
+            present_status_path,
+            wait_presented,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            path = present_status_path(project)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            since = time.time()
+            path.write_text(_json.dumps({"shown": "a@1", "t": since + 1}))
+            self.assertEqual(
+                wait_presented(project, "a@1", since=since, timeout_s=0.5)["status"],
+                "shown",
+            )
+            path.write_text(
+                _json.dumps({"error": "no", "stamp": "a@1", "t": since + 1})
+            )
+            self.assertEqual(
+                wait_presented(project, "a@1", since=since, timeout_s=0.5)["status"],
+                "failed",
+            )
+            # An answer older than the request is not this request's answer.
+            path.write_text(_json.dumps({"shown": "a@1", "t": since - 1}))
+            self.assertEqual(
+                wait_presented(project, "a@1", since=since, timeout_s=0.3)["status"],
+                "pending",
+            )
+
     def test_the_page_names_are_the_rails(self) -> None:
         self.assertIn("evaluations", SECTIONS)
         self.assertNotIn("certificates", SECTIONS)

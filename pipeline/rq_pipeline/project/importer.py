@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.project.kinds import IDENTITY_FILE, Kind, stamp_kind
-from rq_pipeline.project.locate import Project
+from rq_pipeline.project.locate import Project, plain_name
 
 POLICY_FILE = "policy.json"
 POLICY_SCHEMA = "trainnr-policy/1"
@@ -59,9 +59,7 @@ def import_experiment(
     if not identity_file.is_file():
         raise FileNotFoundError(f"{train}: no {IDENTITY_FILE} (not an rq_mjlab run)")
     identity = json.loads(identity_file.read_text())
-    label = name or arm.name
-    if "@" in label or "/" in label or "\\" in label:
-        raise ValueError(f"artifact names are plain words, got {label!r}")
+    label = plain_name(name or arm.name, "run name")
     run_dir = project.folder("runs") / label
     policy_dir = project.folder("policies") / label
     if run_dir.exists() or policy_dir.exists():
@@ -69,7 +67,7 @@ def import_experiment(
     # Everything that can refuse does so before anything is written, so
     # a refused import leaves the project exactly as it was.
     checkpoint = _checkpoint(train)
-    text = _training_log(arm, label)
+    text = _training_log(arm, train, label)
 
     # The run: its identity and, when the study kept one, its log.
     run_dir.mkdir(parents=True)
@@ -135,13 +133,13 @@ TRAINING_FILE = "training.json"
 LOG_DIR_LINE = "log_dir:"
 
 
-def _training_log(arm: Path, label: str) -> str | None:
+def _training_log(arm: Path, train: Path, label: str) -> str | None:
     """The run's console log: its own `train.log` (beside or inside
     `train/`), else the segment of a study log — a `*.log` beside the arm
     — whose `log_dir:` banner names this run (a study launches several
     runs into one log, and a restarted run leaves two segments: the
     longest wins)."""
-    for own in (arm / "train.log", arm / "train" / "train.log"):
+    for own in (train / "train.log", arm / "train.log"):
         if own.is_file():
             return own.read_text(errors="replace")
     best: str | None = None

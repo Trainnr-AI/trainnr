@@ -255,8 +255,9 @@ class Actions:
         policy must succeed on every paired trial and the floor policy on
         none. Minutes of simulation: returns a job handle; the verdict
         lands beside the task as acceptance.json."""
-        if not name or "/" in name:
-            raise ValueError(f"a task name is a plain word, got {name!r}")
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "task name")
         argv = [
             *self._uv(PIPELINE_DIR, "sim"),
             str(TOOLS_DIR / "accept-task.py"),

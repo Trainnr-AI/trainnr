@@ -160,3 +160,20 @@ def list_projects(root: Path | None = None) -> list[Project]:
         (Project(p) for p in home.iterdir() if (p / MANIFEST_FILE).is_file()),
         key=lambda p: p.root.name,
     )
+
+
+NAME_FORBIDDEN = "/\\@"
+
+
+def plain_name(name: str, what: str = "name") -> str:
+    """An artifact's name as a folder: one plain word, no separators, no
+    path tricks. Returns it; refuses anything else by name."""
+    if (
+        not name
+        or name != name.strip()
+        or any(c in name for c in NAME_FORBIDDEN)
+        or name in (".", "..")
+        or name.startswith(".")
+    ):
+        raise ValueError(f"a {what} is a plain word, got {name!r}")
+    return name

@@ -29,6 +29,7 @@ from typing import Any
 import numpy as np
 
 from rq_pipeline.project.index import Artifact, ProjectIndex
+from rq_pipeline.project.kinds import ACCEPTANCE_FILE, TASK_FILE
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 DETAILS_DIR = "details"
@@ -417,13 +418,15 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
     """The critic's verdict as facts: accepted or rejected with the
     reasons, the counts, and the expert's funnel."""
     funnel = a.get("funnel") or {}
+
+    def count(key: str) -> str:
+        k, n = a.get(key), a.get("trials")
+        return f"{k} / {n}" if k is not None and n is not None else "unrecorded"
+
     rows: list[tuple[str, Any]] = [
         ("verdict", "accepted" if a.get("accepted") else "rejected"),
-        (
-            "scripted policy successes",
-            f"{a.get('expert_successes')} / {a.get('trials')}",
-        ),
-        ("floor policy successes", f"{a.get('floor_successes')} / {a.get('trials')}"),
+        ("scripted policy successes", count("expert_successes")),
+        ("floor policy successes", count("floor_successes")),
         ("judged", a.get("judged", "unrecorded")),
         ("simulator build", a.get("instrument", "unrecorded")),
     ]
@@ -448,7 +451,7 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    ref = json.loads((root / "task.json").read_text())
+    ref = json.loads((root / TASK_FILE).read_text())
     task_id = ref.get("task_id", "")
     sections = [
         _kv(
@@ -461,8 +464,8 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         )
     ]
     acceptance = (
-        json.loads((root / "acceptance.json").read_text())
-        if (root / "acceptance.json").is_file()
+        json.loads((root / ACCEPTANCE_FILE).read_text())
+        if (root / ACCEPTANCE_FILE).is_file()
         else None
     )
     if acceptance is not None:
@@ -538,15 +541,6 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                         getattr(proto, "executed_horizon", None),
                     ),
                 ],
-            )
-        )
-    accept = root / "acceptance.json"
-    if accept.is_file():
-        a = json.loads(accept.read_text())
-        sections.append(
-            _kv(
-                "Acceptance (scripted policy must succeed; hold-still must fail)",
-                [(k, _jsonable(v)) for k, v in a.items()],
             )
         )
     return sections

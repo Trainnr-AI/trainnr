@@ -86,7 +86,7 @@ pub fn view_switch(ui: &mut egui::Ui, section: Section, matrix_available: bool) 
             }
         }
     });
-    ui.ctx().data_mut(|d| d.insert_temp(view_id(section), view));
+    set_view(ui.ctx(), section, view);
     view
 }
 
@@ -172,8 +172,10 @@ pub fn table(
         .collect();
     if let Some((col, ascending)) = state.sort {
         if let Some(column) = columns.get(col) {
-            shown.sort_by(|a, b| {
-                let (ka, kb) = (sort_key(a, column), sort_key(b, column));
+            // One key per row, not one per comparison.
+            let mut keyed: Vec<((f64, String), &Artifact)> =
+                shown.iter().map(|a| (sort_key(a, column), *a)).collect();
+            keyed.sort_by(|(ka, _), (kb, _)| {
                 let ord = ka.0.total_cmp(&kb.0).then_with(|| ka.1.cmp(&kb.1));
                 if ascending {
                     ord
@@ -181,6 +183,7 @@ pub fn table(
                     ord.reverse()
                 }
             });
+            shown = keyed.into_iter().map(|(_, a)| a).collect();
         }
     }
     let mut clicked: Option<String> = None;
@@ -207,64 +210,73 @@ pub fn table(
     let style = TableStyle::Dense;
     let row_h = tokens.table_row_height(style) + 4.0;
     let height = listing_height(ui);
-    let mut builder = TableBuilder::new(ui)
-        .id_salt(("listing", section.slug(), columns.len()))
-        .striped(true)
-        .resizable(true)
-        .vscroll(true)
-        .min_scrolled_height(height)
-        .max_scroll_height(height)
-        .sense(egui::Sense::click());
-    for (c, column) in columns.iter().enumerate() {
-        builder = builder.column(match column.as_str() {
-            "name" => Column::initial(NAME_COLUMN).at_least(120.0).clip(true),
-            "updated" => Column::exact(UPDATED_COLUMN),
-            _ if c + 2 == columns.len() => Column::remainder().at_least(120.0).clip(true),
-            _ => Column::initial(160.0).at_least(80.0).clip(true),
-        });
-    }
-    builder
-        .header(row_h + 2.0, |mut header| {
-            for (c, name) in columns.iter().enumerate() {
-                header.col(|ui| {
-                    let sorted = state.sort.filter(|(col, _)| *col == c).map(|(_, asc)| asc);
-                    let text = match sorted {
-                        Some(true) => format!("{name} ▲"),
-                        Some(false) => format!("{name} ▼"),
-                        None => name.clone(),
-                    };
-                    if ui
-                        .add(
-                            egui::Label::new(egui::RichText::new(text).strong())
-                                .sense(egui::Sense::click()),
-                        )
-                        .on_hover_text("sort by this column")
-                        .clicked()
-                    {
-                        clicked_col = Some(c);
-                    }
+    // Wide tables scroll sideways inside their own box; the page never does.
+    egui::ScrollArea::horizontal()
+        .id_salt(("listing-scroll", section.slug()))
+        .show(ui, |ui| {
+            let mut builder = TableBuilder::new(ui)
+                .id_salt(("listing", section.slug(), columns.len()))
+                .striped(true)
+                .resizable(true)
+                .vscroll(true)
+                .min_scrolled_height(height)
+                .max_scroll_height(height)
+                .sense(egui::Sense::click());
+            for (c, column) in columns.iter().enumerate() {
+                builder = builder.column(match column.as_str() {
+                    "name" => Column::initial(NAME_COLUMN).at_least(120.0).clip(true),
+                    "updated" => Column::exact(UPDATED_COLUMN),
+                    _ if c + 2 == columns.len() => Column::remainder().at_least(120.0).clip(true),
+                    _ => Column::initial(160.0).at_least(80.0).clip(true),
                 });
             }
-        })
-        .body(|mut body| {
-            tokens.setup_table_body(&mut body, style);
-            body.rows(row_h, shown.len(), |mut r| {
-                let a = shown[r.index()];
-                r.set_selected(selected == Some(a.stamp.as_str()));
-                for column in &columns {
-                    r.col(|ui| {
-                        let text = cell_text(a, column);
-                        if column == "name" {
-                            ui.add(egui::Label::new(egui::RichText::new(text).strong()).truncate());
-                        } else {
-                            ui.add(egui::Label::new(text).truncate());
+            builder
+                .header(row_h + 2.0, |mut header| {
+                    for (c, name) in columns.iter().enumerate() {
+                        header.col(|ui| {
+                            let sorted =
+                                state.sort.filter(|(col, _)| *col == c).map(|(_, asc)| asc);
+                            let text = match sorted {
+                                Some(true) => format!("{name} ▲"),
+                                Some(false) => format!("{name} ▼"),
+                                None => name.clone(),
+                            };
+                            if ui
+                                .add(
+                                    egui::Label::new(egui::RichText::new(text).strong())
+                                        .sense(egui::Sense::click()),
+                                )
+                                .on_hover_text("sort by this column")
+                                .clicked()
+                            {
+                                clicked_col = Some(c);
+                            }
+                        });
+                    }
+                })
+                .body(|mut body| {
+                    tokens.setup_table_body(&mut body, style);
+                    body.rows(row_h, shown.len(), |mut r| {
+                        let a = shown[r.index()];
+                        r.set_selected(selected == Some(a.stamp.as_str()));
+                        for column in &columns {
+                            r.col(|ui| {
+                                let text = cell_text(a, column);
+                                if column == "name" {
+                                    ui.add(
+                                        egui::Label::new(egui::RichText::new(text).strong())
+                                            .truncate(),
+                                    );
+                                } else {
+                                    ui.add(egui::Label::new(text).truncate());
+                                }
+                            });
+                        }
+                        if r.response().clicked() {
+                            clicked = Some(a.stamp.clone());
                         }
                     });
-                }
-                if r.response().clicked() {
-                    clicked = Some(a.stamp.clone());
-                }
-            });
+                });
         });
     if let Some(c) = clicked_col {
         state.sort = match state.sort {
@@ -280,14 +292,14 @@ pub fn table(
 // ---------------------------------------------------------------------
 // The matrix: policies by the condition they were judged under
 
-fn condition_of(a: &Artifact) -> Option<String> {
+pub fn condition_of(a: &Artifact) -> Option<String> {
     a.summary
         .get(CONDITION_KEY)
         .and_then(|v| v.as_str())
         .map(str::to_owned)
 }
 
-fn policy_of(a: &Artifact) -> String {
+pub fn policy_of(a: &Artifact) -> String {
     a.cites
         .get(POLICY_CITE)
         .and_then(|v| v.as_str())
@@ -296,7 +308,7 @@ fn policy_of(a: &Artifact) -> String {
 }
 
 /// `19 / 40` → (19, 40).
-fn successes_of(a: &Artifact) -> Option<(u32, u32)> {
+pub fn successes_of(a: &Artifact) -> Option<(u32, u32)> {
     let text = a.summary.get(SUCCESS_KEY)?.as_str()?;
     let (k, n) = text.split_once('/')?;
     Some((k.trim().parse().ok()?, n.trim().parse().ok()?))

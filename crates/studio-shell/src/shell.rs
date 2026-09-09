@@ -97,6 +97,8 @@ impl Shell {
         if self.model.request_compare(a, b).is_ok() {
             self.show_requested = true;
             self.shown = Some(format!("{a} vs {b}"));
+            self.last_shown = Some(format!("{a} vs {b}"));
+            self.dismissed_failure = None;
         }
     }
 
@@ -315,21 +317,12 @@ impl Shell {
     /// The page for the current section, except Live, which the caller
     /// renders (it owns the viewer and the viewport).
     pub fn page(&mut self, ui: &mut egui::Ui) {
-        if let Some(root) = self.switch_to.take() {
-            self.kill_presenter();
-            self.model.switch(root);
-            self.selected = None;
-            self.section = Section::Overview;
-        }
-        self.model.refresh();
-        ui.ctx().request_repaint_after(crate::model::RELOAD_EVERY);
         if let Some(problem) = self.model.problem.clone() {
             if self.section != Section::Projects {
                 pages::problem_page(ui, &problem);
                 return;
             }
         }
-        self.presenter_failure(ui);
         match self.section {
             Section::Projects => {
                 if let Some(root) = pages::projects(ui, &self.model) {
@@ -391,9 +384,32 @@ impl Shell {
                 self.table = None;
             }
         }
-        self.keys(ui.ctx());
+    }
+
+    /// Once per frame, before anything is drawn: the project switch the
+    /// user asked for, and the model's watch on its files (the index,
+    /// the jobs, the events, the presenter's answer) — on every page,
+    /// the Simulator included, not only where a page is drawn.
+    pub fn tick(&mut self, ctx: &egui::Context) {
+        if let Some(root) = self.switch_to.take() {
+            self.kill_presenter();
+            self.model.switch(root);
+            self.selected = None;
+            self.section = Section::Overview;
+            self.entered = true;
+        }
+        self.model.refresh();
+        ctx.request_repaint_after(crate::model::RELOAD_EVERY);
+    }
+
+    /// What floats over every page, the Simulator included: the keys and
+    /// the command palette. Called once per frame after the page (or the
+    /// viewer) has been drawn; the failure banner is a panel and goes
+    /// before the page (`presenter_failure`).
+    pub fn overlays(&mut self, ctx: &egui::Context) {
+        self.keys(ctx);
         if let Some(palette) = self.palette.as_mut() {
-            let (chosen, close) = crate::palette::show(ui.ctx(), palette, self.model.index());
+            let (chosen, close) = crate::palette::show(ctx, palette, self.model.index());
             if close {
                 self.palette = None;
             }
@@ -403,7 +419,7 @@ impl Shell {
                     self.selected = None;
                     self.history.clear();
                     self.entered = true;
-                    pages::scroll_to_top(ui.ctx());
+                    pages::scroll_to_top(ctx);
                 }
                 Some(crate::palette::Hit::Artifact { stamp, .. }) => self.navigate(&stamp),
                 None => {}
@@ -457,27 +473,28 @@ impl Shell {
 
     /// When "Show in viewer" could not be honoured, say so where the
     /// click happened, with the presenter's reason, until dismissed.
-    fn presenter_failure(&mut self, ui: &mut egui::Ui) {
+    pub fn presenter_failure(&mut self, ui: &mut egui::Ui) {
         let Some(status) = self.model.present_status.clone() else {
             return;
         };
         let (Some(stamp), Some(error)) = (status.stamp, status.error) else {
             return;
         };
-        if self.shown.as_deref() != Some(stamp.as_str())
-            && self.last_shown.as_deref() != Some(stamp.as_str())
-        {
+        if self.last_shown.as_deref() != Some(stamp.as_str()) {
             return;
         }
         if self.dismissed_failure.as_ref() == Some(&(stamp.clone(), error.clone())) {
             return;
         }
-        egui::Frame::new()
-            .fill(ui.visuals().warn_fg_color.linear_multiply(0.12))
-            .inner_margin(egui::Margin::symmetric(12, 8))
+        egui::Panel::top("presenter-failure")
+            .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                ui.horizontal(|ui| {
+                ui.painter().rect_filled(
+                    ui.max_rect().expand(8.0),
+                    0.0,
+                    ui.visuals().warn_fg_color.linear_multiply(0.12),
+                );
+                ui.horizontal_wrapped(|ui| {
                     ui.small_icon(&icons::WARNING, Some(ui.visuals().warn_fg_color));
                     ui.label(
                         egui::RichText::new(format!(
@@ -486,11 +503,9 @@ impl Shell {
                         ))
                         .color(ui.visuals().warn_fg_color),
                     );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("dismiss").clicked() {
-                            self.dismissed_failure = Some((stamp.clone(), error.clone()));
-                        }
-                    });
+                    if ui.small_button("dismiss").clicked() {
+                        self.dismissed_failure = Some((stamp.clone(), error.clone()));
+                    }
                 });
             });
     }

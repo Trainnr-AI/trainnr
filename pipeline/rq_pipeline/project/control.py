@@ -234,6 +234,7 @@ def screenshot(
 
 PRESENT_STATUS_FILE = "present-status.json"
 PRESENT_TIMEOUT_S = 20.0
+PRESENT_POLL_S = 0.2
 
 
 def present_status_path(project: Project) -> Path:
@@ -243,16 +244,17 @@ def present_status_path(project: Project) -> Path:
 def wait_presented(
     project: Project, stamp: str, *, since: float, timeout_s: float = PRESENT_TIMEOUT_S
 ) -> dict[str, Any]:
-    """The presenter's answer for `stamp` written after `since` (a
-    modification time): `shown`, or `failed` with the reason; `pending`
-    when none came within the timeout (a big scene still streaming, or
-    no presenter running)."""
+    """The presenter's answer for `stamp` written after `since` (a wall
+    clock reading taken before the request): `shown`, or `failed` with
+    the reason; `pending` when none came within the timeout (a big scene
+    still streaming, or no presenter running)."""
     deadline = time.monotonic() + timeout_s
     path = present_status_path(project)
     while time.monotonic() < deadline:
         try:
-            if path.stat().st_mtime > since:
-                raw = json.loads(path.read_text(encoding="utf-8"))
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            written = float(raw.get("t") or path.stat().st_mtime)
+            if written >= since:
                 if raw.get("stamp") == stamp and raw.get("error"):
                     return {
                         "status": "failed",
@@ -263,7 +265,7 @@ def wait_presented(
                     return {"status": "shown", "artifact": stamp}
         except (OSError, ValueError):
             pass
-        time.sleep(0.2)
+        time.sleep(PRESENT_POLL_S)
     return {
         "status": "pending",
         "reason": f"no answer from the presenter within {timeout_s:g} s",

@@ -10,6 +10,8 @@ use crate::pages::Section;
 /// How many hits the palette lists.
 pub const MAX_HITS: usize = 12;
 const PALETTE_WIDTH: f32 = 560.0;
+/// What the palette leaves free on each side in a narrow window.
+const PALETTE_MARGIN: f32 = 48.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Hit {
@@ -54,14 +56,15 @@ pub fn hits(query: &str, index: Option<&Index>) -> Vec<Hit> {
             // The name itself first, then names that start with the query,
             // then the shortest (closest to what was typed), then the newest —
             // so "narrow" lists the policy before its forty evaluations.
-            let rank = |x: &crate::model::Artifact| {
+            // One key per artifact, not one per comparison; newest first among equals.
+            artifacts.sort_by_cached_key(|x| {
                 let name = split_stamp(&x.stamp).0.to_lowercase();
-                (name != needle, !name.starts_with(&needle), name.len())
-            };
-            artifacts.sort_by(|a, b| {
-                rank(a)
-                    .cmp(&rank(b))
-                    .then_with(|| b.updated_epoch().total_cmp(&a.updated_epoch()))
+                (
+                    name != needle,
+                    !name.starts_with(&needle),
+                    name.len(),
+                    std::cmp::Reverse(ordered_float(x.updated_epoch())),
+                )
             });
             out.extend(artifacts.into_iter().map(|a| Hit::Artifact {
                 stamp: a.stamp.clone(),
@@ -73,6 +76,15 @@ pub fn hits(query: &str, index: Option<&Index>) -> Vec<Hit> {
     out
 }
 
+/// An f64 as a totally ordered key (NaN and -inf sort last).
+fn ordered_float(v: f64) -> i64 {
+    if v.is_finite() {
+        (v * 1000.0) as i64
+    } else {
+        i64::MIN
+    }
+}
+
 /// Draw the palette; returns the chosen hit, and whether it should close.
 pub fn show(
     ctx: &egui::Context,
@@ -82,7 +94,7 @@ pub fn show(
     let mut chosen = None;
     let mut close = false;
     let modal = egui::Modal::new(egui::Id::new("command-palette")).show(ctx, |ui| {
-        ui.set_width(PALETTE_WIDTH);
+        ui.set_width(PALETTE_WIDTH.min(ctx.content_rect().width() - PALETTE_MARGIN));
         let edit = ui.add(
             egui::TextEdit::singleline(&mut palette.query)
                 .hint_text("Jump to a page or an artifact…")
@@ -126,8 +138,13 @@ pub fn show(
                         }
                     };
                     ui.small_icon(icon, Some(ui.tokens().label_button_icon_color));
-                    ui.label(egui::RichText::new(title).strong());
-                    ui.label(egui::RichText::new(detail).color(ui.visuals().weak_text_color()));
+                    ui.add(egui::Label::new(egui::RichText::new(title).strong()).truncate());
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(detail).color(ui.visuals().weak_text_color()),
+                        )
+                        .truncate(),
+                    );
                     if i == 0 {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(

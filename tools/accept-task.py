@@ -30,15 +30,16 @@ import mujoco  # noqa: E402
 from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
 from rq_pipeline.physics.backend import instrument_stamp  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
+from rq_pipeline.project.kinds import (  # noqa: E402
+    ACCEPTANCE_FILE,
+    ACCEPTANCE_SCHEMA,
+    TASK_FILE,
+)
 from rq_pipeline.project.locate import Project  # noqa: E402
 from rq_pipeline.tasks.acceptance import accept  # noqa: E402
 from rq_pipeline.tasks.aloha2 import KITTING_SPEC  # noqa: E402
 from rq_pipeline.tasks.experts import EXPERTS, expert_for  # noqa: E402
-from rq_pipeline.tasks.overlay import (  # noqa: E402
-    ACCEPTANCE_FILE,
-    ACCEPTANCE_SCHEMA,
-    build_from_reference,
-)
+from rq_pipeline.tasks.overlay import build_from_reference  # noqa: E402
 
 
 def main() -> None:
@@ -87,7 +88,7 @@ def review_declared(project_root: Path, name: str) -> bool:
     """Review the project's declared task `name`; write its verdict."""
     project = Project(project_root.resolve())
     folder = project.folder("tasks") / name
-    ref_path = folder / "task.json"
+    ref_path = folder / TASK_FILE
     if not ref_path.is_file():
         raise SystemExit(f"no task {name!r} in {project.root} (no {ref_path})")
     ref = json.loads(ref_path.read_text())
@@ -120,7 +121,10 @@ def review_declared(project_root: Path, name: str) -> bool:
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "records": "acceptance-records.jsonl",
     }
-    (folder / ACCEPTANCE_FILE).write_text(json.dumps(record, indent=1) + "\n")
+    # Atomic, like the index: a reader never sees half a verdict.
+    staging = folder / (ACCEPTANCE_FILE + ".tmp")
+    staging.write_text(json.dumps(record, indent=1) + "\n")
+    staging.replace(folder / ACCEPTANCE_FILE)
     # The verdict is part of the task's record: the index and the Studio
     # see it the moment the job ends.
     write_index(project, index_project(project))

@@ -22,6 +22,7 @@ available the indexer says so once and writes the index without pictures.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ import numpy as np
 
 from rq_pipeline.project.details import outcome_of
 from rq_pipeline.project.index import ProjectIndex
+from rq_pipeline.project.kinds import TASK_FILE
 from rq_pipeline.project.locate import INDEX_DIR, Project
 
 PREVIEWS_DIR = "previews"
@@ -51,8 +53,8 @@ MAX_TRACES = 8  # a recording's channel shows at most this many components
 FONT_CANDIDATES = (
     "/System/Library/Fonts/Helvetica.ttc",  # macOS
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian, Ubuntu
-    "C:/Windows/Fonts/segoeui.ttf",  # Windows
-    "C:/Windows/Fonts/arial.ttf",
+    str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"),
+    str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf"),
 )
 
 
@@ -107,8 +109,8 @@ def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     except ImportError:
         return False
     ref = (
-        json.loads((source / "task.json").read_text())
-        if (source / "task.json").is_file()
+        json.loads((source / TASK_FILE).read_text())
+        if (source / TASK_FILE).is_file()
         else {}
     )
     task_id = ref.get("task_id")
@@ -452,17 +454,24 @@ def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
         return _save_pil(image, out)
     # A claim with no numbers to draw: its first sentence, large — the
     # headline — under the record's id; the rest waits in the drawer.
-    draw.text((48, 32), raw.get("id", ""), fill=(160, 166, 178), font=_font(24))
+    draw.text(CARD_ORIGIN, raw.get("id", ""), fill=TEXT_DIM, font=_font(CARD_LABEL_PT))
     headline = _first_sentence(str(raw.get("claim", "")))
-    y = 96
+    y = HEADLINE_TOP
     for row in _wrap(headline, HEADLINE_CHARS)[:HEADLINE_LINES]:
-        draw.text((48, y), row, fill=(236, 238, 242), font=_font(34))
-        y += 52
+        draw.text((CARD_ORIGIN[0], y), row, fill=TEXT_BRIGHT, font=_font(HEADLINE_PT))
+        y += HEADLINE_LEADING
     return _save_pil(image, out)
 
 
 HEADLINE_CHARS = 34  # characters per line at the headline size
 HEADLINE_LINES = 6
+HEADLINE_PT = 34
+HEADLINE_LEADING = 52
+HEADLINE_TOP = 96
+CARD_ORIGIN = (48, 32)  # where a card's small label starts
+CARD_LABEL_PT = 24
+TEXT_DIM = (160, 166, 178)
+TEXT_BRIGHT = (236, 238, 242)
 
 
 def _first_sentence(text: str) -> str:

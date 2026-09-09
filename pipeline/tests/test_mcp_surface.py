@@ -334,10 +334,6 @@ class StudioDoors(unittest.TestCase):
                 os.environ.pop(PROJECT_ENV, None)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TaskDoors(unittest.TestCase):
     """A4: an environment declared by conversation; refusals by name
     before any scene is built."""
@@ -372,3 +368,7 @@ class TaskDoors(unittest.TestCase):
                 self.assertIn("ghost", ghost["reason"])
             finally:
                 os.environ.pop(PROJECT_ENV, None)
+
+
+if __name__ == "__main__":
+    unittest.main()

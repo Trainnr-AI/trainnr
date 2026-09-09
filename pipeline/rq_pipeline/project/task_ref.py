@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.project.kinds import TASK_FILE
-from rq_pipeline.project.locate import Project
+from rq_pipeline.project.locate import Project, plain_name
 
 REGISTERED = "registered"
 DECLARED = "declared"
@@ -63,9 +63,6 @@ def write_task_reference(  # noqa: PLR0913 - one record, each field named
     return out
 
 
-NAME_FORBIDDEN = "/@"
-
-
 def declare_task(
     project: Project, task_id: str, name: str, overlay: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -77,8 +74,7 @@ def declare_task(
     from rq_pipeline.tasks.overlay import build_variant, jsonable  # noqa: PLC0415
     from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
 
-    if not name or any(c in name for c in NAME_FORBIDDEN) or name != name.strip():
-        raise ValueError(f"a task name is a plain word, got {name!r}")
+    plain_name(name, "task name")
     folder = project.folder("tasks") / name
     if folder.exists():
         raise FileExistsError(f"{name!r} is already a task in this project")

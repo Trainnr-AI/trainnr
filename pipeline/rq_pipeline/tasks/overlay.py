@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import fields, is_dataclass, replace
-from pathlib import Path
 from typing import Any
 
 from rq_pipeline.tasks.registry import TaskEntry, resolve, tasks
@@ -74,6 +73,11 @@ def build_variant(task_id: str, overlay: dict[str, Any] | None) -> tuple[Any, An
             f"its fields are {', '.join(sorted(known))}"
         )
     coerced = {k: _coerce(v, known[k]) for k, v in overlay.items()}
+    for k, v in coerced.items():
+        if not _same_shape(v, known[k]):
+            raise ValueError(
+                f"{entry.task_id}.{k} wants a {_shape(known[k])}, got {_shape(v)}"
+            )
     spec = replace(default, **coerced)
     return entry.build(**{SPEC_PARAMETER: spec}), spec
 
@@ -86,14 +90,6 @@ def build_from_reference(ref: dict[str, Any]) -> Any:
         task, _ = build_variant(task_id, ref["spec"])
         return task
     return resolve(task_id).build()
-
-
-def acceptance_path(task_folder: Path) -> Path:
-    return task_folder / ACCEPTANCE_FILE
-
-
-ACCEPTANCE_FILE = "acceptance.json"
-ACCEPTANCE_SCHEMA = "trainnr-acceptance/1"
 
 
 # -- helpers ---------------------------------------------------------------------
@@ -121,6 +117,38 @@ def _coerce(value: Any, default: Any) -> Any:
         sample = next(iter(default.values()), None)
         return {k: _coerce(v, sample) for k, v in value.items()}
     return value
+
+
+def _same_shape(value: Any, default: Any) -> bool:
+    """A value fits a field when it is the default's kind of thing: a
+    number for a number, a tuple of the same length for a tuple, a
+    mapping for a mapping, a string for a string."""
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, (int, float)):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(default, str):
+        return isinstance(value, str)
+    if isinstance(default, tuple):
+        return (
+            isinstance(value, tuple)
+            and len(value) == len(default)
+            and all(_same_shape(x, default[0]) for x in value)
+        )
+    if isinstance(default, dict):
+        sample = next(iter(default.values()), None)
+        return isinstance(value, dict) and (
+            sample is None or all(_same_shape(x, sample) for x in value.values())
+        )
+    return True
+
+
+def _shape(v: Any) -> str:
+    if isinstance(v, tuple):
+        return f"tuple of {len(v)} ({_shape(v[0]) if v else 'empty'})"
+    if isinstance(v, dict):
+        return "mapping"
+    return type(v).__name__
 
 
 def jsonable(v: Any) -> Any:

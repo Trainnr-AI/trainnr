@@ -137,6 +137,23 @@ pub enum Command {
     Quit,
 }
 
+impl Command {
+    /// Whether applying it changes what the window shows — what a
+    /// capture must wait for after.
+    pub fn moves_the_window(&self) -> bool {
+        matches!(
+            self,
+            Command::Open { .. }
+                | Command::Show { .. }
+                | Command::Compare { .. }
+                | Command::Time { .. }
+                | Command::Panels { .. }
+                | Command::Simulate { .. }
+                | Command::Simulator { .. }
+        )
+    }
+}
+
 pub const SCREENSHOTS_RELATIVE: &str = ".index/screenshots";
 /// The default and the ceiling for a screenshot's width: one image an
 /// agent reads whole, never a retina frame verbatim.

@@ -27,6 +27,7 @@ no MCP import anywhere near them — the suite tests them directly and the
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -193,6 +194,12 @@ def describe_tasks() -> list[dict[str, Any]]:
     ]
 
 
+def _reason(why: BaseException) -> str:
+    """An exception as a refusal's reason: a KeyError's own message,
+    not its repr with quotes."""
+    return str(why.args[0]) if isinstance(why, KeyError) and why.args else str(why)
+
+
 def describe_task_families() -> dict[str, Any]:
     """The families a task can be declared over — every registered task
     whose builder takes a spec — with each spec's fields, types and
@@ -223,8 +230,8 @@ def create_task(
     project = current_project()
     try:
         out = declare_task(project, task_id, name, overlay)
-    except (KeyError, ValueError, FileExistsError) as why:
-        return {"status": "refused", "reason": str(why)}
+    except (KeyError, ValueError, FileExistsError, TypeError) as why:
+        return {"status": "refused", "reason": _reason(why)}
     write_index(project, index_project(project))
     return {"status": "done", **out, "next": f"accept_task({name!r})"}
 
@@ -239,13 +246,19 @@ def accept_task(name: str) -> dict[str, Any]:
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.kinds import TASK_FILE  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
     from rq_pipeline.tasks.experts import expert_for  # noqa: PLC0415
 
     project = current_project()
+    try:
+        plain_name(name, "task name")
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
     folder = project.folder("tasks") / name
-    if not (folder / "task.json").is_file():
+    if not (folder / TASK_FILE).is_file():
         return {"status": "refused", "reason": f"no task {name!r} in this project"}
-    ref = json.loads((folder / "task.json").read_text())
+    ref = json.loads((folder / TASK_FILE).read_text())
     try:
         expert_for(ref.get("task_id", ""))
     except (KeyError, ValueError) as why:
@@ -548,15 +561,10 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
     its meshes in 3D, a recording as time series, an experiment as its
     curves, an evaluation as its funnel) and switch to the Live view."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.control import (  # noqa: PLC0415
-        command,
-        present_status_path,
-        wait_presented,
-    )
+    from rq_pipeline.project.control import command, wait_presented  # noqa: PLC0415
 
     project = current_project()
-    status_path = present_status_path(project)
-    since = status_path.stat().st_mtime if status_path.is_file() else 0.0
+    since = time.time()
     answer = command(project, "show", artifact=artifact)
     if answer.get("status") != "done":
         return answer

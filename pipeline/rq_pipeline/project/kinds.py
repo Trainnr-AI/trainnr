@@ -30,6 +30,9 @@ DEPLOY_FILE = "deploy.json"
 DRIFT_FILE = "drift.json"
 FIT_FILE = "fit.json"
 TASK_FILE = "task.json"
+# The critic's verdict beside a task (`tools/accept-task.py --project`).
+ACCEPTANCE_FILE = "acceptance.json"
+ACCEPTANCE_SCHEMA = "trainnr-acceptance/1"
 IDENTITY_FILE = "identity.json"  # rq_mjlab's walk run identity (walk_train.py)
 
 

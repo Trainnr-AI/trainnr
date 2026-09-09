@@ -218,10 +218,7 @@ fn stage_label(name: &str) -> &str {
 }
 
 fn section_of(kind: &str) -> Option<Section> {
-    Section::RAIL
-        .iter()
-        .flat_map(|(_, items)| items.iter().copied())
-        .find(|s| s.kinds().contains(&kind))
+    Section::for_kind(kind)
 }
 
 // ---------------------------------------------------------------------
@@ -334,6 +331,22 @@ fn picture_card(
     text: CardText<'_>,
     selected: bool,
 ) -> egui::Response {
+    let salt = text.title.to_owned();
+    picture_card_with_id(ui, width, picture, icon, text, selected, &salt)
+}
+
+/// A card whose egui id comes from `salt`, not its title: two versions
+/// of one artifact in a row share a title, and a grid's cells share a Ui.
+#[allow(clippy::too_many_arguments)]
+fn picture_card_with_id(
+    ui: &mut egui::Ui,
+    width: f32,
+    picture: Option<&std::path::Path>,
+    icon: &re_ui::Icon,
+    text: CardText<'_>,
+    selected: bool,
+    salt: &str,
+) -> egui::Response {
     let tokens = ui.tokens();
     let thumb_h = width / THUMBNAIL_ASPECT;
     let rect = egui::Rect::from_min_size(
@@ -342,7 +355,7 @@ fn picture_card(
     );
     let response = ui.interact(
         rect,
-        ui.id().with(text.title).with(width as u32),
+        ui.id().with(salt).with(width as u32),
         egui::Sense::click(),
     );
     ui.painter()
@@ -566,7 +579,7 @@ fn latest_pictures(
                 let (name, hash) = split_stamp(&artifact.stamp);
                 let facts =
                     summary_line(&artifact.summary).unwrap_or_else(|| artifact.kind.clone());
-                let response = picture_card(
+                let response = picture_card_with_id(
                     ui,
                     width,
                     model.preview_path(artifact).as_deref(),
@@ -581,6 +594,7 @@ fn latest_pictures(
                         )),
                     },
                     false,
+                    &artifact.stamp,
                 );
                 if response.clicked() {
                     *go_to = section_of(&artifact.kind).map(|s| (s, Some(artifact.stamp.clone())));
@@ -605,28 +619,23 @@ fn best_by_condition(
     }
     let mut best: Vec<(String, &Artifact, f32)> = Vec::new();
     for a in &evaluations {
-        let Some(condition) = a.summary.get("judged at").and_then(|v| v.as_str()) else {
+        let Some(condition) = crate::listing::condition_of(a) else {
             continue;
         };
-        let Some((k, n)) = a
-            .summary
-            .get("success")
-            .and_then(|v| v.as_str())
-            .and_then(|t| t.split_once('/'))
-            .and_then(|(k, n)| {
-                Some((k.trim().parse::<f32>().ok()?, n.trim().parse::<f32>().ok()?))
-            })
-        else {
+        let Some((k, n)) = crate::listing::successes_of(a) else {
             continue;
         };
-        let rate = if n > 0.0 { k / n } else { 0.0 };
-        match best.iter_mut().find(|(c, _, _)| c == condition) {
+        if n == 0 {
+            continue; // no trials: no rate to rank by
+        }
+        let rate = k as f32 / n as f32;
+        match best.iter_mut().find(|(c, _, _)| *c == condition) {
             Some(entry) if rate > entry.2 => {
                 entry.1 = a;
                 entry.2 = rate;
             }
             Some(_) => {}
-            None => best.push((condition.to_owned(), a, rate)),
+            None => best.push((condition, a, rate)),
         }
     }
     if best.is_empty() {
@@ -660,14 +669,9 @@ fn best_by_condition(
         .max_col_width(width)
         .show(ui, |ui| {
             for (i, (condition, artifact, rate)) in best.iter().enumerate() {
-                let policy = artifact
-                    .cites
-                    .get("policy")
-                    .and_then(|v| v.as_str())
-                    .map(|s| split_stamp(s).0)
-                    .unwrap_or("unrecorded");
+                let policy = crate::listing::policy_of(artifact);
                 let facts = format!("{policy} · {:.0}% success", rate * 100.0);
-                let response = picture_card(
+                let response = picture_card_with_id(
                     ui,
                     width,
                     model.preview_path(artifact).as_deref(),
@@ -678,6 +682,7 @@ fn best_by_condition(
                         footer: Some(split_stamp(&artifact.stamp).0.to_owned()),
                     },
                     false,
+                    &artifact.stamp,
                 );
                 if response.clicked() {
                     *go_to = Some((Section::Certificates, Some(artifact.stamp.clone())));
@@ -1233,7 +1238,7 @@ fn card_rows(
                         let facts = summary_line(&artifact.summary)
                             .unwrap_or_else(|| artifact.path.clone());
                         let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
-                        let response = picture_card(
+                        let response = picture_card_with_id(
                             ui,
                             width,
                             model.preview_path(artifact).as_deref(),
@@ -1248,6 +1253,7 @@ fn card_rows(
                                 )),
                             },
                             is_selected,
+                            &artifact.stamp,
                         );
                         if response.clicked() {
                             clicked = Some(artifact.stamp.clone());
