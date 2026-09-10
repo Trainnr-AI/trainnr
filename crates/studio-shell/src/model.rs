@@ -177,14 +177,32 @@ pub struct Job {
     #[serde(default)]
     pub argv: Vec<String>,
     pub started: f64,
+    #[serde(default)]
+    pub pid: u32,
     #[serde(skip)]
     pub exit: Option<i32>,
 }
 
 impl Job {
+    /// Running means no exit recorded AND the process still there: a
+    /// job whose runner was killed before it could write the exit file
+    /// showed as running for an hour after it ended (2026-09-10).
     pub fn running(&self) -> bool {
-        self.exit.is_none()
+        self.exit.is_none() && pid_alive(self.pid)
     }
+}
+
+/// Whether a process id is alive. Linux answers through `/proc`; other
+/// platforms have no dependency-free check here and answer "alive", so
+/// there the exit file alone decides (the runner writes it).
+fn pid_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    if cfg!(target_os = "linux") {
+        return std::path::Path::new(&format!("/proc/{pid}")).exists();
+    }
+    true
 }
 
 impl Index {
@@ -669,12 +687,24 @@ mod tests {
     }
 
     #[test]
-    fn a_job_record_parses_and_is_running_without_an_exit() {
-        let text = r#"{"id":"generate-demos-1a2b","tool":"generate-demos",
-            "argv":["uv","run"],"cwd":"/p","log":"/p/x.log","pid":4,"started":1757000000.5}"#;
-        let job: Job = serde_json::from_str(text).expect("parses");
+    fn a_job_record_parses_and_is_running_while_its_process_lives() {
+        let alive = std::process::id();
+        let text = format!(
+            r#"{{"id":"generate-demos-1a2b","tool":"generate-demos",
+            "argv":["uv","run"],"cwd":"/p","log":"/p/x.log","pid":{alive},"started":1757000000.5}}"#
+        );
+        let job: Job = serde_json::from_str(&text).expect("parses");
         assert!(job.running());
         assert_eq!(job.tool, "generate-demos");
+        // An exit recorded ends it whatever the pid says.
+        let mut ended = job.clone();
+        ended.exit = Some(0);
+        assert!(!ended.running());
+        // No exit and no process (a runner killed before it wrote one):
+        // not running on Linux, where the check exists.
+        let mut gone = job.clone();
+        gone.pid = 0;
+        assert!(!gone.running());
     }
 
     #[test]

@@ -23,6 +23,7 @@ from pathlib import Path
 from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log
 from rq_pipeline.project.importer import (
     VERDICT_GLOB,
+    evaluation_suffix,
     write_certificate,
     write_policy,
 )
@@ -78,14 +79,11 @@ def verdict_files(project: Project) -> list[Path]:
     return sorted(project.runs.rglob(f"{VERDICT_DIR}/{VERDICT_GLOB}"))
 
 
-def certificate_label(verdict_file: Path) -> str:
+def certificate_label(verdict_file: Path, verdict: dict) -> str:
     """The evaluation's name: the run and the checkpoint it judged
-    (`go2-c1-model_1400`); the verdict's own suffix is appended by the
-    writer, so the same checkpoint judged on another instrument keeps
-    its own card."""
-    run_dir = verdict_file.parent.parent
-    policy = json.loads(verdict_file.read_text()).get("policy", "")
-    return f"{run_dir.name}-{policy}"
+    (`go2-c1-model_1400`); the writer appends what tells one judgment
+    of that checkpoint from another (instrument, seed, trials)."""
+    return f"{verdict_file.parent.parent.name}-{verdict.get('policy', '')}"
 
 
 def refresh_verdicts(project: Project) -> list[Path]:
@@ -96,11 +94,12 @@ def refresh_verdicts(project: Project) -> list[Path]:
     written: list[Path] = []
     for verdict_file in verdict_files(project):
         run_dir = verdict_file.parent.parent
-        label = certificate_label(verdict_file)
-        suffix = verdict_file.stem.removeprefix("walk-verdict-")
-        out = project.folder("certificates") / f"{label}-{suffix}"
+        verdict = json.loads(verdict_file.read_text())
+        label = certificate_label(verdict_file, verdict)
+        name = f"{label}-{evaluation_suffix(verdict_file, verdict)}"
+        out = project.folder("certificates") / name
         identity_file = run_dir / IDENTITY_FILE
-        checkpoint = run_dir / f"{label.removeprefix(run_dir.name + '-')}.pt"
+        checkpoint = run_dir / f"{verdict.get('policy', '')}.pt"
         if out.exists() or not identity_file.is_file() or not checkpoint.is_file():
             continue
         identity = json.loads(identity_file.read_text())

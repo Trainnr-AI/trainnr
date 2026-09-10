@@ -6,9 +6,15 @@ and the artifacts land under `runs/` exactly as the wrapped CLI always
 put them. The manager is deliberately dumb: spawn the command with its
 output teed to a log file, remember the pid, record the exit code when
 the child ends. A job survives this server's restart (it is its own
-session); what does not survive is the exit-code watcher — a job whose
-pid is gone but whose exit file never appeared reports
-"ended (exit unrecorded)" rather than guessing.
+session), and so does its exit code: the child runs under a small
+runner (this module as `python -m rq_pipeline.mcp_jobs --exit-file`)
+that writes the `.exit` file itself, so a door called from a script
+that returned, or a server that restarted, still leaves the code the
+Studio reads (two certificates showed "running" for an hour after
+they ended, 2026-09-10). The in-process watcher stays as the second
+recorder. A job whose pid is gone but whose exit file never appeared
+(the runner itself killed) reports "ended (exit unrecorded)" rather
+than guessing.
 
 Stdlib only: the job table is JSON files under `runs/mcp-jobs/`, one
 per job, readable by a human when the tooling is not around.
@@ -19,6 +25,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -54,11 +61,35 @@ class JobRecord(JsonRecord):
 Spawner = Callable[[Sequence[str], Path, Path], subprocess.Popen]
 
 
+EXIT_SUFFIX = ".exit"
+
+
+def exit_path_for(log_path: Path) -> Path:
+    """The job's exit file, beside its log (`<id>.log` -> `<id>.exit`)."""
+    return log_path.with_suffix(EXIT_SUFFIX)
+
+
+def record_exit(exit_path: Path, code: int) -> None:
+    """Atomic: a reader that sees the file sees the code. The
+    create-then-write of write_text let status() read an EMPTY file
+    mid-write (int('') - the lifecycle test, on the GPU box's faster
+    fake exit, 2026-09-02)."""
+    staged = exit_path.with_suffix(".exit.tmp")
+    staged.write_text(str(code))
+    os.replace(staged, exit_path)
+
+
+def runner_argv(argv: Sequence[str], exit_path: Path) -> list[str]:
+    """The command as the runner launches it: this module wrapping the
+    tool, recording the tool's exit code to `exit_path` when it ends."""
+    return [sys.executable, "-m", __name__, "--exit-file", str(exit_path), "--", *argv]
+
+
 def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
     log = open(log_path, "ab")  # noqa: SIM115 - the child owns it past this frame
     try:
         return subprocess.Popen(
-            list(argv),
+            runner_argv(argv, exit_path_for(log_path)),
             cwd=cwd,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -106,15 +137,7 @@ class JobManager:
         # The watcher records the exit code while this server lives; a
         # job that outlives the server ends "unrecorded", said honestly.
         def watch() -> None:
-            code = process.wait()
-            # Atomic: a reader that sees the file sees the code. The
-            # create-then-write of write_text let status() read an
-            # EMPTY file mid-write (int('') - the lifecycle test, on
-            # the GPU box's faster fake exit, 2026-09-02).
-            exit_path = self.jobs_dir / f"{job_id}.exit"
-            staged = exit_path.with_suffix(".exit.tmp")
-            staged.write_text(str(code))
-            os.replace(staged, exit_path)
+            record_exit(exit_path_for(log_path), process.wait())
 
         watcher = threading.Thread(target=watch, daemon=True)
         self._watchers.append(watcher)
@@ -191,3 +214,24 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True  # alive, someone else's — cannot signal, can report
     return True
+
+
+def main(args: Sequence[str] | None = None) -> int:
+    """The runner: run the tool with this process's stdout and stderr
+    (the job's log), record its exit code, and exit with it."""
+    import argparse  # noqa: PLC0415
+
+    parser = argparse.ArgumentParser(description="run a job and record its exit code")
+    parser.add_argument("--exit-file", type=Path, required=True)
+    parser.add_argument("argv", nargs=argparse.REMAINDER)
+    parsed = parser.parse_args(args)
+    argv = parsed.argv[1:] if parsed.argv[:1] == ["--"] else parsed.argv
+    if not argv:
+        parser.error("no command after --")
+    code = subprocess.call(argv, stdin=subprocess.DEVNULL)
+    record_exit(parsed.exit_file, code)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

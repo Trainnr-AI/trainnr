@@ -209,6 +209,28 @@ read differently, and the window must say so rather than show a gap.
     err ratio 0.37 then 0.49 at model_4000) - a still is a picture,
     not a judgment; the certificate remains the judgment.
 
+12. **Two finished certificates showed as running for an hour** (found
+    and fixed 2026-09-10, the box). The job manager's exit-code watcher
+    is a thread in the process that opened the door; called from a
+    script that returned, no `.exit` file ever landed, and the Studio
+    counted a job running while no exit was recorded. Fixed twice: the
+    job now runs under a runner (`python -m rq_pipeline.mcp_jobs
+    --exit-file … -- <tool>`) that writes the exit file itself, whoever
+    launched it; and the Studio counts a job as running only while its
+    process exists (Linux, through `/proc`; elsewhere the exit file
+    alone decides). The Compute card reads "idle · no jobs running"
+    with both certificates ended.
+
+13. **A rotated verdict would have become a second evaluation** (found
+    before it happened, 2026-09-10). rq_mjlab never overwrites a
+    verdict: certifying `model_7999` moved `model_1400`'s file to
+    `walk-verdict-cuda.seed1000.n40.json`, which the live loop would
+    have imported as a new evaluation of `model_1400`. An evaluation is
+    now named by policy, instrument, seed and trial count
+    (`go2-c1-model_1400-cuda-seed1000-n40`), so the rotated file maps
+    to the card that exists and a re-judge under another seed gets its
+    own.
+
 ## 4. Decisions to take before building (asked 2026-09-10)
 
 - **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own
@@ -246,6 +268,22 @@ The run: `walk_train --agent g3 --robot go2 --project <root> --dr-span
 `unitree-go2-declared-pd@3b68245f8d2a`, 4096 environments, 8000
 iterations at ~1.5 s each on the 3090 Ti (about 3.5 h); console log
 `<root>/runs/go2-c1.log`. Then `certify_walk`.
+
+**The loop closed, 2026-09-10 20:25 IST.** The run took 2 h 24 min
+(8000 iterations, 1.03-1.13 s each, ~102k steps/s, final reward 74.0,
+episode length 1000 of 1000). `certify_walk` on `model_1400` mid-run
+and on `model_7999` at the end: both 40/40 survived and tracked, exact
+95 % interval [0.912, 1.000], median error ratio 0.25 and 0.25, under
+the trained ±0.10 law span. The project holds, all seen in the Studio:
+the robot, the environment, the run with its curves, two policies, two
+evaluations citing them and the run, and 81 stills (one per hundred
+iterations, item 11) on the run's iteration timeline; the overview
+reads 4 of 8 stages (asset, environment, policy, evaluation) with
+"next: run system identification on a recording". What the loop does
+not have on this robot: telemetry from a real Go2, hence no sys-id and
+no identified interval - the span was declared, not measured, which is
+the Go1 finding's shape (docs/74) and the reason the overview's next
+move points at a recording.
 
 
 What exists by the end of 2026-09-10, all pushed on the branch: the Go2

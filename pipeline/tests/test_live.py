@@ -91,6 +91,7 @@ class TheLiveVerdict(unittest.TestCase):
         verdict = {
             "source": "go2-walk@83d8a180bfda",
             "policy": "model_1400",
+            "protocol": {"seed": 1000, "trials": 40},
             "successes": 40,
             "trials": 40,
             "ci95": [0.9119, 1.0],
@@ -102,7 +103,7 @@ class TheLiveVerdict(unittest.TestCase):
     def test_a_verdict_becomes_a_policy_and_an_evaluation_once(self) -> None:
         project, _ = self._run()
         written = refresh_verdicts(project)
-        out = project.root / "certificates" / "go2-c1-model_1400-cuda"
+        out = project.root / "certificates" / "go2-c1-model_1400-cuda-seed1000-n40"
         self.assertEqual(written, [out])
         certificate = json.loads((out / "certificate.json").read_text())
         self.assertEqual(certificate["successes"], 40)
@@ -137,3 +138,17 @@ class TheLiveVerdict(unittest.TestCase):
             ).read_text()
         )
         self.assertEqual(policy["run"], before)
+
+    def test_a_rotated_backup_is_the_same_evaluation(self) -> None:
+        project, run = self._run()
+        refresh_verdicts(project)
+        primary = run / VERDICT_DIR / "walk-verdict-cuda.json"
+        backup = run / VERDICT_DIR / "walk-verdict-cuda.seed1000.n40.json"
+        primary.rename(backup)
+        self.assertEqual(refresh_verdicts(project), [])
+        # A re-judge of the same checkpoint under another seed is its own.
+        verdict = json.loads(backup.read_text())
+        verdict["protocol"]["seed"] = 2000
+        primary.write_text(json.dumps(verdict))
+        written = [w.name for w in refresh_verdicts(project)]
+        self.assertEqual(written, ["go2-c1-model_1400-cuda-seed2000-n40"])

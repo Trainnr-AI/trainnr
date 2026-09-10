@@ -124,6 +124,26 @@ def write_policy(
     return stamp_kind(Kind.POLICY, policy_dir)
 
 
+BACKUP_MARK = (
+    ".seed"  # walk_verdict rotates a replaced verdict to <name>.seed<n>.n<k>.json
+)
+
+
+def evaluation_suffix(verdict_file: Path, verdict: dict) -> str:
+    """What tells one evaluation of a policy from another: the verdict
+    file's instrument suffix, the seed and the trial count. A verdict
+    rq_mjlab rotated to its backup name (the same judgment, renamed
+    when a later one took the primary name) maps to the same
+    evaluation, so it is imported once; a re-judge under another seed
+    is its own."""
+    suffix = verdict_file.stem.removeprefix("walk-verdict-").split(BACKUP_MARK, 1)[0]
+    protocol = verdict.get("protocol") or {}
+    seed, trials = protocol.get("seed"), verdict.get("trials")
+    if seed is None or trials is None:
+        return suffix
+    return f"{suffix}-seed{seed}-n{trials}"
+
+
 def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, each named
     project: Project,
     verdict_file: Path,
@@ -136,12 +156,13 @@ def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, eac
     `records-<suffix>.jsonl`) as an evaluation `<label>-<suffix>` citing
     the policy, robot, environment and run. Returns the stamp, or None
     when that evaluation is already in the project."""
-    suffix = verdict_file.stem.removeprefix("walk-verdict-")
-    out = project.folder("certificates") / f"{label}-{suffix}"
+    verdict = json.loads(verdict_file.read_text())
+    name = f"{label}-{evaluation_suffix(verdict_file, verdict)}"
+    out = project.folder("certificates") / name
     if out.exists():
         return None
     out.mkdir(parents=True)
-    verdict = json.loads(verdict_file.read_text())
+    suffix = verdict_file.stem.removeprefix("walk-verdict-")
     certificate = {
         "schema": CERTIFICATE_SCHEMA,
         **verdict,
