@@ -345,6 +345,13 @@ def _summary_run(path: Path) -> dict[str, Any]:
         reward = (training.get("final") or {}).get("reward")
         if reward is not None:
             out["final reward"] = round(float(reward), 1)
+        status = training.get("status")
+        if status:
+            out["status"] = status
+            planned = training.get("iterations")
+            logged = training.get("iterations_logged")
+            if status == "running" and planned and logged is not None:
+                out["progress"] = f"{logged} of {planned} iterations"
     basis = ident.get("dr_basis") or ""
     if basis:
         out["randomization"] = _basis_name(basis)

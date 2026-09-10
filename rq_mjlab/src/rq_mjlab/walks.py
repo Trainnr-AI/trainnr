@@ -73,7 +73,7 @@ def _go1_env(
 
     if bundle is not None:
         raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
-    if dr_span == "identified":
+    if isinstance(dr_span, str):  # "identified" names the bundle's interval
         raise ValueError("the Go1 walk has no identified interval (derived PD)")
 
     return go1_walk_env_cfg(
@@ -115,7 +115,7 @@ def _go2_env(
 
     if bundle is not None:
         raise ValueError("the Go2 walk has no actuator bundle to swap (declared PD)")
-    if dr_span == "identified":
+    if isinstance(dr_span, str):  # "identified" names the bundle's interval
         raise ValueError("the Go2 walk has no identified interval (declared PD)")
     return go2_walk_env_cfg(
         play=play,

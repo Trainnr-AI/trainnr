@@ -131,10 +131,27 @@ def compare(
     }
 
 
+LIVE_REFRESH_S = 15.0  # how often a training run's log becomes its record
+
+
 def serve(project: Project, *, once: bool = False) -> None:
-    """The presenter loop: watch the intent file, present, clear."""
+    """The presenter loop: watch the intent file, present, clear - and
+    every LIVE_REFRESH_S, turn the console log of any run training in
+    the project into its training record and re-index, so the Studio's
+    experiment card follows the run (docs/77, the box, 2026-09-10)."""
+    from rq_pipeline.project.index import index_project, write_index  # noqa: PLC0415
+    from rq_pipeline.project.live import refresh_project  # noqa: PLC0415
+
     path = intent_path(project)
+    last_live = 0.0
     while True:
+        if time.time() - last_live >= LIVE_REFRESH_S:
+            last_live = time.time()
+            try:
+                if refresh_project(project):
+                    write_index(project, index_project(project))
+            except Exception as why:  # a broken log must not kill the presenter
+                _write_status(project, {"live_error": str(why)})
         if path.is_file():
             stamp: str | None = None
             try:

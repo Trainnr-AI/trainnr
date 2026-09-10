@@ -141,6 +141,21 @@ read differently, and the window must say so rather than show a gap.
    The task stamp (`go2-walk@0e7e123a7de7`) was identical on both machines
    from the start, as a content hash should be.
 
+8. **A run training in the project was invisible in the Studio** (found
+   and fixed 2026-09-10, the box). The Studio polls the index file every
+   second, but nothing rewrote the index while a run trained, and the
+   experiment card's curve came only from a console log an imported
+   study arm carries - a door-launched run has neither. Fixed three
+   ways: `walk_train` tees its console into the run folder as
+   `train.log`; `rq_pipeline.project.live` turns that log into
+   `training.json` whenever the log is newer (status `running` until
+   the done line, iterations so far, the curve so far); and the
+   presenter the Studio spawns does that and re-indexes every 15 s. The
+   Go2 run's card showed its reward curve at iteration 1278 of 8000.
+   Open: a run launched by hand, not by the door, is absent from the
+   Compute card (no job record) - the next run goes through
+   `train_walk`.
+
 ## 4. Decisions to take before building (asked 2026-09-10)
 
 - **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own

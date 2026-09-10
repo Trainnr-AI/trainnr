@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -98,6 +99,30 @@ def _span(text: str) -> float | str:
     if text == "identified":
         return text
     return float(text)
+
+
+class Tee:
+    """A stream that writes to the console and to a file, line-buffered
+    so a reader of the file sees an iteration as soon as it is printed."""
+
+    def __init__(self, console: Any, path: Path) -> None:
+        self._console = console
+        self._file = path.open("a", buffering=1, encoding="utf-8", errors="replace")
+
+    def write(self, text: str) -> int:
+        self._console.write(text)
+        self._file.write(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self._console.flush()
+        self._file.flush()
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._console, "isatty", lambda: False)())
+
+    def fileno(self) -> int:
+        return self._console.fileno()
 
 
 def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
@@ -211,6 +236,10 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
+        # The console also lands in the run folder as train.log: the
+        # project's live view reads it while the run trains (docs/77).
+        sys.stdout = Tee(sys.stdout, log_dir / "train.log")
+        sys.stderr = Tee(sys.stderr, log_dir / "train.log")
         print(f"[g3] log_dir: {log_dir}")
 
     tag = args.agent
