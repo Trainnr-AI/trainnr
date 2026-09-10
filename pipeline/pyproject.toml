@@ -9,6 +9,10 @@ description = "Train, validate and serve robot policies with numbers you can sig
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "FSL-1.1-ALv2" }
+dependencies = [
+    "onnx>=1.22.0",
+    "onnxruntime>=1.24.3",
+]
 
 # The core is dependency-free on purpose: the statistics and bundle layers
 # must be recomputable anywhere a report is audited — any Python >= 3.10,
@@ -41,6 +45,9 @@ gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # moves by decision, never as a dependency side effect.
 mjx = ["mujoco-mjx[warp]~=3.11.0"]
 viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+# deploy: the manifest-driven runtime and the sim-to-sim gate run the
+# exported ONNX policy; onnx reads the metadata the exporter attached.
+deploy = ["onnxruntime>=1.20", "onnx>=1.16"]
 # The instrument's MCP surface (rq_pipeline/mcp_server.py): bundles, tasks,
 # engines, actuators, runs as queryable tools for any MCP client — the
 # Studio's agent panel first. Official SDK, MIT; v2 is a rework of v1, so

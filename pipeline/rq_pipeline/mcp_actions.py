@@ -304,6 +304,74 @@ class Actions:
         ]
         return self.jobs.start("accept-task", argv, PIPELINE_DIR)
 
+    def export_deployment(  # noqa: PLR0913 - the export's own knobs, each named
+        self,
+        checkpoint: str,
+        *,
+        name: str,
+        robot: str,
+        project: str,
+        certificate: str | None = None,
+        policy_stamp: str | None = None,
+    ) -> dict[str, Any]:
+        """Export a walk policy for deployment (docs/76 A6): the actor as
+        ONNX, the manifest read from the built environment, the scene as
+        MJCF — into the project's `deploy/<name>/`. Seconds; a job so the
+        Studio shows it."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        if robot not in WALK_ROBOTS:
+            raise ValueError(f"robot is one of {', '.join(WALK_ROBOTS)}, got {robot!r}")
+        argv = [
+            *self._uv(RQ_MJLAB_DIR),
+            "-m",
+            "rq_mjlab.walk_export",
+            checkpoint,
+            "--project",
+            project,
+            "--robot",
+            robot,
+            "--name",
+            name,
+        ]
+        if certificate is not None:
+            argv += ["--certificate", certificate]
+        if policy_stamp is not None:
+            argv += ["--policy-stamp", policy_stamp]
+        return self.jobs.start("export-deployment", argv, RQ_MJLAB_DIR)
+
+    def gate_deployment(
+        self,
+        name: str,
+        *,
+        project: str,
+        trials: int = 20,
+        seed: int = 1000,
+        tolerance: float | None = None,
+    ) -> dict[str, Any]:
+        """The sim-to-sim gate: the exported policy driven through its
+        manifest alone in plain MuJoCo, judged the certificate's way.
+        A job; `gate.json` lands beside the manifest."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "deploy"),
+            str(TOOLS_DIR / "gate-deployment.py"),
+            "--project",
+            project,
+            "--name",
+            name,
+            "--trials",
+            str(trials),
+            "--seed",
+            str(seed),
+        ]
+        if tolerance is not None:
+            argv += ["--tolerance", str(tolerance)]
+        return self.jobs.start("gate-deployment", argv, PIPELINE_DIR)
+
     def open_studio(self) -> dict[str, Any]:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun

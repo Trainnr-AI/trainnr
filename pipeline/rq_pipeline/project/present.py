@@ -753,8 +753,98 @@ def _present_certificate(
     }
 
 
+def _present_deploy(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "deployment"
+) -> dict[str, Any]:
+    """A deployment: the trained scene the policy ships with, posed at its
+    home keyframe; the gate's error ratio per trial against the bound;
+    the manifest's facts and the gate's verdict as a reading."""
+    import mujoco  # noqa: PLC0415
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.deploy.gate import ERR_RATIO_BOUND  # noqa: PLC0415
+    from rq_pipeline.deploy.manifest import GATE_FILE, load_manifest  # noqa: PLC0415
+    from rq_pipeline.deploy.runtime import assets_dir_of, load_scene  # noqa: PLC0415
+    from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+
+    folder = project.root / artifact.path
+    manifest = load_manifest(folder)
+    model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
+    data = mujoco.MjData(model)
+    if model.nkey > 0:
+        mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    gate_file = folder / GATE_FILE
+    gate = json.loads(gate_file.read_text()) if gate_file.exists() else {}
+    with _AsDefault(rr_):
+        RigMirror(model, model_colors=True).log(data, path=f"{root}/scene", static=True)
+        ratios = [float(t.get("err_ratio", 0.0)) for t in gate.get("records", [])]
+        if ratios:
+            rr_.log(f"{root}/gate", rr.BarChart(ratios), static=True)
+        control = manifest.control
+        obs = manifest.raw.get("observations", [])
+        lines = [f"# {artifact.stamp}", ""]
+        verdict = gate.get("verdict") or {}
+        if gate:
+            word = (
+                "passed"
+                if verdict.get("passed")
+                else (
+                    "failed"
+                    if verdict.get("passed") is False
+                    else "reported, not judged"
+                )
+            )
+            ci = gate.get("ci95") or []
+            lines.append(
+                f"sim-to-sim gate **{word}**: {gate.get('successes')} / "
+                f"{gate.get('trials')} trials"
+                + (
+                    f", exact 95 % interval **[{ci[0]:.2f}, {ci[1]:.2f}]**"
+                    if len(ci) == INTERVAL_ENDS
+                    else ""
+                )
+            )
+            lines.append(
+                f"bars: mean velocity error over the commanded speed per trial; "
+                f"a trial tracks below {ERR_RATIO_BOUND}"
+            )
+        else:
+            lines.append("sim-to-sim gate not run yet")
+        lines += [
+            "",
+            f"- checkpoint `{manifest.raw.get('checkpoint', 'unrecorded')}` "
+            f"· policy `{manifest.policy_path.name}`",
+            f"- control {control.get('control_hz')} Hz · physics "
+            f"{control.get('physics_timestep_s')} s, decimation "
+            f"{control.get('decimation')}",
+            f"- observations ({sum(int(o.get('width', 0)) for o in obs)}): "
+            + ", ".join(f"{o.get('name')} {o.get('width')}" for o in obs),
+            f"- scene `{manifest.scene_path.name}` · bodies {model.nbody} · joints "
+            f"{model.njnt} · actuators {model.nu}",
+            _lineage(artifact),
+        ]
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
+    return {
+        "paths": [f"{root}/scene", f"{root}/gate", f"{root}/reading"],
+        "view": "scene + gate + reading",
+        "layout": rrb.Horizontal(
+            rrb.Spatial3DView(origin=f"{root}/scene", name=artifact.stamp),
+            rrb.Vertical(
+                rrb.BarChartView(
+                    origin=f"{root}/gate", name="gate: error ratio per trial"
+                ),
+                rrb.TextDocumentView(origin=f"{root}/reading", name="deployment"),
+            ),
+            column_shares=[3, 2],
+        ),
+    }
+
+
 _PRESENTERS = {
     Kind.ROBOT: _present_robot,
+    Kind.DEPLOY: _present_deploy,
     Kind.RECORDING: _present_recording,
     Kind.RUN: _present_run,
     Kind.BATCH: _present_batch,

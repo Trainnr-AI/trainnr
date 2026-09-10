@@ -34,6 +34,7 @@ from rq_pipeline.project.kinds import (
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
+    GATE_FILE,
     IDENTITY_FILE,
     TASK_FILE,
     Kind,
@@ -318,7 +319,7 @@ _CITE_READERS: dict[Kind, Any] = {
         _read(p / CERTIFICATE_FILE), ("robot", "task", "policy", "run")
     ),
     Kind.DEPLOY: lambda p: _pick(
-        _read(p / DEPLOY_FILE), ("policy", "robot", "task", "certificate")
+        _read(p / DEPLOY_FILE), ("policy", "run", "robot", "task", "certificate")
     ),
     Kind.DRIFT: lambda p: _pick(_read(p / DRIFT_FILE), ("robot", "recording", "fit")),
 }
@@ -501,6 +502,24 @@ def _summary_task(path: Path) -> dict[str, Any]:
     return out
 
 
+def _summary_deploy(path: Path) -> dict[str, Any]:
+    """A deployment at a glance: the checkpoint, the control rate, the
+    gate's word."""
+    m = _read(path / DEPLOY_FILE)
+    gate = _read(path / GATE_FILE)
+    verdict = (gate.get("verdict") or {}).get("passed") if gate else None
+    word = (
+        "not run"
+        if not gate
+        else ("passed" if verdict else ("failed" if verdict is False else "reported"))
+    )
+    return {
+        "checkpoint": m.get("checkpoint", "unrecorded"),
+        "control (Hz)": (m.get("control") or {}).get("control_hz", "unrecorded"),
+        "gate": word,
+    }
+
+
 def _summary_finding(path: Path) -> dict[str, Any]:
     raw = _read(path)
     first = str(raw.get("claim", "")).split(". ", 1)[0]
@@ -514,6 +533,7 @@ _SUMMARY_READERS: dict[Kind, Any] = {
     Kind.RUN: _summary_run,
     Kind.CERTIFICATE: _summary_certificate,
     Kind.FINDING: _summary_finding,
+    Kind.DEPLOY: _summary_deploy,
     Kind.POLICY: _summary_policy,
     Kind.ROBOT: lambda p: {
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))

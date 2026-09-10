@@ -20,6 +20,7 @@ TIER = {
     "plugins": 1,
     "cloud": 1,  # rented machines: stdlib HTTP over the plugin door, nothing above
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
+    "deploy": 1,  # the sim-to-sim gate: plain MuJoCo + ONNX over stats, nothing above
     "evaluate": 2,
     "physics": 3,
     "tasks": 3,

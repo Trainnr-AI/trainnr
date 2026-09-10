@@ -397,6 +397,145 @@ def certify_walk(  # noqa: PLR0913, PLR0917 - the certificate's knobs, each name
         return {"status": "refused", "reason": str(why)}
 
 
+def export_deployment(
+    run: str, checkpoint: str, name: str, certificate: str | None = None
+) -> dict[str, Any]:
+    """Export a trained policy for deployment: `run` is an experiment in
+    the project (its folder under runs/), `checkpoint` a file in it
+    (model_7999.pt), `name` the deployment's folder. The policy artifact
+    and, unless named, the newest evaluation of that checkpoint are cited
+    from the index. The manifest carries everything a runtime needs —
+    joint and actuator orders, gains, home pose, action scale, the
+    ordered observations, the control rate — read from the built
+    environment; the ONNX has normalization folded in; the trained scene
+    rides along as MJCF. Job handle; next: `gate_deployment(name)`."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(run, "run name")
+        plain_name(name, "deployment name")
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+    run_dir = project.folder("runs") / run
+    path = run_dir / checkpoint
+    if not path.is_file():
+        return {
+            "status": "refused",
+            "reason": f"no checkpoint {checkpoint!r} in run {run!r}",
+        }
+    if (project.folder("deploy") / name).exists():
+        return {"status": "refused", "reason": f"deployment {name!r} already exists"}
+    index = index_project(project)
+    run_art = next(
+        (a for a in index.artifacts if a.kind == "run" and a.path == f"runs/{run}"),
+        None,
+    )
+    if run_art is None:
+        return {"status": "refused", "reason": f"run {run!r} is not in the index"}
+    task_ref = _run_task(run_dir)
+    robot = walk_robot(task_ref) if task_ref else None
+    if robot is None:
+        robot = _robot_of_run(run_dir)
+    if robot is None:
+        return {
+            "status": "refused",
+            "reason": (
+                f"run {run!r} names no walk (no task in its identity); pass one by name"
+            ),
+        }
+    stem = Path(checkpoint).stem
+    # The live loop names a judged checkpoint's policy `<run>-<checkpoint>`
+    # and it cites the run; either mark finds it.
+    policy = next(
+        (
+            a
+            for a in index.artifacts
+            if a.kind == "policy"
+            and (
+                a.stamp.split("@", 1)[0] == f"{run}-{stem}"
+                or (
+                    a.cites.get("run") == run_art.stamp
+                    and a.stamp.split("@", 1)[0].endswith(stem)
+                )
+            )
+        ),
+        None,
+    )
+    if certificate is None and policy is not None:
+        judged = [
+            a
+            for a in index.artifacts
+            if a.kind == "certificate" and a.cites.get("policy") == policy.stamp
+        ]
+        judged.sort(key=lambda a: a.updated or "", reverse=True)
+        certificate = judged[0].stamp if judged else None
+    return Actions(JobManager(_jobs_root())).export_deployment(
+        str(path),
+        name=name,
+        robot=robot,
+        project=str(project.root),
+        certificate=certificate,
+        policy_stamp=policy.stamp if policy else None,
+    )
+
+
+def _run_task(run_dir: Path) -> str | None:
+    """The declared task a run cites, from its identity record."""
+    from rq_pipeline.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+
+    identity = run_dir / IDENTITY_FILE
+    if not identity.is_file():
+        return None
+    return json.loads(identity.read_text()).get("task")
+
+
+def _robot_of_run(run_dir: Path) -> str | None:
+    """The walk a run belongs to, from the robot its identity names
+    (`go2@…` → go2) when that is a walk the trainer knows."""
+    from rq_pipeline.mcp_actions import WALK_ROBOTS  # noqa: PLC0415
+    from rq_pipeline.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+
+    identity = run_dir / IDENTITY_FILE
+    if not identity.is_file():
+        return None
+    robot = str(json.loads(identity.read_text()).get("robot", "")).split("@", 1)[0]
+    return robot if robot in WALK_ROBOTS else None
+
+
+def gate_deployment(
+    name: str, trials: int = 20, seed: int = 1000, tolerance: float | None = None
+) -> dict[str, Any]:
+    """Run the sim-to-sim gate on a deployment: the exported policy is
+    driven through its manifest alone — plain MuJoCo, onnxruntime, no
+    training stack — over seeded held commands and judged the
+    certificate's way; passes when its rate is within `tolerance`
+    (default 0.10) of the certificate it cites. Job handle; `gate.json`
+    lands beside the manifest and shows in the Studio."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(name, "deployment name")
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+    if not (project.folder("deploy") / name / "deploy.json").is_file():
+        return {
+            "status": "refused",
+            "reason": f"no deployment {name!r} in this project",
+        }
+    return Actions(JobManager(_jobs_root())).gate_deployment(
+        name, project=str(project.root), trials=trials, seed=seed, tolerance=tolerance
+    )
+
+
 def accept_task(name: str) -> dict[str, Any]:
     """Review a declared environment with the acceptance critic (the
     scripted policy must succeed on every paired trial, the floor policy
@@ -1339,6 +1478,17 @@ def build_server() -> Any:  # noqa: PLR0915
     # works exactly as before.
     actions = Actions(JobManager(_jobs_root()))
 
+    server.tool(
+        description="Export a trained walk policy for deployment: ONNX with "
+        "normalization folded in, a manifest read from the built environment "
+        "(joint and actuator orders, gains, home pose, action scale, ordered "
+        "observations, control rate), the trained scene as MJCF. Job handle."
+    )(export_deployment)
+    server.tool(
+        description="The sim-to-sim gate: drive the exported policy through its "
+        "manifest alone in plain MuJoCo, judge it the certificate's way, pass "
+        "within a stated tolerance of the certificate. Job handle."
+    )(gate_deployment)
     server.tool(
         description="The families an environment can be declared over, with every "
         "spec field, type and default."

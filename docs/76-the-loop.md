@@ -156,9 +156,10 @@ the sidebar — starts at the top, while opening an artifact scrolls its
 drawer into view in the same frame, so the agent's capture is already
 looking at it.
 
-Deployments and Monitoring stay empty on purpose: a deployment manifest
-with its sim-to-sim gate is A6 and drift monitoring is A7, and both end
-at a real robot — the rig connects when they start.
+Monitoring stays empty on purpose: drift monitoring is A7 and ends at a
+real robot — the rig connects when it starts. Deployments fill from A6
+(built 2026-09-11, docs/77 §6): the manifest with its ONNX and scene,
+and the sim-to-sim gate's verdict beside it.
 
 ## 3. The state machine
 
@@ -820,8 +821,9 @@ last asked for, says so in a banner over the page with the reason,
 dismissable; and the `show_in_studio` door waits for that answer
 (`control.wait_presented`) and returns shown, failed with the reason, or
 pending after 20 s, instead of "done" the moment the Studio took the
-request. Deployments and drift records stay unpresentable until A6/A7
-(tested by name in `tests/test_present.py`).
+request. Drift records stay unpresentable until A7 (tested by name in
+`tests/test_present.py`); a deployment presents as the trained scene, the
+gate's error ratio per trial, and a reading (A6, 2026-09-11).
 
 Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left

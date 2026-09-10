@@ -342,6 +342,21 @@ def _render_policy(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _render_robot(bundle, out, {})
 
 
+def _render_deploy(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+    """A deployment's card is the robot it drives, from the project's or
+    the library's bundle named by the manifest's robot version."""
+    from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
+
+    manifest = source / "deploy.json"
+    if not manifest.is_file():
+        return False
+    robot = str(json.loads(manifest.read_text()).get("robot") or "")
+    bundle = find_bundle(robot.split("@", 1)[0]) if robot else None
+    if bundle is None:
+        return False
+    return _render_robot(bundle, out, {})
+
+
 def _bars(
     draw: Any, box: tuple[int, int, int, int], fraction: float, color: tuple
 ) -> None:
@@ -505,6 +520,7 @@ _RENDERERS = {
     "batch": _render_batch,
     "policy": _render_policy,
     "certificate": _render_certificate,
+    "deploy": _render_deploy,
     "finding": _render_finding,
     "dataset": _render_dataset,
     "run": _render_run,

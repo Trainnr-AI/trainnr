@@ -72,7 +72,7 @@ read differently, and the window must say so rather than show a gap.
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `certify_walk` → generic `evaluate_policy`, `certify` (A5) | to build |
-| deployment exported | the deploy manifest (A6): joint-order map, gains, scale, offset, ordered observations, control rate, limits; ONNX; the sim-to-sim gate re-certifying through the manifest in MuJoCo | `export_deployment`, `gate_deployment` | to build |
+| deployment exported | the deploy manifest (A6, `rq_mjlab/src/rq_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`rq_pipeline/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
 | drift monitored | synthetic drift into the declared basis until a Go2 exists; then the SDK2 adapter | `monitor_drift` (A7) | to build |
 
 ## 3. Frictions found, in the order the loop found them
@@ -307,3 +307,56 @@ cites the task; the index shows the experiment with its reward curve as
 it trains (the tensorboard log is not read yet — the console log is,
 once the run ends). Then `certify_walk(<checkpoint>, robot="go2")` for
 the evaluation, and the loop reaches "policy evaluated".
+
+## 6. The deployment stage, built 2026-09-11 on the Mac
+
+`export_deployment(run, checkpoint, name)` spawns `rq_mjlab.walk_export`
+in the walk package's venv: the actor as ONNX (rsl_rl's exporter,
+observation normalization inside the graph, a fixed batch of one, as a
+runtime uses it), checked against the torch actor on sixty-four random
+inputs (max |Δ| recorded; 9.5e-7 on the laptop checkpoint); the manifest
+(`deploy.json`, schema `trainnr-deploy/1`) read from the built
+environment — the policy's joint order, the simulator's actuator order
+and the map between them, kp/kd/effort per joint, the home pose, the
+action rule and scale, the seven observation terms in order with their
+widths and sources, 50 Hz from timestep 0.005 and decimation 4, the
+twist ranges, the fell-over limit, the reference's SDK joint map for
+the Go2 as a declared fact; and `scene.xml`, the entity compiled with
+its injected actuators and keyframe plus a floor and the training
+timestep, so a plain MuJoCo loads the model the policy trained in with
+the bundle's meshes. The door finds the checkpoint's policy and newest
+evaluation in the index and cites them.
+
+`gate_deployment(name, trials, seed, tolerance)` spawns
+`tools/gate-deployment.py` in the pipeline's venv (`--extra deploy`:
+onnxruntime): `rq_pipeline.deploy.runtime` computes each observation
+term from MuJoCo state the way mjlab does (the IMU's velocimeter and
+gyro from the sensors, gravity rotated into the base frame, joint
+positions relative to home, joint velocities, the last action, the held
+command), runs the ONNX, maps actions to controls, steps at the
+manifest's rate; `rq_pipeline.deploy.gate` judges each seeded held
+command the certificate's way (survived and error ratio below 0.5,
+floored at 0.1 m/s), writes the exact interval, and passes when the
+rate is within the stated tolerance (0.10) of the cited certificate's.
+Cross-checked on the laptop checkpoint: the gate says survived 4,
+tracked 0; mjlab's own verdict on the same checkpoint says survived 4,
+tracked 0 (error ratios 0.76–1.0 against 1.01–1.12 — the protocols
+differ, the judgment agrees). Twenty-second episodes run in half a
+second each in plain MuJoCo. The Studio shows the deployment's card (the
+robot), its drawer (the manifest's facts, the gate's verdict and trials,
+the joints and observations as tables) and the loop at 5 of 8 stages;
+"Show in viewer" on a deployment presents the trained scene from
+`scene.xml` with the bundle's meshes, the gate's error ratio per trial
+as bars against the 0.5 bound, and a reading with the lineage
+(`rq_pipeline/project/present.py::_present_deploy`, checked by capture).
+
+Frictions found (docs/77 §3 continued): 14, the project's folder is
+`deploy/`, not `deployments/`; 15, the entity's spec is attached to the
+scene and cannot be serialized — a fresh entity is; 16, rsl_rl's ONNX
+takes one observation at a time; 17, the scene namespaces the entity's
+names (`robot/FL_hip_joint`) — the manifest keeps the robot's own.
+
+What the real Go2 deployment needs next: the certified `model_7999.pt`
+from the box (with its verdicts) so the export cites `go2-c1`'s
+evaluation and the gate judges against 40/40; then the reference's DDS
+simulator on a Linux box as a second, independent gate; then A7.

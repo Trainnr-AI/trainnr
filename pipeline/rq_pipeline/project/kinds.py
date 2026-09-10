@@ -21,6 +21,7 @@ from pathlib import Path
 from rq_pipeline.bundles.hashing import content_stamp, stamp
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.deploy.manifest import GATE_FILE as _GATE_FILE
 from rq_pipeline.envs.lerobot_train_log import CHECKPOINT_WEIGHTS, RUN_MANIFEST_FILE
 
 # Markers this module owns because no writer exists yet (docs/76 §2):
@@ -28,6 +29,8 @@ from rq_pipeline.envs.lerobot_train_log import CHECKPOINT_WEIGHTS, RUN_MANIFEST_
 RECORDING_FILE = "recording.json"
 CERTIFICATE_FILE = "certificate.json"
 DEPLOY_FILE = "deploy.json"
+# The sim-to-sim gate's verdict beside a deployment: named where it is written.
+GATE_FILE = _GATE_FILE
 DRIFT_FILE = "drift.json"
 FIT_FILE = "fit.json"
 TASK_FILE = "task.json"

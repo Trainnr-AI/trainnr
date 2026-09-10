@@ -947,6 +947,178 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     ]
 
 
+# -- deployment (A6) -------------------------------------------------------------------
+
+
+def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+    """A deployment: what the manifest says a runtime needs, the joints
+    and observations as tables, and the sim-to-sim gate's verdict."""
+    from rq_pipeline.deploy.manifest import GATE_FILE, MANIFEST_FILE  # noqa: PLC0415
+
+    m = json.loads((root / MANIFEST_FILE).read_text())
+    control = m.get("control") or {}
+    joints = m.get("joints") or {}
+    onnx = m.get("onnx") or {}
+    sections = [
+        _kv(
+            "Deployment",
+            [
+                ("version", artifact.stamp),
+                ("policy", m.get("policy", "unrecorded")),
+                ("checkpoint", m.get("checkpoint", "unrecorded")),
+                ("experiment", m.get("run", "unrecorded")),
+                ("robot asset", m.get("robot", "unrecorded")),
+                ("actuator model", m.get("actuator", "unrecorded")),
+                ("environment", m.get("task") or "unrecorded"),
+                ("domain randomization", m.get("dr_basis") or "unrecorded"),
+                ("evaluation cited", m.get("certificate") or "none"),
+                ("control rate (Hz)", control.get("control_hz")),
+                ("physics timestep (s)", control.get("physics_timestep_s")),
+                ("decimation", control.get("decimation")),
+                ("episode length (s)", control.get("episode_length_s")),
+                (
+                    "policy file",
+                    f"{onnx.get('file')} ({onnx.get('input_width')} in, "
+                    f"{onnx.get('output_width')} out)",
+                ),
+                ("normalization", onnx.get("normalization", "unrecorded")),
+                (
+                    "export check (max |onnx - torch|)",
+                    onnx.get("export_check_max_abs_diff"),
+                ),
+                ("action", (m.get("action") or {}).get("kind", "unrecorded")),
+                (
+                    "scene",
+                    f"{(m.get('scene') or {}).get('file')} · terrain "
+                    f"{(m.get('scene') or {}).get('terrain')}",
+                ),
+                (
+                    "fell-over limit (deg)",
+                    (m.get("termination") or {}).get("fell_over_deg"),
+                ),
+            ],
+        )
+    ]
+    gate_path = root / GATE_FILE
+    if gate_path.is_file():
+        g = json.loads(gate_path.read_text())
+        verdict = g.get("verdict") or {}
+        cert = g.get("certificate") or {}
+        rows: list[tuple[str, Any]] = [
+            (
+                "verdict",
+                "passed"
+                if verdict.get("passed")
+                else (
+                    "failed"
+                    if verdict.get("passed") is False
+                    else "reported, not judged"
+                ),
+            ),
+            ("successes", f"{g.get('successes')} / {g.get('trials')}"),
+            (
+                "95% confidence interval (exact)",
+                _rng(*g["ci95"]) if g.get("ci95") else "",
+            ),
+            ("rule", verdict.get("rule", "")),
+            ("tolerance", verdict.get("tolerance", "n/a")),
+            (
+                "certificate",
+                f"{cert.get('successes')} / {cert.get('trials')}"
+                if cert
+                else "none cited",
+            ),
+            ("runtime", (g.get("protocol") or {}).get("runtime", "")),
+            (
+                "simulator build",
+                (g.get("protocol") or {}).get("instrument", "unrecorded"),
+            ),
+            ("judged", g.get("judged", "unrecorded")),
+        ]
+        sections.append(
+            _kv(
+                "Sim-to-sim gate",
+                rows,
+                note="The exported policy driven through its manifest alone, judged "
+                "the certificate's way: survived and tracked the held command.",
+            )
+        )
+        sections.append(
+            _table(
+                "Gate trials",
+                ["command (vx, vy, wz)", "steps", "fell", "error ratio", "success"],
+                [
+                    [
+                        ", ".join(f"{c:.2f}" for c in r.get("command", [])),
+                        r.get("steps"),
+                        "yes" if r.get("fell") else "no",
+                        _f(r.get("err_ratio")),
+                        "success" if r.get("success") else "failure",
+                    ]
+                    for r in g.get("records", [])
+                ],
+            )
+        )
+    else:
+        sections.append(
+            _kv(
+                "Sim-to-sim gate",
+                [("verdict", "not run")],
+                note="run gate_deployment to judge it",
+            )
+        )
+    names = joints.get("policy_order") or []
+    sdk = joints.get("sdk_order_map") or [None] * len(names)
+    sections.append(
+        _table(
+            "Joints (policy order)",
+            [
+                "joint",
+                "kp",
+                "kd",
+                "effort limit",
+                "default (rad)",
+                "action scale",
+                "ctrl index",
+                "SDK index",
+            ],
+            [
+                [
+                    n,
+                    _f(joints.get("stiffness", [None] * len(names))[i]),
+                    _f(joints.get("damping", [None] * len(names))[i]),
+                    _f(joints.get("effort_limit", [None] * len(names))[i]),
+                    _f(joints.get("default_pos", [None] * len(names))[i]),
+                    _f((m.get("action") or {}).get("scale", [None] * len(names))[i]),
+                    (joints.get("action_to_ctrl") or [None] * len(names))[i],
+                    sdk[i] if i < len(sdk) else None,
+                ]
+                for i, n in enumerate(names)
+            ],
+            note=joints.get("sdk_order_source") or None,
+        )
+    )
+    sections.append(
+        _table(
+            "Observations (in order)",
+            ["term", "width", "source", "scale", "clip", "history"],
+            [
+                [
+                    t.get("name"),
+                    t.get("width"),
+                    t.get("source"),
+                    _jsonable(t.get("scale")),
+                    t.get("clip"),
+                    t.get("history_length"),
+                ]
+                for t in m.get("observations", [])
+            ],
+            note="The concatenation order is the policy's input order.",
+        )
+    )
+    return sections
+
+
 # -- helpers ------------------------------------------------------------------------
 
 
@@ -1110,6 +1282,7 @@ def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 
 
 _WRITERS = {
+    "deploy": _deploy,
     "robot": _robot,
     "task": _task,
     "recording": _recording,

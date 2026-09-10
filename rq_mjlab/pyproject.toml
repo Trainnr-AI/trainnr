@@ -22,6 +22,8 @@ dependencies = [
     "mjlab==1.6.0",
     # The certified-bundle store's reader and verifier (A1) — a path
     # dependency; the pipeline's BASE install carries no heavy extras.
+    "onnx>=1.22.0",
+    "onnxruntime>=1.30.0",
     "rq-pipeline",
 ]
 
