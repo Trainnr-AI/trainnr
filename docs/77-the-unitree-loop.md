@@ -156,6 +156,38 @@ read differently, and the window must say so rather than show a gap.
    Compute card (no job record) - the next run goes through
    `train_walk`.
 
+9. **A certificate judged inside the project never became an
+   evaluation** (found and fixed 2026-09-10, the box). `certify_walk`
+   on `model_1400` of the training run wrote its 40/40 verdict where
+   rq_mjlab writes one - `runs/go2-c1/verdict/walk-verdict-cuda.json`
+   beside the checkpoint - and the Evaluations page stayed at zero: the
+   only path from a verdict to an evaluation artifact was the importer,
+   which refuses a run already in the project. Fixed: the importer's
+   policy and certificate writers are shared helpers, and the live loop
+   (`live.refresh_verdicts`, every presenter tick) turns each verdict
+   under a run into a policy (`policies/go2-c1-model_1400`, the judged
+   checkpoint copied with a manifest citing the run) and an evaluation
+   (`certificates/go2-c1-model_1400-cuda`) citing that policy; the
+   Studio spawns the presenter when a project opens, not at the first
+   Show. Seen on the Evaluations page within a tick: 40 / 40, exact
+   interval [0.91, 1.00], funnel survived 40, tracked 40; the overview
+   at 4 of 8 stages (asset, environment, policy, evaluation).
+
+10. **A run's version moved every time a checkpoint landed** (found and
+    fixed 2026-09-10, the box). A run was stamped like a bundle, by
+    hashing its folder, so the card read `go2-c1@b7630dc54e54` one tick
+    and `go2-c1@a8300622d290` the next, and the policy written a minute
+    earlier cited a run version that no longer existed - the lineage
+    linked nothing. Fixed: `kinds.stamp_run` hashes the identity the
+    run was launched with (`identity.json`, or a LeRobot run's
+    `run.json`), the rule tasks already followed; the index, the
+    importer and the live loop share it. The policy's and the
+    certificate's `run` now resolve to the run card. Open: the
+    certificate cites the task by rq_mjlab's walk-spec hash
+    (`go2-walk@83d8a180bfda`) while the project's task is
+    `go2-walk@0e7e123a7de7` (the declared spec's content hash), so the
+    environment card is not yet cited by its evaluation.
+
 ## 4. Decisions to take before building (asked 2026-09-10)
 
 - **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own

@@ -40,6 +40,7 @@ from rq_pipeline.project.kinds import (
     UnknownKindError,
     detect,
     stamp_kind,
+    stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
 
@@ -148,7 +149,10 @@ def index_project(project: Project) -> ProjectIndex:
                 # An RL arm keeps its identity under <arm>/train; the ARM is
                 # the artifact's name, not the folder the marker sat in.
                 label = path.parent.name if path.name == "train" else None
-                identity = stamp_kind(kind, path, name=label)
+                if kind is Kind.RUN:
+                    identity = stamp_run(path, name=label)
+                else:
+                    identity = stamp_kind(kind, path, name=label)
                 if kind is Kind.TASK:
                     identity = _task_identity(path, identity)
             except UnknownKindError as why:

@@ -14,10 +14,11 @@ through `bundles/hashing.stamp`. Downstream code never invents a name.
 
 from __future__ import annotations
 
+import json
 from enum import Enum
 from pathlib import Path
 
-from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.hashing import content_stamp, stamp
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.envs.lerobot_train_log import CHECKPOINT_WEIGHTS, RUN_MANIFEST_FILE
@@ -129,3 +130,20 @@ def stamp_kind(kind: Kind, root: Path, name: str | None = None) -> str:
     if "@" in label:
         label = label.split("@", 1)[0]
     return stamp(label, root)
+
+
+def stamp_run(root: Path, name: str | None = None) -> str:
+    """A run's `name@hash`: the hash is of the identity it was launched
+    with (`run.json`, or rq_mjlab's `identity.json`), not of its folder.
+    A folder hash moves every time a checkpoint lands, so a policy that
+    cited a training run pointed at a version that no longer existed
+    a minute later (the Go2 run, 2026-09-10). `name` defaults to the
+    folder's own."""
+    root = Path(root)
+    if detect(root) is not Kind.RUN:
+        raise UnknownKindError(f"{root} is not a run")
+    manifest = root / RUN_MANIFEST_FILE
+    marker = RUN_MANIFEST_FILE if manifest.is_file() else IDENTITY_FILE
+    fields = json.loads((root / marker).read_text())
+    label = name if name is not None else root.name
+    return content_stamp(label.split("@", 1)[0], fields)

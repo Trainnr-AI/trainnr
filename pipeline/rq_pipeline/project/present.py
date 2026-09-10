@@ -140,7 +140,11 @@ def serve(project: Project, *, once: bool = False) -> None:
     the project into its training record and re-index, so the Studio's
     experiment card follows the run (docs/77, the box, 2026-09-10)."""
     from rq_pipeline.project.index import index_project, write_index  # noqa: PLC0415
-    from rq_pipeline.project.live import refresh_project  # noqa: PLC0415
+    from rq_pipeline.project.live import (  # noqa: PLC0415
+        index_stale,
+        refresh_project,
+        refresh_verdicts,
+    )
 
     path = intent_path(project)
     last_live = 0.0
@@ -148,7 +152,8 @@ def serve(project: Project, *, once: bool = False) -> None:
         if time.time() - last_live >= LIVE_REFRESH_S:
             last_live = time.time()
             try:
-                if refresh_project(project):
+                refreshed = refresh_project(project) + refresh_verdicts(project)
+                if refreshed or index_stale(project):
                     write_index(project, index_project(project))
             except Exception as why:  # a broken log must not kill the presenter
                 _write_status(project, {"live_error": str(why)})

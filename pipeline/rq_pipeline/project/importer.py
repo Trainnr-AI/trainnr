@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.project.kinds import IDENTITY_FILE, Kind, stamp_kind
+from rq_pipeline.project.kinds import IDENTITY_FILE, Kind, stamp_kind, stamp_run
 from rq_pipeline.project.locate import Project, plain_name
 
 POLICY_FILE = "policy.json"
@@ -75,9 +75,35 @@ def import_experiment(
     if text is not None:
         (run_dir / "train.log").write_text(text)
         _write_training_record(run_dir / "train.log")
-    run_stamp = stamp_kind(Kind.RUN, run_dir)
+    run_stamp = stamp_run(run_dir)
 
-    # The policy: the checkpoint, its identity, and a manifest citing the run.
+    policy_stamp = write_policy(project, label, checkpoint, identity, run_stamp)
+    evaluations = [
+        stamp
+        for verdict_file in sorted((train / "verdict").glob(VERDICT_GLOB))
+        if (
+            stamp := write_certificate(
+                project, verdict_file, label, policy_stamp, identity, run_stamp
+            )
+        )
+    ]
+    return {
+        "run": run_stamp,
+        "policy": policy_stamp,
+        "evaluations": evaluations,
+        "name": label,
+    }
+
+
+def write_policy(
+    project: Project, label: str, checkpoint: Path, identity: dict, run_stamp: str
+) -> str:
+    """A checkpoint as a policy artifact: the weights copied, a manifest
+    citing the run, robot and actuator it came from. Returns its stamp;
+    an existing policy of that name is returned as it is."""
+    policy_dir = project.folder("policies") / label
+    if policy_dir.is_dir():
+        return stamp_kind(Kind.POLICY, policy_dir)
     policy_dir.mkdir(parents=True)
     shutil.copy2(checkpoint, policy_dir / checkpoint.name)
     # No identity.json here: that file marks a RUN to the kind detector;
@@ -95,38 +121,42 @@ def import_experiment(
         "seed": identity.get("seed"),
     }
     (policy_dir / POLICY_FILE).write_text(json.dumps(manifest, indent=1) + "\n")
-    policy_stamp = stamp_kind(Kind.POLICY, policy_dir)
+    return stamp_kind(Kind.POLICY, policy_dir)
 
-    # The evaluations: one per verdict, with its trial records.
-    evaluations = []
-    for verdict_file in sorted((train / "verdict").glob(VERDICT_GLOB)):
-        suffix = verdict_file.stem.removeprefix("walk-verdict-")
-        out = project.folder("certificates") / f"{label}-{suffix}"
-        if out.exists():
-            continue
-        out.mkdir(parents=True)
-        verdict = json.loads(verdict_file.read_text())
-        certificate = {
-            "schema": CERTIFICATE_SCHEMA,
-            **verdict,
-            "policy": policy_stamp,
-            "robot": identity.get("robot"),
-            "task": verdict.get("source"),
-            "run": run_stamp,
-        }
-        (out / "certificate.json").write_text(json.dumps(certificate, indent=1) + "\n")
-        # Exactly this verdict's records — "at-fit" is a substring of
-        # "at-x0.7-at-fit", so a glob would hand a sibling's trials over.
-        records = train / "verdict" / f"records-{suffix}.jsonl"
-        if records.is_file():
-            shutil.copy2(records, out / records.name)
-        evaluations.append(stamp_kind(Kind.CERTIFICATE, out))
-    return {
-        "run": run_stamp,
+
+def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, each named
+    project: Project,
+    verdict_file: Path,
+    label: str,
+    policy_stamp: str,
+    identity: dict,
+    run_stamp: str,
+) -> str | None:
+    """One walk verdict (`walk-verdict-<suffix>.json` with its
+    `records-<suffix>.jsonl`) as an evaluation `<label>-<suffix>` citing
+    the policy, robot, environment and run. Returns the stamp, or None
+    when that evaluation is already in the project."""
+    suffix = verdict_file.stem.removeprefix("walk-verdict-")
+    out = project.folder("certificates") / f"{label}-{suffix}"
+    if out.exists():
+        return None
+    out.mkdir(parents=True)
+    verdict = json.loads(verdict_file.read_text())
+    certificate = {
+        "schema": CERTIFICATE_SCHEMA,
+        **verdict,
         "policy": policy_stamp,
-        "evaluations": evaluations,
-        "name": label,
+        "robot": identity.get("robot"),
+        "task": verdict.get("source"),
+        "run": run_stamp,
     }
+    (out / "certificate.json").write_text(json.dumps(certificate, indent=1) + "\n")
+    # Exactly this verdict's records — "at-fit" is a substring of
+    # "at-x0.7-at-fit", so a glob would hand a sibling's trials over.
+    records = verdict_file.parent / f"records-{suffix}.jsonl"
+    if records.is_file():
+        shutil.copy2(records, out / records.name)
+    return stamp_kind(Kind.CERTIFICATE, out)
 
 
 TRAINING_FILE = "training.json"

@@ -81,6 +81,14 @@ impl Shell {
 
     /// Show an artifact in the viewer: make sure the presenter runs for
     /// this project, then write the intent it watches for.
+    /// The presenter runs from the moment a project is open, not from the
+    /// first Show: it is also the live loop that turns a training run's
+    /// console log into its record and re-indexes (the Go2 run was
+    /// invisible until a Show, 2026-09-10).
+    pub fn open_project(&mut self) {
+        self.ensure_presenter();
+    }
+
     pub fn show(&mut self, stamp: &str) {
         self.ensure_presenter();
         if self.model.request_show(stamp).is_ok() {
@@ -397,6 +405,7 @@ impl Shell {
             self.selected = None;
             self.section = Section::Overview;
             self.entered = true;
+            self.open_project();
         }
         self.model.refresh();
         ctx.request_repaint_after(crate::model::RELOAD_EVERY);

@@ -147,7 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let viewport = ViewportFeed::idle();
-            let shell = Shell::new(Model::open(&repo_root()), repo_root());
+            let mut shell = Shell::new(Model::open(&repo_root()), repo_root());
+            shell.open_project();
             let control = control::Control::new(shell.model.project_root.clone());
             Ok(Box::new(StudioShell {
                 rerun_app,
