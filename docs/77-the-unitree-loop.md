@@ -188,6 +188,27 @@ read differently, and the window must say so rather than show a gap.
     `go2-walk@0e7e123a7de7` (the declared spec's content hash), so the
     environment card is not yet cited by its evaluation.
 
+11. **What the policy looked like every hundred iterations** (asked
+    2026-09-10: "one image of each 100 iterations, like 80 images",
+    for after the run). `rq_mjlab.walk_stills <run> --project <root>
+    --robot go2 --every 100 --tick 100`: the env built once at the
+    nominal point with one world, every hundredth checkpoint's actor
+    loaded into it in turn, a rollout capped at 100 control ticks (2 s)
+    and the pose at the last tick rendered through the project's own
+    scene file from the chase camera; `stills/stills.json` keeps what
+    the world did in those ticks, `stills/sheet.png` lays every still
+    out in iteration order framed in the outcome's colour (tracking
+    green, fallen red, up but off-command blue). The run's presenter
+    puts the stills on the iteration timeline next to the curves, so
+    scrubbing the reward curve in the Studio shows the robot at that
+    checkpoint. Smoke on the box with three checkpoints: 17 s including
+    the env build, so the eighty-one stills of a finished run are a
+    three-minute pass. Seen: the sheet, and the Live view with the
+    still beside the curves at iteration 5669. Caveat: the rollout is
+    not bit-reproducible across tool invocations (the same seed gave
+    err ratio 0.37 then 0.49 at model_4000) - a still is a picture,
+    not a judgment; the certificate remains the judgment.
+
 ## 4. Decisions to take before building (asked 2026-09-10)
 
 - **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own

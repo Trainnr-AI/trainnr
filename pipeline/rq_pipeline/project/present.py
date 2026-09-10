@@ -368,6 +368,7 @@ def _present_rl_run(
                         continue
                     rr_.set_time("iteration", sequence=int(row[it]))
                     rr_.log(path, rr.Scalars(float(row[c])))
+        stills = _log_stills(folder, rr_, root)
         identity = folder / "identity.json"
         facts = {k: v for k, v in record.items() if k not in ("columns", "curve")}
         text = json.dumps(facts, indent=1)
@@ -381,17 +382,50 @@ def _present_rl_run(
             static=True,
         )
     views = [rrb.TimeSeriesView(origin=p, name=p.split("/", 1)[1]) for p in paths]
+    curves: Any = (
+        rrb.Grid(*views) if views else rrb.TextDocumentView(origin=f"{root}/manifest")
+    )
+    top = (
+        rrb.Horizontal(
+            rrb.Spatial2DView(origin=stills, name="checkpoint"),
+            curves,
+            column_shares=[2, 3],
+        )
+        if stills
+        else curves
+    )
     return {
-        "paths": [*paths, f"{root}/manifest"],
+        "paths": [*paths, *([stills] if stills else []), f"{root}/manifest"],
         "view": "time series",
         "layout": rrb.Vertical(
-            rrb.Grid(*views)
-            if views
-            else rrb.TextDocumentView(origin=f"{root}/manifest"),
+            top,
             rrb.TextDocumentView(origin=f"{root}/manifest", name="manifest"),
             row_shares=[3, 1],
         ),
     }
+
+
+STILLS_DIR, STILLS_FILE = "stills", "stills.json"  # rq_mjlab.walk_stills writes them
+
+
+def _log_stills(folder: Path, rr_: Any, root: str) -> str | None:
+    """A run's checkpoint stills (one rollout frame every N iterations)
+    on the iteration timeline, so scrubbing the reward curve shows what
+    the policy looked like there. The entity path, or None when the
+    run has no stills."""
+    import rerun as rr  # noqa: PLC0415
+
+    record = folder / STILLS_DIR / STILLS_FILE
+    if not record.is_file():
+        return None
+    path = f"{root}/checkpoint"
+    for row in json.loads(record.read_text()):
+        still = folder / STILLS_DIR / row["file"]
+        if not still.is_file():
+            continue
+        rr_.set_time("iteration", sequence=int(row["iteration"]))
+        rr_.log(path, rr.EncodedImage(path=still))
+    return path
 
 
 def _present_policy(

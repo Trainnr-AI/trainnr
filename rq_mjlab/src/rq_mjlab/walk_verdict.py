@@ -102,7 +102,7 @@ def instrument_for(device: str) -> str:
 
 
 def rollout_episodes(
-    env, policy, trials: int, *, capture: bool = False
+    env, policy, trials: int, *, capture: bool = False, max_ticks: int | None = None
 ) -> list[WorldEpisode]:
     """One completed episode per world, judged from the live managers:
     the commanded twist from the command manager, the base-frame
@@ -110,7 +110,9 @@ def rollout_episodes(
     manager. Worlds that finish early keep stepping (the env auto-
     resets) but only each world's FIRST episode is recorded. With
     `capture`, the per-tick observation/action/qpos of that first
-    episode ride along (the rollout->dataset writer's raw material)."""
+    episode ride along (the rollout->dataset writer's raw material).
+    With `max_ticks`, a world still open at that tick is closed as
+    survived so far (the stills tool wants one frame, not a verdict)."""
     import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
 
@@ -148,6 +150,8 @@ def rollout_episodes(
         cmd_sum += cmd * open_worlds
         steps += open_worlds.long()
         closing = open_worlds & dones.bool()
+        if max_ticks is not None:
+            closing |= open_worlds & (steps >= max_ticks)
         if closing.any():
             fell |= closing & unwrapped.termination_manager.terminated
             recorded_steps = torch.where(closing, steps, recorded_steps)
