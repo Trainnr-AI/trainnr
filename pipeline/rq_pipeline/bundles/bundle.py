@@ -19,6 +19,16 @@ BUNDLE_FILE = "bundle.json"
 BUNDLE_SCHEMA = "trainnr-robot/1"
 
 
+SOURCE_PARTS = 3  # <package>/<xmls>/<file>: what a reader needs to find it again
+
+
+def source_locator(source: Path) -> str:
+    """Where a bundle came from, said the same way on every machine: the
+    resolved path's last SOURCE_PARTS components."""
+    parts = source.expanduser().resolve().parts[-SOURCE_PARTS:]
+    return "/".join(parts)
+
+
 def write_bundle_record(
     bundle_dir: Path, name: str, model_file: str, model: Any, *, source: Path
 ) -> Path:
@@ -27,7 +37,12 @@ def write_bundle_record(
         "schema": BUNDLE_SCHEMA,
         "name": name,
         "model_file": model_file,
-        "source": str(Path(source).expanduser().resolve()),
+        # The source's last three path components, never the machine's
+        # absolute path: the record is inside the bundle the stamp hashes,
+        # so an absolute path gave one robot two stamps on two machines
+        # (go2 onboarded from the same clone on the Mac and the WSL box,
+        # 2026-09-10).
+        "source": source_locator(Path(source)),
         "census": {
             "bodies": int(model.nbody),
             "joints": int(model.njnt),

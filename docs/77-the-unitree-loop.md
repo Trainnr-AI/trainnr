@@ -130,6 +130,17 @@ read differently, and the window must say so rather than show a gap.
    project-first locator the pipeline uses; nothing about the project's
    layout is known to the walk package.
 
+7. **A bundle's stamp depended on the machine it was onboarded on**
+   (found and fixed 2026-09-10, the WSL box). `bundle.json` recorded the
+   source as an absolute path, and the record lives inside the directory
+   the stamp hashes, so the Go2 onboarded from the same clone at the same
+   commit was `go2@b6170cf88b09` on the Mac and `go2@a185f9103878` on the
+   box. Fixed: the record keeps the source's last three path components
+   (`unitree_go2/xmls/go2.xml`), the same on every machine; the box's Go2
+   is `go2@5003bf617b5f`, and the Mac's stamp changes when it re-onboards.
+   The task stamp (`go2-walk@0e7e123a7de7`) was identical on both machines
+   from the start, as a content hash should be.
+
 ## 4. Decisions to take before building (asked 2026-09-10)
 
 - **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own
@@ -151,6 +162,23 @@ read differently, and the window must say so rather than show a gap.
   earlier call; a Go2's SDK2 adapter is gated research.
 
 ## 5. Tomorrow on the WSL box: the run, by the doors
+
+**Done on the box, 2026-09-10.** The reference cloned at commit
+`1425b15` into `~/.cache/trainnr/`, the venvs synced with their extras
+(the recorder tests need `rerun`, the dataset tests `pyarrow`: sync
+with `--extra viz` and `--extra sim --extra viz --extra mcp`). The
+project made by hand (`projects/go2-walk/project.json`, loop
+`reinforcement`), then by the doors: `onboard_robot` (friction 7 above,
+then `go2@5003bf617b5f`), `create_task("go2-walk", "go2-flat", {span
+0.10, flat, 20 s, 40 trials})` → `go2-walk@0e7e123a7de7`, `accept_task`
+→ ACCEPTED by the learnability smoke (2 environments, 2 PPO iterations).
+The run: `walk_train --agent g3 --robot go2 --project <root> --dr-span
+0.1 --task-stamp go2-walk@0e7e123a7de7 --log-dir <root>/runs/go2-c1
+--seed 42 --no-recorder`; identity `go2@5003bf617b5f`,
+`unitree-go2-declared-pd@3b68245f8d2a`, 4096 environments, 8000
+iterations at ~1.5 s each on the 3090 Ti (about 3.5 h); console log
+`<root>/runs/go2-c1.log`. Then `certify_walk`.
+
 
 What exists by the end of 2026-09-10, all pushed on the branch: the Go2
 onboarded into `projects/go2-walk` (the reference's `go2.xml`,
