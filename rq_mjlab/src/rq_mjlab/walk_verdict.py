@@ -555,6 +555,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
                 raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
         identity = {
             **identity,
+            "task": trained_identity.get("task"),
             "trained_dr_basis": trained_identity.get("dr_basis"),
             # The training run's seed (walk_train --seed; mjlab's default
             # 42 when the run predates the knob) — a replicate's name.
@@ -563,7 +564,10 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
-    source = f"{spec.source_prefix}@{fields_hash(identity)}"
+    # The environment the certificate cites: the declared task the run was
+    # trained against (its content stamp, the project's environment card)
+    # when the run recorded one; else the walk spec's identity hash.
+    source = identity.get("task") or f"{spec.source_prefix}@{fields_hash(identity)}"
     protocol = {
         "trials": args.trials,
         "seed": args.seed,

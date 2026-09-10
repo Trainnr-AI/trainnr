@@ -36,3 +36,11 @@ runs/
 
 # coverage databases carry absolute paths; per machine, never tracked
 .coverage*
+
+# LaTeX build outputs (the sources are tracked, the build is not)
+docs/paper/latex/*.aux
+docs/paper/latex/*.log
+docs/paper/latex/*.fls
+docs/paper/latex/*.fdb_latexmk
+docs/paper/latex/*.out
+docs/paper/latex/*.synctex.gz
