@@ -94,6 +94,10 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
     from mjlab.rl.exporter_utils import attach_metadata_to_onnx  # noqa: PLC0415
 
+    from rq_mjlab.envelope import (  # noqa: PLC0415
+        checkpoint_iteration,
+        pin_command_envelope,
+    )
     from rq_mjlab.walks import use_project, walk_spec  # noqa: PLC0415
 
     use_project(project)
@@ -112,6 +116,12 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
     cfg.scene.num_envs = 1
     device = "cpu"
     agent = spec.agent(1)
+    # The commands the checkpoint trained under (rq_mjlab.envelope), so
+    # the manifest's ranges - what the gate draws from - are the
+    # policy's envelope, not the curriculum's first stage.
+    envelope = pin_command_envelope(
+        cfg, checkpoint_iteration(checkpoint.stem), agent.num_steps_per_env
+    )
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
@@ -159,6 +169,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
             certificate=certificate,
             policy_stamp=policy_stamp,
             max_abs_diff=max_abs_diff,
+            command_basis=envelope["basis"],
             input_name=inputs[0],
             output_name=outputs[0],
         ),
@@ -321,6 +332,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "terrain": terrain,
         },
         "commands": {"twist": command_ranges},
+        "command_basis": ex.command_basis,
         "termination": {"fell_over_deg": _fell_over_deg(env)},
     }
 

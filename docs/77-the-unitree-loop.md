@@ -404,6 +404,46 @@ choice stands. Not the cause, ruled out on the way: the Vulkan adapter
 (Mesa's dzn over D3D12 draws the app fine), the OpenGL backend (falls
 to llvmpipe and refuses an R32Float target), the driver path.
 
+Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
+manifest described the curriculum's first stage, whatever the
+checkpoint had trained on.** The reward curve's step at iteration
+5000 (86.5 to 73.2; entropy 1.76 to 4.45; episode length unchanged at
+1000) is mjlab's velocity task widening the commanded twist - the
+`command_vel` curriculum, stages at 0, 5000 and 10000 iterations of
+24 steps: forward -1.0..1.0 and turn ±0.5 rad/s, then forward
+-1.5..2.0 and turn ±0.7, then forward -2.0..3.0 (never reached in
+8000). A fresh environment restarts the curriculum, so every
+certificate had judged stage one and the deployment manifest's ranges
+(what the gate draws from) were stage one too; the two checkpoints'
+40/40 were the same question asked twice. Fixed: `rq_mjlab.envelope`
+pins the config's command ranges to the stage the checkpoint's
+iteration had reached and removes the curriculum; the certificate
+records `protocol.commands` and `protocol.command_basis`, the
+manifest `commands` and `command_basis`; an evaluation's name carries
+a hash of its protocol, so a re-judge under another envelope is its
+own card, and the card's subtitle leads with the envelope. Verdict
+backups are named by the policy they judged too (two checkpoints of
+one run under one suffix shared a backup name and the second
+rotation would have overwritten the first).
+
+Re-judged at the trained envelopes, 40 trials, seed 1000, on the
+3090 Ti (both a minute):
+
+| checkpoint | envelope judged | survived / tracked | interval | median error ratio |
+|---|---|---|---|---|
+| model_1400 | stage 1: forward -1..1, turn ±0.5 | 40 / 40 | [0.912, 1.000] | 0.250 |
+| model_7999 | stage 2: forward -1.5..2.0, turn ±0.7 | 40 / 40 | [0.912, 1.000] | 0.199 |
+
+So the second half of training did buy something the first
+certificate could not see: the final policy tracks commands up to
+2 m/s with a lower median error than the early one shows at half the
+speed. The deployment re-exported citing the stage-2 certificate
+(manifest forward -1.5..2.0, sideways ±1.0, turn ±0.7) and re-gated
+over 40 commands drawn there: **40 / 40, [0.912, 1.000], passed** (the
+earlier 38/40 had drawn from stage-one ranges; its two misses were
+0.12 and 0.14 m/s commands). Not a like-for-like pair: different
+draws, different envelopes.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

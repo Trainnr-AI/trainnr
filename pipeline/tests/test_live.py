@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from rq_pipeline.bundles.hashing import fields_hash
 from rq_pipeline.project.kinds import stamp_run
 from rq_pipeline.project.live import (
     TRAIN_LOG,
@@ -71,6 +72,9 @@ class TheLiveRecord(unittest.TestCase):
         self.assertFalse((run / TRAINING_FILE).exists())
 
 
+PROTOCOL = fields_hash({"seed": 1000, "trials": 40})[:6]
+
+
 class TheLiveVerdict(unittest.TestCase):
     """A checkpoint certified inside the project shows as an evaluation
     citing a policy, the next tick, and only once."""
@@ -103,7 +107,11 @@ class TheLiveVerdict(unittest.TestCase):
     def test_a_verdict_becomes_a_policy_and_an_evaluation_once(self) -> None:
         project, _ = self._run()
         written = refresh_verdicts(project)
-        out = project.root / "certificates" / "go2-c1-model_1400-cuda-seed1000-n40"
+        out = (
+            project.root
+            / "certificates"
+            / f"go2-c1-model_1400-cuda-seed1000-n40-p{PROTOCOL}"
+        )
         self.assertEqual(written, [out])
         certificate = json.loads((out / "certificate.json").read_text())
         self.assertEqual(certificate["successes"], 40)
@@ -143,7 +151,7 @@ class TheLiveVerdict(unittest.TestCase):
         project, run = self._run()
         refresh_verdicts(project)
         primary = run / VERDICT_DIR / "walk-verdict-cuda.json"
-        backup = run / VERDICT_DIR / "walk-verdict-cuda.seed1000.n40.json"
+        backup = run / VERDICT_DIR / "walk-verdict-cuda.model_1400.seed1000.n40.json"
         primary.rename(backup)
         self.assertEqual(refresh_verdicts(project), [])
         # A re-judge of the same checkpoint under another seed is its own.
@@ -151,4 +159,16 @@ class TheLiveVerdict(unittest.TestCase):
         verdict["protocol"]["seed"] = 2000
         primary.write_text(json.dumps(verdict))
         written = [w.name for w in refresh_verdicts(project)]
-        self.assertEqual(written, ["go2-c1-model_1400-cuda-seed2000-n40"])
+        self.assertEqual(len(written), 1)
+        self.assertTrue(written[0].startswith("go2-c1-model_1400-cuda-seed2000-n40-p"))
+
+    def test_another_protocol_is_another_evaluation(self) -> None:
+        project, run = self._run()
+        refresh_verdicts(project)
+        primary = run / VERDICT_DIR / "walk-verdict-cuda.json"
+        verdict = json.loads(primary.read_text())
+        verdict["protocol"]["commands"] = {"lin_vel_x": [-1.5, 2.0]}
+        primary.write_text(json.dumps(verdict))
+        written = refresh_verdicts(project)
+        self.assertEqual(len(written), 1)
+        self.assertNotIn(f"-p{PROTOCOL}", written[0].name)

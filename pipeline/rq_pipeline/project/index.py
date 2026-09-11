@@ -379,6 +379,11 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     """What a card says about an evaluation: the rate and its interval."""
     c = _read(path / CERTIFICATE_FILE)
     out: dict[str, Any] = {}
+    # The envelope first: the card's subtitle is cut short, and the
+    # envelope is what tells two judgments of one checkpoint apart.
+    commands = _command_envelope((c.get("protocol") or {}).get("commands"))
+    if commands:
+        out["commands"] = commands
     if "successes" in c and "trials" in c:
         out["success"] = f"{c['successes']} / {c['trials']}"
     ci = c.get("ci95") or c.get("ci")
@@ -388,6 +393,21 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     if judged:
         out["judged at"] = judged
     return out
+
+
+def _command_envelope(commands: Any) -> str | None:
+    """The commanded twist a certificate judged at, in a few words:
+    "forward -1.5 to 2.0 m/s, turn ±0.7 rad/s" - what tells two
+    judgments of one checkpoint apart on a card (2026-09-11)."""
+    if not isinstance(commands, dict):
+        return None
+    parts = []
+    x, z = commands.get("lin_vel_x"), commands.get("ang_vel_z")
+    if isinstance(x, list) and len(x) == 2:  # noqa: PLR2004 - a range is two numbers
+        parts.append(f"forward {x[0]:g} to {x[1]:g} m/s")
+    if isinstance(z, list) and len(z) == 2 and z[0] == -z[1]:  # noqa: PLR2004
+        parts.append(f"turn ±{z[1]:g} rad/s")
+    return ", ".join(parts) or None
 
 
 def _basis_name(basis: str) -> str:

@@ -17,6 +17,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.hashing import fields_hash
 from rq_pipeline.project.kinds import IDENTITY_FILE, Kind, stamp_kind, stamp_run
 from rq_pipeline.project.locate import Project, plain_name
 
@@ -124,24 +125,32 @@ def write_policy(
     return stamp_kind(Kind.POLICY, policy_dir)
 
 
-BACKUP_MARK = (
-    ".seed"  # walk_verdict rotates a replaced verdict to <name>.seed<n>.n<k>.json
-)
+# walk_verdict rotates a replaced verdict to <name>[.<policy>].seed<n>.n<k>.json;
+# the suffix is what stands before that tail (a suffix itself may hold a
+# dot: "at-x0.7-at-fit").
+BACKUP_TAIL = re.compile(r"(\.model_\d+)?\.seed\d+\.n\d+$")
+
+
+PROTOCOL_HASH_CHARS = 6
 
 
 def evaluation_suffix(verdict_file: Path, verdict: dict) -> str:
     """What tells one evaluation of a policy from another: the verdict
-    file's instrument suffix, the seed and the trial count. A verdict
-    rq_mjlab rotated to its backup name (the same judgment, renamed
-    when a later one took the primary name) maps to the same
-    evaluation, so it is imported once; a re-judge under another seed
-    is its own."""
-    suffix = verdict_file.stem.removeprefix("walk-verdict-").split(BACKUP_MARK, 1)[0]
+    file's instrument suffix, the seed, the trial count and a hash of
+    the whole protocol (the criterion, the DR basis, the command
+    envelope). A verdict rq_mjlab rotated to its backup name (the same
+    judgment, renamed when a later one took the primary name) maps to
+    the same evaluation, so it is imported once; a re-judge under
+    another seed or another protocol - the Go2 checkpoints judged
+    again at their trained command envelope, 2026-09-11 - is its own."""
+    suffix = BACKUP_TAIL.sub("", verdict_file.stem.removeprefix("walk-verdict-"))
     protocol = verdict.get("protocol") or {}
     seed, trials = protocol.get("seed"), verdict.get("trials")
     if seed is None or trials is None:
         return suffix
-    return f"{suffix}-seed{seed}-n{trials}"
+    return (
+        f"{suffix}-seed{seed}-n{trials}-p{fields_hash(protocol)[:PROTOCOL_HASH_CHARS]}"
+    )
 
 
 def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, each named

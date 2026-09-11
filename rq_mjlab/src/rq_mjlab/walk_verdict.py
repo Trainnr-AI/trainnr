@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 # The judgment's constants, declared where the certificate cites them.
@@ -495,8 +496,12 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
         # by an audit reading the rows). The rows are appended and stay
         # the primary artifact; the previous file is kept beside the new.
         stamp_prev = json.loads(verdict_path.read_text())
+        # Named by what it judged too: two checkpoints of one run judged
+        # under the same suffix would otherwise share a backup name, and
+        # the second rotation would overwrite the first (2026-09-11).
         previous = out_dir / (
-            f"walk-verdict-{suffix}.seed{stamp_prev['protocol'].get('seed')}"
+            f"walk-verdict-{suffix}.{stamp_prev.get('policy', 'policy')}"
+            f".seed{stamp_prev['protocol'].get('seed')}"
             f".n{stamp_prev['trials']}.json"
         )
         if not previous.exists():
@@ -568,16 +573,24 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     # trained against (its content stamp, the project's environment card)
     # when the run recorded one; else the walk spec's identity hash.
     source = identity.get("task") or f"{spec.source_prefix}@{fields_hash(identity)}"
+    agent = spec.agent(1)
+    # The commands the checkpoint trained under, not the curriculum's
+    # first stage a fresh env would restart at (rq_mjlab.envelope).
+    envelope = pin_command_envelope(
+        cfg, checkpoint_iteration(args.checkpoint.stem), agent.num_steps_per_env
+    )
     protocol = {
         "trials": args.trials,
         "seed": args.seed,
         "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
         "err_floor_mps": ERR_FLOOR,
         "dr_basis": identity["dr_basis"],
+        "commands": envelope["commands"],
+        "command_basis": envelope["basis"],
     }
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
+    print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")
 
-    agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
