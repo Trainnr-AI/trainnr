@@ -10025,6 +10025,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "winit",
 ]
 
 [[package]]

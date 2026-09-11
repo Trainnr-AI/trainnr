@@ -388,6 +388,22 @@ stamp to the task registry, which knows families by id
 through the environment card the index holds (its spec records the
 family id); a run naming the family id directly is taken as is.
 
+Friction 19 (fixed, 2026-09-11, the box): **the Studio window never
+appeared on the operator's screens under WSLg**, through a day of
+work seen only by the agent's in-app screenshots. WSLg's compositor
+announced the window to Windows every time (`robotiq_studio` in the
+RAIL app list), but Windows never showed a native Wayland window from
+this app, while an X11 test window (`xmessage`, through Xwayland)
+showed at once, and the Studio relaunched with `WAYLAND_DISPLAY`
+hidden showed at once - the operator's screenshot. winit takes
+Wayland whenever that variable is set, so the binary now asks the
+event loop for X11 when it runs on WSL (`main.rs::prefer_x11_under_wslg`,
+eframe's event-loop hook and winit's X11 extension trait - no
+environment edits, the crate forbids unsafe); elsewhere winit's own
+choice stands. Not the cause, ruled out on the way: the Vulkan adapter
+(Mesa's dzn over D3D12 draws the app fine), the OpenGL backend (falls
+to llvmpipe and refuses an R32Float target), the driver path.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

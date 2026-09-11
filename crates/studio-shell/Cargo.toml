@@ -44,6 +44,10 @@ egui_extras = "0.36.1"
 # PNG encoding for the agent's screenshots (control.rs); already in the
 # tree through egui_extras, pinned to the same major.
 image = { version = "0.25", default-features = false, features = ["png"] }
+# The window backend choice on WSLg (main.rs::prefer_x11_under_wslg):
+# winit's X11 extension trait is not re-exported by eframe. Same crate
+# instance eframe uses (cargo unifies the version; 0.30 locked).
+winit = { version = "0.30", default-features = false, features = ["x11"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 # This standalone workspace has no [workspace.lints] to inherit from (see

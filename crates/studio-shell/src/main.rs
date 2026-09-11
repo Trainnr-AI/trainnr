@@ -57,6 +57,31 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
 
+/// Under WSLg the compositor announces a native Wayland window to Windows
+/// but Windows never shows it, while the same app through Xwayland shows
+/// at once (seen live 2026-09-11: an X11 test window visible, the Studio
+/// not; the Studio relaunched with the Wayland display hidden, visible).
+/// winit picks Wayland whenever `WAYLAND_DISPLAY` is set, so on WSL the
+/// event loop is asked for X11 instead. Elsewhere winit's own choice stands.
+fn on_wsl() -> bool {
+    std::env::var_os("WSL_DISTRO_NAME").is_some()
+        || std::path::Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
+}
+
+fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
+    if !on_wsl() {
+        return;
+    }
+    re_log::info!("WSLg: taking the X11 path so the window shows");
+    options.event_loop_builder = Some(Box::new(|builder| {
+        #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+        {
+            use winit::platform::x11::EventLoopBuilderExtX11 as _;
+            builder.with_x11();
+        }
+    }));
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_thread_token = re_viewer::MainThreadToken::i_promise_i_am_on_the_main_thread();
@@ -73,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut native_options = re_viewer::native::eframe_options(None);
+    prefer_x11_under_wslg(&mut native_options);
     // Our own dock/window icon in place of the Rerun logo the viewer's
     // eframe options install. Raw RGBA committed beside a generator with
     // provenance (tools/gen-app-icon.py) — no PNG decoder in the tree.
