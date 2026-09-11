@@ -30,7 +30,7 @@ from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
 from mjlab.envs.mdp.actions import JointPositionActionCfg
-from mjlab.managers import TerminationTermCfg
+from mjlab.managers import EventTermCfg, TerminationTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactMatch, ContactSensorCfg, ObjRef, RayCastSensorCfg
 from mjlab.tasks.velocity import mdp
@@ -260,7 +260,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
         cfg.events.pop("push_robot", None)
         cfg.terminations.pop("out_of_terrain_bounds", None)
         cfg.curriculum = {}
-        cfg.events["randomize_terrain"] = envs_mdp.EventTermCfg(
+        cfg.events["randomize_terrain"] = EventTermCfg(
             func=envs_mdp.randomize_terrain, mode="reset", params={}
         )
     return cfg
@@ -290,6 +290,9 @@ def go2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.rewards["upright"].params.pop("terrain_sensor_names", None)
     cfg.terminations.pop("illegal_contact", None)
     cfg.terminations.pop("out_of_terrain_bounds", None)
+    # A plane has no terrain to re-draw at reset (the play-mode event the
+    # rough variant adds; never exercised on the Go2 until play_walk, 2026-09-11).
+    cfg.events.pop("randomize_terrain", None)
     cfg.terminations["fell_over"] = TerminationTermCfg(
         func=mdp.bad_orientation, params={"limit_angle": math.radians(FELL_OVER_DEG)}
     )

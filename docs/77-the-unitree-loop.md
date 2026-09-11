@@ -515,6 +515,28 @@ shaped the run's step at 5000 are invisible at rest. None of the
 field's tools could have said this before the run (docs/33): they
 show terms during one.
 
+**Training streams into the Studio, 2026-09-11 (late).** The `train_walk`
+door never switched the recorder off; the hand-launched go2-c1 had.
+A smoke run through the door (`go2-smoke`: g3, 512 environments, 80
+iterations, seed 7) showed in the Live view as it trained: the watched
+world in 3D, the camera every 25 steps, the twelve joints, every reward
+term per step (the untrained actor's action-rate penalty near -2.5
+before anything else moved), world resets as events, and the Compute
+card counting the job. That is the recorder mjlab's API defined and
+never implemented, our Rerun sink, and nothing else.
+
+`play_walk(run, checkpoint, envs, viewer)` opens a checkpoint in
+mjlab's own viewer - the library's viewers as they are - with the same
+rollout streamed into the Live view by the recorder; `walk_play` now
+takes the walk by robot and project like the other tools (it was
+microduck-only, and the Go2's play mode had never run: its terrain
+event named the wrong module). Friction 22: mjlab's native MuJoCo
+window on this box drew at 0.01x real time, 0 FPS, step 28 after two
+minutes (the operator's screenshot) - the same X11 path the Studio
+pays a core for, and this window pays with its frames. mjlab's other
+viewer, the browser one (viser, `http://localhost:8080`), is the
+door's default now; the native window stays a choice.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

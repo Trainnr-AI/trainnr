@@ -557,6 +557,43 @@ def gate_deployment(
     )
 
 
+def play_walk(
+    run: str, checkpoint: str, envs: int = 9, viewer: str = "viser"
+) -> dict[str, Any]:
+    """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
+    its browser viewer (the URL is on the job's log), or `native`, its
+    MuJoCo window - with the same rollout streamed into the Studio's Live
+    view by the recorder. `run` is the experiment's folder under runs/,
+    `checkpoint` a file in it. Job handle; the viewer lives until closed."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(run, "run name")
+        run_dir = project.folder("runs") / run
+        path = run_dir / checkpoint
+        if not path.is_file():
+            return {
+                "status": "refused",
+                "reason": f"no checkpoint {checkpoint!r} in run {run!r}",
+            }
+        task_id = _task_id_in_project(
+            index_project(project).artifacts, _run_task(run_dir)
+        )
+        robot = (walk_robot(task_id) if task_id else None) or _robot_of_run(run_dir)
+        if robot is None:
+            return {"status": "refused", "reason": f"run {run!r} names no walk"}
+        return Actions(JobManager(_jobs_root())).play_walk(
+            str(path), robot=robot, envs=envs, project=str(project.root), viewer=viewer
+        )
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+
+
 def preview_rewards(
     task: str, controller: str = "untrained", seconds: float = 5.0, seed: int = 1000
 ) -> dict[str, Any]:

@@ -356,3 +356,17 @@ class ThePreviewDoor(unittest.TestCase):
                 self.assertEqual(argv[argv.index(flag) + 1], value)
             with self.assertRaises(ValueError):
                 actions.preview_rewards(robot="spot")
+
+
+class ThePlayDoor(unittest.TestCase):
+    def test_play_walk_opens_the_checkpoint_in_the_walk_venv(self) -> None:
+        with harness() as (actions, spawner):
+            actions.play_walk(
+                "/p/runs/r/model_7999.pt", robot="go2", envs=4, project="/p"
+            )
+            [(argv, _cwd)] = spawner.calls
+            argv = argv[argv.index("rq_mjlab.walk_play") :]
+            self.assertEqual(argv[1], "/p/runs/r/model_7999.pt")
+            self.assertEqual(argv[argv.index("--robot") + 1], "go2")
+            self.assertEqual(argv[argv.index("--envs") + 1], "4")
+            self.assertEqual(argv[argv.index("--project") + 1], "/p")

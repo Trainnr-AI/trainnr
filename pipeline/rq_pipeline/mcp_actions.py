@@ -265,6 +265,36 @@ class Actions:
             argv += ["--student", student, "--horizon", str(horizon)]
         return self.jobs.start("certify-walk", argv, RQ_MJLAB_DIR)
 
+    def play_walk(
+        self,
+        checkpoint: str,
+        *,
+        robot: str = "microduck",
+        envs: int = 9,
+        project: str | None = None,
+        viewer: str = "native",
+    ) -> dict[str, Any]:
+        """A checkpoint in mjlab's own viewer - its MuJoCo window or its
+        browser viewer - the walk in play mode, streamed to the Studio at
+        the same time by the recorder."""
+        if robot not in WALK_ROBOTS:
+            raise ValueError(f"robot is one of {', '.join(WALK_ROBOTS)}, got {robot!r}")
+        argv = [
+            *self._uv(RQ_MJLAB_DIR),
+            "-m",
+            "rq_mjlab.walk_play",
+            checkpoint,
+            "--robot",
+            robot,
+            "--envs",
+            str(envs),
+            "--viewer",
+            viewer,
+        ]
+        if project is not None:
+            argv += ["--project", project]
+        return self.jobs.start("play-walk", argv, RQ_MJLAB_DIR)
+
     def preview_rewards(  # noqa: PLR0913 - the preview's knobs, each named
         self,
         *,
