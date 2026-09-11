@@ -343,10 +343,13 @@ def _present_rl_run(
     artifact: Artifact, folder: Path, rr_: Any, root: str
 ) -> dict[str, Any]:
     """A reinforcement-learning run: every curve the training record kept
-    (reward, episode length, steps per second, losses) on the iteration
-    timeline, and the run's facts as a document."""
+    (the reward and its terms, losses, throughput, the curriculum) on the
+    iteration timeline in grouped panels, and the run's facts as a
+    document."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.envs.tfevents import curve_groups  # noqa: PLC0415
 
     record = json.loads((folder / "training.json").read_text())
     columns: list[str] = record.get("columns") or []
@@ -381,7 +384,12 @@ def _present_rl_run(
             ),
             static=True,
         )
-    views = [rrb.TimeSeriesView(origin=p, name=p.split("/", 1)[1]) for p in paths]
+    views = [
+        rrb.TimeSeriesView(
+            origin=root, name=name, contents=[f"+ {root}/{c}" for c in members]
+        )
+        for name, members in curve_groups(columns).items()
+    ]
     curves: Any = (
         rrb.Grid(*views) if views else rrb.TextDocumentView(origin=f"{root}/manifest")
     )

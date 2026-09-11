@@ -464,6 +464,26 @@ earlier 38/40 had drawn from stage-one ranges; its two misses were
 0.12 and 0.14 m/s commands). Not a like-for-like pair: different
 draws, different envelopes.
 
+Friction 21, and the rule behind it (2026-09-11, evening): **the
+Studio re-derived a training curve from console text while the
+trainer's own record sat in the run folder.** rsl_rl writes a
+TensorBoard event file into every run: 39 series per iteration for
+the Go2 - all thirteen reward terms, the curriculum's stage, the
+policy's action noise, the collection and learning times, the
+termination causes. Read as it is (TensorBoard's own reader, now in
+the pipeline's `viz` extra), it answers what the console never could:
+at iteration 5000 the two biggest losses were foot clearance (-0.38
+to -0.56) and action rate (-0.33 to -0.50), ahead of the two tracking
+terms (-0.16, -0.12) - the policy runs rougher at speed, not only less
+accurately. `rq_pipeline.envs.tfevents` turns the file into the same
+training record the cards read (the five console names kept; every
+other series as `group/name`), the live loop prefers it and falls back
+to the console log, and the viewer lays the series out in grouped
+panels. The operator's rule, from this: be additive on top of the
+libraries, use their features and their outputs as they are, keep our
+modules for what they leave unsolved, and let the Studio and the data
+piping tie it together.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

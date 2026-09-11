@@ -44,7 +44,11 @@ gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # a trial). The engine version is part of the identified artifact; it
 # moves by decision, never as a dependency side effect.
 mjx = ["mujoco-mjx[warp]~=3.11.0"]
-viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+# viz: the Rerun viewer (no GPU vendor requirement) and TensorBoard's event
+# reader - the presenter reads the file rsl_rl already writes into every run
+# (all reward terms, the curriculum, the timings) instead of re-deriving a
+# curve from console text (2026-09-11: additive over the libraries).
+viz = ["rerun-sdk>=0.20", "tensorboard>=2.15"]
 # deploy: the manifest-driven runtime and the sim-to-sim gate run the
 # exported ONNX policy; onnx reads the metadata the exporter attached.
 deploy = ["onnxruntime>=1.20", "onnx>=1.16"]

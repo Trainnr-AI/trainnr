@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 
 from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log
+from rq_pipeline.envs.tfevents import EVENTS_GLOB, events_file, record_from_events
 from rq_pipeline.project.importer import (
     VERDICT_GLOB,
     evaluation_suffix,
@@ -38,33 +39,49 @@ STATUS_RUNNING, STATUS_DONE = "running", "done"
 
 
 def run_folders(project: Project) -> list[Path]:
-    """Every run folder with its own console log, newest first."""
+    """Every run folder with its own console log or event file, newest first."""
     runs = project.runs
     if not runs.is_dir():
         return []
-    found = [p.parent for p in runs.rglob(TRAIN_LOG)]
+    found = {p.parent for p in runs.rglob(TRAIN_LOG)}
+    found |= {p.parent for p in runs.rglob(EVENTS_GLOB)}
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
+def _sources(folder: Path) -> list[Path]:
+    """What the record is read from: the trainer's event file when it
+    exists, the console log when it exists."""
+    events = events_file(folder)
+    log = folder / TRAIN_LOG
+    return [p for p in (events, log if log.is_file() else None) if p is not None]
+
+
 def stale(folder: Path) -> bool:
-    """Whether the log has grown since the record was written."""
-    log, record = folder / TRAIN_LOG, folder / TRAINING_FILE
+    """Whether a source has grown since the record was written."""
+    record = folder / TRAINING_FILE
     if not record.is_file():
         return True
-    return log.stat().st_mtime > record.stat().st_mtime
+    written = record.stat().st_mtime
+    return any(p.stat().st_mtime > written for p in _sources(folder))
 
 
 def refresh_training(folder: Path) -> dict | None:
-    """Parse the folder's console log into `training.json`; returns the
-    record written, or None when the log holds no iteration yet."""
-    text = (folder / TRAIN_LOG).read_text(errors="replace")
-    parsed = parse_rsl_rl_log(text)
-    if parsed is None:
+    """The folder's `training.json` from the trainer's own event file
+    (every series it logs) with the console log's facts, or from the
+    console log alone; returns the record written, or None when neither
+    holds an iteration yet."""
+    log = folder / TRAIN_LOG
+    text = log.read_text(errors="replace") if log.is_file() else ""
+    parsed = parse_rsl_rl_log(text) if text else None
+    events = events_file(folder)
+    record = record_from_events(events, facts=parsed) if events else None
+    record = record or parsed
+    if record is None:
         return None
-    record = parsed.to_json()
-    record["status"] = STATUS_DONE if DONE_MARK in text[-2000:] else STATUS_RUNNING
-    (folder / TRAINING_FILE).write_text(json.dumps(record, indent=1) + "\n")
-    return record
+    out = record.to_json()
+    out["status"] = STATUS_DONE if DONE_MARK in text[-2000:] else STATUS_RUNNING
+    (folder / TRAINING_FILE).write_text(json.dumps(out, indent=1) + "\n")
+    return out
 
 
 def refresh_project(project: Project) -> list[Path]:
