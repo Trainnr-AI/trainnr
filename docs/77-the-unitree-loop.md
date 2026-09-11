@@ -360,3 +360,34 @@ What the real Go2 deployment needs next: the certified `model_7999.pt`
 from the box (with its verdicts) so the export cites `go2-c1`'s
 evaluation and the gate judges against 40/40; then the reference's DDS
 simulator on a Linux box as a second, independent gate; then A7.
+
+**Done on the box, 2026-09-11.** The Mac's two commits pulled, both
+venvs synced (onnx, onnxruntime 1.30), 634 pipeline tests green. Then
+by the doors: `export_deployment(run="go2-c1", checkpoint="model_7999.pt",
+name="go2-c1-deploy")` - `policy.onnx`, `deploy.json` citing the
+policy `go2-c1-model_7999@62a6474496a7`, the run, the robot, the
+declared task `go2-walk@0e7e123a7de7` and the evaluation
+`go2-c1-model_7999-cuda-seed1000-n40@cc63d83c85c4`, and `scene.xml`;
+`gate_deployment("go2-c1-deploy", trials=40, seed=1000)` - **38 / 40,
+exact 95 % interval [0.831, 0.994], passed** (rate 0.95 against the
+certificate's 1.00, tolerance 0.10). No trial fell; the two misses
+are the two smallest held commands (0.12 and 0.14 m/s, just above the
+0.1 m/s floor) at error ratios 0.82 and 1.00 - the regime where the
+ratio criterion is harshest and the two protocols (mjlab's batched
+env under law DR against plain MuJoCo at the nominal point) differ
+most. The Studio: the Deployments page with the card and drawer, the
+overview at 5 of 8 stages, the deployment in the viewer (the trained
+scene with the bundle's meshes, the gate's error ratio per trial with
+the two misses standing out, the reading with the lineage), both jobs
+marked done in the activity feed.
+
+Friction 18 (fixed): a run trained by the door cites its task by the
+project's stamp (`go2-walk@0e7e…`), and the export door handed that
+stamp to the task registry, which knows families by id
+(`robotiq/go2-walk`) - refused. The door now resolves the stamp
+through the environment card the index holds (its spec records the
+family id); a run naming the family id directly is taken as is.
+
+What the loop still lacks on this robot: telemetry from a real Go2
+(sys-id, an identified interval, monitoring). The next independent
+gate is the reference's DDS simulator; then A7.

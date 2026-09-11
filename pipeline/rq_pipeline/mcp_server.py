@@ -437,8 +437,8 @@ def export_deployment(
     )
     if run_art is None:
         return {"status": "refused", "reason": f"run {run!r} is not in the index"}
-    task_ref = _run_task(run_dir)
-    robot = walk_robot(task_ref) if task_ref else None
+    task_id = _task_id_in_project(index.artifacts, _run_task(run_dir))
+    robot = walk_robot(task_id) if task_id else None
     if robot is None:
         robot = _robot_of_run(run_dir)
     if robot is None:
@@ -492,6 +492,27 @@ def _run_task(run_dir: Path) -> str | None:
     if not identity.is_file():
         return None
     return json.loads(identity.read_text()).get("task")
+
+
+def _task_id_in_project(artifacts: Any, ref: str | None) -> str | None:
+    """The task family a run's declared task belongs to. A run trained
+    by the door cites its task by the project's stamp (`go2-walk@0e7e…`,
+    the environment card), and the family id (`robotiq/go2-walk`) is
+    what that card's spec records; a run that names the family id
+    directly is taken as is. Unknown: None (the box, 2026-09-11 - the
+    export door handed the stamp to the registry and was refused)."""
+    if not ref:
+        return None
+    if "@" not in ref:
+        return ref
+    version = ref.split("@", 1)[1]
+    for a in artifacts:
+        if a.kind != "task":
+            continue
+        recorded = str(a.summary.get("stamp", a.stamp))
+        if recorded.split("@", 1)[-1] == version:
+            return a.summary.get("task_id")
+    return None
 
 
 def _robot_of_run(run_dir: Path) -> str | None:

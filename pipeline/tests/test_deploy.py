@@ -9,6 +9,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -22,6 +23,7 @@ from rq_pipeline.deploy.manifest import (
     load_manifest,
 )
 from rq_pipeline.deploy.runtime import _rotate_inverse, open_runtime
+from rq_pipeline.mcp_server import _task_id_in_project
 from rq_pipeline.project import PROJECT_ENV, create_project
 from tests.test_mcp_actions import PIPELINE_DIR, RQ_MJLAB_DIR, TOOLS_DIR, harness
 
@@ -221,3 +223,23 @@ class ManifestType(unittest.TestCase):
         self.assertEqual(m.observations, [1])
         self.assertEqual(m.joints, {"a": 1})
         self.assertEqual(m.scene_path, Path("/x/s"))
+
+
+class TheRunsTaskFamily(unittest.TestCase):
+    """A run trained by the door cites its task by the project's stamp;
+    the export door needs the family id the environment card records."""
+
+    def test_a_project_stamp_resolves_through_the_environment_card(self) -> None:
+        card = SimpleNamespace(
+            kind="task",
+            stamp="go2-flat@0e7e123a7de7",
+            summary={"task_id": "robotiq/go2-walk", "stamp": "go2-walk@0e7e123a7de7"},
+        )
+        self.assertEqual(
+            _task_id_in_project([card], "go2-walk@0e7e123a7de7"), "robotiq/go2-walk"
+        )
+        self.assertEqual(
+            _task_id_in_project([card], "robotiq/go1-walk"), "robotiq/go1-walk"
+        )
+        self.assertIsNone(_task_id_in_project([card], "go2-walk@ffffffffffff"))
+        self.assertIsNone(_task_id_in_project([card], None))
