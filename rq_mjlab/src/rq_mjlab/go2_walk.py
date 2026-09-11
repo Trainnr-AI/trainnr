@@ -266,6 +266,53 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     return cfg
 
 
+GAIT_PHASE_PERIOD_S = 0.6  # the reference's clock (velocity_env_cfg.py, `phase`)
+DEPLOYABLE_ACTOR = (
+    "base_ang_vel",
+    "projected_gravity",
+    "command",
+    "phase",
+    "joint_pos",
+    "joint_vel",
+    "actions",
+)
+
+
+def gait_phase(env: Any, period: float, command_name: str) -> Any:
+    """The reference's gait clock (unitree_rl_mjlab `mdp.phase`, transcribed):
+    sine and cosine of the episode time modulo `period`, zero while the
+    command is under 0.1 - what their deploy runtime computes as
+    `gait_phase`, so a policy trained on it runs in their stack."""
+    import torch  # noqa: PLC0415
+
+    global_phase = (env.episode_length_buf * env.step_dt) % period / period
+    phase = torch.zeros(env.num_envs, 2, device=env.device)
+    phase[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
+    phase[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
+    standing = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
+    still = standing < 0.1  # noqa: PLR2004 - the reference's threshold
+    return torch.where(still.unsqueeze(1), torch.zeros_like(phase), phase)
+
+
+def deployable_actor(cfg: ManagerBasedRlEnvCfg) -> None:
+    """The actor sees what the real Go2 can measure, in the reference's
+    order: no base linear velocity (a critic-only term in the reference;
+    no sensor on the robot, no term in Unitree's deploy runtime - found
+    2026-09-11 when the certified policy could not be written as their
+    deploy.yaml) and the reference's gait phase, which their runtime
+    provides. The critic keeps mjlab's full set."""
+    from mjlab.managers import ObservationTermCfg  # noqa: PLC0415
+
+    actor = cfg.observations["actor"]
+    terms = dict(actor.terms)
+    terms.pop("base_lin_vel", None)
+    terms["phase"] = ObservationTermCfg(
+        func=gait_phase,
+        params={"period": GAIT_PHASE_PERIOD_S, "command_name": "twist"},
+    )
+    actor.terms = {name: terms[name] for name in DEPLOYABLE_ACTOR}
+
+
 def go2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     """The flat-ground variant, the Go1's flat rules on the Go2."""
     cfg = _rough_env_cfg(play=play)
@@ -287,6 +334,7 @@ def go2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     )
     del cfg.observations["actor"].terms["height_scan"]
     del cfg.observations["critic"].terms["height_scan"]
+    deployable_actor(cfg)
     cfg.rewards["upright"].params.pop("terrain_sensor_names", None)
     cfg.terminations.pop("illegal_contact", None)
     cfg.terminations.pop("out_of_terrain_bounds", None)

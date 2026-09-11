@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mjlab.entity.entity import Entity
 
-from rq_mjlab.go2_walk import go2_robot_cfg, go2_walk_env_cfg
+from rq_mjlab.go2_walk import DEPLOYABLE_ACTOR, go2_robot_cfg, go2_walk_env_cfg
 from rq_mjlab.walks import ROBOTS, use_project, walk_spec
 
 PROJECT = Path(__file__).resolve().parents[2] / "projects" / "go2-walk"
@@ -35,6 +35,13 @@ class TheGo2Cfg(unittest.TestCase):
         self.assertNotIn("terrain_scan", sensors)
         self.assertNotIn("height_scan", self.cfg.observations["actor"].terms)
         self.assertIn("fell_over", self.cfg.terminations)
+
+    def test_the_actor_sees_what_the_real_go2_measures(self) -> None:
+        actor = self.cfg.observations["actor"].terms
+        self.assertEqual(tuple(actor), DEPLOYABLE_ACTOR)
+        self.assertNotIn("base_lin_vel", actor)
+        self.assertEqual(actor["phase"].params["period"], 0.6)
+        self.assertIn("base_lin_vel", self.cfg.observations["critic"].terms)
 
     def test_the_studys_events_ride_on_the_declared_gains(self) -> None:
         self.assertIn("actuator_gains", self.cfg.events)

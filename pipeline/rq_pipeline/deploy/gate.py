@@ -94,10 +94,15 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     seed: int = 1000,
     tolerance: float = DEFAULT_TOLERANCE,
     certificate: dict[str, Any] | None = None,
+    open: Any = open_runtime,
 ) -> dict[str, Any]:
-    """Run the gate and write `gate.json`; returns the record."""
+    """Run the gate and write `gate.json`; returns the record. `open`
+    builds the runtime the trials drive - plain MuJoCo by default; any
+    object answering the same seven calls (reset, observe, act, apply,
+    base_velocity_b, fell_over, command) judges under the same rule,
+    so Unitree's own simulator and controller are one argument away."""
     manifest = load_manifest(deployment_dir)
-    runtime = open_runtime(manifest, assets_dir=assets_dir)
+    runtime = open(manifest, assets_dir=assets_dir)
     commands = draw_commands(manifest, trials, seed)
     results = [run_trial(manifest, runtime, c) for c in commands]
     k = sum(t.success for t in results)

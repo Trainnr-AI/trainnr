@@ -24,6 +24,7 @@ KNOWN_SOURCES = (
     "joint_vel_rel",
     "last_action",
     "command twist",
+    "gait_phase",
 )
 
 

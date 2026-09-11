@@ -50,6 +50,7 @@ class Runtime:
         joints = self.manifest.joints
         n = len(joints["policy_order"])
         self.last_action = np.zeros(n, dtype=np.float32)
+        self.ticks = 0  # control steps since reset, the gait clock's time
         self.default_pos = np.asarray(joints["default_pos"], dtype=np.float64)
         self.scale = np.asarray(self.manifest.raw["action"]["scale"], dtype=np.float64)
         self.action_to_ctrl = list(joints["action_to_ctrl"])
@@ -72,6 +73,12 @@ class Runtime:
             self.sensors[self.model.sensor(i).name] = (adr, dim)
 
     @property
+    def step_dt(self) -> float:
+        """The control period: the physics step times the decimation."""
+        control = self.manifest.control
+        return float(control["physics_timestep_s"]) * int(control["decimation"])
+
+    @property
     def decimation(self) -> int:
         return int(self.manifest.control["decimation"])
 
@@ -79,6 +86,7 @@ class Runtime:
         mujoco.mj_resetDataKeyframe(self.model, self.data, keyframe)
         mujoco.mj_forward(self.model, self.data)
         self.last_action[:] = 0.0
+        self.ticks = 0
 
     def observe(self) -> np.ndarray:
         parts = [self._term(t) for t in self.manifest.observations]
@@ -102,6 +110,11 @@ class Runtime:
             value = self.last_action.astype(np.float64)
         elif source == "command twist":
             value = self.command.astype(np.float64)
+        elif source == "gait_phase":
+            params = term.get("params") or {}
+            value = gait_phase(
+                self.ticks, self.step_dt, float(params["period"]), self.command
+            )
         else:  # pragma: no cover - the manifest loader refuses unknown sources
             raise ValueError(f"cannot compute observation source {source!r}")
         value = np.asarray(value, dtype=np.float64) * np.asarray(
@@ -129,6 +142,7 @@ class Runtime:
         for _ in range(self.decimation):
             mujoco.mj_step(self.model, self.data)
         self.last_action = action.astype(np.float32)
+        self.ticks += 1
 
     def base_velocity_b(self) -> np.ndarray:
         """The base's linear velocity in its own frame (what the verdict
@@ -144,6 +158,22 @@ class Runtime:
         # The angle between the body's down and gravity: acos(-g_b·z).
         cos = float(np.clip(-gravity_b[2], -1.0, 1.0))
         return np.degrees(np.arccos(cos)) > float(limit)
+
+
+STANDING_COMMAND = 0.1  # the reference's threshold: no gait clock below it
+
+
+def gait_phase(
+    ticks: int, step_dt: float, period: float, command: np.ndarray
+) -> np.ndarray:
+    """The reference's gait clock (unitree_rl_mjlab `mdp.phase`, and
+    `gait_phase` in their deploy runtime): sine and cosine of the time
+    since reset modulo `period`, zero while the command is below the
+    standing threshold. `ticks` counts control steps since reset."""
+    if float(np.linalg.norm(command)) < STANDING_COMMAND:
+        return np.zeros(2)
+    phase = (ticks * step_dt) % period / period
+    return np.array([np.sin(2 * np.pi * phase), np.cos(2 * np.pi * phase)])
 
 
 def _rotate_inverse(quat_wxyz: np.ndarray, v: np.ndarray) -> np.ndarray:

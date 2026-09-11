@@ -22,7 +22,7 @@ from rq_pipeline.deploy.manifest import (
     Manifest,
     load_manifest,
 )
-from rq_pipeline.deploy.runtime import _rotate_inverse, open_runtime
+from rq_pipeline.deploy.runtime import _rotate_inverse, gait_phase, open_runtime
 from rq_pipeline.mcp_server import _task_id_in_project
 from rq_pipeline.project import PROJECT_ENV, create_project
 from tests.test_mcp_actions import PIPELINE_DIR, RQ_MJLAB_DIR, TOOLS_DIR, harness
@@ -243,3 +243,12 @@ class TheRunsTaskFamily(unittest.TestCase):
         )
         self.assertIsNone(_task_id_in_project([card], "go2-walk@ffffffffffff"))
         self.assertIsNone(_task_id_in_project([card], None))
+
+
+class TheGaitClock(unittest.TestCase):
+    def test_the_reference_s_phase(self) -> None:
+        moving = np.array([0.5, 0.0, 0.0])
+        self.assertTrue(np.allclose(gait_phase(0, 0.02, 0.8, moving), [0.0, 1.0]))
+        # a quarter period in (10 ticks of 20 ms into 0.8 s): sin 1, cos 0
+        self.assertTrue(np.allclose(gait_phase(10, 0.02, 0.8, moving), [1.0, 0.0]))
+        self.assertTrue(np.allclose(gait_phase(7, 0.02, 0.8, np.zeros(3)), [0.0, 0.0]))

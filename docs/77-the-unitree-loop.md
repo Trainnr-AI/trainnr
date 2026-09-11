@@ -547,6 +547,72 @@ half an hour; frames now go JPEG-encoded through Rerun's own
 the watched world spawned, so a robot that walks off leaves an empty
 frame - a chase camera is the next small thing there.
 
+## 7. The second gate: Unitree's own simulator and controller (started 2026-09-11, late)
+
+The reference's `simulate/` is a MuJoCo viewer that publishes the
+simulated Go2 as the robot's own DDS messages (LowState, and a
+SportModeState with the base's position and velocity from MuJoCo
+sensors) and takes LowCmd; its `deploy/` is the C++ controller that
+runs against that simulator and the real robot alike, reading a
+`deploy.yaml` and an ONNX. Our Python gate proves the export agrees
+with the training environment; theirs exercises what ours cannot: the
+MJCF-to-SDK joint remap, their observation assembly, their finite-state
+machine (passive, fixed stand, RL), the wire protocol, their runtime.
+Same judge, third instrument.
+
+**The shape, and why it is small.** Our gate's trial loop asks a
+runtime for seven things (reset, observe, act, apply, base velocity,
+fell over, the held command); `gate()` now takes `open=` to build that
+runtime, so the judge, the draw, the interval, the tolerance rule and
+`gate.json` are shared verbatim. Against their stack the runtime only
+waits for the next state message and publishes the command as gamepad
+sticks - their state machine and their velocity command both come from
+the pad, which the simulator reads from `/dev/input/js0` and packs into
+LowState; a virtual pad through the kernel's uinput is what a person's
+thumbs do. Pieces: `pipeline/rq_pipeline/deploy/unitree_yaml.py` (built: the manifest as
+their `deploy.yaml`; the observation names mapped to their runtime's
+registered terms; **refuses by name any term their runtime does not
+implement** - the writer is the deployability check), *deploy/gamepad.py*
+(uinput pad, ~50 lines, next), *deploy/dds_runtime.py* (~100 lines,
+next: subscribe to their state, publish the pad, drive the FSM at
+reset, the two formulas our runtime already uses for velocity and
+fell-over), *tools/unitree-sim.sh* and `gate_deployment(runtime="dds")`
+(build once, launch both as jobs, gate, stop).
+
+**Friction 24, found by the writer before a line of DDS existed.** The
+certified go2-c1 policy observes the base linear velocity: our Go2
+config builds on mjlab's generic velocity task, whose actor has it,
+while the reference gives it to the critic only (the robot has no
+sensor for it; Unitree's runtime has no such term) and gives the actor
+a gait clock (`phase`: sine and cosine of the episode time modulo
+0.6 s, zero below a 0.1 command) that their runtime provides as
+`gait_phase`. Fixed in `go2_walk.deployable_actor`: the actor sees the
+reference's seven terms in the reference's order, the critic keeps
+mjlab's full set; the gait clock transcribed (`gait_phase`) into our
+config and into `rq_pipeline.deploy.runtime`; the manifest's known
+sources gained it. Every Go2 policy trained from here is deployable
+through their stack; go2-c1 is not, and its two certificates stand as
+what they are. Smoke run `go2-c2-smoke` (80 iterations) exported as
+`go2-c2-smoke-deploy`: 47-wide observation, their `deploy.yaml` written
+with the shipped Go2 file's numbers exactly (joint map 3,4,5,0,1,2,…;
+kp 20/20/40; the home pose), our Python gate runs it end to end
+(0 of 4 at 80 iterations, no falls - a smoke, not a policy). The
+operator's rule tonight: smoke runs only; the full retrain waits.
+
+**What the box needs from the operator, one time** (root):
+
+    sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev libglfw3-dev
+    git clone https://github.com/unitreerobotics/unitree_sdk2 ~/src/unitree_sdk2
+    cd ~/src/unitree_sdk2 && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && make -j8 && sudo make install
+    sudo modprobe joydev && sudo chmod 666 /dev/uinput
+
+(their *doc/setup_en.md* names the apt line; `unitree_sdk2` brings
+CycloneDDS; `/dev/uinput` exists on this kernel, root-owned, and both
+the uinput and joydev modules are built.) Then their simulator and Go2
+controller build with CMake from the cached checkout, and the Python
+side takes Unitree's SDK from GitHub (not on PyPI) plus the cyclonedds
+and python-evdev wheels in a `dds` extra.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.
