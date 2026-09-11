@@ -404,6 +404,26 @@ choice stands. Not the cause, ruled out on the way: the Vulkan adapter
 (Mesa's dzn over D3D12 draws the app fine), the OpenGL backend (falls
 to llvmpipe and refuses an R32Float target), the driver path.
 
+Friction 19, continued (2026-09-11, evening): with the window visible,
+two more things on the X11 path. (a) The process holds one full core:
+the hot thread is "WSI", the presentation thread inside Mesa's dzn
+Vulkan driver, spin-waiting to present to an Xwayland surface that
+has no vertical blank. Presenting without vsync changed nothing; the
+OpenGL path (Mesa's D3D12 driver, WSLg's usual route) refuses the
+viewer's R32Float render target on this box even under the driver
+environment. Left as is: the load is inside the driver, the window
+stays live. (b) The operator's pointer landed a row below where it
+hovered, while a pointer moved through X directly (XTest) hit the
+right row - so the offset was added between Windows and the X server.
+Dropping the window-manager frame (client-drawn chrome) did not
+remove it and lost the window controls; reverted. A plain relaunch
+with the frame, not maximized, put the pointer right ("ok fixed
+now"). The offset is therefore tied to the window's state on the
+Windows side (it had been resized to 1908 x 999 and driven from the
+frame), not to the app; the measurement to take if it returns is the
+X server's pointer position against the operator's, in one
+"park the mouse" round trip.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration
