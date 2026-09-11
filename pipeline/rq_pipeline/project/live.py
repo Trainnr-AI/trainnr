@@ -4,11 +4,15 @@ as it grows, so the experiment card shows the reward curve so far.
 A run folder that carries its own `train.log` (rq_mjlab's walk_train
 tees its console there when it archives a run) gets a `training.json`
 parsed from it whenever the log is newer than the record; the record
-says whether the run is still going (no "done" line yet). The importer
-does the same once for an imported study arm; this does it on every
-presenter tick for whatever trains inside the project.
+says what it can about whether the run is still going: `done` when the
+trainer wrote its last line, `running` while a source is still being
+written to, and `unrecorded` when neither is true - a trainer that
+stopped writing without a last line was killed or paused, and the
+record does not guess which. The importer does the same once for an
+imported study arm; this does it on every presenter tick for whatever
+trains inside the project.
 
-A verdict judged inside a run folder (`certify_walk` on a checkpoint of
+A verdict judged inside a run folder (`evaluate_walk` on a checkpoint of
 a run training in the project writes `verdict/walk-verdict-*.json`
 beside the weights) becomes, the same tick, a policy (the checkpoint it
 judged) and an evaluation citing it — the Evaluations page stayed at
@@ -17,25 +21,35 @@ zero after a 40/40 certificate until this existed (2026-09-10).
 
 from __future__ import annotations
 
-import json
+import time
 from pathlib import Path
+from typing import Any
 
-from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log
-from rq_pipeline.envs.tfevents import EVENTS_GLOB, events_file, record_from_events
-from rq_pipeline.project.importer import (
+from rq_pipeline.envs.rsl_rl_log import (
+    DONE_MARK,
+    STATUS_DONE,
+    STATUS_RUNNING,
+    TRAIN_LOG,
+    TRAINING_FILE,
+    VERDICT_DIR,
     VERDICT_GLOB,
+    parse_rsl_rl_log,
+)
+from rq_pipeline.envs.tfevents import EVENTS_GLOB, events_file, record_from_events
+from rq_pipeline.project.files import read_json, read_text, write_json
+from rq_pipeline.project.importer import (
     evaluation_suffix,
     write_certificate,
     write_policy,
 )
+from rq_pipeline.project.index import UNRECORDED
 from rq_pipeline.project.kinds import IDENTITY_FILE, stamp_run
-from rq_pipeline.project.locate import Project
+from rq_pipeline.project.locate import FOLDERS, Project
 
-TRAIN_LOG = "train.log"
-VERDICT_DIR = "verdict"  # walk_verdict writes beside the checkpoint it judged
-TRAINING_FILE = "training.json"
-DONE_MARK = "] done"  # walk_train's last line: "[g3] done - checkpoints in ..."
-STATUS_RUNNING, STATUS_DONE = "running", "done"
+DONE_TAIL_CHARS = 2000  # the done line is among the log's last lines
+# A source written to within this long is a trainer still writing.
+WRITING_S = 120.0
+CHECKPOINT_GLOB = "*.pt"
 
 
 def run_folders(project: Project) -> list[Path]:
@@ -65,13 +79,25 @@ def stale(folder: Path) -> bool:
     return any(p.stat().st_mtime > written for p in _sources(folder))
 
 
-def refresh_training(folder: Path) -> dict | None:
+def run_status(folder: Path, text: str, *, now: float | None = None) -> str:
+    """What the folder says about the run: `done` on the trainer's last
+    line, `running` while a source was written to within `WRITING_S`,
+    else `unrecorded`."""
+    if DONE_MARK in text[-DONE_TAIL_CHARS:]:
+        return STATUS_DONE
+    now = time.time() if now is None else now
+    if any(now - p.stat().st_mtime < WRITING_S for p in _sources(folder)):
+        return STATUS_RUNNING
+    return UNRECORDED
+
+
+def refresh_training(folder: Path) -> dict[str, Any] | None:
     """The folder's `training.json` from the trainer's own event file
     (every series it logs) with the console log's facts, or from the
     console log alone; returns the record written, or None when neither
     holds an iteration yet."""
     log = folder / TRAIN_LOG
-    text = log.read_text(errors="replace") if log.is_file() else ""
+    text = read_text(log, errors="replace") if log.is_file() else ""
     parsed = parse_rsl_rl_log(text) if text else None
     events = events_file(folder)
     record = record_from_events(events, facts=parsed) if events else None
@@ -79,8 +105,8 @@ def refresh_training(folder: Path) -> dict | None:
     if record is None:
         return None
     out = record.to_json()
-    out["status"] = STATUS_DONE if DONE_MARK in text[-2000:] else STATUS_RUNNING
-    (folder / TRAINING_FILE).write_text(json.dumps(out, indent=1) + "\n")
+    out["status"] = run_status(folder, text)
+    write_json(folder / TRAINING_FILE, out)
     return out
 
 
@@ -96,7 +122,7 @@ def verdict_files(project: Project) -> list[Path]:
     return sorted(project.runs.rglob(f"{VERDICT_DIR}/{VERDICT_GLOB}"))
 
 
-def certificate_label(verdict_file: Path, verdict: dict) -> str:
+def certificate_label(verdict_file: Path, verdict: dict[str, Any]) -> str:
     """The evaluation's name: the run and the checkpoint it judged
     (`go2-c1-model_1400`); the writer appends what tells one judgment
     of that checkpoint from another (instrument, seed, trials)."""
@@ -111,15 +137,15 @@ def refresh_verdicts(project: Project) -> list[Path]:
     written: list[Path] = []
     for verdict_file in verdict_files(project):
         run_dir = verdict_file.parent.parent
-        verdict = json.loads(verdict_file.read_text())
+        verdict = read_json(verdict_file)
         label = certificate_label(verdict_file, verdict)
         name = f"{label}-{evaluation_suffix(verdict_file, verdict)}"
-        out = project.folder("certificates") / name
+        out = project.certificates / name
         identity_file = run_dir / IDENTITY_FILE
-        checkpoint = run_dir / f"{verdict.get('policy', '')}.pt"
+        checkpoint = run_dir / f"{verdict.get('policy', '')}{CHECKPOINT_GLOB[1:]}"
         if out.exists() or not identity_file.is_file() or not checkpoint.is_file():
             continue
-        identity = json.loads(identity_file.read_text())
+        identity = read_json(identity_file)
         run_stamp = stamp_run(run_dir)
         policy_stamp = write_policy(project, label, checkpoint, identity, run_stamp)
         if write_certificate(
@@ -134,17 +160,8 @@ def newest_mtime(project: Project) -> float:
     folders - a new certificate, checkpoint or task since the index was
     written means the Studio's picture is stale."""
     newest = 0.0
-    for kind_folder in (
-        "runs",
-        "tasks",
-        "robots",
-        "findings",
-        "datasets",
-        "recordings",
-        "policies",
-        "certificates",
-    ):
-        folder = project.root / kind_folder
+    for kind_folder in FOLDERS:
+        folder = project.folder(kind_folder)
         if not folder.is_dir():
             continue
         for path in folder.rglob("*"):

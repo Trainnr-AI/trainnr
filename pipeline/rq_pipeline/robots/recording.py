@@ -23,6 +23,21 @@ import numpy as np
 
 from rq_pipeline.bundles.json_record import JsonRecord
 
+
+def monotone(times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Keep only samples whose time is finite and exceeds every earlier
+    kept time — a duplicate, out-of-order or missing stamp is dropped,
+    never re-invented. Returns the kept times and the keep mask, for
+    every adapter that reads a clock."""
+    keep = np.zeros(len(times), dtype=bool)
+    last = -np.inf
+    for i, t in enumerate(times):
+        if np.isfinite(t) and t > last:
+            keep[i] = True
+            last = t
+    return times[keep], keep
+
+
 MANIFEST_FILE = "recording.json"
 SIGNALS_FILE = "signals.npz"
 SCHEMA = "trainnr-recording/1"

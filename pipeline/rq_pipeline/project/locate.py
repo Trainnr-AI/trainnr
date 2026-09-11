@@ -14,11 +14,13 @@ its own robot bundles too, and those are the ones a tool writes.
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from rq_pipeline.paths import checkout
+from rq_pipeline.project.files import read_json, write_json
 
 PROJECT_ENV = "TRAINNR_PROJECT"
 MANIFEST_FILE = "project.json"
@@ -30,23 +32,33 @@ PROJECTS_DIR_NAME = "projects"
 DEFAULT_PROJECT = "default"
 SCHEMA = "trainnr-project/1"
 
-# The one folder per artifact kind. The names are the kinds' plural forms
-# so a directory listing reads as an inventory.
+# The one folder per artifact kind, each named once here and reached
+# through `Project.folder`. The names are the kinds' plural forms so a
+# directory listing reads as an inventory.
+ROBOTS_FOLDER = "robots"
+RECORDINGS_FOLDER = "recordings"
+FITS_FOLDER = "fits"
+TASKS_FOLDER = "tasks"
+BATCHES_FOLDER = "batches"
+DATASETS_FOLDER = "datasets"
+RUNS_FOLDER = "runs"
+POLICIES_FOLDER = "policies"
+CERTIFICATES_FOLDER = "certificates"
+DEPLOY_FOLDER = "deploy"
+FINDINGS_FOLDER = "findings"
 FOLDERS = (
-    "robots",
-    "recordings",
-    "fits",
-    "tasks",
-    "batches",
-    "datasets",
-    "runs",
-    "policies",
-    "certificates",
-    "deploy",
-    "findings",
+    ROBOTS_FOLDER,
+    RECORDINGS_FOLDER,
+    FITS_FOLDER,
+    TASKS_FOLDER,
+    BATCHES_FOLDER,
+    DATASETS_FOLDER,
+    RUNS_FOLDER,
+    POLICIES_FOLDER,
+    CERTIFICATES_FOLDER,
+    DEPLOY_FOLDER,
+    FINDINGS_FOLDER,
 )
-
-_CHECKOUT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
@@ -83,7 +95,7 @@ class Project:
         return self.root / MANIFEST_FILE
 
     def manifest(self) -> Manifest:
-        raw = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        raw = read_json(self.manifest_path)
         if raw.get("schema") != SCHEMA:
             raise ValueError(
                 f"{self.manifest_path} has schema {raw.get('schema')!r}; "
@@ -101,7 +113,7 @@ class Project:
         robot onboarded here builds tasks like a library rig."""
         from rq_pipeline.bundles.locate import add_search_root  # noqa: PLC0415
 
-        add_search_root(self.folder("robots"))
+        add_search_root(self.robots)
         return self
 
     def folder(self, kind_folder: str) -> Path:
@@ -111,15 +123,39 @@ class Project:
 
     @property
     def robots(self) -> Path:
-        return self.root / "robots"
+        return self.folder(ROBOTS_FOLDER)
+
+    @property
+    def recordings(self) -> Path:
+        return self.folder(RECORDINGS_FOLDER)
+
+    @property
+    def tasks(self) -> Path:
+        return self.folder(TASKS_FOLDER)
+
+    @property
+    def batches(self) -> Path:
+        return self.folder(BATCHES_FOLDER)
 
     @property
     def runs(self) -> Path:
-        return self.root / "runs"
+        return self.folder(RUNS_FOLDER)
+
+    @property
+    def policies(self) -> Path:
+        return self.folder(POLICIES_FOLDER)
+
+    @property
+    def certificates(self) -> Path:
+        return self.folder(CERTIFICATES_FOLDER)
+
+    @property
+    def deploy(self) -> Path:
+        return self.folder(DEPLOY_FOLDER)
 
     @property
     def findings(self) -> Path:
-        return self.root / "findings"
+        return self.folder(FINDINGS_FOLDER)
 
     @property
     def index_path(self) -> Path:
@@ -128,7 +164,7 @@ class Project:
 
 def projects_dir() -> Path:
     """The checkout's `projects/` — the default home."""
-    return _CHECKOUT / PROJECTS_DIR_NAME
+    return checkout() / PROJECTS_DIR_NAME
 
 
 def current_project() -> Project:
@@ -167,7 +203,7 @@ def create_project(
         description=description,
         loop=_loop_or_refuse(loop),
     )
-    manifest_path.write_text(json.dumps(asdict(manifest), indent=1) + "\n")
+    write_json(manifest_path, asdict(manifest))
     return Project(root)
 
 

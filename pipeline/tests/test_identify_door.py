@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 
 from rq_pipeline.project import PROJECT_ENV, Kind, create_project, index_project
+from rq_pipeline.project.ingest import ingest
 from rq_pipeline.robot.methods import detect, methods, raw_files, resolve
-from rq_pipeline.robots.ingest import ingest
 from tests._extras import needs_sim
 
 REPO = Path(__file__).resolve().parents[2]
@@ -106,10 +106,12 @@ class Door(unittest.TestCase):
                     described["records"][0]["recording"].split("@")[0],
                     "sweep-2026-08-24-b",
                 )
-                with self.assertRaisesRegex(KeyError, "no artifact"):
-                    identify_system("nobody@000000000000", rec["stamp"])
-                with self.assertRaisesRegex(ValueError, "not a recording"):
-                    identify_system(robot, robot)
+                refused = identify_system("nobody@000000000000", rec["stamp"])
+                self.assertEqual(refused["status"], "refused")
+                self.assertIn("no artifact", refused["reason"])
+                refused = identify_system(robot, robot)
+                self.assertEqual(refused["status"], "refused")
+                self.assertIn("not a recording", refused["reason"])
             finally:
                 os.environ.pop(PROJECT_ENV, None)
 

@@ -6,7 +6,8 @@
 use egui_extras::{Column, TableBuilder};
 use re_ui::{DesignTokens, TableStyle, UiExt as _};
 
-use crate::model::{ago_iso, split_stamp, Artifact};
+use crate::detail::{sortable_header, SortState};
+use crate::model::{ago_iso, split_stamp, Artifact, HIDDEN_KEYS, UNRECORDED};
 use crate::pages::Section;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -18,17 +19,33 @@ pub enum View {
 }
 
 impl View {
-    fn label(self) -> &'static str {
+    /// Every view, in the order the switch shows them.
+    pub const ALL: &'static [View] = &[View::Cards, View::Table, View::Matrix];
+
+    pub fn label(self) -> &'static str {
         match self {
             Self::Cards => "Cards",
             Self::Table => "Table",
             Self::Matrix => "Matrix",
         }
     }
+
+    /// A view by its name, as the agent's `open` command spells it
+    /// (the label, any case).
+    pub fn parse(name: &str) -> Option<Self> {
+        let wanted = name.trim().to_lowercase();
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|v| v.label().to_lowercase() == wanted)
+    }
+
+    /// The names `parse` accepts, for a refusal.
+    pub fn names() -> Vec<String> {
+        Self::ALL.iter().map(|v| v.label().to_lowercase()).collect()
+    }
 }
 
-/// Summary keys never shown as table columns.
-const HIDDEN_KEYS: &[&str] = &["files"];
 /// At most this many summary columns; the drawer holds the rest.
 const MAX_SUMMARY_COLUMNS: usize = 6;
 const NAME_COLUMN: f32 = 240.0;
@@ -72,12 +89,13 @@ pub fn view_switch(ui: &mut egui::Ui, section: Section, matrix_available: bool) 
     if view == View::Matrix && !matrix_available {
         view = View::Cards;
     }
-    let mut choices = vec![View::Cards, View::Table];
-    if matrix_available {
-        choices.push(View::Matrix);
-    }
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        for choice in choices.into_iter().rev() {
+        for choice in View::ALL
+            .iter()
+            .copied()
+            .rev()
+            .filter(|v| *v != View::Matrix || matrix_available)
+        {
             if ui
                 .selectable_label(view == choice, choice.label())
                 .clicked()
@@ -95,7 +113,7 @@ pub fn view_switch(ui: &mut egui::Ui, section: Section, matrix_available: bool) 
 
 #[derive(Clone, Default)]
 struct TableState {
-    sort: Option<(usize, bool)>,
+    sort: SortState,
     filter: String,
 }
 
@@ -170,7 +188,7 @@ pub fn table(
                     .any(|c| cell_text(a, c).to_lowercase().contains(&needle))
         })
         .collect();
-    if let Some((col, ascending)) = state.sort {
+    if let Some((col, ascending)) = state.sort.order() {
         if let Some(column) = columns.get(col) {
             // One key per row, not one per comparison.
             let mut keyed: Vec<((f64, String), &Artifact)> =
@@ -234,21 +252,7 @@ pub fn table(
                 .header(row_h + 2.0, |mut header| {
                     for (c, name) in columns.iter().enumerate() {
                         header.col(|ui| {
-                            let sorted =
-                                state.sort.filter(|(col, _)| *col == c).map(|(_, asc)| asc);
-                            let text = match sorted {
-                                Some(true) => format!("{name} ▲"),
-                                Some(false) => format!("{name} ▼"),
-                                None => name.clone(),
-                            };
-                            if ui
-                                .add(
-                                    egui::Label::new(egui::RichText::new(text).strong())
-                                        .sense(egui::Sense::click()),
-                                )
-                                .on_hover_text("sort by this column")
-                                .clicked()
-                            {
+                            if sortable_header(ui, state.sort, c, name) {
                                 clicked_col = Some(c);
                             }
                         });
@@ -279,11 +283,7 @@ pub fn table(
                 });
         });
     if let Some(c) = clicked_col {
-        state.sort = match state.sort {
-            Some((col, true)) if col == c => Some((c, false)),
-            Some((col, false)) if col == c => None,
-            _ => Some((c, true)),
-        };
+        state.sort.toggle(c);
     }
     ui.ctx().data_mut(|d| d.insert_temp(id, state));
     clicked
@@ -304,7 +304,7 @@ pub fn policy_of(a: &Artifact) -> String {
         .get(POLICY_CITE)
         .and_then(|v| v.as_str())
         .map(|s| split_stamp(s).0.to_owned())
-        .unwrap_or_else(|| "unrecorded".to_owned())
+        .unwrap_or_else(|| UNRECORDED.to_owned())
 }
 
 /// `19 / 40` → (19, 40).
@@ -426,7 +426,7 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
                                     Some((k, n)) if n > 0 => {
                                         (format!("{k} / {n}"), k as f32 / n as f32)
                                     }
-                                    _ => ("unrecorded".to_owned(), 0.0),
+                                    _ => (UNRECORDED.to_owned(), 0.0),
                                 };
                                 let response =
                                     ui.interact(rect, ui.id().with(&a.stamp), egui::Sense::click());
@@ -519,5 +519,14 @@ mod tests {
         assert_eq!(columns_of(&[&a, &b]), vec!["name", "success", "updated"]);
         assert!(sort_key(&b, "success").0 < sort_key(&a, "success").0);
         assert_eq!(cell_text(&a, "name"), "x");
+    }
+
+    #[test]
+    fn views_parse_from_their_names() {
+        assert_eq!(View::parse("cards"), Some(View::Cards));
+        assert_eq!(View::parse(" Matrix "), Some(View::Matrix));
+        assert_eq!(View::parse("grid"), None);
+        assert_eq!(View::names(), vec!["cards", "table", "matrix"]);
+        assert_eq!(View::ALL.len(), View::names().len());
     }
 }

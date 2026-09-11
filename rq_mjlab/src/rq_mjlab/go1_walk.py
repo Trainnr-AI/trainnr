@@ -33,6 +33,7 @@ by hand), `dr_basis` says which span or pin.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Any
 
 from mjlab.envs import ManagerBasedRlEnvCfg
@@ -102,15 +103,32 @@ PIN_AXES: dict[str, tuple[str, ...] | None] = {
 }
 
 
+@dataclass(frozen=True)
+class GainsBasis:
+    """How a walk's basis sentence names the gains the events move:
+    mjlab's derived PD (the Go1) or a reference's declared constants
+    (the Go2). Three phrasings, one place."""
+
+    around: str  # "... around <around>"
+    at: str  # "... at <at> x 1.1"
+    exact: str  # "none: <exact> exactly (no actuator DR)"
+
+
+DERIVED_GAINS = GainsBasis(
+    around="derived", at="derived", exact="mjlab's derived PD gains"
+)
+
+
 def actuator_dr_events(
     *,
     dr_span: float | None,
     pin_scale: float | None,
     pin_only: tuple[str, ...] | None = None,
+    gains: GainsBasis = DERIVED_GAINS,
 ) -> tuple[dict[str, EventTermCfg], str]:
     """The study's events and their basis string: a drawn span, a
     pinned scale (of every scaled parameter, or only `pin_only`), or
-    nothing."""
+    nothing; `gains` words the basis for the gains this walk moves."""
     if pin_scale is not None:
         moved = set(SCALED if pin_only is None else pin_only)
         unknown = moved - set(SCALED)
@@ -119,13 +137,16 @@ def actuator_dr_events(
         lo = hi = float(pin_scale)
         which = ", ".join(n for n in SCALED if n in moved)
         basis = (
-            f"pinned: {which} at derived x {pin_scale:g}, the rest at derived (no draw)"
+            f"pinned: {which} at {gains.at} x {pin_scale:g}, the rest at "
+            f"{gains.at} (no draw)"
         )
     elif dr_span:
         lo, hi = 1.0 - float(dr_span), 1.0 + float(dr_span)
-        basis = f"declared ±{dr_span:g} scale on {', '.join(SCALED)} around derived"
+        basis = (
+            f"declared ±{dr_span:g} scale on {', '.join(SCALED)} around {gains.around}"
+        )
     else:
-        return {}, "none: mjlab's derived PD gains exactly (no actuator DR)"
+        return {}, f"none: {gains.exact} exactly (no actuator DR)"
     if pin_scale is None:
         moved = set(SCALED)
     unit = (1.0, 1.0)  # a parameter the pin leaves at derived

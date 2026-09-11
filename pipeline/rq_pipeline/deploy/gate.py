@@ -1,9 +1,10 @@
 """The sim-to-sim gate (docs/76 A6): the exported policy, driven only
-through its manifest by the plain-MuJoCo runtime, judged the way the
-certificate judged the torch policy — survived the episode and tracked
-the commanded velocity — over seeded held commands; the exact interval
-is compared with the certificate the deployment cites, within a stated
-tolerance. `gate.json` lands beside the manifest.
+through its manifest by a named runtime (`deploy.runtimes`), judged the
+way the evaluation judged the torch policy — survived the episode and
+tracked the commanded velocity (`evaluate.tracking`) — over seeded held
+commands; the exact interval is compared with the evaluation the
+deployment cites, within a stated tolerance. Each runtime's record
+lands beside the manifest under its own name.
 """
 
 from __future__ import annotations
@@ -16,48 +17,45 @@ from typing import Any
 
 import numpy as np
 
-from rq_pipeline.deploy.manifest import GATE_FILE, GATE_SCHEMA, Manifest, load_manifest
-from rq_pipeline.deploy.runtime import open_runtime
+from rq_pipeline.deploy.manifest import GATE_SCHEMA, Key, Manifest, load_manifest
+from rq_pipeline.deploy.runtimes import (
+    DEFAULT_RUNTIME,
+    GateRuntime,
+    Opener,
+    runtime_spec,
+)
+from rq_pipeline.evaluate.tracking import (
+    ERR_FLOOR_MPS,
+    ERR_RATIO_BOUND,
+    TrackingOutcome,
+    criterion_text,
+)
 from rq_pipeline.stats.intervals import clopper_pearson
 
-# The certificate's criterion (rq_mjlab.walk_verdict, read 2026-09-11):
-# survived, and the tracking error closed at least half the gap standing
-# still would leave, the denominator floored at a slow command.
-ERR_RATIO_BOUND = 0.5
-ERR_FLOOR_MPS = 0.1
 # The gate passes when the exported policy's rate is within this much of
-# the certificate's; a stated number, never a hidden one.
+# the evaluation's; a stated number, never a hidden one.
 DEFAULT_TOLERANCE = 0.10
 DEFAULT_TRIALS = 20
+DEFAULT_SEED = 1000
+CI_DIGITS = 4
+COMMANDS_DRAWN = "held per episode, drawn in the manifest's twist ranges"
 
 
 @dataclass(frozen=True)
-class Trial:
+class Trial(TrackingOutcome):
+    """One held command's episode, judged under the shared rule."""
+
     command: list[float]
-    steps: int
-    fell: bool
-    mean_err: float
-    mean_cmd: float
-
-    @property
-    def err_ratio(self) -> float:
-        return self.mean_err / max(self.mean_cmd, ERR_FLOOR_MPS)
-
-    @property
-    def success(self) -> bool:
-        return (not self.fell) and self.err_ratio < ERR_RATIO_BOUND
 
 
-def run_trial(manifest: Manifest, runtime: Any, command: np.ndarray) -> Trial:
+def run_trial(manifest: Manifest, runtime: GateRuntime, command: np.ndarray) -> Trial:
     """One episode at a held command, the manifest's length and rate."""
-    control = manifest.control
-    ticks = round(float(control["episode_length_s"]) * float(control["control_hz"]))
     runtime.reset()
     runtime.command = command.astype(np.float32)
     err_sum = cmd_sum = 0.0
     fell = False
     steps = 0
-    for _ in range(ticks):
+    for _ in range(manifest.control.episode_ticks):
         obs = runtime.observe()
         runtime.apply(runtime.act(obs))
         v = runtime.base_velocity_b()
@@ -77,99 +75,101 @@ def run_trial(manifest: Manifest, runtime: Any, command: np.ndarray) -> Trial:
 
 
 def draw_commands(manifest: Manifest, trials: int, seed: int) -> np.ndarray:
-    """Seeded held commands inside the manifest's ranges (heading off)."""
-    ranges = manifest.raw.get("commands", {}).get("twist", {})
+    """Seeded held commands inside the manifest's ranges (heading off);
+    a manifest without ranges was refused by the loader."""
+    commands = manifest.commands
     rng = np.random.default_rng(seed)
-    lo_hi = [
-        ranges.get(k, [-0.5, 0.5]) for k in ("lin_vel_x", "lin_vel_y", "ang_vel_z")
-    ]
+    lo_hi = (commands.lin_vel_x, commands.lin_vel_y, commands.ang_vel_z)
     return np.stack([rng.uniform(lo, hi, size=trials) for lo, hi in lo_hi], axis=1)
 
 
 def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     deployment_dir: Path,
     *,
-    assets_dir: Path,
+    assets_dir: Path | None,
+    runtime: str = DEFAULT_RUNTIME,
     trials: int = DEFAULT_TRIALS,
-    seed: int = 1000,
+    seed: int = DEFAULT_SEED,
     tolerance: float = DEFAULT_TOLERANCE,
     certificate: dict[str, Any] | None = None,
-    open: Any = open_runtime,
+    open: Opener | None = None,
 ) -> dict[str, Any]:
-    """Run the gate and write `gate.json`; returns the record. `open`
-    builds the runtime the trials drive - plain MuJoCo by default; any
-    object answering the same seven calls (reset, observe, act, apply,
-    base_velocity_b, fell_over, command) judges under the same rule,
-    so Unitree's own simulator and controller are one argument away."""
+    """Run the gate under the named runtime and write its record beside
+    the manifest; returns the record. `open` replaces the registry's
+    opener (a fake runtime under test); the judge, the draw, the interval
+    and the tolerance rule are the same whatever drives the policy."""
+    spec = runtime_spec(runtime)
     manifest = load_manifest(deployment_dir)
-    runtime = open(manifest, assets_dir=assets_dir)
+    opener = open if open is not None else spec.open()
+    driver = opener(manifest, assets_dir=assets_dir)
     commands = draw_commands(manifest, trials, seed)
-    limit = getattr(runtime, "command_limit", None)
-    if limit is not None:  # a gamepad's sticks stop at 1.0
+    protocol: dict[str, Any] = {
+        "trials": trials,
+        "seed": seed,
+        "commands": COMMANDS_DRAWN,
+        "criterion": criterion_text(),
+        "err_ratio_bound": ERR_RATIO_BOUND,
+        "err_floor_mps": ERR_FLOOR_MPS,
+        "runtime": spec.description,
+        "instrument": driver.instrument,
+    }
+    limit = driver.command_limit
+    if limit is not None:  # a gamepad's sticks stop at 1.0: say so, and clip
         commands = np.clip(commands, -float(limit), float(limit))
-    results = [run_trial(manifest, runtime, c) for c in commands]
+        protocol["command_limit"] = float(limit)
+        protocol["commands"] = (
+            f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
+        )
+    results = [run_trial(manifest, driver, c) for c in commands]
     k = sum(t.success for t in results)
     lo, hi = clopper_pearson(k, trials)
     record: dict[str, Any] = {
         "schema": GATE_SCHEMA,
-        "deployment": manifest.raw.get("stamp_of"),
-        "policy": manifest.raw.get("policy"),
-        "protocol": {
-            "trials": trials,
-            "seed": seed,
-            "commands": "held per episode, drawn in the manifest's twist ranges",
-            "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
-            "err_floor_mps": ERR_FLOOR_MPS,
-            "runtime": "plain MuJoCo + onnxruntime, driven by the manifest alone",
-            "instrument": getattr(runtime, "instrument", f"mujoco-{_mujoco_version()}"),
-        },
+        "runtime": spec.name,
+        "deployment": manifest.raw.get(Key.STAMP_OF),
+        "policy": manifest.raw.get(Key.POLICY),
+        "protocol": protocol,
         "successes": k,
         "trials": trials,
-        "ci95": [round(lo, 4), round(hi, 4)],
+        "ci95": [round(lo, CI_DIGITS), round(hi, CI_DIGITS)],
         "records": [
             asdict(t) | {"err_ratio": t.err_ratio, "success": t.success}
             for t in results
         ],
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
+    record["verdict"] = _verdict(k, trials, tolerance, certificate)
     if certificate:
-        ck, cn = certificate.get("successes"), certificate.get("trials")
-        cert_rate = (ck / cn) if (ck is not None and cn) else None
         record["certificate"] = {
-            "stamp": manifest.raw.get("certificate"),
-            "successes": ck,
-            "trials": cn,
+            "stamp": manifest.raw.get(Key.CERTIFICATE),
+            "successes": certificate.get("successes"),
+            "trials": certificate.get("trials"),
             "ci95": certificate.get("ci95"),
         }
-        rate = k / trials
-        passed = cert_rate is not None and rate >= cert_rate - tolerance
-        record["verdict"] = {
-            "passed": passed,
-            "tolerance": tolerance,
-            "rule": (
-                "the gate's success rate is at least the certificate's minus the "
-                "tolerance"
-            ),
-            "gate_rate": rate,
-            "certificate_rate": cert_rate,
-        }
-    else:
-        record["verdict"] = {
-            "passed": None,
-            "rule": (
-                "no certificate cited: the gate reports its rate and judges nothing"
-            ),
-        }
-    # Each runtime keeps its own record: the DDS gate's file is
-    # `gate-dds.json`, so the MuJoCo gate's `gate.json` stands beside it.
-    record_file = getattr(runtime, "record_file", GATE_FILE)
-    staging = Path(deployment_dir) / (record_file + ".tmp")
-    staging.write_text(json.dumps(record, indent=1) + "\n")
-    staging.replace(Path(deployment_dir) / record_file)
+    staging = Path(deployment_dir) / (spec.record_file + ".tmp")
+    staging.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+    staging.replace(Path(deployment_dir) / spec.record_file)
     return record
 
 
-def _mujoco_version() -> str:
-    import mujoco  # noqa: PLC0415
-
-    return mujoco.__version__
+def _verdict(
+    k: int, trials: int, tolerance: float, certificate: dict[str, Any] | None
+) -> dict[str, Any]:
+    """The tolerance rule against the cited evaluation, or a report that
+    judges nothing when none was cited."""
+    if not certificate:
+        return {
+            "passed": None,
+            "rule": "no evaluation cited: the gate reports its rate and judges nothing",
+        }
+    ck, cn = certificate.get("successes"), certificate.get("trials")
+    cert_rate = (ck / cn) if (ck is not None and cn) else None
+    rate = k / trials
+    return {
+        "passed": cert_rate is not None and rate >= cert_rate - tolerance,
+        "tolerance": tolerance,
+        "rule": "the gate's success rate is at least the evaluation's minus the "
+        "tolerance",
+        "gate_rate": rate,
+        "certificate_rate": cert_rate,
+    }

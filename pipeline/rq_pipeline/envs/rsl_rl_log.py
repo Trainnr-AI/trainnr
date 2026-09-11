@@ -15,20 +15,42 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 SCHEMA = "trainnr-training/1"
+# The record beside a run folder (`project/live`, `project/importer` write
+# it; the index, the drawers, the previews and the presenter read it).
+TRAINING_FILE = "training.json"
 ITERATION_LINE = re.compile(r"Learning iteration\s+(\d+)/(\d+)")
 FIELD_LINE = re.compile(r"^\s*([A-Za-z][A-Za-z _/]*?):\s*([-+0-9.eE]+)\s*s?\s*$")
 ENVS_LINE = re.compile(r"(\d+) envs on (\S+),\s*(\d+) iterations")
 ELAPSED_LINE = re.compile(r"Time elapsed:\s*(?:(\d+) days?, )?(\d+):(\d\d):(\d\d)")
+# The record's column names, spelled once: the x-axis and the five
+# quantities the console prints; the event file's other series take
+# `group/name` (`envs/tfevents.column_name`).
+COL_ITERATION = "iteration"
+COL_TOTAL_STEPS = "total_steps"  # environment steps, RL's usual x-axis
+COL_REWARD = "reward"
+COL_EPISODE_LENGTH = "episode_length"
+COL_STEPS_PER_SECOND = "steps_per_second"
+COL_VALUE_LOSS = "value_loss"
+COL_ENTROPY = "entropy"
 # The per-iteration numbers the record keeps, by their name in the log.
 CURVE_FIELDS = {
-    "Total steps": "total_steps",  # environment steps, RL's usual x-axis
-    "Mean reward": "reward",
-    "Mean episode length": "episode_length",
-    "Steps per second": "steps_per_second",
-    "Mean value loss": "value_loss",
-    "Mean entropy loss": "entropy",
+    "Total steps": COL_TOTAL_STEPS,
+    "Mean reward": COL_REWARD,
+    "Mean episode length": COL_EPISODE_LENGTH,
+    "Steps per second": COL_STEPS_PER_SECOND,
+    "Mean value loss": COL_VALUE_LOSS,
+    "Mean entropy loss": COL_ENTROPY,
 }
 MAX_POINTS = 400  # the record samples a long run down to this many rows
+
+# rq_mjlab's walk tools around the trainer (walk_train, walk_verdict),
+# their conventions named once for whoever reads a run folder.
+TRAIN_LOG = "train.log"  # walk_train tees its console here
+DONE_MARK = "] done"  # walk_train's last line: "[g3] done - checkpoints in ..."
+VERDICT_DIR = "verdict"  # walk_verdict writes beside the checkpoint it judged
+VERDICT_PREFIX = "walk-verdict-"
+VERDICT_GLOB = f"{VERDICT_PREFIX}*.json"
+STATUS_RUNNING, STATUS_DONE = "running", "done"
 
 
 @dataclass
@@ -66,7 +88,7 @@ def parse_rsl_rl_log(
             continue
         m = ITERATION_LINE.search(line)
         if m:
-            current = {"iteration": float(m.group(1))}
+            current = {COL_ITERATION: float(m.group(1))}
             rows.append(current)
             record.iterations = record.iterations or int(m.group(2))
             continue
@@ -87,11 +109,11 @@ def parse_rsl_rl_log(
         return None
     record.iterations_logged = len(rows)
     columns = [
-        "iteration",
+        COL_ITERATION,
         *[c for c in CURVE_FIELDS.values() if any(c in r for r in rows)],
     ]
     record.columns = columns
-    rewards = [r["reward"] for r in rows if "reward" in r]
+    rewards = [r[COL_REWARD] for r in rows if COL_REWARD in r]
     record.best_reward = max(rewards) if rewards else None
     record.final = {c: rows[-1][c] for c in columns[1:] if c in rows[-1]}
     step = max(1, -(-len(rows) // max_points))

@@ -44,7 +44,7 @@ class StudioPort(unittest.TestCase):
         # rq_pipeline.viz.STUDIO_ADDRESS is the one Python home; the
         # Rust shell binds the same port (documented mirror).
         address = constant(VIZ, r'STUDIO_ADDRESS = "rerun\+http://127\.0\.0\.1:(\d+)/')
-        bound = constant(MAIN_RS, r'"0\.0\.0\.0:(\d+)"\.parse')
+        bound = constant(MAIN_RS, r'const GRPC_BIND: &str = "0\.0\.0\.0:(\d+)"')
         self.assertEqual(address, bound)
 
 

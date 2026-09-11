@@ -10,7 +10,12 @@ use egui_extras::{Column, TableBuilder};
 use re_ui::{DesignTokens, TableStyle, UiExt as _};
 use serde::Deserialize;
 
+use crate::model::{render_value, schema_compatible, UNRECORDED};
 use crate::widgets::card;
+
+/// The detail file's schema, as `rq_pipeline/project/details.py` writes
+/// it (`SCHEMA`). Same rule as the index: the family must match.
+pub const DETAIL_SCHEMA: &str = "trainnr-detail/5";
 
 /// A row taller than this many rendered lines in one cell is clipped;
 /// long values (a datasheet, a command line) get their own block instead.
@@ -26,6 +31,8 @@ const MODAL_COLUMN_CAP: f32 = 420.0;
 
 #[derive(Deserialize, Default)]
 pub struct Detail {
+    #[serde(default)]
+    pub schema: String,
     #[serde(default)]
     pub version: String,
     #[serde(default)]
@@ -46,24 +53,18 @@ pub struct Section {
     pub note: Option<String>,
 }
 
-/// What is shown when a fact was never recorded: the reader must not
-/// mistake an empty cell for a value.
-const UNRECORDED: &str = "unrecorded";
-
 /// The field's word for a key the index writes in this repo's older
-/// vocabulary (the `cites` map, whose keys are frozen by tests).
+/// vocabulary (the `cites` map, whose keys are frozen by tests). A key
+/// that names an artifact kind takes the kind's word (`pages::kind_word`).
 pub fn field_word(key: &str) -> &str {
     match key {
         "expert" => "scripted policy",
-        "task" => "environment",
         "bundle" => "robot",
         "instrument" => "simulator build",
         "source" => "source dataset",
-        "batch" => "generated dataset",
         "dynamics_basis" | "basis" => "domain randomization",
         "fit" => "system identification",
-        "certificate" => "evaluation",
-        other => other,
+        other => crate::pages::kind_word(other),
     }
 }
 
@@ -75,10 +76,18 @@ impl Detail {
 }
 
 /// Every section, one card each. `expected` is the artifact's current
-/// version; a detail file written for another version is flagged, not
-/// trusted silently. Returns the table section the human asked to
-/// explore (a click on it, or its expand button), if any.
+/// version; a detail file written for another version, or for another
+/// schema family, is flagged, not trusted silently. Returns the table
+/// section the human asked to explore (a click on it, or its expand
+/// button), if any.
 pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Section> {
+    if !schema_compatible(&detail.schema, DETAIL_SCHEMA) {
+        ui.warning_label(format!(
+            "detail was written for schema {}; this Studio reads {DETAIL_SCHEMA} — \
+             re-index with a matching pipeline",
+            detail.schema
+        ));
+    }
     if !detail.version.is_empty() && detail.version != expected {
         ui.warning_label(format!(
             "detail was written for version {} — re-index to refresh",
@@ -145,7 +154,7 @@ fn key_values(ui: &mut egui::Ui, section: &Section, idx: usize) {
         .show(ui, |ui| {
             for row in &section.rows {
                 let key = row.first().and_then(|v| v.as_str()).unwrap_or("");
-                let value = row.get(1).map(render).unwrap_or_default();
+                let value = row.get(1).map(render_value).unwrap_or_default();
                 ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
                 if value.is_empty() {
                     ui.label(
@@ -204,7 +213,7 @@ fn table_preview(ui: &mut egui::Ui, section: &Section, idx: usize) -> bool {
             .header(row_h, |mut header| {
                 for name in &section.columns {
                     header.col(|ui| {
-                        column_name(ui, name, None);
+                        column_name(ui, name);
                     });
                 }
             })
@@ -265,18 +274,55 @@ fn column_width(section: &Section, col: usize, rows: usize, cap: f32) -> f32 {
         .max(COLUMN_MIN)
 }
 
-/// A column name in the header; `sorted` draws the direction it sorts by.
-fn column_name(ui: &mut egui::Ui, name: &str, sorted: Option<bool>) {
-    let text = match sorted {
-        Some(true) => format!("{name} ▲"),
-        Some(false) => format!("{name} ▼"),
-        None => name.to_owned(),
-    };
+/// A column name in a preview's header (the preview does not sort).
+fn column_name(ui: &mut egui::Ui, name: &str) {
     ui.label(
-        egui::RichText::new(text)
+        egui::RichText::new(name)
             .strong()
             .color(ui.visuals().weak_text_color()),
     );
+}
+
+/// How a table is sorted: by which column, and which way. Shared by the
+/// detail modal and the page listing, so a click cycles the same way
+/// everywhere: ascending, descending, then not at all.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SortState(pub Option<(usize, bool)>);
+
+impl SortState {
+    /// Click a column: sort ascending, then descending, then not at all.
+    pub fn toggle(&mut self, col: usize) {
+        self.0 = match self.0 {
+            Some((c, true)) if c == col => Some((col, false)),
+            Some((c, false)) if c == col => None,
+            _ => Some((col, true)),
+        };
+    }
+
+    /// The column sorted by and its direction, if any.
+    pub fn order(self) -> Option<(usize, bool)> {
+        self.0
+    }
+
+    /// The header's text for column `col`: its name with the arrow of
+    /// the direction it sorts by, when it does.
+    pub fn header_text(self, col: usize, name: &str) -> String {
+        match self.0 {
+            Some((c, true)) if c == col => format!("{name} ▲"),
+            Some((c, false)) if c == col => format!("{name} ▼"),
+            _ => name.to_owned(),
+        }
+    }
+}
+
+/// A header cell that sorts on click. Returns true when clicked.
+pub fn sortable_header(ui: &mut egui::Ui, sort: SortState, col: usize, name: &str) -> bool {
+    ui.add(
+        egui::Label::new(egui::RichText::new(sort.header_text(col, name)).strong())
+            .sense(egui::Sense::click()),
+    )
+    .on_hover_text("sort by this column")
+    .clicked()
 }
 
 /// One cell: the full value on hover, a dash for nothing.
@@ -303,8 +349,7 @@ fn cell(ui: &mut egui::Ui, value: Option<&serde_json::Value>) {
 #[derive(Clone, Debug)]
 pub struct TableView {
     pub section: Section,
-    /// The column sorted by, and whether ascending.
-    pub sort: Option<(usize, bool)>,
+    pub sort: SortState,
     pub filter: String,
 }
 
@@ -312,7 +357,7 @@ impl TableView {
     pub fn new(section: Section) -> Self {
         Self {
             section,
-            sort: None,
+            sort: SortState::default(),
             filter: String::new(),
         }
     }
@@ -331,7 +376,7 @@ impl TableView {
                         .any(|v| render_inline(v).to_lowercase().contains(&needle))
             })
             .collect();
-        if let Some((col, ascending)) = self.sort {
+        if let Some((col, ascending)) = self.sort.order() {
             rows.sort_by(|a, b| {
                 let (x, y) = (
                     a.get(col).map(render_inline).unwrap_or_default(),
@@ -353,11 +398,7 @@ impl TableView {
 
     /// Click a column: sort ascending, then descending, then not at all.
     pub fn toggle_sort(&mut self, col: usize) {
-        self.sort = match self.sort {
-            Some((c, true)) if c == col => Some((col, false)),
-            Some((c, false)) if c == col => None,
-            _ => Some((col, true)),
-        };
+        self.sort.toggle(col);
     }
 }
 
@@ -433,20 +474,7 @@ pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
             .header(row_h + 4.0, |mut header| {
                 for (c, name) in view.section.columns.iter().enumerate() {
                     header.col(|ui| {
-                        let sorted = view.sort.filter(|(col, _)| *col == c).map(|(_, asc)| asc);
-                        let text = match sorted {
-                            Some(true) => format!("{name} ▲"),
-                            Some(false) => format!("{name} ▼"),
-                            None => name.clone(),
-                        };
-                        if ui
-                            .add(
-                                egui::Label::new(egui::RichText::new(text).strong())
-                                    .sense(egui::Sense::click()),
-                            )
-                            .on_hover_text("sort by this column")
-                            .clicked()
-                        {
+                        if sortable_header(ui, view.sort, c, name) {
                             clicked_col = Some(c);
                         }
                     });
@@ -493,24 +521,7 @@ fn render_inline(v: &serde_json::Value) -> String {
             .map(render_inline)
             .collect::<Vec<_>>()
             .join(", "),
-        other => render(other),
-    }
-}
-
-fn render(v: &serde_json::Value) -> String {
-    match v {
-        serde_json::Value::Null => String::new(),
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Array(items) => items
-            .iter()
-            .map(|x| match x {
-                serde_json::Value::String(s) => s.clone(),
-                other => other.to_string(),
-            })
-            .collect::<Vec<_>>()
-            .join(", "),
-        serde_json::Value::Object(_) => serde_json::to_string_pretty(v).unwrap_or_default(),
-        other => other.to_string(),
+        other => render_value(other),
     }
 }
 
@@ -536,14 +547,32 @@ mod tests {
         assert_eq!(d.version, "a@000000000000");
         assert_eq!(d.sections.len(), 2);
         assert_eq!(d.sections[1].columns, vec!["joint", "type"]);
-        assert_eq!(render(&d.sections[0].rows[1][1]), "15");
+        assert_eq!(render_value(&d.sections[0].rows[1][1]), "15");
+        // An older minor of the family is read; another family is not.
+        assert!(schema_compatible(&d.schema, DETAIL_SCHEMA));
+        assert!(!schema_compatible("trainnr-project-index/1", DETAIL_SCHEMA));
+    }
+
+    #[test]
+    fn a_sort_state_cycles_and_names_its_column() {
+        let mut sort = SortState::default();
+        assert_eq!(sort.header_text(0, "joint"), "joint");
+        sort.toggle(0);
+        assert_eq!(sort.header_text(0, "joint"), "joint ▲");
+        assert_eq!(sort.header_text(1, "damping"), "damping");
+        sort.toggle(0);
+        assert_eq!(sort.header_text(0, "joint"), "joint ▼");
+        sort.toggle(0);
+        assert_eq!(sort.order(), None, "third click clears");
+        sort.toggle(1);
+        assert_eq!(sort.order(), Some((1, true)));
     }
 
     #[test]
     fn values_render_readably() {
-        assert_eq!(render(&serde_json::json!(["a", "b"])), "a, b");
-        assert_eq!(render(&serde_json::json!(1.5)), "1.5");
-        assert_eq!(render(&serde_json::Value::Null), "");
+        assert_eq!(render_value(&serde_json::json!(["a", "b"])), "a, b");
+        assert_eq!(render_value(&serde_json::json!(1.5)), "1.5");
+        assert_eq!(render_value(&serde_json::Value::Null), "");
         assert!(is_version("go2@a1b2c3d4e5f6"));
         assert!(!is_version("a robot @ home"));
         assert!(looks_numeric("[-0.43, 0.52]"));
@@ -592,7 +621,7 @@ mod tests {
         view.toggle_sort(1);
         assert_eq!(render_inline(&view.rows()[0][0]), "hip", "descending");
         view.toggle_sort(1);
-        assert!(view.sort.is_none(), "third click clears");
+        assert!(view.sort.order().is_none(), "third click clears");
         view.toggle_sort(2);
         assert_eq!(
             render_inline(&view.rows()[0][0]),
@@ -626,5 +655,7 @@ mod tests {
             .starts_with("# Datasheet"));
         assert_eq!(field_word("expert"), "scripted policy");
         assert_eq!(field_word("robot"), "robot");
+        assert_eq!(field_word("certificate"), "evaluation", "a kind's word");
+        assert_eq!(field_word("task"), "environment");
     }
 }

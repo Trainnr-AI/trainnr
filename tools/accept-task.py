@@ -3,7 +3,7 @@ every paired trial, and the do-nothing floor must pass none.
 
     cd pipeline && uv run --extra sim python ../tools/accept-task.py kitting
     cd pipeline && uv run --extra sim python ../tools/accept-task.py kitting \\
-        --tray-y 0.9            # a variant: the tray out of reach -> REJECTED
+        --overlay '{"tray_center": [0.0, 0.9]}'   # the tray out of reach -> REJECTED
     cd pipeline && uv run --extra sim python ../tools/accept-task.py \\
         --project ../projects/aloha-kitting --name tray-far   # a declared task
 
@@ -21,9 +21,10 @@ import contextlib
 import json
 import subprocess
 import sys
-from dataclasses import replace
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from _lab import bootstrap
 
@@ -31,37 +32,38 @@ bootstrap()
 
 import mujoco  # noqa: E402
 from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
+from rq_pipeline.mcp_actions import RQ_MJLAB_DIR, walk_train_argv  # noqa: E402
 from rq_pipeline.physics.backend import instrument_stamp  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.kinds import (  # noqa: E402
     ACCEPTANCE_FILE,
     ACCEPTANCE_SCHEMA,
-    TASK_FILE,
 )
 from rq_pipeline.project.locate import Project  # noqa: E402
+from rq_pipeline.project.task_ref import (  # noqa: E402
+    TaskReference,
+    read_task_reference,
+)
 from rq_pipeline.tasks.acceptance import accept  # noqa: E402
-from rq_pipeline.tasks.aloha2 import KITTING_SPEC  # noqa: E402
-from rq_pipeline.tasks.experts import EXPERTS, expert_for  # noqa: E402
-from rq_pipeline.tasks.overlay import build_from_reference  # noqa: E402
+from rq_pipeline.tasks.experts import expert_for, experts  # noqa: E402
+from rq_pipeline.tasks.overlay import build_from_reference, build_variant  # noqa: E402
 from rq_pipeline.tasks.walks import walk_robot  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("task", nargs="?", choices=sorted(EXPERTS))
+    reviewable = sorted(entry.name for entry in experts().values())
+    parser.add_argument("task", nargs="?", choices=reviewable)
     parser.add_argument("--project", type=Path, default=None, help="a project root")
     parser.add_argument("--name", default=None, help="a declared task in the project")
     parser.add_argument(
         "--record", type=Path, default=None, help="append the rows here"
     )
     parser.add_argument(
-        "--tray-y", type=float, default=None, help="kitting variant: move the tray"
-    )
-    parser.add_argument(
-        "--in-slot-xy",
-        type=float,
+        "--overlay",
         default=None,
-        help="kitting variant: the referee's radius",
+        help="a variant: JSON with the spec fields you change "
+        "(describe_task_families lists them)",
     )
     args = parser.parse_args()
     if args.project is not None or args.name is not None:
@@ -70,15 +72,11 @@ def main() -> None:
         sys.exit(0 if review_declared(args.project, args.name) else 1)
     if args.task is None:
         parser.error("name a task, or a --project and --name")
-    build, expert = EXPERTS[args.task]
-    spec = KITTING_SPEC
-    if args.tray_y is not None:
-        spec = replace(spec, tray_center=(spec.tray_center[0], args.tray_y))
-    if args.in_slot_xy is not None:
-        spec = replace(spec, in_slot_xy_m=args.in_slot_xy)
-    task = build(spec=spec)
+    overlay = json.loads(args.overlay) if args.overlay else None
+    task, spec = build_variant(args.task, overlay)
+    expert = expert_for(args.task)
 
-    def run_expert(model, initial):
+    def run_expert(model: Any, initial: Any) -> Any:
         return expert(model, initial, spec=spec)
 
     verdict = accept(
@@ -90,40 +88,37 @@ def main() -> None:
 
 SMOKE_ENVS = 2
 SMOKE_ITERATIONS = 2
-RQ_MJLAB_DIR = Path(__file__).resolve().parents[1] / "rq_mjlab"
+SMOKE_AGENT = "smoke"
+SMOKE_DONE_MARK = "[smoke] done"  # the trainer's last line (rq_mjlab.walk_train)
+ACCEPTANCE_LOG = "acceptance.log"
+Runner = Callable[..., subprocess.CompletedProcess[Any]]
 
 
-def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
+def review_walk(
+    project: Project,
+    folder: Path,
+    ref: TaskReference,
+    robot: str,
+    *,
+    run: Runner = subprocess.run,
+) -> bool:
     """A walk's acceptance is learnability: the environment builds from
     the project's robot and a few PPO iterations run — rq_mjlab's smoke,
-    in its own venv, with the declared span. The identity it prints is
-    the record."""
-    spec = ref.get("spec") or {}
-    argv = [
-        "uv",
-        "run",
-        "--project",
-        str(RQ_MJLAB_DIR),
-        "python",
-        "-m",
-        "rq_mjlab.walk_train",
-        "--agent",
-        "smoke",
-        "--robot",
-        robot,
-        "--project",
-        str(project.root),
-        "--envs",
-        str(SMOKE_ENVS),
-        "--iterations",
-        str(SMOKE_ITERATIONS),
-        "--dr-span",
-        str(spec.get("dr_span", 0.0)),
-        "--no-recorder",
-    ]
-    log_path = folder / "acceptance.log"
+    in its own venv, with the declared span, through the SAME command
+    line the train door spawns (launch environment included). The
+    identity it prints is the record."""
+    argv = walk_train_argv(
+        agent=SMOKE_AGENT,
+        robot=robot,
+        project=str(project.root),
+        envs=SMOKE_ENVS,
+        iterations=SMOKE_ITERATIONS,
+        dr_span=ref.dr_span if ref.dr_span is not None else 0.0,
+        recorder=False,
+    )
+    log_path = folder / ACCEPTANCE_LOG
     with log_path.open("w") as log:
-        result = subprocess.run(
+        result = run(
             argv, cwd=RQ_MJLAB_DIR, stdout=log, stderr=subprocess.STDOUT, check=False
         )
     lines = log_path.read_text(errors="replace").splitlines()
@@ -132,7 +127,7 @@ def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
         if "identity:" in line:
             with contextlib.suppress(ValueError, SyntaxError):
                 identity = ast.literal_eval(line.split("identity:", 1)[1].strip())
-    accepted = result.returncode == 0 and any("[smoke] done" in line for line in lines)
+    accepted = result.returncode == 0 and any(SMOKE_DONE_MARK in line for line in lines)
     reasons = (
         []
         if accepted
@@ -140,7 +135,7 @@ def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
     )
     record = {
         "schema": ACCEPTANCE_SCHEMA,
-        "task": ref.get("stamp"),
+        "task": ref.stamp,
         "accepted": accepted,
         "gate": (
             f"learnability smoke: {SMOKE_ENVS} environments, "
@@ -154,8 +149,7 @@ def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
         "log": log_path.name,
     }
     print(
-        ("ACCEPTED" if accepted else "REJECTED")
-        + f": {ref.get('stamp')} — {record['gate']}",
+        ("ACCEPTED" if accepted else "REJECTED") + f": {ref.stamp} — {record['gate']}",
         flush=True,
     )
     staging = folder / (ACCEPTANCE_FILE + ".tmp")
@@ -168,19 +162,19 @@ def review_walk(project: Project, folder: Path, ref: dict, robot: str) -> bool:
 def review_declared(project_root: Path, name: str) -> bool:
     """Review the project's declared task `name`; write its verdict."""
     project = Project(project_root.resolve()).use()
-    folder = project.folder("tasks") / name
-    ref_path = folder / TASK_FILE
-    if not ref_path.is_file():
-        raise SystemExit(f"no task {name!r} in {project.root} (no {ref_path})")
-    ref = json.loads(ref_path.read_text())
-    robot = walk_robot(ref["task_id"])
+    try:
+        ref = read_task_reference(project, name)
+    except (FileNotFoundError, ValueError) as why:
+        raise SystemExit(str(why)) from why
+    robot = walk_robot(ref.task_id)
     if robot is not None:
-        return review_walk(project, folder, ref, robot)
-    task = build_from_reference(ref)
-    expert = expert_for(ref["task_id"])
+        return review_walk(project, ref.folder, ref, robot)
+    task = build_from_reference({"task_id": ref.task_id, "spec": ref.spec})
+    expert = expert_for(ref.task_id)
     spec = task.task_spec
+    folder = ref.folder
 
-    def run_expert(model, initial):
+    def run_expert(model: Any, initial: Any) -> Any:
         return expert(model, initial, spec=spec)
 
     verdict = accept(

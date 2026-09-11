@@ -40,6 +40,7 @@ from rq_pipeline.robots.recording import (
     JOINT_VELOCITY,
     Channel,
     Recording,
+    monotone,
 )
 
 NAME = "mcap"
@@ -335,7 +336,7 @@ def _joint_state_channels(
         eff_rows.append(_pad(effort, width))
     if names is None:
         return {}
-    times_arr, keep = _monotone(np.asarray(times, dtype=np.float64))
+    times_arr, keep = monotone(np.asarray(times, dtype=np.float64))
     prefix = (
         "" if topic in ("/joint_states", "joint_states") else f"{topic.strip('/')}."
     )
@@ -383,7 +384,7 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
         for _ in range(9):
             r.f64()
         accel.append([r.f64() for _ in range(3)])
-    times_arr, keep = _monotone(np.asarray(times, dtype=np.float64))
+    times_arr, keep = monotone(np.asarray(times, dtype=np.float64))
     prefix = "" if topic in ("/imu", "imu", "/imu/data") else f"{topic.strip('/')}."
     return {
         f"{prefix}{IMU_ORIENTATION}": Channel(
@@ -412,15 +413,3 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
 
 def _pad(values: list[float], width: int) -> list[float]:
     return list(values[:width]) + [np.nan] * max(0, width - len(values))
-
-
-def _monotone(times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Keep only samples whose time exceeds every earlier kept time —
-    a duplicate or out-of-order stamp is dropped, never re-invented."""
-    keep = np.zeros(len(times), dtype=bool)
-    last = -np.inf
-    for i, t in enumerate(times):
-        if t > last:
-            keep[i] = True
-            last = t
-    return times[keep], keep

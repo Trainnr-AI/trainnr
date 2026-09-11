@@ -36,43 +36,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.evaluate.tracking import (
+    ERR_FLOOR_MPS,
+    ERR_RATIO_BOUND,
+    TrackingOutcome,
+    criterion_text,
+)
+
 from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
-# The judgment's constants, declared where the certificate cites them.
-ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
-ERR_FLOOR = 0.1  # m/s; below this commanded speed the ratio's denominator floors
+# The judgment's rule lives in `rq_pipeline.evaluate.tracking`, shared
+# with the deployment gate; these names stay for the callers here.
+ERR_FLOOR = ERR_FLOOR_MPS
+EpisodeOutcome = TrackingOutcome
 
 # The observation group the actor reads and the capture records: what a
 # captured (T, obs) row IS, and the key a labeler must hand back to the
 # actor — rsl-rl actors index a TensorDict of groups, never a bare tensor.
 ACTOR_OBS_GROUP = "actor"
-
-
-@dataclass(frozen=True)
-class EpisodeOutcome:
-    """One episode's measured facts, before any threshold is applied."""
-
-    steps: int
-    fell: bool
-    mean_err: float  # mean |v_xy - v*_xy| over the episode, m/s
-    mean_cmd: float  # mean ‖v*_xy‖ over the episode, m/s
-
-    @property
-    def err_ratio(self) -> float:
-        return self.mean_err / max(self.mean_cmd, ERR_FLOOR)
-
-    @property
-    def survived(self) -> bool:
-        return not self.fell
-
-    @property
-    def tracked(self) -> bool:
-        return self.err_ratio < ERR_RATIO_BOUND
-
-    @property
-    def success(self) -> bool:
-        return self.survived and self.tracked
 
 
 @dataclass(frozen=True)
@@ -582,7 +564,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     protocol = {
         "trials": args.trials,
         "seed": args.seed,
-        "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
+        "criterion": criterion_text(),
+        "err_ratio_bound": ERR_RATIO_BOUND,
         "err_floor_mps": ERR_FLOOR,
         "dr_basis": identity["dr_basis"],
         "commands": envelope["commands"],

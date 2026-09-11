@@ -23,7 +23,7 @@ import mujoco
 from rq_pipeline.bundles.bundle import model_file_of
 from rq_pipeline.bundles.hashing import content_stamp
 from rq_pipeline.bundles.locate import find_bundle
-from rq_pipeline.tasks.registry import register
+from rq_pipeline.tasks.registry import register, resolve, walk_entries
 
 TERRAINS = ("flat",)  # rough terrain arrives with its own sensors (docs/77)
 DEFAULT_SPAN = 0.10  # the walk study's middle arm
@@ -97,33 +97,32 @@ def _walk(name: str, robot: str, spec: WalkSpec, *, bundle: str | None) -> WalkT
     )
 
 
-@register("go2-walk", rig="go2")
+@register("go2-walk", rig="go2", walk=True)
 def build_go2_walk(*, spec: WalkSpec = DEFAULT_WALK) -> WalkTask:
     """The Unitree Go2 walk on the project's onboarded bundle."""
     return _walk("go2-walk", "go2", spec, bundle="go2")
 
 
-@register("microduck-walk", rig="microduck")
+@register("microduck-walk", rig="microduck", walk=True)
 def build_microduck_walk(*, spec: WalkSpec = DEFAULT_WALK) -> WalkTask:
     """The microduck walk on its certified bundle."""
     return _walk("microduck-walk", "microduck", spec, bundle="microduck")
 
 
-@register("go1-walk", rig="go1")
+@register("go1-walk", rig="go1", walk=True)
 def build_go1_walk(*, spec: WalkSpec = DEFAULT_WALK) -> WalkTask:
     """mjlab's own Go1 walk (the asset ships with the simulator)."""
     return _walk("go1-walk", "go1", spec, bundle=None)
 
 
-WALK_FAMILIES = {
-    "robotiq/go2-walk": "go2",
-    "robotiq/microduck-walk": "microduck",
-    "robotiq/go1-walk": "go1",
-}
-
-
 def walk_robot(task_id: str) -> str | None:
-    """The walk registry's robot name for a walk family, else None."""
-    from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
+    """The walk robot of a walk family (its registered rig), else None
+    for a family that is not a walk."""
+    entry = resolve(task_id)
+    return entry.rig if entry.walk else None
 
-    return WALK_FAMILIES.get(resolve(task_id).task_id)
+
+def walk_robots() -> tuple[str, ...]:
+    """Every robot a walk family is registered for, sorted: what the
+    walk doors accept by name (one truth: the task registry)."""
+    return tuple(sorted({e.rig for e in walk_entries().values()}))

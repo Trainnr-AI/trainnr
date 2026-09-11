@@ -1,7 +1,7 @@
 //! The Simulator page's controls, shaped by what a person does in a
 //! simulator, in order of how often: watch the scene; pause, step,
 //! reset, change speed; poke the robot; flip a debug overlay; look up a
-//! fact about the model. So (Prakhar's calls, 2026-09-09):
+//! fact about the model. So (the operator's calls, 2026-09-09):
 //!
 //! - the picture is the page — nothing permanent sits beside it;
 //! - a **transport bar** under the picture, the video-player shape and
@@ -27,7 +27,9 @@
 
 use re_ui::UiExt as _;
 
-use crate::viewport::{SimModel, SimStatus, ViewportFeed, PREVIEW_TASKS, WALK_TASK};
+use crate::viewport::{
+    SimModel, SimStatus, ViewportFeed, PREVIEW_TASKS, SPEED_RANGE, VIEW_PRESETS, WALK_TASK,
+};
 
 /// What the bar asked the page to do with the viewport itself.
 pub enum Action {
@@ -108,8 +110,9 @@ pub fn apply_follow(ctx: &egui::Context, viewport: &mut ViewportFeed) {
 /// A joint or actuator with no declared range still needs a slider.
 const UNLIMITED_HINGE: [f64; 2] = [-std::f64::consts::PI, std::f64::consts::PI];
 const UNLIMITED_LINEAR: [f64; 2] = [-1.0, 1.0];
-/// Speed slider bounds (simulate's Speed goes further; the stream clamps).
-const SPEED_RANGE: std::ops::RangeInclusive<f32> = 0.1..=4.0;
+/// The slider's span: the part of the stream's [`SPEED_RANGE`] a thumb
+/// can set with any precision (the agent's door reaches the whole range).
+const SPEED_SLIDER_RANGE: std::ops::RangeInclusive<f32> = 0.1..=4.0;
 /// The drawer's width over the picture, and a value's fixed width.
 const DRAWER_WIDTH: f32 = 340.0;
 const VALUE_WIDTH: f32 = 64.0;
@@ -124,8 +127,6 @@ const OVERLAYS: &[(&str, &str, bool)] = &[
     ("transparent", "transparent", false),
     ("shadows", "shadow", true),
 ];
-/// The camera's named views, in the wire's order (`VIEW_PRESETS`).
-const VIEWS: &[(&str, u8)] = &[("Front", 1), ("Side", 2), ("Top", 3), ("Reset view", 0)];
 /// Rendering flags MuJoCo turns on by default (after mjv_defaultScene).
 const RND_DEFAULT_ON: &[&str] = &["shadow", "reflection", "skybox", "haze", "cullface"];
 
@@ -264,14 +265,14 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         let mut speed = status.speed as f32;
         ui.spacing_mut().slider_width = 90.0;
         let response = ui.add(
-            egui::Slider::new(&mut speed, SPEED_RANGE)
+            egui::Slider::new(&mut speed, SPEED_SLIDER_RANGE)
                 .clamping(egui::SliderClamping::Never)
                 .logarithmic(true)
                 .show_value(false),
         );
         mono(ui, format!("{speed:>5.2}×"), 52.0);
         if response.drag_stopped() || (response.changed() && !response.dragged()) {
-            viewport.send_speed(speed);
+            viewport.send_speed(speed.clamp(*SPEED_RANGE.start(), *SPEED_RANGE.end()));
         }
         ui.separator();
         // The mode, said plainly.
@@ -296,10 +297,14 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
         ui.separator();
         chip(ui, "t", format!("{:>8.2} s", status.time));
         chip(ui, "rtf", format!("{:>5.2}", status.rtf));
+        // No frame yet is a dash, never a zero the reader could take for
+        // a measured rate.
         chip(
             ui,
             "fps",
-            format!("{:>4.0}", viewport.fps_settled().unwrap_or(0.0)),
+            viewport
+                .fps_settled()
+                .map_or_else(|| format!("{:>4}", "–"), |f| format!("{f:>4.0}")),
         );
         // The agent, visible.
         if let Some(what) = viewport.flashing() {
@@ -380,10 +385,12 @@ fn worlds_row(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus
     ui.spacing_mut().item_spacing.x = 3.0;
     for (i, world) in status.worlds.iter().enumerate() {
         let (rect, response) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click());
+        // Rerun's own status colours, so the dots match every other
+        // success and error mark in the window.
         let color = if world.done {
-            egui::Color32::from_rgb(220, 60, 60)
+            ui.visuals().error_fg_color
         } else {
-            egui::Color32::from_rgb(70, 200, 110)
+            ui.tokens().alert_success.icon
         };
         ui.painter().circle_filled(rect.center(), 4.0, color);
         if i as i64 == followed {
@@ -478,15 +485,18 @@ pub fn overlays(ctx: &egui::Context, picture: egui::Rect, viewport: &mut Viewpor
                         }
                         ui.separator();
                         ui.menu_image_button(re_ui::icons::VIEW_3D.as_image(), |ui| {
-                            for (name, preset) in VIEWS {
-                                if ui.button(*name).clicked() {
-                                    viewport.send_view(*preset);
+                            for view in VIEW_PRESETS {
+                                if ui.button(view.label).clicked() {
+                                    viewport.send_view(view.index);
                                     ui.close();
                                 }
                             }
                         })
                         .response
-                        .on_hover_text("camera: front, side, top, reset");
+                        .on_hover_text(format!(
+                            "camera: {}",
+                            crate::viewport::view_preset_names().join(", ")
+                        ));
                     });
                 });
         });
@@ -670,7 +680,11 @@ fn control(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, m
             } else {
                 UNLIMITED_LINEAR
             };
-            let echoed = status.ctrl.get(i).copied().unwrap_or(0.0);
+            // An actuator the status has not echoed yet has no value to
+            // show; a row of 0.000 would read as one.
+            let Some(echoed) = status.ctrl.get(i).copied() else {
+                continue;
+            };
             let shown = viewport.slider_value(1, i, echoed);
             let (moved, stopped) = row(ui, &actuator.name, range, shown, status.manual);
             if let Some(v) = moved {
@@ -696,7 +710,9 @@ fn joints(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, mo
             } else {
                 UNLIMITED_LINEAR
             };
-            let echoed = status.qpos.get(joint.qpos).copied().unwrap_or(0.0);
+            let Some(echoed) = status.qpos.get(joint.qpos).copied() else {
+                continue; // not echoed yet: no value to show
+            };
             let shown = viewport.slider_value(0, joint.qpos, echoed);
             let (moved, stopped) = row(ui, &joint.name, range, shown, status.manual);
             if let Some(v) = moved {
@@ -733,7 +749,12 @@ fn physics(ui: &mut egui::Ui, model: &SimModel) {
                 ("bodies", model.nbody.to_string()),
                 ("geoms", model.ngeom.to_string()),
                 ("actuators", model.actuators.len().to_string()),
-                ("sliding joints", model.joints.len().to_string()),
+                // Hinge and slide joints: the ones with one scalar (MuJoCo's
+                // free and ball joints have none, and are not listed).
+                (
+                    "scalar joints (hinge, slide)",
+                    model.joints.len().to_string(),
+                ),
                 (
                     "keyframes",
                     if model.keyframes.is_empty() {

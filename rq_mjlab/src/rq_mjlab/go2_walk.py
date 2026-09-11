@@ -16,6 +16,10 @@ The actuator numbers are the reference's (`go2_constants.py`, read
 kp 40 kd 2 effort 45 armature 0.02. Nothing here measured them — the
 identity string says `declared-pd`, and the loop's "system identified"
 state stays unproven until a recording of a real Go2 is fitted.
+
+Every Go2 fact a deployment needs beyond the built environment lives
+here too (`DEPLOY`): the SDK's joint order and the reference's stack
+(their controller, their simulator's scene), each with its source.
 """
 
 from __future__ import annotations
@@ -37,9 +41,13 @@ from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from mjlab.utils.spec_config import CollisionCfg
 from rq_pipeline.bundles.hashing import fields_hash, stamp
+from rq_pipeline.deploy.manifest import UnitreeFacts
+from rq_pipeline.deploy.runtime import STANDING_COMMAND
+from rq_pipeline.deploy.unitree_yaml import deployable_actor_terms
 
-from rq_mjlab.go1_walk import actuator_dr_events
+from rq_mjlab.go1_walk import GainsBasis, actuator_dr_events
 from rq_mjlab.linter import lint
+from rq_mjlab.walks import DeployFacts
 
 ROBOT = "unitree-go2"
 BUNDLE = "go2"
@@ -57,6 +65,7 @@ TRUNK_GEOMS = ("base1_collision", "base2_collision", "base3_collision")
 # a per-joint rule); declared, like the gains.
 ACTION_SCALE = 0.25
 FELL_OVER_DEG = 70.0
+COMMAND_TERM = "twist"
 
 # The reference's constants, verbatim: what the identity hashes.
 DECLARED: dict[str, Any] = {
@@ -74,6 +83,30 @@ DECLARED: dict[str, Any] = {
     "source": "unitreerobotics/unitree_rl_mjlab src/assets/robots/unitree_go2/"
     "go2_constants.py (commit 1425b15, read 2026-09-10)",
 }
+# The Go1's events word their basis around mjlab's DERIVED gains; the
+# Go2's gains are the reference's DECLARED constants.
+DECLARED_GAINS = GainsBasis(
+    around="the reference's declared constants",
+    at="declared",
+    exact="the reference's declared PD gains",
+)
+
+# What a deployment of this robot carries beyond the built environment.
+# The SDK joint order: the policy's MJCF order FL, FR, RL, RR against the
+# SDK's FR, FL, RR, RL (the reference's deploy.yaml, docs/77 §1).
+DEPLOY = DeployFacts(
+    sdk_joint_map=(3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8),
+    sdk_joint_map_source=(
+        "unitree_rl_mjlab deploy/robots/go2 deploy.yaml joint_ids_map (declared)"
+    ),
+    unitree=UnitreeFacts(
+        robot="go2",
+        controller="go2_ctrl",
+        scene="src/assets/robots/unitree_go2/xmls/scene_go2.xml",
+        source="unitree_rl_mjlab simulate/config.yaml and deploy/robots/go2 "
+        "(read 2026-09-11)",
+    ),
+)
 
 
 def bundle_dir() -> Path:
@@ -267,22 +300,17 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
 
 
 GAIT_PHASE_PERIOD_S = 0.6  # the reference's clock (velocity_env_cfg.py, `phase`)
-DEPLOYABLE_ACTOR = (
-    "base_ang_vel",
-    "projected_gravity",
-    "command",
-    "phase",
-    "joint_pos",
-    "joint_vel",
-    "actions",
-)
+# The actor's terms, in their order: what their deploy runtime provides
+# (`rq_pipeline.deploy.unitree_yaml.UNITREE_TERMS`, one truth).
+DEPLOYABLE_ACTOR = deployable_actor_terms()
 
 
 def gait_phase(env: Any, period: float, command_name: str) -> Any:
     """The reference's gait clock (unitree_rl_mjlab `mdp.phase`, transcribed):
     sine and cosine of the episode time modulo `period`, zero while the
-    command is under 0.1 - what their deploy runtime computes as
-    `gait_phase`, so a policy trained on it runs in their stack."""
+    command is under the standing threshold - what their deploy runtime
+    computes as `gait_phase`, and what `rq_pipeline.deploy.runtime`
+    computes in numpy, so a policy trained on it runs in either stack."""
     import torch  # noqa: PLC0415
 
     global_phase = (env.episode_length_buf * env.step_dt) % period / period
@@ -290,7 +318,7 @@ def gait_phase(env: Any, period: float, command_name: str) -> Any:
     phase[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
     phase[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
     standing = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
-    still = standing < 0.1  # noqa: PLR2004 - the reference's threshold
+    still = standing < STANDING_COMMAND
     return torch.where(still.unsqueeze(1), torch.zeros_like(phase), phase)
 
 
@@ -308,7 +336,7 @@ def deployable_actor(cfg: ManagerBasedRlEnvCfg) -> None:
     terms.pop("base_lin_vel", None)
     terms["phase"] = ObservationTermCfg(
         func=gait_phase,
-        params={"period": GAIT_PHASE_PERIOD_S, "command_name": "twist"},
+        params={"period": GAIT_PHASE_PERIOD_S, "command_name": COMMAND_TERM},
     )
     actor.terms = {name: terms[name] for name in DEPLOYABLE_ACTOR}
 
@@ -359,26 +387,17 @@ def go2_walk_env_cfg(
     the declared gains, and its identity."""
     cfg = go2_flat_env_cfg(play=play)
     events, dr_basis = actuator_dr_events(
-        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
+        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, gains=DECLARED_GAINS
     )
     for name in events:
         if name in cfg.events:
             raise ValueError(f"the Go2 cfg already carries an event named {name!r}")
     cfg.events.update(events)
     lint(cfg.events, ())
-    # The Go1's events word their basis around mjlab's DERIVED gains; the
-    # Go2's gains are the reference's DECLARED constants.
-    basis = dr_basis.replace(
-        "around derived", "around the reference's declared constants"
-    )
-    basis = basis.replace(
-        "mjlab's derived PD gains", "the reference's declared PD gains"
-    )
-    basis = basis.replace("at derived", "at declared")
     return cfg, {
         "robot": robot_stamp(),
         "actuator": actuator_stamp(),
-        "dr_basis": basis,
+        "dr_basis": dr_basis,
     }
 
 

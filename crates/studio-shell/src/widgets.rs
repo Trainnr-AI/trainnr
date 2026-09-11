@@ -7,6 +7,9 @@
 use re_ui::{DesignTokens, Icon, UiExt as _};
 
 pub const CARD_RADIUS: f32 = 8.0;
+/// The space between a card's frame and its content, each side. A page
+/// that sizes content to a card's width subtracts it twice.
+pub const CARD_INNER_MARGIN: i8 = 14;
 /// Rerun's example-card thumbnail aspect (337 × 250).
 pub const THUMBNAIL_ASPECT: f32 = 337.0 / 250.0;
 const THUMBNAIL_RADIUS: u8 = 8;
@@ -32,7 +35,7 @@ pub fn card(ui: &egui::Ui, accent: Option<egui::Color32>) -> egui::Frame {
         .fill(tokens.example_card_background_color)
         .stroke(stroke)
         .corner_radius(CARD_RADIUS)
-        .inner_margin(egui::Margin::same(14))
+        .inner_margin(egui::Margin::same(CARD_INNER_MARGIN))
 }
 
 /// A small pill in the welcome screen's tag style.

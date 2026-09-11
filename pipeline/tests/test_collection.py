@@ -18,15 +18,11 @@ from typing import Any
 import numpy as np
 
 from rq_pipeline.project import Kind, create_project, index_project
+from rq_pipeline.project.ingest import capture as live_capture
+from rq_pipeline.project.ingest import capture_status as status
 from rq_pipeline.robots import resolve
 from rq_pipeline.robots.adapter import detect
-from rq_pipeline.robots.capture import (
-    FAILED,
-    INGESTED,
-    LISTENING,
-    WireUdpCapture,
-    status,
-)
+from rq_pipeline.robots.capture import FAILED, INGESTED, LISTENING
 from rq_pipeline.robots.recording import (
     COLLECTION_MOCAP,
     COLLECTION_ROBOT_OP,
@@ -93,6 +89,21 @@ class Mocap(unittest.TestCase):
             np.testing.assert_allclose(knee_rot.values[:, 0], np.deg2rad([10, 12, 14]))
             self.assertEqual(rec.census["markers"], ["Hip", "Knee"])
             self.assertTrue(any("not retargeted" in n for n in rec.notes))
+
+    def test_a_millimetre_header_lands_in_metres(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "take-mm.csv"
+            # the units live in a column of their own, as Vicon and
+            # OptiTrack exports put them; the marker columns stay marker-shaped
+            path.write_text(
+                "Frame,Time (Seconds),Units (mm),Hip.X,Hip.Y,Hip.Z\n"
+                "0,0.000,1,1000,0,500\n1,0.008,1,1001,0,500\n2,0.016,1,1002,0,500\n"
+            )
+            rec = resolve("mocap").build().read(path)
+            hip = rec.channels["marker.Hip.position"]
+            np.testing.assert_allclose(hip.values[:, 0], [1.000, 1.001, 1.002])
+            np.testing.assert_allclose(hip.values[:, 2], [0.5, 0.5, 0.5])
+            self.assertTrue(any("millimetres" in n for n in rec.notes))
 
     def test_a_robot_log_csv_is_not_mistaken_for_mocap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -162,7 +173,7 @@ class LiveCapture(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")
             port = self._free_port()
-            capture = WireUdpCapture(project, "session-1", port=port)
+            capture = live_capture(project, "session-1", port=port)
             state = capture.start(window_s=30.0)
             self.assertEqual(state.state, LISTENING)
             self.assertEqual(status(project)["state"], LISTENING)
@@ -191,7 +202,7 @@ class LiveCapture(unittest.TestCase):
     def test_an_empty_session_fails_by_name_and_leaves_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")
-            capture = WireUdpCapture(project, "empty", port=self._free_port())
+            capture = live_capture(project, "empty", port=self._free_port())
             capture.start(window_s=5.0)
             final = capture.stop()
             self.assertEqual(final.state, FAILED)
@@ -203,7 +214,7 @@ class LiveCapture(unittest.TestCase):
             project = create_project(Path(tmp) / "p", "p")
             (project.folder("recordings") / "taken").mkdir()
             with self.assertRaises(FileExistsError):
-                WireUdpCapture(project, "taken", port=self._free_port()).start()
+                live_capture(project, "taken", port=self._free_port()).start()
 
 
 # -- the presenter -------------------------------------------------------------------
@@ -229,8 +240,8 @@ class Presenter(unittest.TestCase):
         except ImportError:
             self.skipTest("viz extra not installed")
         from rq_pipeline.project import index_project as idx  # noqa: PLC0415
+        from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
         from rq_pipeline.project.present import _present_recording  # noqa: PLC0415
-        from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")

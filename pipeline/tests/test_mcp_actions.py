@@ -18,8 +18,12 @@ from rq_pipeline.mcp_actions import (
     STUDIO_DIR,
     TOOLS_DIR,
     TRAIN_PYTHON,
+    UNITREE_REFERENCE_DEFAULT,
+    UNITREE_REFERENCE_ENV,
     WSL_RUN,
     Actions,
+    unitree_reference,
+    walk_train_argv,
 )
 from rq_pipeline.mcp_jobs import JobManager
 
@@ -66,9 +70,9 @@ UV_MJLAB = ["uv", "run", "--project", str(RQ_MJLAB_DIR), "python"]
 
 
 class TheDoors(unittest.TestCase):
-    def test_generate_demos_spawns_the_kitting_press_verbatim(self) -> None:
+    def test_generate_kitting_demos_spawns_the_kitting_tool_verbatim(self) -> None:
         with harness() as (actions, spawner):
-            handle = actions.generate_demos(episodes=3, seed=7, out="runs/x")
+            handle = actions.generate_kitting_demos(episodes=3, seed=7, out="runs/x")
             [(argv, cwd)] = spawner.calls
             self.assertEqual(
                 argv,
@@ -85,7 +89,7 @@ class TheDoors(unittest.TestCase):
                 ],
             )
             self.assertEqual(cwd, PIPELINE_DIR)
-            self.assertTrue(str(handle["job_id"]).startswith("generate-demos-"))
+            self.assertTrue(str(handle["job_id"]).startswith("generate-kitting-demos-"))
 
     def test_accept_task_reviews_a_declared_task_in_its_project(self) -> None:
         with harness() as (actions, spawner):
@@ -110,9 +114,9 @@ class TheDoors(unittest.TestCase):
             with self.assertRaises(ValueError):
                 actions.accept_task("a/b", "/p")
 
-    def test_press_planned_spawns_the_planner_press_on_the_task(self) -> None:
+    def test_generate_planned_demos_spawns_the_planner_on_the_task(self) -> None:
         with harness() as (actions, spawner):
-            handle = actions.press_planned("block_stack", episodes=4, seed=9)
+            handle = actions.generate_planned_demos("block_stack", episodes=4, seed=9)
             [(argv, cwd)] = spawner.calls
             self.assertEqual(
                 argv,
@@ -134,18 +138,18 @@ class TheDoors(unittest.TestCase):
                 ],
             )
             self.assertEqual(cwd, PIPELINE_DIR)
-            self.assertTrue(str(handle["job_id"]).startswith("press-planned-"))
+            self.assertTrue(str(handle["job_id"]).startswith("generate-planned-demos-"))
 
-    def test_press_planned_shards_only_when_asked(self) -> None:
+    def test_generate_planned_demos_shards_only_when_asked(self) -> None:
         with harness() as (actions, spawner):
-            actions.press_planned("lift", shards=4)
+            actions.generate_planned_demos("lift", shards=4)
             [(argv, _)] = spawner.calls
             self.assertEqual(argv[-2:], ["--shards", "4"])
 
     def test_zero_episodes_refuses_before_spawning(self) -> None:
         with harness() as (actions, spawner):
             with self.assertRaises(ValueError):
-                actions.generate_demos(episodes=0)
+                actions.generate_kitting_demos(episodes=0)
             self.assertEqual(spawner.calls, [])
 
     def test_the_chain_runs_through_the_train_venv(self) -> None:
@@ -159,8 +163,10 @@ class TheDoors(unittest.TestCase):
 
     def test_the_walk_trains_and_certifies_in_the_rq_mjlab_venv(self) -> None:
         with harness() as (actions, spawner):
-            actions.train_walk(agent="smoke", iterations=5)
-            actions.certify_walk("runs/x/model_100.pt", trials=8, device="cpu")
+            actions.train_walk(agent="smoke", iterations=5, robot="microduck")
+            actions.evaluate_walk(
+                "runs/x/model_100.pt", trials=8, device="cpu", robot="microduck"
+            )
             (train_argv, train_cwd), (cert_argv, _c) = spawner.calls
             self.assertEqual(
                 train_argv,
@@ -203,8 +209,70 @@ class TheDoors(unittest.TestCase):
                     "/p/go2/runs/first",
                 ],
             )
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "one of go1, go2, microduck"):
                 actions.train_walk("smoke", robot="spot")
+            with self.assertRaisesRegex(ValueError, "name the robot"):
+                actions.train_walk("smoke", robot=None)
+
+    def test_the_walk_argv_is_one_line_for_the_door_and_the_smoke(self) -> None:
+        argv = walk_train_argv(
+            agent="smoke",
+            robot="go2",
+            project="/p",
+            envs=2,
+            iterations=2,
+            dr_span=0.1,
+            task_stamp="go2-walk@abc",
+            recorder=False,
+            env_file=Path("/box/wsl.env"),
+        )
+        self.assertEqual(
+            argv,
+            [
+                *UV_MJLAB[:4],
+                "--env-file",
+                "/box/wsl.env",
+                "python",
+                "-m",
+                "rq_mjlab.walk_train",
+                "--agent",
+                "smoke",
+                "--robot",
+                "go2",
+                "--project",
+                "/p",
+                "--envs",
+                "2",
+                "--iterations",
+                "2",
+                "--dr-span",
+                "0.1",
+                "--task-stamp",
+                "go2-walk@abc",
+                "--no-recorder",
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "one of"):
+            walk_train_argv(agent="smoke", robot="spot")
+
+    def test_the_gate_names_its_runtime_and_the_reference(self) -> None:
+        with harness() as (actions, spawner):
+            actions.gate_deployment("d", project="/p", trials=4, runtime="dds")
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[argv.index("--runtime") + 1], "dds")
+            self.assertEqual(
+                argv[argv.index("--reference") + 1], str(unitree_reference())
+            )
+            with self.assertRaisesRegex(ValueError, "unknown gate runtime"):
+                actions.gate_deployment("d", project="/p", runtime="gazebo")
+
+    def test_the_reference_comes_from_the_environment(self) -> None:
+        os.environ[UNITREE_REFERENCE_ENV] = "/ref/checkout"
+        try:
+            self.assertEqual(unitree_reference(), Path("/ref/checkout"))
+        finally:
+            os.environ.pop(UNITREE_REFERENCE_ENV, None)
+        self.assertEqual(unitree_reference(), UNITREE_REFERENCE_DEFAULT.expanduser())
 
     def test_the_studio_launches_release_in_its_crate(self) -> None:
         with harness() as (actions, spawner):
@@ -214,14 +282,15 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, STUDIO_DIR)
 
 
-class TheStudentCertificate(unittest.TestCase):
+class TheStudentEvaluation(unittest.TestCase):
     def test_a_student_rides_the_same_door_with_its_horizon(self) -> None:
         with harness() as (actions, spawner):
-            actions.certify_walk(
+            actions.evaluate_walk(
                 "runs/x/model_1.pt",
                 trials=8,
                 student="runs/s/pretrained_model",
                 horizon=10,
+                robot="microduck",
             )
             [(argv, _)] = spawner.calls
             self.assertEqual(
@@ -229,10 +298,10 @@ class TheStudentCertificate(unittest.TestCase):
             )
 
 
-class ThePressWalkDoor(unittest.TestCase):
-    def test_press_walk_rolls_the_newest_checkpoint_by_default(self) -> None:
+class TheWalkDemosDoor(unittest.TestCase):
+    def test_generate_walk_demos_rolls_the_newest_checkpoint_by_default(self) -> None:
         with harness() as (actions, spawner):
-            actions.press_walk(episodes=4, worlds=3, seed=9, out="runs/w")
+            actions.generate_walk_demos(episodes=4, worlds=3, seed=9, out="runs/w")
             [(argv, cwd)] = spawner.calls
             self.assertEqual(
                 argv,
@@ -276,7 +345,7 @@ class TheJobLifecycle(unittest.TestCase):
     def test_list_is_newest_first(self) -> None:
         with harness() as (actions, _spawner):
             first = actions.open_studio()
-            second = actions.train_walk()
+            second = actions.train_walk(robot="microduck")
             listed = actions.list_jobs()
             self.assertEqual(
                 [job["job_id"] for job in listed],
@@ -308,7 +377,7 @@ class TheLaunchEnvironment(unittest.TestCase):
 
     def test_uv_doors_pass_the_env_file_to_uv(self) -> None:
         with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
-            actions.certify_walk("runs/x/model_1.pt", trials=2)
+            actions.evaluate_walk("runs/x/model_1.pt", trials=2, robot="microduck")
             [(argv, _)] = spawner.calls
             self.assertEqual(argv[:6], [*UV_MJLAB[:4], "--env-file", "/box/wsl.env"])
 

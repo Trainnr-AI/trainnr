@@ -20,13 +20,15 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 
 use egui::{ColorImage, TextureHandle, TextureOptions};
 use re_ui::UiExt as _;
+
+use crate::spawn::{kill_tree, pipeline_command, walk_command, RENDER_STREAM_SCRIPT};
 
 /// The shared-memory frame ring's layout — the Python side's mirror
 /// (`SHM_HEADER`/`SHM_MAGIC` in studio-render-stream.py): magic u32,
@@ -113,6 +115,73 @@ const MAX_RENDER_SIDE: u32 = 1920;
 const RESIZE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
 /// How long the bar shows what the agent just did.
 const AGENT_FLASH: std::time::Duration = std::time::Duration::from_millis(1800);
+/// The longest status message the reader accepts. The stream's status is
+/// a few kilobytes (the model description once, then the clock and the
+/// inputs); a length past this is a torn pipe, not a message, and ends
+/// the stream loudly rather than allocating whatever four bytes say.
+const MAX_STATUS_BYTES: usize = 16 << 20;
+/// The speed factors the stream accepts (`SPEED_MIN`/`SPEED_MAX` in
+/// studio-render-stream.py, mirrored): what the agent may ask for.
+pub const SPEED_RANGE: std::ops::RangeInclusive<f32> = 0.01..=100.0;
+
+/// A named camera view: the name the agent and the menu use, the label
+/// the menu shows, and the wire's `TAG_VIEW` index (`VIEW_PRESETS` in
+/// the stream, in its order).
+pub struct ViewPreset {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub index: u8,
+}
+
+/// The camera's named views, one table for the menu and the door.
+pub const VIEW_PRESETS: &[ViewPreset] = &[
+    ViewPreset {
+        name: "front",
+        label: "Front",
+        index: 1,
+    },
+    ViewPreset {
+        name: "side",
+        label: "Side",
+        index: 2,
+    },
+    ViewPreset {
+        name: "top",
+        label: "Top",
+        index: 3,
+    },
+    ViewPreset {
+        name: "reset",
+        label: "Reset view",
+        index: 0,
+    },
+];
+
+/// The wire index of a view by its name.
+pub fn view_preset(name: &str) -> Option<u8> {
+    let wanted = name.trim().to_lowercase();
+    VIEW_PRESETS
+        .iter()
+        .find(|v| v.name == wanted)
+        .map(|v| v.index)
+}
+
+/// The names `view_preset` accepts, for a refusal.
+pub fn view_preset_names() -> Vec<&'static str> {
+    VIEW_PRESETS.iter().map(|v| v.name).collect()
+}
+
+/// How the RL view is spawned: the walk package's module, and how many
+/// policy-driven worlds it rolls (a 3 × 3 tile of the batched sim).
+struct WalkSpawn {
+    module: &'static str,
+    envs: u32,
+}
+
+const WALK_SPAWN: WalkSpawn = WalkSpawn {
+    module: "rq_mjlab.walk_view",
+    envs: 9,
+};
 
 /// Owns the render-stream subprocess, the shared-memory frame ring, and
 /// the orbit/perturb state the user drives with the mouse over the image.
@@ -249,11 +318,13 @@ pub struct SimWorld {
     pub done: bool,
 }
 
-/// What the reader thread learned from the stream's status messages.
+/// What the reader thread learned from the stream's status messages —
+/// shared, not copied: the panels ask for it several times a frame, and
+/// a status carries every joint and control value.
 #[derive(Default)]
 pub struct SimReport {
-    pub status: Option<SimStatus>,
-    pub model: Option<SimModel>,
+    pub status: Option<Arc<SimStatus>>,
+    pub model: Option<Arc<SimModel>>,
 }
 
 /// The scene previews the idle strip offers — pipeline-registry tasks
@@ -335,22 +406,14 @@ impl ViewportFeed {
     /// the UI (`request_repaint`) the moment a new frame lands — egui does
     /// not otherwise know that a background thread produced fresh pixels.
     pub fn spawn(ctx: &egui::Context, task_name: &str) -> Self {
-        let repo_root = crate::repo_root();
-        let pipeline_dir = repo_root.join("pipeline");
-        let script = repo_root.join("tools").join("studio-render-stream.py");
-
-        // `viz` brings rerun-sdk: the script narrates the physics into
-        // the app's own embedded viewer (best-effort — see the script).
-        let mut command = Command::new("uv");
-        // Its own process group, so stop/drop can reap the WHOLE tree:
-        // killing only the `uv` wrapper left the python grandchild
-        // alive and flooding the ingest channel (the zombie stream,
-        // 2026-09-01).
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt as _;
-            command.process_group(0);
-        }
+        // The RL view runs in the rq_mjlab venv (torch + warp + mjlab);
+        // the previews in the pipeline's. Same ring, same stdin
+        // protocol, different door (`spawn.rs` builds both).
+        let mut command = if task_name == WALK_TASK {
+            walk_command(WALK_SPAWN.module)
+        } else {
+            pipeline_command(RENDER_STREAM_SCRIPT)
+        };
         // The frame ring: created HERE (the reader's lifetime owns it),
         // sized for the largest frame the wire allows, handed to the
         // script by path. See ShmReader for the layout.
@@ -373,35 +436,13 @@ impl ViewportFeed {
             });
 
         if task_name == WALK_TASK {
-            // The RL view runs in the rq_mjlab venv (torch + warp +
-            // mjlab); same ring, same stdin protocol, different door.
             command
-                .args(["run", "--offline", "python", "-m", "rq_mjlab.walk_view"])
-                .args(["--latest", "--envs", "9"])
-                .arg(format!("--shm={}", shm_path.display()))
-                .current_dir(repo_root.join("rq_mjlab"));
+                .arg("--latest")
+                .arg(format!("--envs={}", WALK_SPAWN.envs));
         } else {
-            command
-                .args(["run", "--extra", "sim", "--extra", "viz", "python"])
-                .arg(&script)
-                .arg(task_name)
-                .arg(format!("--shm={}", shm_path.display()))
-                .current_dir(&pipeline_dir);
+            command.arg(task_name);
         }
-        // The pipeline's own wsl.env, spelled here because this spawn
-        // does not go through a tool wrapper: without these, MuJoCo's
-        // offscreen GL on WSL falls back to llvmpipe — the SOFTWARE
-        // rasterizer at ~300 ms/frame and ~300% CPU (measured on the
-        // kitting preview, 2026-09-01; the box's documented gotcha).
-        // Harmless on native Linux; macOS must not get MUJOCO_GL=egl.
-        #[cfg(target_os = "linux")]
-        {
-            command
-                .env("MUJOCO_GL", "egl")
-                .env("GALLIUM_DRIVER", "d3d12")
-                .env("LD_LIBRARY_PATH", "/usr/lib/wsl/lib")
-                .env("OMP_NUM_THREADS", "1");
-        }
+        command.arg(format!("--shm={}", shm_path.display()));
         let spawned = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -444,16 +485,14 @@ impl ViewportFeed {
                 }
             }
             (Ok(mut child), Err(err)) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_tree(&mut child);
                 Self::errored(format!(
                     "could not create the frame ring at {}: {err}",
                     shm_path.display()
                 ))
             }
             (Err(err), _) => Self::errored(format!(
-                "could not start {}: {err} (is `uv` on PATH?)",
-                script.display()
+                "could not start the {task_name} scene: {err} (is `uv` on PATH?)"
             )),
         }
     }
@@ -625,8 +664,9 @@ impl ViewportFeed {
         Some(image_rect)
     }
 
-    /// The stream's latest status and model, for the panel and the state file.
-    pub fn report(&self) -> (Option<SimStatus>, Option<SimModel>) {
+    /// The stream's latest status and model, for the panel and the state
+    /// file: two reference counts bumped, nothing copied.
+    pub fn report(&self) -> (Option<Arc<SimStatus>>, Option<Arc<SimModel>>) {
         self.report
             .lock()
             .map(|r| (r.status.clone(), r.model.clone()))
@@ -681,8 +721,7 @@ impl ViewportFeed {
         self.send_message(&encode_flag(TAG_RND, flag, on));
     }
 
-    /// The camera to a named view: 0 reset, 1 front, 2 side, 3 top
-    /// (`VIEW_PRESETS` in the stream).
+    /// The camera to a named view, by its wire index ([`VIEW_PRESETS`]).
     pub fn send_view(&mut self, preset: u8) {
         self.send_message(&[TAG_VIEW, preset]);
     }
@@ -740,24 +779,19 @@ impl Drop for ViewportFeed {
         // `Child` does not kill on drop (the standard library leaves that
         // to the caller); an orphaned render-stream process is exactly the
         // kind of leak the crate's own smoke test already checked for by
-        // hand — do it here so every caller gets it for free.
+        // hand — do it here so every caller gets it for free. The child
+        // leads its own process group (see `spawn.rs`); the whole tree goes.
         if let Some(mut child) = self.child.take() {
-            // The child leads its own process group (see spawn); kill
-            // the group so the python grandchild dies with the wrapper.
-            #[cfg(unix)]
-            {
-                // `-s TERM -- -PGID`: without the `--`, procps kill can
-                // re-parse a negative pgid as a signal spec plus a DIFFERENT
-                // pid — measured 2026-09-01, and the mis-signaled process
-                // was the Studio itself (stop closed the whole app).
-                let _ = Command::new("kill")
-                    .args(["-s", "TERM", "--", &format!("-{}", child.id())])
-                    .status();
-            }
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_tree(&mut child);
         }
     }
+}
+
+/// The length prefix of a status message, or `None` when it is past
+/// [`MAX_STATUS_BYTES`] — a torn pipe, not a message.
+fn status_length(prefix: [u8; 4]) -> Option<usize> {
+    let len = u32::from_le_bytes(prefix) as usize;
+    (len <= MAX_STATUS_BYTES).then_some(len)
 }
 
 /// The wake-up channel: the script writes one byte per frame published
@@ -784,16 +818,19 @@ fn spawn_token_reader(
                     if stdout.read_exact(&mut len).is_err() {
                         break;
                     }
-                    let mut body = vec![0u8; u32::from_le_bytes(len) as usize];
+                    let Some(len) = status_length(len) else {
+                        break; // corruption: end the stream, loudly (below)
+                    };
+                    let mut body = vec![0u8; len];
                     if stdout.read_exact(&mut body).is_err() {
                         break;
                     }
                     if let Ok(mut status) = serde_json::from_slice::<SimStatus>(&body) {
                         if let Ok(mut slot) = report.lock() {
                             if let Some(model) = status.model.take() {
-                                slot.model = Some(model);
+                                slot.model = Some(Arc::new(model));
                             }
-                            slot.status = Some(status);
+                            slot.status = Some(Arc::new(status));
                         }
                     }
                 }
@@ -1028,6 +1065,25 @@ mod tests {
         // them (framebuffer safety beats exact aspect there).
         let (w, h) = render_size(egui::vec2(10_000.0, 10.0));
         assert!(w <= MAX_RENDER_SIDE && h >= MIN_RENDER_SIDE);
+    }
+
+    #[test]
+    fn a_status_length_past_the_cap_is_corruption() {
+        assert_eq!(status_length(512u32.to_le_bytes()), Some(512));
+        assert_eq!(
+            status_length((MAX_STATUS_BYTES as u32).to_le_bytes()),
+            Some(MAX_STATUS_BYTES)
+        );
+        assert_eq!(status_length(u32::MAX.to_le_bytes()), None);
+    }
+
+    #[test]
+    fn views_are_named_once_for_the_menu_and_the_door() {
+        assert_eq!(view_preset("front"), Some(1));
+        assert_eq!(view_preset(" Reset "), Some(0));
+        assert_eq!(view_preset("behind"), None);
+        assert_eq!(view_preset_names(), vec!["front", "side", "top", "reset"]);
+        assert!(SPEED_RANGE.contains(&1.0) && !SPEED_RANGE.contains(&0.0));
     }
 
     #[test]

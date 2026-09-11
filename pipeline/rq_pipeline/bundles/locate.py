@@ -13,8 +13,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from rq_pipeline.paths import checkout
+
 ROBOTS_DIR_ENV = "RQ_ROBOTS_DIR"
-_CHECKOUT_ROBOTS = Path(__file__).resolve().parents[3] / "robots"
+_CHECKOUT_ROBOTS = checkout() / "robots"
 
 
 def robots_dir() -> Path:
@@ -31,11 +33,15 @@ def robots_dir() -> Path:
 _SEARCH_ROOTS: list[Path] = []
 
 
-def add_search_root(root: Path) -> None:
+def add_search_root(root: Path, *, replace: bool = False) -> None:
     """Search `root` for bundles before the library (idempotent; the
-    latest registration is searched first)."""
+    latest registration is searched first). `replace=True` makes it the
+    ONLY project root: a long-lived server that switches projects must
+    not keep listing the previous project's robots."""
     root = Path(root)
-    if root in _SEARCH_ROOTS:
+    if replace:
+        _SEARCH_ROOTS.clear()
+    elif root in _SEARCH_ROOTS:
         _SEARCH_ROOTS.remove(root)
     _SEARCH_ROOTS.insert(0, root)
 

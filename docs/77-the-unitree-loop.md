@@ -71,7 +71,7 @@ read differently, and the window must say so rather than show a gap.
 | environment defined | the walk families (`rq_pipeline/tasks/walks.py`): `robotiq/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; rq_mjlab builds the simulator environment from it (`rq_mjlab/src/rq_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
-| policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `certify_walk` → generic `evaluate_policy`, `certify` (A5) | to build |
+| policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `evaluate_walk` (`certify_walk` until 2026-09-12) → generic `evaluate_policy` (A5) | to build |
 | deployment exported | the deploy manifest (A6, `rq_mjlab/src/rq_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`rq_pipeline/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
 | drift monitored | synthetic drift into the declared basis until a Go2 exists; then the SDK2 adapter | `monitor_drift` (A7) | to build |
 
@@ -305,8 +305,9 @@ which the trainer receives as `--robot go2 --project <root> --dr-span
 RTX PRO 6000; expect longer on the 3090 Ti). The run's `identity.json`
 cites the task; the index shows the experiment with its reward curve as
 it trains (the tensorboard log is not read yet — the console log is,
-once the run ends). Then `certify_walk(<checkpoint>, robot="go2")` for
-the evaluation, and the loop reaches "policy evaluated".
+once the run ends). Then `evaluate_walk(<checkpoint>, robot="go2")` (the
+door was `certify_walk` until 2026-09-12) for the evaluation, and the loop
+reaches "policy evaluated".
 
 ## 6. The deployment stage, built 2026-09-11 on the Mac
 

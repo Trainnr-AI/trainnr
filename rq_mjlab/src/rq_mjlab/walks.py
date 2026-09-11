@@ -13,9 +13,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from rq_pipeline.deploy.manifest import UnitreeFacts
 
 EnvFactory = Callable[..., tuple[Any, dict[str, str]]]
+
+
+@dataclass(frozen=True)
+class DeployFacts:
+    """What a deployment manifest carries beyond the built environment:
+    the vendor SDK's joint order and where it was read, and the Unitree
+    stack that runs the robot, when there is one. Declared by the walk
+    (its robot module), never guessed by the exporter."""
+
+    sdk_joint_map: tuple[int, ...] | None = None
+    sdk_joint_map_source: str | None = None
+    unitree: UnitreeFacts | None = None
 
 
 @dataclass(frozen=True)
@@ -25,6 +40,7 @@ class WalkSpec:
     agent: Callable[[int], Any]
     default_span: float
     source_prefix: str  # the record's task source: "<prefix>@<identity hash>"
+    deploy: DeployFacts = DeployFacts()
 
 
 def _microduck_env(
@@ -137,6 +153,12 @@ def _go2_span() -> float:
     return ACTUATOR_DR_SPAN
 
 
+def _go2_deploy() -> DeployFacts:
+    from rq_mjlab.go2_walk import DEPLOY  # noqa: PLC0415
+
+    return DEPLOY
+
+
 DEFAULT_ROBOT = "microduck"
 
 
@@ -154,7 +176,9 @@ def walk_spec(robot: str = DEFAULT_ROBOT) -> WalkSpec:
     if robot == "go1":
         return WalkSpec("go1", _go1_env, _go1_agent, _go1_span(), "go1-walk")
     if robot == "go2":
-        return WalkSpec("go2", _go2_env, _go2_agent, _go2_span(), "go2-walk")
+        return WalkSpec(
+            "go2", _go2_env, _go2_agent, _go2_span(), "go2-walk", _go2_deploy()
+        )
     raise KeyError(f"no walk for robot {robot!r}; known: {sorted(ROBOTS)}")
 
 

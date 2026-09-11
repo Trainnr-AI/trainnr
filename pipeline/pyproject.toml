@@ -56,7 +56,8 @@ deploy = ["onnxruntime>=1.20", "onnx>=1.16"]
 # engines, actuators, runs as queryable tools for any MCP client — the
 # Studio's agent panel first. Official SDK, MIT; v2 is a rework of v1, so
 # the pin holds the major.
-mcp = ["mcp~=2.1"]
+# psutil: the Studio's process liveness (`project/control`), cross-platform.
+mcp = ["mcp~=2.1", "psutil>=5.9"]
 # openpi's own websocket client (rq_pipeline/envs/openpi_policy.py): pi0 /
 # pi0.5 served from their process, evaluated through our env. Pinned to the
 # commit it was read at (docs/e2e-research/43); not on PyPI. Its numpy<2 pin

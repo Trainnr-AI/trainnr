@@ -15,10 +15,12 @@ from rq_pipeline.project.live import (
     TRAIN_LOG,
     TRAINING_FILE,
     VERDICT_DIR,
+    WRITING_S,
     refresh_project,
     refresh_training,
     refresh_verdicts,
     run_folders,
+    run_status,
     stale,
 )
 from rq_pipeline.project.locate import Project
@@ -172,3 +174,16 @@ class TheLiveVerdict(unittest.TestCase):
         written = refresh_verdicts(project)
         self.assertEqual(len(written), 1)
         self.assertNotIn(f"-p{PROTOCOL}", written[0].name)
+
+
+class TheStatusWord(unittest.TestCase):
+    """The record says `done`, `running`, or `unrecorded` - never
+    `running` for a trainer that stopped writing without its last line."""
+
+    def test_a_stale_log_without_the_done_line_is_unrecorded(self) -> None:
+        _, run = TheLiveRecord()._project(LOG)
+        text = (run / TRAIN_LOG).read_text()
+        now = (run / TRAIN_LOG).stat().st_mtime
+        self.assertEqual(run_status(run, text, now=now), "running")
+        self.assertEqual(run_status(run, text, now=now + WRITING_S + 1), "unrecorded")
+        self.assertEqual(run_status(run, text + "[g3] done\n", now=now + 1e6), "done")

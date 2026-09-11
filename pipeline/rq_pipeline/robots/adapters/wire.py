@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from rq_pipeline.collect.frames import STATUS_HZ
+from rq_pipeline.collect.wire import Recording as WireRecording
 from rq_pipeline.collect.wire import parse_recording
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.recording import (
@@ -132,7 +133,7 @@ class WireAdapter:
         )
 
 
-def _census(parsed) -> dict:  # type: ignore[no-untyped-def]
+def _census(parsed: WireRecording) -> dict[str, int]:
     return {
         "status_frames": len(parsed.statuses),
         "images": len(parsed.images),

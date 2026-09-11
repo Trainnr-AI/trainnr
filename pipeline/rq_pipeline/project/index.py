@@ -19,9 +19,9 @@ its inputs. Where an older artifact recorded no stamp, the index says
 from __future__ import annotations
 
 import contextlib
-import json
 import os
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,13 +30,21 @@ from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
+from rq_pipeline.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
+from rq_pipeline.evaluate.commands import describe_twist
+from rq_pipeline.project.files import read_json, write_json, write_text
 from rq_pipeline.project.kinds import (
     ACCEPTANCE_FILE,
+    ACCEPTED,
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
     IDENTITY_FILE,
+    POLICY_FILE,
+    RECORDING_FILE,
+    REJECTED,
     TASK_FILE,
+    UNREVIEWED,
     Kind,
     UnknownKindError,
     detect,
@@ -45,7 +53,12 @@ from rq_pipeline.project.kinds import (
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
 
+# The one word for a fact an artifact never recorded - never a guess.
 UNRECORDED = "unrecorded"
+INTERVAL_ENDS = 2  # a confidence interval is two numbers
+# The readers the index keeps per kind: each takes the artifact's root.
+CiteReader = Callable[[Path], dict[str, str]]
+SummaryReader = Callable[[Path], dict[str, Any]]
 
 # The loop's states, in order, and the kind whose presence proves each
 # (docs/76 §3). `identified` is proved by a fit OR by a robot bundle that
@@ -74,9 +87,9 @@ NEXT_MOVE: dict[str, str] = {
     ),
     "environment defined": "define the environment (task spec) and run acceptance",
     "data generated": (
-        "generate demonstrations (generate_demos / press_planned / press_walk)"
+        "generate demonstrations: scripted, planned, or a walk's own rollouts"
     ),
-    "policy trained": "train a policy on the dataset (run_chain / train_walk)",
+    "policy trained": "train a policy on the dataset, or a walk by reinforcement",
     "policy evaluated": (
         "evaluate the policy with paired trials and a confidence interval"
     ),
@@ -202,8 +215,6 @@ def write_index(
     """Write the index; with `previews`, render each artifact's picture
     first and record its path on the artifact (a cache keyed by stamp, so
     unchanged artifacts are never re-rendered)."""
-    from dataclasses import replace  # noqa: PLC0415
-
     index = index if index is not None else index_project(project)
     if previews:
         from rq_pipeline.project.details import write_details  # noqa: PLC0415
@@ -218,12 +229,8 @@ def write_index(
                 for a in index.artifacts
             ],
         )
-    out = project.index_path
-    out.parent.mkdir(parents=True, exist_ok=True)
-    staging = out.with_name(out.name + ".tmp")
-    staging.write_text(json.dumps(asdict(index), indent=1) + "\n", encoding="utf-8")
-    staging.replace(out)
-    (out.parent / ".gitignore").write_text("*\n")
+    out = write_json(project.index_path, asdict(index))
+    write_text(out.parent / ".gitignore", "*\n")
     return out
 
 
@@ -250,11 +257,30 @@ def _candidates(folder: Path) -> list[Path]:
 
 
 def _read(path: Path) -> dict[str, Any]:
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return raw if isinstance(raw, dict) else {}
+    """A record, or `{}` when the file is absent or unreadable - the
+    index says `unrecorded` for what it cannot read, and never stops."""
+    return read_json(path, missing_ok=True)
+
+
+def interval_of(record: dict[str, Any]) -> tuple[float, float] | None:
+    """The exact interval a record carries (`ci95`, or the older `ci`),
+    or None when it holds none - never a made-up pair."""
+    ci = record.get("ci95") or record.get("ci")
+    if isinstance(ci, (list, tuple)) and len(ci) == INTERVAL_ENDS:
+        try:
+            return float(ci[0]), float(ci[1])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def ratio_of(record: dict[str, Any], k: str = "successes", n: str = "trials") -> str:
+    """`k / n` as a record wrote them, or `unrecorded` when either is
+    absent - never `None / None`."""
+    successes, trials = record.get(k), record.get(n)
+    if successes is None or trials is None:
+        return UNRECORDED
+    return f"{successes} / {trials}"
 
 
 def _stamp_or_unrecorded(value: Any) -> str:
@@ -304,13 +330,13 @@ def _cites_batch(path: Path) -> dict[str, str]:
 
 
 def _cites_policy(path: Path) -> dict[str, str]:
-    manifest = _read(path / "policy.json")
+    manifest = _read(path / POLICY_FILE)
     if manifest:
         return _pick(manifest, ("run", "robot", "actuator"))
     return _pick(_read(path / IDENTITY_FILE), ("robot", "actuator"))
 
 
-_CITE_READERS: dict[Kind, Any] = {
+_CITE_READERS: dict[Kind, CiteReader] = {
     Kind.DATASET: _cites_dataset,
     Kind.RUN: _cites_run,
     Kind.BATCH: _cites_batch,
@@ -340,22 +366,20 @@ def _summary_run(path: Path) -> dict[str, Any]:
     run = _read(path / RUN_MANIFEST_FILE)
     if run:
         return {"learning": "imitation", **_take(run, ("policy", "steps", "started"))}
-    training = _read(path / "training.json")
+    training = _read(path / TRAINING_FILE)
     ident = _read(path / IDENTITY_FILE)
     out: dict[str, Any] = {"learning": "reinforcement"}
     if training:
-        out["iterations"] = training.get("iterations_logged") or training.get(
-            "iterations"
-        )
-        reward = (training.get("final") or {}).get("reward")
+        out["iterations"] = training.get("iterations_logged") or UNRECORDED
+        reward = (training.get("final") or {}).get(COL_REWARD)
         if reward is not None:
             out["final reward"] = round(float(reward), 1)
         status = training.get("status")
         if status:
             out["status"] = status
-            planned = training.get("iterations")
+            planned = training.get("iterations")  # only when the console said
             logged = training.get("iterations_logged")
-            if status == "running" and planned and logged is not None:
+            if status == STATUS_RUNNING and planned and logged is not None:
                 out["progress"] = f"{logged} of {planned} iterations"
     basis = ident.get("dr_basis") or ""
     if basis:
@@ -366,8 +390,6 @@ def _summary_run(path: Path) -> dict[str, Any]:
 
 
 def _summary_recording(path: Path) -> dict[str, Any]:
-    from rq_pipeline.project.kinds import RECORDING_FILE  # noqa: PLC0415
-
     raw = _read(path / RECORDING_FILE)
     out = _take(raw, ("adapter", "source", "duration_s", "collection"))
     if "channels" in raw:
@@ -381,33 +403,18 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     # The envelope first: the card's subtitle is cut short, and the
     # envelope is what tells two judgments of one checkpoint apart.
-    commands = _command_envelope((c.get("protocol") or {}).get("commands"))
+    commands = describe_twist((c.get("protocol") or {}).get("commands"))
     if commands:
         out["commands"] = commands
     if "successes" in c and "trials" in c:
-        out["success"] = f"{c['successes']} / {c['trials']}"
-    ci = c.get("ci95") or c.get("ci")
-    if isinstance(ci, list) and len(ci) == 2:  # noqa: PLR2004 - an interval is two numbers
-        out["interval"] = f"[{ci[0]:.2f}, {ci[1]:.2f}]"
+        out["success"] = ratio_of(c)
+    interval = interval_of(c)
+    if interval is not None:
+        out["interval"] = f"[{interval[0]:.2f}, {interval[1]:.2f}]"
     judged = (c.get("protocol") or {}).get("judged_at")
     if judged:
         out["judged at"] = judged
     return out
-
-
-def _command_envelope(commands: Any) -> str | None:
-    """The commanded twist a certificate judged at, in a few words:
-    "forward -1.5 to 2.0 m/s, turn ±0.7 rad/s" - what tells two
-    judgments of one checkpoint apart on a card (2026-09-11)."""
-    if not isinstance(commands, dict):
-        return None
-    parts = []
-    x, z = commands.get("lin_vel_x"), commands.get("ang_vel_z")
-    if isinstance(x, list) and len(x) == 2:  # noqa: PLR2004 - a range is two numbers
-        parts.append(f"forward {x[0]:g} to {x[1]:g} m/s")
-    if isinstance(z, list) and len(z) == 2 and z[0] == -z[1]:  # noqa: PLR2004
-        parts.append(f"turn ±{z[1]:g} rad/s")
-    return ", ".join(parts) or None
 
 
 def _basis_name(basis: str) -> str:
@@ -417,14 +424,14 @@ def _basis_name(basis: str) -> str:
 
 
 def _summary_policy(path: Path) -> dict[str, Any]:
-    manifest = _read(path / "policy.json")
+    manifest = _read(path / POLICY_FILE)
     if manifest:
         basis = manifest.get("dr_basis") or ""
         iterations = manifest.get("iterations")
         out: dict[str, Any] = {
-            "iterations": "unrecorded" if iterations is None else iterations
+            "iterations": UNRECORDED if iterations is None else iterations
         }
-        out["randomization"] = _basis_name(basis) if basis else "unrecorded"
+        out["randomization"] = _basis_name(basis) if basis else UNRECORDED
         out["format"] = manifest.get("format", "")
         return out
     return _take(_read(path / IDENTITY_FILE), ("dr_basis", "seed"))
@@ -515,25 +522,28 @@ def _summary_task(path: Path) -> dict[str, Any]:
     out = _take(_read(path / TASK_FILE), ("task_id", "stamp", "kind"))
     verdict = _read(path / ACCEPTANCE_FILE)
     out["acceptance"] = (
-        ("accepted" if verdict.get("accepted") else "rejected")
-        if verdict
-        else "unreviewed"
+        (ACCEPTED if verdict.get("accepted") else REJECTED) if verdict else UNREVIEWED
     )
     return out
 
 
+def _hz(rate: object) -> str:
+    """A control rate as the card says it, or unrecorded."""
+    return f"{rate:g} Hz" if isinstance(rate, (int, float)) else UNRECORDED
+
+
 def _summary_deploy(path: Path) -> dict[str, Any]:
-    """A deployment at a glance: the checkpoint, the control rate, the
-    gate's word."""
+    """A deployment at a glance: the gate's word first (what the card is
+    for), then the checkpoint and the control rate."""
     m = _read(path / DEPLOY_FILE)
     gates = read_gates(path)
     out: dict[str, Any] = {
-        "checkpoint": m.get("checkpoint", "unrecorded"),
-        "control (Hz)": (m.get("control") or {}).get("control_hz", "unrecorded"),
         "gate": gate_word(gates["mujoco"]) if "mujoco" in gates else "not run",
     }
     if "dds" in gates:
         out["gate (DDS)"] = gate_word(gates["dds"])
+    out["checkpoint"] = m.get("checkpoint", UNRECORDED)
+    out["control"] = _hz((m.get("control") or {}).get("control_hz"))
     return out
 
 
@@ -544,7 +554,7 @@ def _summary_finding(path: Path) -> dict[str, Any]:
     return {"claim": short}  # the id carries the date already
 
 
-_SUMMARY_READERS: dict[Kind, Any] = {
+_SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},
     Kind.RUN: _summary_run,

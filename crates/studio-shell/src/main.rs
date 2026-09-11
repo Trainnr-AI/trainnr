@@ -30,14 +30,17 @@ mod pages;
 mod palette;
 mod shell;
 mod simulator;
+mod spawn;
 mod viewport;
 mod widgets;
 
+use control::{Event, BY_AGENT, BY_STUDIO, BY_USER};
 use model::Model;
 use pages::Section;
 use re_ui::UiExt as _;
 use rerun::external::{re_crash_handler, re_grpc_server, re_log, re_memory, re_viewer};
 use shell::Shell;
+use spawn::{on_wsl, repo_root};
 use viewport::ViewportFeed;
 
 // Rerun's own allocator setup, verbatim: the accounting wrapper is what
@@ -56,6 +59,18 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
+/// The strip the viewport collapses to when no scene runs: the scene
+/// picker and nothing else.
+const VIEWPORT_IDLE_HEIGHT: f32 = 36.0;
+/// The standard Rerun SDK port on every interface: anything calling
+/// `rr.connect_grpc()` lands in this window.
+const GRPC_BIND: &str = "0.0.0.0:9876";
+/// Bounds on what one agent command may ask of the viewer and the
+/// simulator: time steps in the viewer, physics steps in the stream.
+const MAX_TIME_STEPS: u64 = 1000;
+const MAX_SIM_STEPS: u32 = 100_000;
+/// How long a capture waits for the window to produce a frame.
+const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Under WSLg the compositor announces a native Wayland window to Windows
 /// but Windows never shows it, while the same app through Xwayland shows
@@ -63,11 +78,6 @@ const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
 /// not; the Studio relaunched with the Wayland display hidden, visible).
 /// winit picks Wayland whenever `WAYLAND_DISPLAY` is set, so on WSL the
 /// event loop is asked for X11 instead. Elsewhere winit's own choice stands.
-fn on_wsl() -> bool {
-    std::env::var_os("WSL_DISTRO_NAME").is_some()
-        || std::path::Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
-}
-
 fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
     if !on_wsl() {
         return;
@@ -79,6 +89,10 @@ fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
             use winit::platform::x11::EventLoopBuilderExtX11 as _;
             builder.with_x11();
         }
+        #[cfg(not(all(target_os = "linux", not(target_arch = "wasm32"))))]
+        {
+            let _ = builder; // WSL is Linux; this arm never runs a window
+        }
     }));
 }
 
@@ -88,11 +102,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     re_log::setup_logging();
     re_crash_handler::install_crash_handlers(re_viewer::build_info());
 
-    // The standard SDK port: anything calling `rr.connect_grpc()` lands
-    // in this window. Fails loudly if another viewer already holds it —
-    // close the standalone viewer rather than silently split streams.
+    // Fails loudly if another viewer already holds the port — close the
+    // standalone viewer rather than silently split streams.
     let (rx, _grpc_server_handle) = re_grpc_server::spawn_with_recv(
-        "0.0.0.0:9876".parse()?,
+        GRPC_BIND.parse()?,
         Default::default(),
         re_grpc_server::shutdown::never(),
     );
@@ -173,7 +186,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let viewport = ViewportFeed::idle();
-            let mut shell = Shell::new(Model::open(&repo_root()), repo_root());
+            let mut shell = Shell::new(Model::open(repo_root()));
             shell.open_project();
             let control = control::Control::new(shell.model.project_root.clone());
             Ok(Box::new(StudioShell {
@@ -211,18 +224,6 @@ struct StudioShell {
     /// Whether a recording was loaded last frame — a fresh arrival
     /// switches the page to Live once, without trapping the user there.
     seen_recording: bool,
-}
-
-/// `crates/studio-shell` is always two directories under the repo root —
-/// true regardless of the shell's own current working directory, unlike
-/// relying on `std::env::current_dir()`. One home; the viewport's render
-/// subprocess and the default project both build on it.
-fn repo_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .expect("crates/studio-shell is two directories under the repo root")
-        .to_path_buf()
 }
 
 impl eframe::App for StudioShell {
@@ -273,10 +274,8 @@ impl eframe::App for StudioShell {
         let has_recording = self.rerun_app.recording_db().is_some();
         if has_recording && (!self.seen_recording || self.shell.show_requested) {
             if self.shell.section != Section::Live {
-                self.control.event(
-                    "open",
-                    serde_json::json!({"section": "live", "by": "studio"}),
-                );
+                self.control
+                    .event(Event::open(BY_STUDIO).in_section(Section::Live.slug()));
                 self.before.0 = Section::Live; // not the human's doing
             }
             self.shell.section = Section::Live;
@@ -302,9 +301,13 @@ impl eframe::App for StudioShell {
             .default_size(if active {
                 VIEWPORT_DEFAULT_HEIGHT
             } else {
-                36.0
+                VIEWPORT_IDLE_HEIGHT
             })
-            .min_size(if active { VIEWPORT_MIN_HEIGHT } else { 36.0 })
+            .min_size(if active {
+                VIEWPORT_MIN_HEIGHT
+            } else {
+                VIEWPORT_IDLE_HEIGHT
+            })
             .show(ui, |ui| {
                 // The transport bar under the picture; the overlays and the
                 // Inspect drawer float over it (simulator.rs).
@@ -423,15 +426,16 @@ impl StudioShell {
                 self.shell.palette = search.map(|q| crate::palette::Palette::open(Some(q)));
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
-                    if !root.join("project.json").is_file() {
+                    if !root.join(model::MANIFEST_FILE).is_file() {
                         return Err(format!(
-                            "{} is not a project (no project.json)",
-                            root.display()
+                            "{} is not a project (no {})",
+                            root.display(),
+                            model::MANIFEST_FILE
                         ));
                     }
                     self.shell.switch_project(root.clone());
                     self.control
-                        .event("open", serde_json::json!({"project": root, "by": "agent"}));
+                        .event(Event::open(BY_AGENT).in_project(root.display().to_string()));
                 }
                 if let Some(name) = section {
                     let page =
@@ -440,10 +444,8 @@ impl StudioShell {
                     self.shell.selected = None;
                     self.shell.entered = true;
                     pages::scroll_to_top(ui.ctx());
-                    self.control.event(
-                        "open",
-                        serde_json::json!({"section": page.slug(), "by": "agent"}),
-                    );
+                    self.control
+                        .event(Event::open(BY_AGENT).in_section(page.slug()));
                 }
                 if let Some(stamp) = artifact {
                     let kind = self
@@ -453,31 +455,27 @@ impl StudioShell {
                         .map(|a| a.kind.clone())
                         .ok_or_else(|| format!("no artifact {stamp:?} in this project"))?;
                     let page = Section::for_kind(&kind)
-                        .ok_or_else(|| format!("no page lists a {kind}"))?;
+                        .ok_or_else(|| format!("no page lists a {}", pages::kind_word(&kind)))?;
                     self.shell.section = page;
                     self.shell.selected = Some(stamp.clone());
                     self.shell.scroll_to_detail = true;
-                    self.control.event(
-                        "select",
-                        serde_json::json!({"artifact": stamp, "by": "agent"}),
-                    );
+                    self.control
+                        .event(Event::select(BY_AGENT).of_artifact(stamp));
                 }
                 if let Some(name) = view {
-                    let view = match name.trim().to_lowercase().as_str() {
-                        "cards" => crate::listing::View::Cards,
-                        "table" => crate::listing::View::Table,
-                        "matrix" => crate::listing::View::Matrix,
-                        other => {
-                            return Err(format!("no view {other:?}; one of cards, table, matrix"))
-                        }
-                    };
+                    let view = crate::listing::View::parse(&name).ok_or_else(|| {
+                        format!(
+                            "no view {name:?}; one of {}",
+                            crate::listing::View::names().join(", ")
+                        )
+                    })?;
                     crate::listing::set_view(ui.ctx(), self.shell.section, view);
                 }
                 if let Some(title) = table {
                     let wanted = (!title.trim().is_empty()).then_some(title.as_str());
                     self.shell.open_table(wanted)?;
                     self.control
-                        .event("table", serde_json::json!({"table": wanted, "by": "agent"}));
+                        .event(Event::table(BY_AGENT).on_table(wanted.map(str::to_owned)));
                 }
                 Ok(())
             }
@@ -575,7 +573,7 @@ impl StudioShell {
                     } else {
                         TimeControlCommand::StepTimeForward
                     };
-                    for _ in 0..n.unsigned_abs().min(1000) {
+                    for _ in 0..n.unsigned_abs().min(MAX_TIME_STEPS) {
                         time_commands.push(cmd_clone(&cmd));
                     }
                 }
@@ -690,7 +688,7 @@ impl StudioShell {
                     self.viewport.send_run(run);
                 }
                 if let Some(n) = step {
-                    self.viewport.send_step(n.clamp(1, 100_000));
+                    self.viewport.send_step(n.clamp(1, MAX_SIM_STEPS));
                 }
                 if let Some(name) = keyframe {
                     let model = model.as_ref().ok_or("the model is not described yet")?;
@@ -706,8 +704,12 @@ impl StudioShell {
                     self.viewport.send_reset(None);
                 }
                 if let Some(factor) = speed {
-                    if !(0.01..=100.0).contains(&factor) {
-                        return Err("speed must be within 0.01..=100".into());
+                    if !viewport::SPEED_RANGE.contains(&factor) {
+                        return Err(format!(
+                            "speed must be within {}..={}",
+                            viewport::SPEED_RANGE.start(),
+                            viewport::SPEED_RANGE.end()
+                        ));
                     }
                     self.viewport.send_speed(factor);
                 }
@@ -731,7 +733,12 @@ impl StudioShell {
                             .joints
                             .iter()
                             .find(|j| j.name == name)
-                            .ok_or_else(|| format!("no sliding joint {name:?} (free and ball joints have no scalar)"))?;
+                            .ok_or_else(|| {
+                                format!(
+                                    "no scalar joint {name:?} (hinge or slide; free and ball \
+                                     joints have no scalar)"
+                                )
+                            })?;
                         self.viewport.send_qpos(j.qpos as u32, value);
                         self.viewport.stop_editing(0, j.qpos);
                     }
@@ -763,15 +770,12 @@ impl StudioShell {
                     simulator::set_follow(ui.ctx(), choice);
                 }
                 if let Some(name) = view {
-                    let preset = match name.as_str() {
-                        "reset" => 0,
-                        "front" => 1,
-                        "side" => 2,
-                        "top" => 3,
-                        other => {
-                            return Err(format!("view {other:?}: one of front, side, top, reset"))
-                        }
-                    };
+                    let preset = viewport::view_preset(&name).ok_or_else(|| {
+                        format!(
+                            "view {name:?}: one of {}",
+                            viewport::view_preset_names().join(", ")
+                        )
+                    })?;
                     self.viewport.send_view(preset);
                 }
                 if let Some(name) = flag {
@@ -837,7 +841,6 @@ impl StudioShell {
 
     /// The captured frame, if one arrived: write it and answer the command.
     fn answer_screenshot(&mut self, ui: &egui::Ui) {
-        const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
         let Some(shot) = self.shot.clone() else {
             return;
         };
@@ -893,7 +896,11 @@ impl StudioShell {
                 self.control.ack(
                     &id,
                     "failed",
-                    Some("the window produced no frame within 3 s (a hidden or minimized window cannot be captured)"),
+                    Some(&format!(
+                        "the window produced no frame within {} s (a hidden or minimized \
+                         window cannot be captured)",
+                        CAPTURE_TIMEOUT.as_secs()
+                    )),
                 );
             }
             None => {}
@@ -906,41 +913,27 @@ impl StudioShell {
         let (section_before, selected_before, table_before) = self.before.clone();
         let table_now = self.shell.table.as_ref().map(|t| t.section.title.clone());
         if table_now != table_before {
-            self.control.event(
-                "table",
-                serde_json::json!({"table": table_now, "by": "user"}),
-            );
+            self.control
+                .event(Event::table(BY_USER).on_table(table_now.clone()));
         }
         if self.shell.section != section_before {
-            self.control.event(
-                "open",
-                serde_json::json!({"section": self.shell.section.slug(), "by": "user"}),
-            );
+            self.control
+                .event(Event::open(BY_USER).in_section(self.shell.section.slug()));
         }
         if self.shell.selected != selected_before {
             match &self.shell.selected {
-                Some(stamp) => self.control.event(
-                    "select",
-                    serde_json::json!({"artifact": stamp, "by": "user"}),
-                ),
-                None => self
+                Some(stamp) => self
                     .control
-                    .event("deselect", serde_json::json!({"by": "user"})),
+                    .event(Event::select(BY_USER).of_artifact(stamp.clone())),
+                None => self.control.event(Event::deselect(BY_USER)),
             }
         }
         if let Some(shown) = self.shell.shown.take() {
-            self.control
-                .event("show", serde_json::json!({"artifact": shown}));
+            self.control.event(Event::show(BY_USER).of_artifact(shown));
         }
         let live = self.live();
         if let Some(rested) = self.control.watch_live(&live) {
-            self.control.event(
-                "time",
-                serde_json::json!({
-                    "timeline": rested.timeline, "seconds": rested.seconds,
-                    "sequence": rested.sequence, "by": "user"
-                }),
-            );
+            self.control.event(Event::time(BY_USER).at(&rested));
         }
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,

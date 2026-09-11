@@ -12,6 +12,7 @@ use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::Model;
 use crate::pages::{self, Section, RAIL_ICON};
+use crate::spawn::{kill_tree, pipeline_command, PRESENTER_SCRIPT};
 use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
@@ -55,11 +56,10 @@ pub struct Shell {
     pub palette: Option<crate::palette::Palette>,
     /// A presenter failure the user has dismissed (its stamp and reason).
     dismissed_failure: Option<(String, String)>,
-    repo_root: std::path::PathBuf,
 }
 
 impl Shell {
-    pub fn new(model: Model, repo_root: std::path::PathBuf) -> Self {
+    pub fn new(model: Model) -> Self {
         Self {
             model,
             section: Section::Overview,
@@ -75,7 +75,6 @@ impl Shell {
             entered: true,
             palette: None,
             dismissed_failure: None,
-            repo_root,
         }
     }
 
@@ -129,13 +128,8 @@ impl Shell {
                 return;
             }
         }
-        let pipeline = self.repo_root.join("pipeline");
-        let script = self.repo_root.join("tools").join("studio-present.py");
-        let mut command = std::process::Command::new("uv");
+        let mut command = pipeline_command(PRESENTER_SCRIPT);
         command
-            .current_dir(&pipeline)
-            .args(["run", "--extra", "sim", "--extra", "viz", "python"])
-            .arg(&script)
             .arg("--project")
             .arg(&self.model.project_root)
             // The presenter exits on its own when this window is gone —
@@ -146,28 +140,12 @@ impl Shell {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::inherit());
-        // Its own process group, so the whole tree can be reaped (the
-        // viewport's spawn does the same).
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt as _;
-            command.process_group(0);
-        }
         self.presenter = command.spawn().ok();
     }
 
     fn kill_presenter(&mut self) {
         if let Some(mut child) = self.presenter.take() {
-            #[cfg(unix)]
-            {
-                // `-s TERM -- -PGID`: the group, wrapper and grandchild
-                // alike (viewport.rs says why the `--` matters).
-                let _ = std::process::Command::new("kill")
-                    .args(["-s", "TERM", "--", &format!("-{}", child.id())])
-                    .status();
-            }
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_tree(&mut child);
         }
     }
 
@@ -189,7 +167,6 @@ impl Shell {
                     // The project switcher: the current project's name;
                     // click for the list, or open the Projects page.
                     let name = self.model.name();
-                    let projects = self.model.projects();
                     let response = ui.add(
                         egui::Button::new(
                             egui::RichText::new(format!("{name}  ▾"))
@@ -197,9 +174,15 @@ impl Shell {
                         )
                         .frame(false),
                     );
+                    // The list is walked when the popup opens, not every
+                    // frame the bar is drawn.
+                    if response.clicked() {
+                        self.model.refresh_projects();
+                    }
+                    let projects = self.model.projects();
                     egui::Popup::menu(&response).show(|ui| {
                         ui.set_min_width(220.0);
-                        for project in &projects {
+                        for project in projects {
                             let current = project.root == self.model.project_root;
                             let label = if current {
                                 egui::RichText::new(&project.name).strong()
@@ -271,7 +254,7 @@ impl Shell {
         let count = self
             .model
             .index()
-            .map(|index| item.kinds().iter().map(|k| index.count(k)).sum::<usize>())
+            .map(|index| item.kinds().map(|k| index.count(k)).sum::<usize>())
             .unwrap_or(0);
         let fill = if selected {
             tokens.selection_bg_fill
@@ -293,7 +276,7 @@ impl Shell {
                     icon_at(ui, item.icon(), RAIL_ICON, tint);
                     let text = egui::RichText::new(item.title());
                     ui.label(if selected { text.strong() } else { text });
-                    if !item.kinds().is_empty() {
+                    if item.lists_artifacts() {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
                                 egui::RichText::new(count.to_string())
@@ -333,7 +316,7 @@ impl Shell {
         }
         match self.section {
             Section::Projects => {
-                if let Some(root) = pages::projects(ui, &self.model) {
+                if let Some(root) = pages::projects(ui, &mut self.model) {
                     self.switch_to = Some(root);
                 }
             }
@@ -551,14 +534,14 @@ impl Shell {
             .ok_or_else(|| format!("{stamp} is not in the index"))?;
         let detail = self
             .model
-            .detail_path(artifact)
-            .and_then(|p| crate::detail::Detail::load(&p))
+            .detail(artifact)
             .ok_or_else(|| format!("{stamp} has no detail file"))?;
         let wanted = title.trim().to_lowercase();
         let section = detail
             .sections
-            .into_iter()
+            .iter()
             .find(|s| s.kind == "table" && s.title.to_lowercase() == wanted)
+            .cloned()
             .ok_or_else(|| format!("{stamp} has no table named {title:?}"))?;
         self.table = Some(crate::detail::TableView::new(section));
         Ok(())

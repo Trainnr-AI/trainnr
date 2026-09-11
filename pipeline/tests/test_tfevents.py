@@ -5,7 +5,6 @@ five totals, sampled like the console record."""
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from rq_pipeline.envs.rsl_rl_log import TrainingRecord
 from rq_pipeline.envs.tfevents import (
@@ -15,8 +14,10 @@ from rq_pipeline.envs.tfevents import (
     record_from_events,
     record_from_scalars,
 )
+from rq_pipeline.project.locate import projects_dir
 
-GO2_RUN = Path("/home/prakhar-pc/robotiq/projects/go2-walk/runs/go2-c1")
+# The certified Go2 run: on the box only (docs/77 §5).
+GO2_RUN = projects_dir() / "go2-walk" / "runs" / "go2-c1"
 
 
 class TheColumns(unittest.TestCase):
@@ -79,3 +80,12 @@ class TheRecord(unittest.TestCase):
         self.assertIn("reward/track_linear_velocity", record.columns)
         self.assertIn("curriculum/command_vel/lin_vel_x_max", record.columns)
         self.assertEqual(record.iterations_logged, 8000)
+
+
+class ThePlannedCount(unittest.TestCase):
+    def test_the_file_never_invents_the_planned_iterations(self) -> None:
+        scalars = {"Train/mean_reward": [(i, 1.0) for i in range(10)]}
+        record = record_from_scalars(scalars)
+        assert record is not None
+        self.assertIsNone(record.iterations)  # the console said nothing
+        self.assertEqual(record.iterations_logged, 10)

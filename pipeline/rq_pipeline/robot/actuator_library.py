@@ -22,9 +22,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.paths import checkout
 from rq_pipeline.robot.friction_budget import FrictionParams
 
-ACTUATORS_ROOT = Path(__file__).resolve().parents[3] / "robots" / "actuators"
+ACTUATORS_ROOT = checkout() / "robots" / "actuators"
 PROVENANCE_FILE = "PROVENANCE.json"
 REQUIRED_PROVENANCE_FIELDS = ("source", "citation", "license")
 # "bam-refit": BAM's own model and optimiser re-run by us on Rhoban's

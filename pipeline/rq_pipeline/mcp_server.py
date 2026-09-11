@@ -14,7 +14,7 @@ family (`rq_pipeline.mcp_actions`): thin doors that spawn the CLI
 owning the work as a background job and hand back a handle
 (`job_status` polls, artifacts land under `runs/` as always). The
 agent lives in the developer's own tool; these tools are how it
-presses, trains, certifies and opens the Studio.
+generates data, trains, evaluates and opens the Studio.
 
 The query functions are plain functions returning JSON-able dicts, with
 no MCP import anywhere near them — the suite tests them directly and the
@@ -29,11 +29,15 @@ from __future__ import annotations
 import contextlib
 import json
 import time
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
+from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
+from rq_pipeline.mcp_jobs import DONE, JobHandle, Refusal, refusal
 from rq_pipeline.physics.registry import engines
 
 # BUNDLE_STORE has ONE home (the bundle module itself); it was spelled
@@ -222,7 +226,7 @@ def describe_task_families() -> dict[str, Any]:
 
 def create_task(
     task_id: str, name: str, overlay: dict[str, Any] | None = None
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """Declare an environment into the project: a family (see
     `describe_task_families`) with `overlay` — only the spec fields you
     change — built for real and stamped by its content. Refuses, by name,
@@ -239,12 +243,12 @@ def create_task(
     try:
         out = declare_task(project, task_id, name, overlay)
     except (KeyError, ValueError, FileExistsError, TypeError) as why:
-        return {"status": "refused", "reason": _reason(why)}
+        return refusal(_reason(why))
     write_index(project, index_project(project))
-    return {"status": "done", **out, "next": f"accept_task({name!r})"}
+    return {"status": DONE, **out, "next": f"accept_task({name!r})"}
 
 
-def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any]:
+def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any] | Refusal:
     """A robot enters as a hash-stamped bundle: the MJCF's directory
     copied whole (meshes and includes ride along), compiled once as the
     honesty check, its model file recorded in `bundle.json`. Into the
@@ -261,13 +265,13 @@ def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any]:
     try:
         out = actions.onboard_robot(mjcf_path, name, into=str(into) if into else None)
     except (FileNotFoundError, FileExistsError, ValueError) as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
     if into is not None:
         from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
 
         project = current_project()
         write_index(project, index_project(project))
-    return {"status": "done", **out}
+    return {"status": DONE, **out}
 
 
 def _project_root_if_any() -> Path | None:
@@ -282,20 +286,20 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     agent: str = "smoke",
     envs: int | None = None,
     iterations: int | None = None,
-    robot: str = "microduck",
+    robot: str | None = None,
     name: str | None = None,
     seed: int | None = None,
     task: str | None = None,
-) -> dict[str, Any]:
-    """Train a walk policy through rq_mjlab. `robot` names the walk:
-    microduck (its certified bundle), go1 (mjlab's own asset), go2 (the
-    robot onboarded into the project). With a project open the trainer
-    searches its robots first, and `name` — the experiment's folder under
-    the project's `runs/` — makes the run an artifact the index sees
-    (`agent="g3"` only; a smoke archives nothing). `task` names a
-    declared walk in the project: its robot and randomization span are
-    used and its version cited by the run. Minutes to hours; returns a
-    job handle."""
+) -> JobHandle | Refusal:
+    """Train a walk policy through rq_mjlab. `task` names a declared walk
+    in the project: its robot and randomization span are used and its
+    version cited by the run; `robot` alone names a registered walk
+    family's robot (`describe_task_families`). With neither, the project's
+    one declared walk is taken; several or none is a refusal by name.
+    With a project open the trainer searches its robots first, and `name`
+    — the experiment's folder under the project's `runs/` — makes the run
+    an artifact the index sees (`agent="g3"` only; a smoke archives
+    nothing). Minutes to hours; returns a job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
@@ -304,25 +308,22 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     log_dir = None
     dr_span: float | None = None
     task_stamp: str | None = None
+    if task is None and robot is None:
+        task = _the_project_walk(root)
+        if task is None:
+            return refusal(_no_single_walk(root))
     if task is not None:
         declared = _declared_walk(root, task)
-        if "reason" in declared:
-            return {"status": "refused", **declared}
-        robot, dr_span, task_stamp = (
-            declared["robot"],
-            declared["dr_span"],
-            declared["stamp"],
-        )
+        if isinstance(declared, str):
+            return refusal(declared)
+        robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
     if name is not None:
         try:
             plain_name(name, "experiment name")
         except ValueError as why:
-            return {"status": "refused", "reason": str(why)}
+            return refusal(str(why))
         if root is None:
-            return {
-                "status": "refused",
-                "reason": "an experiment name needs an open project",
-            }
+            return refusal("an experiment name needs an open project")
         log_dir = str(root / "runs" / name)
     try:
         return Actions(JobManager(_jobs_root())).train_walk(
@@ -337,53 +338,100 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             task_stamp=task_stamp,
         )
     except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
 
 
-def _declared_walk(root: Path | None, task: str) -> dict[str, Any]:
-    """A declared walk's robot, span and version — or the reason it is
-    not one (`reason`)."""
-    from rq_pipeline.project.kinds import TASK_FILE  # noqa: PLC0415
+@dataclass(frozen=True)
+class DeclaredWalk:
+    """A declared walk as the doors use it: its robot (the walk family's
+    rig), its randomization span, its version."""
+
+    name: str
+    robot: str
+    dr_span: float | None
+    stamp: str
+
+
+def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
+    """A declared walk's robot, span and version — or, as a string, the
+    reason it is not one."""
+    from rq_pipeline.project.locate import Project  # noqa: PLC0415
+    from rq_pipeline.project.task_ref import read_task_reference  # noqa: PLC0415
     from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
     if root is None:
-        return {"reason": "a declared task needs an open project"}
-    ref_path = root / "tasks" / task / TASK_FILE
-    if not ref_path.is_file():
-        return {"reason": f"no task {task!r} in this project"}
-    ref = json.loads(ref_path.read_text())
+        return "a declared task needs an open project"
     try:
-        walk = walk_robot(ref.get("task_id", ""))
-    except KeyError as why:
-        return {"reason": _reason(why)}
+        ref = read_task_reference(Project(root), task)
+        walk = walk_robot(ref.task_id)
+    except (FileNotFoundError, KeyError, ValueError) as why:
+        return _reason(why)
     if walk is None:
-        return {"reason": f"{task!r} is not a walk"}
-    return {
-        "robot": walk,
-        "dr_span": float((ref.get("spec") or {}).get("dr_span", 0.0)),
-        "stamp": ref.get("stamp"),
-    }
+        return f"{task!r} is not a walk"
+    return DeclaredWalk(name=task, robot=walk, dr_span=ref.dr_span, stamp=ref.stamp)
 
 
-def certify_walk(  # noqa: PLR0913, PLR0917 - the certificate's knobs, each named
+def _declared_walks(root: Path | None) -> list[DeclaredWalk]:
+    """Every declared walk in the project, by folder order."""
+    from rq_pipeline.project.locate import Project  # noqa: PLC0415
+    from rq_pipeline.project.task_ref import task_references  # noqa: PLC0415
+
+    if root is None:
+        return []
+    found = []
+    for ref in task_references(Project(root)):
+        walk = _declared_walk(root, ref.name)
+        if isinstance(walk, DeclaredWalk):
+            found.append(walk)
+    return found
+
+
+def _the_project_walk(root: Path | None) -> str | None:
+    """The project's one declared walk, by name, when there is exactly
+    one — the walk a door takes when the caller names neither task nor
+    robot. Else None (refused by `_no_single_walk`)."""
+    walks = _declared_walks(root)
+    return walks[0].name if len(walks) == 1 else None
+
+
+def _no_single_walk(root: Path | None) -> str:
+    walks = _declared_walks(root)
+    if not walks:
+        return (
+            "name the walk: `task` (a declared walk in the project) or `robot` "
+            "(a registered walk family's robot); this project declares no walk"
+        )
+    return "name the walk with `task`; this project declares several: " + ", ".join(
+        w.name for w in walks
+    )
+
+
+def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each named
     checkpoint: str,
     trials: int = 40,
     seed: int = 1000,
     device: str | None = None,
     student: str | None = None,
     horizon: int = 20,
-    robot: str = "microduck",
-) -> dict[str, Any]:
+    robot: str | None = None,
+) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
-    the run's stamps on every row; `robot` names the walk the checkpoint
-    belongs to. With a project open its robots are searched first. Job
-    handle."""
+    the run's versions on every row; `robot` names the walk the checkpoint
+    belongs to, else the project's one declared walk. With a project open
+    its robots are searched first. Job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
     root = _project_root_if_any()
+    if robot is None:
+        walk = _the_project_walk(root)
+        if walk is None:
+            return refusal(_no_single_walk(root))
+        declared = _declared_walk(root, walk)
+        assert isinstance(declared, DeclaredWalk)
+        robot = declared.robot
     try:
-        return Actions(JobManager(_jobs_root())).certify_walk(
+        return Actions(JobManager(_jobs_root())).evaluate_walk(
             checkpoint,
             trials=trials,
             seed=seed,
@@ -394,12 +442,12 @@ def certify_walk(  # noqa: PLR0913, PLR0917 - the certificate's knobs, each name
             project=str(root) if root else None,
         )
     except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
 
 
 def export_deployment(
     run: str, checkpoint: str, name: str, certificate: str | None = None
-) -> dict[str, Any]:
+) -> JobHandle | Refusal:
     """Export a trained policy for deployment: `run` is an experiment in
     the project (its folder under runs/), `checkpoint` a file in it
     (model_7999.pt), `name` the deployment's folder. The policy artifact
@@ -413,67 +461,35 @@ def export_deployment(
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
     from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
-    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
     project = current_project()
     try:
         plain_name(run, "run name")
         plain_name(name, "deployment name")
     except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
     run_dir = project.folder("runs") / run
     path = run_dir / checkpoint
     if not path.is_file():
-        return {
-            "status": "refused",
-            "reason": f"no checkpoint {checkpoint!r} in run {run!r}",
-        }
+        return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
     if (project.folder("deploy") / name).exists():
-        return {"status": "refused", "reason": f"deployment {name!r} already exists"}
+        return refusal(f"deployment {name!r} already exists")
     index = index_project(project)
     run_art = next(
         (a for a in index.artifacts if a.kind == "run" and a.path == f"runs/{run}"),
         None,
     )
     if run_art is None:
-        return {"status": "refused", "reason": f"run {run!r} is not in the index"}
-    task_id = _task_id_in_project(index.artifacts, _run_task(run_dir))
-    robot = walk_robot(task_id) if task_id else None
+        return refusal(f"run {run!r} is not in the index")
+    robot = _walk_of_run(index.artifacts, run_dir)
     if robot is None:
-        robot = _robot_of_run(run_dir)
-    if robot is None:
-        return {
-            "status": "refused",
-            "reason": (
-                f"run {run!r} names no walk (no task in its identity); pass one by name"
-            ),
-        }
-    stem = Path(checkpoint).stem
-    # The live loop names a judged checkpoint's policy `<run>-<checkpoint>`
-    # and it cites the run; either mark finds it.
-    policy = next(
-        (
-            a
-            for a in index.artifacts
-            if a.kind == "policy"
-            and (
-                a.stamp.split("@", 1)[0] == f"{run}-{stem}"
-                or (
-                    a.cites.get("run") == run_art.stamp
-                    and a.stamp.split("@", 1)[0].endswith(stem)
-                )
-            )
-        ),
-        None,
-    )
+        return refusal(
+            f"run {run!r} names no walk (no task in its identity); pass one by name"
+        )
+    policy = policy_of_checkpoint(index.artifacts, run, run_art.stamp, checkpoint)
     if certificate is None and policy is not None:
-        judged = [
-            a
-            for a in index.artifacts
-            if a.kind == "certificate" and a.cites.get("policy") == policy.stamp
-        ]
-        judged.sort(key=lambda a: a.updated or "", reverse=True)
-        certificate = judged[0].stamp if judged else None
+        newest = newest_evaluation_of(index.artifacts, policy.stamp)
+        certificate = newest.stamp if newest else None
     return Actions(JobManager(_jobs_root())).export_deployment(
         str(path),
         name=name,
@@ -482,6 +498,52 @@ def export_deployment(
         certificate=certificate,
         policy_stamp=policy.stamp if policy else None,
     )
+
+
+def policy_of_checkpoint(
+    artifacts: Iterable[Any], run: str, run_stamp: str, checkpoint: str
+) -> Any | None:
+    """The policy artifact of a run's checkpoint. The live loop names a
+    judged checkpoint's policy `<run>-<checkpoint stem>` and it cites the
+    run; either mark finds it. None when the checkpoint was never judged."""
+    stem = Path(checkpoint).stem
+    return next(
+        (
+            a
+            for a in artifacts
+            if a.kind == "policy"
+            and (
+                a.stamp.split("@", 1)[0] == f"{run}-{stem}"
+                or (
+                    a.cites.get("run") == run_stamp
+                    and a.stamp.split("@", 1)[0].endswith(stem)
+                )
+            )
+        ),
+        None,
+    )
+
+
+def newest_evaluation_of(artifacts: Iterable[Any], policy_stamp: str) -> Any | None:
+    """The newest evaluation citing a policy by version, or None."""
+    judged = [
+        a
+        for a in artifacts
+        if a.kind == "certificate" and a.cites.get("policy") == policy_stamp
+    ]
+    judged.sort(key=lambda a: a.updated or "", reverse=True)
+    return judged[0] if judged else None
+
+
+def _walk_of_run(artifacts: Iterable[Any], run_dir: Path) -> str | None:
+    """The walk robot a run belongs to: the family of the declared task
+    its identity cites, else the robot its identity names when that is
+    a registered walk's."""
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+    task_id = _task_id_in_project(artifacts, _run_task(run_dir))
+    robot = walk_robot(task_id) if task_id else None
+    return robot if robot is not None else _robot_of_run(run_dir)
 
 
 def _run_task(run_dir: Path) -> str | None:
@@ -494,7 +556,7 @@ def _run_task(run_dir: Path) -> str | None:
     return json.loads(identity.read_text()).get("task")
 
 
-def _task_id_in_project(artifacts: Any, ref: str | None) -> str | None:
+def _task_id_in_project(artifacts: Iterable[Any], ref: str | None) -> str | None:
     """The task family a run's declared task belongs to. A run trained
     by the door cites its task by the project's stamp (`go2-walk@0e7e…`,
     the environment card), and the family id (`robotiq/go2-walk`) is
@@ -518,14 +580,14 @@ def _task_id_in_project(artifacts: Any, ref: str | None) -> str | None:
 def _robot_of_run(run_dir: Path) -> str | None:
     """The walk a run belongs to, from the robot its identity names
     (`go2@…` → go2) when that is a walk the trainer knows."""
-    from rq_pipeline.mcp_actions import WALK_ROBOTS  # noqa: PLC0415
+    from rq_pipeline.mcp_actions import walk_robots  # noqa: PLC0415
     from rq_pipeline.project.kinds import IDENTITY_FILE  # noqa: PLC0415
 
     identity = run_dir / IDENTITY_FILE
     if not identity.is_file():
         return None
     robot = str(json.loads(identity.read_text()).get("robot", "")).split("@", 1)[0]
-    return robot if robot in WALK_ROBOTS else None
+    return robot if robot in walk_robots() else None
 
 
 def gate_deployment(
@@ -533,16 +595,22 @@ def gate_deployment(
     trials: int = 20,
     seed: int = 1000,
     tolerance: float | None = None,
-    runtime: str = "mujoco",
-) -> dict[str, Any]:
+    runtime: str = DEFAULT_RUNTIME,
+) -> JobHandle | Refusal:
     """Run the sim-to-sim gate on a deployment: the exported policy is
-    driven through its manifest alone — plain MuJoCo, onnxruntime, no
+    driven through its manifest alone by a registered runtime — no
     training stack — over seeded held commands and judged the
-    certificate's way; passes when its rate is within `tolerance`
-    (default 0.10) of the certificate it cites. `runtime` is `mujoco`
-    (plain MuJoCo through our manifest) or `dds` (Unitree's own
-    simulator and controller, the second gate). Job handle; `gate.json`
-    lands beside the manifest and shows in the Studio."""
+    evaluation's way; passes when its rate is within `tolerance` (the
+    gate's own default when unset) of the evaluation it cites. `runtime`
+    is one of `list_gate_runtimes()`: plain MuJoCo through our manifest,
+    or Unitree's own simulator and controller over DDS (the second gate,
+    Linux only). Job handle; the runtime's record lands beside the
+    manifest and shows in the Studio."""
+    from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
+    from rq_pipeline.deploy.runtimes import (  # noqa: PLC0415
+        require_platform,
+        runtime_spec,
+    )
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
@@ -551,13 +619,11 @@ def gate_deployment(
     project = current_project()
     try:
         plain_name(name, "deployment name")
-    except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
-    if not (project.folder("deploy") / name / "deploy.json").is_file():
-        return {
-            "status": "refused",
-            "reason": f"no deployment {name!r} in this project",
-        }
+        require_platform(runtime_spec(runtime))  # unknown, or not for this OS
+    except (ValueError, RuntimeError) as why:
+        return refusal(str(why))
+    if not (project.folder("deploy") / name / MANIFEST_FILE).is_file():
+        return refusal(f"no deployment {name!r} in this project")
     return Actions(JobManager(_jobs_root())).gate_deployment(
         name,
         project=str(project.root),
@@ -568,9 +634,24 @@ def gate_deployment(
     )
 
 
+def list_gate_runtimes() -> list[dict[str, Any]]:
+    """Every runtime the sim-to-sim gate can drive an exported policy
+    through, with the platforms it runs on (empty: every platform)."""
+    from rq_pipeline.deploy.runtimes import RUNTIMES  # noqa: PLC0415
+
+    return [
+        {
+            "name": spec.name,
+            "description": spec.description,
+            "platforms": list(spec.platforms),
+        }
+        for spec in RUNTIMES.values()
+    ]
+
+
 def play_walk(
     run: str, checkpoint: str, envs: int = 9, viewer: str = "viser"
-) -> dict[str, Any]:
+) -> JobHandle | Refusal:
     """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
     its browser viewer (the URL is on the job's log), or `native`, its
     MuJoCo window - with the same rollout streamed into the Studio's Live
@@ -580,7 +661,6 @@ def play_walk(
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
     from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
-    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
     project = current_project()
     try:
@@ -588,26 +668,20 @@ def play_walk(
         run_dir = project.folder("runs") / run
         path = run_dir / checkpoint
         if not path.is_file():
-            return {
-                "status": "refused",
-                "reason": f"no checkpoint {checkpoint!r} in run {run!r}",
-            }
-        task_id = _task_id_in_project(
-            index_project(project).artifacts, _run_task(run_dir)
-        )
-        robot = (walk_robot(task_id) if task_id else None) or _robot_of_run(run_dir)
+            return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
+        robot = _walk_of_run(index_project(project).artifacts, run_dir)
         if robot is None:
-            return {"status": "refused", "reason": f"run {run!r} names no walk"}
+            return refusal(f"run {run!r} names no walk")
         return Actions(JobManager(_jobs_root())).play_walk(
             str(path), robot=robot, envs=envs, project=str(project.root), viewer=viewer
         )
     except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
 
 
 def preview_rewards(
     task: str, controller: str = "untrained", seconds: float = 5.0, seed: int = 1000
-) -> dict[str, Any]:
+) -> JobHandle | Refusal:
     """See the reward before training: roll the declared walk for a few
     seconds under `controller` - `untrained` (the recipe's actor at its
     random start) or `stand` (the held posture) - with every reward term
@@ -623,12 +697,12 @@ def preview_rewards(
     try:
         plain_name(task, "task name")
         declared = _declared_walk(root, task)
-        if "robot" not in declared:
-            return {"status": "refused", **declared}
+        if isinstance(declared, str):
+            return refusal(declared)
         assert root is not None
         out = root / "tasks" / task / f"preview-{controller}.json"
         return Actions(JobManager(_jobs_root())).preview_rewards(
-            robot=declared["robot"],
+            robot=declared.robot,
             controller=controller,
             seconds=seconds,
             seed=seed,
@@ -636,10 +710,10 @@ def preview_rewards(
             out=str(out),
         )
     except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
 
 
-def accept_task(name: str) -> dict[str, Any]:
+def accept_task(name: str) -> JobHandle | Refusal:
     """Review a declared environment with the acceptance critic (the
     scripted policy must succeed on every paired trial, the floor policy
     on none). Minutes of simulation: returns a job handle; the verdict,
@@ -649,26 +723,17 @@ def accept_task(name: str) -> dict[str, Any]:
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.kinds import TASK_FILE  # noqa: PLC0415
-    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.project.task_ref import read_task_reference  # noqa: PLC0415
     from rq_pipeline.tasks.experts import expert_for  # noqa: PLC0415
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
     project = current_project()
     try:
-        plain_name(name, "task name")
-    except ValueError as why:
-        return {"status": "refused", "reason": str(why)}
-    folder = project.folder("tasks") / name
-    if not (folder / TASK_FILE).is_file():
-        return {"status": "refused", "reason": f"no task {name!r} in this project"}
-    ref = json.loads((folder / TASK_FILE).read_text())
-    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
-
-    try:
-        if walk_robot(ref.get("task_id", "")) is None:
-            expert_for(ref.get("task_id", ""))
-    except (KeyError, ValueError) as why:
-        return {"status": "refused", "reason": str(why)}
+        ref = read_task_reference(project, name)
+        if walk_robot(ref.task_id) is None:
+            expert_for(ref.task_id)
+    except (FileNotFoundError, KeyError, ValueError) as why:
+        return refusal(_reason(why))
     return Actions(JobManager(_jobs_root())).accept_task(name, str(project.root))
 
 
@@ -749,7 +814,7 @@ def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
 
 
 def describe_eval(run: str, runs_root: Path | None = None) -> dict[str, Any]:
-    """One run's episode records, folded the way the certificate is:
+    """One run's episode records, folded the way the evaluation is:
     trials, successes, the milestone funnel, and every trial's verdict —
     through `rq_pipeline.evaluate.records`, never a private re-parse."""
     from rq_pipeline.evaluate.records import (  # noqa: PLC0415 - keeps import cheap
@@ -875,7 +940,7 @@ def ingest_recording(
     named channels with units and rates, a census of what the robot
     reported, and the adapter's honest notes. The first move of the loop."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
+    from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
 
     return ingest(current_project(), Path(source), name=name, adapter=adapter)
 
@@ -931,7 +996,7 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     table: str | None = None,
     view: str | None = None,
     search: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """Navigate the Studio: a page by name (projects, overview, robots,
     environments, recordings, datasets, experiments, policies, evaluations,
     findings, deployments, monitoring, live), an artifact by version (its
@@ -946,10 +1011,7 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     from rq_pipeline.project.control import SECTIONS, command  # noqa: PLC0415
 
     if section is not None and section.strip().lower() not in SECTIONS:
-        return {
-            "status": "refused",
-            "reason": f"no page {section!r}; one of {', '.join(SECTIONS)}",
-        }
+        return refusal(f"no page {section!r}; one of {', '.join(SECTIONS)}")
     return command(
         current_project(),
         "open",
@@ -1025,7 +1087,7 @@ def set_studio_time(  # noqa: PLR0913, PLR0917
 
 def set_studio_panels(
     blueprint: str | None = None, selection: str | None = None
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """The viewer's side panels: `expand` or `toggle` the blueprint panel
     (left: what each view shows) and the selection panel (right: the
     selected entity's properties)."""
@@ -1034,19 +1096,20 @@ def set_studio_panels(
 
     for name, value in (("blueprint", blueprint), ("selection", selection)):
         if value is not None and value not in PANEL_ACTIONS:
-            return {
-                "status": "refused",
-                "reason": f"{name}: {value!r} is not one of {', '.join(PANEL_ACTIONS)}",
-            }
+            return refusal(
+                f"{name}: {value!r} is not one of {', '.join(PANEL_ACTIONS)}"
+            )
     return command(
         current_project(), "panels", blueprint=blueprint, selection=selection
     )
 
 
 def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
-    """Run a scene in the Studio's MuJoCo viewport — a preview task by name
-    (kitting, lift, duck) or `walk` for the newest trained walk policy —
-    and switch to the Live view; with no task, stop the viewport. The
+    """Run a scene in the Studio's MuJoCo viewport — a preview scene by a
+    task's name (`describe_tasks`; the viewport's own list is what the
+    Simulator page offers) or `walk:<robot>` for the newest trained walk
+    policy of a registered walk family — and switch to the Live view;
+    with no task, stop the viewport. The
     state file then reports `viewport_task` and `viewport_fps`, the
     frames drawn to the screen in the last second."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
@@ -1091,7 +1154,7 @@ def control_simulator(  # noqa: PLR0913, PLR0917
 
 def set_simulator_input(
     value: float, actuator: str | None = None, joint: str | None = None
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """One slider of simulate's Control or Joint panel: an actuator's
     control value by name, or a hinge/slide joint's position by name
     (free and ball joints have no scalar). Takes manual control of the
@@ -1100,7 +1163,7 @@ def set_simulator_input(
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
     if (actuator is None) == (joint is None):
-        return {"status": "refused", "reason": "name exactly one of actuator, joint"}
+        return refusal("name exactly one of actuator, joint")
     return command(
         current_project(), "simulator", actuator=actuator, joint=joint, value=value
     )
@@ -1111,7 +1174,7 @@ def set_simulator_view(
     on: bool | None = None,
     camera: str | None = None,
     inspect: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """What the simulator shows: a MuJoCo visualization or rendering
     `flag` by its own name with `on` (contactpoint, contactforce, joint,
     actuator, constraint, inertia, com, transparent, perturbforce, camera,
@@ -1122,9 +1185,9 @@ def set_simulator_view(
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
     if flag is not None and on is None:
-        return {"status": "refused", "reason": "a flag needs `on`"}
+        return refusal("a flag needs `on`")
     if flag is None and camera is None and inspect is None:
-        return {"status": "refused", "reason": "name a flag, a camera view or inspect"}
+        return refusal("name a flag, a camera view or inspect")
     return command(
         current_project(),
         "simulator",
@@ -1162,7 +1225,7 @@ def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, An
 # -- import what exists: experiments, policies, evaluations, findings ------------
 
 
-def import_experiment(path: str, name: str | None = None) -> dict[str, Any]:
+def import_experiment(path: str, name: str | None = None) -> dict[str, Any] | Refusal:
     """Bring a trained rq_mjlab experiment into the project: its run
     (identity, log), its checkpoint as a policy citing the run, robot and
     actuator model, and one evaluation per verdict file with its trial
@@ -1182,12 +1245,12 @@ def import_experiment(path: str, name: str | None = None) -> dict[str, Any]:
     try:
         out = run_import(project, Path(path), name=name)
     except (FileExistsError, FileNotFoundError, ValueError) as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
     write_index(project, index_project(project))
-    return {"status": "done", **out}
+    return {"status": DONE, **out}
 
 
-def import_finding(record: str) -> dict[str, Any]:
+def import_finding(record: str) -> dict[str, Any] | Refusal:
     """Bring a record from the repository's findings ledger into the
     project, by id (e.g. walk-c1-2026-09-04) or by path."""
     from rq_pipeline.project import (  # noqa: PLC0415
@@ -1203,9 +1266,9 @@ def import_finding(record: str) -> dict[str, Any]:
     try:
         out = run_import(project, record)
     except (FileExistsError, FileNotFoundError, ValueError) as why:
-        return {"status": "refused", "reason": str(why)}
+        return refusal(str(why))
     write_index(project, index_project(project))
-    return {"status": "done", **out}
+    return {"status": DONE, **out}
 
 
 def list_ledger_findings(prefix: str = "") -> list[dict[str, str]]:
@@ -1246,7 +1309,7 @@ def list_identification_methods() -> list[dict[str, str]]:
 
 def identify_system(
     robot: str, recording: str, method: str | None = None
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """System identification as a door: fit the robot's dynamics from a
     recording in this project (both by version), with a method by name
     or the one that accepts the pair. Writes a fit record into the
@@ -1264,16 +1327,19 @@ def identify_system(
     )
     from rq_pipeline.robot.methods import detect, resolve  # noqa: PLC0415
 
-    project, bundle = _project_artifact(robot, "robot")
-    _, rec = _project_artifact(recording, "recording")
-    bundle_dir = project.root / bundle.path
-    recording_dir = project.root / rec.path
-    entry = resolve(method) if method else detect(bundle_dir, recording_dir)
-    fitter = entry.build()
-    why = fitter.accepts(bundle_dir, recording_dir)
-    if why is not None:
-        raise ValueError(f"{entry.name} cannot fit {robot} from {recording}: {why}")
-    result, path = fitter.fit(bundle_dir, recording_dir, write=True)
+    try:
+        project, bundle = _project_artifact(robot, "robot")
+        _, rec = _project_artifact(recording, "recording")
+        bundle_dir = project.root / bundle.path
+        recording_dir = project.root / rec.path
+        entry = resolve(method) if method else detect(bundle_dir, recording_dir)
+        fitter = entry.build()
+        why = fitter.accepts(bundle_dir, recording_dir)
+        if why is not None:
+            raise ValueError(f"{entry.name} cannot fit {robot} from {recording}: {why}")
+        result, path = fitter.fit(bundle_dir, recording_dir, write=True)
+    except (FileNotFoundError, KeyError, ValueError) as refused:
+        return refusal(_reason(refused))
     records = load_fit_records(bundle_dir)
     spread = None
     if len(records) >= MIN_FITS_FOR_SPREAD:
@@ -1303,6 +1369,7 @@ def identify_system(
         robot,
     )
     return {
+        "status": DONE,
         "method": entry.name,
         "robot": robot_now,
         "robot_before": robot,
@@ -1327,7 +1394,7 @@ def identify_system(
     }
 
 
-def describe_identification(robot: str) -> dict[str, Any]:
+def describe_identification(robot: str) -> dict[str, Any] | Refusal:
     """A robot's system identification as recorded: every fit record with
     its parameters, intervals and verdicts, the anchor statements, and the
     cross-run spread verdict when two or more records exist."""
@@ -1336,9 +1403,13 @@ def describe_identification(robot: str) -> dict[str, Any]:
         spread_verdicts,
     )
 
-    project, bundle = _project_artifact(robot, "robot")
+    try:
+        project, bundle = _project_artifact(robot, "robot")
+    except (FileNotFoundError, KeyError, ValueError) as refused:
+        return refusal(_reason(refused))
     records = load_fit_records(project.root / bundle.path)
     return {
+        "status": DONE,
         "robot": robot,
         "records": [
             {
@@ -1376,7 +1447,7 @@ def describe_identification(robot: str) -> dict[str, Any]:
 
 def create_project_dir(
     path: str, name: str, description: str = "", loop: str = ""
-) -> dict[str, Any]:
+) -> dict[str, Any] | Refusal:
     """Make a project directory: the manifest and one folder per artifact
     kind. `loop` says how its policy learns — `imitation` (from a
     dataset) or `reinforcement` (from its own rollouts; the dataset stage
@@ -1387,8 +1458,8 @@ def create_project_dir(
     try:
         project = create_project(Path(path), name, description, loop=loop)
     except (FileExistsError, ValueError) as why:
-        return {"status": "refused", "reason": str(why)}
-    return {"status": "done", "root": str(project.root), "name": project.name}
+        return refusal(str(why))
+    return {"status": DONE, "root": str(project.root), "name": project.name}
 
 
 # A registration list: one statement per door, read top to bottom.
@@ -1546,8 +1617,9 @@ def build_server() -> Any:  # noqa: PLR0915
         "(right) panels."
     )(set_studio_panels)
     server.tool(
-        description="Run a scene in the MuJoCo viewport (kitting, lift, duck, walk) "
-        "and open the Live view; no task stops it. State reports viewport_fps."
+        description="Run a scene in the MuJoCo viewport (a task's preview scene, or "
+        "walk:<robot> for the newest trained walk) and open the Live view; no task "
+        "stops it. State reports viewport_fps."
     )(simulate_in_studio)
     server.tool(
         description="simulate's Simulation section on the running scene: run/pause, "
@@ -1589,9 +1661,14 @@ def build_server() -> Any:  # noqa: PLR0915
     )(export_deployment)
     server.tool(
         description="The sim-to-sim gate: drive the exported policy through its "
-        "manifest alone in plain MuJoCo, judge it the certificate's way, pass "
-        "within a stated tolerance of the certificate. Job handle."
+        "manifest alone by a registered runtime (plain MuJoCo, or Unitree's "
+        "simulator over DDS), judge it the evaluation's way, pass within a stated "
+        "tolerance of the cited evaluation. Job handle."
     )(gate_deployment)
+    server.tool(
+        description="Every runtime the sim-to-sim gate can drive a policy through, "
+        "with the platforms each runs on."
+    )(list_gate_runtimes)
     server.tool(
         description="The families an environment can be declared over, with every "
         "spec field, type and default."
@@ -1606,9 +1683,9 @@ def build_server() -> Any:  # noqa: PLR0915
         "verdict lands beside the task."
     )(accept_task)
     server.tool(
-        description="Generate demonstrations with a scripted policy; only successful "
-        "episodes are kept (DR draws recorded). Returns a job handle."
-    )(actions.generate_demos)
+        description="Generate kitting demonstrations with the scripted policy; only "
+        "successful episodes are kept (DR draws recorded). Returns a job handle."
+    )(actions.generate_kitting_demos)
     server.tool(
         description="Augment seed demonstrations (device filters, CPU verifies, "
         "success criterion gates). Needs the GPU box. Returns a job handle."
@@ -1618,24 +1695,27 @@ def build_server() -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk policy (microduck, go1, or the project's go2) "
-        "through rq_mjlab; name the experiment to archive it in the project. "
-        "agent=smoke is minutes; agent=g3 is the flagship recipe. Job handle."
+        description="Train a walk policy through rq_mjlab on a declared walk (task) "
+        "or a registered walk family's robot (describe_task_families); name the "
+        "experiment to archive it in the project. agent=smoke is minutes; agent=g3 "
+        "is the flagship recipe. Job handle."
     )(train_walk)
     server.tool(
         description="Evaluate a walk policy: paired episodes, exact confidence "
-        "intervals, stamps on every row; robot names the walk. Job handle."
-    )(certify_walk)
+        "intervals, versions on every row; robot names the walk, else the "
+        "project's one declared walk. Job handle."
+    )(evaluate_walk)
     server.tool(
         description="The RL teacher generates demonstrations (docs/66 D2): the walk "
         "checkpoint rolls out, keepers become a stamped batch with chase-camera "
         "frames, discards a failures.jsonl. Job handle."
-    )(actions.press_walk)
+    )(actions.generate_walk_demos)
     server.tool(
-        description="The planner policy generates demonstrations (docs/66 D3) on an "
-        "SO-101 task: beats written from the seated scene, executed by chained IK, "
-        "kept by the task's referee, streamed to the Studio. Job handle."
-    )(actions.press_planned)
+        description="The planner policy generates demonstrations (docs/66 D3) on a "
+        "task from the registry: beats written from the seated scene, executed by "
+        "chained IK, kept by the task's success criterion, streamed to the Studio. "
+        "Job handle."
+    )(actions.generate_planned_demos)
     server.tool(
         description="Launch the Studio (release build); anything speaking the "
         "Rerun SDK streams into it on :9876."

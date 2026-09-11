@@ -31,7 +31,12 @@ from pathlib import Path
 import numpy as np
 
 from rq_pipeline.robots.adapter import adapter
-from rq_pipeline.robots.recording import COLLECTION_MOCAP, Channel, Recording
+from rq_pipeline.robots.recording import (
+    COLLECTION_MOCAP,
+    Channel,
+    Recording,
+    monotone,
+)
 
 NAME = "mocap"
 CSV_SUFFIX = ".csv"
@@ -42,6 +47,7 @@ FRAME_COLUMNS = ("frame", "frame_index", "#")
 # Marker columns come as `<name>.x` / `<name>_X` / `<name> X`.
 COMPONENT_RE = re.compile(r"^(?P<name>.+?)[._ ](?P<axis>[xyzXYZ]|rx|ry|rz|RX|RY|RZ)$")
 MM_HINTS = ("mm", "millimet")
+MM_TO_M = 0.001  # a header that names millimetres
 DEFAULT_RATE_HZ = 120.0
 MIN_MARKER_COLUMNS = 3  # x, y, z of at least one marker
 MIN_FRAMES = 2  # motion needs two frames
@@ -110,10 +116,8 @@ def _read_csv(source: Path) -> Recording:
         notes.append(
             f"no time or frame column; rows taken at {DEFAULT_RATE_HZ:g} Hz (assumed)"
         )
-    times, keep = _monotone(times)
-    scale = (
-        CM_TO_M * 10 if any(h in " ".join(fields).lower() for h in MM_HINTS) else 1.0
-    )
+    times, keep = monotone(times)
+    scale = MM_TO_M if any(h in " ".join(fields).lower() for h in MM_HINTS) else 1.0
     if scale != 1.0:
         notes.append("header names millimetres; positions scaled to metres")
     # Group `<name>.<axis>` columns into one channel per marker/joint.
@@ -297,13 +301,3 @@ def _rate(times: np.ndarray) -> float | None:
         return None
     span = float(times[-1] - times[0])
     return round((len(times) - 1) / span, 3) if span > 0 else None
-
-
-def _monotone(times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    keep = np.zeros(len(times), dtype=bool)
-    last = -np.inf
-    for i, t in enumerate(times):
-        if np.isfinite(t) and t > last:
-            keep[i] = True
-            last = t
-    return times[keep], keep

@@ -17,6 +17,7 @@ writes `kind: "registered"`. The indexer reads either.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,58 @@ from rq_pipeline.project.locate import Project, plain_name
 
 REGISTERED = "registered"
 DECLARED = "declared"
+UNSTAMPED = "unstamped"
+TASKS_FOLDER = "tasks"
+
+
+@dataclass(frozen=True)
+class TaskReference:
+    """A project's `task.json`, read: the family id, the content stamp
+    (or `unstamped`), the kind, the declared spec when there is one."""
+
+    name: str  # the folder under tasks/
+    task_id: str
+    stamp: str
+    kind: str
+    folder: Path
+    spec: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def dr_span(self) -> float | None:
+        """A declared walk's randomization span, when the spec has one."""
+        value = self.spec.get("dr_span")
+        return float(value) if value is not None else None
+
+
+def read_task_reference(project: Project, name: str) -> TaskReference:
+    """The project's task `name`, or a refusal by name (FileNotFoundError)."""
+    plain_name(name, "task name")
+    folder = project.folder(TASKS_FOLDER) / name
+    path = folder / TASK_FILE
+    if not path.is_file():
+        raise FileNotFoundError(f"no task {name!r} in {project.root} (no {path})")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if "task_id" not in raw:
+        raise ValueError(f"{path}: no task_id recorded")
+    return TaskReference(
+        name=name,
+        task_id=str(raw["task_id"]),
+        stamp=str(raw.get("stamp", UNSTAMPED)),
+        kind=str(raw.get("kind", REGISTERED)),
+        folder=folder,
+        spec=dict(raw.get("spec") or {}),
+    )
+
+
+def task_references(project: Project) -> list[TaskReference]:
+    """Every task the project records, by folder name."""
+    root = project.folder(TASKS_FOLDER)
+    if not root.is_dir():
+        return []
+    found = []
+    for folder in sorted(p for p in root.iterdir() if (p / TASK_FILE).is_file()):
+        found.append(read_task_reference(project, folder.name))
+    return found
 
 
 def write_task_reference(  # noqa: PLR0913 - one record, each field named
@@ -45,11 +98,11 @@ def write_task_reference(  # noqa: PLR0913 - one record, each field named
         raise ValueError(
             f"task ids are namespaced, like robotiq/kitting; got {task_id!r}"
         )
-    folder = project.folder("tasks") / (name or task_id.replace("/", "--"))
+    folder = project.folder(TASKS_FOLDER) / (name or task_id.replace("/", "--"))
     folder.mkdir(parents=True, exist_ok=True)
     record: dict[str, Any] = {
         "task_id": task_id,
-        "stamp": stamp if stamp is not None else "unstamped",
+        "stamp": stamp if stamp is not None else UNSTAMPED,
         "kind": kind,
     }
     if name is not None:
@@ -75,7 +128,7 @@ def declare_task(
     from rq_pipeline.tasks.registry import resolve  # noqa: PLC0415
 
     plain_name(name, "task name")
-    folder = project.folder("tasks") / name
+    folder = project.folder(TASKS_FOLDER) / name
     if folder.exists():
         raise FileExistsError(f"{name!r} is already a task in this project")
     task, spec = build_variant(task_id, overlay)

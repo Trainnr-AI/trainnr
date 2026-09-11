@@ -11,22 +11,40 @@ evaluation cites its policy, robot and environment; nothing is renamed.
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.hashing import fields_hash
-from rq_pipeline.project.kinds import IDENTITY_FILE, Kind, stamp_kind, stamp_run
+from rq_pipeline.envs.rsl_rl_log import (
+    ITERATION_LINE,
+    TRAIN_LOG,
+    TRAINING_FILE,
+    VERDICT_DIR,
+    VERDICT_GLOB,
+    VERDICT_PREFIX,
+    parse_rsl_rl_log,
+)
+from rq_pipeline.paths import checkout
+from rq_pipeline.project.files import read_json, read_text, write_json, write_text
+from rq_pipeline.project.kinds import (
+    CERTIFICATE_FILE,
+    IDENTITY_FILE,
+    POLICY_FILE,
+    Kind,
+    stamp_kind,
+    stamp_run,
+)
 from rq_pipeline.project.locate import Project, plain_name
 
-POLICY_FILE = "policy.json"
 POLICY_SCHEMA = "trainnr-policy/1"
 CERTIFICATE_SCHEMA = "trainnr-evaluation/1"
-VERDICT_GLOB = "walk-verdict-*.json"
-REPO = Path(__file__).resolve().parents[3]
-LEDGER = REPO / "docs" / "findings"
+LEDGER_DIR = Path("docs") / "findings"  # the repo's findings ledger
+
+
+def ledger() -> Path:
+    return checkout() / LEDGER_DIR
 
 
 def _checkpoint(train: Path) -> Path:
@@ -59,10 +77,10 @@ def import_experiment(
     identity_file = train / IDENTITY_FILE
     if not identity_file.is_file():
         raise FileNotFoundError(f"{train}: no {IDENTITY_FILE} (not an rq_mjlab run)")
-    identity = json.loads(identity_file.read_text())
+    identity = read_json(identity_file)
     label = plain_name(name or arm.name, "run name")
-    run_dir = project.folder("runs") / label
-    policy_dir = project.folder("policies") / label
+    run_dir = project.runs / label
+    policy_dir = project.policies / label
     if run_dir.exists() or policy_dir.exists():
         raise FileExistsError(f"{label!r} is already in the project")
     # Everything that can refuse does so before anything is written, so
@@ -74,14 +92,14 @@ def import_experiment(
     run_dir.mkdir(parents=True)
     shutil.copy2(identity_file, run_dir / IDENTITY_FILE)
     if text is not None:
-        (run_dir / "train.log").write_text(text)
-        _write_training_record(run_dir / "train.log")
+        write_text(run_dir / TRAIN_LOG, text)
+        _write_training_record(run_dir / TRAIN_LOG)
     run_stamp = stamp_run(run_dir)
 
     policy_stamp = write_policy(project, label, checkpoint, identity, run_stamp)
     evaluations = [
         stamp
-        for verdict_file in sorted((train / "verdict").glob(VERDICT_GLOB))
+        for verdict_file in sorted((train / VERDICT_DIR).glob(VERDICT_GLOB))
         if (
             stamp := write_certificate(
                 project, verdict_file, label, policy_stamp, identity, run_stamp
@@ -97,12 +115,16 @@ def import_experiment(
 
 
 def write_policy(
-    project: Project, label: str, checkpoint: Path, identity: dict, run_stamp: str
+    project: Project,
+    label: str,
+    checkpoint: Path,
+    identity: dict[str, Any],
+    run_stamp: str,
 ) -> str:
     """A checkpoint as a policy artifact: the weights copied, a manifest
     citing the run, robot and actuator it came from. Returns its stamp;
     an existing policy of that name is returned as it is."""
-    policy_dir = project.folder("policies") / label
+    policy_dir = project.policies / label
     if policy_dir.is_dir():
         return stamp_kind(Kind.POLICY, policy_dir)
     policy_dir.mkdir(parents=True)
@@ -121,7 +143,7 @@ def write_policy(
         "dr_basis": identity.get("dr_basis"),
         "seed": identity.get("seed"),
     }
-    (policy_dir / POLICY_FILE).write_text(json.dumps(manifest, indent=1) + "\n")
+    write_json(policy_dir / POLICY_FILE, manifest)
     return stamp_kind(Kind.POLICY, policy_dir)
 
 
@@ -134,7 +156,7 @@ BACKUP_TAIL = re.compile(r"(\.model_\d+)?\.seed\d+\.n\d+$")
 PROTOCOL_HASH_CHARS = 6
 
 
-def evaluation_suffix(verdict_file: Path, verdict: dict) -> str:
+def evaluation_suffix(verdict_file: Path, verdict: dict[str, Any]) -> str:
     """What tells one evaluation of a policy from another: the verdict
     file's instrument suffix, the seed, the trial count and a hash of
     the whole protocol (the criterion, the DR basis, the command
@@ -143,7 +165,7 @@ def evaluation_suffix(verdict_file: Path, verdict: dict) -> str:
     the same evaluation, so it is imported once; a re-judge under
     another seed or another protocol - the Go2 checkpoints judged
     again at their trained command envelope, 2026-09-11 - is its own."""
-    suffix = BACKUP_TAIL.sub("", verdict_file.stem.removeprefix("walk-verdict-"))
+    suffix = BACKUP_TAIL.sub("", verdict_file.stem.removeprefix(VERDICT_PREFIX))
     protocol = verdict.get("protocol") or {}
     seed, trials = protocol.get("seed"), verdict.get("trials")
     if seed is None or trials is None:
@@ -158,20 +180,20 @@ def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, eac
     verdict_file: Path,
     label: str,
     policy_stamp: str,
-    identity: dict,
+    identity: dict[str, Any],
     run_stamp: str,
 ) -> str | None:
     """One walk verdict (`walk-verdict-<suffix>.json` with its
     `records-<suffix>.jsonl`) as an evaluation `<label>-<suffix>` citing
     the policy, robot, environment and run. Returns the stamp, or None
     when that evaluation is already in the project."""
-    verdict = json.loads(verdict_file.read_text())
+    verdict = read_json(verdict_file)
     name = f"{label}-{evaluation_suffix(verdict_file, verdict)}"
-    out = project.folder("certificates") / name
+    out = project.certificates / name
     if out.exists():
         return None
     out.mkdir(parents=True)
-    suffix = verdict_file.stem.removeprefix("walk-verdict-")
+    suffix = verdict_file.stem.removeprefix(VERDICT_PREFIX)
     certificate = {
         "schema": CERTIFICATE_SCHEMA,
         **verdict,
@@ -180,7 +202,7 @@ def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, eac
         "task": verdict.get("source"),
         "run": run_stamp,
     }
-    (out / "certificate.json").write_text(json.dumps(certificate, indent=1) + "\n")
+    write_json(out / CERTIFICATE_FILE, certificate)
     # Exactly this verdict's records — "at-fit" is a substring of
     # "at-x0.7-at-fit", so a glob would hand a sibling's trials over.
     records = verdict_file.parent / f"records-{suffix}.jsonl"
@@ -189,7 +211,6 @@ def write_certificate(  # noqa: PLR0913, PLR0917 - what a certificate cites, eac
     return stamp_kind(Kind.CERTIFICATE, out)
 
 
-TRAINING_FILE = "training.json"
 LOG_DIR_LINE = "log_dir:"
 
 
@@ -199,35 +220,33 @@ def _training_log(arm: Path, train: Path, label: str) -> str | None:
     — whose `log_dir:` banner names this run (a study launches several
     runs into one log, and a restarted run leaves two segments: the
     longest wins)."""
-    for own in (train / "train.log", arm / "train.log"):
+    for own in (train / TRAIN_LOG, arm / TRAIN_LOG):
         if own.is_file():
-            return own.read_text(errors="replace")
+            return read_text(own, errors="replace")
     best: str | None = None
     for log in sorted(arm.parent.glob("*.log")):
-        lines = log.read_text(errors="replace").splitlines(keepends=True)
+        lines = read_text(log, errors="replace").splitlines(keepends=True)
         starts = [i for i, line in enumerate(lines) if LOG_DIR_LINE in line]
         for n, i in enumerate(starts):
             if not lines[i].rstrip().endswith(f"/{label}/train"):
                 continue
             end = starts[n + 1] if n + 1 < len(starts) else len(lines)
             segment = "".join(lines[i:end])
-            if best is None or segment.count("Learning iteration") > best.count(
-                "Learning iteration"
-            ):
+            if best is None or _iterations_in(segment) > _iterations_in(best):
                 best = segment
     return best
+
+
+def _iterations_in(text: str) -> int:
+    return sum(1 for _ in ITERATION_LINE.finditer(text))
 
 
 def _write_training_record(log: Path) -> None:
     """The run's training facts and reward curve, read once from the
     console log so the index never re-reads hundreds of thousands of lines."""
-    from rq_pipeline.envs.rsl_rl_log import parse_rsl_rl_log  # noqa: PLC0415
-
-    record = parse_rsl_rl_log(log.read_text(errors="replace"))
+    record = parse_rsl_rl_log(read_text(log, errors="replace"))
     if record is not None:
-        (log.parent / TRAINING_FILE).write_text(
-            json.dumps(record.to_json(), indent=1) + "\n"
-        )
+        write_json(log.parent / TRAINING_FILE, record.to_json())
 
 
 def import_finding(project: Project, record: str | Path) -> dict[str, Any]:
@@ -235,13 +254,13 @@ def import_finding(project: Project, record: str | Path) -> dict[str, Any]:
     record file) into the project's findings."""
     path = Path(record)
     if not path.is_file():
-        path = LEDGER / f"{record}.json"
+        path = ledger() / f"{record}.json"
     if not path.is_file():
-        raise FileNotFoundError(f"no finding {record!r} (looked in {LEDGER})")
-    body = json.loads(path.read_text())
+        raise FileNotFoundError(f"no finding {record!r} (looked in {ledger()})")
+    body = read_json(path)
     if "claim" not in body or "id" not in body:
         raise ValueError(f"{path} is not a finding record (no id/claim)")
-    out = project.folder("findings") / path.name
+    out = project.findings / path.name
     if out.exists():
         raise FileExistsError(f"finding {path.name} is already in the project")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -256,12 +275,12 @@ def import_finding(project: Project, record: str | Path) -> dict[str, Any]:
 def ledger_findings(prefix: str = "") -> list[dict[str, str]]:
     """The ledger's records, id and claim, optionally by id prefix."""
     out = []
-    for path in sorted(LEDGER.glob("*.json")):
+    for path in sorted(ledger().glob("*.json")):
         if prefix and not path.stem.startswith(prefix):
             continue
         try:
-            body = json.loads(path.read_text())
-        except ValueError:
+            body = read_json(path)
+        except (OSError, ValueError):
             continue
         out.append(
             {

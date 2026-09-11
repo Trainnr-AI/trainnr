@@ -21,18 +21,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rq_pipeline.envs.rsl_rl_log import MAX_POINTS, TrainingRecord
+from rq_pipeline.envs.rsl_rl_log import (
+    COL_ENTROPY,
+    COL_EPISODE_LENGTH,
+    COL_ITERATION,
+    COL_REWARD,
+    COL_STEPS_PER_SECOND,
+    COL_VALUE_LOSS,
+    MAX_POINTS,
+    TrainingRecord,
+)
 
 EVENTS_GLOB = "events.out.tfevents.*"
 # rsl_rl's tag -> the console parser's column of the same quantity.
 NAMED = {
-    "Train/mean_reward": "reward",
-    "Train/mean_episode_length": "episode_length",
-    "Perf/total_fps": "steps_per_second",
-    "Loss/value": "value_loss",
-    "Loss/entropy": "entropy",
+    "Train/mean_reward": COL_REWARD,
+    "Train/mean_episode_length": COL_EPISODE_LENGTH,
+    "Perf/total_fps": COL_STEPS_PER_SECOND,
+    "Loss/value": COL_VALUE_LOSS,
+    "Loss/entropy": COL_ENTROPY,
 }
-GROUPS = {"Episode_Reward": "reward"}  # every other group keeps its own name
+GROUPS = {"Episode_Reward": COL_REWARD}  # every other group keeps its own name
+TRAINER = "rsl_rl (tensorboard)"
 SKIP_SUFFIX = "/time"  # rsl_rl's wall-clock twins of the step series
 
 
@@ -78,9 +88,11 @@ def record_from_scalars(
 ) -> TrainingRecord | None:
     """The training record from the scalar series, sampled down to
     `max_points` rows like the console record; `facts` carries what the
-    file lacks (planned iterations, envs, device, wall seconds)."""
+    file lacks (planned iterations, envs, device, wall seconds) - the
+    planned count stays unrecorded without them: the file holds the
+    iterations run, never the number asked for."""
     columns_by_tag = {t: c for t in scalars if (c := column_name(t))}
-    if not columns_by_tag or "reward" not in columns_by_tag.values():
+    if not columns_by_tag or COL_REWARD not in columns_by_tag.values():
         return None
     by_step: dict[int, dict[str, float]] = {}
     for tag, column in columns_by_tag.items():
@@ -89,13 +101,11 @@ def record_from_scalars(
     steps = sorted(by_step)
     named = [c for c in NAMED.values() if c in columns_by_tag.values()]
     others = sorted(c for c in set(columns_by_tag.values()) - set(named))
-    columns = ["iteration", *named, *others]
+    columns = [COL_ITERATION, *named, *others]
     record = TrainingRecord(**(facts.to_json() if facts else {}))
-    record.trainer = "rsl_rl (tensorboard)"
+    record.trainer = TRAINER
     record.iterations_logged = len(steps)
-    if record.iterations is None:
-        record.iterations = steps[-1] + 1
-    rewards = [by_step[s]["reward"] for s in steps if "reward" in by_step[s]]
+    rewards = [by_step[s][COL_REWARD] for s in steps if COL_REWARD in by_step[s]]
     record.best_reward = max(rewards) if rewards else None
     record.final = {c: v for c, v in by_step[steps[-1]].items()}
     record.columns = columns
@@ -120,7 +130,7 @@ def curve_groups(columns: list[str]) -> dict[str, list[str]]:
     each, every `group/name` column in its group's panel."""
     groups: dict[str, list[str]] = {}
     for c in columns:
-        if c == "iteration":
+        if c == COL_ITERATION:
             continue
         group = c.split("/", 1)[0] + " terms" if "/" in c else c
         groups.setdefault(group, []).append(c)

@@ -253,7 +253,7 @@ class TheProjectDoors(unittest.TestCase):
         from unittest import mock  # noqa: PLC0415
 
         from rq_pipeline.project import current_project  # noqa: PLC0415
-        from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
+        from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
 
         repo = Path(__file__).resolve().parents[2]
         wire = repo / "recordings" / "chase-arm-2026-08-17.wire"

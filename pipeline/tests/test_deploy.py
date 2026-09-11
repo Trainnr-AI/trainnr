@@ -18,15 +18,15 @@ from rq_pipeline.deploy.gate import ERR_RATIO_BOUND, Trial, draw_commands
 from rq_pipeline.deploy.manifest import (
     DDS_GATE_FILE,
     GATE_FILE,
+    GATE_SCHEMA,
     KNOWN_SOURCES,
     MANIFEST_FILE,
     MANIFEST_SCHEMA,
-    Manifest,
     gate_word,
     load_manifest,
     read_gates,
 )
-from rq_pipeline.deploy.runtime import _rotate_inverse, gait_phase, open_runtime
+from rq_pipeline.deploy.runtime import gait_phase, open_runtime, rotate_inverse
 from rq_pipeline.mcp_server import _task_id_in_project
 from rq_pipeline.project import PROJECT_ENV, create_project
 from rq_pipeline.project.index import _summary_deploy
@@ -68,7 +68,7 @@ class TheManifest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = _manifest(Path(tmp))
             m = load_manifest(root)
-            self.assertEqual(m.control["control_hz"], 50)
+            self.assertEqual(m.control.control_hz, 50)
             self.assertEqual(m.policy_path, root / "policy.onnx")
             _manifest(root, schema="trainnr-deploy/0")
             with self.assertRaises(ValueError) as caught:
@@ -120,11 +120,11 @@ class TheGate(unittest.TestCase):
 
     def test_rotating_into_the_identity_frame_changes_nothing(self) -> None:
         v = np.array([0.1, -0.2, 0.3])
-        np.testing.assert_allclose(_rotate_inverse(np.array([1.0, 0, 0, 0]), v), v)
+        np.testing.assert_allclose(rotate_inverse(np.array([1.0, 0, 0, 0]), v), v)
         # A half turn about z flips x and y.
         half = np.array([0.0, 0.0, 0.0, 1.0])
         np.testing.assert_allclose(
-            _rotate_inverse(half, v), [-0.1, 0.2, 0.3], atol=1e-12
+            rotate_inverse(half, v), [-0.1, 0.2, 0.3], atol=1e-12
         )
 
 
@@ -215,19 +215,17 @@ class TheDoors(unittest.TestCase):
 
 class ManifestType(unittest.TestCase):
     def test_manifest_properties_read_the_raw_record(self) -> None:
-        m = Manifest(
-            raw={
-                "observations": [1],
-                "joints": {"a": 1},
-                "control": {"c": 2},
-                "onnx": {"file": "p"},
-                "scene": {"file": "s"},
-            },
-            root=Path("/x"),
-        )
-        self.assertEqual(m.observations, [1])
-        self.assertEqual(m.joints, {"a": 1})
-        self.assertEqual(m.scene_path, Path("/x/s"))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _manifest(Path(tmp))
+            m = load_manifest(root)
+            self.assertEqual(m.control.control_hz, 50)
+            self.assertEqual(m.control.decimation, 4)
+            self.assertEqual(m.joints.policy_order, ("j",))
+            self.assertEqual([o.name for o in m.observations], ["joint_pos"])
+            self.assertEqual(m.observations[0].source, "joint_pos_rel")
+            self.assertEqual(m.commands.lin_vel_x, (0.0, 1.0))
+            self.assertEqual(m.scene_path, root / "scene.xml")
+            self.assertEqual(m.policy_path, root / "policy.onnx")
 
 
 class TheRunsTaskFamily(unittest.TestCase):
@@ -267,13 +265,27 @@ class BothGateRecords(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = _manifest(Path(tmp))
             (folder / GATE_FILE).write_text(
-                json.dumps({"successes": 4, "trials": 4, "verdict": {"passed": True}})
+                json.dumps(
+                    {
+                        "schema": GATE_SCHEMA,
+                        "successes": 4,
+                        "trials": 4,
+                        "verdict": {"passed": True},
+                    }
+                )
             )
             self.assertEqual(list(read_gates(folder)), ["mujoco"])
             self.assertEqual(_summary_deploy(folder)["gate"], "passed")
             self.assertNotIn("gate (DDS)", _summary_deploy(folder))
             (folder / DDS_GATE_FILE).write_text(
-                json.dumps({"successes": 0, "trials": 2, "verdict": {"passed": None}})
+                json.dumps(
+                    {
+                        "schema": GATE_SCHEMA,
+                        "successes": 0,
+                        "trials": 2,
+                        "verdict": {"passed": None},
+                    }
+                )
             )
             self.assertEqual(list(read_gates(folder)), ["mujoco", "dds"])
             summary = _summary_deploy(folder)

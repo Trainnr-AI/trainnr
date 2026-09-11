@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 
 from rq_pipeline.project import Kind, create_project, index_project
+from rq_pipeline.project.ingest import ingest
 from rq_pipeline.robots import Channel, Recording, list_adapters, resolve
 from rq_pipeline.robots.adapter import detect
 from rq_pipeline.robots.adapters import mcap as mcap_mod
-from rq_pipeline.robots.ingest import ingest
 from rq_pipeline.robots.recording import JOINT_COMMAND, JOINT_POSITION
 from tests._extras import needs_numpy
 

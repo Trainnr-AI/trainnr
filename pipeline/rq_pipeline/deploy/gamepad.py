@@ -9,13 +9,16 @@ minus left stick x, turn = minus right stick x, each in [-1, 1] and
 clamped to the policy's ranges - deploy/include, `velocity_commands`).
 The layout below is theirs (`simulate/src/physics_joystick.h`, xbox):
 the joystick driver numbers axes and buttons in the order they are
-registered, so the order here IS the mapping.
+registered, so the order here IS the mapping. Linux only (uinput): the
+registry refuses it by name elsewhere.
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any
+from collections.abc import Callable, Sequence
+
+from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
 
 # Their xbox layout: js axis index -> evdev absolute axis, in order.
 AXES = (
@@ -56,6 +59,11 @@ INVERTED = ("ly", "ry")  # their reading negates the y sticks
 # How long a press or a chord is held; 0.15 s was missed by their 1 kHz machine.
 PRESS_S = 0.3
 COMMAND_LIMIT = 1.0  # a stick reaches 1.0 at most: the pad's command envelope
+# What the device announces itself as: Microsoft's Xbox 360 controller ids,
+# which their joystick reader treats as an xbox layout.
+XBOX_VENDOR = 0x045E
+XBOX_PRODUCT = 0x028E
+PAD_NAME = "trainnr virtual xbox pad"
 
 
 def axis_value(x: float, *, inverted: bool = False) -> int:
@@ -65,7 +73,7 @@ def axis_value(x: float, *, inverted: bool = False) -> int:
     return round((-x if inverted else x) * AXIS_MAX)
 
 
-def sticks_for_command(command: Any) -> dict[str, float]:
+def sticks_for_command(command: Sequence[float]) -> dict[str, float]:
     """The stick positions that make their controller command
     (forward, sideways, turn): ly = forward, lx = -sideways, rx = -turn."""
     vx, vy, wz = (float(c) for c in command[:3])
@@ -76,10 +84,14 @@ class VirtualPad:
     """The device. `evdev.UInput` creates it; the joystick driver exposes
     it as `/dev/input/js<n>` for their simulator."""
 
-    def __init__(self, name: str = "trainnr virtual xbox pad") -> None:
+    def __init__(
+        self, name: str = PAD_NAME, sleep: Callable[[float], None] = time.sleep
+    ) -> None:
+        require_platform(RUNTIMES["dds"])
         from evdev import AbsInfo, UInput, ecodes  # noqa: PLC0415
 
         self._e = ecodes
+        self._sleep = sleep
         info = AbsInfo(
             value=0, min=-AXIS_MAX, max=AXIS_MAX, fuzz=0, flat=0, resolution=0
         )
@@ -91,7 +103,9 @@ class VirtualPad:
                 for a in AXES
             ],
         }
-        self._ui = UInput(capabilities, name=name, vendor=0x045E, product=0x028E)
+        self._ui = UInput(
+            capabilities, name=name, vendor=XBOX_VENDOR, product=XBOX_PRODUCT
+        )
 
     def _abs(self, axis: str, value: int) -> None:
         self._ui.write(self._e.EV_ABS, getattr(self._e, axis), value)
@@ -110,21 +124,21 @@ class VirtualPad:
         their state machine's transitions ("LT + up", "RT + A")."""
         self._abs(TRIGGER_AXIS[trigger], AXIS_MAX)
         self._ui.syn()
-        time.sleep(hold_s)
+        self._sleep(hold_s)
         if button in DPAD:
             axis, direction = DPAD[button]
             self._abs(axis, direction)
             self._ui.syn()
-            time.sleep(hold_s)
+            self._sleep(hold_s)
             self._abs(axis, 0)
         else:
             key = BUTTON_KEY[button]
             self._key(key, True)
             self._ui.syn()
-            time.sleep(hold_s)
+            self._sleep(hold_s)
             self._key(key, False)
         self._ui.syn()
-        time.sleep(hold_s)
+        self._sleep(hold_s)
         self._abs(TRIGGER_AXIS[trigger], 0)
         self._ui.syn()
 

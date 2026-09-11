@@ -32,10 +32,53 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 from rq_pipeline.bundles.json_record import JsonRecord
 
 JOBS_DIR_NAME = "mcp-jobs"
+
+# The three shapes a door answers with, so every caller reads one word
+# (`status`) before anything else. A refusal names the reason; a handle
+# names the job to poll; `done` carries the door's own fields beside it.
+REFUSED = "refused"
+DONE = "done"
+
+
+class JobHandle(TypedDict):
+    """A started job: what `job_status` polls."""
+
+    job_id: str
+    log: str
+    pid: int
+
+
+class Refusal(TypedDict):
+    """A door that did not act, and why."""
+
+    status: str  # REFUSED
+    reason: str
+
+
+class JobStatus(TypedDict):
+    """A job's state and its log tail."""
+
+    job_id: str
+    tool: str
+    state: str
+    argv: list[str]
+    log: str
+    log_tail: list[str]
+
+
+class Cancelled(TypedDict):
+    job_id: str
+    cancelled: str
+
+
+def refusal(reason: str) -> Refusal:
+    return {"status": REFUSED, "reason": reason}
+
 
 # How much of a job's log `job_status` returns by default — enough to
 # see the current stage line and the last error, not the whole run.
@@ -117,7 +160,7 @@ class JobManager:
         for watcher in self._watchers:
             watcher.join(timeout)
 
-    def start(self, tool: str, argv: Sequence[str], cwd: Path) -> dict[str, object]:
+    def start(self, tool: str, argv: Sequence[str], cwd: Path) -> JobHandle:
         """Spawn `argv` in `cwd`; returns the job's id, log path and pid."""
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
@@ -144,9 +187,7 @@ class JobManager:
         watcher.start()
         return {"job_id": job_id, "log": str(log_path), "pid": process.pid}
 
-    def status(
-        self, job_id: str, *, tail: int = DEFAULT_TAIL_LINES
-    ) -> dict[str, object]:
+    def status(self, job_id: str, *, tail: int = DEFAULT_TAIL_LINES) -> JobStatus:
         """The job's state — running / done(exit) / ended (unrecorded) —
         with the log's tail riding along."""
         record = self._record(job_id)
@@ -173,7 +214,7 @@ class JobManager:
             "log_tail": lines[-tail:],
         }
 
-    def cancel(self, job_id: str) -> dict[str, object]:
+    def cancel(self, job_id: str) -> Cancelled:
         """SIGTERM the job's whole process group (its own session — the
         same gesture as the Studio's stop button)."""
         record = self._record(job_id)
@@ -184,7 +225,7 @@ class JobManager:
             note = "already gone"
         return {"job_id": job_id, "cancelled": note}
 
-    def list(self) -> list[dict[str, object]]:
+    def list(self) -> list[JobStatus]:
         """Every job on record, newest first, with its current state."""
         if not self.jobs_dir.is_dir():
             return []

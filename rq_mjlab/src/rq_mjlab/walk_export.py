@@ -14,7 +14,11 @@ plain MuJoCo runtime steps the same model.
 Everything in the manifest is read out of the BUILT environment, never
 retyped from a config: the reference stack's hand-maintained deploy.yaml
 drifted from its training config, and that is the failure this file
-exists to make impossible (docs/77 §1).
+exists to make impossible (docs/77 §1). What the environment cannot
+know - a vendor SDK's joint order, the vendor's own stack - the walk
+declares (`walks.DeployFacts`) with its source, and the manifest says so.
+The manifest's schema and keys are the pipeline's
+(`rq_pipeline.deploy.manifest`); this file writes them from there.
 """
 
 from __future__ import annotations
@@ -22,33 +26,45 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-MANIFEST_SCHEMA = "trainnr-deploy/1"
-MANIFEST_FILE = "deploy.json"
+import mujoco
+import numpy as np
+from numpy.typing import NDArray
+from rq_pipeline.deploy.manifest import (
+    MANIFEST_FILE,
+    MANIFEST_SCHEMA,
+    SOURCE_GAIT_PHASE,
+    Key,
+)
+from rq_pipeline.project.kinds import IDENTITY_FILE, stamp_run
+
+from rq_mjlab.walks import DeployFacts
+
 POLICY_FILE = "policy.onnx"
 SCENE_FILE = "scene.xml"
 # The project's folder for deployments (`rq_pipeline.project.locate.FOLDERS`).
 DEPLOY_FOLDER = "deploy"
 # Manifest numbers are float32 facts of the model; print them as such.
 FLOAT_DIGITS = 6
+DEGREES_DIGITS = 3
 ACTOR_OBS_GROUP = "actor"
+ROBOT_ENTITY = "robot"
+ACTION_TERM = "joint_pos"
+COMMAND_TERM = "twist"
+FALL_TERM = "fell_over"
 # How closely the ONNX must follow the torch actor on random inputs.
 EXPORT_TOLERANCE = 1e-4
 EXPORT_CHECK_SAMPLES = 64
-# The reference's SDK joint order for the Go2 (deploy.yaml, docs/77 §1):
-# the policy's MJCF order FL, FR, RL, RR against the SDK's FR, FL, RR, RL.
-SDK_JOINT_MAPS = {"go2": [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8]}
-SDK_JOINT_MAP_SOURCE = (
-    "unitree_rl_mjlab deploy/robots/go2 deploy.yaml joint_ids_map (declared)"
-)
-FLOOR_XML = (
-    '  <worldbody>\n    <geom name="floor" type="plane" size="0 0 0.05" '
-    'condim="3" friction="0.6" priority="1"/>\n'
-)
+PROBE_SEED = 0
+FLOOR_NAME = "floor"
+UNRECORDED = "unrecorded"
+# mjlab's term functions, as `_source_of` names their sources.
+BUILTIN_SENSOR = "builtin_sensor"
+GENERATED_COMMANDS = "generated_commands"
+GAIT_PHASE_FUNC = "gait_phase"
 
 
 def main() -> None:
@@ -74,7 +90,37 @@ def main() -> None:
         certificate=args.certificate,
         policy_stamp=args.policy_stamp,
     )
-    print(f"[export] {out['manifest']['stamp_of']} -> {out['dir']}", flush=True)
+    print(f"[export] {out['manifest'][Key.STAMP_OF]} -> {out['dir']}", flush=True)
+
+
+@dataclass(frozen=True)
+class Export:
+    """What the manifest writer needs beyond the environment."""
+
+    obs_dim: int
+    checkpoint: Path
+    run_dir: Path
+    identity: dict[str, Any]
+    robot: str
+    certificate: str | None
+    policy_stamp: str | None
+    max_abs_diff: float
+    command_basis: str
+    input_name: str
+    output_name: str
+    clip_actions: float | None
+    deploy: DeployFacts
+
+
+@dataclass(frozen=True)
+class Floor:
+    """The plane the policy trained on, read from the built model: its
+    contact parameters decide what the feet touch."""
+
+    size: tuple[float, float, float]
+    condim: int
+    priority: int
+    friction: tuple[float, float, float]
 
 
 def export(  # noqa: PLR0913 - the export's own knobs, each named
@@ -88,7 +134,6 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
 ) -> dict[str, Any]:
     """Write `<project>/deploy/<name>/{policy.onnx, deploy.json,
     scene.xml}`; returns the manifest and the directory."""
-    import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
@@ -104,10 +149,14 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
     spec = walk_spec(robot)
     checkpoint = Path(checkpoint).resolve()
     run_dir = checkpoint.parent
-    identity_file = run_dir / "identity.json"
-    trained = json.loads(identity_file.read_text()) if identity_file.is_file() else {}
+    identity_file = run_dir / IDENTITY_FILE
+    trained = (
+        json.loads(identity_file.read_text(encoding="utf-8"))
+        if identity_file.is_file()
+        else {}
+    )
     cfg, identity = spec.env_cfg(dr_span=None, pin_scale=None, bundle=None)
-    for key in ("robot", "actuator"):
+    for key in (Key.ROBOT, Key.ACTUATOR):
         if trained.get(key) not in (None, identity.get(key)):
             raise SystemExit(
                 f"identity mismatch on {key}: the run was trained on "
@@ -126,6 +175,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
+    _require_same_actor_width(checkpoint, env, device)
     runner.load(
         str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
     )
@@ -141,7 +191,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
     unwrapped = env.unwrapped
     obs = env.get_observations()
     obs_dim = int(obs[ACTOR_OBS_GROUP].shape[-1])
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(PROBE_SEED)
     probe = rng.standard_normal((EXPORT_CHECK_SAMPLES, obs_dim)).astype(np.float32)
     with torch.inference_mode():
         onnx_module = runner.alg.get_policy().as_onnx(verbose=False).cpu().eval()
@@ -163,7 +213,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
             run_dir=run_dir,
             identity={
                 **identity,
-                **{k: trained[k] for k in ("seed", "task") if k in trained},
+                **{k: trained[k] for k in (Key.SEED, Key.TASK) if k in trained},
             },
             robot=robot,
             certificate=certificate,
@@ -172,37 +222,60 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
             command_basis=envelope["basis"],
             input_name=inputs[0],
             output_name=outputs[0],
+            clip_actions=agent.clip_actions,
+            deploy=spec.deploy,
         ),
     )
-    (out_dir / SCENE_FILE).write_text(_scene_xml(unwrapped))
+    (out_dir / SCENE_FILE).write_text(_scene_xml(unwrapped), encoding="utf-8")
     attach_metadata_to_onnx(
         str(policy_path),
         {
             "trainnr_schema": MANIFEST_SCHEMA,
-            "robot": manifest["robot"],
-            "actuator": manifest["actuator"],
-            "task": manifest.get("task") or "unrecorded",
-            "run": manifest["run"],
-            "joint_names": manifest["joints"]["policy_order"],
-            "observation_names": [t["name"] for t in manifest["observations"]],
+            Key.ROBOT: manifest[Key.ROBOT],
+            Key.ACTUATOR: manifest[Key.ACTUATOR],
+            Key.TASK: manifest[Key.TASK],
+            Key.RUN: manifest[Key.RUN],
+            "joint_names": manifest[Key.JOINTS]["policy_order"],
+            "observation_names": [t["name"] for t in manifest[Key.OBSERVATIONS]],
         },
     )
-    (out_dir / MANIFEST_FILE).write_text(json.dumps(manifest, indent=1) + "\n")
+    (out_dir / MANIFEST_FILE).write_text(
+        json.dumps(manifest, indent=1) + "\n", encoding="utf-8"
+    )
     env.close()
     return {"dir": str(out_dir), "manifest": manifest}
 
 
-class Export:
-    """What the manifest writer needs beyond the environment."""
-
-    def __init__(self, **fields: Any) -> None:
-        self.__dict__.update(fields)
+# The first actor layer's weight in rsl_rl's checkpoint: its input width
+# is the observation width the checkpoint was trained on.
+ACTOR_FIRST_LAYER = "mlp.0.weight"
 
 
-def _run_onnx(path: Path, probe: Any) -> Any:
+def _require_same_actor_width(checkpoint: Path, env: Any, device: str) -> None:
+    """Refuse by name a checkpoint whose actor observes a different width
+    than the declared walk's actor builds now: an older recipe (the Go2
+    actor became deployable on 2026-09-11 and lost the base linear
+    velocity for a gait clock), never a torch shape traceback."""
+    import torch  # noqa: PLC0415
+
+    state = torch.load(str(checkpoint), map_location=device, weights_only=False)
+    weight = (state.get("actor_state_dict") or {}).get(ACTOR_FIRST_LAYER)
+    if weight is None:
+        return  # not rsl_rl's layout; the loader's own refusal names it
+    trained_width = int(weight.shape[1])
+    built_width = int(env.get_observations()[ACTOR_OBS_GROUP].shape[-1])
+    if trained_width != built_width:
+        raise SystemExit(
+            f"{checkpoint}: its actor observes {trained_width} terms, the "
+            f"declared walk's actor observes {built_width} now; the checkpoint "
+            "was trained by an earlier recipe and cannot be exported through "
+            "this one - retrain on the current recipe"
+        )
+
+
+def _run_onnx(path: Path, probe: NDArray[np.float32]) -> NDArray[np.float32]:
     """The exported graph takes one observation at a time (rsl_rl exports a
     fixed batch of one, as a runtime uses it), so the probe runs row by row."""
-    import numpy as np  # noqa: PLC0415
     import onnxruntime as ort  # noqa: PLC0415
 
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
@@ -211,13 +284,13 @@ def _run_onnx(path: Path, probe: Any) -> Any:
 
 
 def _manifest(env: Any, ex: Export) -> dict[str, Any]:
-    """Every number read from the built environment."""
+    """Every number read from the built environment; the vendor facts
+    from the walk's declaration."""
     import torch  # noqa: PLC0415
     from mjlab.envs.mdp.actions import JointPositionAction  # noqa: PLC0415
-    from rq_pipeline.project.kinds import stamp_run  # noqa: PLC0415
 
-    entity = env.scene["robot"]
-    joint_action = env.action_manager.get_term("joint_pos")
+    entity = env.scene[ROBOT_ENTITY]
+    joint_action = env.action_manager.get_term(ACTION_TERM)
     assert isinstance(joint_action, JointPositionAction)
     model = env.sim.mj_model
     joint_names = list(entity.joint_names)
@@ -268,7 +341,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
         raise SystemExit(
             f"observation widths sum to {widths}, the actor takes {ex.obs_dim}"
         )
-    twist = env.command_manager.get_term("twist")
+    twist = env.command_manager.get_term(COMMAND_TERM)
     ranges = getattr(getattr(twist, "cfg", None), "ranges", None)
     command_ranges = (
         {k: list(v) for k, v in asdict(ranges).items() if v is not None}
@@ -278,45 +351,47 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
     physics_dt = float(env.cfg.sim.mujoco.timestep)
     decimation = int(env.cfg.decimation)
     terrain = env.cfg.scene.terrain.terrain_type if env.cfg.scene.terrain else None
-    return {
-        "schema": MANIFEST_SCHEMA,
-        "stamp_of": f"{ex.robot} policy {ex.checkpoint.stem}",
-        "policy": ex.policy_stamp or "unrecorded",
-        "checkpoint": ex.checkpoint.name,
-        "run": stamp_run(ex.run_dir),
-        "robot": ex.identity["robot"],
-        "actuator": ex.identity["actuator"],
-        "task": ex.identity.get("task"),
-        "dr_basis": ex.identity.get("dr_basis"),
-        "seed": ex.identity.get("seed"),
-        "certificate": ex.certificate,
-        "control": {
+    clip = ex.clip_actions
+    deploy = ex.deploy
+    manifest: dict[str, Any] = {
+        Key.SCHEMA: MANIFEST_SCHEMA,
+        Key.STAMP_OF: f"{ex.robot} policy {ex.checkpoint.stem}",
+        Key.POLICY: ex.policy_stamp or UNRECORDED,
+        Key.CHECKPOINT: ex.checkpoint.name,
+        Key.RUN: stamp_run(ex.run_dir),
+        Key.ROBOT: ex.identity[Key.ROBOT],
+        Key.ACTUATOR: ex.identity[Key.ACTUATOR],
+        Key.TASK: ex.identity.get(Key.TASK) or UNRECORDED,
+        Key.DR_BASIS: ex.identity.get(Key.DR_BASIS) or UNRECORDED,
+        Key.SEED: ex.identity.get(Key.SEED),
+        Key.CERTIFICATE: ex.certificate,
+        Key.CONTROL: {
             "physics_timestep_s": physics_dt,
             "decimation": decimation,
             "control_hz": round(1.0 / (physics_dt * decimation)),
             "episode_length_s": float(env.cfg.episode_length_s),
         },
-        "joints": {
+        Key.JOINTS: {
             "policy_order": joint_names,
             "ctrl_order": ctrl_names,
             "action_to_ctrl": action_to_ctrl,
-            "sdk_order_map": SDK_JOINT_MAPS.get(ex.robot),
-            "sdk_order_source": SDK_JOINT_MAP_SOURCE
-            if ex.robot in SDK_JOINT_MAPS
-            else None,
+            "sdk_order_map": (
+                list(deploy.sdk_joint_map) if deploy.sdk_joint_map else None
+            ),
+            "sdk_order_source": deploy.sdk_joint_map_source,
             "stiffness": stiffness,
             "damping": damping,
             "effort_limit": effort,
             "default_pos": default_pos,
         },
-        "action": {
+        Key.ACTION: {
             "kind": "joint position target = default_pos + scale * action",
             "scale": scale_list,
             "offset": default_pos,
-            "clip": None,
+            "clip": [-float(clip), float(clip)] if clip is not None else None,
         },
-        "observations": observations,
-        "onnx": {
+        Key.OBSERVATIONS: observations,
+        Key.ONNX: {
             "file": POLICY_FILE,
             "input": ex.input_name,
             "output": ex.output_name,
@@ -325,16 +400,20 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "normalization": "folded into the graph",
             "export_check_max_abs_diff": ex.max_abs_diff,
         },
-        "scene": {
+        Key.SCENE: {
             "file": SCENE_FILE,
             "meshes": "the robot bundle's assets/, by name (the bundle is the "
             "version above)",
             "terrain": terrain,
+            "floor": asdict(_floor_of(model)),
         },
-        "commands": {"twist": command_ranges},
-        "command_basis": ex.command_basis,
-        "termination": {"fell_over_deg": _fell_over_deg(env)},
+        Key.COMMANDS: {"twist": command_ranges},
+        Key.COMMAND_BASIS: ex.command_basis,
+        Key.TERMINATION: {"fell_over_deg": _fell_over_deg(env)},
     }
+    if deploy.unitree is not None:
+        manifest[Key.UNITREE] = asdict(deploy.unitree)
+    return manifest
 
 
 def _unprefixed(name: str) -> str:
@@ -342,43 +421,70 @@ def _unprefixed(name: str) -> str:
 
 
 def _source_of(cfg: Any) -> str:
+    """The manifest's name for what a term computes, from mjlab's term
+    function and its params."""
     name = getattr(cfg.func, "__name__", str(cfg.func))
     params = cfg.params or {}
-    if name == "builtin_sensor":
+    if name == BUILTIN_SENSOR:
         return f"sensor {params.get('sensor_name', '')}".strip()
-    if name == "generated_commands":
+    if name == GENERATED_COMMANDS:
         return f"command {params.get('command_name', '')}".strip()
+    if name == GAIT_PHASE_FUNC:
+        return SOURCE_GAIT_PHASE
     return name
 
 
 def _fell_over_deg(env: Any) -> float | None:
-    term = env.cfg.terminations.get("fell_over")
+    term = env.cfg.terminations.get(FALL_TERM)
     if term is None:
         return None
     angle = (term.params or {}).get("limit_angle")
-    return round(math.degrees(float(angle)), 3) if angle is not None else None
+    return (
+        round(math.degrees(float(angle)), DEGREES_DIGITS) if angle is not None else None
+    )
+
+
+def _floor_of(model: mujoco.MjModel) -> Floor:
+    """The plane the trained scene stands on, from the built model - its
+    contact parameters, never retyped."""
+    planes = [
+        g
+        for g in range(model.ngeom)
+        if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_PLANE
+    ]
+    if len(planes) != 1:
+        raise SystemExit(
+            f"the built scene has {len(planes)} plane geoms; the exporter writes "
+            "one floor"
+        )
+    g = planes[0]
+    return Floor(
+        size=tuple(float(v) for v in model.geom_size[g]),
+        condim=int(model.geom_condim[g]),
+        priority=int(model.geom_priority[g]),
+        friction=tuple(float(v) for v in model.geom_friction[g]),
+    )
 
 
 def _scene_xml(env: Any) -> str:
-    """The trained model as MJCF, actuators and keyframe injected, a
-    plane under it, the training timestep - what a plain MuJoCo runtime
-    loads with the bundle's meshes."""
+    """The trained model as MJCF, actuators and keyframe injected, the
+    plane it trained on under it, the training timestep - what a plain
+    MuJoCo runtime loads with the bundle's meshes."""
     from mjlab.entity.entity import Entity  # noqa: PLC0415
 
     # A fresh entity: the scene's own is attached to the scene spec and
     # cannot be serialized on its own.
-    xml = Entity(env.cfg.scene.entities["robot"]).spec.to_xml()
-    physics_dt = float(env.cfg.sim.mujoco.timestep)
-    xml = xml.replace("  <worldbody>\n", FLOOR_XML, 1)
-    if re.search(r"<option[^>]*timestep=", xml):
-        xml = re.sub(r'timestep="[^"]*"', f'timestep="{physics_dt:g}"', xml, count=1)
-    elif "<option" in xml:
-        xml = xml.replace("<option", f'<option timestep="{physics_dt:g}"', 1)
-    else:
-        xml = xml.replace(
-            "  <worldbody>", f'  <option timestep="{physics_dt:g}"/>\n  <worldbody>', 1
-        )
-    return xml
+    spec = Entity(env.cfg.scene.entities[ROBOT_ENTITY]).spec
+    spec.option.timestep = float(env.cfg.sim.mujoco.timestep)
+    floor = _floor_of(env.sim.mj_model)
+    geom = spec.worldbody.add_geom()
+    geom.name = FLOOR_NAME
+    geom.type = mujoco.mjtGeom.mjGEOM_PLANE
+    geom.size = list(floor.size)
+    geom.condim = floor.condim
+    geom.priority = floor.priority
+    geom.friction = list(floor.friction)
+    return str(spec.to_xml())
 
 
 def _jsonable(v: Any) -> Any:

@@ -30,8 +30,11 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from rq_pipeline.project.locate import INDEX_DIR, Project
+from rq_pipeline.paths import checkout
+from rq_pipeline.project.locate import INDEX_DIR, PROJECT_ENV, Project
+from rq_pipeline.viz import STUDIO_ADDRESS
 
 COMMANDS_DIR = "commands"
 STATE_FILE = "studio-state.json"
@@ -78,8 +81,8 @@ SECTIONS = (
     "live",
 )
 PANEL_ACTIONS = ("expand", "toggle")
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# The built Studio, relative to the checkout.
+STUDIO_RELEASE = Path("crates") / "studio-shell" / "target" / "release"
 
 
 # -- paths ---------------------------------------------------------------------
@@ -280,13 +283,13 @@ def studio_binary() -> Path | None:
         path = Path(named)
         return path if path.is_file() else None
     exe = "studio-shell.exe" if sys.platform.startswith("win") else "studio-shell"
-    path = REPO_ROOT / "crates" / "studio-shell" / "target" / "release" / exe
+    path = checkout() / STUDIO_RELEASE / exe
     return path if path.is_file() else None
 
 
-VIEWER_PORT = (
-    9876  # the Studio's embedded Rerun server (rq_pipeline.viz.STUDIO_ADDRESS)
-)
+# The Studio's embedded Rerun server: the port of `viz.STUDIO_ADDRESS`,
+# the one address every feed connects to.
+VIEWER_PORT = urlsplit(STUDIO_ADDRESS).port or 0
 PORT_FREE_TIMEOUT_S = 8.0
 
 
@@ -344,11 +347,11 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
-    env["TRAINNR_PROJECT"] = str(project.root)
+    env[PROJECT_ENV] = str(project.root)
     with log.open("ab") as sink:
         child = subprocess.Popen(
             [str(binary)],
-            cwd=str(REPO_ROOT),
+            cwd=str(checkout()),
             env=env,
             stdout=sink,
             stderr=subprocess.STDOUT,
@@ -403,15 +406,18 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
 
 
 def _pid_alive(pid: int) -> bool:
+    """Whether a process with this id exists. psutil's probe, because
+    `os.kill(pid, 0)` is a liveness check on POSIX and a TERMINATE on
+    Windows - it would have killed the Studio it asked after."""
     if pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+        import psutil  # noqa: PLC0415 - the `mcp` extra
+    except ImportError as why:
+        raise ImportError(
+            "psutil is needed to check a Studio's process: install the `mcp` extra"
+        ) from why
+    return bool(psutil.pid_exists(pid))
 
 
 def _prune(folder: Path, keep: int = KEEP_COMMANDS) -> None:

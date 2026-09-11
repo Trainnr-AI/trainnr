@@ -128,7 +128,14 @@ FRAME_TOKEN = b"\xf7"  # one byte on stdout per published shm frame
 # Free-camera framing per rig, seeded from each rig's own viewer tools
 # (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
 # a starting pose the operator immediately corrects by dragging.
+DEFAULT_CAMERA = "default"  # a rig with no preset of its own
 RIG_CAMERAS = {
+    DEFAULT_CAMERA: {  # a metre-scale scene seen from the front, slightly above
+        "azimuth": 90.0,
+        "elevation": -20.0,
+        "distance": 1.0,
+        "lookat": (0.0, 0.0, 0.15),
+    },
     "microduck-rl": {  # the RL view: nine worlds on a grid, seen from above the corner
         "azimuth": 120.0,
         "elevation": -20.0,
@@ -154,6 +161,12 @@ RIG_CAMERAS = {
         "lookat": (0.0, 0.0, 0.2),
     },
 }
+
+
+def rig_camera(rig: str | None) -> dict:
+    """The rig's own framing, else the default preset."""
+    return RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+
 
 # The physics narration into the Studio's embedded Rerun viewer: the same
 # `mj_step` loop that renders the pixels also logs the twin, every named
@@ -1692,23 +1705,45 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None
 
 
 WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched sim
+WALK_SCENE_PARTS = 3  # walk:<robot>:<worlds>
 
 
-def walk_scene(worlds: int, offscreen_side: int = MAX_RENDER_SIDE) -> "mujoco.MjModel":
+def walk_scene_of(scene: str) -> tuple[str, int]:
+    """`walk:<robot>:<worlds>` -> (robot, worlds); refused by name when the
+    robot is missing — the RL view has no robot of its own."""
+    parts = scene.split(":")
+    if len(parts) != WALK_SCENE_PARTS or not parts[1] or not parts[2].isdigit():
+        raise ValueError(
+            f"a walk scene is {WALK}:<robot>:<worlds> (the robot's bundle name and "
+            f"the number of worlds), not {scene!r}"
+        )
+    return parts[1], int(parts[2])
+
+
+def walk_scene(
+    robot: str, worlds: int, offscreen_side: int = MAX_RENDER_SIDE
+) -> "mujoco.MjModel":
     """One CPU model holding `worlds` copies of the walk robot on one
     ground plane, each under a `wNN/` prefix at its grid cell (the RL
     view's mirror; rq_mjlab.walk_view fills its qpos from the batched
     sim). The batched env's world origins are already in each free
     joint's global qpos, so the copies land on their origins by the copy
     alone. Built here, not in rq_mjlab, so the render process — the
-    pipeline venv, no mjlab — can build the same model."""
+    pipeline venv, no mjlab — can build the same model. The robot's model
+    is the one its bundle records (project first, then the library)."""
+    from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
+    from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
     from rq_pipeline.tasks.scene import grid_of  # noqa: PLC0415
 
-    repo = pathlib.Path(__file__).resolve().parent.parent
-    xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
+    bundle = find_bundle(robot)
+    model_file = model_file_of(bundle) if bundle is not None else None
+    if bundle is None or model_file is None:
+        raise FileNotFoundError(
+            f"no bundle {robot!r} with a model file in the project or the library"
+        )
     scene, _ = grid_of(
-        f"microduck-rl-{worlds}",
-        (mujoco.MjSpec.from_file(xml) for _ in range(worlds)),
+        f"{robot}-rl-{worlds}",
+        (mujoco.MjSpec.from_file(str(model_file)) for _ in range(worlds)),
         pitch=0.0,
     )
     for geom in scene.geoms:
@@ -1742,11 +1777,13 @@ def render_on(scene: str, ring_path: str, shm_path: str | None, rig: str) -> Non
     the ring was created by that process, the wire and status are the
     same."""
     if scene.startswith(f"{WALK}:"):
-        model = walk_scene(int(scene.split(":", 1)[1]))
+        model = walk_scene(*walk_scene_of(scene))
     else:
         model = mujoco.MjModel.from_xml_path(scene)
     ring = StateRing(ring_path, model, create=False)
-    orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
+    orbit = OrbitCamera(
+        RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+    )
     perturber = Perturber(model)
     sim = SimControl(model, ring, orbit)
     pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
@@ -1781,7 +1818,9 @@ def stream(task_name: str, shm_path: str | None) -> None:
     # orphaned physics at 100 % of a core.
     physics = subprocess.Popen(physics_args, stdin=subprocess.PIPE)
 
-    orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
+    orbit = OrbitCamera(
+        RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+    )
     perturber = Perturber(model)
     sim = SimControl(model, ring, orbit)
     pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
@@ -1883,7 +1922,7 @@ if __name__ == "__main__":
     physics_ring = None
     model_path = None
     ring_path = None
-    rig = "so101"
+    rig: str | None = None  # the scene's own rig, or the default camera
     for flag in sys.argv[1:]:
         if flag.startswith("--physics="):
             physics_ring = flag.removeprefix("--physics=")

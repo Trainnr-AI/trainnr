@@ -22,23 +22,67 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Callable
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from rq_pipeline.project.index import Artifact, ProjectIndex
-from rq_pipeline.project.kinds import ACCEPTANCE_FILE, TASK_FILE
+from rq_pipeline.collect.datasheet import DATASHEET_FILE
+from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.envs.lerobot_train_log import (
+    CHAIN_LOG_FILE,
+    RUN_MANIFEST_FILE,
+    RunLayout,
+    parse_train_line,
+)
+from rq_pipeline.envs.rsl_rl_log import (
+    COL_EPISODE_LENGTH,
+    COL_REWARD,
+    COL_STEPS_PER_SECOND,
+    TRAINING_FILE,
+)
+from rq_pipeline.evaluate.commands import TWIST_LABEL
+from rq_pipeline.project.files import read_json, read_text, write_json
+from rq_pipeline.project.index import (
+    UNRECORDED,
+    Artifact,
+    ProjectIndex,
+    interval_of,
+    ratio_of,
+)
+from rq_pipeline.project.kinds import (
+    ACCEPTANCE_FILE,
+    ACCEPTED,
+    CERTIFICATE_FILE,
+    FITS_DIR,
+    IDENTITY_FILE,
+    POLICY_FILE,
+    REJECTED,
+    TASK_FILE,
+    UNREVIEWED,
+)
 from rq_pipeline.project.locate import INDEX_DIR, Project
+from rq_pipeline.tasks.overlay import jsonable as _plain_jsonable
+
+if TYPE_CHECKING:
+    from rq_pipeline.tasks.task import Task
 
 DETAILS_DIR = "details"
-# /4 (2026-09-10): a walk's gate and episode; /3 (2026-09-09): fit records
-# read as written.
+# /5 (2026-09-12): one gate section per runtime; /4 (2026-09-10): a walk's
+# gate and episode; /3 (2026-09-09): fit records read as written.
 SCHEMA = "trainnr-detail/5"
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
+EPISODE_MANIFEST = "manifest.json"  # a generated episode's own record
+LEROBOT_INFO = Path("meta") / "info.json"  # LeRobot's dataset description
+CHECKPOINTS_DIR = "checkpoints"  # LeRobot's trainer keeps them here
+Section = dict[str, Any]
+# A writer reads one artifact and returns its sections.
+Writer = Callable[[Project, Path, Artifact], list[Section]]
 
 JOINT_TYPES = {0: "free", 1: "ball", 2: "slide", 3: "hinge"}
 ACTUATOR_TRN = {
@@ -50,7 +94,6 @@ ACTUATOR_TRN = {
     5: "body",
 }
 INTEGRATORS = {0: "Euler", 1: "RK4", 2: "implicit", 3: "implicitfast"}
-INTERVAL_ENDS = 2  # a confidence interval is two numbers
 # The protocol fields with a field-word label; the rest are shown as recorded.
 PROTOCOL_KEYS = frozenset(
     {"trials", "seed", "criterion", "err_floor_mps", "dr_basis", "judged_at"}
@@ -78,10 +121,7 @@ UPDATED_RESOLUTION_S = 1.0
 
 
 def _schema_of(path: Path) -> str:
-    try:
-        return str(json.loads(path.read_text()).get("schema", ""))
-    except (OSError, ValueError):
-        return ""
+    return str(read_json(path, missing_ok=True).get("schema", ""))
 
 
 def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
@@ -98,7 +138,7 @@ def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
             if writer is None:
                 continue
             try:
-                sections = writer(project.root / artifact.path, artifact)
+                sections = writer(project, project.root / artifact.path, artifact)
             except Exception as why:  # a detail is a view; the index is not
                 sections = [
                     _kv(
@@ -106,16 +146,11 @@ def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
                         [("reason", str(why)), ("path", artifact.path)],
                     )
                 ]
-            out.parent.mkdir(parents=True, exist_ok=True)
-            staging = out.with_suffix(".json.tmp")
-            staging.write_text(
-                json.dumps(
-                    {"schema": SCHEMA, "version": artifact.stamp, "sections": sections},
-                    indent=1,
-                    default=_jsonable,
-                )
+            write_json(
+                out,
+                {"schema": SCHEMA, "version": artifact.stamp, "sections": sections},
+                default=jsonable,
             )
-            staging.replace(out)
         written[artifact.stamp] = str(out.relative_to(project.root))
     return written
 
@@ -200,10 +235,16 @@ def _rng(lo: Any, hi: Any) -> str:
     return f"[{_f(lo)}, {_f(hi)}]"
 
 
+def _interval(record: dict[str, Any]) -> str:
+    """The record's exact interval as `[lo, hi]`, or `unrecorded`."""
+    interval = interval_of(record)
+    return _rng(*interval) if interval is not None else UNRECORDED
+
+
 # -- robot (Asset) ---------------------------------------------------------------
 
 
-def _robot(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     import mujoco  # noqa: PLC0415
 
     from rq_pipeline.project.previews import _robot_model_file  # noqa: PLC0415
@@ -337,7 +378,7 @@ def _robot(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         collision,
         _kv("Files", [(f, "") for f in files]),
     ]
-    fits = root / "fits"
+    fits = root / FITS_DIR
     if fits.is_dir():
         sections.insert(1, _fit_table(fits))
     return sections
@@ -421,24 +462,20 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
     reasons, the counts, and the expert's funnel."""
     funnel = a.get("funnel") or {}
 
-    def count(key: str) -> str:
-        k, n = a.get(key), a.get("trials")
-        return f"{k} / {n}" if k is not None and n is not None else "unrecorded"
-
     rows: list[tuple[str, Any]] = [
-        ("verdict", "accepted" if a.get("accepted") else "rejected")
+        ("verdict", ACCEPTED if a.get("accepted") else REJECTED)
     ]
     gate = a.get("gate")
     if gate:
         rows.append(("gate", gate))
     else:
         rows += [
-            ("scripted policy successes", count("expert_successes")),
-            ("floor policy successes", count("floor_successes")),
+            ("scripted policy successes", ratio_of(a, "expert_successes")),
+            ("floor policy successes", ratio_of(a, "floor_successes")),
         ]
     rows += [
-        ("judged", a.get("judged", "unrecorded")),
-        ("simulator build", a.get("instrument", "unrecorded")),
+        ("judged", a.get("judged", UNRECORDED)),
+        ("simulator build", a.get("instrument", UNRECORDED)),
     ]
     for key, value in (a.get("identity") or {}).items():
         rows.append((f"identity · {key}", value))
@@ -467,8 +504,8 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    ref = json.loads((root / TASK_FILE).read_text())
+def _task(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    ref = read_json(root / TASK_FILE)
     task_id = ref.get("task_id", "")
     sections = [
         _kv(
@@ -480,24 +517,17 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             ],
         )
     ]
-    acceptance = (
-        json.loads((root / ACCEPTANCE_FILE).read_text())
-        if (root / ACCEPTANCE_FILE).is_file()
-        else None
-    )
-    if acceptance is not None:
-        sections.append(_acceptance(acceptance))
+    if (root / ACCEPTANCE_FILE).is_file():
+        sections.append(_acceptance(read_json(root / ACCEPTANCE_FILE)))
     else:
         sections.append(
             _kv(
                 "Acceptance",
-                [("verdict", "unreviewed")],
+                [("verdict", UNREVIEWED)],
                 note="run accept_task to review it",
             )
         )
     try:
-        from dataclasses import asdict  # noqa: PLC0415
-
         from rq_pipeline.tasks.overlay import build_from_reference  # noqa: PLC0415
 
         task = build_from_reference(ref)
@@ -505,45 +535,14 @@ def _task(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         sections.append(_kv("Scene", [("not built", str(why))]))
         return sections
     proto = getattr(task, "protocol", None)
-    control_hz = getattr(task, "control_hz", None)
-    steps = getattr(proto, "steps", None)
-    episode_s = (steps / control_hz) if (steps and control_hz) else None
-    walk_spec = getattr(task, "task_spec", None) if proto is None else None
-    if walk_spec is not None:  # a walk: the episode is the spec's
-        episode_s = getattr(walk_spec, "episode_s", None)
-        steps = int(episode_s * control_hz) if (episode_s and control_hz) else None
-    sections.append(
-        _kv(
-            "Episode",
-            [
-                ("robot asset", Path(str(getattr(task, "bundle_dir", ""))).name),
-                ("control rate (Hz)", control_hz),
-                ("episode length (steps)", steps),
-                ("episode length (s)", _f(episode_s, 2) if episode_s else ""),
-                (
-                    "paired trials per evaluation",
-                    getattr(proto, "trials", None)
-                    if proto is not None
-                    else getattr(walk_spec, "trials", None),
-                ),
-                ("instruction", getattr(task, "instruction", "")),
-                *(
-                    []
-                    if walk_spec is not None
-                    else [
-                        ("cameras", list(getattr(task, "cameras", []) or [])),
-                        ("state dimension", getattr(task, "state_width", None)),
-                    ]
-                ),
-            ],
-        )
-    )
+    describe = next(d for matches, d in _TASK_DESCRIBERS if matches(task))
+    sections.append(_kv("Episode", describe(task)))
     spec = getattr(task, "task_spec", None)
     if spec is not None:
         fields = asdict(spec)
         spawn = fields.pop("part_spawn", None)
         sections.append(
-            _kv("Task specification", [(k, _jsonable(v)) for k, v in fields.items()])
+            _kv("Task specification", [(k, jsonable(v)) for k, v in fields.items()])
         )
         if spawn:
             sections.append(
@@ -585,10 +584,77 @@ def _describe(obj: Any) -> str:
     return doc or getattr(obj, "__name__", None) or type(obj).__name__
 
 
+# -- the two task shapes the registry holds, described each its own way ------
+#
+# A manipulation task carries a `protocol` (steps, trials, milestones, the
+# success criterion); a walk carries a `task_spec` with the episode in
+# seconds and no scripted protocol. Each shape describes its own episode;
+# a third shape is a row in `_TASK_DESCRIBERS`, not a branch.
+
+Rows = list[tuple[str, Any]]
+
+
+def _is_manipulation(task: Task) -> bool:
+    return getattr(task, "protocol", None) is not None
+
+
+def _is_walk(task: Task) -> bool:
+    return (
+        getattr(task, "protocol", None) is None
+        and getattr(task, "task_spec", None) is not None
+    )
+
+
+def _episode_common(task: Task, steps: int | None, episode_s: float | None) -> Rows:
+    return [
+        ("robot asset", Path(str(getattr(task, "bundle_dir", ""))).name),
+        ("control rate (Hz)", getattr(task, "control_hz", None)),
+        ("episode length (steps)", steps),
+        ("episode length (s)", _f(episode_s, 2) if episode_s else ""),
+    ]
+
+
+def _describe_manipulation(task: Task) -> Rows:
+    proto = task.protocol
+    control_hz = getattr(task, "control_hz", None)
+    steps = getattr(proto, "steps", None)
+    episode_s = (steps / control_hz) if (steps and control_hz) else None
+    return [
+        *_episode_common(task, steps, episode_s),
+        ("paired trials per evaluation", getattr(proto, "trials", None)),
+        ("instruction", getattr(task, "instruction", "")),
+        ("cameras", list(getattr(task, "cameras", []) or [])),
+        ("state dimension", getattr(task, "state_width", None)),
+    ]
+
+
+def _describe_walk(task: Task) -> Rows:
+    spec = task.task_spec
+    control_hz = getattr(task, "control_hz", None)
+    episode_s = getattr(spec, "episode_s", None)
+    steps = int(episode_s * control_hz) if (episode_s and control_hz) else None
+    return [
+        *_episode_common(task, steps, episode_s),
+        ("paired trials per evaluation", getattr(spec, "trials", None)),
+        ("instruction", getattr(task, "instruction", "")),
+    ]
+
+
+def _describe_other(task: Task) -> Rows:
+    return _episode_common(task, None, None)
+
+
+_TASK_DESCRIBERS: tuple[tuple[Callable[[Any], bool], Callable[[Any], Rows]], ...] = (
+    (_is_manipulation, _describe_manipulation),
+    (_is_walk, _describe_walk),
+    (lambda _task: True, _describe_other),
+)
+
+
 # -- recording ---------------------------------------------------------------------
 
 
-def _recording(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+def _recording(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     from rq_pipeline.robots.recording import Recording  # noqa: PLC0415
 
     rec = Recording.read(root)
@@ -640,7 +706,7 @@ def _recording(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         ),
         _kv(
             "What the robot reported",
-            [(k, _jsonable(v)) for k, v in rec.census.items()],
+            [(k, jsonable(v)) for k, v in rec.census.items()],
         ),
         _kv("Notes", [(f"{i + 1}", n) for i, n in enumerate(rec.notes)])
         if rec.notes
@@ -651,7 +717,7 @@ def _recording(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 # -- batch (a generated dataset) and dataset (an exported one) -------------------------
 
 
-def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+def _batch(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     from rq_pipeline.collect.datasheet import summarize  # noqa: PLC0415
 
     s = summarize(root)
@@ -659,8 +725,7 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     episodes = sorted(root.glob("episode_*"))
     rows = []
     for ep in episodes[:MAX_ROWS]:
-        man = ep / "manifest.json"
-        raw = json.loads(man.read_text()) if man.is_file() else {}
+        raw = read_json(ep / EPISODE_MANIFEST, missing_ok=True)
         frames = len(list(ep.glob("frames/*.jpg")) or list(ep.glob("frames/*/*.jpg")))
         dyn = raw.get("dynamics") or {
             k: raw[k] for k in ("damping_scale", "gain_scale") if k in raw
@@ -669,10 +734,10 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             [
                 ep.name,
                 raw.get("seed"),
-                raw.get("attempt", 1),
+                raw.get("attempt", UNRECORDED),
                 frames,
                 field_words(str(raw.get("verdict", ""))),
-                _jsonable(dyn),
+                jsonable(dyn),
                 raw.get("dynamics_basis")
                 or ("hand-set ±" + str(raw["dr_span"]) if "dr_span" in raw else ""),
             ]
@@ -710,8 +775,8 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         ),
         _markdown(
             "Datasheet",
-            field_words((root / "datasheet.md").read_text()[:MAX_MARKDOWN])
-            if (root / "datasheet.md").is_file()
+            field_words(read_text(root / DATASHEET_FILE)[:MAX_MARKDOWN])
+            if (root / DATASHEET_FILE).is_file()
             else "",
             note="The datasheet as written at generation time; house words in an "
             "older file are shown in the field's terms.",
@@ -719,23 +784,15 @@ def _batch(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     ]
 
 
-def _dataset(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    info = (
-        json.loads((root / "meta" / "info.json").read_text())
-        if (root / "meta" / "info.json").is_file()
-        else {}
-    )
-    prov = (
-        json.loads((root / "provenance.json").read_text())
-        if (root / "provenance.json").is_file()
-        else {}
-    )
+def _dataset(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    info = read_json(root / LEROBOT_INFO, missing_ok=True)
+    prov = read_json(root / PROVENANCE_FILE, missing_ok=True)
     features = info.get("features", {})
     feat_rows = [
         [
             k,
             v.get("dtype"),
-            _jsonable(v.get("shape")),
+            jsonable(v.get("shape")),
             ", ".join(v.get("names") or []) if isinstance(v.get("names"), list) else "",
         ]
         for k, v in features.items()
@@ -750,11 +807,11 @@ def _dataset(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ("frames", info.get("total_frames")),
                 ("fps", info.get("fps")),
                 ("robot type", info.get("robot_type", "")),
-                ("robot asset", prov.get("bundle", "unrecorded")),
+                ("robot asset", prov.get("bundle", UNRECORDED)),
                 ("scripted policy", prov.get("expert", "")),
                 (
                     "source dataset",
-                    prov.get("source_stamp") or prov.get("source", "unrecorded"),
+                    prov.get("source_stamp") or prov.get("source", UNRECORDED),
                 ),
             ],
         ),
@@ -765,7 +822,7 @@ def _dataset(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         ),
         _kv(
             "Provenance",
-            [(k, _jsonable(v)) for k, v in prov.items() if k != "manifests"],
+            [(k, jsonable(v)) for k, v in prov.items() if k != "manifests"],
             note=f"{len(prov.get('manifests', []))} per-episode manifests carried"
             if prov.get("manifests")
             else None,
@@ -776,26 +833,22 @@ def _dataset(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 # -- run (Experiment) and evaluation ----------------------------------------------
 
 
-def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    run = (
-        json.loads((root / "run.json").read_text())
-        if (root / "run.json").is_file()
-        else None
-    )
-    if run is not None:
-        from rq_pipeline.envs.lerobot_train_log import parse_train_line  # noqa: PLC0415
-
-        log = root / "chain.log"
+def _run(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    if (root / RUN_MANIFEST_FILE).is_file():
+        run = read_json(root / RUN_MANIFEST_FILE)
+        log = root / CHAIN_LOG_FILE
         last = None
         n = 0
         if log.is_file():
-            for line in log.read_text(errors="replace").splitlines():
+            for line in read_text(log, errors="replace").splitlines():
                 p = parse_train_line(line)
                 if p is not None:
                     last, n = p, n + 1
         ckpts = (
             sorted(
-                (root.parent / f"{run.get('name', '')}-act" / "checkpoints").glob("*")
+                (RunLayout(root.parent, run["name"]).training / CHECKPOINTS_DIR).glob(
+                    "*"
+                )
             )
             if run.get("name")
             else []
@@ -813,11 +866,11 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                     ("dataset", run.get("dataset_repo_id")),
                     (
                         "robot asset",
-                        (run.get("provenance") or {}).get("bundle", "unrecorded"),
+                        (run.get("provenance") or {}).get("bundle", UNRECORDED),
                     ),
                     (
                         "scripted policy",
-                        (run.get("provenance") or {}).get("expert", "unrecorded"),
+                        (run.get("provenance") or {}).get("expert", UNRECORDED),
                     ),
                     ("started", run.get("started")),
                     ("checkpoint every", run.get("checkpoint_every")),
@@ -826,22 +879,14 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                     ("last step", getattr(last, "step", None)),
                     (
                         "last metrics",
-                        _jsonable(dict(getattr(last, "metrics", {}) or {})),
+                        jsonable(dict(getattr(last, "metrics", {}) or {})),
                     ),
                 ],
             ),
             _kv("Command", [("argv", run.get("command", ""))]),
         ]
-    ident = (
-        json.loads((root / "identity.json").read_text())
-        if (root / "identity.json").is_file()
-        else {}
-    )
-    training = (
-        json.loads((root / "training.json").read_text())
-        if (root / "training.json").is_file()
-        else {}
-    )
+    ident = read_json(root / IDENTITY_FILE, missing_ok=True)
+    training = read_json(root / TRAINING_FILE, missing_ok=True)
     final = training.get("final") or {}
     wall = training.get("wall_seconds")
     sections = [
@@ -849,17 +894,17 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             "Experiment (reinforcement learning)",
             [
                 ("version", artifact.stamp),
-                ("trainer", training.get("trainer", "unrecorded")),
-                ("iterations", training.get("iterations_logged") or "unrecorded"),
-                ("parallel environments", training.get("envs", "unrecorded")),
-                ("device", training.get("device", "unrecorded")),
-                ("wall time", f"{wall / 3600:.1f} h" if wall else "unrecorded"),
-                ("final mean reward", final.get("reward", "unrecorded")),
-                ("best mean reward", training.get("best_reward", "unrecorded")),
-                ("final episode length", final.get("episode_length", "unrecorded")),
-                ("steps per second", final.get("steps_per_second", "unrecorded")),
-                ("robot asset", ident.get("robot", "unrecorded")),
-                ("actuator model", ident.get("actuator", "unrecorded")),
+                ("trainer", training.get("trainer", UNRECORDED)),
+                ("iterations", training.get("iterations_logged") or UNRECORDED),
+                ("parallel environments", training.get("envs", UNRECORDED)),
+                ("device", training.get("device", UNRECORDED)),
+                ("wall time", f"{wall / 3600:.1f} h" if wall else UNRECORDED),
+                ("final mean reward", final.get(COL_REWARD, UNRECORDED)),
+                ("best mean reward", training.get("best_reward", UNRECORDED)),
+                ("final episode length", final.get(COL_EPISODE_LENGTH, UNRECORDED)),
+                ("steps per second", final.get(COL_STEPS_PER_SECOND, UNRECORDED)),
+                ("robot asset", ident.get("robot", UNRECORDED)),
+                ("actuator model", ident.get("actuator", UNRECORDED)),
                 ("domain randomization", ident.get("dr_basis", "")),
                 ("seed", ident.get("seed")),
             ],
@@ -872,20 +917,19 @@ def _run(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 "Training curve",
                 [c.replace("_", " ") for c in columns],
                 [[_f(v) for v in row] for row in training.get("curve", [])],
-                note="sampled from the console log; the full log is train.log",
+                note="sampled from the trainer's record; the full log is train.log",
             )
         )
     return sections
 
 
-def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    c = json.loads((root / "certificate.json").read_text())
-    k, n = c.get("successes"), c.get("trials")
-    ci = c.get("ci95") or c.get("ci") or []
+def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    c = read_json(root / CERTIFICATE_FILE)
+    n = c.get("trials")
     rows = []
     records = sorted(root.glob("records*.jsonl"))
     for rec in records:
-        for line in rec.read_text().splitlines():
+        for line in read_text(rec).splitlines():
             if not line.strip():
                 continue
             r = json.loads(line)
@@ -904,17 +948,15 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ]
             )
     funnel = c.get("funnel") or {}
-    protocol = c.get("protocol") if isinstance(c.get("protocol"), dict) else {}
+    raw_protocol = c.get("protocol")
+    protocol: dict[str, Any] = raw_protocol if isinstance(raw_protocol, dict) else {}
     return [
         _kv(
             "Evaluation",
             [
                 ("version", artifact.stamp),
-                ("success rate", f"{k} / {n}" if k is not None and n else ""),
-                (
-                    "95% confidence interval (exact)",
-                    _rng(*ci) if len(ci) == INTERVAL_ENDS else "",
-                ),
+                ("success rate", ratio_of(c)),
+                ("95% confidence interval (exact)", _interval(c)),
                 ("policy", c.get("policy", "")),
                 ("robot asset", c.get("robot", c.get("identity", {}).get("robot", ""))),
                 ("environment", c.get("task", c.get("source", ""))),
@@ -935,7 +977,7 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ("domain randomization", protocol.get("dr_basis")),
                 ("judged at", protocol.get("judged_at")),
                 *[
-                    (k2, _jsonable(v))
+                    (k2, jsonable(v))
                     for k2, v in protocol.items()
                     if k2 not in PROTOCOL_KEYS
                 ],
@@ -950,7 +992,7 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 # -- deployment (A6) -------------------------------------------------------------------
 
 
-def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
+def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     """A deployment: what the manifest says a runtime needs, the joints
     and observations as tables, and the sim-to-sim gate's verdict."""
     from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
@@ -960,7 +1002,7 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         read_gates,
     )
 
-    m = json.loads((root / MANIFEST_FILE).read_text())
+    m = read_json(root / MANIFEST_FILE)
     control = m.get("control") or {}
     joints = m.get("joints") or {}
     onnx = m.get("onnx") or {}
@@ -969,13 +1011,13 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             "Deployment",
             [
                 ("version", artifact.stamp),
-                ("policy", m.get("policy", "unrecorded")),
-                ("checkpoint", m.get("checkpoint", "unrecorded")),
-                ("experiment", m.get("run", "unrecorded")),
-                ("robot asset", m.get("robot", "unrecorded")),
-                ("actuator model", m.get("actuator", "unrecorded")),
-                ("environment", m.get("task") or "unrecorded"),
-                ("domain randomization", m.get("dr_basis") or "unrecorded"),
+                ("policy", m.get("policy", UNRECORDED)),
+                ("checkpoint", m.get("checkpoint", UNRECORDED)),
+                ("experiment", m.get("run", UNRECORDED)),
+                ("robot asset", m.get("robot", UNRECORDED)),
+                ("actuator model", m.get("actuator", UNRECORDED)),
+                ("environment", m.get("task") or UNRECORDED),
+                ("domain randomization", m.get("dr_basis") or UNRECORDED),
                 ("evaluation cited", m.get("certificate") or "none"),
                 ("control rate (Hz)", control.get("control_hz")),
                 ("physics timestep (s)", control.get("physics_timestep_s")),
@@ -986,12 +1028,12 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                     f"{onnx.get('file')} ({onnx.get('input_width')} in, "
                     f"{onnx.get('output_width')} out)",
                 ),
-                ("normalization", onnx.get("normalization", "unrecorded")),
+                ("normalization", onnx.get("normalization", UNRECORDED)),
                 (
                     "export check (max |onnx - torch|)",
                     onnx.get("export_check_max_abs_diff"),
                 ),
-                ("action", (m.get("action") or {}).get("kind", "unrecorded")),
+                ("action", (m.get("action") or {}).get("kind", UNRECORDED)),
                 (
                     "scene",
                     f"{(m.get('scene') or {}).get('file')} · terrain "
@@ -1011,38 +1053,30 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         cert = g.get("certificate") or {}
         rows: list[tuple[str, Any]] = [
             ("verdict", gate_word(g)),
-            ("successes", f"{g.get('successes')} / {g.get('trials')}"),
-            (
-                "95% confidence interval (exact)",
-                _rng(*g["ci95"]) if g.get("ci95") else "",
-            ),
+            ("successes", ratio_of(g)),
+            ("95% confidence interval (exact)", _interval(g)),
             ("rule", verdict.get("rule", "")),
             ("tolerance", verdict.get("tolerance", "n/a")),
-            (
-                "certificate",
-                f"{cert.get('successes')} / {cert.get('trials')}"
-                if cert
-                else "none cited",
-            ),
-            ("runtime", (g.get("protocol") or {}).get("runtime", "")),
+            ("evaluation cited", ratio_of(cert) if cert else "none cited"),
+            ("runtime", (g.get("protocol") or {}).get("runtime", UNRECORDED)),
             (
                 "simulator build",
-                (g.get("protocol") or {}).get("instrument", "unrecorded"),
+                (g.get("protocol") or {}).get("instrument", UNRECORDED),
             ),
-            ("judged", g.get("judged", "unrecorded")),
+            ("judged", g.get("judged", UNRECORDED)),
         ]
         sections.append(
             _kv(
                 f"Sim-to-sim gate: {instrument}",
                 rows,
                 note="The exported policy driven through its manifest alone, judged "
-                "the certificate's way: survived and tracked the held command.",
+                "the evaluation's way: survived and tracked the held command.",
             )
         )
         sections.append(
             _table(
                 f"Gate trials: {instrument}",
-                ["command (vx, vy, wz)", "steps", "fell", "error ratio", "success"],
+                [TWIST_LABEL, "steps", "fell", "error ratio", "success"],
                 [
                     [
                         ", ".join(f"{c:.2f}" for c in r.get("command", [])),
@@ -1103,7 +1137,7 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                     t.get("name"),
                     t.get("width"),
                     t.get("source"),
-                    _jsonable(t.get("scale")),
+                    jsonable(t.get("scale")),
                     t.get("clip"),
                     t.get("history_length"),
                 ]
@@ -1128,38 +1162,32 @@ def outcome_of(raw: Any) -> Any:
 
 
 def _dataclass_dict(obj: Any) -> dict[str, Any]:
-    from dataclasses import asdict, is_dataclass  # noqa: PLC0415
-
     if is_dataclass(obj) and not isinstance(obj, type):
         return asdict(obj)
     return dict(obj) if isinstance(obj, dict) else {}
 
 
-def _jsonable(v: Any) -> Any:
+def jsonable(v: Any) -> Any:
+    """A value as JSON can hold it: numpy scalars and arrays as numbers
+    and lists, then the task layer's own rule for the plain shapes;
+    anything else as its string."""
     if isinstance(v, (np.floating, np.integer)):
         return v.item()
     if isinstance(v, np.ndarray):
         return v.tolist()
     if isinstance(v, (list, tuple)):
-        return [_jsonable(x) for x in v]
+        return [jsonable(x) for x in v]
     if isinstance(v, dict):
-        return {str(k): _jsonable(x) for k, x in v.items()}
-    if isinstance(v, (str, int, float, bool)) or v is None:
-        return v
-    return str(v)
+        return {str(k): jsonable(x) for k, x in v.items()}
+    plain = _plain_jsonable(v)
+    if isinstance(plain, (str, int, float, bool)) or plain is None:
+        return plain
+    return str(plain)
 
 
-def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    manifest = (
-        json.loads((root / "policy.json").read_text())
-        if (root / "policy.json").is_file()
-        else {}
-    )
-    identity = (
-        json.loads((root / "identity.json").read_text())
-        if (root / "identity.json").is_file()
-        else {}
-    )
+def _policy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    manifest = read_json(root / POLICY_FILE, missing_ok=True)
+    identity = read_json(root / IDENTITY_FILE, missing_ok=True)
     weights = sorted(
         p.name
         for p in (root.iterdir() if root.is_dir() else [root])
@@ -1190,18 +1218,15 @@ def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     )
     # Every evaluation in the project that judged this policy.
     rows = []
-    for cert in sorted(
-        (root.parent.parent / "certificates").glob("*/certificate.json")
-    ):
-        c = json.loads(cert.read_text())
+    for cert in sorted(project.certificates.glob(f"*/{CERTIFICATE_FILE}")):
+        c = read_json(cert, missing_ok=True)
         if c.get("policy") != artifact.stamp:
             continue
-        ci = c.get("ci95") or c.get("ci") or []
         rows.append(
             [
                 cert.parent.name,
-                f"{c.get('successes')} / {c.get('trials')}",
-                _rng(*ci) if len(ci) == INTERVAL_ENDS else "",
+                ratio_of(c),
+                _interval(c),
                 (c.get("protocol") or {}).get("judged_at", ""),
                 c.get("instrument", ""),
             ]
@@ -1218,8 +1243,8 @@ def _policy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     ]
 
 
-def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
-    raw = json.loads(root.read_text())
+def _finding(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    raw = read_json(root)
     outcome = raw.get("outcome")
     outcome = outcome_of(outcome)
     sections: list[dict[str, Any]] = [
@@ -1254,13 +1279,13 @@ def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 "Outcome by condition",
                 ["condition", *keys],
                 [
-                    [name, *[_jsonable(arm.get(k)) for k in keys]]
+                    [name, *[jsonable(arm.get(k)) for k in keys]]
                     for name, arm in arms.items()
                 ],
             )
         )
     elif isinstance(outcome, dict):
-        sections.append(_kv("Outcome", [(k, _jsonable(v)) for k, v in outcome.items()]))
+        sections.append(_kv("Outcome", [(k, jsonable(v)) for k, v in outcome.items()]))
     elif outcome is not None:
         sections.append(_markdown("Outcome", str(outcome)))
     for title, key in (
@@ -1270,14 +1295,14 @@ def _finding(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     ):
         block = raw.get(key)
         if isinstance(block, dict) and block:
-            sections.append(_kv(title, [(k, _jsonable(v)) for k, v in block.items()]))
+            sections.append(_kv(title, [(k, jsonable(v)) for k, v in block.items()]))
     caveats = raw.get("caveats")
     if isinstance(caveats, list) and caveats:
         sections.append(_markdown("Caveats", "\n".join(f"- {c}" for c in caveats)))
     return sections
 
 
-_WRITERS = {
+_WRITERS: dict[str, Writer] = {
     "deploy": _deploy,
     "robot": _robot,
     "task": _task,

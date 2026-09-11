@@ -133,7 +133,7 @@ pub fn show(
                             (
                                 Section::icon_for(kind),
                                 split_stamp(stamp).0.to_owned(),
-                                format!("{kind} · {when}"),
+                                format!("{} · {when}", crate::pages::kind_word(kind)),
                             )
                         }
                     };

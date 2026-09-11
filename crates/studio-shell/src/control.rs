@@ -16,6 +16,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::model::now_epoch;
+
 pub const COMMANDS_RELATIVE: &str = ".index/commands";
 pub const STATE_RELATIVE: &str = ".index/studio-state.json";
 pub const EVENTS_RELATIVE: &str = ".index/events.jsonl";
@@ -220,6 +222,116 @@ pub struct SimulatorState {
     pub render_ms: f64,
 }
 
+// -- events: one struct writes `events.jsonl` and reads it back ---------------
+
+/// Who did it, as the event names them.
+pub const BY_AGENT: &str = "agent";
+pub const BY_USER: &str = "user";
+pub const BY_STUDIO: &str = "studio";
+/// What was done: the event kinds the window writes.
+pub const EVENT_OPEN: &str = "open";
+pub const EVENT_SELECT: &str = "select";
+pub const EVENT_DESELECT: &str = "deselect";
+pub const EVENT_SHOW: &str = "show";
+pub const EVENT_TABLE: &str = "table";
+pub const EVENT_TIME: &str = "time";
+
+/// One line of `events.jsonl`: what the human, the agent or the Studio
+/// itself did in the window. The same struct writes the line and reads
+/// it back (`model::Model::events`), so a key can never drift between
+/// the writer and the activity feed — the `show` line once wrote one
+/// name and read another, and showed blank.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Event {
+    /// Nanoseconds since the epoch.
+    #[serde(default)]
+    pub t: f64,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeline: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<i64>,
+}
+
+impl Event {
+    fn of(kind: &str, by: &str) -> Self {
+        Self {
+            kind: kind.to_owned(),
+            by: by.to_owned(),
+            ..Self::default()
+        }
+    }
+
+    pub fn open(by: &str) -> Self {
+        Self::of(EVENT_OPEN, by)
+    }
+
+    pub fn select(by: &str) -> Self {
+        Self::of(EVENT_SELECT, by)
+    }
+
+    pub fn deselect(by: &str) -> Self {
+        Self::of(EVENT_DESELECT, by)
+    }
+
+    pub fn show(by: &str) -> Self {
+        Self::of(EVENT_SHOW, by)
+    }
+
+    pub fn table(by: &str) -> Self {
+        Self::of(EVENT_TABLE, by)
+    }
+
+    pub fn time(by: &str) -> Self {
+        Self::of(EVENT_TIME, by)
+    }
+
+    pub fn in_section(mut self, slug: String) -> Self {
+        self.section = Some(slug);
+        self
+    }
+
+    pub fn of_artifact(mut self, stamp: String) -> Self {
+        self.artifact = Some(stamp);
+        self
+    }
+
+    /// The table opened, or `None` when it was closed.
+    pub fn on_table(mut self, title: Option<String>) -> Self {
+        self.table = title;
+        self
+    }
+
+    pub fn in_project(mut self, root: String) -> Self {
+        self.project = Some(root);
+        self
+    }
+
+    /// Where the viewer's cursor rested.
+    pub fn at(mut self, live: &Live) -> Self {
+        self.timeline = live.timeline.clone();
+        self.seconds = live.seconds;
+        self.sequence = live.sequence;
+        self
+    }
+
+    pub fn epoch_seconds(&self) -> f64 {
+        self.t / 1e9
+    }
+}
+
 pub struct Control {
     root: PathBuf,
     seen: BTreeSet<String>,
@@ -330,7 +442,7 @@ impl Control {
             "id": id,
             "status": status,
             "reason": reason,
-            "t": epoch_seconds(),
+            "t": now_epoch(),
         });
         if let Some(into) = body.as_object_mut() {
             into.extend(extra);
@@ -381,7 +493,7 @@ impl Control {
         if !(due || changed) {
             return;
         }
-        state.heartbeat = epoch_seconds();
+        state.heartbeat = now_epoch();
         let _ = write_atomic(
             &self.root.join(STATE_RELATIVE),
             &serde_json::to_string(&state).unwrap_or_default(),
@@ -390,14 +502,12 @@ impl Control {
         self.last_written = Some(now);
     }
 
-    /// Append one event the human caused.
-    pub fn event(&self, kind: &str, fields: serde_json::Value) {
-        let mut body = serde_json::json!({ "t": epoch_nanos(), "kind": kind });
-        if let (Some(into), Some(from)) = (body.as_object_mut(), fields.as_object()) {
-            for (k, v) in from {
-                into.insert(k.clone(), v.clone());
-            }
-        }
+    /// Append one event: what the human, the agent or the Studio did.
+    pub fn event(&self, mut event: Event) {
+        event.t = epoch_nanos();
+        let Ok(line) = serde_json::to_string(&event) else {
+            return;
+        };
         let path = self.root.join(EVENTS_RELATIVE);
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -408,7 +518,7 @@ impl Control {
             .append(true)
             .open(path)
         {
-            let _ = writeln!(file, "{body}");
+            let _ = writeln!(file, "{line}");
         }
     }
 
@@ -451,7 +561,9 @@ fn same_but_heartbeat(a: &StudioState, b: &StudioState) -> bool {
     a == b
 }
 
-fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
+/// Write a file in one replace: a reader never sees a half-written
+/// state, ack or intent. The one such routine in the crate.
+pub fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -460,17 +572,12 @@ fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
     std::fs::rename(tmp, path)
 }
 
-pub fn epoch_seconds() -> f64 {
+/// Nanoseconds since the epoch as the event line carries them (an f64
+/// keeps them to within a microsecond, enough to order a feed).
+fn epoch_nanos() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or_default()
-}
-
-fn epoch_nanos() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
+        .map(|d| d.as_nanos() as f64)
         .unwrap_or_default()
 }
 
@@ -560,8 +667,8 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed["section"], "overview");
         assert!(parsed["heartbeat"].as_f64().unwrap() > 0.0);
-        control.event("select", serde_json::json!({"artifact": "a@000000000000"}));
-        control.event("open", serde_json::json!({"section": "robots"}));
+        control.event(Event::select(BY_USER).of_artifact("a@000000000000".into()));
+        control.event(Event::open(BY_AGENT).in_section("robots".into()));
         let lines: Vec<String> = std::fs::read_to_string(root.join(EVENTS_RELATIVE))
             .unwrap()
             .lines()
@@ -569,6 +676,35 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("\"kind\":\"select\""));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_event_reads_back_with_the_keys_it_was_written_with() {
+        let root = temp_root("events");
+        let control = Control::new(root.clone());
+        control.event(Event::show(BY_USER).of_artifact("go2@abc".into()));
+        control.event(Event::table(BY_AGENT).on_table(None));
+        let rested = Live {
+            recording: Some("r".into()),
+            timeline: Some("time".into()),
+            seconds: Some(1.5),
+            sequence: None,
+        };
+        control.event(Event::time(BY_USER).at(&rested));
+        let text = std::fs::read_to_string(root.join(EVENTS_RELATIVE)).unwrap();
+        let back: Vec<Event> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).expect("the line we wrote"))
+            .collect();
+        assert_eq!(back[0].kind, EVENT_SHOW);
+        assert_eq!(back[0].artifact.as_deref(), Some("go2@abc"));
+        assert!(back[0].t > 0.0 && back[0].epoch_seconds() > 1.0e9);
+        assert_eq!(back[1].kind, EVENT_TABLE);
+        assert_eq!(back[1].table, None, "a closed table is absent, not null");
+        assert!(!text.lines().nth(1).unwrap().contains("\"table\":"));
+        assert_eq!(back[2].timeline.as_deref(), Some("time"));
+        assert_eq!(back[2].seconds, Some(1.5));
         let _ = std::fs::remove_dir_all(root);
     }
 

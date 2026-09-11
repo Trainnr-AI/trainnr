@@ -37,9 +37,9 @@ from rq_pipeline.bundles.hashing import fields_hash, stamp
 from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
 from rq_pipeline.collect.provenance import dagger_stamp
+from rq_pipeline.evaluate.tracking import criterion_text
 
 from rq_mjlab.walk_verdict import (
-    ERR_RATIO_BOUND,
     WorldEpisode,
     instrument_for,
     rollout_episodes,
@@ -249,7 +249,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         ],
         notes={
             "teacher": expert,
-            "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
+            "criterion": criterion_text(),
         },
     ).write_to(out)
     camera = ChaseCamera(*frame_size)
@@ -311,7 +311,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             frame_every_control_ticks=frame_every,
             dynamics_basis=basis,
             action_semantics=ACTION_SEMANTICS,
-            verdict=f"success (survived and err_ratio<{ERR_RATIO_BOUND})",
+            verdict=f"success ({criterion_text()})",
         )
 
     try:

@@ -21,18 +21,33 @@ available the indexer says so once and writes the index without pictures.
 
 from __future__ import annotations
 
-import json
-import os
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.deploy.manifest import MANIFEST_FILE as DEPLOY_FILE
+from rq_pipeline.envs.lerobot_train_log import CHAIN_LOG_FILE
+from rq_pipeline.envs.rsl_rl_log import COL_ITERATION, COL_REWARD, TRAINING_FILE
 from rq_pipeline.project.details import outcome_of
-from rq_pipeline.project.index import ProjectIndex
-from rq_pipeline.project.kinds import TASK_FILE
+from rq_pipeline.project.files import read_json, read_text
+from rq_pipeline.project.index import ProjectIndex, interval_of
+from rq_pipeline.project.kinds import (
+    CERTIFICATE_FILE,
+    IDENTITY_FILE,
+    POLICY_FILE,
+    TASK_FILE,
+)
 from rq_pipeline.project.locate import INDEX_DIR, Project
+
+if TYPE_CHECKING:
+    import mujoco
+    from PIL.Image import Image as PilImage
+    from PIL.ImageDraw import ImageDraw
+    from PIL.ImageFont import FreeTypeFont
 
 PREVIEWS_DIR = "previews"
 # Rerun's welcome-screen cards are 337x250 at 1x; we render at 2x for
@@ -49,13 +64,11 @@ SERIES = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
 REFERENCE_LINE = (60, 64, 72)
 TEXT = (200, 205, 215)
 PLOT_MARGIN = 40
-MAX_TRACES = 8  # a recording's channel shows at most this many components
-FONT_CANDIDATES = (
-    "/System/Library/Fonts/Helvetica.ttc",  # macOS
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian, Ubuntu
-    str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"),
-    str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf"),
-)
+# A tile is small: a recording's channel shows at most this many
+# components here (the viewer draws up to `present.MAX_TRACES`).
+TILE_TRACES = 8
+# A renderer draws one artifact's picture into `out`; True when it did.
+Renderer = Callable[[Project, Path, Path, dict[str, Any]], bool]
 
 
 def preview_path(project: Project, stamp: str) -> Path:
@@ -70,10 +83,11 @@ def write_previews(project: Project, index: ProjectIndex) -> dict[str, str]:
         out = preview_path(project, artifact.stamp)
         if not out.is_file():
             source = project.root / artifact.path
+            renderer = _RENDERERS.get(artifact.kind)
+            if renderer is None:
+                continue
             try:
-                ok = _RENDERERS.get(artifact.kind, lambda *_: False)(
-                    source, out, artifact.summary
-                )
+                ok = renderer(project, source, out, artifact.summary)
             except Exception:  # a preview is decoration; the index is not
                 ok = False
             if not ok:
@@ -85,7 +99,9 @@ def write_previews(project: Project, index: ProjectIndex) -> dict[str, str]:
 # -- per kind -------------------------------------------------------------
 
 
-def _render_robot(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_robot(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """The bundle's model, posed at its keyframe or zero, offscreen."""
     try:
         import mujoco  # noqa: PLC0415
@@ -99,7 +115,9 @@ def _render_robot(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     )
 
 
-def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_task(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """The environment's scene — the registered task built and compiled —
     from a wider camera than a robot's, so the table and the parts read."""
     try:
@@ -108,11 +126,7 @@ def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
         from rq_pipeline.tasks.overlay import build_from_reference  # noqa: PLC0415
     except ImportError:
         return False
-    ref = (
-        json.loads((source / TASK_FILE).read_text())
-        if (source / TASK_FILE).is_file()
-        else {}
-    )
+    ref = read_json(source / TASK_FILE, missing_ok=True)
     task_id = ref.get("task_id")
     if not task_id:
         return False
@@ -126,12 +140,13 @@ def _render_task(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _render_model(model, out, SCENE_CAMERA)
 
 
-def _render_model(model: Any, out: Path, camera_spec: dict[str, float]) -> bool:
+def _render_model(
+    model: mujoco.MjModel, out: Path, camera_spec: dict[str, float]
+) -> bool:
     """One offscreen frame of a compiled model at its first keyframe (or
     zero), from a free camera placed by `camera_spec` around the model's
     own centre and extent."""
     import mujoco  # noqa: PLC0415
-    import numpy as np  # noqa: PLC0415
 
     data = mujoco.MjData(model)
     if model.nkey > 0:
@@ -163,7 +178,9 @@ def _robot_model_file(source: Path) -> Path | None:
     return model_file_of(source)
 
 
-def _render_batch(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_batch(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """The first kept episode's first frame (the batch's own JPEG)."""
     frames = sorted(source.glob("episode_*/frames/*.jpg")) or sorted(
         source.glob("episode_*/frames/*/*.jpg")
@@ -173,24 +190,22 @@ def _render_batch(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _copy_scaled(frames[0], out)
 
 
-def _render_dataset(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_dataset(
+    project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """A dataset's frames live in video; its source batch, when the
     project still holds it, has the picture."""
-    try:
-        provenance = json.loads((source / "provenance.json").read_text())
-    except (OSError, ValueError):
-        return False
-    name = provenance.get("source")
+    name = read_json(source / PROVENANCE_FILE, missing_ok=True).get("source")
     if not name:
         return False
-    batch = source.parent.parent / "batches" / name
+    batch = project.batches / name
     if not batch.is_dir():
         return False
-    return _render_batch(batch, out, {})
+    return _render_batch(project, batch, out, {})
 
 
 def _plot_lines(
-    draw: Any,
+    draw: ImageDraw,
     series: list[list[tuple[float, float]]],
     *,
     stroke: int = 4,
@@ -235,11 +250,11 @@ def _render_training_curve(source: Path, out: Path) -> bool:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
         return False
-    record = json.loads((source / "training.json").read_text())
+    record = read_json(source / TRAINING_FILE)
     columns = record.get("columns") or []
-    if "reward" not in columns:
+    if COL_REWARD not in columns or COL_ITERATION not in columns:
         return False
-    it, rw = columns.index("iteration"), columns.index("reward")
+    it, rw = columns.index(COL_ITERATION), columns.index(COL_REWARD)
     points = [
         (float(row[it]), float(row[rw]))
         for row in record.get("curve", [])
@@ -262,24 +277,26 @@ def _render_training_curve(source: Path, out: Path) -> bool:
     return _save_pil(image, out)
 
 
-def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_run(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """An RL run's reward curve from its training record; an imitation
     run's loss curve from its chain log. A small line plot with no axes —
     a shape, the way a platform's run tile shows one."""
-    if (source / "training.json").is_file():
+    if (source / TRAINING_FILE).is_file():
         return _render_training_curve(source, out)
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
         return False
-    log = source / "chain.log"
+    log = source / CHAIN_LOG_FILE
     if not log.is_file():
         return False
     losses = [
         float(m.group(1))
         for m in (
             LOSS_LINE.search(line)
-            for line in log.read_text(errors="replace").splitlines()
+            for line in read_text(log, errors="replace").splitlines()
         )
         if m
     ]
@@ -291,9 +308,12 @@ def _render_run(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
     return _save_pil(image, out)
 
 
-def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
-    """The recording's first joint channel as small traces — a signal's
-    shape, the way a platform's log tile shows one."""
+def _render_recording(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
+    """The recording's first channel as small traces — a signal's shape,
+    the way a platform's log tile shows one. The adapter orders the
+    channels; the first is its own choice of what leads."""
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
 
@@ -301,10 +321,7 @@ def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool
     except ImportError:
         return False
     recording = Recording.read(source)
-    channel = next(
-        (c for n, c in recording.channels.items() if "position" in n or "ticks" in n),
-        next(iter(recording.channels.values()), None),
-    )
+    channel = next(iter(recording.channels.values()), None)
     if channel is None or len(channel.times) < MIN_CURVE_POINTS:
         return False
     image = Image.new("RGB", PREVIEW_SIZE, GROUND)
@@ -316,49 +333,49 @@ def _render_recording(source: Path, out: Path, _summary: dict[str, Any]) -> bool
             for t, v in zip(channel.times, values[:, col], strict=True)
             if np.isfinite(v)
         ]
-        for col in range(min(values.shape[1], MAX_TRACES))
+        for col in range(min(values.shape[1], TILE_TRACES))
     ]
     _plot_lines(draw, series)
     return _save_pil(image, out)
 
 
-def _render_policy(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_policy(
+    project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """The robot the policy drives, from the project's own bundle (a
     checkpoint has no picture of its own; the robot it moves is the
     honest one), else nothing."""
-    manifest = source / "policy.json"
-    identity = source / "identity.json"
-    raw = (
-        json.loads(manifest.read_text())
-        if manifest.is_file()
-        else (json.loads(identity.read_text()) if identity.is_file() else {})
+    raw = read_json(source / POLICY_FILE, missing_ok=True) or read_json(
+        source / IDENTITY_FILE, missing_ok=True
     )
     robot = str(raw.get("robot") or "")
     if "@" not in robot:
         return False
-    bundle = source.parent.parent / "robots" / robot.split("@", 1)[0]
+    bundle = project.robots / robot.split("@", 1)[0]
     if not bundle.is_dir():
         return False
-    return _render_robot(bundle, out, {})
+    return _render_robot(project, bundle, out, {})
 
 
-def _render_deploy(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_deploy(
+    project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """A deployment's card is the robot it drives, from the project's or
     the library's bundle named by the manifest's robot version."""
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
 
-    manifest = source / "deploy.json"
-    if not manifest.is_file():
-        return False
-    robot = str(json.loads(manifest.read_text()).get("robot") or "")
+    robot = str(read_json(source / DEPLOY_FILE, missing_ok=True).get("robot") or "")
     bundle = find_bundle(robot.split("@", 1)[0]) if robot else None
     if bundle is None:
         return False
-    return _render_robot(bundle, out, {})
+    return _render_robot(project, bundle, out, {})
+
+
+Color = tuple[int, int, int]
 
 
 def _bars(
-    draw: Any, box: tuple[int, int, int, int], fraction: float, color: tuple
+    draw: ImageDraw, box: tuple[int, int, int, int], fraction: float, color: Color
 ) -> None:
     """A track and a filled share of it: `box` is (x, y, width, height)."""
     x, y, w, h = box
@@ -371,14 +388,16 @@ def _bars(
         )
 
 
-def _render_certificate(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_certificate(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """The evaluation at a glance: the success rate large, its exact
     interval as a bar on 0..1, the funnel as stacked bars."""
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
         return False
-    c = json.loads((source / "certificate.json").read_text())
+    c = read_json(source / CERTIFICATE_FILE)
     k, n = c.get("successes"), c.get("trials")
     if k is None or not n:
         return False
@@ -391,12 +410,12 @@ def _render_certificate(source: Path, out: Path, _summary: dict[str, Any]) -> bo
     rate = k / n
     draw.text((48, 40), f"{k} / {n}", fill=(236, 238, 242), font=big)
     draw.text((48, 150), f"{rate:.0%} success", fill=(160, 166, 178), font=small)
-    ci = c.get("ci95") or c.get("ci") or []
-    if len(ci) == 2:  # noqa: PLR2004 - an interval is two numbers
+    interval = interval_of(c)
+    if interval is not None:
         x0, x1 = 48, width - 48
         y = 230
         draw.rounded_rectangle([x0, y, x1, y + 14], radius=7, fill=(44, 48, 56))
-        lo, hi = ci
+        lo, hi = interval
         draw.rounded_rectangle(
             [x0 + int((x1 - x0) * lo), y - 2, x0 + int((x1 - x0) * hi), y + 16],
             radius=8,
@@ -426,14 +445,16 @@ def _render_certificate(source: Path, out: Path, _summary: dict[str, Any]) -> bo
     return _save_pil(image, out)
 
 
-def _render_finding(source: Path, out: Path, _summary: dict[str, Any]) -> bool:
+def _render_finding(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
     """A finding at a glance: when its outcome holds arms with successes
     over trials, a bar per arm; otherwise the claim, wrapped."""
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
         return False
-    raw = json.loads(source.read_text())
+    raw = read_json(source)
     outcome = outcome_of(raw.get("outcome"))
     width, height = PREVIEW_SIZE
     image = Image.new("RGB", (width, height), GROUND)
@@ -500,21 +521,15 @@ def _wrap(text: str, chars: int) -> list[str]:
     return lines
 
 
-def _font(size: int) -> Any:
+def _font(size: int) -> FreeTypeFont:
+    """Pillow's bundled font at this size - the same face on every
+    machine, no system font paths."""
     from PIL import ImageFont  # noqa: PLC0415
 
-    for candidate in FONT_CANDIDATES:
-        try:
-            return ImageFont.truetype(candidate, size)
-        except OSError:
-            continue
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:  # an older Pillow: the bitmap font, one size
-        return ImageFont.load_default()
+    return ImageFont.load_default(size=size)
 
 
-_RENDERERS = {
+_RENDERERS: dict[str, Renderer] = {
     "recording": _render_recording,
     "robot": _render_robot,
     "batch": _render_batch,
@@ -531,7 +546,7 @@ _RENDERERS = {
 # -- writing ---------------------------------------------------------------
 
 
-def _save(pixels: Any, out: Path) -> bool:
+def _save(pixels: np.ndarray, out: Path) -> bool:
     try:
         from PIL import Image  # noqa: PLC0415
     except ImportError:
@@ -539,7 +554,7 @@ def _save(pixels: Any, out: Path) -> bool:
     return _save_pil(Image.fromarray(pixels), out)
 
 
-def _save_pil(image: Any, out: Path) -> bool:
+def _save_pil(image: PilImage, out: Path) -> bool:
     out.parent.mkdir(parents=True, exist_ok=True)
     staging = out.with_suffix(".png.tmp")
     image.save(staging, format="PNG", optimize=True)

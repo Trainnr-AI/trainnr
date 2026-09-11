@@ -5,9 +5,10 @@
 //!
 //! Vocabulary (decision 2026-09-09): the field's, not ours — Assets,
 //! Environments, Recordings, Datasets, Experiments, Policies,
-//! Certificates, Deployments, Monitoring. Our internal kinds map onto
-//! those names in `Section`; the one word that stays ours is
-//! "certificate", because nobody else has one.
+//! Evaluations, Deployments, Monitoring. The index's internal kind names
+//! (`certificate`, `batch`, `task`, `run`…) never reach the screen: the
+//! [`KINDS`] table maps each onto its page, its icon and the field's word
+//! for one of it, and every painted kind goes through [`kind_word`].
 //!
 //! Every artifact that has a picture shows it (decision 2026-09-09: a
 //! platform shows pictures, not hashes): a robot's rendered model, a
@@ -17,14 +18,130 @@
 
 use re_ui::{icons, DesignTokens, UiExt as _};
 
+use crate::control::{
+    Event, BY_AGENT, BY_USER, EVENT_DESELECT, EVENT_OPEN, EVENT_SELECT, EVENT_SHOW, EVENT_TABLE,
+    EVENT_TIME,
+};
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
-    summary_line, Artifact, Event, Index, Job, Model,
+    summary_line, Artifact, Index, Job, Model, UNRECORDED,
 };
 use crate::widgets::{
-    card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_RADIUS,
-    THUMBNAIL_ASPECT,
+    card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
+    CARD_RADIUS, THUMBNAIL_ASPECT,
 };
+
+/// The environment variable the cloud tools read for a control plane
+/// (`rq_pipeline.cloud`): the Compute card reports whether it is set,
+/// and never whether the endpoint answers — the Studio does not ask it.
+const CLOUD_ENDPOINT_ENV: &str = "TRAINNR_ENDPOINT";
+
+/// The artifact kinds the index writes (`rq_pipeline/project/kinds.py`,
+/// `Kind`), as the Studio spells them once.
+pub mod kind {
+    pub const ROBOT: &str = "robot";
+    pub const TASK: &str = "task";
+    pub const RECORDING: &str = "recording";
+    pub const BATCH: &str = "batch";
+    pub const DATASET: &str = "dataset";
+    pub const RUN: &str = "run";
+    pub const POLICY: &str = "policy";
+    pub const CERTIFICATE: &str = "certificate";
+    pub const DEPLOY: &str = "deploy";
+    pub const DRIFT: &str = "drift";
+    pub const FINDING: &str = "finding";
+}
+
+/// One artifact kind: its index name, the page that lists it, its icon,
+/// and the field's word for one of it (what a card, a tag or a refusal
+/// prints — never the index name).
+pub struct Kind {
+    pub name: &'static str,
+    pub section: Section,
+    pub icon: &'static re_ui::Icon,
+    pub word: &'static str,
+}
+
+/// Every kind the index can emit. `Section::kinds`, `for_kind`,
+/// `icon_for`, `kind_word` and the KPI row all derive from this table.
+pub const KINDS: &[Kind] = &[
+    Kind {
+        name: kind::ROBOT,
+        section: Section::Robots,
+        icon: &icons::ENTITY,
+        word: "robot",
+    },
+    Kind {
+        name: kind::TASK,
+        section: Section::Environments,
+        icon: &icons::VIEW_3D,
+        word: "environment",
+    },
+    Kind {
+        name: kind::RECORDING,
+        section: Section::Recordings,
+        icon: &icons::RECORDING,
+        word: "recording",
+    },
+    Kind {
+        name: kind::BATCH,
+        section: Section::Datasets,
+        icon: &icons::DATA_SOURCE,
+        word: "generated dataset",
+    },
+    Kind {
+        name: kind::DATASET,
+        section: Section::Datasets,
+        icon: &icons::DATASET,
+        word: "dataset",
+    },
+    Kind {
+        name: kind::RUN,
+        section: Section::Experiments,
+        icon: &icons::VIEW_TIMESERIES,
+        word: "experiment",
+    },
+    Kind {
+        name: kind::POLICY,
+        section: Section::Policies,
+        icon: &icons::COMPONENT_STATIC,
+        word: "policy",
+    },
+    Kind {
+        name: kind::CERTIFICATE,
+        section: Section::Certificates,
+        icon: &icons::SUCCESS,
+        word: "evaluation",
+    },
+    Kind {
+        name: kind::DEPLOY,
+        section: Section::Deployments,
+        icon: &icons::EXTERNAL_LINK,
+        word: "deployment",
+    },
+    Kind {
+        name: kind::DRIFT,
+        section: Section::Monitoring,
+        icon: &icons::LOOP,
+        word: "drift record",
+    },
+    Kind {
+        name: kind::FINDING,
+        section: Section::Findings,
+        icon: &icons::INFO,
+        word: "finding",
+    },
+];
+
+fn kind_entry(name: &str) -> Option<&'static Kind> {
+    KINDS.iter().find(|k| k.name == name)
+}
+
+/// The field's word for an index kind name; a kind this build does not
+/// know keeps its name (a newer index is not lied about).
+pub fn kind_word(name: &str) -> &str {
+    kind_entry(name).map_or(name, |k| k.word)
+}
 
 /// The page's content column, capped so a wide window does not stretch
 /// cards into strips; Rerun's welcome screen does the same.
@@ -122,26 +239,22 @@ impl Section {
 
     /// The page that lists artifacts of this kind.
     pub fn for_kind(kind: &str) -> Option<Self> {
-        Self::RAIL
-            .iter()
-            .flat_map(|(_, items)| items.iter().copied())
-            .find(|s| s.kinds().contains(&kind))
+        kind_entry(kind).map(|k| k.section)
     }
 
-    pub fn kinds(self) -> &'static [&'static str] {
-        match self {
-            Self::Robots => &["robot"],
-            Self::Environments => &["task"],
-            Self::Recordings => &["recording"],
-            Self::Datasets => &["batch", "dataset"],
-            Self::Experiments => &["run"],
-            Self::Policies => &["policy"],
-            Self::Certificates => &["certificate"],
-            Self::Deployments => &["deploy"],
-            Self::Monitoring => &["drift"],
-            Self::Findings => &["finding"],
-            Self::Projects | Self::Overview | Self::Live => &[],
-        }
+    /// The index kinds this section lists (Datasets holds two: pressed
+    /// batches and exported datasets alike; Experiments are training
+    /// runs), from the [`KINDS`] table — no allocation, it runs per frame.
+    pub fn kinds(self) -> impl Iterator<Item = &'static str> {
+        KINDS
+            .iter()
+            .filter(move |k| k.section == self)
+            .map(|k| k.name)
+    }
+
+    /// Whether the section lists artifacts at all (the rail's count).
+    pub fn lists_artifacts(self) -> bool {
+        self.kinds().next().is_some()
     }
 
     pub fn icon(self) -> &'static re_ui::Icon {
@@ -162,22 +275,10 @@ impl Section {
         }
     }
 
-    /// The icon for one of this section's kinds (Datasets holds two).
+    /// The icon for an index kind (Datasets holds two); an unknown kind
+    /// gets the empty-entity icon.
     pub fn icon_for(kind: &str) -> &'static re_ui::Icon {
-        match kind {
-            "robot" => &icons::ENTITY,
-            "task" => &icons::VIEW_3D,
-            "recording" => &icons::RECORDING,
-            "batch" => &icons::DATA_SOURCE,
-            "dataset" => &icons::DATASET,
-            "run" => &icons::VIEW_TIMESERIES,
-            "policy" => &icons::COMPONENT_STATIC,
-            "certificate" => &icons::SUCCESS,
-            "deploy" => &icons::EXTERNAL_LINK,
-            "drift" => &icons::LOOP,
-            "finding" => &icons::INFO,
-            _ => &icons::ENTITY_EMPTY,
-        }
+        kind_entry(kind).map_or(&icons::ENTITY_EMPTY, |k| k.icon)
     }
 
     /// The sentence a section shows when it has nothing yet — what the
@@ -374,9 +475,10 @@ fn picture_card_with_id(
     };
     ui.painter()
         .rect_stroke(rect, CARD_RADIUS, stroke, egui::StrokeKind::Inside);
+    let margin = f32::from(CARD_INNER_MARGIN);
     let desc = egui::Rect::from_min_size(
-        egui::pos2(rect.min.x + 14.0, thumb_rect.max.y + 10.0),
-        egui::vec2(width - 28.0, CARD_DESCRIPTION_HEIGHT - 20.0),
+        egui::pos2(rect.min.x + margin, thumb_rect.max.y + 10.0),
+        egui::vec2(width - 2.0 * margin, CARD_DESCRIPTION_HEIGHT - 20.0),
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -441,7 +543,10 @@ pub fn problem_page(ui: &mut egui::Ui, problem: &str) {
 /// Every project under `projects/` as a picture card: its first artifact's
 /// picture, its name, its stage progress and artifact count. Returns a
 /// project root to switch to when one is clicked.
-pub fn projects(ui: &mut egui::Ui, model: &Model) -> Option<std::path::PathBuf> {
+pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathBuf> {
+    // The page is visited, not polled: a walk when it opens (throttled
+    // inside), then the cached list.
+    model.refresh_projects();
     let list = model.projects();
     let mut switch_to = None;
     page(ui, |ui| {
@@ -577,8 +682,8 @@ fn latest_pictures(
         .show(ui, |ui| {
             for artifact in with_pictures.iter().take(columns) {
                 let (name, hash) = split_stamp(&artifact.stamp);
-                let facts =
-                    summary_line(&artifact.summary).unwrap_or_else(|| artifact.kind.clone());
+                let facts = summary_line(&artifact.summary)
+                    .unwrap_or_else(|| kind_word(&artifact.kind).to_owned());
                 let response = picture_card_with_id(
                     ui,
                     width,
@@ -587,11 +692,7 @@ fn latest_pictures(
                     CardText {
                         title: name,
                         facts: &facts,
-                        footer: Some(format!(
-                            "{} · @{hash} · {}",
-                            artifact.kind,
-                            ago_iso(artifact.updated.as_deref())
-                        )),
+                        footer: Some(card_footer(artifact, hash)),
                     },
                     false,
                     &artifact.stamp,
@@ -613,7 +714,7 @@ fn best_by_condition(
     index: &Index,
     go_to: &mut Option<(Section, Option<String>)>,
 ) {
-    let evaluations = index.by_kind("certificate");
+    let evaluations = index.by_kind(kind::CERTIFICATE);
     if !crate::listing::matrix_available(&evaluations) {
         return;
     }
@@ -825,41 +926,43 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
 /// its section, with a large icon.
 fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<(Section, Option<String>)>) {
     let episodes: u64 = index
-        .by_kind("batch")
+        .by_kind(kind::BATCH)
         .iter()
         .filter_map(|a| a.summary.get("episodes").and_then(|v| v.as_u64()))
         .sum();
+    let count_of = |section: Section| section.kinds().map(|k| index.count(k)).sum::<usize>();
     let cards: [(Section, String, String); 4] = [
         (
             Section::Robots,
-            index.count("robot").to_string(),
-            first_name(index, "robot").unwrap_or_else(|| "no asset".into()),
+            count_of(Section::Robots).to_string(),
+            first_name(index, kind::ROBOT).unwrap_or_else(|| "no asset".into()),
         ),
         (
             Section::Datasets,
-            (index.count("batch") + index.count("dataset")).to_string(),
+            count_of(Section::Datasets).to_string(),
             format!("{episodes} episodes"),
         ),
         (
             Section::Experiments,
-            index.count("run").to_string(),
-            first_name(index, "run").unwrap_or_else(|| "no experiment".into()),
+            count_of(Section::Experiments).to_string(),
+            first_name(index, kind::RUN).unwrap_or_else(|| "no experiment".into()),
         ),
         (
             Section::Certificates,
-            index.count("certificate").to_string(),
-            first_name(index, "certificate").unwrap_or_else(|| "none yet".into()),
+            count_of(Section::Certificates).to_string(),
+            first_name(index, kind::CERTIFICATE).unwrap_or_else(|| "none yet".into()),
         ),
     ];
     let gap = GRID_GAP;
     let width = (ui.available_width() - gap * 3.0) / 4.0;
+    let inner = width - 2.0 * f32::from(CARD_INNER_MARGIN);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
         for (section, value, caption) in cards {
             let response = card(ui, None)
                 .show(ui, |ui| {
-                    ui.set_min_width(width - 28.0);
-                    ui.set_max_width(width - 28.0);
+                    ui.set_min_width(inner);
+                    ui.set_max_width(inner);
                     ui.set_min_height(KPI_CARD_HEIGHT);
                     ui.set_max_height(KPI_CARD_HEIGHT);
                     ui.horizontal_top(|ui| {
@@ -965,8 +1068,8 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
                     }
                     ActivityLine::Event(event) => {
                         let who = match event.by.as_str() {
-                            "agent" => "agent",
-                            "user" => "you",
+                            BY_AGENT => "agent",
+                            BY_USER => "you",
                             _ => "studio",
                         };
                         ui.label(egui::RichText::new(who).strong());
@@ -1001,22 +1104,37 @@ fn event_words(event: &Event) -> String {
             .unwrap_or_else(|| slug.clone().unwrap_or_default())
     };
     match event.kind.as_str() {
-        "open" if event.project.is_some() => {
+        EVENT_OPEN if event.project.is_some() => {
             format!(
                 "opened project {}",
                 event.project.clone().unwrap_or_default()
             )
         }
-        "open" => format!("opened {}", page(&event.section)),
-        "select" => format!("selected {}", name(&event.artifact)),
-        "deselect" => "closed the drawer".to_owned(),
-        "show" => format!("showed {} in the viewer", name(&event.recording)),
-        "table" => match &event.table {
+        EVENT_OPEN => format!("opened {}", page(&event.section)),
+        EVENT_SELECT => format!("selected {}", name(&event.artifact)),
+        EVENT_DESELECT => "closed the drawer".to_owned(),
+        EVENT_SHOW => format!("showed {} in the viewer", name(&event.artifact)),
+        EVENT_TABLE => match &event.table {
             Some(t) => format!("explored the {t} table"),
             None => "closed the table".to_owned(),
         },
-        "time" => "moved the time cursor".to_owned(),
+        EVENT_TIME => "moved the time cursor".to_owned(),
         other => other.to_owned(),
+    }
+}
+
+/// The cloud line of the Compute card: the endpoint this window's
+/// environment names, or that none is named. Whether it answers is not
+/// known here, and not claimed.
+fn cloud_line() -> String {
+    match std::env::var(CLOUD_ENDPOINT_ENV) {
+        Ok(url) if !url.trim().is_empty() => {
+            format!(
+                "Cloud: {} (from {CLOUD_ENDPOINT_ENV}; reachability {UNRECORDED} here)",
+                url.trim()
+            )
+        }
+        _ => format!("Cloud: {CLOUD_ENDPOINT_ENV} is not set; jobs run on this machine."),
     }
 }
 
@@ -1048,11 +1166,18 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
             },
         );
         ui.add_space(6.0);
-        weak_body(
-            ui,
-            "Cloud: offline. Set TRAINNR_ENDPOINT to reach a control plane.",
-        );
+        weak_body(ui, cloud_line());
     });
+}
+
+/// What a picture card says under its facts: the kind in the field's
+/// word, the version hash, and when it last changed.
+fn card_footer(artifact: &Artifact, hash: &str) -> String {
+    format!(
+        "{} · @{hash} · {}",
+        kind_word(&artifact.kind),
+        ago_iso(artifact.updated.as_deref())
+    )
 }
 
 // ---------------------------------------------------------------------
@@ -1067,11 +1192,7 @@ pub fn ordered(model: &Model, section: Section) -> Vec<String> {
     let Some(index) = model.index() else {
         return Vec::new();
     };
-    let mut rows: Vec<&Artifact> = section
-        .kinds()
-        .iter()
-        .flat_map(|k| index.by_kind(k))
-        .collect();
+    let mut rows: Vec<&Artifact> = section.kinds().flat_map(|k| index.by_kind(k)).collect();
     sort_newest(&mut rows);
     rows.into_iter().map(|a| a.stamp.clone()).collect()
 }
@@ -1098,11 +1219,7 @@ pub fn section(
     };
     let scroll_to_detail = nav.scroll_to_detail;
     let entered = nav.entered;
-    let mut rows: Vec<&Artifact> = section
-        .kinds()
-        .iter()
-        .flat_map(|k| index.by_kind(k))
-        .collect();
+    let mut rows: Vec<&Artifact> = section.kinds().flat_map(|k| index.by_kind(k)).collect();
     // Newest first: what changed last is what the user came to see.
     sort_newest(&mut rows);
     page(ui, |ui| {
@@ -1261,11 +1378,7 @@ fn card_rows(
                             CardText {
                                 title: name,
                                 facts: &facts,
-                                footer: Some(format!(
-                                    "{} · @{hash} · {}",
-                                    artifact.kind,
-                                    ago_iso(artifact.updated.as_deref())
-                                )),
+                                footer: Some(card_footer(artifact, hash)),
                             },
                             is_selected,
                             &artifact.stamp,
@@ -1346,7 +1459,7 @@ fn detail(
                             .text_style(DesignTokens::welcome_screen_h2())
                             .strong(),
                     );
-                    tag(ui, &artifact.kind);
+                    tag(ui, kind_word(&artifact.kind));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // The artifact as itself: a robot in 3D, a recording as
                         // plots, a run's curves, a certificate's funnel — in the
@@ -1389,12 +1502,10 @@ fn detail(
         });
     });
     // The artifact itself, in the field's terms: the sections the Python
-    // side wrote for it (detail.rs). Falls back to the index's summary
-    // for a kind that has no detail writer yet.
-    match model
-        .detail_path(artifact)
-        .and_then(|p| crate::detail::Detail::load(&p))
-    {
+    // side wrote for it (detail.rs), parsed once and re-read when the
+    // file moves. Falls back to the index's summary for a kind that has
+    // no detail writer yet.
+    match model.detail(artifact) {
         Some(detail) => {
             ui.add_space(14.0);
             explore = crate::detail::show(ui, &detail, &artifact.stamp);
@@ -1404,7 +1515,7 @@ fn detail(
             card(ui, None).show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.label(egui::RichText::new("Summary").strong());
-                fact_grid(ui, ("summary", &artifact.stamp), &artifact.summary, false);
+                fact_grid(ui, ("summary", &artifact.stamp), &artifact.summary);
             });
         }
         None => {}
@@ -1441,7 +1552,7 @@ fn lineage_grid(
 /// the version on hover), in monospace otherwise; `unrecorded` in the
 /// warning colour.
 fn stamp_link(ui: &mut egui::Ui, model: &Model, stamp: &str, short: bool, nav: &mut Nav) {
-    if stamp == "unrecorded" {
+    if stamp == UNRECORDED {
         ui.label(egui::RichText::new(stamp).color(ui.visuals().warn_fg_color));
     } else if model.artifact(stamp).is_some() {
         let (name, hash) = split_stamp(stamp);
@@ -1499,37 +1610,20 @@ fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav)
 /// How many links a "Used by" row shows before folding.
 const USED_BY_SHOWN: usize = 12;
 
-/// A two-column key/value grid; stamps in monospace, `unrecorded` in the
-/// warning colour when `stamps` is set.
+/// A two-column key/value grid of an artifact's summary (the cites have
+/// their own grid, `lineage_grid`, whose values are links).
 fn fact_grid(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash + std::fmt::Debug,
     map: &serde_json::Map<String, serde_json::Value>,
-    stamps: bool,
 ) {
     egui::Grid::new(id)
         .num_columns(2)
         .spacing([16.0, 4.0])
         .show(ui, |ui| {
             for (key, value) in map {
-                // The index writes cites keys in the repo's older vocabulary
-                // (frozen by tests); the reader sees the field's word.
-                let shown = if stamps {
-                    crate::detail::field_word(key)
-                } else {
-                    key
-                };
-                ui.label(egui::RichText::new(shown).color(ui.visuals().weak_text_color()));
-                if stamps {
-                    let text = value.as_str().unwrap_or_default();
-                    if text == "unrecorded" {
-                        ui.label(egui::RichText::new(text).color(ui.visuals().warn_fg_color));
-                    } else {
-                        ui.monospace(text);
-                    }
-                } else {
-                    ui.label(render_value(value));
-                }
+                ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
+                ui.label(render_value(value));
                 ui.end_row();
             }
         });
@@ -1548,9 +1642,9 @@ mod tests {
         assert_eq!(Section::parse("simulator"), Some(Section::Live));
         assert_eq!(Section::Live.slug(), "simulator");
         assert_eq!(Section::parse("dance"), None);
-        assert_eq!(Section::for_kind("batch"), Some(Section::Datasets));
+        assert_eq!(Section::for_kind(kind::BATCH), Some(Section::Datasets));
         assert_eq!(
-            Section::for_kind("certificate"),
+            Section::for_kind(kind::CERTIFICATE),
             Some(Section::Certificates)
         );
         assert_eq!(Section::for_kind("nothing"), None);
@@ -1558,23 +1652,41 @@ mod tests {
     }
 
     #[test]
-    fn every_kind_the_index_can_emit_has_a_section() {
-        let kinds = [
-            "robot",
-            "recording",
-            "task",
-            "batch",
-            "dataset",
-            "run",
-            "policy",
-            "certificate",
-            "deploy",
-            "drift",
-            "finding",
+    fn every_kind_the_index_can_emit_has_a_section_an_icon_and_a_word() {
+        // The kinds `rq_pipeline/project/kinds.py` writes, by name.
+        let written = [
+            kind::ROBOT,
+            kind::RECORDING,
+            kind::TASK,
+            kind::BATCH,
+            kind::DATASET,
+            kind::RUN,
+            kind::POLICY,
+            kind::CERTIFICATE,
+            kind::DEPLOY,
+            kind::DRIFT,
+            kind::FINDING,
         ];
-        for kind in kinds {
-            assert!(section_of(kind).is_some(), "{kind} has no section");
+        assert_eq!(KINDS.len(), written.len(), "one table row per kind");
+        for name in written {
+            assert!(section_of(name).is_some(), "{name} has no section");
+            assert!(
+                !std::ptr::eq(Section::icon_for(name), &icons::ENTITY_EMPTY),
+                "{name} has no icon"
+            );
+            assert_ne!(kind_word(name), "", "{name} has no word");
         }
+        // The index's names never reach the screen where the field has a word.
+        assert_eq!(kind_word(kind::CERTIFICATE), "evaluation");
+        assert_eq!(kind_word(kind::BATCH), "generated dataset");
+        assert_eq!(kind_word(kind::RUN), "experiment");
+        assert_eq!(kind_word("something-newer"), "something-newer");
+        // A section's kinds come from the same table.
+        assert_eq!(
+            Section::Datasets.kinds().collect::<Vec<_>>(),
+            vec![kind::BATCH, kind::DATASET]
+        );
+        assert!(!Section::Overview.lists_artifacts());
         // `fit` rides inside a robot bundle today (no fits section yet).
         assert!(section_of("fit").is_none());
     }

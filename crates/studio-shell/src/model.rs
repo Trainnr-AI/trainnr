@@ -11,14 +11,28 @@
 //! so a tool call from the developer's agent updates this window with no
 //! protocol in between. The files are the truth; this is a cache.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
 
+pub use crate::control::Event;
+use crate::detail::Detail;
+
+/// The index's schema, as `rq_pipeline/project/index.py` writes it
+/// (`INDEX_SCHEMA`). The family (before the `/`) must match; a newer
+/// minor version is read, its unknown fields ignored.
+pub const INDEX_SCHEMA: &str = "trainnr-project-index/1";
 /// Mirrored from `rq_pipeline/project/locate.py`.
 const INDEX_RELATIVE: &str = ".index/project.json";
-const MANIFEST_FILE: &str = "project.json";
+pub const MANIFEST_FILE: &str = "project.json";
+/// Where projects live in a checkout (`PROJECTS_DIR_NAME`), and the two
+/// the Studio opens when none is named.
+pub const PROJECTS_HOME: &str = "projects";
+const DEFAULT_PROJECT_NAME: &str = "default";
+const SAMPLE_PROJECT_NAME: &str = "sample";
 /// Mirrored from `rq_pipeline/mcp_jobs.py` (`JOBS_DIR_NAME`).
 const JOBS_DIR: &str = "mcp-jobs";
 /// Mirrored from `rq_pipeline/project/present.py` (`INTENT_FILE`): the
@@ -27,12 +41,18 @@ const JOBS_DIR: &str = "mcp-jobs";
 const INTENT_RELATIVE: &str = ".index/present.json";
 /// The environment variable both halves honour (`PROJECT_ENV`).
 pub const PROJECT_ENV: &str = "TRAINNR_PROJECT";
-const DEFAULT_PROJECT: &str = "projects/default";
-const SAMPLE_PROJECT: &str = "projects/sample";
 /// How often the files' mtimes are polled. A tool call rewrites the
 /// index in one atomic replace; a second of latency is invisible next to
 /// the seconds the tool itself took.
 pub const RELOAD_EVERY: Duration = Duration::from_secs(1);
+/// How often the projects home is re-walked when nothing moved: every
+/// project's index is parsed on a walk, so it is not a per-frame cost.
+const PROJECTS_RESCAN_EVERY: Duration = Duration::from_secs(10);
+/// What is shown when a fact was never recorded: the reader must not
+/// mistake an empty cell for a value. One spelling across the window.
+pub const UNRECORDED: &str = "unrecorded";
+/// Summary keys never shown as a fact or a table column.
+pub const HIDDEN_KEYS: &[&str] = &["files"];
 
 /// `ProjectIndex`, as `rq_pipeline.project.index` writes it. Unknown
 /// fields are ignored so an older Studio still opens a newer index.
@@ -42,6 +62,8 @@ pub struct Index {
     by_stamp: std::collections::HashMap<String, usize>,
     #[serde(skip)]
     by_hash: std::collections::HashMap<String, Vec<usize>>,
+    #[serde(default)]
+    pub schema: String,
     #[serde(default)]
     pub project: String,
     #[serde(default)]
@@ -97,33 +119,6 @@ impl Artifact {
         self.updated_epoch
             .or_else(|| self.updated.as_deref().and_then(epoch_of))
             .unwrap_or(f64::NEG_INFINITY)
-    }
-}
-
-/// One line of `events.jsonl`: what the human or the agent did in the
-/// window (`control.rs` writes it).
-#[derive(Deserialize, Clone, Debug)]
-pub struct Event {
-    /// Nanoseconds since the epoch.
-    pub t: f64,
-    pub kind: String,
-    #[serde(default)]
-    pub by: String,
-    #[serde(default)]
-    pub section: Option<String>,
-    #[serde(default)]
-    pub artifact: Option<String>,
-    #[serde(default)]
-    pub recording: Option<String>,
-    #[serde(default)]
-    pub table: Option<String>,
-    #[serde(default)]
-    pub project: Option<String>,
-}
-
-impl Event {
-    pub fn epoch_seconds(&self) -> f64 {
-        self.t / 1e9
     }
 }
 
@@ -278,6 +273,28 @@ impl<T> Watched<T> {
             false
         }
     }
+
+    /// The value, re-read through `load` only when the file moved: one
+    /// stat per call, never a parse.
+    fn current(&mut self, load: impl FnOnce(&Path) -> Option<T>) -> Option<&T> {
+        if self.changed() {
+            self.value = load(&self.path);
+        }
+        self.value.as_ref()
+    }
+}
+
+/// The family of a schema string: `trainnr-detail/5` → `trainnr-detail`.
+/// A Studio reads any version of the families it knows; a version bump
+/// within a family adds fields, which serde ignores.
+pub fn schema_family(schema: &str) -> &str {
+    schema.split_once('/').map_or(schema, |(family, _)| family)
+}
+
+/// Whether a file written for `written` is one this Studio reads
+/// (`ours`). An unstamped file is taken as is: older writers wrote none.
+pub fn schema_compatible(written: &str, ours: &str) -> bool {
+    written.is_empty() || schema_family(written) == schema_family(ours)
 }
 
 /// One project under `projects/`, as the Projects page and the switcher
@@ -296,8 +313,15 @@ pub struct ProjectSummary {
 pub struct Model {
     /// `projects/` in the checkout: where the switcher looks.
     projects_home: PathBuf,
+    /// Every project under the home, as last walked (`refresh_projects`).
+    projects: Vec<ProjectSummary>,
+    projects_home_seen: Option<SystemTime>,
+    projects_scanned_at: Option<std::time::Instant>,
     pub project_root: PathBuf,
     index: Watched<Index>,
+    /// The selected artifact's detail file, re-read only when it moves:
+    /// the drawer asks for it every frame it is open.
+    detail: RefCell<Option<Watched<Rc<Detail>>>>,
     jobs_dir: PathBuf,
     jobs_seen: Option<SystemTime>,
     pub jobs: Vec<Job>,
@@ -318,22 +342,27 @@ impl Model {
     /// Python side applies, plus the sample so a fresh clone shows a page
     /// instead of an error.
     pub fn open(repo_root: &Path) -> Self {
+        let home = repo_root.join(PROJECTS_HOME);
         let root = std::env::var_os(PROJECT_ENV)
             .map(PathBuf::from)
             .filter(|p| p.join(MANIFEST_FILE).is_file())
             .or_else(|| {
-                let default = repo_root.join(DEFAULT_PROJECT);
+                let default = home.join(DEFAULT_PROJECT_NAME);
                 default.join(MANIFEST_FILE).is_file().then_some(default)
             })
-            .unwrap_or_else(|| repo_root.join(SAMPLE_PROJECT));
-        Self::at(root, repo_root.join("projects"))
+            .unwrap_or_else(|| home.join(SAMPLE_PROJECT_NAME));
+        Self::at(root, home)
     }
 
     /// Open a specific project directory.
     pub fn at(root: PathBuf, projects_home: PathBuf) -> Self {
         let mut model = Self {
             projects_home,
+            projects: Vec::new(),
+            projects_home_seen: None,
+            projects_scanned_at: None,
             index: Watched::new(root.join(INDEX_RELATIVE)),
+            detail: RefCell::new(None),
             jobs_dir: root.join(JOBS_DIR),
             jobs_seen: None,
             jobs: Vec::new(),
@@ -347,6 +376,7 @@ impl Model {
         };
         model.reload_index();
         model.reload_jobs();
+        model.rescan_projects();
         model
     }
 
@@ -368,6 +398,18 @@ impl Model {
             .filter(|p| p.is_file())
     }
 
+    /// An artifact's detail, parsed once and re-read when its file moves.
+    /// One artifact is watched at a time: the drawer shows one.
+    pub fn detail(&self, artifact: &Artifact) -> Option<Rc<Detail>> {
+        let path = self.detail_path(artifact)?;
+        let mut slot = self.detail.borrow_mut();
+        let watched = match slot.as_mut() {
+            Some(w) if w.path == path => w,
+            _ => slot.insert(Watched::new(path)),
+        };
+        watched.current(|p| Detail::load(p).map(Rc::new)).cloned()
+    }
+
     /// An artifact's preview as an absolute path, when it has one.
     pub fn preview_path(&self, artifact: &Artifact) -> Option<PathBuf> {
         artifact
@@ -378,9 +420,37 @@ impl Model {
     }
 
     /// Every project under the projects home, by name, with what its own
-    /// index says about it. Read fresh on each call; the Projects page is
-    /// visited, not polled.
-    pub fn projects(&self) -> Vec<ProjectSummary> {
+    /// index says about it — as last walked. The top bar reads this every
+    /// frame; the walk itself happens in `refresh_projects`.
+    pub fn projects(&self) -> &[ProjectSummary] {
+        &self.projects
+    }
+
+    /// Re-walk the projects home when it moved, when this project's index
+    /// was reloaded, or when the last walk is old — at most once per
+    /// [`RELOAD_EVERY`]. The switcher's popup and the Projects page call
+    /// it when they open, so a fresh project shows the moment it is asked
+    /// for.
+    pub fn refresh_projects(&mut self) {
+        let now = std::time::Instant::now();
+        let recent = self
+            .projects_scanned_at
+            .is_some_and(|t| now.duration_since(t) < RELOAD_EVERY);
+        if recent {
+            return;
+        }
+        self.rescan_projects();
+    }
+
+    fn rescan_projects(&mut self) {
+        self.projects_scanned_at = Some(std::time::Instant::now());
+        self.projects_home_seen = std::fs::metadata(&self.projects_home)
+            .and_then(|m| m.modified())
+            .ok();
+        self.projects = self.walk_projects();
+    }
+
+    fn walk_projects(&self) -> Vec<ProjectSummary> {
         let Ok(entries) = std::fs::read_dir(&self.projects_home) else {
             return Vec::new();
         };
@@ -470,16 +540,9 @@ impl Model {
     }
 
     fn write_intent(&self, body: serde_json::Value) -> std::io::Result<()> {
-        let path = self.project_root.join(INTENT_RELATIVE);
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, body.to_string())?;
-        std::fs::rename(tmp, path)
+        crate::control::write_atomic(&self.project_root.join(INTENT_RELATIVE), &body.to_string())
     }
 
-    /// The artifact with this version, if the index knows it.
     /// The artifact a stamp names (`Index::artifact`).
     pub fn artifact(&self, stamp: &str) -> Option<&Artifact> {
         self.index()?.artifact(stamp)
@@ -495,8 +558,21 @@ impl Model {
             return;
         }
         self.last_poll = Some(now);
+        let mut projects_stale = self
+            .projects_scanned_at
+            .is_none_or(|t| now.duration_since(t) >= PROJECTS_RESCAN_EVERY);
         if self.index.changed() {
             self.reload_index();
+            projects_stale = true;
+        }
+        let home_modified = std::fs::metadata(&self.projects_home)
+            .and_then(|m| m.modified())
+            .ok();
+        if home_modified != self.projects_home_seen {
+            projects_stale = true;
+        }
+        if projects_stale {
+            self.rescan_projects();
         }
         let jobs_modified = std::fs::metadata(&self.jobs_dir)
             .and_then(|m| m.modified())
@@ -533,6 +609,15 @@ impl Model {
                 i.finish();
                 i
             }) {
+                Ok(index) if !schema_compatible(&index.schema, INDEX_SCHEMA) => {
+                    self.index.value = None;
+                    self.problem = Some(format!(
+                        "{} was written for schema {}; this Studio reads {INDEX_SCHEMA}. \
+                         Re-index with a matching pipeline, or update the Studio.",
+                        self.index.path.display(),
+                        index.schema
+                    ));
+                }
                 Ok(index) => {
                     self.index.value = Some(index);
                     self.problem = None;
@@ -607,7 +692,7 @@ pub fn split_stamp(stamp: &str) -> (&str, &str) {
 pub fn summary_line(summary: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
     let parts: Vec<String> = summary
         .iter()
-        .filter(|(k, _)| *k != "files")
+        .filter(|(k, _)| !HIDDEN_KEYS.contains(&k.as_str()))
         // A claim or a success rate reads on its own; a key would be noise.
         // The keys are the index writer's (`project/index.py`,
         // `_summary_finding` and `_summary_certificate`).
@@ -619,8 +704,12 @@ pub fn summary_line(summary: &serde_json::Map<String, serde_json::Value>) -> Opt
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
+/// A JSON value as a person reads it: a string as itself, a list joined
+/// by commas, nothing for `null` (an absent fact is never the word
+/// "null"), an object pretty-printed. The one renderer in the crate.
 pub fn render_value(value: &serde_json::Value) -> String {
     match value {
+        serde_json::Value::Null => String::new(),
         serde_json::Value::String(s) => s.clone(),
         serde_json::Value::Array(items) => items
             .iter()
@@ -631,6 +720,7 @@ pub fn render_value(value: &serde_json::Value) -> String {
             })
             .collect::<Vec<_>>()
             .join(", "),
+        serde_json::Value::Object(_) => serde_json::to_string_pretty(value).unwrap_or_default(),
         other => other.to_string(),
     }
 }
@@ -714,6 +804,38 @@ mod tests {
         assert!(summary_line(&m).is_none());
         m.insert("episodes".into(), serde_json::json!(2));
         assert_eq!(summary_line(&m).as_deref(), Some("episodes 2"));
+        assert_eq!(render_value(&serde_json::Value::Null), "");
+        assert_eq!(render_value(&serde_json::json!(["a", 1])), "a, 1");
+    }
+
+    #[test]
+    fn a_schema_of_another_family_is_refused_and_a_newer_minor_is_read() {
+        assert_eq!(
+            schema_family("trainnr-project-index/1"),
+            "trainnr-project-index"
+        );
+        assert!(schema_compatible("trainnr-project-index/2", INDEX_SCHEMA));
+        assert!(
+            schema_compatible("", INDEX_SCHEMA),
+            "an older writer wrote none"
+        );
+        assert!(!schema_compatible("trainnr-detail/5", INDEX_SCHEMA));
+        let root = std::env::temp_dir().join(format!("studio-schema-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".index")).unwrap();
+        std::fs::write(root.join(MANIFEST_FILE), "{}").unwrap();
+        std::fs::write(
+            root.join(INDEX_RELATIVE),
+            r#"{"schema":"somebody-else/1","project":"p","artifacts":[],"states":[]}"#,
+        )
+        .unwrap();
+        let model = Model::at(root.clone(), root.join(PROJECTS_HOME));
+        assert!(model.index().is_none());
+        assert!(model
+            .problem
+            .as_deref()
+            .is_some_and(|p| p.contains("somebody-else/1") && p.contains(INDEX_SCHEMA)));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -812,13 +934,13 @@ pub fn ago(epoch_seconds: f64) -> String {
 pub fn ago_iso(iso: Option<&str>) -> String {
     iso.and_then(epoch_of)
         .map(ago)
-        .unwrap_or_else(|| "unrecorded".to_owned())
+        .unwrap_or_else(|| UNRECORDED.to_owned())
 }
 
 /// `YYYY-MM-DD` (UTC) of an epoch time.
 pub fn date_of(epoch_seconds: f64) -> String {
     if !(0.0..=EPOCH_MAX).contains(&epoch_seconds) {
-        return "unrecorded".to_owned();
+        return UNRECORDED.to_owned();
     }
     let (y, m, d) = civil_from_days((epoch_seconds / 86_400.0).floor() as i64);
     format!("{y:04}-{m:02}-{d:02}")
@@ -868,8 +990,8 @@ mod time_tests {
         assert_eq!(epoch_of("junk"), None);
         assert_eq!(epoch_of("2026-13-40T00:00:00Z"), None);
         assert_eq!(epoch_of("2026-09-0ʘT00:00:00Z"), None);
-        assert_eq!(date_of(1e30), "unrecorded");
-        assert_eq!(date_of(-5.0), "unrecorded");
+        assert_eq!(date_of(1e30), UNRECORDED);
+        assert_eq!(date_of(-5.0), UNRECORDED);
     }
 
     #[test]

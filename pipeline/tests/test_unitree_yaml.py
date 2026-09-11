@@ -1,20 +1,32 @@
 """Our manifest as Unitree's deploy.yaml, and the refusal that is the
-deployability check."""
+deployability check: terms matched on what they compute, never on a
+name."""
 
 from __future__ import annotations
 
-import json
 import unittest
 from pathlib import Path
+from typing import Any
 
-from rq_pipeline.deploy.manifest import Manifest
+from rq_pipeline.deploy.manifest import (
+    SOURCE_COMMAND_TWIST,
+    SOURCE_GAIT_PHASE,
+    SOURCE_IMU_ANG_VEL,
+    SOURCE_IMU_LIN_VEL,
+    SOURCE_JOINT_POS_REL,
+    SOURCE_JOINT_VEL_REL,
+    SOURCE_LAST_ACTION,
+    SOURCE_PROJECTED_GRAVITY,
+    Manifest,
+)
 from rq_pipeline.deploy.unitree_yaml import (
+    UNITREE_TERMS,
     NotDeployableError,
+    deployable_actor_terms,
     unitree_deploy,
     unitree_observations,
 )
 
-GO2_DEPLOY = Path("/home/prakhar-pc/robotiq/projects/go2-walk/deploy/go2-c1-deploy")
 THEIR_TOP_KEYS = {
     "joint_ids_map",
     "step_dt",
@@ -27,10 +39,17 @@ THEIR_TOP_KEYS = {
 }
 
 
-def _manifest(observations: list[dict]) -> Manifest:
-    raw = {
-        "control": {"control_hz": 50, "decimation": 4, "episode_length_s": 20.0},
+def _manifest(observations: list[dict[str, Any]], **overrides: object) -> Manifest:
+    raw: dict[str, Any] = {
+        "control": {
+            "physics_timestep_s": 0.005,
+            "decimation": 4,
+            "control_hz": 50,
+            "episode_length_s": 20.0,
+        },
         "joints": {
+            "policy_order": [f"j{i}" for i in range(12)],
+            "action_to_ctrl": list(range(12)),
             "sdk_order_map": [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8],
             "stiffness": [20.0] * 12,
             "damping": [1.0] * 12,
@@ -47,17 +66,23 @@ def _manifest(observations: list[dict]) -> Manifest:
         },
         "observations": observations,
     }
+    raw.update(overrides)
     return Manifest(root=Path("/nowhere"), raw=raw)
 
 
 DEPLOYABLE = [
-    {"name": "base_ang_vel", "width": 3, "scale": 1.0},
-    {"name": "projected_gravity", "width": 3, "scale": 1.0},
-    {"name": "command", "width": 3, "scale": 1.0},
-    {"name": "phase", "width": 2, "scale": 1.0, "params": {"period": 0.6}},
-    {"name": "joint_pos", "width": 12, "scale": 1.0},
-    {"name": "joint_vel", "width": 12, "scale": 0.05},
-    {"name": "actions", "width": 12, "scale": 1.0},
+    {"name": "base_ang_vel", "width": 3, "source": SOURCE_IMU_ANG_VEL},
+    {"name": "projected_gravity", "width": 3, "source": SOURCE_PROJECTED_GRAVITY},
+    {"name": "command", "width": 3, "source": SOURCE_COMMAND_TWIST},
+    {
+        "name": "phase",
+        "width": 2,
+        "source": SOURCE_GAIT_PHASE,
+        "params": {"period": 0.6, "command_name": "twist"},
+    },
+    {"name": "joint_pos", "width": 12, "source": SOURCE_JOINT_POS_REL},
+    {"name": "joint_vel", "width": 12, "source": SOURCE_JOINT_VEL_REL, "scale": 0.05},
+    {"name": "actions", "width": 12, "source": SOURCE_LAST_ACTION},
 ]
 
 
@@ -66,18 +91,7 @@ class TheWriter(unittest.TestCase):
         out = unitree_deploy(_manifest(DEPLOYABLE))
         self.assertEqual(set(out), THEIR_TOP_KEYS)
         self.assertEqual(out["step_dt"], 0.02)
-        self.assertEqual(
-            list(out["observations"]),
-            [
-                "base_ang_vel",
-                "projected_gravity",
-                "velocity_commands",
-                "gait_phase",
-                "joint_pos_rel",
-                "joint_vel_rel",
-                "last_action",
-            ],
-        )
+        self.assertEqual(list(out["observations"]), [t.theirs for t in UNITREE_TERMS])
         self.assertEqual(out["observations"]["gait_phase"]["params"], {"period": 0.6})
         self.assertEqual(
             out["observations"]["velocity_commands"]["params"],
@@ -87,14 +101,54 @@ class TheWriter(unittest.TestCase):
         self.assertEqual(
             out["commands"]["base_velocity"]["ranges"]["lin_vel_x"], [-1.5, 2.0]
         )
+        self.assertIsNone(out["commands"]["base_velocity"]["ranges"]["heading"])
+        self.assertIsNone(out["actions"]["JointPositionAction"]["clip"])
 
-    def test_a_term_their_runtime_lacks_is_refused_by_name(self) -> None:
+    def test_the_actor_order_is_theirs(self) -> None:
+        self.assertEqual(
+            deployable_actor_terms(),
+            (
+                "base_ang_vel",
+                "projected_gravity",
+                "command",
+                "phase",
+                "joint_pos",
+                "joint_vel",
+                "actions",
+            ),
+        )
+
+    def test_a_term_their_runtime_lacks_is_refused_by_source(self) -> None:
         with self.assertRaises(NotDeployableError) as caught:
-            unitree_observations(_manifest([{"name": "base_lin_vel", "width": 3}]))
+            unitree_observations(
+                _manifest(
+                    [{"name": "base_lin_vel", "width": 3, "source": SOURCE_IMU_LIN_VEL}]
+                )
+            )
         self.assertIn("base_lin_vel", str(caught.exception))
-
-    @unittest.skipUnless(GO2_DEPLOY.is_dir(), "the Go2 deployment lives on the box")
-    def test_the_first_certified_go2_policy_is_not_deployable_there(self) -> None:
-        raw = json.loads((GO2_DEPLOY / "deploy.json").read_text())
+        self.assertIn(SOURCE_IMU_LIN_VEL, str(caught.exception))
+        # A term merely NAMED like theirs is refused too: the source decides.
         with self.assertRaises(NotDeployableError):
-            unitree_deploy(Manifest(root=GO2_DEPLOY, raw=raw))
+            unitree_observations(
+                _manifest([{"name": "phase", "width": 2, "source": SOURCE_IMU_LIN_VEL}])
+            )
+
+    def test_a_missing_parameter_is_refused_by_name(self) -> None:
+        with self.assertRaises(NotDeployableError) as caught:
+            unitree_observations(
+                _manifest([{"name": "phase", "width": 2, "source": SOURCE_GAIT_PHASE}])
+            )
+        self.assertIn("period", str(caught.exception))
+
+    def test_a_robot_without_an_sdk_order_is_refused(self) -> None:
+        manifest = _manifest(
+            DEPLOYABLE,
+            joints={
+                "policy_order": ["j"],
+                "action_to_ctrl": [0],
+                "default_pos": [0.0],
+            },
+        )
+        with self.assertRaises(NotDeployableError) as caught:
+            unitree_deploy(manifest)
+        self.assertIn("joint_ids_map", str(caught.exception))

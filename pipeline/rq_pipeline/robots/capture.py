@@ -20,7 +20,11 @@ avoids. A Unitree listener waits on its SDK research (docs/76 §5).
 
 `Capture` is deliberately a small state machine (idle → listening →
 ingested) with its state on disk (`<project>/.index/capture.json`), so
-the Studio can show it and a tool can poll it, the way jobs work.
+the Studio can show it and a tool can poll it, the way jobs work. The
+seam takes directories: where the recordings go and where the state
+lives; which project those belong to is the caller's (the project
+layer sits above this one, never below it). The ingest at the end is
+injected for the same reason: the project layer's stamps the artifact.
 """
 
 from __future__ import annotations
@@ -29,13 +33,19 @@ import json
 import socket
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.project.locate import INDEX_DIR, Project
+from rq_pipeline.robots.ingest import ingest as ingest_into
 
 STATE_FILE = "capture.json"
+ENCODING = "utf-8"
+# What lands the raw file as a recording: (recordings dir, raw file,
+# name, adapter) -> a record with at least `notes`; the project layer
+# passes its stamping ingest, the seam's own writes without a stamp.
+Ingest = Callable[..., dict[str, Any]]
 # The firmware's telemetry port (firmware/pico-odom, TELEMETRY_PORT); the
 # UDP bridge carries the same second copy on purpose.
 WIRE_UDP_PORT = 9870
@@ -61,20 +71,20 @@ class CaptureState:
     error: str | None = None
     notes: list[str] = field(default_factory=list)
 
-    def write(self, project: Project) -> Path:
-        out = project.root / INDEX_DIR / STATE_FILE
+    def write(self, state_dir: Path) -> Path:
+        out = Path(state_dir) / STATE_FILE
         out.parent.mkdir(parents=True, exist_ok=True)
         staging = out.with_suffix(".json.tmp")
-        staging.write_text(json.dumps(asdict(self), indent=1))
+        staging.write_text(json.dumps(asdict(self), indent=1), encoding=ENCODING)
         staging.replace(out)
         return out
 
     @classmethod
-    def read(cls, project: Project) -> CaptureState:
-        path = project.root / INDEX_DIR / STATE_FILE
+    def read(cls, state_dir: Path) -> CaptureState:
+        path = Path(state_dir) / STATE_FILE
         if not path.is_file():
             return cls()
-        raw = json.loads(path.read_text())
+        raw = json.loads(path.read_text(encoding=ENCODING))
         known = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in raw.items() if k in known})
 
@@ -84,18 +94,26 @@ class WireUdpCapture:
     on `stop()` ingest it. One capture at a time per project."""
 
     def __init__(
-        self, project: Project, name: str, *, port: int = WIRE_UDP_PORT
+        self,
+        recordings: Path,
+        state_dir: Path,
+        name: str,
+        *,
+        port: int = WIRE_UDP_PORT,
+        ingest: Ingest = ingest_into,
     ) -> None:
-        self.project = project
+        self.recordings = Path(recordings)
+        self.state_dir = Path(state_dir)
         self.name = name
         self.port = port
-        self.raw = project.folder("recordings") / f".capture-{name}.wire"
+        self.ingest = ingest
+        self.raw = self.recordings / f".capture-{name}.wire"
         self.state = CaptureState(source=f"udp:{port}", raw_file=str(self.raw))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     def start(self, window_s: float = DEFAULT_WINDOW_S) -> CaptureState:
-        if (self.project.folder("recordings") / self.name).exists():
+        if (self.recordings / self.name).exists():
             raise FileExistsError(f"a recording named {self.name!r} already exists")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -108,7 +126,7 @@ class WireUdpCapture:
         sock.settimeout(QUIET_S)
         self.state.state = LISTENING
         self.state.started = time.time()
-        self.state.write(self.project)
+        self.state.write(self.state_dir)
         self._thread = threading.Thread(
             target=self._listen,
             args=(sock, window_s),
@@ -125,9 +143,8 @@ class WireUdpCapture:
                 try:
                     datagram, _addr = sock.recvfrom(DATAGRAM_BYTES)
                 except TimeoutError:
-                    self.state.write(
-                        self.project
-                    )  # quiet is visible, not a dead listener
+                    # quiet is visible, not a dead listener
+                    self.state.write(self.state_dir)
                     continue
                 except OSError:
                     break
@@ -136,7 +153,7 @@ class WireUdpCapture:
                 self.state.datagrams += 1
                 self.state.last_datagram = time.time()
                 if self.state.datagrams % 50 == 1:
-                    self.state.write(self.project)
+                    self.state.write(self.state_dir)
         sock.close()
 
     def stop(self) -> CaptureState:
@@ -147,16 +164,16 @@ class WireUdpCapture:
         return self.finish()
 
     def finish(self) -> CaptureState:
-        from rq_pipeline.robots.ingest import ingest  # noqa: PLC0415
-
         if self.state.datagrams == 0 or not self.raw.is_file():
             self.state.state = FAILED
             self.state.error = "no datagrams received — nothing to ingest"
             self.raw.unlink(missing_ok=True)
         else:
             try:
-                record = ingest(self.project, self.raw, name=self.name, adapter="wire")
-                self.state.stamp = record["stamp"]
+                record = self.ingest(
+                    self.recordings, self.raw, name=self.name, adapter="wire"
+                )
+                self.state.stamp = record.get("stamp")
                 self.state.state = INGESTED
                 self.state.notes = list(record.get("notes", []))
             except Exception as why:
@@ -164,9 +181,9 @@ class WireUdpCapture:
                 self.state.error = str(why)
             finally:
                 self.raw.unlink(missing_ok=True)
-        self.state.write(self.project)
+        self.state.write(self.state_dir)
         return self.state
 
 
-def status(project: Project) -> dict[str, Any]:
-    return asdict(CaptureState.read(project))
+def status(state_dir: Path) -> dict[str, Any]:
+    return asdict(CaptureState.read(state_dir))

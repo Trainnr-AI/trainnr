@@ -10,23 +10,40 @@ The observation terms are the velocity task's, computed the way mjlab
 computes them (`mjlab/envs/mdp/observations.py`, read 2026-09-11):
 the IMU's velocimeter and gyro from the model's sensors, gravity
 projected into the base frame, joint positions relative to the home
-pose, joint velocities, the last action, the commanded twist.
+pose, joint velocities, the last action, the commanded twist, and the
+reference's gait clock.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import mujoco
 import numpy as np
 
-from rq_pipeline.deploy.manifest import Manifest
+from rq_pipeline.deploy.manifest import (
+    SOURCE_COMMAND_TWIST,
+    SOURCE_GAIT_PHASE,
+    SOURCE_JOINT_POS_REL,
+    SOURCE_JOINT_VEL_REL,
+    SOURCE_LAST_ACTION,
+    SOURCE_PROJECTED_GRAVITY,
+    Manifest,
+    Observation,
+)
+
+if TYPE_CHECKING:
+    import onnxruntime as ort
 
 FREE_JOINT_QPOS = 7
 FREE_JOINT_QVEL = 6
 TIMESTEP_TOLERANCE_S = 1e-9
+GRAVITY_DOWN = np.array([0.0, 0.0, -1.0])
+STANDING_COMMAND = 0.1  # the reference's threshold: no gait clock below it
+SENSOR_PREFIX = "sensor "
+ONNX_PROVIDERS = ("CPUExecutionProvider",)
 
 
 @dataclass
@@ -36,36 +53,34 @@ class Runtime:
     manifest: Manifest
     model: mujoco.MjModel
     data: mujoco.MjData
-    session: Any
+    session: ort.InferenceSession
     command: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float32))
+    command_limit: float | None = None  # the manifest's ranges are the only bound
     last_action: np.ndarray = field(init=False)
     default_pos: np.ndarray = field(init=False)
     scale: np.ndarray = field(init=False)
-    action_to_ctrl: list[int] = field(init=False)
+    action_to_ctrl: tuple[int, ...] = field(init=False)
     joint_qpos: np.ndarray = field(init=False)
     joint_qvel: np.ndarray = field(init=False)
     sensors: dict[str, tuple[int, int]] = field(init=False)
+    ticks: int = field(init=False, default=0)  # control steps since reset
 
     def __post_init__(self) -> None:
         joints = self.manifest.joints
-        n = len(joints["policy_order"])
+        n = len(joints.policy_order)
         self.last_action = np.zeros(n, dtype=np.float32)
-        self.ticks = 0  # control steps since reset, the gait clock's time
-        self.default_pos = np.asarray(joints["default_pos"], dtype=np.float64)
-        self.scale = np.asarray(self.manifest.raw["action"]["scale"], dtype=np.float64)
-        self.action_to_ctrl = list(joints["action_to_ctrl"])
+        self.default_pos = np.asarray(joints.default_pos, dtype=np.float64)
+        self.scale = np.asarray(self.manifest.action.scale, dtype=np.float64)
+        self.action_to_ctrl = joints.action_to_ctrl
         # Where each policy-order joint lives in qpos/qvel (after the free joint).
         self.joint_qpos = np.array(
             [
                 self.model.jnt_qposadr[self.model.joint(j).id]
-                for j in joints["policy_order"]
+                for j in joints.policy_order
             ]
         )
         self.joint_qvel = np.array(
-            [
-                self.model.jnt_dofadr[self.model.joint(j).id]
-                for j in joints["policy_order"]
-            ]
+            [self.model.jnt_dofadr[self.model.joint(j).id] for j in joints.policy_order]
         )
         self.sensors = {}
         for i in range(self.model.nsensor):
@@ -73,14 +88,21 @@ class Runtime:
             self.sensors[self.model.sensor(i).name] = (adr, dim)
 
     @property
+    def instrument(self) -> str:
+        return f"mujoco-{mujoco.__version__}"
+
+    @property
     def step_dt(self) -> float:
-        """The control period: the physics step times the decimation."""
-        control = self.manifest.control
-        return float(control["physics_timestep_s"]) * int(control["decimation"])
+        return self.manifest.control.step_dt
 
     @property
     def decimation(self) -> int:
-        return int(self.manifest.control["decimation"])
+        return self.manifest.control.decimation
+
+    @property
+    def quat(self) -> np.ndarray:
+        """The base's orientation, w x y z of the free joint."""
+        return self.data.qpos[3:FREE_JOINT_QPOS]
 
     def reset(self, *, keyframe: int = 0) -> None:
         mujoco.mj_resetDataKeyframe(self.model, self.data, keyframe)
@@ -92,47 +114,44 @@ class Runtime:
         parts = [self._term(t) for t in self.manifest.observations]
         return np.concatenate(parts).astype(np.float32)
 
-    def _term(self, term: dict[str, Any]) -> np.ndarray:
-        source = term["source"]
-        scale = term.get("scale", 1.0)
-        if source.startswith("sensor "):
-            adr, dim = self.sensors[source.split(" ", 1)[1].split("/", 1)[-1]]
+    def _term(self, term: Observation) -> np.ndarray:
+        source = term.source
+        if source.startswith(SENSOR_PREFIX):
+            adr, dim = self.sensors[source[len(SENSOR_PREFIX) :].split("/", 1)[-1]]
             value = self.data.sensordata[adr : adr + dim].copy()
-        elif source == "projected_gravity":
-            quat = self.data.qpos[3:7]  # w x y z of the free joint
-            gravity = np.array([0.0, 0.0, -1.0])
-            value = _rotate_inverse(quat, gravity)
-        elif source == "joint_pos_rel":
+        elif source == SOURCE_PROJECTED_GRAVITY:
+            value = rotate_inverse(self.quat, GRAVITY_DOWN)
+        elif source == SOURCE_JOINT_POS_REL:
             value = self.data.qpos[self.joint_qpos] - self.default_pos
-        elif source == "joint_vel_rel":
+        elif source == SOURCE_JOINT_VEL_REL:
             value = self.data.qvel[self.joint_qvel]
-        elif source == "last_action":
+        elif source == SOURCE_LAST_ACTION:
             value = self.last_action.astype(np.float64)
-        elif source == "command twist":
+        elif source == SOURCE_COMMAND_TWIST:
             value = self.command.astype(np.float64)
-        elif source == "gait_phase":
-            params = term.get("params") or {}
+        elif source == SOURCE_GAIT_PHASE:
             value = gait_phase(
-                self.ticks, self.step_dt, float(params["period"]), self.command
+                self.ticks, self.step_dt, float(term.params["period"]), self.command
             )
         else:  # pragma: no cover - the manifest loader refuses unknown sources
             raise ValueError(f"cannot compute observation source {source!r}")
         value = np.asarray(value, dtype=np.float64) * np.asarray(
-            scale, dtype=np.float64
+            term.scale, dtype=np.float64
         )
-        clip = term.get("clip")
-        if clip is not None:
-            value = np.clip(value, clip[0], clip[1])
-        if int(value.size) != int(term["width"]):
+        if term.clip is not None:
+            value = np.clip(value, term.clip[0], term.clip[1])
+        if int(value.size) != term.width:
             raise ValueError(
-                f"{term['name']}: width {value.size}, manifest says {term['width']}"
+                f"{term.name}: width {value.size}, manifest says {term.width}"
             )
         return value
 
     def act(self, obs: np.ndarray) -> np.ndarray:
         name = self.session.get_inputs()[0].name
         out = self.session.run(None, {name: obs[None, :]})[0][0]
-        return np.asarray(out, dtype=np.float32)
+        action = np.asarray(out, dtype=np.float32)
+        clip = self.manifest.action.clip
+        return action if clip is None else np.clip(action, clip[0], clip[1])
 
     def apply(self, action: np.ndarray) -> None:
         """One control tick: targets from the action, `decimation` physics steps."""
@@ -147,20 +166,10 @@ class Runtime:
     def base_velocity_b(self) -> np.ndarray:
         """The base's linear velocity in its own frame (what the verdict
         compares to the command)."""
-        quat = self.data.qpos[3:7]
-        return _rotate_inverse(quat, self.data.qvel[0:3].copy())
+        return rotate_inverse(self.quat, self.data.qvel[0:3].copy())
 
     def fell_over(self) -> bool:
-        limit = self.manifest.raw.get("termination", {}).get("fell_over_deg")
-        if limit is None:
-            return False
-        gravity_b = _rotate_inverse(self.data.qpos[3:7], np.array([0.0, 0.0, -1.0]))
-        # The angle between the body's down and gravity: acos(-g_b·z).
-        cos = float(np.clip(-gravity_b[2], -1.0, 1.0))
-        return np.degrees(np.arccos(cos)) > float(limit)
-
-
-STANDING_COMMAND = 0.1  # the reference's threshold: no gait clock below it
+        return fell_over(self.quat, self.manifest.termination.fell_over_deg)
 
 
 def gait_phase(
@@ -176,7 +185,7 @@ def gait_phase(
     return np.array([np.sin(2 * np.pi * phase), np.cos(2 * np.pi * phase)])
 
 
-def _rotate_inverse(quat_wxyz: np.ndarray, v: np.ndarray) -> np.ndarray:
+def rotate_inverse(quat_wxyz: np.ndarray, v: np.ndarray) -> np.ndarray:
     """Rotate a world vector into the frame of the quaternion (w, x, y, z)."""
     out = np.zeros(3)
     conj = np.array([quat_wxyz[0], -quat_wxyz[1], -quat_wxyz[2], -quat_wxyz[3]])
@@ -184,12 +193,22 @@ def _rotate_inverse(quat_wxyz: np.ndarray, v: np.ndarray) -> np.ndarray:
     return out
 
 
+def fell_over(quat_wxyz: np.ndarray, limit_deg: float | None) -> bool:
+    """The evaluation's fall rule: the angle between the body's down and
+    gravity (acos(-g_b·z)) past the limit; never, when none is declared."""
+    if limit_deg is None:
+        return False
+    gravity_b = rotate_inverse(np.asarray(quat_wxyz, dtype=np.float64), GRAVITY_DOWN)
+    cos = float(np.clip(-gravity_b[2], -1.0, 1.0))
+    return bool(np.degrees(np.arccos(cos)) > float(limit_deg))
+
+
 def assets_dir_of(manifest: Manifest) -> Path:
     """The meshes the manifest's scene names: the cited robot bundle's
     `assets/`, found project-first (`bundles.locate`)."""
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
 
-    robot = str(manifest.raw.get("robot", "")).split("@", 1)[0]
+    robot = manifest.robot_name
     bundle = find_bundle(robot) if robot else None
     if bundle is None:
         raise FileNotFoundError(
@@ -203,9 +222,9 @@ def load_scene(manifest: Manifest, *, assets_dir: Path) -> mujoco.MjModel:
     against the manifest's."""
     assets = {p.name: p.read_bytes() for p in Path(assets_dir).iterdir() if p.is_file()}
     model = mujoco.MjModel.from_xml_string(
-        manifest.scene_path.read_text(), assets=assets
+        manifest.scene_path.read_text(encoding="utf-8"), assets=assets
     )
-    expected_dt = float(manifest.control["physics_timestep_s"])
+    expected_dt = manifest.control.physics_timestep_s
     if abs(model.opt.timestep - expected_dt) > TIMESTEP_TOLERANCE_S:
         raise ValueError(
             f"scene timestep {model.opt.timestep} differs from the manifest's "
@@ -221,7 +240,7 @@ def open_runtime(manifest: Manifest, *, assets_dir: Path) -> Runtime:
     model = load_scene(manifest, assets_dir=assets_dir)
     data = mujoco.MjData(model)
     session = ort.InferenceSession(
-        str(manifest.policy_path), providers=["CPUExecutionProvider"]
+        str(manifest.policy_path), providers=list(ONNX_PROVIDERS)
     )
     runtime = Runtime(manifest=manifest, model=model, data=data, session=session)
     runtime.reset()
