@@ -35,7 +35,7 @@ from rq_pipeline.project.locate import INDEX_DIR, Project
 DETAILS_DIR = "details"
 # /4 (2026-09-10): a walk's gate and episode; /3 (2026-09-09): fit records
 # read as written.
-SCHEMA = "trainnr-detail/4"
+SCHEMA = "trainnr-detail/5"
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
@@ -953,7 +953,12 @@ def _certificate(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
 def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
     """A deployment: what the manifest says a runtime needs, the joints
     and observations as tables, and the sim-to-sim gate's verdict."""
-    from rq_pipeline.deploy.manifest import GATE_FILE, MANIFEST_FILE  # noqa: PLC0415
+    from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
+        GATE_INSTRUMENTS,
+        MANIFEST_FILE,
+        gate_word,
+        read_gates,
+    )
 
     m = json.loads((root / MANIFEST_FILE).read_text())
     control = m.get("control") or {}
@@ -999,22 +1004,13 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
             ],
         )
     ]
-    gate_path = root / GATE_FILE
-    if gate_path.is_file():
-        g = json.loads(gate_path.read_text())
+    gates = read_gates(root)
+    for runtime, g in gates.items():
+        instrument = GATE_INSTRUMENTS[runtime]
         verdict = g.get("verdict") or {}
         cert = g.get("certificate") or {}
         rows: list[tuple[str, Any]] = [
-            (
-                "verdict",
-                "passed"
-                if verdict.get("passed")
-                else (
-                    "failed"
-                    if verdict.get("passed") is False
-                    else "reported, not judged"
-                ),
-            ),
+            ("verdict", gate_word(g)),
             ("successes", f"{g.get('successes')} / {g.get('trials')}"),
             (
                 "95% confidence interval (exact)",
@@ -1037,7 +1033,7 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         ]
         sections.append(
             _kv(
-                "Sim-to-sim gate",
+                f"Sim-to-sim gate: {instrument}",
                 rows,
                 note="The exported policy driven through its manifest alone, judged "
                 "the certificate's way: survived and tracked the held command.",
@@ -1045,7 +1041,7 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
         )
         sections.append(
             _table(
-                "Gate trials",
+                f"Gate trials: {instrument}",
                 ["command (vx, vy, wz)", "steps", "fell", "error ratio", "success"],
                 [
                     [
@@ -1059,7 +1055,7 @@ def _deploy(root: Path, artifact: Artifact) -> list[dict[str, Any]]:
                 ],
             )
         )
-    else:
+    if not gates:
         sections.append(
             _kv(
                 "Sim-to-sim gate",

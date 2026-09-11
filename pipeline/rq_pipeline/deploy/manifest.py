@@ -12,8 +12,38 @@ from typing import Any
 
 MANIFEST_SCHEMA = "trainnr-deploy/1"
 MANIFEST_FILE = "deploy.json"
-GATE_FILE = "gate.json"
+GATE_FILE = "gate.json"  # the plain-MuJoCo gate's record
+DDS_GATE_FILE = "gate-dds.json"  # the reference's simulator and controller over DDS
 GATE_SCHEMA = "trainnr-gate/1"
+# Every gate record a deployment can hold, by the runtime that wrote it,
+# and the instrument each stands for, in the field's words.
+GATE_RECORDS = {"mujoco": GATE_FILE, "dds": DDS_GATE_FILE}
+GATE_INSTRUMENTS = {
+    "mujoco": "plain MuJoCo",
+    "dds": "Unitree's simulator and controller over DDS",
+}
+
+
+def read_gates(folder: Path) -> dict[str, dict[str, Any]]:
+    """The gate records present beside a manifest, by runtime, in the
+    order of `GATE_RECORDS`."""
+    out: dict[str, dict[str, Any]] = {}
+    for runtime, name in GATE_RECORDS.items():
+        path = Path(folder) / name
+        if path.is_file():
+            out[runtime] = json.loads(path.read_text())
+    return out
+
+
+def gate_word(record: dict[str, Any]) -> str:
+    """A gate record's verdict in one word: passed, failed, or reported
+    (no certificate was cited, so nothing was judged)."""
+    passed = (record.get("verdict") or {}).get("passed")
+    if passed is True:
+        return "passed"
+    return "failed" if passed is False else "reported, not judged"
+
+
 # The observation sources the plain-MuJoCo runtime can compute. A manifest
 # naming another is refused: the runtime never guesses a term.
 KNOWN_SOURCES = (

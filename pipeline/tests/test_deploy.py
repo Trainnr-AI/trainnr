@@ -16,15 +16,20 @@ import numpy as np
 import rq_pipeline.mcp_server as server
 from rq_pipeline.deploy.gate import ERR_RATIO_BOUND, Trial, draw_commands
 from rq_pipeline.deploy.manifest import (
+    DDS_GATE_FILE,
+    GATE_FILE,
     KNOWN_SOURCES,
     MANIFEST_FILE,
     MANIFEST_SCHEMA,
     Manifest,
+    gate_word,
     load_manifest,
+    read_gates,
 )
 from rq_pipeline.deploy.runtime import _rotate_inverse, gait_phase, open_runtime
 from rq_pipeline.mcp_server import _task_id_in_project
 from rq_pipeline.project import PROJECT_ENV, create_project
+from rq_pipeline.project.index import _summary_deploy
 from tests.test_mcp_actions import PIPELINE_DIR, RQ_MJLAB_DIR, TOOLS_DIR, harness
 
 PROJECT = Path(__file__).resolve().parents[2] / "projects" / "go2-walk"
@@ -252,3 +257,26 @@ class TheGaitClock(unittest.TestCase):
         # a quarter period in (10 ticks of 20 ms into 0.8 s): sin 1, cos 0
         self.assertTrue(np.allclose(gait_phase(10, 0.02, 0.8, moving), [1.0, 0.0]))
         self.assertTrue(np.allclose(gait_phase(7, 0.02, 0.8, np.zeros(3)), [0.0, 0.0]))
+
+
+class BothGateRecords(unittest.TestCase):
+    """A deployment holds one record per runtime that gated it; the card
+    reads each by name and never confuses the two."""
+
+    def test_each_runtime_keeps_its_own_record_and_word(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = _manifest(Path(tmp))
+            (folder / GATE_FILE).write_text(
+                json.dumps({"successes": 4, "trials": 4, "verdict": {"passed": True}})
+            )
+            self.assertEqual(list(read_gates(folder)), ["mujoco"])
+            self.assertEqual(_summary_deploy(folder)["gate"], "passed")
+            self.assertNotIn("gate (DDS)", _summary_deploy(folder))
+            (folder / DDS_GATE_FILE).write_text(
+                json.dumps({"successes": 0, "trials": 2, "verdict": {"passed": None}})
+            )
+            self.assertEqual(list(read_gates(folder)), ["mujoco", "dds"])
+            summary = _summary_deploy(folder)
+            self.assertEqual(summary["gate"], "passed")
+            self.assertEqual(summary["gate (DDS)"], "reported, not judged")
+            self.assertEqual(gate_word({"verdict": {"passed": False}}), "failed")

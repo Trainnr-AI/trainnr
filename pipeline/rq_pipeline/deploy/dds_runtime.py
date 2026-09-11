@@ -22,7 +22,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from rq_pipeline.deploy.gamepad import COMMAND_LIMIT, VirtualPad, sticks_for_command
-from rq_pipeline.deploy.manifest import Manifest
+from rq_pipeline.deploy.manifest import DDS_GATE_FILE, Manifest
 from rq_pipeline.deploy.runtime import _rotate_inverse
 
 TOPIC_STATE = "rt/sportmodestate"
@@ -70,7 +70,7 @@ class DdsRuntime:
 
     command_limit = COMMAND_LIMIT
     instrument = "unitree_mujoco + go2_ctrl over DDS (unitree_rl_mjlab)"
-    record_file = "gate-dds.json"  # beside the MuJoCo gate's gate.json, never over it
+    record_file = DDS_GATE_FILE  # beside the MuJoCo gate's record, never over it
 
     def __init__(
         self, manifest: Manifest, *, bus: Bus, pad: Any, sleep: Any = time.sleep

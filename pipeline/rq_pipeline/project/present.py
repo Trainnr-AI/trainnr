@@ -772,7 +772,12 @@ def _present_deploy(
     import rerun.blueprint as rrb  # noqa: PLC0415
 
     from rq_pipeline.deploy.gate import ERR_RATIO_BOUND  # noqa: PLC0415
-    from rq_pipeline.deploy.manifest import GATE_FILE, load_manifest  # noqa: PLC0415
+    from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
+        GATE_INSTRUMENTS,
+        gate_word,
+        load_manifest,
+        read_gates,
+    )
     from rq_pipeline.deploy.runtime import assets_dir_of, load_scene  # noqa: PLC0415
     from rq_pipeline.viz import RigMirror  # noqa: PLC0415
 
@@ -783,37 +788,28 @@ def _present_deploy(
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
-    gate_file = folder / GATE_FILE
-    gate = json.loads(gate_file.read_text()) if gate_file.exists() else {}
+    gates = read_gates(folder)
     with _AsDefault(rr_):
         RigMirror(model, model_colors=True).log(data, path=f"{root}/scene", static=True)
-        ratios = [float(t.get("err_ratio", 0.0)) for t in gate.get("records", [])]
-        if ratios:
-            rr_.log(f"{root}/gate", rr.BarChart(ratios), static=True)
+        for runtime, g in gates.items():
+            ratios = [float(t.get("err_ratio", 0.0)) for t in g.get("records", [])]
+            if ratios:
+                rr_.log(f"{root}/gate/{runtime}", rr.BarChart(ratios), static=True)
         control = manifest.control
         obs = manifest.raw.get("observations", [])
         lines = [f"# {artifact.stamp}", ""]
-        verdict = gate.get("verdict") or {}
-        if gate:
-            word = (
-                "passed"
-                if verdict.get("passed")
-                else (
-                    "failed"
-                    if verdict.get("passed") is False
-                    else "reported, not judged"
-                )
-            )
-            ci = gate.get("ci95") or []
+        for runtime, g in gates.items():
+            ci = g.get("ci95") or []
             lines.append(
-                f"sim-to-sim gate **{word}**: {gate.get('successes')} / "
-                f"{gate.get('trials')} trials"
+                f"- gate in {GATE_INSTRUMENTS[runtime]} **{gate_word(g)}**: "
+                f"{g.get('successes')} / {g.get('trials')} trials"
                 + (
                     f", exact 95 % interval **[{ci[0]:.2f}, {ci[1]:.2f}]**"
                     if len(ci) == INTERVAL_ENDS
                     else ""
                 )
             )
+        if gates:
             lines.append(
                 f"bars: mean velocity error over the commanded speed per trial; "
                 f"a trial tracks below {ERR_RATIO_BOUND}"
@@ -840,9 +836,14 @@ def _present_deploy(
         "layout": rrb.Horizontal(
             rrb.Spatial3DView(origin=f"{root}/scene", name=artifact.stamp),
             rrb.Vertical(
-                rrb.BarChartView(
-                    origin=f"{root}/gate", name="gate: error ratio per trial"
-                ),
+                *[
+                    rrb.BarChartView(
+                        origin=f"{root}/gate/{runtime}",
+                        name=f"gate in {GATE_INSTRUMENTS[runtime]}: "
+                        "error ratio per trial",
+                    )
+                    for runtime in gates
+                ],
                 rrb.TextDocumentView(origin=f"{root}/reading", name="deployment"),
             ),
             column_shares=[3, 2],

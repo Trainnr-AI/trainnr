@@ -28,13 +28,13 @@ from typing import Any
 
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.project.kinds import (
     ACCEPTANCE_FILE,
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
-    GATE_FILE,
     IDENTITY_FILE,
     TASK_FILE,
     Kind,
@@ -526,18 +526,15 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     """A deployment at a glance: the checkpoint, the control rate, the
     gate's word."""
     m = _read(path / DEPLOY_FILE)
-    gate = _read(path / GATE_FILE)
-    verdict = (gate.get("verdict") or {}).get("passed") if gate else None
-    word = (
-        "not run"
-        if not gate
-        else ("passed" if verdict else ("failed" if verdict is False else "reported"))
-    )
-    return {
+    gates = read_gates(path)
+    out: dict[str, Any] = {
         "checkpoint": m.get("checkpoint", "unrecorded"),
         "control (Hz)": (m.get("control") or {}).get("control_hz", "unrecorded"),
-        "gate": word,
+        "gate": gate_word(gates["mujoco"]) if "mujoco" in gates else "not run",
     }
+    if "dds" in gates:
+        out["gate (DDS)"] = gate_word(gates["dds"])
+    return out
 
 
 def _summary_finding(path: Path) -> dict[str, Any]:

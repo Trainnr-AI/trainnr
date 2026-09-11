@@ -649,8 +649,12 @@ the MuJoCo gate's `gate.json`; each runtime writes its own
 gate asks for at most 1 m/s and 1 rad/s whatever the manifest's
 ranges say (`command_limit`, the draw is clipped).
 
-Open: the Studio's deployment card reads `gate.json` only - the DDS
-record is not on a card yet; the real number waits for a policy
+Closed on the Mac, 2026-09-12: a deployment's card, drawer and viewer
+read every gate record beside the manifest by runtime (`deploy.manifest`:
+`GATE_RECORDS`, `read_gates`, `gate_word`) - the card says `gate` and
+`gate (DDS)`, the drawer holds one verdict and one trials table per
+instrument, the viewer one bar chart per instrument. Open: the real
+number waits for a policy
 trained on the deployable actor (smoke runs only tonight, by the
 operator's word); their simulator's window takes the box's X11 path
 (the physics thread is what publishes, so the gate does not care).
