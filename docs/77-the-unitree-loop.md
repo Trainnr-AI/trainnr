@@ -613,6 +613,48 @@ controller build with CMake from the cached checkout, and the Python
 side takes Unitree's SDK from GitHub (not on PyPI) plus the cyclonedds
 and python-evdev wheels in a `dds` extra.
 
+**Built and run, 2026-09-11 (late).** The operator ran the four root
+lines; their simulator (4.4 MB) and Go2 controller (8.8 MB) built from
+the cached checkout; the `dds` extra installed (cyclonedds against
+`/usr/local`, Unitree's SDK from GitHub, evdev). Then, in order:
+*deploy/gamepad.py* (the virtual xbox pad; their axis and button order
+is the registration order), *deploy/dds_runtime.py* (SportModeState
+for the base velocity and IMU quaternion, the pad for the command,
+their state machine walked at reset), *deploy/unitree_stage.py* (the
+deployment as their project layout: a copy of their binary, their
+config.yaml, our manifest as their yaml, our ONNX), `gate(open=…)`,
+`tools/gate-deployment.py --runtime dds` standing both binaries up
+around the gate, `gate_deployment(runtime="dds")`. Seen live: the pad
+at `/dev/input/js0`; their simulator on loopback (CycloneDDS says the
+interface is not multicast-capable and disables it - discovery still
+works); their controller "Connected to robot", loading our policy
+directory; every stick and button reaching both their wireless
+message and the LowState bytes (a Python probe); their state machine
+"Change state from Passive to FixStand" and "FixStand to Velocity" on
+the pad's chords; the gate over the live stack, two trials of the
+smoke policy, 1000 steps each, no fall, error ratios 0.72 and 1.00
+(an 80-iteration network; the record names the instrument
+`unitree_mujoco + go2_ctrl over DDS`), through the door too, with the
+MuJoCo gate's record standing beside it.
+
+Frictions on the way: 25, `libddsc.so.0` not found by their controller
+- `make install` put it under `/usr/local/lib`, which the loader does
+not search until `ldconfig`; the box's `pipeline/wsl.env` now carries
+it and the stack passes it on. 26, a 0.15 s chord was missed by their
+1 kHz state machine (a press edge lives one message frame at ~900
+LowState messages a second); 0.3 s holds, each chord twice (a repeat
+is a no-op in the state it leads to). 27, the DDS record overwrote
+the MuJoCo gate's `gate.json`; each runtime writes its own
+(`gate-dds.json`). Bounded by design: a stick reaches 1.0, so the DDS
+gate asks for at most 1 m/s and 1 rad/s whatever the manifest's
+ranges say (`command_limit`, the draw is clipped).
+
+Open: the Studio's deployment card reads `gate.json` only - the DDS
+record is not on a card yet; the real number waits for a policy
+trained on the deployable actor (smoke runs only tonight, by the
+operator's word); their simulator's window takes the box's X11 path
+(the physics thread is what publishes, so the gate does not care).
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

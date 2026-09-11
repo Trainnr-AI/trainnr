@@ -405,7 +405,7 @@ class Actions:
             argv += ["--policy-stamp", policy_stamp]
         return self.jobs.start("export-deployment", argv, RQ_MJLAB_DIR)
 
-    def gate_deployment(
+    def gate_deployment(  # noqa: PLR0913 - the gate's knobs, each named
         self,
         name: str,
         *,
@@ -413,9 +413,11 @@ class Actions:
         trials: int = 20,
         seed: int = 1000,
         tolerance: float | None = None,
+        runtime: str = "mujoco",
     ) -> dict[str, Any]:
         """The sim-to-sim gate: the exported policy driven through its
-        manifest alone in plain MuJoCo, judged the certificate's way.
+        manifest alone in plain MuJoCo, or through Unitree's simulator
+        and controller (`runtime="dds"`), judged the certificate's way.
         A job; `gate.json` lands beside the manifest."""
         from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
 
@@ -434,6 +436,7 @@ class Actions:
         ]
         if tolerance is not None:
             argv += ["--tolerance", str(tolerance)]
+        argv += ["--runtime", runtime]
         return self.jobs.start("gate-deployment", argv, PIPELINE_DIR)
 
     def open_studio(self) -> dict[str, Any]:

@@ -104,6 +104,9 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     manifest = load_manifest(deployment_dir)
     runtime = open(manifest, assets_dir=assets_dir)
     commands = draw_commands(manifest, trials, seed)
+    limit = getattr(runtime, "command_limit", None)
+    if limit is not None:  # a gamepad's sticks stop at 1.0
+        commands = np.clip(commands, -float(limit), float(limit))
     results = [run_trial(manifest, runtime, c) for c in commands]
     k = sum(t.success for t in results)
     lo, hi = clopper_pearson(k, trials)
@@ -118,7 +121,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
             "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
             "err_floor_mps": ERR_FLOOR_MPS,
             "runtime": "plain MuJoCo + onnxruntime, driven by the manifest alone",
-            "instrument": f"mujoco-{_mujoco_version()}",
+            "instrument": getattr(runtime, "instrument", f"mujoco-{_mujoco_version()}"),
         },
         "successes": k,
         "trials": trials,
@@ -157,9 +160,12 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
                 "no certificate cited: the gate reports its rate and judges nothing"
             ),
         }
-    staging = Path(deployment_dir) / (GATE_FILE + ".tmp")
+    # Each runtime keeps its own record: the DDS gate's file is
+    # `gate-dds.json`, so the MuJoCo gate's `gate.json` stands beside it.
+    record_file = getattr(runtime, "record_file", GATE_FILE)
+    staging = Path(deployment_dir) / (record_file + ".tmp")
     staging.write_text(json.dumps(record, indent=1) + "\n")
-    staging.replace(Path(deployment_dir) / GATE_FILE)
+    staging.replace(Path(deployment_dir) / record_file)
     return record
 
 

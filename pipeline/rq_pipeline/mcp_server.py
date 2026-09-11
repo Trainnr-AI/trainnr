@@ -529,13 +529,19 @@ def _robot_of_run(run_dir: Path) -> str | None:
 
 
 def gate_deployment(
-    name: str, trials: int = 20, seed: int = 1000, tolerance: float | None = None
+    name: str,
+    trials: int = 20,
+    seed: int = 1000,
+    tolerance: float | None = None,
+    runtime: str = "mujoco",
 ) -> dict[str, Any]:
     """Run the sim-to-sim gate on a deployment: the exported policy is
     driven through its manifest alone — plain MuJoCo, onnxruntime, no
     training stack — over seeded held commands and judged the
     certificate's way; passes when its rate is within `tolerance`
-    (default 0.10) of the certificate it cites. Job handle; `gate.json`
+    (default 0.10) of the certificate it cites. `runtime` is `mujoco`
+    (plain MuJoCo through our manifest) or `dds` (Unitree's own
+    simulator and controller, the second gate). Job handle; `gate.json`
     lands beside the manifest and shows in the Studio."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
@@ -553,7 +559,12 @@ def gate_deployment(
             "reason": f"no deployment {name!r} in this project",
         }
     return Actions(JobManager(_jobs_root())).gate_deployment(
-        name, project=str(project.root), trials=trials, seed=seed, tolerance=tolerance
+        name,
+        project=str(project.root),
+        trials=trials,
+        seed=seed,
+        tolerance=tolerance,
+        runtime=runtime,
     )
 
 

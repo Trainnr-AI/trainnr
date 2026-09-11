@@ -64,6 +64,15 @@ mcp = ["mcp~=2.1"]
 remote = [
     "openpi-client @ git+https://github.com/Physical-Intelligence/openpi.git@215abfb217dbac7d5f1273282331b9b1866c0479#subdirectory=packages/openpi-client",
 ]
+# dds: the second gate - Unitree's own simulator and controller (docs/77 §7).
+# cyclonedds builds against the C library unitree_sdk2 installs under
+# /usr/local (`CYCLONEDDS_HOME=/usr/local uv sync --extra dds`); the SDK
+# is not on PyPI, hence the git source; evdev is the virtual gamepad.
+dds = [
+    "cyclonedds>=0.10.2",
+    "evdev>=1.9.3",
+    "unitree-sdk2py",
+]
 
 # The task registry's plugin door (rq_pipeline/tasks/registry.py): a third
 # party lists its task module here under its own name and `lerobot-eval
@@ -106,6 +115,9 @@ include = ["rq_pipeline*"]
 # msgpack-numpy codec round-trips on numpy 2.2 (measured) and the train
 # venv's torch/mujoco/jax need numpy 2, so the pin is overridden here, once.
 override-dependencies = ["numpy>=1.26"]
+
+[tool.uv.sources]
+unitree-sdk2py = { git = "https://github.com/unitreerobotics/unitree_sdk2_python" }
 
 [tool.ruff]
 target-version = "py310"
