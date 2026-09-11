@@ -331,3 +331,28 @@ class TheLaunchEnvironment(unittest.TestCase):
             actions.open_studio()
             [(argv, _)] = spawner.calls
             self.assertEqual(argv, ["cargo", "run", "--release"])
+
+
+class ThePreviewDoor(unittest.TestCase):
+    def test_preview_rewards_spawns_the_preview_in_the_walk_venv(self) -> None:
+        with harness() as (actions, spawner):
+            actions.preview_rewards(
+                robot="go2",
+                controller="stand",
+                seconds=3.0,
+                project="/p",
+                out="/p/tasks/t/preview-stand.json",
+            )
+            [(argv, _cwd)] = spawner.calls
+            self.assertIn("rq_mjlab.reward_preview", argv)
+            # uv's own --project comes first; the tool's flags follow the module.
+            argv = argv[argv.index("rq_mjlab.reward_preview") :]
+            for flag, value in (
+                ("--robot", "go2"),
+                ("--controller", "stand"),
+                ("--seconds", "3.0"),
+                ("--project", "/p"),
+            ):
+                self.assertEqual(argv[argv.index(flag) + 1], value)
+            with self.assertRaises(ValueError):
+                actions.preview_rewards(robot="spot")

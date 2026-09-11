@@ -265,6 +265,40 @@ class Actions:
             argv += ["--student", student, "--horizon", str(horizon)]
         return self.jobs.start("certify-walk", argv, RQ_MJLAB_DIR)
 
+    def preview_rewards(  # noqa: PLR0913 - the preview's knobs, each named
+        self,
+        *,
+        robot: str = "microduck",
+        controller: str = "untrained",
+        seconds: float = 5.0,
+        seed: int = 1000,
+        project: str | None = None,
+        out: str | None = None,
+    ) -> dict[str, Any]:
+        """The reward before a run: a short rollout under an untrained
+        actor or the held posture, every term streamed to the Studio,
+        a summary written beside the task."""
+        if robot not in WALK_ROBOTS:
+            raise ValueError(f"robot is one of {', '.join(WALK_ROBOTS)}, got {robot!r}")
+        argv = [
+            *self._uv(RQ_MJLAB_DIR),
+            "-m",
+            "rq_mjlab.reward_preview",
+            "--robot",
+            robot,
+            "--controller",
+            controller,
+            "--seconds",
+            str(seconds),
+            "--seed",
+            str(seed),
+        ]
+        if project is not None:
+            argv += ["--project", project]
+        if out is not None:
+            argv += ["--out", out]
+        return self.jobs.start("preview-rewards", argv, RQ_MJLAB_DIR)
+
     def press_walk(
         self,
         checkpoint: str | None = None,

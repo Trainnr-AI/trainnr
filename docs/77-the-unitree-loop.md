@@ -484,6 +484,37 @@ libraries, use their features and their outputs as they are, keep our
 modules for what they leave unsolved, and let the Studio and the data
 piping tie it together.
 
+**The reward preview, built 2026-09-11 (the evening's last piece).**
+`preview_rewards(task, controller, seconds)` rolls the declared walk
+for a few seconds under a controller nobody trained - `untrained`,
+the recipe's actor at its random start, or `stand`, the held posture
+- with the recorder on at every step, so the Studio's Live view
+shows the world, the camera, the joints and **every reward term per
+step** (the recorder now streams the terms beside the total, from
+mjlab's own per-step term buffer - the hook Isaac Lab's live plots
+read; that part serves training runs too). A per-term summary lands
+beside the task (`tasks/go2-flat/preview-<controller>.json`). What it
+said about go2-flat, 5 s, 250 steps, no falls, per step:
+
+| term | untrained actor | standing still |
+|---|---|---|
+| track angular velocity (max 2.0) | +1.69 | +1.72 |
+| upright (max 1.0) | +0.87 | +0.87 |
+| pose (max 1.0) | +0.68 | +0.65 |
+| track linear velocity (max 2.0) | +0.56 | +0.56 |
+| foot clearance | -0.01 | -0.01 |
+| everything else | ~0 | 0 |
+| total | 3.78 | 3.79 |
+
+Doing nothing collects 3.8 of the roughly 6 a perfect step could
+earn: the angular term pays almost fully for not turning, because the
+commanded turn rates are small against its 0.71 rad/s width, and the
+linear term pays a third for not moving. The learning signal for
+walking is the remaining two points, and the four penalties that
+shaped the run's step at 5000 are invisible at rest. None of the
+field's tools could have said this before the run (docs/33): they
+show terms during one.
+
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
 gate is the reference's DDS simulator; then A7.

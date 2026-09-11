@@ -557,6 +557,40 @@ def gate_deployment(
     )
 
 
+def preview_rewards(
+    task: str, controller: str = "untrained", seconds: float = 5.0, seed: int = 1000
+) -> dict[str, Any]:
+    """See the reward before training: roll the declared walk for a few
+    seconds under `controller` - `untrained` (the recipe's actor at its
+    random start) or `stand` (the held posture) - with every reward term
+    streamed per step into the Studio's viewer beside the 3D world, and
+    write a per-term summary beside the task (`preview-<controller>.json`).
+    A silent term, a dominating term or a surprising scale shows here,
+    before a run is paid for. Job handle."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    root = _project_root_if_any()
+    try:
+        plain_name(task, "task name")
+        declared = _declared_walk(root, task)
+        if "robot" not in declared:
+            return {"status": "refused", **declared}
+        assert root is not None
+        out = root / "tasks" / task / f"preview-{controller}.json"
+        return Actions(JobManager(_jobs_root())).preview_rewards(
+            robot=declared["robot"],
+            controller=controller,
+            seconds=seconds,
+            seed=seed,
+            project=str(root),
+            out=str(out),
+        )
+    except ValueError as why:
+        return {"status": "refused", "reason": str(why)}
+
+
 def accept_task(name: str) -> dict[str, Any]:
     """Review a declared environment with the acceptance critic (the
     scripted policy must succeed on every paired trial, the floor policy

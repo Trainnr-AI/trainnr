@@ -120,7 +120,14 @@ class RerunRecorder(RecorderTerm):
                     rrb.Grid(
                         rrb.Spatial3DView(origin="world", name="physics"),
                         rrb.Spatial2DView(origin="camera", name="camera"),
-                        rrb.TimeSeriesView(origin="train", name="training"),
+                        rrb.TimeSeriesView(
+                            origin="train",
+                            name="training",
+                            contents=["+ $origin/**", "- $origin/reward_terms/**"],
+                        ),
+                        rrb.TimeSeriesView(
+                            origin="train/reward_terms", name="reward terms"
+                        ),
                         rrb.TextLogView(origin="recorder", name="events"),
                     ),
                     collapse_panels=False,
@@ -152,6 +159,8 @@ class RerunRecorder(RecorderTerm):
         reward = getattr(env, "reward_buf", None)
         if isinstance(reward, torch.Tensor) and reward.numel() > watched:
             rr.log("train/reward", rr.Scalars(float(reward[watched])))
+            if self._cfg.terms:
+                self._log_terms(watched)
         elif not self._said_no_reward:
             # Once, by name — and the two absences are different: a
             # missing buffer is an env without rewards, a short one is a
@@ -175,6 +184,20 @@ class RerunRecorder(RecorderTerm):
             and int(env.common_step_counter) % self._cfg.frame_every == 0
         ):
             self._log_frame(watched)
+
+    def _log_terms(self, watched: int) -> None:
+        """Every reward term's value this step for the watched world -
+        mjlab's reward manager keeps them per step (the hook Isaac Lab's
+        live visualizer reads too); the total alone said nothing about
+        WHY a curve moved (the Go2's step at iteration 5000, 2026-09-11)."""
+        manager = getattr(self._env, "reward_manager", None)
+        terms = getattr(manager, "get_active_iterable_terms", None)
+        if terms is None:
+            return
+        for name, values in terms(watched):
+            self._rr.log(
+                f"train/reward_terms/{name}", self._rr.Scalars(float(values[0]))
+            )
 
     def _log_mirror(self, mirror: RigMirror, watched: int) -> None:
         """One world's geoms out of the batched engine, into 3D."""
@@ -283,6 +306,7 @@ class RerunRecorderCfg(RecorderTermCfg):
     mirror: bool = True  # the 3D scene beside the series
     frames: bool = True  # MuJoCo-rendered camera images of the watched world
     layout: bool = True  # send a purposeful view layout on connect
+    terms: bool = True  # every reward term per step beside the total
     frame_every: int = 25  # control steps between camera frames (renders cost ~30 ms)
     every: int = (
         10  # control steps between samples: the viewer's rate, not the trainer's
