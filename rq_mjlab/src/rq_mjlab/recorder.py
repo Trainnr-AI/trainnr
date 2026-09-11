@@ -47,6 +47,9 @@ def _require_rerun() -> Any:
     return rr
 
 
+FRAME_JPEG_QUALITY = 85  # camera frames go over the wire encoded
+
+
 class RerunRecorder(RecorderTerm):
     """Stream one watched world's training story to a Rerun endpoint."""
 
@@ -273,7 +276,13 @@ class RerunRecorder(RecorderTerm):
             spread = np.linalg.norm(mj_data.geom_xpos[robot] - mj_data.xpos[1], axis=1)
             camera.distance = 4.0 * float(max(spread.max(), 0.05))
         renderer.update_scene(mj_data, camera=camera)
-        self._rr.log("camera/watched", self._rr.Image(renderer.render()))
+        # JPEG on the way in: a raw 640x360 frame is 690 KB and a play
+        # session grew to 1.2 GiB in the viewer in half an hour (2026-09-11);
+        # Rerun encodes it here, ~25x smaller, the viewer decodes.
+        self._rr.log(
+            "camera/watched",
+            self._rr.Image(renderer.render()).compress(jpeg_quality=FRAME_JPEG_QUALITY),
+        )
 
     def record_pre_reset(self, env_ids: torch.Tensor) -> None:
         if (env_ids == self._cfg.watched_env).any():

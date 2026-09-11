@@ -536,6 +536,16 @@ minutes (the operator's screenshot) - the same X11 path the Studio
 pays a core for, and this window pays with its frames. mjlab's other
 viewer, the browser one (viser, `http://localhost:8080`), is the
 door's default now; the native window stays a choice.
+Seen by the operator in the browser at 0.40x real time, 18 FPS, with
+mjlab's own panels - Controls, Visualization, Rewards, Metrics - so
+the library's live reward view is there too, for one world, for as
+long as the tab is open; the Studio's is the one that persists.
+Friction 23: the recorder sent camera frames raw (690 KB each, one
+every 25 steps) and the play stream reached 1.2 GiB in the viewer in
+half an hour; frames now go JPEG-encoded through Rerun's own
+`compress`, about 25x smaller. The recorder's camera also stays where
+the watched world spawned, so a robot that walks off leaves an empty
+frame - a chase camera is the next small thing there.
 
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). The next independent
