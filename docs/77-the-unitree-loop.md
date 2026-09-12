@@ -938,12 +938,15 @@ Closed on the Mac, 2026-09-12: a deployment's card, drawer and viewer
 read every gate record beside the manifest by runtime (`deploy.manifest`:
 `GATE_RECORDS`, `read_gates`, `gate_word`) - the card says `gate` and
 `gate (DDS)`, the drawer holds one verdict and one trials table per
-instrument, the viewer one bar chart per instrument. Open: the real
-number waits for a policy
-trained on the deployable actor (smoke runs only tonight, by the
-operator's word); their simulator's window takes the box's X11 path
-(the physics thread is what publishes, so the gate does not care).
+instrument, the viewer one bar chart per instrument.
+
+Closed on the box, 2026-09-12/13 (§7 above): the real number, on
+go2-c2 trained on the deployable actor - certificate 38/40, MuJoCo
+gate 20/20, DDS gate 20/20, both judged against the certificate on
+`go2-c2-deploy-cited`, and the DDS gate mirrored into the Studio.
+Their simulator's window still takes the box's X11 path (the physics
+thread is what publishes, so the gate does not care).
 
 What the loop still lacks on this robot: telemetry from a real Go2
-(sys-id, an identified interval, monitoring). The next independent
-gate is the reference's DDS simulator; then A7.
+(sys-id, an identified interval, monitoring). Both independent gates
+are in; A7 (drift) is next.

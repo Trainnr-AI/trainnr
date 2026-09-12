@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import numpy as np
 
@@ -27,7 +28,7 @@ from rq_pipeline.deploy.gamepad import (
     sticks_for_command,
 )
 from rq_pipeline.deploy.manifest import MANIFEST_SCHEMA, Manifest
-from rq_pipeline.deploy.runtimes import runtime_spec
+from rq_pipeline.deploy.runtimes import LINUX, runtime_spec
 from rq_pipeline.deploy.unitree_stage import (
     REFERENCE_CACHE,
     REFERENCE_ENV,
@@ -359,7 +360,13 @@ class OnePad(unittest.TestCase):
     def test_the_stack_shares_its_pad_and_closes_it(self) -> None:
         from rq_pipeline.deploy.unitree_stage import UnitreeStack  # noqa: PLC0415
 
-        with tempfile.TemporaryDirectory() as tmp:
+        # The sharing is the stack's own bookkeeping, not the platform's:
+        # read it anywhere, with the Linux seam answered (the stack
+        # refuses off Linux by name, tested beside the doors).
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(sys, "platform", LINUX),
+        ):
             stack = UnitreeStack(
                 _deployment(Path(tmp)), reference=_reference(Path(tmp))
             )

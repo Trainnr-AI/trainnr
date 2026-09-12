@@ -42,6 +42,9 @@ NOT_A_SCORE = {"1/2", "11/12", "2/3"}
 # A slash-separated list of seeds or versions ("42/43/44", "13.0/13.2")
 # is not a score: refuse to read a token that is followed by another /.
 LISTED = re.compile(r"\d{1,3}/\d{1,3}/")
+# A two-day date ("2026-09-12/13", a run that crossed midnight) carries a
+# slash between day numbers, not a count over trials.
+SPAN_DATE = re.compile(r"\d{4}-\d{2}-\d{2}/\d{1,2}")
 
 
 def recorded_ratios() -> set[str]:  # noqa: PLR0912 - one pass over every record shape
@@ -83,9 +86,19 @@ def main() -> int:
         text = (REPO / rel).read_text()
         for lineno, line in enumerate(text.splitlines(), 1):
             listed = {m.start() for m in LISTED.finditer(line)}
+            dated = {
+                pos
+                for m in SPAN_DATE.finditer(line)
+                for pos in range(m.start(), m.end())
+            }
             for m in RATIO.finditer(line):
                 token = f"{m.group(1)}/{m.group(2)}"
-                if token in NOT_A_SCORE or token in have or m.start() in listed:
+                if (
+                    token in NOT_A_SCORE
+                    or token in have
+                    or m.start() in listed
+                    or m.start() in dated
+                ):
                     continue
                 problems.append(f"{rel}:{lineno}: {token} has no finding record")
     for problem in problems:
