@@ -78,11 +78,26 @@ const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 /// not; the Studio relaunched with the Wayland display hidden, visible).
 /// winit picks Wayland whenever `WAYLAND_DISPLAY` is set, so on WSL the
 /// event loop is asked for X11 instead. Elsewhere winit's own choice stands.
+/// Comfortably inside a 1080-line monitor with the manager's frame.
+const WSL_WINDOW_SIZE: [f32; 2] = [1600.0, 900.0];
+
 fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
     if !on_wsl() {
         return;
     }
     re_log::info!("WSLg: taking the X11 path so the window shows");
+    // A remembered size that nearly fills the monitor comes back
+    // MAXIMIZED under WSLg's window manager, with the frame 32 px above
+    // the screen: the window cannot be dragged and every pointer hit
+    // lands 32 px low (2026-09-12, twice; the X11 state read it). So on
+    // WSL the window opens at a fixed size, never maximized, and its
+    // size is not remembered between runs.
+    options.persist_window = false;
+    options.viewport = options
+        .viewport
+        .clone()
+        .with_inner_size(WSL_WINDOW_SIZE)
+        .with_maximized(false);
     options.event_loop_builder = Some(Box::new(|builder| {
         #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
         {

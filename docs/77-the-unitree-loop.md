@@ -425,6 +425,20 @@ frame), not to the app; the measurement to take if it returns is the
 X server's pointer position against the operator's, in one
 "park the mouse" round trip.
 
+Friction 19, resolved (2026-09-12, the box): the pointer offset and
+the window that would not move had one cause, read off the X server
+this time: WSLg's window manager had the Studio **maximized** on both
+axes, its frame 32 px above the screen and wider than the monitor,
+because the remembered window size (1908 x 999) plus the frame
+exceeded the work area. A maximized window cannot be dragged, and the
+bridge maps the pointer as if the frame began on-screen, so every hit
+landed 32 px low - "hovering over the text selects the box below".
+Un-maximizing the live window through the manager put both right at
+once. The binary now opens at a fixed 1600 x 900 on WSL, never
+maximized, and does not remember its size there (`persist_window`
+off). The instrument for next time: `_NET_WM_STATE` and the frame's
+geometry via python-xlib, one command.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration
