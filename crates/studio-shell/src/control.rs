@@ -122,7 +122,8 @@ pub enum Command {
         #[serde(default)]
         on: Option<bool>,
         /// One group mask bit: the group number with `on`, of `kind`
-        /// (geom unless said: site, joint, tendon, actuator, flex, skin).
+        /// (the stream's first kind, geom, unless said: site, joint,
+        /// tendon, actuator, flex, skin).
         #[serde(default)]
         group: Option<u32>,
         #[serde(default)]

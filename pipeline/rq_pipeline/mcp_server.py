@@ -1193,7 +1193,7 @@ def set_simulator_view(  # noqa: PLR0913, PLR0917 - one door, one switch per kin
     flag: str | None = None,
     on: bool | None = None,
     group: int | None = None,
-    kind: str = "geom",
+    kind: str | None = None,
     camera: str | None = None,
     inspect: str | None = None,
     fullscreen: bool | None = None,
@@ -1202,8 +1202,9 @@ def set_simulator_view(  # noqa: PLR0913, PLR0917 - one door, one switch per kin
     `flag` by its own name with `on` (contactpoint, contactforce, joint,
     actuator, constraint, inertia, com, transparent, perturbforce, camera,
     light, tendon… or shadow, reflection, skybox, fog, wireframe…); a
-    `group` number 0-5 with `on`, of `kind` geom (default), site, joint,
-    tendon, actuator, flex or skin - MuJoCo's group enable; the `camera`
+    `group` number 0-5 with `on`, of `kind` geom (the default), site,
+    joint, tendon, actuator, flex or skin - MuJoCo's group enable; the
+    `camera`
     to a named view (front, side, top, reset); the Inspect drawer by tab
     (control, joints, physics, visuals) or close; `fullscreen` puts the
     viewport alone on the page (what the `f` key does) or restores it."""

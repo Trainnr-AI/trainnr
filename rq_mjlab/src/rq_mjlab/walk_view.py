@@ -106,6 +106,24 @@ class Joystick:
         self.enabled.value = True
 
 
+def twist_switch(env, axes: int) -> tuple[object | None, str]:
+    """The walk's velocity command term and its bounds as the render
+    stream's `--twist-ranges` value (lo,hi per axis, the envelope's
+    first `axes` keys). A walk without the term gets no Commands tab:
+    (None, "")."""
+    from rq_mjlab.envelope import (  # noqa: PLC0415
+        COMMAND_TERM,
+        RANGE_KEYS,
+        command_ranges,
+    )
+
+    if COMMAND_TERM not in env.command_manager.active_terms:
+        return None, ""
+    ranges = command_ranges(env.cfg)
+    bounds = ",".join(f"{lo},{hi}" for lo, hi in (ranges[k] for k in RANGE_KEYS[:axes]))
+    return env.command_manager.get_term(COMMAND_TERM), bounds
+
+
 def latest_checkpoint(project: Path | None = None) -> Path:
     """The newest model_*.pt: under the project's runs when a project is
     given (the Studio's walk scene rolls the project's latest policy),
@@ -380,14 +398,7 @@ def main() -> None:  # noqa: PLR0915
         flush=True,
     )
     env, policy = load_policy(checkpoint, args.envs, device, robot=robot)
-    from rq_mjlab.envelope import COMMAND_TERM, command_ranges  # noqa: PLC0415
-
-    twist_term = env.unwrapped.command_manager.get_term(COMMAND_TERM)
-    ranges = command_ranges(env.unwrapped.cfg)
-    twist_bounds = ",".join(
-        f"{lo},{hi}"
-        for lo, hi in (ranges[k] for k in ("lin_vel_x", "lin_vel_y", "ang_vel_z"))
-    )
+    twist_term, twist_bounds = twist_switch(env.unwrapped, streamer.TWIST_AXES)
     mirror = streamer.walk_scene(robot, args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
@@ -427,13 +438,14 @@ def main() -> None:  # noqa: PLR0915
             *([f"--shm={args.shm}"] if args.shm else []),
             *([f"--project={args.project}"] if args.project else []),
             f"--rig={robot}-rl",
-            f"--twist-ranges={twist_bounds}",
+            *([f"--twist-ranges={twist_bounds}"] if twist_bounds else []),
         ],
         cwd=str(REPO / "pipeline"),
     )
     overview = None if args.no_rerun else Overview(args.envs)
     pump = streamer.PhysicsPump(mirror, None, ring)
-    pump.on_command = Joystick(twist_term, streamer.TWIST_AXES).on_command
+    if twist_term is not None:
+        pump.on_command = Joystick(twist_term, streamer.TWIST_AXES).on_command
 
     step_seconds = float(env.unwrapped.step_dt)
     obs = env.get_observations()

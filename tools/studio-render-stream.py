@@ -762,8 +762,8 @@ STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, sp
 MAILBOX_SLOTS = 16  # commands queued between two physics polls; older ones are dropped
 MAILBOX_SLOT_BYTES = 16  # cmd u32, arg i32, arg f64
 MAILBOX_BYTES = 8 + MAILBOX_SLOTS * MAILBOX_SLOT_BYTES  # cseq u32, pad; then the slots
-# `twist`: one axis of one world's commanded twist - arg_i = world * 3 +
-# axis (a slot carries one float), arg_i = -1 hands the commands back.
+# `twist`: one axis of one world's commanded twist - arg_i = world *
+# TWIST_AXES + axis (a slot carries one float), -1 hands the commands back.
 MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual", "twist")
 
 

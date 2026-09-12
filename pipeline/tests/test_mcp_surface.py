@@ -330,6 +330,18 @@ class StudioDoors(unittest.TestCase):
                     self.assertEqual(answer["status"], "refused")
                     self.assertIn("launch_studio", answer["reason"])
                 self.assertIn("no page", open_in_studio(section="dance")["reason"])
+                # The walk's twist axes: named from a fixed set, valued unless
+                # handing back; never more than one input per call.
+                self.assertIn("vx", set_simulator_input(1.0, command="vq")["reason"])
+                self.assertIn("value", set_simulator_input(command="vx")["reason"])
+                self.assertIn(
+                    "exactly one",
+                    set_simulator_input(1.0, actuator="a", command="vx")["reason"],
+                )
+                self.assertIn(
+                    "launch_studio", set_simulator_input(command="own")["reason"]
+                )
+                self.assertIn("on", set_simulator_view(group=1)["reason"])
                 self.assertIn(
                     "launch_studio",
                     open_in_studio(section="evaluations", view="matrix")["reason"],

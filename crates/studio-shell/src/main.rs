@@ -871,14 +871,22 @@ impl StudioShell {
                 if let Some(group) = group {
                     let on = on.ok_or("a group needs `on`")?;
                     let model = model.as_ref().ok_or("the model is not described yet")?;
-                    let kind = kind.unwrap_or_else(|| "geom".into());
-                    let index = model
-                        .groups
-                        .iter()
-                        .position(|k| *k == kind)
-                        .ok_or_else(|| {
-                            format!("no group kind {kind:?}; one of {:?}", model.groups)
-                        })?;
+                    // No kind named: the stream's first (geom, as it orders them).
+                    let index = match kind {
+                        Some(kind) => {
+                            model
+                                .groups
+                                .iter()
+                                .position(|k| *k == kind)
+                                .ok_or_else(|| {
+                                    format!("no group kind {kind:?}; one of {:?}", model.groups)
+                                })?
+                        }
+                        None => 0,
+                    };
+                    if model.groups.is_empty() {
+                        return Err("this scene reports no group kinds".into());
+                    }
                     if group >= model.ngroup {
                         return Err(format!("group {group}: 0 to {}", model.ngroup - 1));
                     }
