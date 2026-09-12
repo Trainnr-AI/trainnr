@@ -378,7 +378,9 @@ impl StudioShell {
             simulator::overlays(ui.ctx(), picture, &mut self.viewport);
             simulator::drawer(ui.ctx(), picture, &mut self.viewport);
         }
-        simulator::shortcuts(ui.ctx(), &mut self.viewport);
+        if let Some(press) = simulator::shortcuts(ui.ctx(), &mut self.viewport) {
+            self.control.event(Event::key(BY_USER, &press));
+        }
         simulator::apply_follow(ui.ctx(), &mut self.viewport);
         match action {
             Some(simulator::Action::Spawn(task)) => {

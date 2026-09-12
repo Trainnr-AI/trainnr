@@ -225,9 +225,10 @@ pub struct ViewportFeed {
     /// commands: the source the next axis composes from, ahead of the
     /// status echo (two door calls in a row raced on the echo, 2026-09-12).
     twist_held: Option<(i32, [f32; 3])>,
-    /// Whether the picture had the pointer over it, or keyboard focus,
-    /// on its last frame: where the keys go (`wants_keys`).
-    keys: bool,
+    /// Whether the picture had the pointer over it, and whether it had
+    /// keyboard focus, on its last frame: where the keys go (`wants_keys`).
+    hovered: bool,
+    focused: bool,
 }
 
 /// One joint the Joint panel can slide (hinge or slide; free and ball
@@ -401,7 +402,8 @@ impl ViewportFeed {
             report: Arc::new(std::sync::Mutex::new(SimReport::default())),
             editing: std::collections::HashMap::new(),
             twist_held: None,
-            keys: false,
+            hovered: false,
+            focused: false,
         }
     }
 
@@ -524,7 +526,8 @@ impl ViewportFeed {
                     report,
                     editing: std::collections::HashMap::new(),
                     twist_held: None,
-                    keys: false,
+                    hovered: false,
+                    focused: false,
                 }
             }
             (Ok(mut child), Err(err)) => {
@@ -644,7 +647,8 @@ impl ViewportFeed {
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
-        self.keys = response.hovered() || response.has_focus();
+        self.hovered = response.hovered();
+        self.focused = response.has_focus();
         let mut d_azimuth = 0.0f32;
         let mut d_elevation = 0.0f32;
         let mut d_distance = 0.0f32;
@@ -723,7 +727,24 @@ impl ViewportFeed {
         if !self.is_active() || ctx.text_edit_focused() {
             return false;
         }
-        self.keys || !ctx.egui_wants_keyboard_input()
+        self.hovered || self.focused || !ctx.egui_wants_keyboard_input()
+    }
+
+    /// Who has the keys, for the event log: none, picture, other, text.
+    pub fn focus_owner(&self, ctx: &egui::Context) -> &'static str {
+        if ctx.text_edit_focused() {
+            "text"
+        } else if self.focused {
+            "picture"
+        } else if ctx.egui_wants_keyboard_input() {
+            "other"
+        } else {
+            "none"
+        }
+    }
+
+    pub fn picture_hovered(&self) -> bool {
+        self.hovered
     }
 
     /// The stream's latest status and model, for the panel and the state

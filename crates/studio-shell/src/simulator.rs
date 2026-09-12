@@ -996,13 +996,50 @@ const PAN_HURRY: f32 = 3.0;
 
 /// Space runs or pauses, → steps once, R resets, W A S D Q E pan the
 /// camera while held — when the keys are the picture's (`wants_keys`).
-pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
+/// A pan key pressed this frame and what decided its fate, for the
+/// event log.
+pub struct KeyPress {
+    pub key: String,
+    /// Whether the keys were the picture's (`wants_keys`).
+    pub picture: bool,
+    pub focus: &'static str,
+    pub pointer: Option<egui::Pos2>,
+}
+
+const PAN_KEYS: [egui::Key; 6] = [
+    egui::Key::W,
+    egui::Key::A,
+    egui::Key::S,
+    egui::Key::D,
+    egui::Key::Q,
+    egui::Key::E,
+];
+
+/// The pan key pressed this frame, if one was — recorded whether or
+/// not it acted, so a silent key can be explained from the log.
+fn pan_key_press(ctx: &egui::Context, viewport: &ViewportFeed) -> Option<KeyPress> {
+    let (key, pointer) = ctx.input(|i| {
+        (
+            PAN_KEYS.iter().find(|k| i.key_pressed(**k)).copied(),
+            i.pointer.latest_pos(),
+        )
+    });
+    key.map(|key| KeyPress {
+        key: format!("{key:?}"),
+        picture: viewport.wants_keys(ctx) && viewport.is_active(),
+        focus: viewport.focus_owner(ctx),
+        pointer: pointer.filter(|_| viewport.picture_hovered()).or(pointer),
+    })
+}
+
+pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) -> Option<KeyPress> {
+    let press = pan_key_press(ctx, viewport);
     if !viewport.wants_keys(ctx) {
-        return;
+        return press;
     }
     pan_keys(ctx, viewport);
     let (status, _) = viewport.report();
-    let Some(status) = status else { return };
+    let Some(status) = status else { return press };
     let (space, right, reset, inspect_key) = ctx.input(|i| {
         (
             i.key_pressed(egui::Key::Space),
@@ -1024,6 +1061,7 @@ pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
     if reset {
         viewport.send_reset(None);
     }
+    press
 }
 
 /// The first-person walk every 3D tool has: W/S along the view, A/D

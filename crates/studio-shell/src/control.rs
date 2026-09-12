@@ -254,6 +254,7 @@ pub const EVENT_DESELECT: &str = "deselect";
 pub const EVENT_SHOW: &str = "show";
 pub const EVENT_TABLE: &str = "table";
 pub const EVENT_TIME: &str = "time";
+pub const EVENT_KEY: &str = "key";
 
 /// One line of `events.jsonl`: what the human, the agent or the Studio
 /// itself did in the window. The same struct writes the line and reads
@@ -282,6 +283,18 @@ pub struct Event {
     pub seconds: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sequence: Option<i64>,
+    /// A key of the picture's (W A S D Q E) pressed: which, whether the
+    /// picture had the keys, who had focus (none, picture, other,
+    /// text), where the pointer was - so "the keys do nothing" can be
+    /// read off the log (2026-09-12).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pointer: Option<[f32; 2]>,
 }
 
 impl Event {
@@ -315,6 +328,16 @@ impl Event {
 
     pub fn time(by: &str) -> Self {
         Self::of(EVENT_TIME, by)
+    }
+
+    /// A pan key pressed over the page, with what decided its fate.
+    pub fn key(by: &str, press: &crate::simulator::KeyPress) -> Self {
+        let mut event = Self::of(EVENT_KEY, by);
+        event.key = Some(press.key.clone());
+        event.picture = Some(press.picture);
+        event.focus = Some(press.focus.to_owned());
+        event.pointer = press.pointer.map(|p| [p.x, p.y]);
+        event
     }
 
     pub fn in_section(mut self, slug: String) -> Self {

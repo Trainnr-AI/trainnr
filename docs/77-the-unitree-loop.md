@@ -580,7 +580,17 @@ lookat - in its status and the shell in `studio-state.json`
 operator's flow reproduced with injected input (click the picture,
 click Rerun's 3D view, glide back, hold W a second) moved the lookat
 2.5 m. A single pointer warp never registers as a hover in egui; the
-test had to glide.
+test had to glide. The operator then reported the same again, so the
+Studio now writes every W A S D Q E press to `events.jsonl` (kind
+`key`: whether the picture had the keys, who held focus, where the
+pointer was). His log settled it: the presses reached the picture
+with focus on it - they were taps in alternating directions, and at
+0.6 of the camera distance per second a tap moved centimetres, which
+reads as nothing next to Rerun's fly camera (its orbit-mode speed is
+the orbit radius per second, with momentum). The rate is now 2.0
+(`PAN_RATE_PER_S` in `tools/studio-render-stream.py`): a tap is most of
+a metre at the Go2 rig's distance. Lesson kept: an injected test that
+holds a key proves the wire, not the feel; log the human's presses.
 
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the

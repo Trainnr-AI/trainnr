@@ -386,8 +386,11 @@ MIN_DISTANCE_M = 0.15
 MAX_DISTANCE_M = 6.0
 # A held pan key moves the lookat this fraction of the camera's distance
 # per second: the same key crosses a whole close-up or a whole wide shot
-# in the same time, which is what a hand expects.
-PAN_RATE_PER_S = 0.6
+# in the same time, which is what a hand expects. 0.6 read as "nothing"
+# on a tap (a 100 ms press moved 25 cm in a 4-world scene, 2026-09-12);
+# 2.0 puts a tap at most of a metre, and Shift on the Studio side
+# triples it.
+PAN_RATE_PER_S = 2.0
 
 
 class OrbitCamera:
