@@ -500,10 +500,25 @@ so one key crosses a close-up and a wide shot in the same time).
 Panning a followed world releases the follow, which would otherwise
 put the lookat straight back. Verified with keys injected through the
 X server: W for a second and a half walked past the four robots, D
-moved across, E rose until the ground's edge showed. Still to come
-from the same list: the full MuJoCo flag set and the geom groups in
-the Inspect drawer, the command sliders and world picker for the walk
-scene, and the terrains as a task's own declaration (the larger item).
+moved across, E rose until the ground's edge showed.
+
+**The whole switchboard (2026-09-12).** The corner chips showed six
+flags of MuJoCo's forty-one, and no group masks. The Inspect drawer
+has a fourth tab, **Visuals**: every visualization flag and every
+rendering flag by MuJoCo's own name, three to a row, each box showing
+what the stream renders (the status echoes every flag), and the group
+grid - `simulate`'s "Group enable": geom, site, joint, tendon,
+actuator, flex and skin, groups 0 to 5, one bit each over a new wire
+message (`tools/studio-render-stream.py`, TAG_GROUP: kind, group, on;
+`mjvOption`'s seven group masks). The door
+`set_simulator_view(group=, kind=, on=)` reaches the same bits, and
+`inspect="visuals"` opens the tab; an unknown kind or a group past 5
+is refused naming the valid ones. Seen: the joint flag from the door
+lighting both the checkbox and the corner chip; geom group 0 off
+taking the ground away (the Go2's meshes sit in group 2, mjlab's
+visual group). Still to come from the same list: the command sliders
+and world picker for the walk scene, and the terrains as a task's own
+declaration (the larger item).
 
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the

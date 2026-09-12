@@ -717,6 +717,8 @@ impl StudioShell {
                 value,
                 flag,
                 on,
+                group,
+                kind,
                 inspect,
                 view,
                 follow,
@@ -740,6 +742,7 @@ impl StudioShell {
                     actuator.as_ref().map(|_| "actuator"),
                     joint.as_ref().map(|_| "joint"),
                     flag.as_ref().map(|_| "overlay"),
+                    group.map(|_| "group"),
                     inspect.as_ref().map(|_| "inspect"),
                     view.as_ref().map(|_| "view"),
                     follow.as_ref().map(|_| "follow"),
@@ -859,6 +862,22 @@ impl StudioShell {
                             model.vis_flags, model.rnd_flags
                         ));
                     }
+                }
+                if let Some(group) = group {
+                    let on = on.ok_or("a group needs `on`")?;
+                    let model = model.as_ref().ok_or("the model is not described yet")?;
+                    let kind = kind.unwrap_or_else(|| "geom".into());
+                    let index = model
+                        .groups
+                        .iter()
+                        .position(|k| *k == kind)
+                        .ok_or_else(|| {
+                            format!("no group kind {kind:?}; one of {:?}", model.groups)
+                        })?;
+                    if group >= model.ngroup {
+                        return Err(format!("group {group}: 0 to {}", model.ngroup - 1));
+                    }
+                    self.viewport.send_group(index as u8, group as u8, on);
                 }
                 Ok(())
             }

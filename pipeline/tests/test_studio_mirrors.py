@@ -50,6 +50,15 @@ class WireTags(unittest.TestCase):
         rs_bytes = int(constant(VIEWPORT_RS, r"fn encode_pan\(.*?\) -> \[u8; (\d+)\]"))
         self.assertEqual(py_bytes + 1, rs_bytes)  # the tag byte leads
 
+    def test_the_group_tag_agrees(self) -> None:
+        # The group-mask message (u8 kind, u8 group, u8 on): one tag,
+        # four bytes on the wire, the kinds named by the stream's report.
+        py_tag = constant(RENDER_STREAM, r"^TAG_GROUP = (\d+)")
+        rs_tag = constant(VIEWPORT_RS, r"const TAG_GROUP: u8 = (\d+);")
+        self.assertEqual(py_tag, rs_tag)
+        self.assertEqual(constant(RENDER_STREAM, r"^    TAG_GROUP: (\d+),"), "3")
+        self.assertIn("&[TAG_GROUP, kind, group, u8::from(on)]", VIEWPORT_RS)
+
 
 class StudioPort(unittest.TestCase):
     def test_the_ingest_port_is_the_one_the_shell_binds(self) -> None:

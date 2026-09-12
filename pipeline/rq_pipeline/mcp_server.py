@@ -1169,9 +1169,11 @@ def set_simulator_input(
     )
 
 
-def set_simulator_view(
+def set_simulator_view(  # noqa: PLR0913, PLR0917 - one door, one switch per kind of thing shown
     flag: str | None = None,
     on: bool | None = None,
+    group: int | None = None,
+    kind: str = "geom",
     camera: str | None = None,
     inspect: str | None = None,
     fullscreen: bool | None = None,
@@ -1179,22 +1181,26 @@ def set_simulator_view(
     """What the simulator shows: a MuJoCo visualization or rendering
     `flag` by its own name with `on` (contactpoint, contactforce, joint,
     actuator, constraint, inertia, com, transparent, perturbforce, camera,
-    light, tendon… or shadow, reflection, skybox, fog, wireframe…); the
-    `camera` to a named view (front, side, top, reset); the Inspect drawer
-    by tab (control, joints, physics) or close; `fullscreen` puts the
+    light, tendon… or shadow, reflection, skybox, fog, wireframe…); a
+    `group` number 0-5 with `on`, of `kind` geom (default), site, joint,
+    tendon, actuator, flex or skin - MuJoCo's group enable; the `camera`
+    to a named view (front, side, top, reset); the Inspect drawer by tab
+    (control, joints, physics, visuals) or close; `fullscreen` puts the
     viewport alone on the page (what the `f` key does) or restores it."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
-    if flag is not None and on is None:
-        return refusal("a flag needs `on`")
-    if flag is None and camera is None and inspect is None and fullscreen is None:
-        return refusal("name a flag, a camera view, inspect or fullscreen")
+    if (flag is not None or group is not None) and on is None:
+        return refusal("a flag or group needs `on`")
+    if (flag, group, camera, inspect, fullscreen) == (None,) * 5:
+        return refusal("name a flag, a group, a camera view, inspect or fullscreen")
     return command(
         current_project(),
         "simulator",
         flag=flag,
         on=on,
+        group=group,
+        kind=kind,
         view=camera,
         inspect=inspect,
         fullscreen=fullscreen,

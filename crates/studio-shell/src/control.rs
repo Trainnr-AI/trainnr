@@ -121,6 +121,12 @@ pub enum Command {
         flag: Option<String>,
         #[serde(default)]
         on: Option<bool>,
+        /// One group mask bit: the group number with `on`, of `kind`
+        /// (geom unless said: site, joint, tendon, actuator, flex, skin).
+        #[serde(default)]
+        group: Option<u32>,
+        #[serde(default)]
+        kind: Option<String>,
         /// The Inspect drawer: control, joints, physics, or close.
         #[serde(default)]
         inspect: Option<String>,

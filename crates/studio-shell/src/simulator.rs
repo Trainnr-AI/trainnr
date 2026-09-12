@@ -139,6 +139,10 @@ enum Tab {
     Control,
     Joints,
     Physics,
+    /// Every MuJoCo visualization and rendering flag, and the group
+    /// masks - `simulate`'s Visualization, Rendering and Group enable
+    /// sections in one list.
+    Visuals,
 }
 
 /// Open the drawer on a tab by name, or close it — the agent's door.
@@ -149,9 +153,10 @@ pub fn inspect(ctx: &egui::Context, what: &str) -> Result<(), String> {
         "control" => set_drawer(ctx, true, Tab::Control),
         "joints" => set_drawer(ctx, true, Tab::Joints),
         "physics" => set_drawer(ctx, true, Tab::Physics),
+        "visuals" => set_drawer(ctx, true, Tab::Visuals),
         other => {
             return Err(format!(
-                "inspect {other:?}: one of control, joints, physics, close"
+                "inspect {other:?}: one of control, joints, physics, visuals, close"
             ));
         }
     }
@@ -465,31 +470,12 @@ pub fn overlays(ctx: &egui::Context, picture: egui::Rect, viewport: &mut Viewpor
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         for (label, flag, rendering) in OVERLAYS {
-                            let table = if *rendering {
-                                &model.rnd_flags
-                            } else {
-                                &model.vis_flags
-                            };
-                            let Some(index) = table.iter().position(|f| f == flag) else {
+                            let Some(index) = flag_index(&model, flag, *rendering) else {
                                 continue;
                             };
-                            let map = if *rendering { &status.rnd } else { &status.vis };
-                            let default_on = if *rendering {
-                                if *flag == "shadow" {
-                                    status.shadows
-                                } else {
-                                    RND_DEFAULT_ON.contains(flag)
-                                }
-                            } else {
-                                false
-                            };
-                            let on = map.get(&index.to_string()).copied().unwrap_or(default_on);
+                            let on = flag_on(&status, index, flag, *rendering);
                             if toggle(ui, on, label, &format!("MuJoCo {flag}")) {
-                                if *rendering {
-                                    viewport.send_rnd(index as u32, !on);
-                                } else {
-                                    viewport.send_vis(index as u32, !on);
-                                }
+                                send_flag(viewport, index, *rendering, !on);
                             }
                         }
                         ui.separator();
@@ -509,6 +495,37 @@ pub fn overlays(ctx: &egui::Context, picture: egui::Rect, viewport: &mut Viewpor
                     });
                 });
         });
+}
+
+/// A flag's wire index in the model's table for its kind.
+fn flag_index(model: &SimModel, flag: &str, rendering: bool) -> Option<usize> {
+    let table = if rendering {
+        &model.rnd_flags
+    } else {
+        &model.vis_flags
+    };
+    table.iter().position(|f| f == flag)
+}
+
+/// A flag as rendered — the status echoes every flag's value; before the
+/// first status the defaults are MuJoCo's (rendering flags mostly on,
+/// visualization flags off), and shadows are whatever the stream chose.
+fn flag_on(status: &SimStatus, index: usize, flag: &str, rendering: bool) -> bool {
+    let map = if rendering { &status.rnd } else { &status.vis };
+    let default_on = match (rendering, flag) {
+        (true, "shadow") => status.shadows,
+        (true, _) => RND_DEFAULT_ON.contains(&flag),
+        (false, _) => false,
+    };
+    map.get(&index.to_string()).copied().unwrap_or(default_on)
+}
+
+fn send_flag(viewport: &mut ViewportFeed, index: usize, rendering: bool, on: bool) {
+    if rendering {
+        viewport.send_rnd(index as u32, on);
+    } else {
+        viewport.send_vis(index as u32, on);
+    }
 }
 
 // -- the Inspect drawer --------------------------------------------------------
@@ -542,6 +559,7 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                             (Tab::Control, "Control"),
                             (Tab::Joints, "Joints"),
                             (Tab::Physics, "Physics"),
+                            (Tab::Visuals, "Visuals"),
                         ] {
                             if toggle(ui, tab == t, name, "") {
                                 tab = t;
@@ -560,7 +578,7 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                         set_drawer(ui.ctx(), true, tab);
                     }
                     ui.add_space(4.0);
-                    if tab != Tab::Physics {
+                    if matches!(tab, Tab::Control | Tab::Joints) {
                         mode_line(ui, viewport, &status);
                     }
                     egui::ScrollArea::vertical()
@@ -569,6 +587,7 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                             Tab::Control => control(ui, viewport, &status, &model),
                             Tab::Joints => joints(ui, viewport, &status, &model),
                             Tab::Physics => physics(ui, &model),
+                            Tab::Visuals => visuals(ui, viewport, &status, &model),
                         });
                 });
         });
@@ -735,6 +754,76 @@ fn joints(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, mo
 }
 
 /// The model's facts, looked up rarely: simulate's Physics section.
+/// The whole switchboard: every visualization flag, every rendering
+/// flag, and the group masks, each a checkbox that sends its bit — the
+/// stream's status echoes what is rendered, so a box shows the truth.
+fn visuals(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, model: &SimModel) {
+    for (heading, rendering, table) in [
+        ("Visualization", false, &model.vis_flags),
+        ("Rendering", true, &model.rnd_flags),
+    ] {
+        ui.label(egui::RichText::new(heading).strong());
+        flag_grid(ui, heading, table, |ui, index, flag| {
+            let mut on = flag_on(status, index, flag, rendering);
+            if ui.checkbox(&mut on, flag).changed() {
+                send_flag(viewport, index, rendering, on);
+            }
+        });
+        ui.add_space(6.0);
+    }
+    if model.groups.is_empty() {
+        return;
+    }
+    ui.label(egui::RichText::new("Groups").strong())
+        .on_hover_text("which group numbers of each kind are drawn (MuJoCo's group enable)");
+    egui::Grid::new("simulator_groups")
+        .num_columns(1 + model.ngroup as usize)
+        .spacing([6.0, 4.0])
+        .show(ui, |ui| {
+            ui.label("");
+            for g in 0..model.ngroup {
+                ui.label(egui::RichText::new(g.to_string()).weak());
+            }
+            ui.end_row();
+            for (kind_index, kind) in model.groups.iter().enumerate() {
+                ui.label(kind);
+                let mask = status.groups.get(kind);
+                for g in 0..model.ngroup as usize {
+                    // MuJoCo draws groups 0-2 by default (mjv_defaultOption).
+                    let mut on = mask.and_then(|m| m.get(g).copied()).unwrap_or(g < 3);
+                    if ui.checkbox(&mut on, "").changed() {
+                        viewport.send_group(kind_index as u8, g as u8, on);
+                    }
+                }
+                ui.end_row();
+            }
+        });
+}
+
+/// Flags in the stream's index order, FLAG_COLUMNS to a row: MuJoCo has
+/// thirty-odd visualization flags, and the drawer is a column.
+const FLAG_COLUMNS: usize = 3;
+
+fn flag_grid(
+    ui: &mut egui::Ui,
+    id: &str,
+    table: &[String],
+    mut cell: impl FnMut(&mut egui::Ui, usize, &str),
+) {
+    egui::Grid::new(format!("simulator_flags_{id}"))
+        .num_columns(FLAG_COLUMNS)
+        .min_col_width(DRAWER_WIDTH / FLAG_COLUMNS as f32 - 10.0)
+        .spacing([4.0, 1.0])
+        .show(ui, |ui| {
+            for (index, flag) in table.iter().enumerate() {
+                cell(ui, index, flag);
+                if index % FLAG_COLUMNS == FLAG_COLUMNS - 1 {
+                    ui.end_row();
+                }
+            }
+        });
+}
+
 fn physics(ui: &mut egui::Ui, model: &SimModel) {
     egui::Grid::new("simulator_physics")
         .num_columns(2)
@@ -830,7 +919,13 @@ fn pan_keys(ctx: &egui::Context, viewport: &mut ViewportFeed) {
         let axis = |plus: egui::Key, minus: egui::Key| {
             f32::from(i.key_down(plus)) - f32::from(i.key_down(minus))
         };
-        (axis(W, S), axis(D, A), axis(E, Q), i.modifiers.shift, i.stable_dt)
+        (
+            axis(W, S),
+            axis(D, A),
+            axis(E, Q),
+            i.modifiers.shift,
+            i.stable_dt,
+        )
     });
     if forward == 0.0 && right == 0.0 && up == 0.0 {
         return;

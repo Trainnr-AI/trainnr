@@ -57,6 +57,9 @@ Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
                   held per axis (signed); this side turns them into
                   metres of lookat travel in the camera's own frame,
                   scaled by the distance (WASD/QE, 2026-09-12)
+    0x12 group  : u8 kind (GROUP_KINDS: geom, site, joint, tendon,
+                  actuator, flex, skin), u8 group 0-5, u8 on — one bit
+                  of the matching mjvOption group mask (2026-09-12)
 
 Camera values arrive as DELTAS and this side integrates them: every
 absolute camera fact — the per-rig starting pose, the clamps — lives
@@ -609,6 +612,10 @@ TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
 TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
 TAG_FOLLOW = 16  # i32 world to keep the camera on, -1 for none
 TAG_PAN = 17  # f32 forward, f32 right, f32 up: seconds of pan key held
+TAG_GROUP = 18  # u8 kind (GROUP_KINDS index), u8 group 0-5, u8 on
+# The seven `mjvOption` group masks, in one order for the wire and the
+# status: simulate's "Group enable" section, every kind it offers.
+GROUP_KINDS = ("geom", "site", "joint", "tendon", "actuator", "flex", "skin")
 FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
 VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
@@ -629,6 +636,7 @@ TAG_PAYLOAD_BYTES = {
     TAG_VIEW: 1,  # u8 VIEW_PRESETS index: the camera to a named view
     TAG_FOLLOW: 4,  # i32 world index, -1 none (many-worlds scenes)
     TAG_PAN: 12,  # f32 forward, f32 right, f32 up (seconds held, signed)
+    TAG_GROUP: 3,  # u8 kind, u8 group, u8 on: one mjvOption group mask bit
 }
 STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
 STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
@@ -1151,6 +1159,7 @@ class SimControl:
         self._lock = threading.Lock()
         self._vis: dict[int, bool] = {}
         self._rnd: dict[int, bool] = {}
+        self._groups: dict[tuple[str, int], bool] = {}
         self.paused = False
         self.manual = False
         self.speed = 1.0
@@ -1213,14 +1222,20 @@ class SimControl:
                     if self.follow >= 0
                     else self.camera.default_distance
                 )
-        elif tag == TAG_VIS:
+        elif tag in (TAG_VIS, TAG_RND, TAG_GROUP):
+            self._handle_view(tag, payload)
+
+    def _handle_view(self, tag: int, payload: bytes) -> None:
+        """The render-side switches: a visualization flag, a rendering
+        flag, or one bit of a group mask - applied at the next frame."""
+        with self._lock:
+            if tag == TAG_GROUP:
+                kind, group, on = payload
+                if kind < len(GROUP_KINDS) and group < mujoco.mjNGROUP:
+                    self._groups[(GROUP_KINDS[kind], group)] = bool(on)
+                return
             flag, on = struct.unpack("<IB", payload)
-            with self._lock:
-                self._vis[flag] = bool(on)
-        elif tag == TAG_RND:
-            flag, on = struct.unpack("<IB", payload)
-            with self._lock:
-                self._rnd[flag] = bool(on)
+            (self._vis if tag == TAG_VIS else self._rnd)[flag] = bool(on)
 
     def _take_control(self) -> None:
         """A slider moved: the human drives the scene from here on, from
@@ -1233,13 +1248,15 @@ class SimControl:
     # -- render lane ------------------------------------------------------
     def apply_flags(self, vopt: "mujoco.MjvOption", scene: "mujoco.MjvScene") -> None:
         with self._lock:
-            vis, rnd = dict(self._vis), dict(self._rnd)
+            vis, rnd, groups = dict(self._vis), dict(self._rnd), dict(self._groups)
         for flag, on in vis.items():
             if 0 <= flag < len(vopt.flags):
                 vopt.flags[flag] = on
         for flag, on in rnd.items():
             if 0 <= flag < len(scene.flags):
                 scene.flags[flag] = on
+        for (kind, group), on in groups.items():
+            getattr(vopt, f"{kind}group")[group] = on
 
     def follow_lookat(self, local: "mujoco.MjData") -> "np.ndarray | None":
         """Where the camera should look: the followed world's root, if any."""
@@ -1270,6 +1287,11 @@ class SimControl:
             if scene is not None
             else {}
         )
+        groups = (
+            {k: [bool(v) for v in getattr(vopt, f"{k}group")] for k in GROUP_KINDS}
+            if vopt is not None
+            else {}
+        )
         body: dict = {
             "time": float(local.time),
             "rtf": float(self.ring.rtf),
@@ -1282,6 +1304,7 @@ class SimControl:
             "render_ms": float(lane.get("last_render_ms", 0.0)),
             "vis": vis,
             "rnd": rnd,
+            "groups": groups,
             "follow": self.follow,
             "worlds": [
                 {"reward": float(r), "done": bool(d)} for r, d in self.ring.world_stats
@@ -1367,6 +1390,8 @@ class SimControl:
             "ngeom": int(m.ngeom),
             "vis_flags": vis_names,
             "rnd_flags": rnd_names,
+            "groups": list(GROUP_KINDS),
+            "ngroup": int(mujoco.mjNGROUP),
             "nworld": self.ring.nworld,
         }
 

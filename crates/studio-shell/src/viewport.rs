@@ -271,6 +271,12 @@ pub struct SimModel {
     pub vis_flags: Vec<String>,
     #[serde(default)]
     pub rnd_flags: Vec<String>,
+    /// The group-mask kinds the stream offers (geom, site, joint, …),
+    /// in wire order, and how many groups each has (MuJoCo's mjNGROUP).
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub ngroup: u32,
     /// Worlds in a many-worlds scene (0 for a single world).
     #[serde(default)]
     pub nworld: u32,
@@ -301,6 +307,9 @@ pub struct SimStatus {
     pub vis: std::collections::BTreeMap<String, bool>,
     #[serde(default)]
     pub rnd: std::collections::BTreeMap<String, bool>,
+    /// Each group mask as rendered, by kind name.
+    #[serde(default)]
+    pub groups: std::collections::BTreeMap<String, Vec<bool>>,
     #[serde(default)]
     pub follow: i64,
     #[serde(default)]
@@ -723,6 +732,12 @@ impl ViewportFeed {
         self.send_message(&encode_flag(TAG_RND, flag, on));
     }
 
+    /// One bit of a group mask: the kind by its wire index (the model's
+    /// `groups` order), the group 0..ngroup.
+    pub fn send_group(&mut self, kind: u8, group: u8, on: bool) {
+        self.send_message(&[TAG_GROUP, kind, group, u8::from(on)]);
+    }
+
     /// The camera to a named view, by its wire index ([`VIEW_PRESETS`]).
     pub fn send_view(&mut self, preset: u8) {
         self.send_message(&[TAG_VIEW, preset]);
@@ -910,6 +925,7 @@ const TAG_RND: u8 = 14;
 const TAG_VIEW: u8 = 15;
 const TAG_FOLLOW: u8 = 16;
 const TAG_PAN: u8 = 17;
+const TAG_GROUP: u8 = 18;
 /// The stdout tokens: a frame published, a status message follows.
 const FRAME_TOKEN: u8 = 0xF7;
 const STATUS_TOKEN: u8 = 0xF8;
