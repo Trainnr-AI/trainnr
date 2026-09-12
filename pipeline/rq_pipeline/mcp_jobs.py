@@ -32,7 +32,13 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+
+# pydantic (the MCP surface) reads these signatures; on Python < 3.12 it
+# accepts only typing_extensions' TypedDict (the box's 3.11 venv, 2026-09-12).
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 from rq_pipeline.bundles.json_record import JsonRecord
 

@@ -12,6 +12,9 @@ license = { text = "FSL-1.1-ALv2" }
 dependencies = [
     "onnx>=1.22.0",
     "onnxruntime>=1.24.3",
+    # pydantic reads the job handles' TypedDicts; on Python < 3.12 only
+    # typing_extensions' TypedDict is accepted (mcp_jobs.py).
+    "typing-extensions>=4.6; python_version < '3.12'",
 ]
 
 # The core is dependency-free on purpose: the statistics and bundle layers
