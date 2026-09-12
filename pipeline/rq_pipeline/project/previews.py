@@ -75,14 +75,26 @@ def preview_path(project: Project, stamp: str) -> Path:
     return project.root / INDEX_DIR / PREVIEWS_DIR / f"{stamp}.png"
 
 
+def stale_preview(source: Path, out: Path) -> bool:
+    """Whether the picture predates its artifact: a run stamped by its
+    identity keeps one stamp for its whole life, and the sparkline drawn
+    at its second iteration stood for the finished curve (go2-c2 showed
+    "reward -1.1" over 1500 iterations, 2026-09-12)."""
+    from rq_pipeline.project.index import _file_times  # noqa: PLC0415
+
+    times = _file_times(source)
+    return bool(times) and out.stat().st_mtime < max(times)
+
+
 def write_previews(project: Project, index: ProjectIndex) -> dict[str, str]:
-    """Write a preview for every artifact that has one and does not yet;
-    return `{stamp: relative path}` for those that exist afterwards."""
+    """Write a preview for every artifact that has none yet or whose
+    files changed since; return `{stamp: relative path}` for those that
+    exist afterwards."""
     written: dict[str, str] = {}
     for artifact in index.artifacts:
         out = preview_path(project, artifact.stamp)
-        if not out.is_file():
-            source = project.root / artifact.path
+        source = project.root / artifact.path
+        if not out.is_file() or stale_preview(source, out):
             renderer = _RENDERERS.get(artifact.kind)
             if renderer is None:
                 continue

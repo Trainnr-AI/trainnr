@@ -623,6 +623,23 @@ go2-flat declares a plane, so no relief yet: a rough declaration
 (mjlab's `ROUGH_TERRAINS_CFG`, the Go2 file's `_rough_env_cfg`) shows
 through the same path, and is the next item.
 
+Friction 33 (fixed, 2026-09-12): **"where are the iterations visible
+in the Studio?"** They are the Experiments card (the reward sparkline
+over iterations), its page (the facts, the training curve table, Show
+in viewer for the 39 TensorBoard series in Rerun) - but go2-c2's card
+showed "reward -1.1", a straight line, over 1500 finished iterations.
+A run is stamped by its identity (friction 9), so its stamp never
+changes, and a preview is drawn once per stamp: the sparkline drawn at
+the run's second iteration stood for its life. Previews now redraw
+when any file of the artifact is newer than the picture
+(`stale_preview` in `pipeline/rq_pipeline/project/previews.py`,
+`tests/test_previews_stale.py`), and the shell's image cache keys a
+preview by its path AND modification time (`preview_uri` in
+`crates/studio-shell/src/widgets.rs`) - the redrawn file was on disk
+while the window still showed the first picture ever loaded under
+that path. Seen: the card's full curve, "reward 85.0", after one
+reindex and a relaunch.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration

@@ -58,9 +58,17 @@ pub fn tag(ui: &mut egui::Ui, text: &str) {
 /// http, image, serde, svg), so the bytes are handed to egui directly
 /// under a `bytes://` URI — the same route Rerun's own icons take. The
 /// registration is idempotent and egui caches the decoded texture, so
-/// the disk read happens once per file.
+/// the disk read happens once per file VERSION: the file's modification
+/// time is part of the URI, so a preview redrawn in place (a run's
+/// curve after more iterations, 2026-09-12) shows fresh instead of the
+/// first picture ever loaded under that path.
 pub fn preview_uri(ui: &egui::Ui, path: &std::path::Path) -> Option<String> {
-    let uri = format!("bytes://{}", path.display());
+    let modified = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis());
+    let uri = format!("bytes://{}?{modified}", path.display());
     if ui.ctx().try_load_bytes(&uri).is_err() {
         let bytes = std::fs::read(path).ok()?;
         ui.ctx().include_bytes(uri.clone(), bytes);
