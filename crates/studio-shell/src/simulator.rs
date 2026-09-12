@@ -995,9 +995,9 @@ fn physics(ui: &mut egui::Ui, model: &SimModel) {
 const PAN_HURRY: f32 = 3.0;
 
 /// Space runs or pauses, → steps once, R resets, W A S D Q E pan the
-/// camera while held — unless a text field has the keyboard.
+/// camera while held — when the keys are the picture's (`wants_keys`).
 pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
-    if !viewport.is_active() || ctx.egui_wants_keyboard_input() {
+    if !viewport.wants_keys(ctx) {
         return;
     }
     pan_keys(ctx, viewport);

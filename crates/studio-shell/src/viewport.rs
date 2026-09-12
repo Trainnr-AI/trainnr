@@ -225,6 +225,9 @@ pub struct ViewportFeed {
     /// commands: the source the next axis composes from, ahead of the
     /// status echo (two door calls in a row raced on the echo, 2026-09-12).
     twist_held: Option<(i32, [f32; 3])>,
+    /// Whether the picture had the pointer over it, or keyboard focus,
+    /// on its last frame: where the keys go (`wants_keys`).
+    keys: bool,
 }
 
 /// One joint the Joint panel can slide (hinge or slide; free and ball
@@ -332,6 +335,9 @@ pub struct SimStatus {
     /// task commands.
     #[serde(default)]
     pub twist: Option<SimTwist>,
+    /// Where the camera is: azimuth, elevation, distance, lookat x y z.
+    #[serde(default)]
+    pub camera: Vec<f64>,
     #[serde(default)]
     pub follow: i64,
     #[serde(default)]
@@ -395,6 +401,7 @@ impl ViewportFeed {
             report: Arc::new(std::sync::Mutex::new(SimReport::default())),
             editing: std::collections::HashMap::new(),
             twist_held: None,
+            keys: false,
         }
     }
 
@@ -517,6 +524,7 @@ impl ViewportFeed {
                     report,
                     editing: std::collections::HashMap::new(),
                     twist_held: None,
+                    keys: false,
                 }
             }
             (Ok(mut child), Err(err)) => {
@@ -629,6 +637,14 @@ impl ViewportFeed {
         // mjvPerturb; this side only names the gesture.
         let ctrl_held = ui.input(|i| i.modifiers.ctrl);
         let image_rect = fitted_rect(response.rect, texture.aspect_ratio());
+        // A click on the picture takes the keyboard from whatever held
+        // it (Rerun's own views take focus when clicked, and every
+        // shortcut went silent after one, 2026-09-12); hovering is
+        // enough too - keys go where the pointer is, as in every 3D tool.
+        if response.clicked() || response.drag_started() {
+            response.request_focus();
+        }
+        self.keys = response.hovered() || response.has_focus();
         let mut d_azimuth = 0.0f32;
         let mut d_elevation = 0.0f32;
         let mut d_distance = 0.0f32;
@@ -697,6 +713,17 @@ impl ViewportFeed {
             self.send_update(d_azimuth, d_elevation, d_distance);
         }
         Some(image_rect)
+    }
+
+    /// Whether the keys belong to the picture this frame: the pointer is
+    /// over it or it was clicked last, and no text field is being typed
+    /// in. With nothing focused at all the keys are the picture's too
+    /// (the transport bar's shortcuts always worked that way).
+    pub fn wants_keys(&self, ctx: &egui::Context) -> bool {
+        if !self.is_active() || ctx.text_edit_focused() {
+            return false;
+        }
+        self.keys || !ctx.egui_wants_keyboard_input()
     }
 
     /// The stream's latest status and model, for the panel and the state

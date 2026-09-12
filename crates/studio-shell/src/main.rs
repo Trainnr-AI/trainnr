@@ -399,7 +399,7 @@ impl StudioShell {
     /// `f` puts the viewport alone on the page and back (Live, a scene
     /// running); Escape leaves it; F11 toggles the window itself.
     fn fullscreen_keys(&mut self, ctx: &egui::Context) {
-        let typing = ctx.memory(|m| m.focused().is_some());
+        let typing = ctx.text_edit_focused();
         let (f, f11, escape) = ctx.input_mut(|i| {
             (
                 !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::F),
@@ -1061,6 +1061,7 @@ impl StudioShell {
                 manual: s.manual,
                 speed: s.speed,
                 render_ms: s.render_ms,
+                camera: s.camera.clone(),
             }),
         };
         self.control.record_state(state);

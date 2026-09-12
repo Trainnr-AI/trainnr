@@ -24,6 +24,25 @@ RIG_PATH = "world/rig"  # where every rig tool logs the mirror
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
 
 
+def leave_cleanly_on_term(rr) -> None:
+    """A process streaming into the Studio's own Rerun server dies by
+    TERM when the window closes or a job is stopped (the shell reaps its
+    children; the job runner signals the group); a plain TERM cut the
+    gRPC stream mid-message and the server logged "h2 protocol error:
+    error reading a body from connection" at every close (2026-09-12).
+    Close the connection first, then go. One home for every process
+    that connects: the render stream's narrator, the walk view, the
+    recorder, the verdict."""
+    import os  # noqa: PLC0415
+    import signal  # noqa: PLC0415
+
+    def _leave(*_: object) -> None:
+        rr.disconnect()
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _leave)
+
+
 def mat_to_xyzw(flat: Any) -> Any:
     """Rotation matrix -> xyzw quaternion, via MuJoCo's own routine
     (mju_mat2Quat is wxyz; Rerun wants xyzw)."""

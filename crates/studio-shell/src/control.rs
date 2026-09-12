@@ -236,6 +236,9 @@ pub struct SimulatorState {
     pub manual: bool,
     pub speed: f64,
     pub render_ms: f64,
+    /// Where the camera is: azimuth, elevation, distance, lookat x y z.
+    #[serde(default)]
+    pub camera: Vec<f64>,
 }
 
 // -- events: one struct writes `events.jsonl` and reads it back ---------------

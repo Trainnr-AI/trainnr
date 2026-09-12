@@ -80,7 +80,6 @@ rendering.
 import math
 import os
 import pathlib
-import signal
 import struct
 import sys
 import threading
@@ -229,27 +228,13 @@ PACE_SPIN_S = 0.0015
 SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
 
 
-def leave_cleanly_on_term(rr) -> None:
-    """A process streaming into the Studio's own Rerun server dies by
-    TERM when the window closes (the shell reaps its children); a plain
-    TERM cut the gRPC stream mid-message and the server logged
-    "h2 protocol error: error reading a body from connection" at every
-    close (2026-09-12). Close the connection first, then go."""
-
-    def _leave(*_: object) -> None:
-        rr.disconnect()
-        os._exit(0)
-
-    signal.signal(signal.SIGTERM, _leave)
-
-
 class PhysicsNarrator:
     """The sim's state into Rerun, per step, on the `sim` timeline."""
 
     def __init__(self, model: "mujoco.MjModel", task_name: str) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
-        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+        from rq_pipeline.viz import RigMirror, leave_cleanly_on_term  # noqa: PLC0415
 
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)
@@ -435,6 +420,12 @@ class OrbitCamera:
     def size(self) -> tuple[int, int]:
         with self._lock:
             return self.width, self.height
+
+    def pose(self) -> list[float]:
+        """Azimuth, elevation, distance, then the lookat - the status
+        echoes it so an agent (or a test) knows where the camera is."""
+        with self._lock:
+            return [self.azimuth, self.elevation, self.distance, *self.lookat]
 
     def zoom_to(self, distance: float) -> None:
         """A followed world is small: the camera closes in on it; an
@@ -1354,6 +1345,7 @@ class SimControl:
             "rnd": rnd,
             "groups": groups,
             "twist": self._twist,
+            "camera": self.camera.pose() if self.camera is not None else [],
             "follow": self.follow,
             "worlds": [
                 {"reward": float(r), "done": bool(d)} for r, d in self.ring.world_stats

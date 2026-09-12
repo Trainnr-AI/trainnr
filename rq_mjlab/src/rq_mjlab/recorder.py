@@ -35,6 +35,7 @@ from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
 # One home for the Studio's ingest address (rq-pipeline is a hard dep).
 from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
+from rq_pipeline.viz import leave_cleanly_on_term
 
 
 def _require_rerun() -> Any:
@@ -60,6 +61,7 @@ class RerunRecorder(RecorderTerm):
         self._cfg = cfg
         rr.init(cfg.app_id, spawn=False)
         rr.connect_grpc(cfg.address)
+        leave_cleanly_on_term(rr)  # a stopped job leaves its stream closed
         # (name, qpos address) per SCALAR joint — hinge/slide only. The
         # first cut indexed qpos by JOINT index, which plots freejoint
         # quaternion components as "joints" on any floating-base robot

@@ -575,7 +575,7 @@ CTRL and QPOS cross into the physics process through the ring (a
 mailbox for commands, seqlocked arrays for the sliders); VIS and RND
 stay with the renderer. Back over stdout, beside the frame token, a
 status message every 100 ms: sim time, real-time factor, paused,
-manual, speed, qpos, ctrl, shadows, render time, the flags — and once,
+manual, speed, qpos, ctrl, shadows, render time, the flags, the camera pose (azimuth, elevation, distance, lookat; `simulator.camera` in the state file) — and once,
 the model: joints with qpos addresses and ranges, actuators with control
 ranges, keyframes, the physics facts, the flag tables in MuJoCo's names.
 

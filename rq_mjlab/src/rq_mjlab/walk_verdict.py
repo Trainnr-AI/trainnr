@@ -177,11 +177,15 @@ class VerdictFeed:
 
     def __init__(self, run_name: str) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
-        from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: PLC0415
+        from rq_pipeline.viz import (  # noqa: PLC0415
+            STUDIO_ADDRESS,
+            leave_cleanly_on_term,
+        )
 
         self._rr: Any = rr
         rr.init(f"rq-verdict-{run_name}")
         rr.connect_grpc(STUDIO_ADDRESS)
+        leave_cleanly_on_term(rr)
         self._tick = 0
 
     @classmethod

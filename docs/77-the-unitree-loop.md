@@ -565,6 +565,23 @@ the liveness probe reaps it first, and a zombie is not alive
 (`pipeline/rq_pipeline/project/control.py`). Found while timing the
 close: the "60 s hang" my own scripts measured was the same zombie.
 
+Friction 32 (fixed, 2026-09-12): **"WASD works in the Rerun 3D
+viewer but not in the MuJoCo viewer."** The shortcuts refused the keys
+whenever any widget had keyboard focus, and Rerun's 3D view takes
+focus when clicked and keeps it, so after one look through the Rerun
+view every shortcut of the picture went silent - the keys, Space, R.
+Now the picture takes focus when clicked, and the keys are the
+picture's whenever the pointer is over it or it was clicked last;
+only a text field being typed in blocks them (`ViewportFeed::wants_keys`
+in `crates/studio-shell/src/viewport.rs`, the `f` key the same). The
+stream now echoes the camera pose - azimuth, elevation, distance,
+lookat - in its status and the shell in `studio-state.json`
+(`simulator.camera`), so a key can be checked as a number: the
+operator's flow reproduced with injected input (click the picture,
+click Rerun's 3D view, glide back, hold W a second) moved the lookat
+2.5 m. A single pointer warp never registers as a hover in egui; the
+test had to glide.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration
