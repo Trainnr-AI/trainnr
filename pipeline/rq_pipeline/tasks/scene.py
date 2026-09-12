@@ -216,12 +216,43 @@ def add_slot_walls(  # noqa: PLR0913 - a well's geometry, each dimension named
 GRID_PITCH = 1.6
 
 
+# The sky every MuJoCo scene wears (Menagerie's scene.xml values): a
+# gradient skybox, so a display's background is not black. Added to a
+# stage that brings none of its own.
+SKY = {
+    "type": "skybox",
+    "builtin": "gradient",
+    "rgb1": [0.3, 0.5, 0.7],
+    "rgb2": [0.0, 0.0, 0.0],
+    "width": 512,
+    "height": 3072,
+}
+
+
+def add_sky(scene: Any) -> None:
+    """A gradient skybox on a spec without one."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    if any(t.type == mujoco.mjtTexture.mjTEXTURE_SKYBOX for t in scene.textures):
+        return
+    scene.add_texture(
+        name="sky",
+        type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
+        builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
+        rgb1=SKY["rgb1"],
+        rgb2=SKY["rgb2"],
+        width=SKY["width"],
+        height=SKY["height"],
+    )
+
+
 def grid_of(
     name: str,
     children: Any,
     *,
     pitch: float = GRID_PITCH,
     disable_floor_contacts: bool = False,
+    stage: Any = None,
 ) -> tuple[Any, list[str]]:
     """One MjSpec holding every child spec on a centred √n grid.
 
@@ -231,24 +262,31 @@ def grid_of(
     attached under a `wNN/` prefix at its grid cell. Options, render
     budgets and shadow sizes are the CALLER's to set on the returned
     scene. Returns (scene spec, prefixes).
+
+    `stage`: a spec to build ON instead of the plain light and plane -
+    a task's own terrain and dressing as its framework composed them
+    (the walk view hands the render process mjlab's, 2026-09-12). The
+    children are attached into it; it gets a sky if it has none.
     """
     import math  # noqa: PLC0415
 
     import mujoco  # noqa: PLC0415 - sim extra
 
     children = list(children)
-    scene = mujoco.MjSpec()
+    scene = stage if stage is not None else mujoco.MjSpec()
     scene.modelname = name
-    scene.worldbody.add_light(
-        pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
-    )
-    scene.worldbody.add_geom(
-        name="ground",
-        type=mujoco.mjtGeom.mjGEOM_PLANE,
-        size=[0, 0, 0.1],
-        pos=[0, 0, -0.75],
-        rgba=[0.12, 0.12, 0.12, 1],
-    )
+    if stage is None:
+        scene.worldbody.add_light(
+            pos=[0, 0, 4], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+        )
+        scene.worldbody.add_geom(
+            name="ground",
+            type=mujoco.mjtGeom.mjGEOM_PLANE,
+            size=[0, 0, 0.1],
+            pos=[0, 0, -0.75],
+            rgba=[0.12, 0.12, 0.12, 1],
+        )
+    add_sky(scene)
     side = math.isqrt(len(children) - 1) + 1 if children else 0
     prefixes = []
     for n, child in enumerate(children):

@@ -106,6 +106,38 @@ class Joystick:
         self.enabled.value = True
 
 
+STAGE_PREFIX = "stage/"  # the terrain's names in the mirror: stage/terrain
+
+
+def export_stage(terrain_cfg, path: Path) -> Path | None:
+    """The task's own stage - mjlab's scene dressing with the terrain the
+    task declares (its checker plane, or the generator's heightfields and
+    boxes, from the same config and seed the env was built from) and no
+    robot - as one XML the render process can build the mirror on.
+    mjlab composes its scene exactly so (`Scene._add_terrain`: the base
+    scene.xml, the terrain entity attached at the world's frame); this
+    repeats the composition from the declaration. Built fresh rather
+    than taken from the env: the env's terrain spec has been attached
+    once already and carries the robot's default classes, which the XML
+    writer then duplicates. Heightfield data rides inline
+    (`elevation`), so no assets travel. None when the task declares no
+    terrain."""
+    import mujoco  # noqa: PLC0415
+    from mjlab.scene.scene import _SCENE_XML  # noqa: PLC0415
+    from mjlab.terrains.terrain_entity import TerrainEntity  # noqa: PLC0415
+
+    if terrain_cfg is None:
+        return None
+    terrain = TerrainEntity(terrain_cfg, device="cpu")
+    stage = mujoco.MjSpec.from_file(str(_SCENE_XML))
+    # mjlab attaches with an empty prefix; the XML writer then emits a
+    # nested empty <default/> that MuJoCo's own reader refuses ("empty
+    # class name", 3.11). A named prefix writes a named class.
+    stage.attach(terrain.spec, prefix=STAGE_PREFIX, frame=stage.worldbody.add_frame())
+    path.write_text(stage.to_xml(), encoding="utf-8")
+    return path
+
+
 def twist_switch(env, axes: int) -> tuple[object | None, str]:
     """The walk's velocity command term and its bounds as the render
     stream's `--twist-ranges` value (lo,hi per axis, the envelope's
@@ -360,7 +392,7 @@ class Overview:
 
 
 # One process, one loop, read top to bottom: the physics side of the RL view.
-def main() -> None:  # noqa: PLR0915
+def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", nargs="?", type=Path, default=None)
     parser.add_argument("--latest", action="store_true")
@@ -421,6 +453,9 @@ def main() -> None:  # noqa: PLR0915
 
     # The ring, then the render process on the Studio's own pipes.
     fd, ring_path = tempfile.mkstemp(prefix="studio-state-walk-", suffix=".ring")
+    stage = export_stage(
+        env.unwrapped.cfg.scene.terrain, Path(ring_path).with_suffix(".stage.xml")
+    )
     import os  # noqa: PLC0415
 
     os.close(fd)
@@ -438,6 +473,7 @@ def main() -> None:  # noqa: PLR0915
             streamer.WALK,
             f"--scene={streamer.WALK}:{robot}:{args.envs}",
             f"--ring={ring_path}",
+            *([f"--stage={stage}"] if stage else []),
             *([f"--shm={args.shm}"] if args.shm else []),
             *([f"--project={args.project}"] if args.project else []),
             f"--rig={robot}-rl",
@@ -509,6 +545,8 @@ def main() -> None:  # noqa: PLR0915
     finally:
         renderer.terminate()
         Path(ring_path).unlink(missing_ok=True)
+        if stage is not None:
+            stage.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

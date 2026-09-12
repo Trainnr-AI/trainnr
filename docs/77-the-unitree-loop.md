@@ -601,6 +601,28 @@ real, smaller findings on the way. Lesson, the operator's own rule
 re-learned at a price: verify in the viewer, never in a printout; a
 number the app echoes is not the picture the human sees.
 
+**The task's own stage (2026-09-12).** "There is no terrain and it is
+all very plain": the walk mirror stood on a dark plane under a black
+sky, the display grid's skeleton. Now the walk view exports the
+task's stage - mjlab's own scene dressing (its `scene.xml`: headlight,
+haze, shadow map) with the terrain built fresh from the terrain
+declaration the env was built from (`TerrainEntityCfg`: the checker
+plane, or a generator's heightfields and boxes from the same config
+and seed), no robot - as one XML beside the ring (`export_stage` in
+`rq_mjlab.walk_view`), and the render process builds the mirror ON it
+(`grid_of(stage=)` in `pipeline/rq_pipeline/tasks/scene.py`, the
+`--stage=` flag of `tools/studio-render-stream.py`), adding Menagerie's
+gradient sky when the stage brings none. Heightfields ride inline in
+the XML (`elevation`), so no assets travel. Two MuJoCo XML-writer
+quirks on the way: the env's own terrain spec, attached once already,
+carries the robot's default classes and writes a duplicate; an empty
+attach prefix writes an empty `<default/>` the reader refuses - hence
+built from the declaration, under a named prefix. Seen: four Go2s on
+mjlab's checker ground under the haze, at 31 frames per second.
+go2-flat declares a plane, so no relief yet: a rough declaration
+(mjlab's `ROUGH_TERRAINS_CFG`, the Go2 file's `_rough_env_cfg`) shows
+through the same path, and is the next item.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration

@@ -1837,8 +1837,17 @@ def walk_scene_of(scene: str) -> tuple[str, int]:
     return parts[1], int(parts[2])
 
 
+STAGE_XML: str | None = None  # set by --stage= (the task's terrain, walk scenes)
+# mjlab asks for 8192 shadow maps; the live tools draw at this size
+# (tools/rl-watch.py does the same).
+LIVE_SHADOWSIZE = 2048
+
+
 def walk_scene(
-    robot: str, worlds: int, offscreen_side: int = MAX_RENDER_SIDE
+    robot: str,
+    worlds: int,
+    offscreen_side: int = MAX_RENDER_SIDE,
+    stage_xml: str | None = None,
 ) -> "mujoco.MjModel":
     """One CPU model holding `worlds` copies of the walk robot on one
     ground plane, each under a `wNN/` prefix at its grid cell (the RL
@@ -1847,7 +1856,10 @@ def walk_scene(
     joint's global qpos, so the copies land on their origins by the copy
     alone. Built here, not in rq_mjlab, so the render process — the
     pipeline venv, no mjlab — can build the same model. The robot's model
-    is the one its bundle records (project first, then the library)."""
+    is the one its bundle records (project first, then the library).
+    `stage_xml`: the task's own terrain and dressing, as the walk view
+    exported them from mjlab's scene - the ground the policy walks on,
+    instead of the plain plane."""
     from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
     from rq_pipeline.tasks.scene import grid_of  # noqa: PLC0415
@@ -1858,16 +1870,22 @@ def walk_scene(
         raise FileNotFoundError(
             f"no bundle {robot!r} with a model file in the project or the library"
         )
+    stage = mujoco.MjSpec.from_file(stage_xml) if stage_xml else None
     scene, _ = grid_of(
         f"{robot}-rl-{worlds}",
         (mujoco.MjSpec.from_file(str(model_file)) for _ in range(worlds)),
         pitch=0.0,
+        stage=stage,
     )
-    for geom in scene.geoms:
-        if geom.name == "ground":
-            geom.pos[2] = 0.0  # the display grids' table offset; ducks walk at z=0
+    if stage is None:
+        for geom in scene.geoms:
+            if geom.name == "ground":
+                geom.pos[2] = 0.0  # the display grids' table offset; walks at z=0
     scene.visual.global_.offwidth = offscreen_side
     scene.visual.global_.offheight = offscreen_side
+    scene.visual.quality.shadowsize = min(
+        scene.visual.quality.shadowsize, LIVE_SHADOWSIZE
+    )
     return scene.compile()
 
 
@@ -1894,7 +1912,7 @@ def render_on(scene: str, ring_path: str, shm_path: str | None, rig: str) -> Non
     the ring was created by that process, the wire and status are the
     same."""
     if scene.startswith(f"{WALK}:"):
-        model = walk_scene(*walk_scene_of(scene))
+        model = walk_scene(*walk_scene_of(scene), stage_xml=STAGE_XML)
     else:
         model = mujoco.MjModel.from_xml_path(scene)
     ring = StateRing(ring_path, model, create=False)
@@ -2043,6 +2061,8 @@ if __name__ == "__main__":
     for flag in sys.argv[1:]:
         if flag.startswith("--physics="):
             physics_ring = flag.removeprefix("--physics=")
+        elif flag.startswith("--stage="):
+            STAGE_XML = flag.removeprefix("--stage=")
         elif flag.startswith("--twist-ranges="):
             # lo,hi per axis (vx, vy, wz): the walk's command bounds.
             bounds = [float(v) for v in flag.removeprefix("--twist-ranges=").split(",")]
