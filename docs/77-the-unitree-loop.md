@@ -949,4 +949,20 @@ thread is what publishes, so the gate does not care).
 
 What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). Both independent gates
-are in; A7 (drift) is next.
+are in.
+
+## 8. The last stage, and why it is empty here (2026-09-13)
+
+A7, drift monitoring, is built (docs/76 §9.1–9.2) and proved on the
+Pico rig: two real sweeps as the reference, a copy with one wheel's
+encoder scaled named that wheel's gear and nothing else, an untouched
+copy came back within. On the Go2 the stage stays empty and the strip
+says so — a drift check needs an identification method and a recording
+from the robot, and this robot has neither: its dynamics are the
+reference's declared constants (§1), never measured. The order that
+fills it is the one the loop already states: telemetry from a real Go2
+through an adapter, a method for a legged robot's actuators (the
+reference's rated PD is the declared point; an identified interval
+around it is what a check would judge against), then `check_drift` on
+every fresh recording. The strip's Sys ID and Telemetry flags are the
+same gap seen from the other end.

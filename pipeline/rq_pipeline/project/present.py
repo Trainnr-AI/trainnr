@@ -903,7 +903,58 @@ def _present_deploy(
     }
 
 
+def _present_drift(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "drift"
+) -> Shown:
+    """A drift check: each judged parameter's shift against its reference
+    (in reference half-widths, so ±1 is the interval's edge) as bars, and
+    the reading with the verdict and the lineage."""
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.fleet.drift import (  # noqa: PLC0415
+        ANCHORED,
+        DRIFT_FILE,
+        load_drift_record,
+    )
+
+    d = load_drift_record(project.root / artifact.path / DRIFT_FILE)
+    judged = [p for p in d.parameters if p.verdict != ANCHORED]
+    with _AsDefault(rr_):
+        shifts = [p.shift for p in judged if p.shift is not None]
+        if shifts:
+            rr_.log(f"{root}/shift", rr.BarChart(shifts), static=True)
+        lines = [
+            f"# {artifact.stamp}",
+            "",
+            f"**{'drifted' if d.drifted else 'within interval'}** — {d.recommendation}",
+            "",
+            "bars: each parameter's fresh estimate against its reference "
+            "interval, in reference half-widths (±1 is the edge); order: "
+            + ", ".join(p.name for p in judged if p.shift is not None),
+            "",
+        ]
+        lines += [
+            f"- {p.name}: **{p.verdict}** · fresh {p.fresh_estimate:.4g} "
+            f"± {p.fresh_half_width:.3g} · reference "
+            f"[{p.reference_lower:.4g}, {p.reference_upper:.4g}]"
+            for p in d.parameters
+        ]
+        lines += ["", f"method `{d.method}` · {d.references} reference record(s)"]
+        lines.append(_lineage(artifact))
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
+    return {
+        "paths": [f"{root}/shift", f"{root}/reading"],
+        "view": "shift + reading",
+        "layout": rrb.Horizontal(
+            rrb.BarChartView(origin=f"{root}/shift", name="shift per parameter"),
+            rrb.TextDocumentView(origin=f"{root}/reading", name="drift check"),
+        ),
+    }
+
+
 _PRESENTERS: dict[Kind, Presenter] = {
+    Kind.DRIFT: _present_drift,
     Kind.ROBOT: _present_robot,
     Kind.DEPLOY: _present_deploy,
     Kind.RECORDING: _present_recording,

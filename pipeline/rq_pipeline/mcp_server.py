@@ -1422,6 +1422,88 @@ def identify_system(
     }
 
 
+def check_drift(
+    robot: str, recording: str, method: str | None = None, name: str | None = None
+) -> dict[str, Any] | Refusal:
+    """Drift monitoring as a door: identify fresh telemetry (a recording in
+    this project, by version) with the robot's identification method
+    WITHOUT writing a fit record, and judge every parameter against the
+    union of the robot's identified intervals. Writes a drift record under
+    the project's monitoring folder — the verdict per parameter (within,
+    left, unresolved, anchored), the parameters that left, the
+    recommendation (re-identify, then re-evaluate) — and re-indexes so the
+    loop's 'drift monitored' state is proved by it. Refused by name: an
+    unknown version, a robot with no fit record yet, a robot no method can
+    fit from this recording, a check name already taken."""
+    from rq_pipeline.fleet.drift import DRIFT_FILE, judge  # noqa: PLC0415
+    from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+    from rq_pipeline.project.index import UNRECORDED  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.robot.methods import detect, resolve  # noqa: PLC0415
+
+    try:
+        project, bundle = _project_artifact(robot, "robot")
+        _, rec = _project_artifact(recording, "recording")
+        bundle_dir = project.root / bundle.path
+        recording_dir = project.root / rec.path
+        check_name = plain_name(
+            name if name else f"{recording.split('@', 1)[0]}-check", "check name"
+        )
+        out_dir = project.monitoring / check_name
+        if out_dir.exists():
+            raise ValueError(
+                f"a drift check named {check_name!r} exists; a check is an "
+                "artifact and is never overwritten - name this one"
+            )
+        entry = resolve(method) if method else detect(bundle_dir, recording_dir)
+        fitter = entry.build()
+        why = fitter.accepts(bundle_dir, recording_dir)
+        if why is not None:
+            raise ValueError(f"{entry.name} cannot fit {robot} from {recording}: {why}")
+        record = judge(
+            bundle_dir, recording_dir, fitter, robot=robot, recording=recording
+        )
+    except (FileNotFoundError, KeyError, ValueError) as refused:
+        return refusal(_reason(refused))
+    path = record.write(out_dir / DRIFT_FILE)
+    index = index_project(project)
+    write_index(project, index)
+    state = next(s for s in index.states if s.name == "drift monitored")
+    stamp = next(
+        (
+            a.stamp
+            for a in index.artifacts
+            if a.kind == "drift" and a.path == str(out_dir.relative_to(project.root))
+        ),
+        UNRECORDED,
+    )
+    return {
+        "status": DONE,
+        "check": stamp,
+        "robot": robot,
+        "recording": recording,
+        "method": entry.name,
+        "record": str(path.relative_to(project.root)),
+        "drifted": record.drifted,
+        "left": list(record.left),
+        "unresolved": list(record.unresolved),
+        "recommendation": record.recommendation,
+        "references": record.references,
+        "parameters": [
+            {
+                "name": p.name,
+                "verdict": p.verdict,
+                "reference": [p.reference_lower, p.reference_upper],
+                "fresh": [p.fresh_lower, p.fresh_upper],
+                "estimate": p.fresh_estimate,
+                "shift": p.shift,
+            }
+            for p in record.parameters
+        ],
+        "state": {"drift monitored": state.present, "proved_by": state.proved_by},
+    }
+
+
 def describe_identification(robot: str) -> dict[str, Any] | Refusal:
     """A robot's system identification as recorded: every fit record with
     its parameters, intervals and verdicts, the anchor statements, and the
@@ -1601,6 +1683,12 @@ def build_server() -> Any:  # noqa: PLR0915
         description="System identification: fit a robot's dynamics from a recording "
         "(both by version); writes the fit record with intervals and verdicts."
     )(identify_system)
+    server.tool(
+        description="Drift monitoring: identify fresh telemetry (a recording, by "
+        "version) without writing a fit record and judge every parameter against "
+        "the robot's identified intervals; writes a drift record naming what left "
+        "and recommending re-identification."
+    )(check_drift)
     server.tool(
         description="A robot's fit records: parameters, intervals, identified or not, "
         "anchors, the cross-run spread."

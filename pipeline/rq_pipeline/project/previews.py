@@ -543,7 +543,76 @@ def _font(size: int) -> FreeTypeFont | ImageFontType:
     return ImageFont.load_default(size=size)
 
 
+def _render_drift(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
+    """A drift check at a glance: the word large, then a row per judged
+    parameter — the reference interval as a grey bar, the fresh interval
+    over it, red when it left."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+    except ImportError:
+        return False
+    from rq_pipeline.fleet.drift import (  # noqa: PLC0415
+        ANCHORED,
+        DRIFT_FILE,
+        LEFT,
+        load_drift_record,
+    )
+
+    try:
+        d = load_drift_record(source / DRIFT_FILE)
+    except (OSError, ValueError, TypeError):
+        return False
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), GROUND)
+    draw = ImageDraw.Draw(image)
+    big, small, tiny = _font(72), _font(28), _font(22)
+    word = "drifted" if d.drifted else "within interval"
+    ink = (255, 107, 107) if d.drifted else (236, 238, 242)
+    draw.text((48, 36), word, fill=ink, font=big)
+    draw.text(
+        (48, 128),
+        f"{len(d.left)} left · {len(d.unresolved)} unresolved · "
+        f"{d.references} reference record(s)",
+        fill=(160, 166, 178),
+        font=small,
+    )
+    judged = [p for p in d.parameters if p.verdict != ANCHORED]
+    if not judged:
+        return _save_pil(image, out)
+    x0, x1, y = 48, width - 48, 190
+    row = max(28, min(56, (height - y - 24) // len(judged)))
+    for p in judged:
+        lows = [p.reference_lower, p.fresh_lower]
+        highs = [p.reference_upper, p.fresh_upper]
+        finite_lo = [v for v in lows if np.isfinite(v)]
+        finite_hi = [v for v in highs if np.isfinite(v)]
+        if not finite_lo or not finite_hi:
+            y += row
+            continue
+        lo, hi = min(finite_lo), max(finite_hi)
+        span = (hi - lo) or 1.0
+        px = lambda v, lo=lo, span=span: x0 + int((x1 - x0) * (v - lo) / span)  # noqa: E731
+        draw.text((x0, y), p.name, fill=(160, 166, 178), font=tiny)
+        bar = y + 24
+        draw.rounded_rectangle(
+            [px(p.reference_lower), bar, px(p.reference_upper), bar + 8],
+            radius=4,
+            fill=(70, 74, 84),
+        )
+        fill = (255, 107, 107) if p.verdict == LEFT else (88, 166, 255)
+        draw.rounded_rectangle(
+            [px(p.fresh_lower), bar - 3, px(p.fresh_upper), bar + 11],
+            radius=5,
+            fill=fill,
+        )
+        y += row
+    return _save_pil(image, out)
+
+
 _RENDERERS: dict[str, Renderer] = {
+    "drift": _render_drift,
     "recording": _render_recording,
     "robot": _render_robot,
     "batch": _render_batch,

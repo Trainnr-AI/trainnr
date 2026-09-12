@@ -227,7 +227,8 @@ class Presenter(unittest.TestCase):
         self.assertIn(Kind.ROBOT, _PRESENTERS)
         self.assertIn(Kind.RECORDING, _PRESENTERS)
         self.assertIn(Kind.CERTIFICATE, _PRESENTERS)
-        self.assertNotIn(Kind.DRIFT, _PRESENTERS)  # no writer yet, so no view
+        self.assertIn(Kind.DRIFT, _PRESENTERS)  # A7: the shift bars and a reading
+        self.assertNotIn(Kind.FIT, _PRESENTERS)  # a fit rides inside its bundle
 
     def test_the_recording_presenter_logs_every_channel_on_the_time_timeline(
         self,

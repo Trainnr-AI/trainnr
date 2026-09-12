@@ -22,6 +22,7 @@ TIER = {
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
     "deploy": 2,  # the sim-to-sim gate: plain MuJoCo + ONNX, judged by evaluate's rule
+    "fleet": 3,  # drift: the identifier's method over a recording, judged
     "physics": 3,
     "tasks": 3,
     "collect": 3,

@@ -27,6 +27,7 @@ from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.manifest import MANIFEST_FILE as DEPLOY_FILE
 from rq_pipeline.envs.lerobot_train_log import CHECKPOINT_WEIGHTS, RUN_MANIFEST_FILE
+from rq_pipeline.fleet.drift import DRIFT_FILE as _DRIFT_FILE
 from rq_pipeline.project.files import read_json
 from rq_pipeline.robots.recording import MANIFEST_FILE as RECORDING_FILE
 
@@ -34,7 +35,7 @@ from rq_pipeline.robots.recording import MANIFEST_FILE as RECORDING_FILE
 # a drift record. The rest are imported from their writers above or
 # named here for the writers in this package.
 CERTIFICATE_FILE = "certificate.json"  # `project/importer.write_certificate`
-DRIFT_FILE = "drift.json"
+DRIFT_FILE = _DRIFT_FILE
 FIT_FILE = "fit.json"
 TASK_FILE = "task.json"  # `project/task_ref.write_task_reference`
 # A policy's manifest beside its weights (`project/importer.write_policy`);

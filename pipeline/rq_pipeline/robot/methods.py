@@ -29,6 +29,9 @@ class IdentificationMethod(Protocol):
     """What a method must do to sit behind the seam."""
 
     name: str
+    # Parameters the method fixes from outside the data (an anchor): a
+    # drift check reports them and never judges them, they were not measured.
+    anchored: tuple[str, ...]
 
     def accepts(self, bundle_dir: Path, recording_dir: Path) -> str | None:
         """None when this method can fit this robot from this recording;
@@ -111,6 +114,7 @@ def raw_files(recording_dir: Path, suffix: str) -> list[Path]:
 )
 class DrivetrainRatio:
     name = "drivetrain-ratio"
+    anchored = ("scale_ref_damping",)  # the ratio fit's fixed scale reference
 
     def accepts(self, bundle_dir: Path, recording_dir: Path) -> str | None:
         from rq_pipeline.bundles.profile import load_profile  # noqa: PLC0415

@@ -1302,7 +1302,68 @@ def _finding(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     return sections
 
 
+def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    """A drift check: the verdict and what to do, then every parameter's
+    fresh interval beside the reference it was judged against."""
+    from rq_pipeline.fleet.drift import DRIFT_FILE, load_drift_record  # noqa: PLC0415
+
+    try:
+        d = load_drift_record(root / DRIFT_FILE)
+    except (OSError, ValueError, TypeError) as why:
+        return [_kv("Drift check", [("unreadable", str(why))])]
+    sections: list[Section] = [
+        _kv(
+            "Drift check",
+            [
+                ("version", artifact.stamp),
+                ("verdict", "drifted" if d.drifted else "within interval"),
+                ("parameters that left", ", ".join(d.left) or "none"),
+                ("unresolved", ", ".join(d.unresolved) or "none"),
+                ("recommendation", d.recommendation),
+                ("method", d.method),
+                ("reference", f"{d.references} fit record(s): {', '.join(d.fit)}"),
+                ("rule", d.rule),
+                ("anchor", d.anchor),
+                ("simulator build", d.instrument),
+                ("code", d.code),
+                ("checked", d.created_utc),
+            ],
+            note="Fresh telemetry identified without writing a fit record, judged "
+            "against the union of the robot's identified intervals.",
+        ),
+        _table(
+            "Parameters",
+            [
+                "parameter",
+                "verdict",
+                "reference interval",
+                "fresh estimate",
+                "fresh interval",
+                "shift (reference half-widths)",
+                "unit",
+            ],
+            [
+                [
+                    p.name,
+                    p.verdict,
+                    _rng(p.reference_lower, p.reference_upper),
+                    _f(p.fresh_estimate),
+                    _rng(p.fresh_lower, p.fresh_upper),
+                    _f(p.shift) if p.shift is not None else UNRECORDED,
+                    p.unit,
+                ]
+                for p in d.parameters
+            ],
+            note="within: overlaps the reference; left: pinned and outside it; "
+            "unresolved: not pinned by this recording; anchored: fixed by the "
+            "method, never judged.",
+        ),
+    ]
+    return sections
+
+
 _WRITERS: dict[str, Writer] = {
+    "drift": _drift,
     "deploy": _deploy,
     "robot": _robot,
     "task": _task,

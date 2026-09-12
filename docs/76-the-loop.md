@@ -156,8 +156,9 @@ the sidebar — starts at the top, while opening an artifact scrolls its
 drawer into view in the same frame, so the agent's capture is already
 looking at it.
 
-Monitoring stays empty on purpose: drift monitoring is A7 and ends at a
-real robot — the rig connects when it starts. Deployments fill from A6
+Monitoring fills from A7 (built 2026-09-13, §9.1): a drift check's card,
+its drawer with every parameter's fresh interval beside the reference,
+its shift bars in the viewer. Deployments fill from A6
 (built 2026-09-11, docs/77 §6): the manifest with its ONNX and scene,
 and the sim-to-sim gate's verdict beside it.
 
@@ -447,6 +448,94 @@ This is the smallest honest version of the fleet data plane designed in
 docs/30 §3.3 — telemetry always, interventions on event, heavy logs
 batched — and it is the piece that turns a one-shot pipeline into a loop
 that keeps improving.
+
+### 9.1 The design (2026-09-13, before building)
+
+**The question a drift check answers.** "Is the robot I have still the
+robot the evaluation was judged on?" The evaluation was judged at the
+bundle's identified dynamics; each parameter there carries an interval
+from system identification. A drift check re-identifies from a fresh
+recording and asks, parameter by parameter, whether the fresh interval
+still overlaps the identified one.
+
+**The reference interval is the union of the bundle's fit records**, per
+parameter: the lowest lower bound to the highest upper bound across every
+record the bundle carries. That is the spread rule the repo already
+trusts (`robot/fit_record.cross_run_spread`: when runs disagree beyond
+their own intervals, trust the spread, never one run). The rig's own
+records show why it must be the union: its right gear differs between
+the b and c sweeps by more than either interval, so a check against one
+record alone would call a second healthy recording drift. One record is
+a legal reference; the record says how many it rests on.
+
+**Three verdicts per parameter, no fourth.** *within*: the fresh
+interval overlaps the reference. *left*: the fresh interval is pinned
+(the identifier's own criterion, half-width within 10 % of the allowed
+range) and does not overlap the reference. *unresolved*: the fresh
+interval is not pinned, so this recording cannot say either way. An
+anchored parameter (the rig's damping, fixed as the scale reference) is
+reported and never judged: it was not measured. A record is *drifted*
+when any parameter left; its recommendation names them and says
+re-identify, then re-evaluate.
+
+**What it reuses, and what is new.** The recording enters through the
+robot seam (A2, any adapter). The fresh fit is the registered
+identification method (A3, `robot/methods`) run without writing, so a
+drift check never adds a fit record to the bundle — a check is a
+question, identification is a decision. New: the comparison, the drift
+record (kind `drift`, schema `trainnr-drift/1`, one folder per check
+under the project's `monitoring/`, citing the robot, the recording and
+the fit records it compared against), the door `check_drift(robot,
+recording)`, and the Studio's Monitoring page reading it (card: the
+verdict; drawer: every parameter's two intervals; viewer: the shift of
+each parameter against its reference width).
+
+**Proved without a robot.** The rig's committed sweep recordings are the
+fixture. Synthetic drift is one wheel's encoder ticks scaled in a copy of
+the recording — a worn or swapped gear, seen by the encoder — ingested
+like any telemetry. The check must name that wheel's gear as left and
+the other wheel's as within; the unmodified recording, checked against
+the bundle it identified, must come back within on every judged
+parameter. Two real sweeps as the reference, so the union rule is what
+the test exercises.
+
+**What it does not claim.** A drift check is only as good as the method
+behind it: the rig has one; the Go2 has no telemetry and no method, so on
+that robot the stage stays empty and the strip says so. The fleet tiers
+(always-on telemetry, events, batches) are a service; this is one record
+per check, run by an agent when it decides to.
+
+### 9.2 Built (2026-09-13, the Mac)
+
+`rq_pipeline/fleet/drift.py` (the rule, the record, `judge`), the kind's
+marker imported from there by `project/kinds.py`, the project's
+`monitoring/` folder, the door `check_drift(robot, recording, method,
+name)` in `rq_pipeline/mcp_server.py`, the index's summary, the drawer,
+the tile and the viewer presentation, and `anchored` on the
+identification method's Protocol (`rq_pipeline/robot/methods.py`: the
+drivetrain ratio fit anchors its damping) so an anchor is reported and
+never judged. Tests in `pipeline/tests/test_drift.py`: the rule on
+constructed records, then the whole path on the rig's committed sweeps.
+
+The proof the design asked for, on a fresh project (`projects/rig-drift`,
+not tracked): two real sweeps identified (the reference), then a copy of
+the first with the LEFT wheel's encoder ticks scaled by 1.4 — the check
+named `left_gear_per_damp` as left and the right wheel's gear as within;
+then an untouched copy of the first sweep — every judged parameter
+within, nothing left, nothing unresolved. The worn check named exactly
+one parameter: the left gear's fresh estimate sat 5.2 reference
+half-widths above the reference's centre (8.4e-5 against [5.8e-5,
+6.6e-5]); the left wheel's friction, the right wheel's gear and friction
+all stayed within, and the anchored damping was reported at its fixed
+value and not judged. The Studio: the loop strip at Monitoring, the
+card's word, the drawer's two intervals per parameter, the viewer's
+shift bars.
+
+Two rules learned building it. A check is a question: it runs the
+identifier with `write=False` and the bundle's version does not move,
+where identification (a decision) writes a record and moves it. A check
+is an artifact: a second check of the same recording under the same name
+is refused, like a deployment.
 
 ## 10. The window, in three modes
 
@@ -824,9 +913,11 @@ last asked for, says so in a banner over the page with the reason,
 dismissable; and the `show_in_studio` door waits for that answer
 (`control.wait_presented`) and returns shown, failed with the reason, or
 pending after 20 s, instead of "done" the moment the Studio took the
-request. Drift records stay unpresentable until A7 (tested by name in
-`tests/test_present.py`); a deployment presents as the trained scene, the
-gate's error ratio per trial, and a reading (A6, 2026-09-11).
+request. A deployment presents as the trained scene, the gate's error
+ratio per trial, and a reading (A6, 2026-09-11); a drift check as each
+parameter's shift against its reference and a reading (A7, 2026-09-13).
+Only a fit record, which rides inside its bundle, has no presentation of
+its own (tested by name in `tests/test_present.py`).
 
 Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left

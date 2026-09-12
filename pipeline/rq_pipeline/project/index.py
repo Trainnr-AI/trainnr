@@ -347,7 +347,9 @@ _CITE_READERS: dict[Kind, CiteReader] = {
     Kind.DEPLOY: lambda p: _pick(
         _read(p / DEPLOY_FILE), ("policy", "run", "robot", "task", "certificate")
     ),
-    Kind.DRIFT: lambda p: _pick(_read(p / DRIFT_FILE), ("robot", "recording", "fit")),
+    # A check cites the robot (its version carries the fit records it was
+    # judged against; the drawer names them) and the recording it judged.
+    Kind.DRIFT: lambda p: _pick(_read(p / DRIFT_FILE), ("robot", "recording")),
 }
 
 
@@ -554,7 +556,26 @@ def _summary_finding(path: Path) -> dict[str, Any]:
     return {"claim": short}  # the id carries the date already
 
 
+def _summary_drift(path: Path) -> dict[str, Any]:
+    """What a card says about a drift check: the word, then who left."""
+    d = _read(path / DRIFT_FILE)
+    if not d:
+        return {}
+    left = list(d.get("left") or [])
+    unresolved = list(d.get("unresolved") or [])
+    out: dict[str, Any] = {
+        "verdict": "drifted" if d.get("drifted") else "within interval",
+    }
+    if left:
+        out["left"] = ", ".join(left)
+    if unresolved:
+        out["unresolved"] = ", ".join(unresolved)
+    out["references"] = d.get("references", UNRECORDED)
+    return out
+
+
 _SUMMARY_READERS: dict[Kind, SummaryReader] = {
+    Kind.DRIFT: _summary_drift,
     Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},
     Kind.RUN: _summary_run,

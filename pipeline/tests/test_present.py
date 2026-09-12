@@ -76,8 +76,8 @@ class Presenters(unittest.TestCase):
 
     def test_every_index_kind_has_a_presenter_or_is_named(self) -> None:
         missing = {k.value for k in Kind} - {k.value for k in _PRESENTERS}
-        # Drift records arrive with A7; fits ride in bundles.
-        self.assertEqual(missing, {"drift", "fit"})
+        # Fits ride in bundles: a robot's drawer shows them.
+        self.assertEqual(missing, {"fit"})
 
     def test_rl_run_policy_and_finding_present_as_themselves(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
