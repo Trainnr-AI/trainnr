@@ -187,7 +187,8 @@ class Recording:
         with `<channel>.times` and `<channel>.values` arrays."""
         out = Path(out)
         out.mkdir(parents=True, exist_ok=True)
-        arrays: dict[str, np.ndarray] = {}
+        # Any: numpy's stub types **kwargs against savez's own keywords.
+        arrays: dict[str, Any] = {}
         for name, channel in self.channels.items():
             arrays[f"{name}.times"] = channel.times
             arrays[f"{name}.values"] = channel.values

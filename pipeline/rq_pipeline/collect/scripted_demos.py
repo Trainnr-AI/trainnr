@@ -198,7 +198,9 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     trial = int(rng.integers(protocol.trials))
     initial = protocol.perturb(trial, home)
     draws: dict[str, Any] = {"trial": trial}
-    cameras = CameraCapture(
+    # `cameras` is the caller's selection by name; the capture is its own
+    # object (one name held both, and the type checker could not follow).
+    capture = CameraCapture(
         model,
         # A test task may declare none; a study may ask for a subset.
         select_cameras(task.cameras, cameras) if frame_every else (),
@@ -207,9 +209,9 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     )
     stepper = backend.stepper(initial, protocol.steps)
     try:
-        actions = driver(task, model, stepper, cameras.capture)
+        actions = driver(task, model, stepper, capture.capture)
     finally:
-        cameras.close()
+        capture.close()
     succeeded = bool(protocol.success(stepper.states, stepper.sensors))
     return PressResult(
         succeeded,
@@ -222,7 +224,7 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
         actions,
         visuals=drawn,
         visual_basis=visual_basis if drawn else "",
-        camera_frames=cameras.frames or None,
+        camera_frames=capture.frames or None,
     )
 
 

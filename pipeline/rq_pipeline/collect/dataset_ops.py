@@ -82,12 +82,12 @@ def check_union(sources: list[Path]) -> list[dict[str, Any]]:
             f"sources disagree on expert (the labeler): {sorted(labelers)}"
         )
     for key in BASIS_KEYS:
-        values: set[str] = set()
+        bases: set[str] = set()
         for s in sidecars:
-            values |= _manifest_bases(s)[key]
-        if len(values) > 1:
+            bases |= _manifest_bases(s)[key]
+        if len(bases) > 1:
             raise ValueError(
-                f"sources disagree on {key}: {sorted(values)} — a union of two "
+                f"sources disagree on {key}: {sorted(bases)} — a union of two "
                 "bases is two datasets (docs/e2e-research/58 §8)"
             )
     return sidecars

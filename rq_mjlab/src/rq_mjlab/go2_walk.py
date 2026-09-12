@@ -207,6 +207,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
             sensor.frame.name = TRUNK
     for sensor in cfg.scene.sensors or ():
         if sensor.name == "foot_height_scan":
+            assert isinstance(sensor, RayCastSensorCfg)  # TerrainHeightSensorCfg
             sensor.frame = tuple(
                 ObjRef(type="site", name=s, entity="robot") for s in FOOT_SITES
             )

@@ -122,8 +122,8 @@ def rollout_episodes(
             act = actions.detach().cpu().numpy()
             pose = device_qpos.detach().cpu().numpy()
             still_open = open_worlds.cpu().numpy()
-            for i in np.flatnonzero(still_open):
-                trace[i].append((actor[i], act[i], pose[i]))
+            for world in np.flatnonzero(still_open):
+                trace[world].append((actor[world], act[world], pose[world]))
         obs, _, dones, _ = env.step(actions)
         command = unwrapped.command_manager.get_command("twist")
         velocity = unwrapped.scene["robot"].data.root_link_lin_vel_b

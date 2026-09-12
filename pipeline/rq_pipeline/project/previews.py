@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from PIL.Image import Image as PilImage
     from PIL.ImageDraw import ImageDraw
     from PIL.ImageFont import FreeTypeFont
+    from PIL.ImageFont import ImageFont as ImageFontType
 
 PREVIEWS_DIR = "previews"
 # Rerun's welcome-screen cards are 337x250 at 1x; we render at 2x for
@@ -533,9 +534,10 @@ def _wrap(text: str, chars: int) -> list[str]:
     return lines
 
 
-def _font(size: int) -> FreeTypeFont:
+def _font(size: int) -> FreeTypeFont | ImageFontType:
     """Pillow's bundled font at this size - the same face on every
-    machine, no system font paths."""
+    machine, no system font paths. A FreeType face where Pillow has
+    FreeType; its bitmap default otherwise (Pillow's own signature)."""
     from PIL import ImageFont  # noqa: PLC0415
 
     return ImageFont.load_default(size=size)

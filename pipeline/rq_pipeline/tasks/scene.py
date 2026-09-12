@@ -248,13 +248,14 @@ def add_sky(scene: Any) -> None:
     )
 
 
-def grid_of(
+def grid_of(  # noqa: PLR0913 - a grid's layout, each option named
     name: str,
     children: Any,
     *,
     pitch: float = GRID_PITCH,
     disable_floor_contacts: bool = False,
     stage: Any = None,
+    sky: bool = False,
 ) -> tuple[Any, list[str]]:
     """One MjSpec holding every child spec on a centred √n grid.
 
@@ -268,7 +269,12 @@ def grid_of(
     `stage`: a spec to build ON instead of the plain light and plane -
     a task's own terrain and dressing as its framework composed them
     (the walk view hands the render process mjlab's, 2026-09-12). The
-    children are attached into it; it gets a sky if it has none.
+    children are attached into it.
+
+    `sky`: a gradient skybox when the scene has none - for a display a
+    person looks at. Off by default: a grid a camera is JUDGED through
+    (the walk press's chase camera, whose frames train and certify the
+    vision student) must keep the pixels it was trained on.
     """
     import math  # noqa: PLC0415
 
@@ -288,7 +294,8 @@ def grid_of(
             pos=[0, 0, -0.75],
             rgba=[0.12, 0.12, 0.12, 1],
         )
-    add_sky(scene)
+    if sky:
+        add_sky(scene)
     side = math.isqrt(len(children) - 1) + 1 if children else 0
     prefixes = []
     for n, child in enumerate(children):

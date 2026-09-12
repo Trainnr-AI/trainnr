@@ -110,6 +110,11 @@ drivetrain-ratio = "rq_pipeline.robot.methods:DrivetrainRatio"
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
 
+[tool.setuptools.package-data]
+# PEP 561: the package's own annotations are its types for whoever
+# imports it (rq_mjlab, third parties).
+rq_pipeline = ["py.typed"]
+
 # Ruff is the whole lint/format story — same role clippy+rustfmt play for
 # the crates, and the pre-commit gate runs it the same way. Rules mirror
 # docs/18-code-quality.md: no unused anything, no shadowed builtins,
@@ -144,9 +149,18 @@ select = [
 # Rust crates.
 
 [tool.mypy]
-# Zero errors as of 2026-09-01; tools/verify.sh gates it. The global
-# ignore covers the untyped C extensions (mujoco, mujoco_warp, lerobot);
-# rerun/torch/jax/numpy/gymnasium all ship py.typed and are checked.
+# Zero errors is the baseline; tools/verify.sh gates it, run INSIDE this
+# project's environment so rerun/torch/jax/numpy/gymnasium (py.typed) are
+# checked for real. Run isolated (plain `uvx mypy`, until 2026-09-13)
+# every installed package read as Any and the check proved nothing about
+# how we call them. The global ignore covers packages absent here.
 python_version = "3.10"
 ignore_missing_imports = true
 files = ["rq_pipeline"]
+
+[[tool.mypy.overrides]]
+# The untyped C extensions: no py.typed, their API lives in compiled
+# modules mypy cannot read, so their Python shells are skipped (Any)
+# rather than read as modules with no attributes.
+module = ["mujoco", "mujoco.*", "mujoco_warp", "mujoco_warp.*", "warp", "warp.*", "lerobot", "lerobot.*"]
+follow_imports = "skip"

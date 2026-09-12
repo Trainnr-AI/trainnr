@@ -57,10 +57,15 @@ step "ruff lint (tools)"       "(cd pipeline && uvx ruff check ../tools)"
 # rq_mjlab had NO Python gate until 2026-09-01 — its lint, types and
 # tests ran only when somebody remembered. Now under the same roof.
 step "ruff lint (rq_mjlab)"    "(cd rq_mjlab && uvx ruff check src tests)"
-# Types, both packages: zero errors is the baseline (2026-09-01); the
-# config (and the untyped-C-extension ignores) lives in each pyproject.
-step "mypy (pipeline)"         "(cd pipeline && uvx mypy rq_pipeline)"
-step "mypy (rq_mjlab)"         "(cd rq_mjlab && uvx mypy src/rq_mjlab)"
+# Types, both packages: zero errors is the baseline; the config (and
+# the untyped-C-extension skips) lives in each pyproject. Run INSIDE each
+# project's environment (`uv run --with mypy`), never as an isolated
+# `uvx mypy`: isolated, every installed package - mjlab, rq_pipeline,
+# torch, rerun - read as Any, the check went quiet on how we call them,
+# and it missed an import of a function deleted a week earlier
+# (2026-09-13).
+step "mypy (pipeline)"         "(cd pipeline && uv run --with mypy mypy rq_pipeline)"
+step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --with mypy mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
 step "simulator solves the U-trap" \

@@ -36,6 +36,7 @@ class GridOnAStage(unittest.TestCase):
             (mujoco.MjSpec.from_string(child) for _ in range(2)),
             pitch=0.0,
             stage=stage,
+            sky=True,
         )
         model = scene.compile()
         names = [model.geom(i).name for i in range(model.ngeom)]
@@ -51,6 +52,43 @@ class GridOnAStage(unittest.TestCase):
             if model.tex_type[i] == mujoco.mjtTexture.mjTEXTURE_SKYBOX
         ]
         self.assertEqual(len(skies), 1)
+
+    def test_the_bare_grid_keeps_its_pixels(self) -> None:
+        # No sky unless asked, no shadow budget unless dressed: the walk
+        # press's chase camera renders training and judging frames of
+        # the vision student off this grid (2026-09-13).
+        import importlib.util  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        import mujoco  # noqa: PLC0415 - the sim extra
+
+        from rq_pipeline.tasks.scene import RenderBudget  # noqa: PLC0415
+
+        tools = Path(__file__).resolve().parents[2] / "tools"
+        sys.path.insert(0, str(tools))
+        spec = importlib.util.spec_from_file_location(
+            "studio_render_stream", tools / "studio-render-stream.py"
+        )
+        srs = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(srs)
+
+        def skies(model: mujoco.MjModel) -> int:
+            return sum(
+                int(model.tex_type[i] == mujoco.mjtTexture.mjTEXTURE_SKYBOX)
+                for i in range(model.ntex)
+            )
+
+        bare = srs.walk_scene("microduck", 1, 256, dressed=False)
+        dressed = srs.walk_scene("microduck", 1, 256)
+        self.assertEqual(skies(bare), 0)
+        self.assertEqual(
+            bare.vis.quality.shadowsize,
+            mujoco.MjModel.from_xml_string("<mujoco/>").vis.quality.shadowsize,
+        )
+        self.assertEqual(skies(dressed), 1)
+        self.assertEqual(dressed.vis.quality.shadowsize, RenderBudget.SHADOWSIZE)
 
     def test_a_stage_with_its_own_sky_keeps_it(self) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra

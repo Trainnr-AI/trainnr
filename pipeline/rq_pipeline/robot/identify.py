@@ -149,11 +149,14 @@ def staged_excitation(
         raise ValueError(f"peak amplitude must be positive, got {peak_amplitude}")
     times = np.asarray(times)
     # Distinct phases stop the components from peaking together.
-    signal = sum(
-        np.sin(2.0 * np.pi * frequency * times + index)
-        for index, frequency in enumerate(frequencies_hz)
+    summed = np.sum(
+        [
+            np.sin(2.0 * np.pi * frequency * times + index)
+            for index, frequency in enumerate(frequencies_hz)
+        ],
+        axis=0,
     )
-    signal = signal / max(1.0, float(np.max(np.abs(signal))))
+    signal = np.asarray(summed / max(1.0, float(np.max(np.abs(summed)))))
     progress = np.arange(len(times)) / max(1, len(times))
     stage_index = np.minimum((progress * stages).astype(int), stages - 1)
     amplitude = peak_amplitude * (stage_index + 1) / stages

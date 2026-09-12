@@ -69,7 +69,8 @@ def g3_agent(iterations: int) -> Any:
         RslRlPpoAlgorithmCfg,
     )
 
-    model_cfg = dict(
+    # One recipe for both networks; Any so it unpacks into either.
+    model_cfg: dict[str, Any] = dict(
         hidden_dims=(512, 256, 128),
         activation="elu",
         obs_normalization=True,

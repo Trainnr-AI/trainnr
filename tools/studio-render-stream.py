@@ -1845,6 +1845,8 @@ def walk_scene(
     worlds: int,
     offscreen_side: int = MAX_RENDER_SIDE,
     stage_xml: str | None = None,
+    *,
+    dressed: bool = True,
 ) -> "mujoco.MjModel":
     """One CPU model holding `worlds` copies of the walk robot on one
     ground plane, each under a `wNN/` prefix at its grid cell (the RL
@@ -1856,7 +1858,9 @@ def walk_scene(
     is the one its bundle records (project first, then the library).
     `stage_xml`: the task's own terrain and dressing, as the walk view
     exported them from mjlab's scene - the ground the policy walks on,
-    instead of the plain plane."""
+    instead of the plain plane. `dressed`: the Studio's dressing, a sky
+    and the live shadow budget; False is the bare mirror of 2026-09-09,
+    for a camera whose pixels are data (the walk press's chase camera)."""
     from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
     from rq_pipeline.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
@@ -1873,6 +1877,7 @@ def walk_scene(
         (mujoco.MjSpec.from_file(str(model_file)) for _ in range(worlds)),
         pitch=0.0,
         stage=stage,
+        sky=dressed,
     )
     if stage is None:
         for geom in scene.geoms:
@@ -1880,11 +1885,12 @@ def walk_scene(
                 geom.pos[2] = 0.0  # the display grids' table offset; walks at z=0
     scene.visual.global_.offwidth = offscreen_side
     scene.visual.global_.offheight = offscreen_side
-    # mjlab's stage asks for an 8192 shadow map; every live view draws at
-    # the scene budget's size.
-    scene.visual.quality.shadowsize = min(
-        scene.visual.quality.shadowsize, RenderBudget.SHADOWSIZE
-    )
+    if dressed:
+        # mjlab's stage asks for an 8192 shadow map; every live view draws
+        # at the scene budget's size.
+        scene.visual.quality.shadowsize = min(
+            scene.visual.quality.shadowsize, RenderBudget.SHADOWSIZE
+        )
     return scene.compile()
 
 

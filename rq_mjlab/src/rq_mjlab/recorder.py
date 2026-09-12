@@ -157,7 +157,10 @@ class RerunRecorder(RecorderTerm):
         if self._qpos is None:
             from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
-            self._qpos = as_torch(env.sim.data.qpos)
+            # mjlab types sim.data as an alias of mujoco_warp's Data, which
+            # has no type information: the fields are read as Any.
+            data: Any = env.sim.data
+            self._qpos = as_torch(data.qpos)
         qpos = self._qpos[watched]
         for name, qpos_adr in self._joints:
             rr.log(f"train/qpos/{name}", rr.Scalars(float(qpos[qpos_adr])))
@@ -209,7 +212,7 @@ class RerunRecorder(RecorderTerm):
         if self._geom_views is None:
             from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
-            data = self._env.sim.data
+            data: Any = self._env.sim.data  # untyped mujoco_warp Data (above)
             self._geom_views = (as_torch(data.geom_xpos), as_torch(data.geom_xmat))
         xpos_view, xmat_view = self._geom_views
 

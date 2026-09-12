@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.event_manager import EventMode, EventTermCfg
 from rq_pipeline.robot.actuator_bundle import declared_ranges
 
 from rq_mjlab.actuator import BamActuator, BamActuatorCfg
@@ -48,7 +48,7 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
     *,
     entity_name: str = "robot",
     fallback_span: float | None = None,
-    mode: str = "reset",
+    mode: EventMode = "reset",
     pin_scale: float | None = None,
     pin_only: tuple[str, ...] | None = None,
 ) -> tuple[EventTermCfg, str]:

@@ -464,11 +464,13 @@ def _floor_of(model: mujoco.MjModel) -> Floor:
             "one floor"
         )
     g = planes[0]
+    sx, sy, sz = (float(v) for v in model.geom_size[g])
+    slide, spin, roll = (float(v) for v in model.geom_friction[g])
     return Floor(
-        size=tuple(float(v) for v in model.geom_size[g]),
+        size=(sx, sy, sz),
         condim=int(model.geom_condim[g]),
         priority=int(model.geom_priority[g]),
-        friction=tuple(float(v) for v in model.geom_friction[g]),
+        friction=(slide, spin, roll),
     )
 
 

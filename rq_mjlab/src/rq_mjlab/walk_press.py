@@ -99,13 +99,18 @@ class ChaseCamera:
     one-robot CPU mirror (the batched engine's memory is invisible to
     any renderer; the recorder's camera leg is the same idea)."""
 
-    def __init__(self, width: int, height: int) -> None:
+    def __init__(self, width: int, height: int, robot: str = BUNDLE) -> None:
         import mujoco  # noqa: PLC0415
 
-        from rq_mjlab.walk_view import mirror_of  # noqa: PLC0415
+        from rq_mjlab.walk_view import transport  # noqa: PLC0415
 
         self._mujoco = mujoco
-        self.model = mirror_of(1, max(width, height))
+        # The bare one-robot mirror: no sky, the model's own shadow map -
+        # the picture the student's datasets were pressed with. It was
+        # `walk_view.mirror_of` until that went with the many-worlds scene
+        # (2026-09-09) and left this import pointing at nothing; mypy
+        # against the real packages found it (2026-09-13).
+        self.model = transport().walk_scene(robot, 1, max(width, height), dressed=False)
         self.data = mujoco.MjData(self.model)
         self.renderer = mujoco.Renderer(self.model, height=height, width=width)
         self.camera = mujoco.MjvCamera()

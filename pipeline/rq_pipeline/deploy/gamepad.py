@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # Their xbox layout: js axis index -> evdev absolute axis, in order.
 AXES = (
@@ -73,7 +77,7 @@ def axis_value(x: float, *, inverted: bool = False) -> int:
     return round((-x if inverted else x) * AXIS_MAX)
 
 
-def sticks_for_command(command: Sequence[float]) -> dict[str, float]:
+def sticks_for_command(command: Sequence[float] | NDArray[Any]) -> dict[str, float]:
     """The stick positions that make their controller command
     (forward, sideways, turn): ly = forward, lx = -sideways, rx = -turn."""
     vx, vy, wz = (float(c) for c in command[:3])
@@ -96,7 +100,9 @@ class VirtualPad:
             value=0, min=-AXIS_MAX, max=AXIS_MAX, fuzz=0, flat=0, resolution=0
         )
         hat = AbsInfo(value=0, min=-1, max=1, fuzz=0, flat=0, resolution=0)
-        capabilities = {
+        # Any: evdev annotates capabilities as codes only, but its docs
+        # (and the kernel) take (code, AbsInfo) pairs for EV_ABS.
+        capabilities: dict[int, Any] = {
             ecodes.EV_KEY: [getattr(ecodes, b) for b in BUTTONS],
             ecodes.EV_ABS: [
                 (getattr(ecodes, a), hat if a.startswith("ABS_HAT") else info)
