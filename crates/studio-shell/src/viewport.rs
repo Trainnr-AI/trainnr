@@ -736,6 +736,14 @@ impl ViewportFeed {
         self.send_message(&bytes);
     }
 
+    /// Move the camera's lookat in its own frame — forward, right, up —
+    /// by seconds of key held per axis (signed). The metres per second
+    /// are the stream's fact (it knows the distance); this side only
+    /// says how long a key was down.
+    pub fn send_pan(&mut self, forward_s: f32, right_s: f32, up_s: f32) {
+        self.send_message(&encode_pan(forward_s, right_s, up_s));
+    }
+
     /// The agent pressed something: the bar shows it for a moment.
     pub fn flash(&mut self, what: &str) {
         self.agent_flash = Some((what.to_owned(), std::time::Instant::now()));
@@ -901,6 +909,7 @@ const TAG_VIS: u8 = 13;
 const TAG_RND: u8 = 14;
 const TAG_VIEW: u8 = 15;
 const TAG_FOLLOW: u8 = 16;
+const TAG_PAN: u8 = 17;
 /// The stdout tokens: a frame published, a status message follows.
 const FRAME_TOKEN: u8 = 0xF7;
 const STATUS_TOKEN: u8 = 0xF8;
@@ -922,6 +931,17 @@ fn encode_camera_update(
     bytes[9..13].copy_from_slice(&d_distance.to_le_bytes());
     bytes[13..17].copy_from_slice(&size.0.to_le_bytes());
     bytes[17..21].copy_from_slice(&size.1.to_le_bytes());
+    bytes
+}
+
+/// One pan: tag then Python's `struct.unpack("<fff", …)` — seconds a
+/// key was held along each camera axis, signed.
+fn encode_pan(forward_s: f32, right_s: f32, up_s: f32) -> [u8; 13] {
+    let mut bytes = [0u8; 13];
+    bytes[0] = TAG_PAN;
+    bytes[1..5].copy_from_slice(&forward_s.to_le_bytes());
+    bytes[5..9].copy_from_slice(&right_s.to_le_bytes());
+    bytes[9..13].copy_from_slice(&up_s.to_le_bytes());
     bytes
 }
 
@@ -984,6 +1004,11 @@ mod tests {
         );
         assert_eq!(encode_flag(TAG_VIS, 14, true), [13, 14, 0, 0, 0, 1]);
         assert_eq!(encode_u32(TAG_STEP, 10), [7, 10, 0, 0, 0]);
+        // struct.pack("<fff", 0.5, -1.0, 0.0), tag first.
+        assert_eq!(
+            encode_pan(0.5, -1.0, 0.0),
+            [17, 0, 0, 0, 0x3F, 0, 0, 0x80, 0xBF, 0, 0, 0, 0]
+        );
     }
 
     #[test]

@@ -487,10 +487,23 @@ page. Now: the `f` key, the maximize button in the transport bar, or
 alone on the Live page (no rail, no viewer panels); Escape or the
 same key returns; F11 makes the window itself full screen through the
 chrome. Seen: the four Go2 worlds filling the page at 32 frames per
-second. Still to come from the same list: the full MuJoCo flag set
-and the geom groups in the Inspect drawer, the command sliders and
-world picker for the walk scene, and the terrains as a task's own
-declaration (the larger item).
+second.
+
+**Walking the camera (2026-09-12).** "There is no WASD to move the
+camera": the viewport only orbited and zoomed. Now W and S walk the
+camera along its view flattened to the ground, A and D across it, Q
+and E lower and raise it, Shift three times as fast, for as long as
+the key is held (`tools/studio-render-stream.py`, one new wire
+message: the seconds each key was down, signed per axis; the metres
+are the stream's, PAN_RATE_PER_S of the current distance per second,
+so one key crosses a close-up and a wide shot in the same time).
+Panning a followed world releases the follow, which would otherwise
+put the lookat straight back. Verified with keys injected through the
+X server: W for a second and a half walked past the four robots, D
+moved across, E rose until the ground's edge showed. Still to come
+from the same list: the full MuJoCo flag set and the geom groups in
+the Inspect drawer, the command sliders and world picker for the walk
+scene, and the terrains as a task's own declaration (the larger item).
 
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the

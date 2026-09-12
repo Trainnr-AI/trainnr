@@ -53,6 +53,10 @@ Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
                   active perturbation (MuJoCo's own mjv_movePerturb)
     0x04 release: end the perturbation
     0x05 pause  : toggle the physics loop
+    0x11 pan    : f32 forward, f32 right, f32 up — SECONDS a key was
+                  held per axis (signed); this side turns them into
+                  metres of lookat travel in the camera's own frame,
+                  scaled by the distance (WASD/QE, 2026-09-12)
 
 Camera values arrive as DELTAS and this side integrates them: every
 absolute camera fact — the per-rig starting pose, the clamps — lives
@@ -371,6 +375,10 @@ MAX_RENDER_SIDE = 1920
 MAX_ELEVATION_DEG = 89.0
 MIN_DISTANCE_M = 0.15
 MAX_DISTANCE_M = 6.0
+# A held pan key moves the lookat this fraction of the camera's distance
+# per second: the same key crosses a whole close-up or a whole wide shot
+# in the same time, which is what a hand expects.
+PAN_RATE_PER_S = 0.6
 
 
 class OrbitCamera:
@@ -425,6 +433,24 @@ class OrbitCamera:
                 self.azimuth, self.elevation = d["azimuth"], -MAX_ELEVATION_DEG
             else:
                 self.azimuth, self.elevation = d["azimuth"], d["elevation"]
+
+    def pan(self, forward_s: float, right_s: float, up_s: float) -> None:
+        """Move the lookat in the camera's frame — forward along the
+        view direction flattened to the ground, right across it, up the
+        world's z — by seconds of key held (the wire's unit), at
+        PAN_RATE_PER_S of the current distance per second. MuJoCo's free
+        camera looks along (cos el·cos az, cos el·sin az, sin el), so
+        the ground-plane forward is (cos az, sin az) and right is a
+        quarter turn clockwise from it."""
+        with self._lock:
+            step = PAN_RATE_PER_S * self.distance
+            az = math.radians(self.azimuth)
+            x, y, z = self.lookat
+            self.lookat = (
+                x + step * (forward_s * math.cos(az) + right_s * math.sin(az)),
+                y + step * (forward_s * math.sin(az) - right_s * math.cos(az)),
+                z + step * up_s,
+            )
 
     def apply_deltas(
         self,
@@ -582,6 +608,7 @@ TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
 TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
 TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
 TAG_FOLLOW = 16  # i32 world to keep the camera on, -1 for none
+TAG_PAN = 17  # f32 forward, f32 right, f32 up: seconds of pan key held
 FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
 VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
@@ -601,6 +628,7 @@ TAG_PAYLOAD_BYTES = {
     TAG_RND: 5,  # u32 mjtRndFlag, u8 on
     TAG_VIEW: 1,  # u8 VIEW_PRESETS index: the camera to a named view
     TAG_FOLLOW: 4,  # i32 world index, -1 none (many-worlds scenes)
+    TAG_PAN: 12,  # f32 forward, f32 right, f32 up (seconds held, signed)
 }
 STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
 STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
@@ -642,6 +670,8 @@ def _read_control_messages(  # noqa: PLR0912 - one branch per wire tag
             index = payload[0]
             if index < len(VIEW_PRESETS):
                 camera.set_view(VIEW_PRESETS[index])
+        elif tag == TAG_PAN:
+            camera.pan(*struct.unpack("<fff", payload))
         elif tag == TAG_SELECT:
             perturber.queue_select(*struct.unpack("<ff", payload))
         elif tag == TAG_DRAG:

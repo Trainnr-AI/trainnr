@@ -39,6 +39,18 @@ class RenderSideCap(unittest.TestCase):
         self.assertEqual(py, rs)
 
 
+class WireTags(unittest.TestCase):
+    def test_the_pan_tag_and_its_payload_agree(self) -> None:
+        # The pan message (WASD/QE, 2026-09-12): the tag number and the
+        # three f32 seconds on both sides of the pipe.
+        py_tag = constant(RENDER_STREAM, r"^TAG_PAN = (\d+)")
+        rs_tag = constant(VIEWPORT_RS, r"const TAG_PAN: u8 = (\d+);")
+        self.assertEqual(py_tag, rs_tag)
+        py_bytes = int(constant(RENDER_STREAM, r"^    TAG_PAN: (\d+),"))
+        rs_bytes = int(constant(VIEWPORT_RS, r"fn encode_pan\(.*?\) -> \[u8; (\d+)\]"))
+        self.assertEqual(py_bytes + 1, rs_bytes)  # the tag byte leads
+
+
 class StudioPort(unittest.TestCase):
     def test_the_ingest_port_is_the_one_the_shell_binds(self) -> None:
         # rq_pipeline.viz.STUDIO_ADDRESS is the one Python home; the

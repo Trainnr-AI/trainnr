@@ -8,7 +8,8 @@
 //!   the shape of Rerun's own timeline right below it: play or pause,
 //!   step, ten steps, reset, the keyframes, speed, the scene picker, and
 //!   three chips that never move — sim time, real-time factor, frames;
-//!   Space, → and R do what they do in `simulate`;
+//!   Space, → and R do what they do in `simulate`; W A S D walk the
+//!   camera over the ground, Q and E lower and raise it, Shift hurries;
 //! - two **modes**, said plainly: the scene runs itself, or you drive;
 //! - an **Inspect drawer** over the right of the picture — Control,
 //!   Joints, Physics — sliders read-only while the scene runs itself,
@@ -781,12 +782,16 @@ fn physics(ui: &mut egui::Ui, model: &SimModel) {
 
 // -- keys ------------------------------------------------------------------------
 
-/// Space runs or pauses, → steps once, R resets — unless a text field has
-/// the keyboard.
+/// Shift on a pan key moves the camera this much faster.
+const PAN_HURRY: f32 = 3.0;
+
+/// Space runs or pauses, → steps once, R resets, W A S D Q E pan the
+/// camera while held — unless a text field has the keyboard.
 pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
     if !viewport.is_active() || ctx.egui_wants_keyboard_input() {
         return;
     }
+    pan_keys(ctx, viewport);
     let (status, _) = viewport.report();
     let Some(status) = status else { return };
     let (space, right, reset, inspect_key) = ctx.input(|i| {
@@ -810,4 +815,30 @@ pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) {
     if reset {
         viewport.send_reset(None);
     }
+}
+
+/// The first-person walk every 3D tool has: W/S along the view, A/D
+/// across it, Q/E down and up, for as long as the key is held. Each
+/// frame sends the seconds the keys were down (`stable_dt`), so the
+/// speed is the stream's to set and the frame rate does not change it.
+/// A held key raises no event, so the frame asks for the next one
+/// itself. Panning releases a followed world: the follow would put the
+/// lookat straight back.
+fn pan_keys(ctx: &egui::Context, viewport: &mut ViewportFeed) {
+    use egui::Key::{A, D, E, Q, S, W};
+    let (forward, right, up, hurry, dt) = ctx.input(|i| {
+        let axis = |plus: egui::Key, minus: egui::Key| {
+            f32::from(i.key_down(plus)) - f32::from(i.key_down(minus))
+        };
+        (axis(W, S), axis(D, A), axis(E, Q), i.modifiers.shift, i.stable_dt)
+    });
+    if forward == 0.0 && right == 0.0 && up == 0.0 {
+        return;
+    }
+    let seconds = if hurry { dt * PAN_HURRY } else { dt };
+    if follow_state(ctx) != Follow::None {
+        set_follow(ctx, Follow::None);
+    }
+    viewport.send_pan(forward * seconds, right * seconds, up * seconds);
+    ctx.request_repaint();
 }
