@@ -251,18 +251,24 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
 ACTOR_FIRST_LAYER = "mlp.0.weight"
 
 
+def trained_actor_width(checkpoint: Path, device: str) -> int | None:
+    """The observation width the checkpoint's actor was trained on, from
+    its first layer; None when the file is not rsl_rl's layout."""
+    import torch  # noqa: PLC0415
+
+    state = torch.load(str(checkpoint), map_location=device, weights_only=False)
+    weight = (state.get("actor_state_dict") or {}).get(ACTOR_FIRST_LAYER)
+    return None if weight is None else int(weight.shape[1])
+
+
 def _require_same_actor_width(checkpoint: Path, env: Any, device: str) -> None:
     """Refuse by name a checkpoint whose actor observes a different width
     than the declared walk's actor builds now: an older recipe (the Go2
     actor became deployable on 2026-09-11 and lost the base linear
     velocity for a gait clock), never a torch shape traceback."""
-    import torch  # noqa: PLC0415
-
-    state = torch.load(str(checkpoint), map_location=device, weights_only=False)
-    weight = (state.get("actor_state_dict") or {}).get(ACTOR_FIRST_LAYER)
-    if weight is None:
+    trained_width = trained_actor_width(checkpoint, device)
+    if trained_width is None:
         return  # not rsl_rl's layout; the loader's own refusal names it
-    trained_width = int(weight.shape[1])
     built_width = int(env.get_observations()[ACTOR_OBS_GROUP].shape[-1])
     if trained_width != built_width:
         raise SystemExit(

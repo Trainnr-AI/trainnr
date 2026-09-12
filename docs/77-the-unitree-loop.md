@@ -439,6 +439,48 @@ maximized, and does not remember its size there (`persist_window`
 off). The instrument for next time: `_NET_WM_STATE` and the frame's
 geometry via python-xlib, one command.
 
+Then the chrome (2026-09-12, asked for: "make the OS window border
+standard for Windows, Mac and Linux, only the buttons differ, the
+app's colour"): the window's chrome is ours on every platform that
+lets a client draw it (`crates/studio-shell/src/chrome.rs`), the way
+Rerun's own viewer does - our top bar is the title bar (drag,
+double-click to maximize), re_ui's caption buttons at its right on
+Windows and Linux, invisible resize zones on the edges; the Mac keeps
+its traffic lights over a full-size content view. Rerun's helper sets
+the per-platform flags. Two things the transparent window then
+needed: the app's ground painted under everything (a see-through
+strip showed the desktop between the header and the panels), and,
+on WSL, the window keeping its own outer edge on the screen (WSLg's
+manager opened the frameless window 21 px above the top). The grey
+frame the operator saw was the manager's; it is gone.
+
+**The Studio's own walk scene on the Go2 (2026-09-12).** "The same
+four robots we saw in viser, in our Studio": the Simulator page's
+walk scene (`rq_mjlab.walk_view` feeding `tools/studio-render-stream.py`
+over the state ring) was microduck-shaped in three places - the
+checkpoint lookup under `runs/microduck-walk`, the scene name
+`walk:<worlds>` where the render stream now wants `walk:<robot>:<worlds>`
+(the Mac's review had generalised the stream, not the view), and the
+camera rig. Now: `--robot` and `--project` (the robot from the
+project's one declared walk, the same rule the doors apply; "latest"
+= the newest policy artifact, else the newest run checkpoint); the
+render process takes `--project` so the Go2 bundle, which lives only
+in the project, is found; a `go2-rl` rig, and the follow distance a
+property of the rig (0.9 m for a microduck, 2.6 m for a Go2); the
+Studio passes the project and asks for four worlds. Friction 28 on
+the way: the view rebuilt the training env from the identity's DR
+basis string and refused the Go2's ("declared ±0.1 scale…" has no
+span to parse) - a view is not a judgment; it builds the play env at
+the nominal point and gates on robot and actuator only, as walk_play
+does. Friction 29: model_7999 is from before the actor became
+deployable (48 terms; the current actor 47), so the view rebuilds
+with the earlier recipe by name (`go2_walk_env_cfg(legacy_actor=True)`,
+the width read shared with the exporter) - an old policy stays
+watchable, and only the exporter refuses it. Seen: four Go2 worlds at
+33 frames per second and real time in the viewport, the followed
+world with contacts, forces and joints drawn, the worlds' markers and
+the reward per world in the viewer.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration

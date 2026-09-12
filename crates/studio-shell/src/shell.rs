@@ -151,13 +151,24 @@ impl Shell {
 
     /// The top bar: wordmark, project, jobs, and the viewer's panel
     /// toggles (meaningful on the Live view; harmless elsewhere).
-    pub fn top_bar(&mut self, ui: &mut egui::Ui, viewer_buttons: impl FnOnce(&mut egui::Ui)) {
+    pub fn top_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        custom_chrome: bool,
+        viewer_buttons: impl FnOnce(&mut egui::Ui),
+    ) {
         let tokens = ui.tokens();
         egui::Frame::new()
             .fill(tokens.top_bar_color)
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
+                if custom_chrome {
+                    // This bar is the title bar: drag and double-click,
+                    // registered first so the widgets on it win input.
+                    let rect = ui.available_rect_before_wrap();
+                    crate::chrome::title_bar_interaction(ui, rect, ui.id().with("titlebar"));
+                }
                 ui.horizontal(|ui| {
                     #[cfg(target_os = "macos")]
                     ui.add_space(TRAFFIC_LIGHTS_INSET);
@@ -199,6 +210,12 @@ impl Shell {
                         }
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if custom_chrome {
+                            // re_ui's caption buttons: close, maximize,
+                            // minimize, in the platform's own order.
+                            ui.native_window_buttons_ui();
+                            ui.separator();
+                        }
                         viewer_buttons(ui);
                         ui.add_space(8.0);
                         let running = self.model.running_jobs();

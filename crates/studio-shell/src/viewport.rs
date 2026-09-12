@@ -180,7 +180,7 @@ struct WalkSpawn {
 
 const WALK_SPAWN: WalkSpawn = WalkSpawn {
     module: "rq_mjlab.walk_view",
-    envs: 9,
+    envs: 4, // what the operator compared against mjlab's own viewer (2026-09-12)
 };
 
 /// Owns the render-stream subprocess, the shared-memory frame ring, and
@@ -405,7 +405,7 @@ impl ViewportFeed {
     /// environment. `ctx` is cloned into the reader thread so it can wake
     /// the UI (`request_repaint`) the moment a new frame lands — egui does
     /// not otherwise know that a background thread produced fresh pixels.
-    pub fn spawn(ctx: &egui::Context, task_name: &str) -> Self {
+    pub fn spawn(ctx: &egui::Context, task_name: &str, project_root: &std::path::Path) -> Self {
         // The RL view runs in the rq_mjlab venv (torch + warp + mjlab);
         // the previews in the pipeline's. Same ring, same stdin
         // protocol, different door (`spawn.rs` builds both).
@@ -436,9 +436,11 @@ impl ViewportFeed {
             });
 
         if task_name == WALK_TASK {
+            // The project's own walk: its robot, its latest checkpoint.
             command
                 .arg("--latest")
-                .arg(format!("--envs={}", WALK_SPAWN.envs));
+                .arg(format!("--envs={}", WALK_SPAWN.envs))
+                .arg(format!("--project={}", project_root.display()));
         } else {
             command.arg(task_name);
         }

@@ -118,13 +118,14 @@ def _go1_span() -> float:
     return ACTUATOR_DR_SPAN
 
 
-def _go2_env(
+def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     *,
     play: bool = False,
     dr_span: float | str | None,
     pin_scale: float | None,
     pin_axis: str = "all",
     bundle: Any = None,
+    legacy_actor: bool = False,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
     from rq_mjlab.go2_walk import go2_walk_env_cfg  # noqa: PLC0415
@@ -138,6 +139,7 @@ def _go2_env(
         dr_span=dr_span,
         pin_scale=pin_scale,
         pin_only=_axis(PIN_AXES, pin_axis),
+        legacy_actor=legacy_actor,
     )
 
 

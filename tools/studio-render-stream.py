@@ -142,6 +142,13 @@ RIG_CAMERAS = {
         "distance": 3.0,
         "lookat": (0.0, 0.0, 0.1),
     },
+    "go2-rl": {  # the RL view for a 70 cm quadruped: a grid of worlds, from above
+        "azimuth": 135.0,
+        "elevation": -28.0,
+        "distance": 4.2,
+        "lookat": (0.0, 0.0, 0.25),
+        "follow": 2.6,
+    },
     "microduck": {
         "azimuth": 120.0,
         "elevation": -15.0,
@@ -375,6 +382,9 @@ class OrbitCamera:
         self._lock = threading.Lock()
         self._defaults = defaults
         self.default_distance = defaults["distance"]
+        # A followed world is one robot, closed in on at the rig's own
+        # distance: a microduck at 0.9 m, a Go2 at 2.6 m (2026-09-12).
+        self.follow_distance = float(defaults.get("follow", FOLLOW_DISTANCE_M))
         self.azimuth = defaults["azimuth"]
         self.elevation = defaults["elevation"]
         self.distance = defaults["distance"]
@@ -1169,7 +1179,7 @@ class SimControl:
             self.follow = world if world in self._world_roots else -1
             if self.camera is not None:
                 self.camera.zoom_to(
-                    FOLLOW_DISTANCE_M
+                    self.camera.follow_distance
                     if self.follow >= 0
                     else self.camera.default_distance
                 )
@@ -1932,6 +1942,12 @@ if __name__ == "__main__":
             ring_path = flag.removeprefix("--ring=")
         elif flag.startswith("--rig="):
             rig = flag.removeprefix("--rig=")
+        elif flag.startswith("--project="):
+            # A walk scene names its robot by bundle; the project's robots
+            # are searched first (the Go2 lives only there, 2026-09-12).
+            from rq_pipeline.project.locate import Project
+
+            Project(pathlib.Path(flag.removeprefix("--project=")).resolve()).use()
     if model_path and ring_path:
         render_on(model_path, ring_path, shm, rig)
         raise SystemExit(0)

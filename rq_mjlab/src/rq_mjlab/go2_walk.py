@@ -341,7 +341,9 @@ def deployable_actor(cfg: ManagerBasedRlEnvCfg) -> None:
     actor.terms = {name: terms[name] for name in DEPLOYABLE_ACTOR}
 
 
-def go2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+def go2_flat_env_cfg(
+    play: bool = False, *, legacy_actor: bool = False
+) -> ManagerBasedRlEnvCfg:
     """The flat-ground variant, the Go1's flat rules on the Go2."""
     cfg = _rough_env_cfg(play=play)
     cfg.sim.njmax = 300
@@ -362,7 +364,8 @@ def go2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     )
     del cfg.observations["actor"].terms["height_scan"]
     del cfg.observations["critic"].terms["height_scan"]
-    deployable_actor(cfg)
+    if not legacy_actor:  # the recipe before 2026-09-11: mjlab's actor, 48 terms
+        deployable_actor(cfg)
     cfg.rewards["upright"].params.pop("terrain_sensor_names", None)
     cfg.terminations.pop("illegal_contact", None)
     cfg.terminations.pop("out_of_terrain_bounds", None)
@@ -382,10 +385,11 @@ def go2_walk_env_cfg(
     dr_span: float | None = ACTUATOR_DR_SPAN,
     pin_scale: float | None = None,
     pin_only: tuple[str, ...] | None = None,
+    legacy_actor: bool = False,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The Go2 flat walk with the study's actuator randomization around
     the declared gains, and its identity."""
-    cfg = go2_flat_env_cfg(play=play)
+    cfg = go2_flat_env_cfg(play=play, legacy_actor=legacy_actor)
     events, dr_basis = actuator_dr_events(
         dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, gains=DECLARED_GAINS
     )

@@ -55,10 +55,21 @@ def transport():
     return module
 
 
-def latest_checkpoint() -> Path:
-    """The newest model_*.pt under runs/microduck-walk, else the flagship
-    study's arms under docs/artifacts/walk-c1 — what the Studio's walk
-    scene rolls without naming a file."""
+def latest_checkpoint(project: Path | None = None) -> Path:
+    """The newest model_*.pt: under the project's runs when a project is
+    given (the Studio's walk scene rolls the project's latest policy),
+    else under runs/microduck-walk or the flagship study's arms."""
+    if project is not None:
+        # A policy artifact first (a judged checkpoint, copied there by
+        # the live loop), else any run's checkpoint; newest by time.
+        root = Path(project)
+        for pattern in ("policies/*/model_*.pt", "runs/*/model_*.pt"):
+            checkpoints = sorted(root.glob(pattern), key=lambda p: p.stat().st_mtime)
+            if checkpoints:
+                return checkpoints[-1]
+        raise SystemExit(
+            f"no model_*.pt under {project}/policies or runs - train a walk first"
+        )
     checkpoints = sorted(
         [
             *REPO.glob("runs/microduck-walk/*/model_*.pt"),
@@ -72,6 +83,32 @@ def latest_checkpoint() -> Path:
             "train one (walk_train) or pull a run from the pod first"
         )
     return checkpoints[-1]
+
+
+def project_walk_robot(project: Path) -> str:
+    """The robot of the project's one declared walk (its task's family
+    through the registry), the same rule the doors apply; refused by
+    name when the project declares none or several."""
+    import json  # noqa: PLC0415
+
+    from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+    found = []
+    for task_file in sorted(Path(project).glob("tasks/*/task.json")):
+        try:
+            robot = walk_robot(
+                str(json.loads(task_file.read_text()).get("task_id", ""))
+            )
+        except KeyError:
+            robot = None
+        if robot:
+            found.append((task_file.parent.name, robot))
+    if len(found) != 1:
+        raise SystemExit(
+            f"{project}: {len(found)} declared walks {[n for n, _ in found]}; "
+            "name the robot with --robot"
+        )
+    return found[0][1]
 
 
 def dr_span_of(identity: dict) -> float:
@@ -149,18 +186,52 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduc
     trained_file = checkpoint.parent / "identity.json"
     trained = json.loads(trained_file.read_text()) if trained_file.is_file() else {}
     spec = walk_spec(robot)
-    cfg, identity = spec.env_cfg(
-        dr_span=dr_span_of(trained) if trained else spec.default_span, pin_scale=None
+    # The walk in play mode at the nominal point, as walk_play rolls it:
+    # a view, not a judgment, so the trained DR basis is not rebuilt
+    # (the Go2's declared-constants basis has no span to parse, and this
+    # gate refused it, 2026-09-12). Robot and actuator must still match.
+    from rq_mjlab.walk_export import (  # noqa: PLC0415
+        ACTOR_OBS_GROUP,
+        trained_actor_width,
     )
-    if trained and not same_identity(trained, identity):
-        raise SystemExit(
-            f"identity mismatch: this env is {identity}, trained {trained}"
-        )
+
+    cfg, identity = spec.env_cfg(play=True, dr_span=None, pin_scale=None)
+    for key in ("robot", "actuator"):
+        if trained.get(key) not in (None, identity.get(key)):
+            raise SystemExit(
+                f"identity mismatch on {key}: this env is {identity}, trained {trained}"
+            )
     cfg.scene.num_envs = envs
     agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
+    # A checkpoint from the recipe before the actor became deployable
+    # (48 terms against 47, 2026-09-11) is still a policy to watch: the
+    # env is rebuilt with that actor, by name, never a shape traceback.
+    trained_width = trained_actor_width(checkpoint, device)
+    built_width = int(env.get_observations()[ACTOR_OBS_GROUP].shape[-1])
+    if trained_width is not None and trained_width != built_width:
+        env.close()
+        try:
+            cfg, _ = spec.env_cfg(
+                play=True, dr_span=None, pin_scale=None, legacy_actor=True
+            )
+        except TypeError as error:
+            raise SystemExit(
+                f"{checkpoint.name}: actor observes {trained_width} terms, this "
+                f"walk builds {built_width}, and {robot!r} has no earlier recipe"
+            ) from error
+        cfg.scene.num_envs = envs
+        env = RslRlVecEnvWrapper(
+            ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
+        )
+        print(
+            f"[walk-view] {checkpoint.name}: the earlier actor recipe "
+            f"({trained_width} terms)",
+            file=sys.stderr,
+            flush=True,
+        )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
     runner.load(
         str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
@@ -224,8 +295,21 @@ def main() -> None:  # noqa: PLR0915
     parser.add_argument("--envs", type=int, default=9)
     parser.add_argument("--shm", default=None)
     parser.add_argument("--no-rerun", action="store_true")
+    parser.add_argument("--robot", default=None, help="the walk's robot (bundle name)")
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots first, its latest run, its declared walk",
+    )
     args = parser.parse_args()
-    checkpoint = args.checkpoint if args.checkpoint else latest_checkpoint()
+    from rq_mjlab.walks import DEFAULT_ROBOT, use_project  # noqa: PLC0415
+
+    use_project(args.project)
+    robot = args.robot or (
+        project_walk_robot(args.project) if args.project else DEFAULT_ROBOT
+    )
+    checkpoint = args.checkpoint if args.checkpoint else latest_checkpoint(args.project)
     streamer = transport()
 
     import warp as wp  # noqa: PLC0415
@@ -240,12 +324,12 @@ def main() -> None:  # noqa: PLR0915
 
     # stderr: stdout is the render process's token channel.
     print(
-        f"[walk-view] {checkpoint.name} on {device}, {args.envs} worlds",
+        f"[walk-view] {robot} {checkpoint.name} on {device}, {args.envs} worlds",
         file=sys.stderr,
         flush=True,
     )
-    env, policy = load_policy(checkpoint, args.envs, device)
-    mirror = streamer.walk_scene(args.envs)
+    env, policy = load_policy(checkpoint, args.envs, device, robot=robot)
+    mirror = streamer.walk_scene(robot, args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
     device_qvel = as_torch(env.unwrapped.sim.data.qvel)
@@ -279,10 +363,11 @@ def main() -> None:  # noqa: PLR0915
             "python",
             str(REPO / "tools" / "studio-render-stream.py"),
             streamer.WALK,
-            f"--scene={streamer.WALK}:{args.envs}",
+            f"--scene={streamer.WALK}:{robot}:{args.envs}",
             f"--ring={ring_path}",
             *([f"--shm={args.shm}"] if args.shm else []),
-            "--rig=microduck-rl",
+            *([f"--project={args.project}"] if args.project else []),
+            f"--rig={robot}-rl",
         ],
         cwd=str(REPO / "pipeline"),
     )

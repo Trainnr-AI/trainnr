@@ -22,6 +22,7 @@
 //! verdict — "use exactly what Rerun does, don't reinvent the wheel" —
 //! replaced it with the wheel.
 
+mod chrome;
 mod control;
 mod detail;
 mod listing;
@@ -140,22 +141,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_app_id("robotiq_studio")
         .with_icon(std::sync::Arc::new(icon));
 
-    // On Linux, re_ui's chrome probe defaults to client-drawn
-    // decorations (always, when WAYLAND_DISPLAY is unset) — but the
-    // client here is US, and our header is a brand bar, not a drag
-    // region: the window came up borderless and could neither move nor
-    // resize (seen live on WSLg, 2026-08-31; the only grabbable thing
-    // near the top was the viewport panel's resize handle). Ask for the
-    // native frame instead; WSLg draws a movable, resizable one.
-    #[cfg(target_os = "linux")]
-    {
-        native_options.viewport = native_options
-            .viewport
-            .with_decorations(true)
-            .with_title_shown(true)
-            .with_titlebar_shown(true)
-            .with_transparent(false);
-    }
+    // The chrome is ours where a client may draw it (chrome.rs): our top
+    // bar is the title bar, with drag, double-click and the caption
+    // buttons; the Mac keeps its traffic lights over a full-size content
+    // view. Rerun's helper sets the per-platform flags.
+    native_options.viewport =
+        re_ui::viewport_with_window_chrome(native_options.viewport, chrome::custom_chrome());
 
     eframe::run_native(
         "robotiq studio",
@@ -189,16 +180,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             rerun_app.add_log_receiver(rx);
 
-            // The builder's `.with_decorations(true)` above is not enough:
-            // the embedded viewer re-asserts its OWN chrome preference every
-            // frame (`sync_native_window_decorations`, driven by this
-            // AppOptions flag, whose Linux default is client-drawn) and
-            // strips the frame right back off. Tell the app itself to want
-            // native decorations.
-            #[cfg(target_os = "linux")]
-            {
-                rerun_app.app_options_mut().custom_window_decorations = false;
-            }
+            // The embedded viewer re-asserts its own chrome preference every
+            // frame (`sync_native_window_decorations`); it must agree with
+            // the window we built.
+            rerun_app.app_options_mut().custom_window_decorations = chrome::custom_chrome();
 
             let viewport = ViewportFeed::idle();
             let mut shell = Shell::new(Model::open(repo_root()));
@@ -253,6 +238,17 @@ impl eframe::App for StudioShell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if chrome::custom_chrome() {
+            // The window is transparent under our own chrome (rounded
+            // corners need it); paint the app's ground under everything
+            // first, or the gaps between panels show the desktop
+            // (a see-through strip under the header, 2026-09-12).
+            chrome::paint_ground(ui);
+            chrome::resize_handles(ui);
+            if spawn::on_wsl() {
+                chrome::keep_on_screen(ui.ctx());
+            }
+        }
         self.shell.tick(ui.ctx());
         self.answer_screenshot(ui);
         self.apply_commands(ui);
@@ -265,7 +261,7 @@ impl eframe::App for StudioShell {
         // override above); its panel toggles ride on ours, and matter on
         // the Live view.
         let sender = self.rerun_app.command_sender.clone();
-        self.shell.top_bar(ui, |ui| {
+        self.shell.top_bar(ui, chrome::custom_chrome(), |ui| {
             use re_ui::{UICommand, UICommandSender as _};
             if ui
                 .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
@@ -341,7 +337,8 @@ impl eframe::App for StudioShell {
                 simulator::apply_follow(ui.ctx(), &mut self.viewport);
                 match action {
                     Some(simulator::Action::Spawn(task)) => {
-                        self.viewport = ViewportFeed::spawn(ui.ctx(), &task);
+                        self.viewport =
+                            ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
                     }
                     Some(simulator::Action::Stop) => self.viewport = ViewportFeed::idle(),
                     None => {}
@@ -651,7 +648,8 @@ impl StudioShell {
                                 viewport::WALK_TASK
                             ));
                         }
-                        self.viewport = ViewportFeed::spawn(ui.ctx(), &name);
+                        self.viewport =
+                            ViewportFeed::spawn(ui.ctx(), &name, &self.shell.model.project_root);
                         self.shell.section = Section::Live;
                     }
                     None => self.viewport = ViewportFeed::idle(),
