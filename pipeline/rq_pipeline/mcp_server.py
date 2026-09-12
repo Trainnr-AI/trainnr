@@ -1174,20 +1174,22 @@ def set_simulator_view(
     on: bool | None = None,
     camera: str | None = None,
     inspect: str | None = None,
+    fullscreen: bool | None = None,
 ) -> dict[str, Any] | Refusal:
     """What the simulator shows: a MuJoCo visualization or rendering
     `flag` by its own name with `on` (contactpoint, contactforce, joint,
     actuator, constraint, inertia, com, transparent, perturbforce, camera,
     light, tendon… or shadow, reflection, skybox, fog, wireframe…); the
     `camera` to a named view (front, side, top, reset); the Inspect drawer
-    by tab (control, joints, physics) or close."""
+    by tab (control, joints, physics) or close; `fullscreen` puts the
+    viewport alone on the page (what the `f` key does) or restores it."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
     if flag is not None and on is None:
         return refusal("a flag needs `on`")
-    if flag is None and camera is None and inspect is None:
-        return refusal("name a flag, a camera view or inspect")
+    if flag is None and camera is None and inspect is None and fullscreen is None:
+        return refusal("name a flag, a camera view, inspect or fullscreen")
     return command(
         current_project(),
         "simulator",
@@ -1195,6 +1197,7 @@ def set_simulator_view(
         on=on,
         view=camera,
         inspect=inspect,
+        fullscreen=fullscreen,
     )
 
 

@@ -35,6 +35,8 @@ use crate::viewport::{
 pub enum Action {
     Spawn(String),
     Stop,
+    /// The viewport alone on the page, or back (the `f` key, the button).
+    ToggleFullscreen,
 }
 
 /// Which world the camera keeps in view, in a many-worlds scene.
@@ -316,8 +318,14 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(200));
         }
-        // Inspect, at the right end.
+        // Inspect and full screen, at the right end.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui
+                .small_icon_button(&re_ui::icons::CHROME_MAXIMIZE, "Viewport full screen  (F)")
+                .clicked()
+            {
+                action = Some(Action::ToggleFullscreen);
+            }
             let (open, tab) = drawer_state(ui.ctx());
             if toggle(ui, open, "Inspect", "Control, Joints, Physics  (I)") {
                 set_drawer(ui.ctx(), !open, tab);

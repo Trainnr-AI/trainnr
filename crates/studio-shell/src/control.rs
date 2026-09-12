@@ -130,6 +130,10 @@ pub enum Command {
         /// Many-worlds: none, worst, failing, cycle, or a world index.
         #[serde(default)]
         follow: Option<String>,
+        /// The viewport alone on the page (true), or the Live page as it
+        /// is (false) - what the `f` key toggles.
+        #[serde(default)]
+        fullscreen: Option<bool>,
     },
     Screenshot {
         /// The written image's width in pixels; taller frames scale to it.

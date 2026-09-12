@@ -481,6 +481,17 @@ watchable, and only the exporter refuses it. Seen: four Go2 worlds at
 world with contacts, forces and joints drawn, the worlds' markers and
 the reward per world in the viewer.
 
+**Full screen (2026-09-12).** The viewport had no way to fill the
+page. Now: the `f` key, the maximize button in the transport bar, or
+`set_simulator_view(fullscreen=True)` put the picture and its bar
+alone on the Live page (no rail, no viewer panels); Escape or the
+same key returns; F11 makes the window itself full screen through the
+chrome. Seen: the four Go2 worlds filling the page at 32 frames per
+second. Still to come from the same list: the full MuJoCo flag set
+and the geom groups in the Inspect drawer, the command sliders and
+world picker for the walk scene, and the terrains as a task's own
+declaration (the larger item).
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration

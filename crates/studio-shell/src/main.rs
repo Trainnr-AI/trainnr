@@ -198,6 +198,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shot: None,
                 last_navigation: None,
                 seen_recording: false,
+                viewport_full: false,
             }))
         }),
     )?;
@@ -224,6 +225,9 @@ struct StudioShell {
     /// Whether a recording was loaded last frame — a fresh arrival
     /// switches the page to Live once, without trapping the user there.
     seen_recording: bool,
+    /// The viewport alone on the Live page: no rail, no viewer panels,
+    /// the picture and its transport bar (the `f` key; Escape leaves).
+    viewport_full: bool,
 }
 
 impl eframe::App for StudioShell {
@@ -249,6 +253,7 @@ impl eframe::App for StudioShell {
                 chrome::keep_on_screen(ui.ctx());
             }
         }
+        self.fullscreen_keys(ui.ctx());
         self.shell.tick(ui.ctx());
         self.answer_screenshot(ui);
         self.apply_commands(ui);
@@ -278,7 +283,10 @@ impl eframe::App for StudioShell {
         });
         // A presenter failure is a panel under the header, before the page.
         self.shell.presenter_failure(ui);
-        self.shell.rail(ui);
+        let full = self.viewport_full && self.shell.section == Section::Live;
+        if !full {
+            self.shell.rail(ui);
+        }
 
         // A recording arriving while another page is up switches to Live:
         // a run streaming in is the thing to look at.
@@ -294,7 +302,12 @@ impl eframe::App for StudioShell {
         }
         self.seen_recording = has_recording;
 
-        if self.shell.section == Section::Live {
+        if full {
+            // Full screen: the picture and its transport bar, nothing else.
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| self.viewport_body(ui));
+        } else if self.shell.section == Section::Live {
             // The simulator's controls (simulate's own sections: Simulation,
             // Physics, Joint, Control, Visualization, Rendering) on the
             // right; the viewport on top of the rest; the Rerun viewer
@@ -319,31 +332,7 @@ impl eframe::App for StudioShell {
             } else {
                 VIEWPORT_IDLE_HEIGHT
             })
-            .show(ui, |ui| {
-                // The transport bar under the picture; the overlays and the
-                // Inspect drawer float over it (simulator.rs).
-                let mut action = None;
-                egui::Panel::bottom("simulator_transport")
-                    .resizable(false)
-                    .show(ui, |ui| {
-                        action = simulator::transport(ui, &mut self.viewport);
-                    });
-                let picture = self.viewport.show(ui);
-                if let Some(picture) = picture {
-                    simulator::overlays(ui.ctx(), picture, &mut self.viewport);
-                    simulator::drawer(ui.ctx(), picture, &mut self.viewport);
-                }
-                simulator::shortcuts(ui.ctx(), &mut self.viewport);
-                simulator::apply_follow(ui.ctx(), &mut self.viewport);
-                match action {
-                    Some(simulator::Action::Spawn(task)) => {
-                        self.viewport =
-                            ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
-                    }
-                    Some(simulator::Action::Stop) => self.viewport = ViewportFeed::idle(),
-                    None => {}
-                }
-            });
+            .show(ui, |ui| self.viewport_body(ui));
             if has_recording {
                 self.rerun_app.ui(ui, frame);
             } else {
@@ -370,6 +359,66 @@ impl eframe::App for StudioShell {
         }
         self.shell.overlays(ui.ctx());
         self.report(ui);
+    }
+}
+
+impl StudioShell {
+    /// The picture, its transport bar under it, the overlays and the
+    /// Inspect drawer floating over it (simulator.rs) - the same body in
+    /// the Live page's top panel and alone in full screen.
+    fn viewport_body(&mut self, ui: &mut egui::Ui) {
+        let mut action = None;
+        egui::Panel::bottom("simulator_transport")
+            .resizable(false)
+            .show(ui, |ui| {
+                action = simulator::transport(ui, &mut self.viewport);
+            });
+        let picture = self.viewport.show(ui);
+        if let Some(picture) = picture {
+            simulator::overlays(ui.ctx(), picture, &mut self.viewport);
+            simulator::drawer(ui.ctx(), picture, &mut self.viewport);
+        }
+        simulator::shortcuts(ui.ctx(), &mut self.viewport);
+        simulator::apply_follow(ui.ctx(), &mut self.viewport);
+        match action {
+            Some(simulator::Action::Spawn(task)) => {
+                self.viewport =
+                    ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+            }
+            Some(simulator::Action::Stop) => {
+                self.viewport = ViewportFeed::idle();
+                self.viewport_full = false;
+            }
+            Some(simulator::Action::ToggleFullscreen) => {
+                self.viewport_full = !self.viewport_full;
+            }
+            None => {}
+        }
+    }
+
+    /// `f` puts the viewport alone on the page and back (Live, a scene
+    /// running); Escape leaves it; F11 toggles the window itself.
+    fn fullscreen_keys(&mut self, ctx: &egui::Context) {
+        let typing = ctx.memory(|m| m.focused().is_some());
+        let (f, f11, escape) = ctx.input_mut(|i| {
+            (
+                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::F),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::F11),
+                self.viewport_full
+                    && !typing
+                    && i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
+            )
+        });
+        if f && self.shell.section == Section::Live && self.viewport.is_active() {
+            self.viewport_full = !self.viewport_full;
+        }
+        if escape {
+            self.viewport_full = false;
+        }
+        if f11 {
+            let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+        }
     }
 }
 
@@ -671,9 +720,14 @@ impl StudioShell {
                 inspect,
                 view,
                 follow,
+                fullscreen,
             } => {
                 if !self.viewport.is_active() {
                     return Err("no scene runs in the simulator; simulate a task first".into());
+                }
+                if let Some(full) = fullscreen {
+                    self.viewport_full = full;
+                    self.shell.section = Section::Live;
                 }
                 let (_, model) = self.viewport.report();
                 let pressed = [
@@ -689,6 +743,7 @@ impl StudioShell {
                     inspect.as_ref().map(|_| "inspect"),
                     view.as_ref().map(|_| "view"),
                     follow.as_ref().map(|_| "follow"),
+                    fullscreen.map(|f| if f { "full screen" } else { "page" }),
                 ]
                 .into_iter()
                 .flatten()
