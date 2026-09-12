@@ -4,6 +4,7 @@ fake reference tree, the platform seam."""
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -238,6 +239,138 @@ def _deployment(tmp: Path, **overrides: object) -> Manifest:
     (root / "policy.onnx").write_bytes(b"\x00")
     (root / "scene.xml").write_text("<mujoco/>")
     return Manifest(root=root, raw=raw)
+
+
+# The Go2's twelve joints as a manifest names them, with the SDK order.
+JOINTS = {
+    "policy_order": [f"j{i}" for i in range(12)],
+    "action_to_ctrl": list(range(12)),
+    "default_pos": [0.0] * 12,
+    "sdk_order_map": [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8],
+}
+
+
+class ThePose(unittest.TestCase):
+    """Where their robot is, for the Studio's mirror: the bus's base pose
+    and the motors re-ordered from the SDK's order into the policy's."""
+
+    def test_the_motors_come_back_in_policy_order(self) -> None:
+        class _PosedBus(_Bus):
+            def pose(self):
+                return (
+                    np.array([1.0, 2.0, 0.3]),
+                    np.array([1.0, 0, 0, 0]),
+                    np.arange(12, dtype=float),  # motor i reads i
+                )
+
+        manifest = _manifest(joints=JOINTS)
+        rt = DdsRuntime(
+            manifest, bus=_PosedBus([1, 0, 0, 0], [0, 0, 0]), pad=_Pad(), sleep=_still
+        )
+        position, quat, joints = rt.pose()
+        self.assertEqual(position.tolist(), [1.0, 2.0, 0.3])
+        self.assertEqual(quat.tolist(), [1.0, 0, 0, 0])
+        # policy joint i is SDK motor sdk_order_map[i]
+        self.assertEqual(
+            joints.tolist(), list(map(float, manifest.joints.sdk_order_map))
+        )
+
+
+class TheMirror(unittest.TestCase):
+    """The gate's picture in the Studio: a frame every EVERY_TICKS with the
+    pose in the scene, the command and the measured velocity as series."""
+
+    def test_ticks_become_frames_and_series(self) -> None:
+        import mujoco  # noqa: PLC0415 - the sim extra
+
+        from rq_pipeline.deploy.mirror import EVERY_TICKS, GateMirror  # noqa: PLC0415
+
+        joints = "".join(
+            f'<body name="b{i}" pos="0 0 {0.1 * i:.1f}">'
+            f'<joint name="j{i}" type="hinge" axis="0 0 1"/>'
+            '<geom type="box" size="0.02 0.02 0.02"/></body>'
+            for i in range(12)
+        )
+        model = mujoco.MjModel.from_xml_string(
+            '<mujoco><worldbody><body name="base"><freejoint/>'
+            f'<geom type="box" size="0.1 0.1 0.05"/>{joints}</body>'
+            "</worldbody></mujoco>"
+        )
+        manifest = _manifest(joints=JOINTS)
+
+        class _Rr:
+            def __init__(self):
+                self.calls: list[tuple[str, Any]] = []
+
+            def init(self, *a, **k):
+                self.calls.append(("init", a))
+
+            def connect_grpc(self, *a, **k):
+                self.calls.append(("connect", a))
+
+            def send_blueprint(self, *a, **k):
+                self.calls.append(("blueprint", None))
+
+            def set_time(self, *a, **k):
+                self.calls.append(("time", k))
+
+            def log(self, path, *a, **k):
+                self.calls.append(("log", path))
+
+            def Scalars(self, v):  # noqa: N802 - Rerun's own name
+                return ("scalars", v)
+
+            def TextLog(self, t):  # noqa: N802 - Rerun's own name
+                return ("text", t)
+
+            def disconnect(self):
+                pass
+
+        rr = _Rr()
+        mirror = GateMirror(manifest, model, "fake", rr=rr, log=io.StringIO())
+        mirror.trial(0, np.array([0.5, 0.0, 0.1]))
+        for _ in range(EVERY_TICKS * 3):
+            mirror.tick(
+                0.02,
+                (np.array([1, 0, 0.4]), np.array([1, 0, 0, 0]), np.zeros(12)),
+                np.array([0.5, 0.0, 0.1]),
+                np.array([0.45, 0.01, 0.0]),
+            )
+        logged = [c[1] for c in rr.calls if c[0] == "log"]
+        self.assertIn("gate/notes", logged)
+        self.assertEqual(logged.count("gate/command/vx"), 3)
+        self.assertEqual(logged.count("gate/velocity/vy"), 3)
+        self.assertAlmostEqual(mirror.seconds, 0.02 * EVERY_TICKS * 3)
+        self.assertEqual(mirror.data.qpos[2], 0.4)
+
+
+class OnePad(unittest.TestCase):
+    """The runtime moves the pad their simulator reads - the stack's -
+    never one of its own (a second joystick node nobody read: every
+    chord to nobody, their FSM Passive for 20 trials, 2026-09-12)."""
+
+    def test_the_opener_takes_the_stacks_pad_and_bus(self) -> None:
+        from rq_pipeline.deploy.dds_runtime import open_dds_runtime  # noqa: PLC0415
+
+        pad, bus = _Pad(), _Bus([1, 0, 0, 0], [0, 0, 0])
+        runtime = open_dds_runtime(_manifest(), pad=pad, bus=bus)
+        self.assertIs(runtime.pad, pad)
+        self.assertIs(runtime.bus, bus)
+
+    def test_the_stack_shares_its_pad_and_closes_it(self) -> None:
+        from rq_pipeline.deploy.unitree_stage import UnitreeStack  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            stack = UnitreeStack(
+                _deployment(Path(tmp)), reference=_reference(Path(tmp))
+            )
+            self.assertEqual(stack.runtime_options(), {})  # nothing started yet
+            pad = _Pad()
+            stack.pad = pad  # what __enter__ creates
+            self.assertEqual(stack.runtime_options(), {"pad": pad})
+            stack.close()
+            self.assertIn(("close",), pad.log)
+            self.assertEqual(stack.runtime_options(), {})
 
 
 class TheStage(unittest.TestCase):

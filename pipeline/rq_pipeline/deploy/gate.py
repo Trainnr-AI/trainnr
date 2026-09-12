@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 from rq_pipeline.deploy.manifest import GATE_SCHEMA, Key, Manifest, load_manifest
+from rq_pipeline.deploy.mirror import GateMirror
 from rq_pipeline.deploy.runtimes import (
     DEFAULT_RUNTIME,
     GateRuntime,
@@ -48,17 +49,30 @@ class Trial(TrackingOutcome):
     command: list[float]
 
 
-def run_trial(manifest: Manifest, runtime: GateRuntime, command: np.ndarray) -> Trial:
-    """One episode at a held command, the manifest's length and rate."""
+def run_trial(
+    manifest: Manifest,
+    runtime: GateRuntime,
+    command: np.ndarray,
+    *,
+    mirror: GateMirror | None = None,
+    index: int = 0,
+) -> Trial:
+    """One episode at a held command, the manifest's length and rate;
+    with a `mirror`, every tick's pose goes to the Studio."""
     runtime.reset()
     runtime.command = command.astype(np.float32)
     err_sum = cmd_sum = 0.0
     fell = False
     steps = 0
+    pose = getattr(runtime, "pose", None) if mirror is not None else None
+    if mirror is not None:
+        mirror.trial(index, command)
     for _ in range(manifest.control.episode_ticks):
         obs = runtime.observe()
         runtime.apply(runtime.act(obs))
         v = runtime.base_velocity_b()
+        if pose is not None:
+            mirror.tick(manifest.control.step_dt, pose(), command, v)
         err_sum += float(np.linalg.norm(v[:2] - command[:2]))
         cmd_sum += float(np.linalg.norm(command[:2]))
         steps += 1
@@ -93,15 +107,18 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     tolerance: float = DEFAULT_TOLERANCE,
     certificate: dict[str, Any] | None = None,
     open: Opener | None = None,
+    narrate: bool = False,
 ) -> dict[str, Any]:
     """Run the gate under the named runtime and write its record beside
     the manifest; returns the record. `open` replaces the registry's
     opener (a fake runtime under test); the judge, the draw, the interval
-    and the tolerance rule are the same whatever drives the policy."""
+    and the tolerance rule are the same whatever drives the policy.
+    `narrate` mirrors every trial into the Studio (`deploy/mirror.py`)."""
     spec = runtime_spec(runtime)
     manifest = load_manifest(deployment_dir)
     opener = open if open is not None else spec.open()
     driver = opener(manifest, assets_dir=assets_dir)
+    mirror = GateMirror.open(manifest, spec.name) if narrate else None
     commands = draw_commands(manifest, trials, seed)
     protocol: dict[str, Any] = {
         "trials": trials,
@@ -120,7 +137,10 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         protocol["commands"] = (
             f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
         )
-    results = [run_trial(manifest, driver, c) for c in commands]
+    results = [
+        run_trial(manifest, driver, c, mirror=mirror, index=i)
+        for i, c in enumerate(commands)
+    ]
     k = sum(t.success for t in results)
     lo, hi = clopper_pearson(k, trials)
     record: dict[str, Any] = {

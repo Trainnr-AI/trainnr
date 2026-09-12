@@ -77,6 +77,10 @@ def main() -> None:
         raise SystemExit(str(exc)) from exc
     certificate = _certificate(project, manifest.raw.get(Key.CERTIFICATE))
     with stack:
+        # What the stack started that the runtime must share (the DDS
+        # stack's one virtual pad); a library runtime shares nothing.
+        shared = getattr(stack, "runtime_options", dict)()
+        opener = spec.open()
         record = gate(
             folder,
             assets_dir=assets_dir,
@@ -85,6 +89,10 @@ def main() -> None:
             seed=args.seed,
             tolerance=args.tolerance,
             certificate=certificate,
+            open=lambda manifest, assets_dir=None: opener(
+                manifest, assets_dir=assets_dir, **shared
+            ),
+            narrate=True,
         )
     verdict = record["verdict"]
     print(

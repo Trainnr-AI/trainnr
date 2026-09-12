@@ -104,6 +104,15 @@ class Runtime:
         """The base's orientation, w x y z of the free joint."""
         return self.data.qpos[3:FREE_JOINT_QPOS]
 
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Where the robot is, for the Studio's mirror: base position,
+        base quaternion (w x y z), joints in the policy order."""
+        return (
+            self.data.qpos[0:3].copy(),
+            self.quat.copy(),
+            self.data.qpos[self.joint_qpos].copy(),
+        )
+
     def reset(self, *, keyframe: int = 0) -> None:
         mujoco.mj_resetDataKeyframe(self.model, self.data, keyframe)
         mujoco.mj_forward(self.model, self.data)

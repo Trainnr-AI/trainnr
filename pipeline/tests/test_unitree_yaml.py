@@ -104,6 +104,19 @@ class TheWriter(unittest.TestCase):
         self.assertIsNone(out["commands"]["base_velocity"]["ranges"]["heading"])
         self.assertIsNone(out["actions"]["JointPositionAction"]["clip"])
 
+    def test_no_history_is_one_kept_frame_in_their_count(self) -> None:
+        # mjlab's 0 (the current frame only) is their 1; their manager
+        # keeps `history_length` frames and 0 keeps none (2026-09-12).
+        from rq_pipeline.deploy.unitree_yaml import their_history  # noqa: PLC0415
+
+        self.assertEqual(their_history(0), 1)
+        self.assertEqual(their_history(1), 1)
+        self.assertEqual(their_history(4), 4)
+        deploy = unitree_deploy(_manifest(DEPLOYABLE))
+        self.assertTrue(
+            all(t["history_length"] >= 1 for t in deploy["observations"].values())
+        )
+
     def test_the_actor_order_is_theirs(self) -> None:
         self.assertEqual(
             deployable_actor_terms(),

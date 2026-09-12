@@ -114,9 +114,19 @@ def unitree_observations(manifest: Manifest) -> dict[str, dict[str, Any]]:
                 if isinstance(scale, list)
                 else [float(scale)] * term.width
             ),
-            "history_length": term.history_length,
+            "history_length": their_history(term.history_length),
         }
     return out
+
+
+def their_history(history_length: int) -> int:
+    """mjlab counts PAST frames (0 = the current frame only); their
+    observation manager counts frames KEPT, the current one included,
+    and a term with 0 keeps nothing - its buffer empties, the policy
+    reads an empty observation, and the robot froze in the fixed stand
+    through 20 trials of the DDS gate (2026-09-12). Their reference
+    file writes 1 for no history."""
+    return max(1, int(history_length))
 
 
 def unitree_deploy(manifest: Manifest) -> dict[str, Any]:

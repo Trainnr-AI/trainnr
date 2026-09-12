@@ -30,7 +30,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 from rq_pipeline.deploy.dds_runtime import DOMAIN_ID, NETWORK
 from rq_pipeline.deploy.gamepad import VirtualPad
@@ -219,6 +219,12 @@ class UnitreeStack:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def runtime_options(self) -> dict[str, Any]:
+        """What the runtime opened inside this stack must share with it:
+        the one pad their simulator reads. Two pads were two joystick
+        nodes, and the runtime moved the one nobody read (2026-09-12)."""
+        return {"pad": self.pad} if self.pad is not None else {}
+
     def _spawn(
         self, argv: list[str], cwd: Path, env: dict[str, str], log: Path
     ) -> subprocess.Popen[bytes]:
@@ -238,6 +244,9 @@ class UnitreeStack:
                     proc.kill()
         for handle in self._files:
             handle.close()
+        if self.pad is not None:
+            self.pad.close()
+            self.pad = None
         self._files = []
         if self.pad is not None:
             self.pad.close()

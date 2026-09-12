@@ -623,6 +623,61 @@ go2-flat declares a plane, so no relief yet: a rough declaration
 (mjlab's `ROUGH_TERRAINS_CFG`, the Go2 file's `_rough_env_cfg`) shows
 through the same path, and is the next item.
 
+**The second gate's first real number (2026-09-12/13).** go2-c2 -
+1500 iterations on the deployable actor, 41 minutes on the box, the
+first run allowed there - certified 38/40 at the stage-1 envelope,
+exported as `go2-c2-deploy`, MuJoCo gate 20/20, and the DDS gate
+0/20 with the robot never moving. The DDS gate then found three
+handover bugs, all ours, none visible to the MuJoCo gate (which drives
+the policy through the manifest and never through their stack):
+
+Friction 34 (fixed): **two virtual gamepads.** The stack created a
+pad and pointed their simulator at it; the runtime created a second
+pad and moved that one. Their controller's log: "FSM: Start Passive"
+and never another line through 20 trials - every chord went to a
+joystick nobody read. The stack now shares its one pad
+(`UnitreeStack.runtime_options`, threaded by `tools/gate-deployment.py`)
+and closes it when it ends; the smoke gate had got the device order
+the other way round by luck.
+
+Friction 35 (fixed): **an empty observation.** Our `deploy.yaml`
+wrote `history_length: 0`, mjlab's "no history"; their observation
+manager counts frames KEPT, keeps none for 0, and their policy read
+an empty vector: the FSM reached Velocity and the joints stood at the
+fixed stand to three decimals (a live probe of their LowState). Their
+reference file writes 1. `their_history` in
+`pipeline/rq_pipeline/deploy/unitree_yaml.py` maps the count.
+
+Friction 36 (fixed): **the frame.** The quaternion was read off
+SportModeState, which their bridge fills with position and velocity
+only: identity orientation, every velocity judged in the world frame,
+no fall ever registered. A per-axis probe under their controller
+showed body velocity equal to world velocity and a heading of zero
+through a turn. The bus now takes the IMU quaternion from LowState.
+
+Then: **DDS gate 20/20**, interval 0.83 to 1.0, tracking error ratio
+0.11 to 0.41 against the 0.5 bound (our MuJoCo gate on the same
+policy: 0.08 median, 0.15 max). The per-axis probe's numbers under
+their controller: forward 0.68 of 0.8, sideways 0.59 of 0.8, yaw 0.18
+of 0.5 rad/s - their PD and rate on our policy track less tightly
+than our runtime, within the rule.
+
+Friction 37 (fixed, 2026-09-13): **"the Go2 is moving in the native
+window but not in our Studio."** The DDS gate showed only in Unitree's
+simulator window; law 0 says everything streams to the Studio. Every
+gate runtime now answers `pose()` (base position, quaternion, joints
+in the policy order - the DDS one re-orders their LowState motors by
+the manifest's `sdk_order_map`), and the gate mirrors each tick into
+the deployment's own scene through `rq_pipeline.viz.RigMirror`, the
+path every rig tool uses (`pipeline/rq_pipeline/deploy/mirror.py`):
+a recording named for the runtime, the 3D view, the command and the
+measured planar velocity as series, the trials as a log. The gate job
+carries the `viz` extra for it; no Rerun or no loadable scene makes
+the mirror a no-op that says so, and the number never depends on the
+picture. Seen: the Live page with "gate · dds", the Go2 walking in
+the exported scene beside the walk scene, the command steps per
+trial and the measured velocity following them.
+
 Friction 33 (fixed, 2026-09-12): **"where are the iterations visible
 in the Studio?"** They are the Experiments card (the reward sparkline
 over iterations), its page (the facts, the training curve table, Show

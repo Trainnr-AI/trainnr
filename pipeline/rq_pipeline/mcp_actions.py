@@ -500,7 +500,7 @@ class Actions:
         plain_name(name, "deployment name")
         runtime = runtime_spec(runtime).name  # refuses an unknown one by name
         argv = [
-            *self._uv(PIPELINE_DIR, "sim", "deploy"),
+            *self._uv(PIPELINE_DIR, "sim", "deploy", "viz"),
             str(TOOLS_DIR / "gate-deployment.py"),
             "--project",
             project,

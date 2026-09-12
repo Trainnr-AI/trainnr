@@ -28,7 +28,9 @@ from rq_pipeline.deploy.manifest import Manifest
 from rq_pipeline.deploy.runtime import fell_over, rotate_inverse
 from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
 
-TOPIC_STATE = "rt/sportmodestate"
+TOPIC_STATE = "rt/sportmodestate"  # the base's world position and velocity
+TOPIC_LOW = "rt/lowstate"  # joints and the IMU (the quaternion the frame needs)
+MOTORS = 12  # the Go2's motors in their LowState, the first twelve slots
 TOPIC_LOW = "rt/lowstate"
 NETWORK = "lo"  # their simulator and controller meet on loopback
 DOMAIN_ID = 0
@@ -44,6 +46,13 @@ Sleep = Callable[[float], None]
 
 
 class Bus(Protocol):
+    """What the runtime reads: the latest state, and where the robot is."""
+
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """(base position, base quaternion wxyz, motor positions in the
+        SDK's order) as of the last `latest`."""
+        ...
+
     """What the runtime reads: the latest base state their stack publishes."""
 
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
@@ -59,7 +68,12 @@ class Pad(Protocol):
 
 
 class SdkBus:
-    """Unitree's Python SDK over CycloneDDS: one subscriber, the latest message."""
+    """Unitree's Python SDK over CycloneDDS: the latest of two messages.
+    Their simulator's bridge fills SportModeState with the base's world
+    position and velocity only; the IMU quaternion lives in LowState.
+    Reading the quaternion off SportModeState gave the identity: every
+    velocity was judged in the world frame, so a turning trial's error
+    grew with its heading and a fall could never register (2026-09-12)."""
 
     def __init__(self, network: str = NETWORK, domain_id: int = DOMAIN_ID) -> None:
         require_platform(RUNTIMES["dds"])
@@ -68,20 +82,32 @@ class SdkBus:
             ChannelSubscriber,
         )
         from unitree_sdk2py.idl.unitree_go.msg.dds_ import (  # noqa: PLC0415
+            LowState_,
             SportModeState_,
         )
 
         ChannelFactoryInitialize(domain_id, network)
-        self._sub = ChannelSubscriber(TOPIC_STATE, SportModeState_)
-        self._sub.Init()
+        self._state = ChannelSubscriber(TOPIC_STATE, SportModeState_)
+        self._state.Init()
+        self._low = ChannelSubscriber(TOPIC_LOW, LowState_)
+        self._low.Init()
 
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
-        msg = self._sub.Read(timeout_ms)
-        if msg is None:
+        state = self._state.Read(timeout_ms)
+        low = self._low.Read(timeout_ms)
+        if state is None or low is None:
             return None
-        quat = np.asarray(msg.imu_state.quaternion, dtype=np.float64)  # w x y z
-        velocity = np.asarray(msg.velocity, dtype=np.float64)
-        return quat, velocity
+        self._pose = (
+            np.asarray(state.position, dtype=np.float64),
+            np.asarray(low.imu_state.quaternion, dtype=np.float64),  # w x y z
+            np.asarray([m.q for m in low.motor_state[:MOTORS]], dtype=np.float64),
+        )
+        return self._pose[1].copy(), np.asarray(state.velocity, dtype=np.float64)
+
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """From the messages `latest` last read: base position, base
+        quaternion, the motors' positions in THEIR order."""
+        return self._pose
 
 
 class DdsRuntime:
@@ -162,6 +188,15 @@ class DdsRuntime:
     def base_velocity_b(self) -> np.ndarray:
         return rotate_inverse(self._quat, self._velocity_w)
 
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Where their robot is, for the Studio's mirror: the bus's base
+        position and quaternion, and the motors re-ordered from their SDK
+        order into the policy order (the manifest's `sdk_order_map`)."""
+        position, quat, motors = self.bus.pose()
+        order = self.manifest.joints.sdk_order_map
+        joints = motors[list(order)] if order else motors
+        return position, quat, joints
+
     def fell_over(self) -> bool:
         return fell_over(self._quat, self.manifest.termination.fell_over_deg)
 
@@ -169,6 +204,16 @@ class DdsRuntime:
         self.pad.sticks(**STICKS_CENTERED)
 
 
-def open_dds_runtime(manifest: Manifest, *, assets_dir: object = None) -> DdsRuntime:
-    """The live one: the SDK bus on loopback and a virtual pad."""
-    return DdsRuntime(manifest, bus=SdkBus(), pad=VirtualPad())
+def open_dds_runtime(
+    manifest: Manifest,
+    *,
+    assets_dir: object = None,
+    pad: Pad | None = None,
+    bus: Bus | None = None,
+) -> DdsRuntime:
+    """The live one: the SDK bus on loopback and THE virtual pad their
+    simulator was pointed at - the stack's (`UnitreeStack.runtime_options`).
+    A pad of its own here was a second joystick node their simulator
+    never read: every chord went to nobody, their FSM stayed Passive and
+    the gate read 0/20 on a policy that walks (2026-09-12)."""
+    return DdsRuntime(manifest, bus=bus or SdkBus(), pad=pad or VirtualPad())
