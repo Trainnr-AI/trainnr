@@ -80,6 +80,7 @@ rendering.
 import math
 import os
 import pathlib
+import signal
 import struct
 import sys
 import threading
@@ -228,6 +229,20 @@ PACE_SPIN_S = 0.0015
 SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
 
 
+def leave_cleanly_on_term(rr) -> None:
+    """A process streaming into the Studio's own Rerun server dies by
+    TERM when the window closes (the shell reaps its children); a plain
+    TERM cut the gRPC stream mid-message and the server logged
+    "h2 protocol error: error reading a body from connection" at every
+    close (2026-09-12). Close the connection first, then go."""
+
+    def _leave(*_: object) -> None:
+        rr.disconnect()
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _leave)
+
+
 class PhysicsNarrator:
     """The sim's state into Rerun, per step, on the `sim` timeline."""
 
@@ -239,6 +254,7 @@ class PhysicsNarrator:
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)
         rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
+        leave_cleanly_on_term(rr)
         # Narrate ONE robot even when the scene holds a flock: rr.log
         # BLOCKS when the channel floods, and twenty ducks' series plus
         # 700 mesh transforms per tick froze the whole sim loop inside

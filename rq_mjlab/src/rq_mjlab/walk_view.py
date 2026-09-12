@@ -321,6 +321,7 @@ class Overview:
         self.worlds = worlds
         rr.init("robotiq-walk-worlds", spawn=False)
         rr.connect_grpc()
+        transport().leave_cleanly_on_term(rr)
         rr.send_blueprint(
             rrb.Blueprint(
                 rrb.Horizontal(

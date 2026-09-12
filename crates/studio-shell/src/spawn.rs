@@ -166,12 +166,27 @@ fn mujoco_environment(command: &mut Command) {
 /// signal spec plus a DIFFERENT pid — measured 2026-09-01, and the
 /// mis-signaled process was the Studio itself), then the child itself,
 /// then reap it.
+/// How long a child gets to leave on TERM before the KILL: the Python
+/// sides close their Rerun stream into the Studio's own server on TERM
+/// (`leave_cleanly_on_term` in tools/studio-render-stream.py); a KILL
+/// in the same instant cut the stream and the server logged an h2 error
+/// at every close (2026-09-12).
+const TERM_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+const TERM_POLL: std::time::Duration = std::time::Duration::from_millis(25);
+
 pub fn kill_tree(child: &mut Child) {
     #[cfg(unix)]
     {
         let _ = Command::new("kill")
             .args(["-s", "TERM", "--", &format!("-{}", child.id())])
             .status();
+        let deadline = std::time::Instant::now() + TERM_GRACE;
+        while std::time::Instant::now() < deadline {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return;
+            }
+            std::thread::sleep(TERM_POLL);
+        }
     }
     let _ = child.kill();
     let _ = child.wait();

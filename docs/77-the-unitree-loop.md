@@ -540,6 +540,20 @@ the first's axis, and took the echoed follow instead of the rule's):
 the held twist now lives Studio-side. Still to come from the list:
 the terrains as a task's own declaration (the larger item).
 
+Friction 30 (fixed, 2026-09-12): **closing the Studio logged
+`re_grpc_server: Error while receiving messages: h2 protocol error:
+error reading a body from connection`.** The Studio hosts its own
+Rerun server, and two of its children stream into it - the walk view
+(world markers, rewards) and a plain scene's physics narrator. On
+close the shell sent TERM to the children's process group and KILLed
+its direct child in the same instant, so a gRPC stream into the
+Studio died mid-message and the server said so. Now the narrating
+processes close their Rerun connection on TERM and leave
+(`leave_cleanly_on_term` in `tools/studio-render-stream.py`, used by
+both), and the shell waits up to 1.5 s after TERM before the KILL
+(`crates/studio-shell/src/spawn.rs`). Measured: the walk scene and a
+plain task each quit with no h2 line and no leftover process.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration
