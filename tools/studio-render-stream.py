@@ -413,12 +413,17 @@ class OrbitCamera:
         self.height = HEIGHT
 
     def apply_to(self, cam: "mujoco.MjvCamera") -> None:
+        """Every camera field, every frame - the lookat too: it used to be
+        copied only at creation and while following, so a pan moved the
+        status echo and not the picture (2026-09-12, the operator's
+        "WASD does nothing" after two "fixes" judged by that echo)."""
         with self._lock:
             cam.azimuth, cam.elevation, cam.distance = (
                 self.azimuth,
                 self.elevation,
                 self.distance,
             )
+            cam.lookat = list(self.lookat)
 
     def size(self) -> tuple[int, int]:
         with self._lock:

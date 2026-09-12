@@ -589,8 +589,17 @@ with focus on it - they were taps in alternating directions, and at
 reads as nothing next to Rerun's fly camera (its orbit-mode speed is
 the orbit radius per second, with momentum). The rate is now 2.0
 (`PAN_RATE_PER_S` in `tools/studio-render-stream.py`): a tap is most of
-a metre at the Go2 rig's distance. Lesson kept: an injected test that
-holds a key proves the wire, not the feel; log the human's presses.
+a metre at the Go2 rig's distance. Then the operator a third time,
+and the real cause: the render lane copied the orbit's lookat into
+MuJoCo's camera only at creation and while following a world, while
+azimuth, elevation and distance were applied every frame - so a pan
+moved the status echo (the number every test read) and never the
+picture. `OrbitCamera.apply_to` now applies the lookat too, and
+`pipeline/tests/test_studio_camera.py` reads `MjvCamera.lookat` after
+a pan, which the old code fails. The focus rule and the rate were
+real, smaller findings on the way. Lesson, the operator's own rule
+re-learned at a price: verify in the viewer, never in a printout; a
+number the app echoes is not the picture the human sees.
 
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
