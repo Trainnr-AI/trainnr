@@ -1838,9 +1838,6 @@ def walk_scene_of(scene: str) -> tuple[str, int]:
 
 
 STAGE_XML: str | None = None  # set by --stage= (the task's terrain, walk scenes)
-# mjlab asks for 8192 shadow maps; the live tools draw at this size
-# (tools/rl-watch.py does the same).
-LIVE_SHADOWSIZE = 2048
 
 
 def walk_scene(
@@ -1862,7 +1859,7 @@ def walk_scene(
     instead of the plain plane."""
     from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
-    from rq_pipeline.tasks.scene import grid_of  # noqa: PLC0415
+    from rq_pipeline.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
 
     bundle = find_bundle(robot)
     model_file = model_file_of(bundle) if bundle is not None else None
@@ -1883,8 +1880,10 @@ def walk_scene(
                 geom.pos[2] = 0.0  # the display grids' table offset; walks at z=0
     scene.visual.global_.offwidth = offscreen_side
     scene.visual.global_.offheight = offscreen_side
+    # mjlab's stage asks for an 8192 shadow map; every live view draws at
+    # the scene budget's size.
     scene.visual.quality.shadowsize = min(
-        scene.visual.quality.shadowsize, LIVE_SHADOWSIZE
+        scene.visual.quality.shadowsize, RenderBudget.SHADOWSIZE
     )
     return scene.compile()
 

@@ -237,7 +237,6 @@ pub struct SimulatorState {
     pub speed: f64,
     pub render_ms: f64,
     /// Where the camera is: azimuth, elevation, distance, lookat x y z.
-    #[serde(default)]
     pub camera: Vec<f64>,
 }
 

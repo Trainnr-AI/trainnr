@@ -69,6 +69,19 @@ pub fn preview_uri(ui: &egui::Ui, path: &std::path::Path) -> Option<String> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_millis());
     let uri = format!("bytes://{}?{modified}", path.display());
+    // A redrawn file leaves its previous version in egui's caches (bytes
+    // and texture); a live run redraws its curve at every refresh, so the
+    // old one is forgotten when the new one is registered.
+    let last = egui::Id::new(("preview-uri", path));
+    let previous: Option<String> = ui.ctx().data(|d| d.get_temp(last));
+    if previous.as_deref().is_some_and(|p| p != uri) {
+        if let Some(previous) = &previous {
+            ui.ctx().forget_image(previous);
+        }
+    }
+    if previous.as_deref() != Some(uri.as_str()) {
+        ui.ctx().data_mut(|d| d.insert_temp(last, uri.clone()));
+    }
     if ui.ctx().try_load_bytes(&uri).is_err() {
         let bytes = std::fs::read(path).ok()?;
         ui.ctx().include_bytes(uri.clone(), bytes);

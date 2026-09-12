@@ -80,9 +80,9 @@ def stale_preview(source: Path, out: Path) -> bool:
     identity keeps one stamp for its whole life, and the sparkline drawn
     at its second iteration stood for the finished curve (go2-c2 showed
     "reward -1.1" over 1500 iterations, 2026-09-12)."""
-    from rq_pipeline.project.index import _file_times  # noqa: PLC0415
+    from rq_pipeline.project.index import file_times  # noqa: PLC0415
 
-    times = _file_times(source)
+    times = file_times(source)
     return bool(times) and out.stat().st_mtime < max(times)
 
 

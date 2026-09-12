@@ -76,6 +76,8 @@ TERM_KEYS = frozenset(
     {"name", "width", "source", "params", "scale", "clip", "history_length"}
 )
 TWIST_AXES = ("lin_vel_x", "lin_vel_y", "ang_vel_z")
+# The same axes as a door and the Studio name them (forward, left, turn).
+TWIST_SHORT = ("vx", "vy", "wz")
 
 # The observation sources the plain-MuJoCo runtime can compute. A manifest
 # naming another is refused: the runtime never guesses a term.

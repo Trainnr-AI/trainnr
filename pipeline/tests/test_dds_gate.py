@@ -4,7 +4,6 @@ fake reference tree, the platform seam."""
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -327,7 +326,7 @@ class TheMirror(unittest.TestCase):
                 pass
 
         rr = _Rr()
-        mirror = GateMirror(manifest, model, "fake", rr=rr, log=io.StringIO())
+        mirror = GateMirror(manifest, model, "fake", rr=rr)
         mirror.trial(0, np.array([0.5, 0.0, 0.1]))
         for _ in range(EVERY_TICKS * 3):
             mirror.tick(

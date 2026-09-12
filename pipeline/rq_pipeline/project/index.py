@@ -476,14 +476,14 @@ def _link_cited_by(artifacts: list[Artifact]) -> None:
 def _times(kind: Kind, path: Path) -> tuple[str | None, str | None]:
     """(created, updated) for an artifact: its own recorded date when it
     keeps one, else the oldest file under it; the newest file under it."""
-    stamps = sorted(_file_times(path))
+    stamps = sorted(file_times(path))
     oldest = _iso(stamps[0]) if stamps else None
     newest = _iso(stamps[-1]) if stamps else None
     own = _own_date(kind, path)
     return (own or oldest, newest)
 
 
-def _file_times(path: Path) -> list[float]:
+def file_times(path: Path) -> list[float]:
     """Modification times of every file under `path`, hidden files and
     hidden directories (an artifact's own `.index`, a `.git`) left out."""
     if path.is_file():

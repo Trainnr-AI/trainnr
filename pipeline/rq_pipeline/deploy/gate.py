@@ -64,15 +64,14 @@ def run_trial(
     err_sum = cmd_sum = 0.0
     fell = False
     steps = 0
-    pose = getattr(runtime, "pose", None) if mirror is not None else None
     if mirror is not None:
         mirror.trial(index, command)
     for _ in range(manifest.control.episode_ticks):
         obs = runtime.observe()
         runtime.apply(runtime.act(obs))
         v = runtime.base_velocity_b()
-        if pose is not None:
-            mirror.tick(manifest.control.step_dt, pose(), command, v)
+        if mirror is not None:
+            mirror.tick(manifest.control.step_dt, runtime.pose(), command, v)
         err_sum += float(np.linalg.norm(v[:2] - command[:2]))
         cmd_sum += float(np.linalg.norm(command[:2]))
         steps += 1

@@ -57,7 +57,7 @@ import rerun as rr
 from _lab import bootstrap, frame_viewer, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.scene import GeomGroup, grid_of  # noqa: E402
+from rq_pipeline.tasks.scene import GeomGroup, RenderBudget, grid_of  # noqa: E402
 from rq_pipeline.viz import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
@@ -97,7 +97,7 @@ def grid_model_from_xml(xml_path, worlds: int):
         f"{ENV_NAME}-grid-{worlds}",
         (mujoco.MjSpec.from_file(str(xml_path)) for _ in range(worlds)),
     )
-    scene.visual.quality.shadowsize = 2048
+    scene.visual.quality.shadowsize = RenderBudget.SHADOWSIZE
     side = math.isqrt(max(worlds - 1, 0)) + 1
     del prefixes  # the mirror reads geoms straight off the compiled model
     return scene.compile(), side

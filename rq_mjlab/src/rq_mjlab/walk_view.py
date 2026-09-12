@@ -123,10 +123,14 @@ def export_stage(terrain_cfg, path: Path) -> Path | None:
     (`elevation`), so no assets travel. None when the task declares no
     terrain."""
     import mujoco  # noqa: PLC0415
-    from mjlab.scene.scene import _SCENE_XML  # noqa: PLC0415
     from mjlab.terrains.terrain_entity import TerrainEntity  # noqa: PLC0415
 
     if terrain_cfg is None:
+        return None
+    try:  # mjlab's base scene file: a private name, so a version may move it
+        from mjlab.scene.scene import _SCENE_XML  # noqa: PLC0415
+    except ImportError as why:
+        print(f"[walk-view] no stage, the plain grid instead: {why}", file=sys.stderr)
         return None
     terrain = TerrainEntity(terrain_cfg, device="cpu")
     stage = mujoco.MjSpec.from_file(str(_SCENE_XML))

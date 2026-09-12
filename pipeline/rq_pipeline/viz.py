@@ -22,6 +22,7 @@ RIG_PATH = "world/rig"  # where every rig tool logs the mirror
 # feed and recorder connects to (the Rust shell binds the same port;
 # crates/studio-shell/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
+TERM_EXIT_STATUS = 128 + 15  # a process ended by SIGTERM, as a shell reports it
 
 
 def leave_cleanly_on_term(rr) -> None:
@@ -32,13 +33,24 @@ def leave_cleanly_on_term(rr) -> None:
     error reading a body from connection" at every close (2026-09-12).
     Close the connection first, then go. One home for every process
     that connects: the render stream's narrator, the walk view, the
-    recorder, the verdict."""
+    recorder, the verdict, the gate's mirror.
+
+    The exit status stays what TERM means (128 + 15, the shell's
+    convention): a stopped training job or gate must not read as one
+    that finished. The exit is hard, like TERM's default action: the
+    render stream's stdin reader holds a lock a normal shutdown trips
+    over. A handler can only be installed from the main thread; from
+    any other the default action stays."""
     import os  # noqa: PLC0415
     import signal  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+
+    if threading.current_thread() is not threading.main_thread():
+        return
 
     def _leave(*_: object) -> None:
         rr.disconnect()
-        os._exit(0)
+        os._exit(TERM_EXIT_STATUS)
 
     signal.signal(signal.SIGTERM, _leave)
 

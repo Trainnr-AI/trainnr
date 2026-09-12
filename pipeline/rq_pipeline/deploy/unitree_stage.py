@@ -244,9 +244,6 @@ class UnitreeStack:
                     proc.kill()
         for handle in self._files:
             handle.close()
-        if self.pad is not None:
-            self.pad.close()
-            self.pad = None
         self._files = []
         if self.pad is not None:
             self.pad.close()

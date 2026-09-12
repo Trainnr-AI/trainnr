@@ -31,7 +31,6 @@ from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
 TOPIC_STATE = "rt/sportmodestate"  # the base's world position and velocity
 TOPIC_LOW = "rt/lowstate"  # joints and the IMU (the quaternion the frame needs)
 MOTORS = 12  # the Go2's motors in their LowState, the first twelve slots
-TOPIC_LOW = "rt/lowstate"
 NETWORK = "lo"  # their simulator and controller meet on loopback
 DOMAIN_ID = 0
 FSM_SETTLE_S = 2.0  # the fixed stand takes about this long to reach
@@ -46,17 +45,16 @@ Sleep = Callable[[float], None]
 
 
 class Bus(Protocol):
-    """What the runtime reads: the latest state, and where the robot is."""
+    """What the runtime reads: the latest base state their stack
+    publishes, and where the robot is."""
+
+    def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
+        """(quaternion wxyz, world-frame velocity) or None on timeout."""
 
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """(base position, base quaternion wxyz, motor positions in the
         SDK's order) as of the last `latest`."""
         ...
-
-    """What the runtime reads: the latest base state their stack publishes."""
-
-    def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
-        """(quaternion wxyz, world-frame velocity) or None on timeout."""
 
 
 class Pad(Protocol):
@@ -91,6 +89,7 @@ class SdkBus:
         self._state.Init()
         self._low = ChannelSubscriber(TOPIC_LOW, LowState_)
         self._low.Init()
+        self._pose: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
 
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
         state = self._state.Read(timeout_ms)
@@ -107,6 +106,8 @@ class SdkBus:
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """From the messages `latest` last read: base position, base
         quaternion, the motors' positions in THEIR order."""
+        if self._pose is None:
+            raise RuntimeError("no pose yet: `latest` has not read their state")
         return self._pose
 
 

@@ -10,6 +10,7 @@ compiled model.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -219,14 +220,15 @@ GRID_PITCH = 1.6
 # The sky every MuJoCo scene wears (Menagerie's scene.xml values): a
 # gradient skybox, so a display's background is not black. Added to a
 # stage that brings none of its own.
-SKY = {
-    "type": "skybox",
-    "builtin": "gradient",
-    "rgb1": [0.3, 0.5, 0.7],
-    "rgb2": [0.0, 0.0, 0.0],
-    "width": 512,
-    "height": 3072,
-}
+@dataclass(frozen=True)
+class Sky:
+    rgb1: tuple[float, float, float] = (0.3, 0.5, 0.7)
+    rgb2: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    width: int = 512
+    height: int = 3072
+
+
+SKY = Sky()
 
 
 def add_sky(scene: Any) -> None:
@@ -239,10 +241,10 @@ def add_sky(scene: Any) -> None:
         name="sky",
         type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
         builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
-        rgb1=SKY["rgb1"],
-        rgb2=SKY["rgb2"],
-        width=SKY["width"],
-        height=SKY["height"],
+        rgb1=list(SKY.rgb1),
+        rgb2=list(SKY.rgb2),
+        width=SKY.width,
+        height=SKY.height,
     )
 
 

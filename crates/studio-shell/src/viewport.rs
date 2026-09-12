@@ -743,10 +743,6 @@ impl ViewportFeed {
         }
     }
 
-    pub fn picture_hovered(&self) -> bool {
-        self.hovered
-    }
-
     /// The stream's latest status and model, for the panel and the state
     /// file: two reference counts bumped, nothing copied.
     pub fn report(&self) -> (Option<Arc<SimStatus>>, Option<Arc<SimModel>>) {

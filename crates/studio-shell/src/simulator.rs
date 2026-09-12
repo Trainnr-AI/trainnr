@@ -994,8 +994,6 @@ fn physics(ui: &mut egui::Ui, model: &SimModel) {
 /// Shift on a pan key moves the camera this much faster.
 const PAN_HURRY: f32 = 3.0;
 
-/// Space runs or pauses, → steps once, R resets, W A S D Q E pan the
-/// camera while held — when the keys are the picture's (`wants_keys`).
 /// A pan key pressed this frame and what decided its fate, for the
 /// event log.
 pub struct KeyPress {
@@ -1016,22 +1014,37 @@ const PAN_KEYS: [egui::Key; 6] = [
 ];
 
 /// The pan key pressed this frame, if one was — recorded whether or
-/// not it acted, so a silent key can be explained from the log.
+/// not it acted, so a silent key can be explained from the log. The
+/// first press only: egui reports a held key's auto-repeat as presses
+/// too, and a held W wrote thirty lines a second. Never while a text
+/// field has the keyboard: the log is not a keystroke recorder.
 fn pan_key_press(ctx: &egui::Context, viewport: &ViewportFeed) -> Option<KeyPress> {
+    if ctx.text_edit_focused() {
+        return None;
+    }
     let (key, pointer) = ctx.input(|i| {
-        (
-            PAN_KEYS.iter().find(|k| i.key_pressed(**k)).copied(),
-            i.pointer.latest_pos(),
-        )
+        let key = i.events.iter().find_map(|event| match event {
+            egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                ..
+            } if PAN_KEYS.contains(key) => Some(*key),
+            _ => None,
+        });
+        (key, i.pointer.latest_pos())
     });
     key.map(|key| KeyPress {
         key: format!("{key:?}"),
-        picture: viewport.wants_keys(ctx) && viewport.is_active(),
+        picture: viewport.wants_keys(ctx),
         focus: viewport.focus_owner(ctx),
-        pointer: pointer.filter(|_| viewport.picture_hovered()).or(pointer),
+        pointer,
     })
 }
 
+/// Space runs or pauses, → steps once, R resets, W A S D Q E pan the
+/// camera while held — when the keys are the picture's (`wants_keys`).
+/// Returns the pan key pressed this frame for the event log.
 pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) -> Option<KeyPress> {
     let press = pan_key_press(ctx, viewport);
     if !viewport.wants_keys(ctx) {

@@ -310,6 +310,13 @@ def viewer_port_free(port: int | None = None) -> bool:
     return True
 
 
+# Studios this process launched, by pid: a child that has exited stays a
+# zombie - "existing" to every probe - until its parent reaps it. The
+# MCP server launches and later quits in one process, and `quit` waited
+# its whole timeout on a Studio that had left in 0.2 s (2026-09-12).
+_LAUNCHED: dict[int, subprocess.Popen] = {}
+
+
 def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     """Start the Studio on the project; wait for its first heartbeat.
     Waits for the viewer's port first: a window quit a moment ago can
@@ -406,13 +413,6 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
 # -- helpers -------------------------------------------------------------------
 
 
-# Studios this process launched, by pid: a child that has exited stays a
-# zombie - "existing" to every probe - until its parent reaps it. The
-# MCP server launches and later quits in one process, and `quit` waited
-# its whole timeout on a Studio that had left in 0.2 s (2026-09-12).
-_LAUNCHED: dict[int, subprocess.Popen] = {}
-
-
 def _pid_alive(pid: int) -> bool:
     """Whether a process with this id is running. psutil's probe, because
     `os.kill(pid, 0)` is a liveness check on POSIX and a TERMINATE on
@@ -434,6 +434,8 @@ def _pid_alive(pid: int) -> bool:
         return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         return False
+    except psutil.AccessDenied:
+        return True  # it exists; another user's process, or a locked-down OS
 
 
 def _prune(folder: Path, keep: int = KEEP_COMMANDS) -> None:

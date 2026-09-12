@@ -36,6 +36,7 @@ from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
+from rq_pipeline.deploy.manifest import TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.mcp_jobs import DONE, JobHandle, Refusal, refusal
 from rq_pipeline.physics.registry import engines
@@ -1152,9 +1153,6 @@ def control_simulator(  # noqa: PLR0913, PLR0917
     )
 
 
-TWIST_AXES = ("vx", "vy", "wz")
-
-
 def set_simulator_input(
     value: float | None = None,
     actuator: str | None = None,
@@ -1175,8 +1173,8 @@ def set_simulator_input(
     named = [n for n in (actuator, joint, command) if n is not None]
     if len(named) != 1:
         return refusal("name exactly one of actuator, joint, command")
-    if command is not None and command not in (*TWIST_AXES, "own"):
-        return refusal(f"command is one of {TWIST_AXES} or own, not {command!r}")
+    if command is not None and command not in (*TWIST_SHORT, "own"):
+        return refusal(f"command is one of {TWIST_SHORT} or own, not {command!r}")
     if value is None and command != "own":
         return refusal("a value is needed")
     return send(

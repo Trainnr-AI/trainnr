@@ -21,15 +21,14 @@ from typing import Any
 
 import numpy as np
 
-from rq_pipeline.deploy.manifest import Manifest
+from rq_pipeline.deploy.manifest import TWIST_SHORT, Manifest
 
 APP_ID = "rq-gate"
 TIMELINE = "sim"
-# Frames per control tick: every second tick at 50 Hz is 25 frames a
-# second, the recorder's budget for a mirror (viz.MIRROR_HZ).
+# A frame every second control tick: 25 a second at the Go2's 50 Hz,
+# near the render stream's 20 Hz mirror budget (its MIRROR_HZ); every
+# frame is one log call per geom, and rr.log blocks when it floods.
 EVERY_TICKS = 2
-FREE_JOINT_QPOS = 7
-AXES = ("vx", "vy", "wz")
 
 
 def _rerun() -> Any | None:
@@ -50,8 +49,7 @@ class GateMirror:
         model: Any,
         runtime_name: str,
         *,
-        rr: Any | None = None,
-        log: Any = sys.stderr,
+        rr: Any,
     ) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
@@ -71,7 +69,6 @@ class GateMirror:
         self._mirror = RigMirror(model, model_colors=True, skip_groups=(3, 4, 5))
         self.ticks = 0
         self.seconds = 0.0
-        self._log = log
         rr.init(f"{APP_ID}-{runtime_name}", spawn=False)
         rr.connect_grpc(STUDIO_ADDRESS)
         leave_cleanly_on_term(rr)
@@ -93,10 +90,12 @@ class GateMirror:
 
         try:
             model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
-        except (FileNotFoundError, ValueError) as why:
-            print(f"[gate] no mirror: the scene did not load ({why})", file=log)
+            return cls(manifest, model, runtime_name, rr=rr)
+        except (FileNotFoundError, ValueError, KeyError) as why:
+            # an unloadable scene, or a joint the manifest names and the
+            # scene lacks: the gate runs, the picture does not
+            print(f"[gate] no mirror: {why!r}", file=log)
             return None
-        return cls(manifest, model, runtime_name, rr=rr, log=log)
 
     def _layout(self) -> None:
         rr = self._rr
@@ -124,7 +123,7 @@ class GateMirror:
 
     def trial(self, index: int, command: np.ndarray) -> None:
         cmd = ", ".join(
-            f"{a} {float(c):+.2f}" for a, c in zip(AXES, command, strict=True)
+            f"{a} {float(c):+.2f}" for a, c in zip(TWIST_SHORT, command, strict=True)
         )
         self._rr.set_time(TIMELINE, duration=self.seconds)
         self._rr.log("gate/notes", self._rr.TextLog(f"trial {index}: {cmd}"))
@@ -144,6 +143,8 @@ class GateMirror:
             return
         import mujoco  # noqa: PLC0415
 
+        from rq_pipeline.deploy.runtime import FREE_JOINT_QPOS  # noqa: PLC0415
+
         rr = self._rr
         position, quat, joints = pose
         self.data.qpos[0:3] = position
@@ -152,7 +153,7 @@ class GateMirror:
         mujoco.mj_forward(self.model, self.data)
         rr.set_time(TIMELINE, duration=self.seconds)
         self._mirror.log(self.data)
-        for axis, value in zip(AXES, command, strict=True):
+        for axis, value in zip(TWIST_SHORT, command, strict=True):
             rr.log(f"gate/command/{axis}", rr.Scalars(float(value)))
-        for axis, value in zip(AXES[:2], velocity_b[:2], strict=True):
+        for axis, value in zip(TWIST_SHORT[:2], velocity_b[:2], strict=True):
             rr.log(f"gate/velocity/{axis}", rr.Scalars(float(value)))

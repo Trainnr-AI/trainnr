@@ -19,6 +19,9 @@ MAIN_RS = (REPO / "crates" / "studio-shell" / "src" / "main.rs").read_text(
     encoding="utf-8"
 )
 VIZ = (REPO / "pipeline" / "rq_pipeline" / "viz.py").read_text(encoding="utf-8")
+SIMULATOR_RS = (REPO / "crates" / "studio-shell" / "src" / "simulator.rs").read_text(
+    encoding="utf-8"
+)
 
 
 def constant(source: str, pattern: str) -> str:
@@ -70,6 +73,18 @@ class WireTags(unittest.TestCase):
             constant(VIEWPORT_RS, r"fn encode_twist\(.*?\) -> \[u8; (\d+)\]")
         )
         self.assertEqual(py_bytes + 1, rs_bytes)
+
+
+class TwistNames(unittest.TestCase):
+    def test_the_studio_names_the_twist_axes_as_the_door_does(self) -> None:
+        # manifest.TWIST_SHORT is the Python home (the door, the gate's
+        # mirror); simulator.rs names the Commands tab's rows.
+        from rq_pipeline.deploy.manifest import TWIST_SHORT  # noqa: PLC0415
+
+        rows = constant(
+            SIMULATOR_RS, r"const TWIST_AXES: \[\(&str, &str\); 3\] = \[(.*?)\];"
+        )
+        self.assertEqual(tuple(re.findall(r'\("(\w+)", "\w+"\)', rows)), TWIST_SHORT)
 
 
 class StudioPort(unittest.TestCase):
