@@ -554,6 +554,17 @@ both), and the shell waits up to 1.5 s after TERM before the KILL
 (`crates/studio-shell/src/spawn.rs`). Measured: the walk scene and a
 plain task each quit with no h2 line and no leftover process.
 
+Friction 31 (fixed, 2026-09-12): **`quit_studio` from the process
+that launched the Studio waited its whole five seconds, then reported
+"terminated after the timeout" - for a Studio that had left in 0.2
+s.** A child that has exited is a zombie until its parent reaps it,
+and every probe (`os.kill(pid, 0)`, psutil's `pid_exists`) counts a
+zombie as existing; the MCP server launches and quits in one process,
+so it always hit this. The launcher now keeps its Popen by pid and
+the liveness probe reaps it first, and a zombie is not alive
+(`pipeline/rq_pipeline/project/control.py`). Found while timing the
+close: the "60 s hang" my own scripts measured was the same zombie.
+
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration

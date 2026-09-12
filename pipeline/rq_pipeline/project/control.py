@@ -357,6 +357,7 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+    _LAUNCHED[child.pid] = child
     deadline = time.monotonic() + LAUNCH_TIMEOUT_S
     while time.monotonic() < deadline:
         if child.poll() is not None:
@@ -405,11 +406,23 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
 # -- helpers -------------------------------------------------------------------
 
 
+# Studios this process launched, by pid: a child that has exited stays a
+# zombie - "existing" to every probe - until its parent reaps it. The
+# MCP server launches and later quits in one process, and `quit` waited
+# its whole timeout on a Studio that had left in 0.2 s (2026-09-12).
+_LAUNCHED: dict[int, subprocess.Popen] = {}
+
+
 def _pid_alive(pid: int) -> bool:
-    """Whether a process with this id exists. psutil's probe, because
+    """Whether a process with this id is running. psutil's probe, because
     `os.kill(pid, 0)` is a liveness check on POSIX and a TERMINATE on
-    Windows - it would have killed the Studio it asked after."""
+    Windows - it would have killed the Studio it asked after. A child of
+    this process is reaped first; a zombie is not alive."""
     if pid <= 0:
+        return False
+    child = _LAUNCHED.get(pid)
+    if child is not None and child.poll() is not None:
+        del _LAUNCHED[pid]
         return False
     try:
         import psutil  # noqa: PLC0415 - the `mcp` extra
@@ -417,7 +430,10 @@ def _pid_alive(pid: int) -> bool:
         raise ImportError(
             "psutil is needed to check a Studio's process: install the `mcp` extra"
         ) from why
-    return bool(psutil.pid_exists(pid))
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
 
 
 def _prune(folder: Path, keep: int = KEEP_COMMANDS) -> None:
