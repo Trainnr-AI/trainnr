@@ -678,6 +678,20 @@ picture. Seen: the Live page with "gate · dds", the Go2 walking in
 the exported scene beside the walk scene, the command steps per
 trial and the measured velocity following them.
 
+Friction 38 (recorded, 2026-09-13): **an export started beside its
+certificate cites nothing.** `go2-c2-deploy` was exported while the
+40-trial evaluation still ran, so its manifest names no policy
+artifact and no evaluation, and both gates could only report a rate
+("no evaluation cited: the gate reports its rate and judges
+nothing"). The export refuses an existing name, rightly - a
+deployment is an artifact - so the cited one is `go2-c2-deploy-cited`:
+policy `go2-c2-model_1499`, certificate 38/40, and both gates JUDGED
+against it: MuJoCo 20/20 passed, DDS 20/20 passed (rate 1.0 against
+the certificate's 0.95, tolerance 0.1). The order that closes the
+loop is certificate, then export, then the gates; the export door
+should refuse a checkpoint without an evaluation unless told
+otherwise (open).
+
 Friction 33 (fixed, 2026-09-12): **"where are the iterations visible
 in the Studio?"** They are the Experiments card (the reward sparkline
 over iterations), its page (the facts, the training curve table, Show
