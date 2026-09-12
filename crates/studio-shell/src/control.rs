@@ -127,6 +127,11 @@ pub enum Command {
         group: Option<u32>,
         #[serde(default)]
         kind: Option<String>,
+        /// One axis of the commanded twist in a walk scene, with `value`:
+        /// vx (forward), vy (left) or wz (turn); `own` hands the commands
+        /// back to the task. The twist goes to the followed world, else w0.
+        #[serde(default)]
+        command: Option<String>,
         /// The Inspect drawer: control, joints, physics, or close.
         #[serde(default)]
         inspect: Option<String>,

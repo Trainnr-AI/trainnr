@@ -516,9 +516,29 @@ message (`tools/studio-render-stream.py`, TAG_GROUP: kind, group, on;
 is refused naming the valid ones. Seen: the joint flag from the door
 lighting both the checkbox and the corner chip; geom group 0 off
 taking the ground away (the Go2's meshes sit in group 2, mjlab's
-visual group). Still to come from the same list: the command sliders
-and world picker for the walk scene, and the terrains as a task's own
-declaration (the larger item).
+visual group).
+
+**Commanding a world (2026-09-12).** The walk scene ran on the task's
+sampled twists only. mjlab's velocity term already carries a joystick
+override for its own viser viewer: three slider handles, an enable
+handle and an env index, read at every `compute`, written into the
+command the policy observes. The Studio drives that same hook - the
+handles are ours (`rq_mjlab.walk_view`, `Joystick`), fed from the
+ring's mailbox instead of viser; none of the term's logic is copied.
+A fifth drawer tab, **Commands**, appears in walk scenes: forward,
+left and turn sliders bounded by the task's own command ranges (the
+render process learns them from the walk on its command line), a
+"hand back" that returns the commands to the task; the twist goes to
+the followed world, else w0. The door:
+`set_simulator_input(value, command="vx"|"vy"|"wz")` and
+`command="own"`. Measured off the ring (root positions over four
+seconds): under the task's commands w0 drifted at 0.09 m/s; commanded
+backwards at 1 m/s it moved at 0.86 m/s; commanded to turn at 0.7
+rad/s with no forward speed it stayed within a centimetre. Two door
+calls in a row first raced on the status echo (the second overwrote
+the first's axis, and took the echoed follow instead of the rule's):
+the held twist now lives Studio-side. Still to come from the list:
+the terrains as a task's own declaration (the larger item).
 
 Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
 manifest described the curriculum's first stage, whatever the

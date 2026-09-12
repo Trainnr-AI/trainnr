@@ -60,6 +60,10 @@ Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
     0x12 group  : u8 kind (GROUP_KINDS: geom, site, joint, tendon,
                   actuator, flex, skin), u8 group 0-5, u8 on — one bit
                   of the matching mjvOption group mask (2026-09-12)
+    0x13 twist  : i32 world, f32 vx, f32 vy, f32 wz — the commanded
+                  twist for one world of a walk scene (mjlab's own
+                  joystick override on the velocity term); world -1
+                  hands the commands back to the task (2026-09-12)
 
 Camera values arrive as DELTAS and this side integrates them: every
 absolute camera fact — the per-rig starting pose, the clamps — lives
@@ -80,6 +84,7 @@ import struct
 import sys
 import threading
 import time
+from collections.abc import Callable
 
 # Must run before `import mujoco` — this repo's own convention everywhere
 # else offscreen rendering happens on Linux (tools/e2e-smoke.py,
@@ -613,9 +618,12 @@ TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
 TAG_FOLLOW = 16  # i32 world to keep the camera on, -1 for none
 TAG_PAN = 17  # f32 forward, f32 right, f32 up: seconds of pan key held
 TAG_GROUP = 18  # u8 kind (GROUP_KINDS index), u8 group 0-5, u8 on
+TAG_TWIST = 19  # i32 world (-1 releases), f32 vx, f32 vy, f32 wz
+TWIST_AXES = 3
 # The seven `mjvOption` group masks, in one order for the wire and the
 # status: simulate's "Group enable" section, every kind it offers.
 GROUP_KINDS = ("geom", "site", "joint", "tendon", "actuator", "flex", "skin")
+TWIST_RANGES: list[list[float]] | None = None  # set by --twist-ranges (walk scenes)
 FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
 VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
@@ -637,6 +645,7 @@ TAG_PAYLOAD_BYTES = {
     TAG_FOLLOW: 4,  # i32 world index, -1 none (many-worlds scenes)
     TAG_PAN: 12,  # f32 forward, f32 right, f32 up (seconds held, signed)
     TAG_GROUP: 3,  # u8 kind, u8 group, u8 on: one mjvOption group mask bit
+    TAG_TWIST: 16,  # i32 world, f32 vx, f32 vy, f32 wz (walk scenes)
 }
 STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
 STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
@@ -753,7 +762,9 @@ STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, sp
 MAILBOX_SLOTS = 16  # commands queued between two physics polls; older ones are dropped
 MAILBOX_SLOT_BYTES = 16  # cmd u32, arg i32, arg f64
 MAILBOX_BYTES = 8 + MAILBOX_SLOTS * MAILBOX_SLOT_BYTES  # cseq u32, pad; then the slots
-MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual")
+# `twist`: one axis of one world's commanded twist - arg_i = world * 3 +
+# axis (a slot carries one float), arg_i = -1 hands the commands back.
+MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual", "twist")
 
 
 class StateRing:
@@ -1043,6 +1054,9 @@ class PhysicsPump:
         self._rtf_since = time.monotonic()
         self._rtf_sim = 0.0
         self.speed = 1.0  # the real-time factor asked for (simulate's Speed)
+        # Mailbox commands the pump does not know go here: a scene loop
+        # with its own switches (the walk's twist) sets it.
+        self.on_command: Callable[[str, int, float], None] | None = None
         self.rtf = 0.0  # the one achieved, over the last statistics window
         self.manual = False
 
@@ -1066,6 +1080,8 @@ class PhysicsPump:
                 raise TakeOver(data)
             if not arg_i and self.manual:
                 raise ResetScene(-1)
+        elif self.on_command is not None:
+            self.on_command(name, arg_i, arg_f)
 
     def tick(
         self, data: "mujoco.MjData", pace_seconds: float, hold_when_paused: bool = True
@@ -1160,6 +1176,9 @@ class SimControl:
         self._vis: dict[int, bool] = {}
         self._rnd: dict[int, bool] = {}
         self._groups: dict[tuple[str, int], bool] = {}
+        # The twist the human commands (walk scenes): world and values,
+        # echoed in the status; None while the task commands.
+        self._twist: dict | None = None
         self.paused = False
         self.manual = False
         self.speed = 1.0
@@ -1222,8 +1241,21 @@ class SimControl:
                     if self.follow >= 0
                     else self.camera.default_distance
                 )
+        elif tag == TAG_TWIST:
+            self._handle_twist(payload)
         elif tag in (TAG_VIS, TAG_RND, TAG_GROUP):
             self._handle_view(tag, payload)
+
+    def _handle_twist(self, payload: bytes) -> None:
+        """A walk scene's commanded twist: one mailbox slot per axis
+        (world * axes + axis), or -1 to hand the commands back."""
+        world, *twist = struct.unpack("<ifff", payload)
+        self._twist = None if world < 0 else {"world": world, "value": twist}
+        if world < 0:
+            self.ring.post_command("twist", -1)
+            return
+        for axis, value in enumerate(twist):
+            self.ring.post_command("twist", world * TWIST_AXES + axis, value)
 
     def _handle_view(self, tag: int, payload: bytes) -> None:
         """The render-side switches: a visualization flag, a rendering
@@ -1305,6 +1337,7 @@ class SimControl:
             "vis": vis,
             "rnd": rnd,
             "groups": groups,
+            "twist": self._twist,
             "follow": self.follow,
             "worlds": [
                 {"reward": float(r), "done": bool(d)} for r, d in self.ring.world_stats
@@ -1393,6 +1426,9 @@ class SimControl:
             "groups": list(GROUP_KINDS),
             "ngroup": int(mujoco.mjNGROUP),
             "nworld": self.ring.nworld,
+            # A walk scene's command bounds (vx, vy, wz), from the task
+            # that runs the scene; absent for a scene without commands.
+            "twist_ranges": TWIST_RANGES,
         }
 
 
@@ -1991,6 +2027,12 @@ if __name__ == "__main__":
     for flag in sys.argv[1:]:
         if flag.startswith("--physics="):
             physics_ring = flag.removeprefix("--physics=")
+        elif flag.startswith("--twist-ranges="):
+            # lo,hi per axis (vx, vy, wz): the walk's command bounds.
+            bounds = [float(v) for v in flag.removeprefix("--twist-ranges=").split(",")]
+            if len(bounds) != 2 * TWIST_AXES:
+                sys.exit("--twist-ranges takes six numbers: lo,hi for vx, vy, wz")
+            TWIST_RANGES = [bounds[i : i + 2] for i in range(0, len(bounds), 2)]
         elif flag.startswith("--scene="):
             model_path = flag.removeprefix("--scene=")
         elif flag.startswith("--ring="):

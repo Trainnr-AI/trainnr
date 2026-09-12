@@ -55,6 +55,57 @@ def transport():
     return module
 
 
+class _Slot:
+    """What mjlab's velocity term reads off a viser handle: `.value`."""
+
+    def __init__(self, value: float | bool) -> None:
+        self.value = value
+
+
+class Joystick:
+    """The Studio's Commands tab on mjlab's own compute-time override:
+    the velocity term's viser joystick (`create_gui` in mjlab's
+    tasks/velocity/mdp/velocity_command.py) reads an enable handle,
+    three slider handles and an env index at every `compute`, and
+    writes the twist into the command the policy observes. The same
+    three attributes, fed from the ring's mailbox instead of viser -
+    nothing of the term's own logic is copied."""
+
+    HANDLES = ("_joystick_enabled", "_joystick_sliders", "_joystick_get_env_idx")
+
+    def __init__(self, term, axes: int) -> None:
+        missing = [h for h in self.HANDLES if not hasattr(term, h)]
+        if missing:
+            raise SystemExit(
+                f"mjlab's velocity term has no {missing}: the Commands tab drives "
+                "its viewer joystick, which this mjlab does not have"
+            )
+        self.axes = axes
+        self.world = 0
+        self.enabled = _Slot(False)
+        self.sliders = [_Slot(0.0) for _ in range(axes)]
+        # mjlab's viewer seam: the three handles its `compute` reads.
+        term._joystick_enabled = self.enabled
+        term._joystick_sliders = self.sliders
+        term._joystick_get_env_idx = lambda: self.world
+
+    def on_command(self, name: str, arg_i: int, arg_f: float) -> None:
+        """The mailbox's `twist`: arg_i = world * axes + axis, or -1 to
+        hand the commands back to the task."""
+        if name != "twist":
+            return
+        if arg_i < 0:
+            self.enabled.value = False
+            return
+        self.world, axis = divmod(arg_i, self.axes)
+        self.sliders[axis].value = arg_f
+        if not self.enabled.value:
+            print(
+                f"[walk-view] w{self.world} commanded from the Studio", file=sys.stderr
+            )
+        self.enabled.value = True
+
+
 def latest_checkpoint(project: Path | None = None) -> Path:
     """The newest model_*.pt: under the project's runs when a project is
     given (the Studio's walk scene rolls the project's latest policy),
@@ -329,6 +380,14 @@ def main() -> None:  # noqa: PLR0915
         flush=True,
     )
     env, policy = load_policy(checkpoint, args.envs, device, robot=robot)
+    from rq_mjlab.envelope import COMMAND_TERM, command_ranges  # noqa: PLC0415
+
+    twist_term = env.unwrapped.command_manager.get_term(COMMAND_TERM)
+    ranges = command_ranges(env.unwrapped.cfg)
+    twist_bounds = ",".join(
+        f"{lo},{hi}"
+        for lo, hi in (ranges[k] for k in ("lin_vel_x", "lin_vel_y", "ang_vel_z"))
+    )
     mirror = streamer.walk_scene(robot, args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
@@ -368,11 +427,13 @@ def main() -> None:  # noqa: PLR0915
             *([f"--shm={args.shm}"] if args.shm else []),
             *([f"--project={args.project}"] if args.project else []),
             f"--rig={robot}-rl",
+            f"--twist-ranges={twist_bounds}",
         ],
         cwd=str(REPO / "pipeline"),
     )
     overview = None if args.no_rerun else Overview(args.envs)
     pump = streamer.PhysicsPump(mirror, None, ring)
+    pump.on_command = Joystick(twist_term, streamer.TWIST_AXES).on_command
 
     step_seconds = float(env.unwrapped.step_dt)
     obs = env.get_observations()

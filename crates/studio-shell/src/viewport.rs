@@ -221,6 +221,10 @@ pub struct ViewportFeed {
     /// Slider values the human is editing, so a drag does not fight
     /// the 100 ms status echo: keyed by qpos address / actuator index.
     editing: std::collections::HashMap<(u8, usize), f64>,
+    /// The twist last sent (world, values) while the human holds the
+    /// commands: the source the next axis composes from, ahead of the
+    /// status echo (two door calls in a row raced on the echo, 2026-09-12).
+    twist_held: Option<(i32, [f32; 3])>,
 }
 
 /// One joint the Joint panel can slide (hinge or slide; free and ball
@@ -280,6 +284,20 @@ pub struct SimModel {
     /// Worlds in a many-worlds scene (0 for a single world).
     #[serde(default)]
     pub nworld: u32,
+    /// A walk scene's command bounds - forward, left, turn - from the
+    /// task that runs it; absent for a scene without commands.
+    #[serde(default)]
+    pub twist_ranges: Option<[[f64; 2]; 3]>,
+}
+
+/// The twist the human commands in a walk scene: which world, and the
+/// forward, left and turn values.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimTwist {
+    #[serde(default)]
+    pub world: i64,
+    #[serde(default)]
+    pub value: [f64; 3],
 }
 
 /// The clock and the inputs, every 100 ms (the stream's status message).
@@ -310,6 +328,10 @@ pub struct SimStatus {
     /// Each group mask as rendered, by kind name.
     #[serde(default)]
     pub groups: std::collections::BTreeMap<String, Vec<bool>>,
+    /// The commanded twist while the human holds it; None while the
+    /// task commands.
+    #[serde(default)]
+    pub twist: Option<SimTwist>,
     #[serde(default)]
     pub follow: i64,
     #[serde(default)]
@@ -372,6 +394,7 @@ impl ViewportFeed {
             agent_flash: None,
             report: Arc::new(std::sync::Mutex::new(SimReport::default())),
             editing: std::collections::HashMap::new(),
+            twist_held: None,
         }
     }
 
@@ -493,6 +516,7 @@ impl ViewportFeed {
                     agent_flash: None,
                     report,
                     editing: std::collections::HashMap::new(),
+                    twist_held: None,
                 }
             }
             (Ok(mut child), Err(err)) => {
@@ -732,6 +756,18 @@ impl ViewportFeed {
         self.send_message(&encode_flag(TAG_RND, flag, on));
     }
 
+    /// The commanded twist for one world of a walk scene; world -1 hands
+    /// the commands back to the task.
+    pub fn send_twist(&mut self, world: i32, twist: [f32; 3]) {
+        self.twist_held = (world >= 0).then_some((world, twist));
+        self.send_message(&encode_twist(world, twist));
+    }
+
+    /// The twist the human holds, as last sent (None: the task's own).
+    pub fn twist_held(&self) -> Option<(i32, [f32; 3])> {
+        self.twist_held
+    }
+
     /// One bit of a group mask: the kind by its wire index (the model's
     /// `groups` order), the group 0..ngroup.
     pub fn send_group(&mut self, kind: u8, group: u8, on: bool) {
@@ -773,9 +809,16 @@ impl ViewportFeed {
     }
 
     /// The value a slider shows: what the human is dragging, else the
-    /// stream's echo. Kind 0 = a joint (qpos address), 1 = an actuator.
+    /// stream's echo. Kind 0 = a joint (qpos address), 1 = an actuator,
+    /// 2 = a twist axis.
     pub fn slider_value(&self, kind: u8, index: usize, echoed: f64) -> f64 {
         self.editing.get(&(kind, index)).copied().unwrap_or(echoed)
+    }
+
+    /// A slider the human is dragging shows this until the drag ends
+    /// (the stream's echo lags a frame or two behind the hand).
+    pub fn start_editing(&mut self, kind: u8, index: usize, value: f64) {
+        self.editing.insert((kind, index), value);
     }
 
     /// The drag ended: the stream's echo is the truth again.
@@ -926,6 +969,7 @@ const TAG_VIEW: u8 = 15;
 const TAG_FOLLOW: u8 = 16;
 const TAG_PAN: u8 = 17;
 const TAG_GROUP: u8 = 18;
+const TAG_TWIST: u8 = 19;
 /// The stdout tokens: a frame published, a status message follows.
 const FRAME_TOKEN: u8 = 0xF7;
 const STATUS_TOKEN: u8 = 0xF8;
@@ -958,6 +1002,18 @@ fn encode_pan(forward_s: f32, right_s: f32, up_s: f32) -> [u8; 13] {
     bytes[1..5].copy_from_slice(&forward_s.to_le_bytes());
     bytes[5..9].copy_from_slice(&right_s.to_le_bytes());
     bytes[9..13].copy_from_slice(&up_s.to_le_bytes());
+    bytes
+}
+
+/// One twist: tag then Python's `struct.unpack("<ifff", …)` — the world
+/// and the forward, left, turn values.
+fn encode_twist(world: i32, twist: [f32; 3]) -> [u8; 17] {
+    let mut bytes = [0u8; 17];
+    bytes[0] = TAG_TWIST;
+    bytes[1..5].copy_from_slice(&world.to_le_bytes());
+    for (i, v) in twist.iter().enumerate() {
+        bytes[5 + 4 * i..9 + 4 * i].copy_from_slice(&v.to_le_bytes());
+    }
     bytes
 }
 
@@ -1024,6 +1080,11 @@ mod tests {
         assert_eq!(
             encode_pan(0.5, -1.0, 0.0),
             [17, 0, 0, 0, 0x3F, 0, 0, 0x80, 0xBF, 0, 0, 0, 0]
+        );
+        // struct.pack("<ifff", -1, 1.0, 0.0, 0.0), tag first.
+        assert_eq!(
+            encode_twist(-1, [1.0, 0.0, 0.0]),
+            [19, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
 

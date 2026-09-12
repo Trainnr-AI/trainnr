@@ -59,6 +59,18 @@ class WireTags(unittest.TestCase):
         self.assertEqual(constant(RENDER_STREAM, r"^    TAG_GROUP: (\d+),"), "3")
         self.assertIn("&[TAG_GROUP, kind, group, u8::from(on)]", VIEWPORT_RS)
 
+    def test_the_twist_tag_and_its_payload_agree(self) -> None:
+        # The commanded twist (i32 world, three f32): the tag and the
+        # sixteen payload bytes on both sides.
+        py_tag = constant(RENDER_STREAM, r"^TAG_TWIST = (\d+)")
+        rs_tag = constant(VIEWPORT_RS, r"const TAG_TWIST: u8 = (\d+);")
+        self.assertEqual(py_tag, rs_tag)
+        py_bytes = int(constant(RENDER_STREAM, r"^    TAG_TWIST: (\d+),"))
+        rs_bytes = int(
+            constant(VIEWPORT_RS, r"fn encode_twist\(.*?\) -> \[u8; (\d+)\]")
+        )
+        self.assertEqual(py_bytes + 1, rs_bytes)
+
 
 class StudioPort(unittest.TestCase):
     def test_the_ingest_port_is_the_one_the_shell_binds(self) -> None:

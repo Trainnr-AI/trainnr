@@ -562,7 +562,9 @@ opens a drawer over the right of the picture with four tabs: Control
 Joints (a row per hinge or slide joint; free and ball joints have none,
 simulate's rule), Physics (timestep, integrator, solver, gravity,
 counts, keyframes), Visuals (every MuJoCo visualization and rendering
-flag, and the seven group masks, 2026-09-12). While the scene runs itself the rows are read-only
+flag, and the seven group masks, 2026-09-12), and in walk scenes
+Commands (the twist for the followed world, bounded by the task's
+ranges, on mjlab's joystick override). While the scene runs itself the rows are read-only
 bars showing what the policy does; in drive mode they are sliders with
 a typed value. Ctrl+drag on the picture still shoves a body.
 
@@ -587,7 +589,7 @@ to (0.01–100), reported back as the factor achieved.
 
 **The agent's doors.** `simulate_in_studio(task)` starts or stops a
 scene; `control_simulator(run, step, reset, keyframe, speed, manual)`;
-`set_simulator_input(value, actuator= | joint=)`; `set_simulator_view(flag, on | group=, kind=, on | camera= | inspect= | fullscreen=)` — a MuJoCo flag, one group-mask bit (geom, site, joint, tendon, actuator, flex, skin; 0-5), a named camera view (front, side, top, reset), the Inspect drawer's tab (control, joints, physics, visuals, close), or the viewport alone on the page.
+`set_simulator_input(value, actuator= | joint= | command=)` — an actuator or joint slider, or in a walk scene one twist axis (vx, vy, wz) for the followed world on mjlab's own joystick override, `command="own"` handing back; `set_simulator_view(flag, on | group=, kind=, on | camera= | inspect= | fullscreen=)` — a MuJoCo flag, one group-mask bit (geom, site, joint, tendon, actuator, flex, skin; 0-5), a named camera view (front, side, top, reset), the Inspect drawer's tab (control, joints, physics, visuals, close), or the viewport alone on the page.
 Names are the model's own and a wrong one is refused naming the
 choices; nothing runs → refused with "simulate_in_studio first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,

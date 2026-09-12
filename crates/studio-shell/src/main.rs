@@ -719,6 +719,7 @@ impl StudioShell {
                 on,
                 group,
                 kind,
+                command,
                 inspect,
                 view,
                 follow,
@@ -743,6 +744,7 @@ impl StudioShell {
                     joint.as_ref().map(|_| "joint"),
                     flag.as_ref().map(|_| "overlay"),
                     group.map(|_| "group"),
+                    command.as_ref().map(|_| "command"),
                     inspect.as_ref().map(|_| "inspect"),
                     view.as_ref().map(|_| "view"),
                     follow.as_ref().map(|_| "follow"),
@@ -862,6 +864,9 @@ impl StudioShell {
                             model.vis_flags, model.rnd_flags
                         ));
                     }
+                }
+                if let Some(axis) = command {
+                    simulator::command_from_door(ui.ctx(), &mut self.viewport, &axis, value)?;
                 }
                 if let Some(group) = group {
                     let on = on.ok_or("a group needs `on`")?;

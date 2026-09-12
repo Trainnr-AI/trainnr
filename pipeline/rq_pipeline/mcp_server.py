@@ -1152,20 +1152,40 @@ def control_simulator(  # noqa: PLR0913, PLR0917
     )
 
 
+TWIST_AXES = ("vx", "vy", "wz")
+
+
 def set_simulator_input(
-    value: float, actuator: str | None = None, joint: str | None = None
+    value: float | None = None,
+    actuator: str | None = None,
+    joint: str | None = None,
+    command: str | None = None,
 ) -> dict[str, Any] | Refusal:
     """One slider of simulate's Control or Joint panel: an actuator's
     control value by name, or a hinge/slide joint's position by name
-    (free and ball joints have no scalar). Takes manual control of the
-    scene. Names come from the robot's Actuators and Joints tables."""
+    (free and ball joints have no scalar); either takes manual control of
+    the scene. Or, in a walk scene, one axis of the commanded twist -
+    `command` vx (forward, m/s), vy (left) or wz (turn, rad/s) with
+    `value`, sent to the followed world (else w0) through mjlab's own
+    joystick override; `command="own"` hands the commands back to the
+    task. Names come from the robot's Actuators and Joints tables."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.control import command  # noqa: PLC0415
+    from rq_pipeline.project.control import command as send  # noqa: PLC0415
 
-    if (actuator is None) == (joint is None):
-        return refusal("name exactly one of actuator, joint")
-    return command(
-        current_project(), "simulator", actuator=actuator, joint=joint, value=value
+    named = [n for n in (actuator, joint, command) if n is not None]
+    if len(named) != 1:
+        return refusal("name exactly one of actuator, joint, command")
+    if command is not None and command not in (*TWIST_AXES, "own"):
+        return refusal(f"command is one of {TWIST_AXES} or own, not {command!r}")
+    if value is None and command != "own":
+        return refusal("a value is needed")
+    return send(
+        current_project(),
+        "simulator",
+        actuator=actuator,
+        joint=joint,
+        command=command,
+        value=value,
     )
 
 

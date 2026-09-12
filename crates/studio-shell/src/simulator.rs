@@ -143,6 +143,62 @@ enum Tab {
     /// masks - `simulate`'s Visualization, Rendering and Group enable
     /// sections in one list.
     Visuals,
+    /// A walk scene's commanded twist: forward, left, turn sliders for
+    /// the followed world, on mjlab's own joystick override.
+    Commands,
+}
+
+/// The twist axes as the door and the rows name them, in wire order.
+/// No slash in a row's name: `short` would take the part after it.
+const TWIST_AXES: [(&str, &str); 3] = [("vx", "forward"), ("vy", "left"), ("wz", "turn")];
+/// The slider kind twist axes are edited under (0 joints, 1 actuators).
+const TWIST_KIND: u8 = 2;
+
+/// Which world a commanded twist goes to: the followed one (the follow
+/// rule's answer now, not the echoed one), else w0.
+fn command_world(ctx: &egui::Context, status: &SimStatus) -> i32 {
+    follow_target(ctx, follow_state(ctx), &status.worlds).max(0)
+}
+
+/// What the human holds: as last sent from here, else as the stream
+/// echoes it (a hold begun by another Studio session), else nothing.
+fn held_twist(viewport: &ViewportFeed, status: &SimStatus) -> Option<(i32, [f64; 3])> {
+    viewport
+        .twist_held()
+        .map(|(w, t)| (w, t.map(f64::from)))
+        .or_else(|| status.twist.as_ref().map(|t| (t.world as i32, t.value)))
+}
+
+/// The door's `command`: one axis by name with a value, or `own`.
+pub fn command_from_door(
+    ctx: &egui::Context,
+    viewport: &mut ViewportFeed,
+    axis: &str,
+    value: Option<f32>,
+) -> Result<(), String> {
+    let (status, model) = viewport.report();
+    let (Some(status), Some(model)) = (status, model) else {
+        return Err("the scene is not described yet".into());
+    };
+    if model.twist_ranges.is_none() {
+        return Err("commands need a walk scene; this scene has none".into());
+    }
+    if axis == "own" {
+        viewport.send_twist(-1, [0.0; 3]);
+        return Ok(());
+    }
+    let index = TWIST_AXES
+        .iter()
+        .position(|(name, _)| *name == axis)
+        .ok_or_else(|| format!("no command axis {axis:?}: vx, vy, wz or own"))?;
+    let value = value.ok_or("a command axis needs a `value`")?;
+    let (world, held) =
+        held_twist(viewport, &status).unwrap_or_else(|| (command_world(ctx, &status), [0.0; 3]));
+    let mut twist = held.map(|v| v as f32);
+    twist[index] = value;
+    viewport.send_twist(world, twist);
+    set_drawer(ctx, true, Tab::Commands);
+    Ok(())
 }
 
 /// Open the drawer on a tab by name, or close it — the agent's door.
@@ -154,9 +210,10 @@ pub fn inspect(ctx: &egui::Context, what: &str) -> Result<(), String> {
         "joints" => set_drawer(ctx, true, Tab::Joints),
         "physics" => set_drawer(ctx, true, Tab::Physics),
         "visuals" => set_drawer(ctx, true, Tab::Visuals),
+        "commands" => set_drawer(ctx, true, Tab::Commands),
         other => {
             return Err(format!(
-                "inspect {other:?}: one of control, joints, physics, visuals, close"
+                "inspect {other:?}: one of control, joints, physics, visuals, commands, close"
             ));
         }
     }
@@ -555,12 +612,16 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                     ui.set_max_height(height);
                     let mut tab = tab;
                     ui.horizontal(|ui| {
-                        for (t, name) in [
+                        let mut tabs = vec![
                             (Tab::Control, "Control"),
                             (Tab::Joints, "Joints"),
                             (Tab::Physics, "Physics"),
                             (Tab::Visuals, "Visuals"),
-                        ] {
+                        ];
+                        if model.twist_ranges.is_some() {
+                            tabs.push((Tab::Commands, "Commands"));
+                        }
+                        for (t, name) in tabs {
                             if toggle(ui, tab == t, name, "") {
                                 tab = t;
                             }
@@ -588,6 +649,7 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                             Tab::Joints => joints(ui, viewport, &status, &model),
                             Tab::Physics => physics(ui, &model),
                             Tab::Visuals => visuals(ui, viewport, &status, &model),
+                            Tab::Commands => commands(ui, viewport, &status, &model),
                         });
                 });
         });
@@ -754,6 +816,64 @@ fn joints(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, mo
 }
 
 /// The model's facts, looked up rarely: simulate's Physics section.
+/// The walk's twist for one world: three sliders bounded by the task's
+/// own command ranges. Moving one takes the commands for the followed
+/// world (else w0) on mjlab's joystick override; "hand back" returns
+/// them to the task's sampler. The rows show what the human holds.
+fn commands(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, model: &SimModel) {
+    let Some(ranges) = model.twist_ranges else {
+        return;
+    };
+    let held = held_twist(viewport, status);
+    let world = held.map_or_else(|| command_world(ui.ctx(), status), |(w, _)| w);
+    ui.horizontal(|ui| {
+        if let Some((held_world, _)) = held {
+            ui.label(egui::RichText::new(format!("You command w{held_world}.")).strong());
+            if ui
+                .small("hand back")
+                .on_hover_text("the task's own commands again")
+                .clicked()
+            {
+                viewport.send_twist(-1, [0.0; 3]);
+            }
+        } else {
+            ui.label(
+                egui::RichText::new(format!(
+                    "The task commands. A slider commands w{world} (the followed world)."
+                ))
+                .color(ui.visuals().weak_text_color()),
+            );
+        }
+    });
+    ui.label(
+        egui::RichText::new("metres per second forward and left, radians per second turn")
+            .small()
+            .color(ui.visuals().weak_text_color()),
+    );
+    let values = held.map_or([0.0; 3], |(_, v)| v);
+    let mut twist = values;
+    let mut moved = false;
+    let mut stopped = None;
+    for (i, (name, unit)) in TWIST_AXES.iter().enumerate() {
+        let shown = viewport.slider_value(TWIST_KIND, i, values[i]);
+        let (change, done) = row(ui, &format!("{name} {unit}"), ranges[i], shown, true);
+        twist[i] = change.unwrap_or(shown);
+        if let Some(v) = change {
+            viewport.start_editing(TWIST_KIND, i, v);
+            moved = true;
+        }
+        if done {
+            stopped = Some(i);
+        }
+    }
+    if moved {
+        viewport.send_twist(world, twist.map(|v| v as f32));
+    }
+    if let Some(i) = stopped {
+        viewport.stop_editing(TWIST_KIND, i);
+    }
+}
+
 /// The whole switchboard: every visualization flag, every rendering
 /// flag, and the group masks, each a checkbox that sends its bit — the
 /// stream's status echoes what is rendered, so a box shows the truth.
