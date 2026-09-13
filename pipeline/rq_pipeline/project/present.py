@@ -55,6 +55,7 @@ from rq_pipeline.project.kinds import (
     Kind,
 )
 from rq_pipeline.project.locate import INDEX_DIR, Project
+from rq_pipeline.viz import viewer_files
 
 if TYPE_CHECKING:
     import rerun as rr
@@ -107,7 +108,14 @@ def present(
     )
     recording.connect_grpc(STUDIO_ADDRESS)
     try:
+        # The saved streams first (docs/76 §10.5): each lands in the viewer
+        # under its own recording id with the layout it was saved with -
+        # a run that happened elsewhere opens here as it ran.
+        replayed = viewer_files(project.root / artifact.path)
+        for path in replayed:
+            recording.log_file_from_path(path)
         shown = presenter(project, artifact, recording)
+        shown["viewer_files"] = [str(path) for path in replayed]
         recording.send_blueprint(rrb.Blueprint(shown["layout"]))
         recording.flush(timeout_sec=FLUSH_S)
     finally:
@@ -117,6 +125,7 @@ def present(
         "kind": kind.value,
         "paths": shown["paths"],
         "view": shown["view"],
+        "viewer_files": shown["viewer_files"],
     }
 
 

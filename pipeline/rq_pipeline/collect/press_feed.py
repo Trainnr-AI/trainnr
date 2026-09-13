@@ -14,6 +14,7 @@ missing viewer (the `viz` extra adds it).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from rq_pipeline.viz import STUDIO_ADDRESS
@@ -40,22 +41,28 @@ def thinned(frames: list[tuple[int, Any]], limit: int) -> list[tuple[int, Any]]:
     return picked
 
 
+# The saved stream of a data-generation batch, inside its folder (docs/76 §10.5).
+PRESS_STREAM = "press"
+
+
 class StudioPressFeed:
     """Streams one press run to the Studio (a `press.PressFeed`)."""
 
-    def __init__(self, run_name: str) -> None:
-        import rerun as rr  # noqa: PLC0415 - viz extra
+    def __init__(self, run_name: str, file: Path | None = None) -> None:
+        from rq_pipeline.viz import open_stream  # noqa: PLC0415 - viz extra
 
-        self._rr: Any = rr
-        rr.init(f"{APP_ID}-{run_name}")
-        rr.connect_grpc(STUDIO_ADDRESS)
+        self._rr: Any = open_stream(
+            f"{APP_ID}-{run_name}", address=STUDIO_ADDRESS, file=file
+        )
 
     @classmethod
-    def connect(cls, run_name: str, say: Say = print) -> StudioPressFeed | None:
+    def connect(
+        cls, run_name: str, say: Say = print, file: Path | None = None
+    ) -> StudioPressFeed | None:
         """The feed, or None with ONE loud line when rerun-sdk is not in
         this venv — pressing continues unwatched (docs/66 §0)."""
         try:
-            return cls(run_name)
+            return cls(run_name, file)
         except ImportError:
             say(
                 "no rerun-sdk in this venv — pressing continues UNWATCHED "

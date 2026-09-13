@@ -17,6 +17,7 @@ its picture.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -50,13 +51,14 @@ class GateMirror:
         runtime_name: str,
         *,
         rr: Any,
+        file: Path | None = None,
     ) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
         from rq_pipeline.viz import (  # noqa: PLC0415
             STUDIO_ADDRESS,
             RigMirror,
-            leave_cleanly_on_term,
+            open_stream,
         )
 
         self._rr = rr
@@ -69,14 +71,17 @@ class GateMirror:
         self._mirror = RigMirror(model, model_colors=True, skip_groups=(3, 4, 5))
         self.ticks = 0
         self.seconds = 0.0
-        rr.init(f"{APP_ID}-{runtime_name}", spawn=False)
-        rr.connect_grpc(STUDIO_ADDRESS)
-        leave_cleanly_on_term(rr)
+        open_stream(f"{APP_ID}-{runtime_name}", address=STUDIO_ADDRESS, file=file)
         self._layout()
 
     @classmethod
     def open(
-        cls, manifest: Manifest, runtime_name: str, *, log: Any = sys.stderr
+        cls,
+        manifest: Manifest,
+        runtime_name: str,
+        *,
+        log: Any = sys.stderr,
+        file: Path | None = None,
     ) -> GateMirror | None:
         """The mirror, or None with a note when it cannot be one."""
         rr = _rerun()
@@ -90,7 +95,7 @@ class GateMirror:
 
         try:
             model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
-            return cls(manifest, model, runtime_name, rr=rr)
+            return cls(manifest, model, runtime_name, rr=rr, file=file)
         except (FileNotFoundError, ValueError, KeyError) as why:
             # an unloadable scene, or a joint the manifest names and the
             # scene lacks: the gate runs, the picture does not

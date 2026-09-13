@@ -115,6 +115,7 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
 )
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
 from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
+from rq_pipeline.viz import sinks  # noqa: E402
 
 # The ALOHA 2 tasks; every builder takes `look`, and the first free body's
 # z sits at CUBE_Z_STATE_INDEX in either scene (the cube, or the right
@@ -382,7 +383,7 @@ class Watcher:
     ) -> None:
         import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
         from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: PLC0415
-        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+        from rq_pipeline.viz import RigMirror  # noqa: PLC0415, sinks
 
         self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)
@@ -724,8 +725,7 @@ def open_sinks(rrd: Path | None) -> None:
     the file fills (measured 2026-08-28). Before the blueprint, so the
     file carries the layout too."""
     if rrd is not None:
-        rrd.parent.mkdir(parents=True, exist_ok=True)
-        rr.set_sinks(rr.GrpcSink(), rr.FileSink(str(rrd)))
+        rr.set_sinks(*sinks(rr, file=rrd))
 
 
 # ---- the modes ---------------------------------------------------------------

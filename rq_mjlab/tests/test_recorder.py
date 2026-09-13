@@ -116,6 +116,23 @@ class TheRecorder(unittest.TestCase):
         # The mirror adds the 3D leg on top of the scalar story.
         self.assertGreater(with_mirror, without)
 
+    def test_the_cfg_carries_the_saved_stream_and_opens_through_the_seam(self) -> None:
+        from rq_pipeline import viz  # noqa: PLC0415
+
+        from rq_mjlab import recorder  # noqa: PLC0415
+        from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
+
+        self.assertIsNone(
+            RerunRecorderCfg().file, "live only unless a run names its folder"
+        )
+        self.assertEqual(
+            RerunRecorderCfg(file="runs/x/.viewer/train.rrd").file,
+            "runs/x/.viewer/train.rrd",
+        )
+        self.assertIs(
+            recorder.open_stream, viz.open_stream, "one seam opens every stream"
+        )
+
     def test_the_cfg_names_its_term_class(self) -> None:
         from rq_mjlab.recorder import RerunRecorder, RerunRecorderCfg  # noqa: PLC0415
 

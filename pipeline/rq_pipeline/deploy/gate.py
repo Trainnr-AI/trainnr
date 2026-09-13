@@ -32,6 +32,7 @@ from rq_pipeline.evaluate.tracking import (
     criterion_text,
 )
 from rq_pipeline.stats.intervals import clopper_pearson
+from rq_pipeline.viz import viewer_file
 
 # The gate passes when the exported policy's rate is within this much of
 # the evaluation's; a stated number, never a hidden one.
@@ -47,6 +48,10 @@ class Trial(TrackingOutcome):
     """One held command's episode, judged under the shared rule."""
 
     command: list[float]
+
+
+# The saved stream of a gate, per runtime, inside its deployment.
+GATE_STREAM = "gate"
 
 
 def run_trial(
@@ -117,7 +122,16 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     manifest = load_manifest(deployment_dir)
     opener = open if open is not None else spec.open()
     driver = opener(manifest, assets_dir=assets_dir)
-    mirror = GateMirror.open(manifest, spec.name) if narrate else None
+    mirror = (
+        GateMirror.open(
+            manifest,
+            spec.name,
+            # The gate's picture, saved inside the deployment (docs/76 §10.5).
+            file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
+        )
+        if narrate
+        else None
+    )
     commands = draw_commands(manifest, trials, seed)
     protocol: dict[str, Any] = {
         "trials": trials,

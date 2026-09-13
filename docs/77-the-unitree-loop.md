@@ -951,6 +951,19 @@ What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). Both independent gates
 are in.
 
+## 8a. The window follows the run (2026-09-13)
+
+From today every feed on this branch saves its stream inside the
+artifact it narrates (docs/76 §10.5): the next training run on the box
+leaves `runs/<run>/.viewer/train.rrd`, its evaluation
+`.viewer/verdict-<checkpoint>.rrd`, its gates
+`.viewer/gate-mujoco.rrd` and `.viewer/gate-dds.rrd`. A pull of the
+project brings the pictures home; Show in viewer on the Mac replays them
+as they ran on the box. Nothing on the box has to change; the Studio
+there may even be closed, and the feeds say so and save. What waits for
+the box: the first Go2 run made after this commit, so the claim has a
+box-side number beside the Mac's.
+
 ## 8. The last stage, and why it is empty here (2026-09-13)
 
 A7, drift monitoring, is built (docs/76 §9.1–9.2) and proved on the

@@ -15,6 +15,7 @@ follows what is actually happening, not a canned scene.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 RIG_PATH = "world/rig"  # where every rig tool logs the mirror
@@ -23,6 +24,122 @@ RIG_PATH = "world/rig"  # where every rig tool logs the mirror
 # crates/studio-shell/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
 TERM_EXIT_STATUS = 128 + 15  # a process ended by SIGTERM, as a shell reports it
+
+# The headless rule (docs/76 §10.5): a feed that narrates an artifact also
+# writes its stream into that artifact, under a hidden folder — outside
+# the artifact's hash and the index's walk, so a picture never moves a
+# version and a reindex never reads one.
+VIEWER_DIR = ".viewer"
+VIEWER_SUFFIX = ".rrd"
+# One knob for disk: "0", "off", "no" or "false" keeps the live stream only.
+VIEWER_FILE_ENV = "TRAINNR_VIEWER_FILE"
+_OFF = ("0", "off", "no", "false")
+
+
+def viewer_file(folder: Path | str, name: str) -> Path:
+    """Where the named stream of the artifact at `folder` is saved."""
+    return Path(folder) / VIEWER_DIR / f"{name}{VIEWER_SUFFIX}"
+
+
+def viewer_files(folder: Path | str) -> list[Path]:
+    """Every saved stream the artifact at `folder` carries, by name."""
+    root = Path(folder) / VIEWER_DIR
+    return sorted(root.glob(f"*{VIEWER_SUFFIX}")) if root.is_dir() else []
+
+
+def viewer_file_wanted() -> bool:
+    import os  # noqa: PLC0415
+
+    return os.environ.get(VIEWER_FILE_ENV, "1").strip().lower() not in _OFF
+
+
+# How long a feed waits to learn whether a Studio listens at the address
+# before it opens: one TCP connect, on loopback, far below a frame.
+LISTEN_PROBE_S = 0.5
+
+
+def studio_listening(
+    address: str = STUDIO_ADDRESS, timeout_s: float = LISTEN_PROBE_S
+) -> bool:
+    """Whether something accepts connections at the Studio's address now.
+    A feed toward a viewer that never answers keeps every chunk in a
+    bounded queue; once that queue is full the SDK's shutdown flush waits
+    for an acknowledgement that never comes and the process never exits
+    (a gate under the job runner, 2026-09-13: verdict printed, process
+    alive for ten minutes). So the question is asked before the sink is
+    chosen, not after."""
+    import socket  # noqa: PLC0415
+    from urllib.parse import urlsplit  # noqa: PLC0415
+
+    parts = urlsplit(address.replace("rerun+", "", 1))
+    host, port = parts.hostname or "127.0.0.1", parts.port or 9876
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def sinks(
+    rr: Any,
+    *,
+    address: str = STUDIO_ADDRESS,
+    file: Path | str | None = None,
+    listening: bool | None = None,
+) -> list[Any]:
+    """The sinks a feed streams to: the Studio's server when one listens,
+    plus the file when one is named and wanted. Both at once on purpose:
+    `rr.save()` alone REPLACES the viewer connection and the window goes
+    dark while the file fills (measured 2026-08-28). With a file and no
+    Studio, the file alone — a headless run must end (see
+    `studio_listening`). With no file and no Studio the server sink stays,
+    as every feed behaved before the file existed."""
+    saving = file is not None and viewer_file_wanted()
+    heard = studio_listening(address) if listening is None else listening
+    out: list[Any] = []
+    if heard or not saving:
+        out.append(rr.GrpcSink(address))
+    if saving:
+        path = Path(file)  # type: ignore[arg-type]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        out.append(rr.FileSink(str(path)))
+    return out
+
+
+def open_stream(
+    app_id: str,
+    *,
+    address: str = STUDIO_ADDRESS,
+    file: Path | str | None = None,
+    recording_id: str | None = None,
+    on_term: bool = True,
+) -> Any:
+    """The one way a feed opens its stream: the global recording named
+    `app_id`, sent to the Studio and, when `file` names one, saved there
+    too; the TERM handler installed so a stopped job closes cleanly.
+    Returns the `rerun` module for the caller's logging."""
+    import sys  # noqa: PLC0415
+
+    import rerun as rr  # noqa: PLC0415 - the viz extra
+
+    kwargs = {"recording_id": recording_id} if recording_id is not None else {}
+    rr.init(app_id, spawn=False, **kwargs)
+    chosen = sinks(rr, address=address, file=file)
+    kinds = [type(sink).__name__ for sink in chosen]
+    if kinds == ["GrpcSink"]:
+        rr.connect_grpc(address)
+    else:
+        rr.set_sinks(*chosen)
+    if "GrpcSink" not in kinds:
+        print(
+            f"[{app_id}] no Studio listens at {address}: saving the stream to "
+            f"{file} only (headless, docs/76 §10.5)",
+            file=sys.stderr,
+            flush=True,
+        )
+    if on_term:
+        leave_cleanly_on_term(rr)
+    return rr
 
 
 def leave_cleanly_on_term(rr) -> None:

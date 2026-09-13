@@ -25,6 +25,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.viz import viewer_file
+
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 CONTROLLERS = ("untrained", "stand")
@@ -53,6 +55,10 @@ def summarize(steps: list[dict[str, float]], fell: int) -> dict[str, Any]:
     }
 
 
+# The saved stream of a reward preview, beside its summary in the task.
+PREVIEW_STREAM = "preview"
+
+
 def preview(  # noqa: PLR0913 - the preview's knobs, each named
     *,
     robot: str,
@@ -61,6 +67,7 @@ def preview(  # noqa: PLR0913 - the preview's knobs, each named
     device: str,
     address: str | None,
     seed: int,
+    file: Path | None = None,
 ) -> dict[str, Any]:
     import torch  # noqa: PLC0415
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
@@ -77,6 +84,8 @@ def preview(  # noqa: PLR0913 - the preview's knobs, each named
     recorder = RerunRecorderCfg(app_id=APP_ID, every=1, frame_every=FRAME_EVERY)
     if address:
         recorder.address = address
+    if file is not None:
+        recorder.file = str(file)  # the saved stream beside the summary
     cfg.recorders = {"rerun": recorder}
     agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
@@ -142,6 +151,11 @@ def main() -> int:
         device=args.device,
         address=args.address,
         seed=args.seed,
+        file=(
+            viewer_file(args.out.parent, f"{PREVIEW_STREAM}-{args.controller}")
+            if args.out is not None
+            else None
+        ),
     )
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)

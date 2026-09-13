@@ -1504,6 +1504,51 @@ def check_drift(
     }
 
 
+def describe_viewer_recording(
+    artifact: str, values: bool = False
+) -> dict[str, Any] | Refusal:
+    """The saved viewer streams an artifact carries (by version): every
+    feed that narrated it into the Studio also wrote its stream into the
+    artifact's folder, so a run with no window leaves the same picture.
+    Each file described by Rerun's own reader: entity paths, timelines,
+    components, chunk counts, size; and, with `values` and the viz-query
+    extra, rows per timeline and every scalar series' count, minimum,
+    maximum and last value (tens of seconds on a gate's file, so asked
+    for, not assumed). Refused by name: an unknown version."""
+    from rq_pipeline.project.viewer import describe_folder  # noqa: PLC0415
+
+    try:
+        project, found = _any_project_artifact(artifact)
+    except (FileNotFoundError, KeyError, ValueError) as refused:
+        return refusal(_reason(refused))
+    folder = project.root / found.path
+    files = describe_folder(folder, values=values)
+    return {
+        "status": DONE,
+        "artifact": found.stamp,
+        "kind": found.kind,
+        "recordings": files,
+        "note": (
+            "no saved viewer stream: the artifact was made by a feed that "
+            "streams only, or before 2026-09-13, or with TRAINNR_VIEWER_FILE off"
+            if not files
+            else f"{len(files)} saved stream(s); show_in_studio replays them"
+        ),
+    }
+
+
+def _any_project_artifact(stamp: str) -> Any:
+    from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
+
+    project = current_project()
+    artifact = next(
+        (a for a in index_project(project).artifacts if a.stamp == stamp), None
+    )
+    if artifact is None:
+        raise KeyError(f"no artifact {stamp!r} in {project.root}")
+    return project, artifact
+
+
 def describe_identification(robot: str) -> dict[str, Any] | Refusal:
     """A robot's system identification as recorded: every fit record with
     its parameters, intervals and verdicts, the anchor statements, and the
@@ -1683,6 +1728,12 @@ def build_server() -> Any:  # noqa: PLR0915
         description="System identification: fit a robot's dynamics from a recording "
         "(both by version); writes the fit record with intervals and verdicts."
     )(identify_system)
+    server.tool(
+        description="The saved viewer streams an artifact carries (a headless run "
+        "leaves the same picture a window shows): each file's entity paths, "
+        "timelines, components and size; with the viz-query extra, the scalar "
+        "series' count, min, max and last value."
+    )(describe_viewer_recording)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
         "version) without writing a fit record and judge every parameter against "

@@ -35,7 +35,7 @@ from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
 # One home for the Studio's ingest address (rq-pipeline is a hard dep).
 from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
-from rq_pipeline.viz import leave_cleanly_on_term
+from rq_pipeline.viz import open_stream
 
 
 def _require_rerun() -> Any:
@@ -59,9 +59,9 @@ class RerunRecorder(RecorderTerm):
         rr = _require_rerun()
         self._rr = rr
         self._cfg = cfg
-        rr.init(cfg.app_id, spawn=False)
-        rr.connect_grpc(cfg.address)
-        leave_cleanly_on_term(rr)  # a stopped job leaves its stream closed
+        # The one seam (rq_pipeline.viz.open_stream): the Studio's server
+        # and, when the run has a folder, its saved stream too (docs/76 §10.5).
+        open_stream(cfg.app_id, address=cfg.address, file=cfg.file)
         # (name, qpos address) per SCALAR joint — hinge/slide only. The
         # first cut indexed qpos by JOINT index, which plots freejoint
         # quaternion components as "joints" on any floating-base robot
@@ -316,6 +316,8 @@ class RerunRecorderCfg(RecorderTermCfg):
     func: type[RerunRecorder] = RerunRecorder
     address: str = DEFAULT_ADDRESS
     app_id: str = "rq-mjlab-train"
+    # The saved stream, inside the run's folder (docs/76 §10.5); None: live only.
+    file: str | None = None
     watched_env: int = 0
     mirror: bool = True  # the 3D scene beside the series
     frames: bool = True  # MuJoCo-rendered camera images of the watched world

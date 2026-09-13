@@ -51,6 +51,10 @@ DEFAULTS = {
 }
 
 
+# The saved stream of a training run, inside its folder (docs/76 §10.5).
+TRAIN_STREAM = "train"
+
+
 def smoke_agent(iterations: int) -> Any:
     """G2's borrowed cfg: the velocity family's PPO shape, smoke-scale."""
     from mjlab.tasks.registry import load_rl_cfg  # noqa: PLC0415
@@ -201,6 +205,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
 
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
@@ -218,6 +223,12 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     identity = {**identity, "seed": cfg.seed}
     if args.task_stamp:
         identity["task"] = args.task_stamp
+    # The smoke gate archives nothing; g3 archives itself with identity,
+    # and its saved stream lands inside that folder (docs/76 §10.5).
+    log_dir = None
+    if args.agent == "g3":
+        log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_dir.mkdir(parents=True, exist_ok=True)
     cfg.recorders = (
         {}
         if args.no_recorder
@@ -226,16 +237,13 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
                 app_id=f"rq-walk-{args.agent}",
                 every=every,
                 frame_every=args.frame_every,
+                file=str(viewer_file(log_dir, TRAIN_STREAM)) if log_dir else None,
             )
         }
     )
 
     agent = smoke_agent(iterations) if args.agent == "smoke" else spec.agent(iterations)
-    # The smoke gate archives nothing; g3 archives itself with identity.
-    log_dir = None
-    if args.agent == "g3":
-        log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
-        log_dir.mkdir(parents=True, exist_ok=True)
+    if log_dir is not None:
         (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
         # The console also lands in the run folder as train.log: the
         # project's live view reads it while the run trains (docs/77).

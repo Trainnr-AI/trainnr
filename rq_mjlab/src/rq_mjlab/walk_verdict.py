@@ -42,6 +42,7 @@ from rq_pipeline.evaluate.tracking import (
     TrackingOutcome,
     criterion_text,
 )
+from rq_pipeline.viz import viewer_file
 
 from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
@@ -175,23 +176,18 @@ class VerdictFeed:
 
     ROOT = "verdict"
 
-    def __init__(self, run_name: str) -> None:
+    def __init__(self, run_name: str, file: Path | None = None) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
-        from rq_pipeline.viz import (  # noqa: PLC0415
-            STUDIO_ADDRESS,
-            leave_cleanly_on_term,
-        )
+        from rq_pipeline.viz import STUDIO_ADDRESS, open_stream  # noqa: PLC0415
 
         self._rr: Any = rr
-        rr.init(f"rq-verdict-{run_name}")
-        rr.connect_grpc(STUDIO_ADDRESS)
-        leave_cleanly_on_term(rr)
+        open_stream(f"rq-verdict-{run_name}", address=STUDIO_ADDRESS, file=file)
         self._tick = 0
 
     @classmethod
-    def connect(cls, run_name: str) -> VerdictFeed | None:
+    def connect(cls, run_name: str, file: Path | None = None) -> VerdictFeed | None:
         try:
-            return cls(run_name)
+            return cls(run_name, file)
         except ImportError:
             print(
                 "no rerun-sdk in this venv - the verdict runs UNWATCHED",
@@ -615,7 +611,15 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
             "camera": CAMERA_BLANKED if args.blank_camera else CAMERA_SIGHTED,
             "state": STATE_BLANKED if args.blank_state else STATE_GIVEN,
         }
-    feed = None if args.no_studio else VerdictFeed.connect(policy_name.split("@")[0])
+    feed = (
+        None
+        if args.no_studio
+        else VerdictFeed.connect(
+            policy_name.split("@")[0],
+            # The saved stream lands in the run the checkpoint belongs to.
+            viewer_file(args.checkpoint.parent, f"verdict-{args.checkpoint.stem}"),
+        )
+    )
     if isinstance(policy, StudentPolicy):
         policy.feed = feed
     outcomes = rollout_outcomes(env, policy, args.trials)

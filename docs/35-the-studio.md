@@ -173,10 +173,12 @@ surface (docs/64 §3) and the loop it walks (docs/76). The app's jobs:
 - **Pointed at an artifact.** This does not exist yet: a tool to open a
   named recording or run in the window is designed but unbuilt, and it is
   the app's next piece of work.
-- **The human's live view.** Headless runs must report the same facts
-  without it — the datasheet, the certificate, the findings record. That
-  parity is a design requirement, not an accident: a run on a rented
-  machine or in CI has no window, and must still be readable.
+- **The human's live view.** Headless runs report the same facts
+  without it — the datasheet, the evaluation, the findings record — and
+  since 2026-09-13 keep the same picture: every feed that narrates an
+  artifact saves its stream inside it, a door reads the file back, and
+  Show in viewer replays it (docs/76 §10.5). A run on a rented machine
+  or in CI has no window, and is still readable and still watchable.
 
 ## 8. Deliberately not scheduled
 

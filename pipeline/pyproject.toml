@@ -52,6 +52,9 @@ mjx = ["mujoco-mjx[warp]~=3.11.0"]
 # (all reward terms, the curriculum, the timings) instead of re-deriving a
 # curve from console text (2026-09-11: additive over the libraries).
 viz = ["rerun-sdk>=0.20", "tensorboard>=2.15"]
+# Reading a saved viewer recording back as columns (the headless door):
+# Rerun's local catalog needs DataFusion.
+viz-query = ["rerun-sdk[datafusion]>=0.20"]
 # deploy: the manifest-driven runtime and the sim-to-sim gate run the
 # exported ONNX policy; onnx reads the metadata the exporter attached.
 deploy = ["onnxruntime>=1.20", "onnx>=1.16"]

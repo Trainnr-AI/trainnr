@@ -546,11 +546,12 @@ rented machine or in continuous integration has none.
 - **Native**: the app, streamed into by every stage, driven by the
   agent in real time through the control surface (§10.1), with the
   simulator's own page (§10.2) — both built 2026-09-09.
-- **Headless**: every feed also writes a recording file beside its live
-  stream, so a windowless run leaves something to open later, and a tool
-  reads that file back. The parity requirement: a headless run reports
-  the same facts a window shows — the datasheet, the evaluation, the
-  findings record.
+- **Headless** (built 2026-09-13, §10.5): every feed that narrates an
+  artifact also writes its stream into that artifact, a tool reads the
+  file back with no window, and Show in viewer replays it. The parity
+  requirement holds: a headless run reports the same facts a window
+  shows — the datasheet, the evaluation, the findings record — and now
+  keeps the same picture.
 - **Web**: serving a saved recording to a browser. Designed, gated on a
   research pass that did not complete. Nothing else depends on it.
 
@@ -923,6 +924,106 @@ Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left
 the render surface at the old size, so every later capture came out
 clipped; not worth a broken door for a convenience.
+
+### 10.5 Headless (designed 2026-09-13, before building)
+
+**What "headless" means here.** Not a second window and not a web page:
+a run with no window at all — the box overnight, a rented pod, CI —
+must leave behind the same two things a windowed run has. The facts:
+every artifact's JSON, which it already leaves, because every stage
+writes records before it paints anything. And the picture: the stream
+every feed sends into the Studio, which today exists only while the
+process runs and a viewer listens. A8 keeps the picture.
+
+**The rule: every feed that narrates an artifact also writes its stream
+to a file inside that artifact.** Rerun's file sink beside its viewer
+sink, set together, because saving alone replaces the viewer connection
+and the window goes dark while the file fills (measured 2026-08-28, the
+training watcher). One seam opens every stream (`rq_pipeline.viz`), so
+the rule is one function, not a habit. The file is `.viewer/<name>.rrd`
+under the artifact's folder: hidden, because the artifact's version is a
+hash over its visible files and the index walks only those — a picture
+never moves a version, and a reindex never reads a picture. A training
+run leaves `runs/<run>/.viewer/train.rrd`; an evaluation its
+`.viewer/verdict-<checkpoint>.rrd` in the run it judged; a data batch
+`.viewer/press.rrd`; a deployment `.viewer/gate-<runtime>.rrd` per gate;
+a reward preview `.viewer/preview-<controller>.rrd` in its task. A
+session that narrates no artifact — the simulator, a checkpoint played,
+a presentation — writes nothing; there is nothing to leave it in. One
+knob, `TRAINNR_VIEWER_FILE=0`, turns the file off where disk matters.
+
+**Reading it back with no window.** Two doors into the file. Rerun's own
+command line ships with the SDK and answers what the file holds: every
+entity path, every timeline, every component, chunk counts and size —
+enough for an agent to know the picture exists and what is in it. The
+values themselves need Rerun's local catalog, which needs DataFusion
+(98 MB): a separate extra, `viz-query`, so the core stays light; with
+it the door reads the columns — rows per timeline, and for every scalar
+series its count, minimum, maximum and last value. Without it the door
+says so by name and gives the inventory. The door is
+`describe_viewer_recording(artifact)`: the files inside the artifact,
+each described.
+
+**The window follows the file.** "Show in viewer" on an artifact that
+carries viewer files sends them into the Studio first — each lands
+under its own recording id with the layout it was saved with, exactly
+as the live stream looked — then the derived presentation. So a run
+that happened on the box opens on the Mac as it ran.
+
+**Parity, stated as a test.** A gate run with the Studio quit leaves its
+file; the door reads from that file the same number of ticks the gate's
+record says it stepped, and the same trials the record lists; the Studio
+launched afterwards shows the gate's picture from the file. That is the
+gate for A8: a headless run reports the same facts a window shows, and
+keeps the same picture.
+
+**What this does not do.** No web viewer (§10, gated on research). No
+service, no upload, no retention rule: a file per run, where the run
+lives. The cloud feed that follows a remote log stays as it is; the
+remote's own feeds now leave their files beside the remote's artifacts,
+which is what a pull brings home.
+
+**Built (2026-09-13, the Mac).** The seam: `rq_pipeline/viz.py`
+(`open_stream`, `sinks`, `viewer_file`, `viewer_files`,
+`studio_listening`, the `TRAINNR_VIEWER_FILE` knob). Through it: the
+mjlab recorder (a training run's `.viewer/train.rrd`, the reward
+preview's `.viewer/preview-<controller>.rrd`), the walk verdict
+(`.viewer/verdict-<checkpoint>.rrd` in the run), the data-generation
+feed (`.viewer/press.rrd`), the gate's mirror
+(`.viewer/gate-<runtime>.rrd`), and the training watcher's own file
+flag. The reader: `rq_pipeline/project/viewer.py` — Rerun's command
+line for the inventory, Rerun's local catalog (the `viz-query` extra,
+DataFusion, 98 MB) for the values. The door `describe_viewer_recording`
+and the replay in `project/present.py`. Tests in
+`pipeline/tests/test_viewer_stream.py`.
+
+The parity test, run: the Studio quit, the gate door on a laptop
+deployment — the job done in 6 s, one line on its stderr saying no
+Studio listens and the stream is saved only, a 12.3 MB file inside the
+deployment; the door read it back in 0.8 s at 0.2 GB: five scalar
+series of 2000 rows on the gate's own clock, the commanded forward speed
+spanning −0.594 to 0.208 with −0.594 last — the gate record's four
+commands were 0.043, 0.208, −0.058 and −0.594, in that order. The Studio
+launched afterwards: Show in viewer on the deployment replayed the file
+under its own recording id, the gate's picture as it ran.
+
+Two things the parity test found, both in Rerun 0.36.2 and both now
+handled in the seam rather than worked around per feed. First, **a feed
+toward a viewer that never answers does not end**: the SDK's server sink
+keeps every chunk in a bounded queue; once it is full, the flush the SDK
+runs at exit waits for an acknowledgement that never comes, and the
+process sits in a channel receive forever (the gate under the job
+runner: verdict printed, process alive for ten minutes; reproduced with
+one chunk per row, five thousand rows, no viewer). A small queue times
+out in seven seconds and exits; a full one never does. So the seam asks
+one TCP question before choosing sinks: no Studio and a file to save
+to means the file alone. Second, **the catalog reads every column
+unless told otherwise**: the first reader materialized a gate file's
+meshes per tick across every timeline and was killed at the machine's
+memory on a 12 MB file; the reader now selects the scalar entities and
+one clock. Sixty seconds of a gate is 12 MB because the mirror carries
+the scene's meshes; the `sim` clock has 2000 rows for four trials of a
+thousand steps, the mirror's own sampling.
 
 ## 11. What this refuses to claim
 

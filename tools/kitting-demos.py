@@ -24,13 +24,14 @@ from _lab import PREVIEW_EVERY_TICKS, bootstrap
 bootstrap()
 
 from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
-from rq_pipeline.collect.press_feed import StudioPressFeed  # noqa: E402
+from rq_pipeline.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
 from rq_pipeline.collect.shards import (  # noqa: E402
     ShardSpec,
     plan_shards,
     record_shard,
     run_sharded_tool,
 )
+from rq_pipeline.viz import viewer_file  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,7 +106,13 @@ def main() -> None:
         if args.shard_index is None
         else f"{args.out.name}-s{args.shard_index}"
     )
-    feed = None if args.no_studio else StudioPressFeed.connect(name, say=say)
+    feed = (
+        None
+        if args.no_studio
+        else StudioPressFeed.connect(
+            name, say=say, file=viewer_file(args.out, PRESS_STREAM)
+        )
+    )
     batch = generate_demos(
         args.out,
         episodes=args.episodes,
