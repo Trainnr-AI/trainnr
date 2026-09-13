@@ -64,8 +64,12 @@ step "ruff lint (rq_mjlab)"    "(cd rq_mjlab && uvx ruff check src tests)"
 # torch, rerun - read as Any, the check went quiet on how we call them,
 # and it missed an import of a function deleted a week earlier
 # (2026-09-13).
-step "mypy (pipeline)"         "(cd pipeline && uv run --with mypy mypy rq_pipeline)"
-step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --with mypy mypy src/rq_mjlab)"
+# The extras are named so the check reads the same packages on every
+# machine (an inexact sync read whatever the box last installed); mypy
+# is pinned so a release of it does not move the gate.
+MYPY="mypy==2.3.1"
+step "mypy (pipeline)"         "(cd pipeline && uv run --extra sim --extra mcp --extra deploy --extra viz --with $MYPY mypy rq_pipeline)"
+step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
 step "simulator solves the U-trap" \

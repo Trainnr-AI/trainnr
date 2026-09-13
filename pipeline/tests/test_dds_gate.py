@@ -39,6 +39,9 @@ from rq_pipeline.deploy.unitree_stage import (
     stage_simulator,
 )
 from rq_pipeline.deploy.unitree_yaml import UNITREE_DEPLOY_FILE
+from tests._extras import installed, needs_sim
+
+VIZ = installed("rerun")
 
 UNITREE = {
     "robot": "go2",
@@ -92,6 +95,13 @@ class _Bus:
 class _Silent:
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
         return None
+
+
+class _WideBus(_Bus):
+    """A LowState with more motors than the policy has joints."""
+
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return np.zeros(3), np.array([1.0, 0, 0, 0]), np.arange(20, dtype=float)
 
 
 def _manifest(root: Path = Path("/nowhere"), **overrides: object) -> Manifest:
@@ -276,14 +286,17 @@ class ThePose(unittest.TestCase):
         )
 
 
+@needs_sim
 class TheMirror(unittest.TestCase):
-    """The gate's picture in the Studio: a frame every EVERY_TICKS with the
-    pose in the scene, the command and the measured velocity as series."""
+    """The gate's picture in the Studio: a frame every `mirror.every` ticks with the
+    pose in the scene, the command and the measured velocity as series.
+    The mirror's stream is opened through the seam, patched out here: a
+    fake SDK gets the log calls, no Studio port is touched."""
 
     def test_ticks_become_frames_and_series(self) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
-        from rq_pipeline.deploy.mirror import EVERY_TICKS, GateMirror  # noqa: PLC0415
+        from rq_pipeline.deploy.mirror import GateMirror  # noqa: PLC0415
 
         joints = "".join(
             f'<body name="b{i}" pos="0 0 {0.1 * i:.1f}">'
@@ -327,9 +340,10 @@ class TheMirror(unittest.TestCase):
                 pass
 
         rr = _Rr()
-        mirror = GateMirror(manifest, model, "fake", rr=rr)
+        with mock.patch("rq_pipeline.deploy.mirror.open_stream", return_value=rr):
+            mirror = GateMirror(manifest, model, "fake", rr=rr)
         mirror.trial(0, np.array([0.5, 0.0, 0.1]))
-        for _ in range(EVERY_TICKS * 3):
+        for _ in range(mirror.every * 3):
             mirror.tick(
                 0.02,
                 (np.array([1, 0, 0.4]), np.array([1, 0, 0, 0]), np.zeros(12)),
@@ -340,7 +354,7 @@ class TheMirror(unittest.TestCase):
         self.assertIn("gate/notes", logged)
         self.assertEqual(logged.count("gate/command/vx"), 3)
         self.assertEqual(logged.count("gate/velocity/vy"), 3)
-        self.assertAlmostEqual(mirror.seconds, 0.02 * EVERY_TICKS * 3)
+        self.assertAlmostEqual(mirror.seconds, 0.02 * mirror.every * 3)
         self.assertEqual(mirror.data.qpos[2], 0.4)
 
 
@@ -356,6 +370,21 @@ class OnePad(unittest.TestCase):
         runtime = open_dds_runtime(_manifest(), pad=pad, bus=bus)
         self.assertIs(runtime.pad, pad)
         self.assertIs(runtime.bus, bus)
+
+    def test_no_pad_is_refused_by_name(self) -> None:
+        """A pad of the runtime's own was the second joystick nobody read."""
+        from rq_pipeline.deploy.dds_runtime import open_dds_runtime  # noqa: PLC0415
+
+        with self.assertRaisesRegex(RuntimeError, "stack's pad"):
+            open_dds_runtime(_manifest(), bus=_Bus([1, 0, 0, 0], [0, 0, 0]))
+
+    def test_a_library_runtime_has_no_stack_and_shares_nothing(self) -> None:
+        from rq_pipeline.deploy.runtimes import NoStack  # noqa: PLC0415
+
+        stack = runtime_spec("mujoco").stack_for(_manifest())
+        self.assertIsInstance(stack, NoStack)
+        with stack as inside:
+            self.assertEqual(inside.runtime_options(), {})
 
     def test_the_stack_shares_its_pad_and_closes_it(self) -> None:
         from rq_pipeline.deploy.unitree_stage import UnitreeStack  # noqa: PLC0415

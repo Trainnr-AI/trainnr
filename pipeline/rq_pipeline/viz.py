@@ -19,10 +19,31 @@ from pathlib import Path
 from typing import Any
 
 RIG_PATH = "world/rig"  # where every rig tool logs the mirror
+# The simulation clock every narrator logs on (the render stream, the walk
+# view, the gate's mirror): one name, so the viewer lines them up.
+SIM_TIMELINE = "sim"
+# MuJoCo geom groups a visual mirror leaves out: 3 collision, 4 hidden, 5
+# markers/sites (the convention mjlab and Menagerie scenes follow).
+VISUAL_ONLY_SKIP_GROUPS: tuple[int, ...] = (3, 4, 5)
+# A mirror's frame budget: rr.log per geom per frame blocks when it floods.
+MIRROR_HZ = 20
 # The Studio's Rerun ingest door — the ONE home for the address every
 # feed and recorder connects to (the Rust shell binds the same port;
 # crates/studio-shell/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
+
+
+def _host_port(address: str) -> tuple[str, int]:
+    """The host and port an address names, for a socket."""
+    from urllib.parse import urlsplit  # noqa: PLC0415
+
+    parts = urlsplit(address.replace("rerun+", "", 1))
+    if parts.hostname is None or parts.port is None:
+        raise ValueError(f"{address!r} names no host:port")
+    return parts.hostname, parts.port
+
+
+STUDIO_HOST, STUDIO_PORT = _host_port(STUDIO_ADDRESS)
 TERM_EXIT_STATUS = 128 + 15  # a process ended by SIGTERM, as a shell reports it
 
 # The headless rule (docs/76 §10.5): a feed that narrates an artifact also
@@ -69,14 +90,11 @@ def studio_listening(
     alive for ten minutes). So the question is asked before the sink is
     chosen, not after."""
     import socket  # noqa: PLC0415
-    from urllib.parse import urlsplit  # noqa: PLC0415
 
-    parts = urlsplit(address.replace("rerun+", "", 1))
-    host, port = parts.hostname or "127.0.0.1", parts.port or 9876
     try:
-        with socket.create_connection((host, port), timeout=timeout_s):
+        with socket.create_connection(_host_port(address), timeout=timeout_s):
             return True
-    except OSError:
+    except (OSError, ValueError):
         return False
 
 
@@ -86,6 +104,7 @@ def sinks(
     address: str = STUDIO_ADDRESS,
     file: Path | str | None = None,
     listening: bool | None = None,
+    wanted: bool | None = None,
 ) -> list[Any]:
     """The sinks a feed streams to: the Studio's server when one listens,
     plus the file when one is named and wanted. Both at once on purpose:
@@ -93,35 +112,42 @@ def sinks(
     dark while the file fills (measured 2026-08-28). With a file and no
     Studio, the file alone — a headless run must end (see
     `studio_listening`). With no file and no Studio the server sink stays,
-    as every feed behaved before the file existed."""
-    saving = file is not None and viewer_file_wanted()
+    as every feed behaved before the file existed. `wanted` overrides the
+    environment knob: a file the operator named on a command line is
+    written whatever the knob says."""
+    saving = viewer_file_wanted() if wanted is None else wanted
     heard = studio_listening(address) if listening is None else listening
     out: list[Any] = []
-    if heard or not saving:
+    if heard or file is None or not saving:
         out.append(rr.GrpcSink(address))
-    if saving:
-        path = Path(file)  # type: ignore[arg-type]
+    if file is not None and saving:
+        path = Path(file)
         path.parent.mkdir(parents=True, exist_ok=True)
         out.append(rr.FileSink(str(path)))
     return out
 
 
-def open_stream(
+def open_stream(  # noqa: PLR0913 - the stream's own knobs, each named
     app_id: str,
     *,
     address: str = STUDIO_ADDRESS,
     file: Path | str | None = None,
     recording_id: str | None = None,
     on_term: bool = True,
+    rr: Any = None,
 ) -> Any:
     """The one way a feed opens its stream: the global recording named
     `app_id`, sent to the Studio and, when `file` names one, saved there
     too; the TERM handler installed so a stopped job closes cleanly.
-    Returns the `rerun` module for the caller's logging."""
+    `rr` is the SDK module when the caller already holds one (a feed that
+    took it by injection, a test's fake); else the real one. Returns the
+    module for the caller's logging."""
     import sys  # noqa: PLC0415
 
-    import rerun as rr  # noqa: PLC0415 - the viz extra
+    if rr is None:
+        import rerun  # noqa: PLC0415 - the viz extra
 
+        rr = rerun
     kwargs = {"recording_id": recording_id} if recording_id is not None else {}
     rr.init(app_id, spawn=False, **kwargs)
     chosen = sinks(rr, address=address, file=file)
@@ -142,7 +168,7 @@ def open_stream(
     return rr
 
 
-def leave_cleanly_on_term(rr) -> None:
+def leave_cleanly_on_term(rr: Any) -> None:
     """A process streaming into the Studio's own Rerun server dies by
     TERM when the window closes or a job is stopped (the shell reaps its
     children; the job runner signals the group); a plain TERM cut the

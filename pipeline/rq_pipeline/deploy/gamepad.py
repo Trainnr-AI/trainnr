@@ -58,7 +58,8 @@ BUTTONS = (
 BUTTON_KEY = dict(
     zip(("A", "B", "X", "Y", "LB", "RB", "back", "start"), BUTTONS, strict=True)
 )
-AXIS_MAX = 32767  # 16-bit sticks, their `joystick_bits: 16`
+JOYSTICK_BITS = 16  # their `joystick_bits`: the sticks' resolution on the wire
+AXIS_MAX = 2 ** (JOYSTICK_BITS - 1) - 1  # a signed reading of that width
 INVERTED = ("ly", "ry")  # their reading negates the y sticks
 # How long a press or a chord is held; 0.15 s was missed by their 1 kHz machine.
 PRESS_S = 0.3

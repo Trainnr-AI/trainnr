@@ -25,6 +25,7 @@
 mod chrome;
 mod control;
 mod detail;
+mod keys;
 mod listing;
 mod model;
 mod pages;
@@ -199,6 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 last_navigation: None,
                 seen_recording: false,
                 viewport_full: false,
+                closing: false,
             }))
         }),
     )?;
@@ -228,6 +230,8 @@ struct StudioShell {
     /// The viewport alone on the Live page: no rail, no viewer panels,
     /// the picture and its transport bar (the `f` key; Escape leaves).
     viewport_full: bool,
+    /// A close that waits one frame for full screen to end.
+    closing: bool,
 }
 
 impl eframe::App for StudioShell {
@@ -249,11 +253,11 @@ impl eframe::App for StudioShell {
             // (a see-through strip under the header, 2026-09-12).
             chrome::paint_ground(ui);
             chrome::resize_handles(ui);
-            if spawn::on_wsl() {
-                chrome::keep_on_screen(ui.ctx());
-            }
+            // A frameless window has no manager to keep it on the screen.
+            chrome::keep_on_screen(ui.ctx(), spawn::on_wsl());
         }
         self.fullscreen_keys(ui.ctx());
+        self.leave_fullscreen_before_close(ui.ctx());
         self.shell.tick(ui.ctx());
         self.answer_screenshot(ui);
         self.apply_commands(ui);
@@ -387,10 +391,7 @@ impl StudioShell {
                 self.viewport =
                     ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
             }
-            Some(simulator::Action::Stop) => {
-                self.viewport = ViewportFeed::idle();
-                self.viewport_full = false;
-            }
+            Some(simulator::Action::Stop) => self.stop_scene(),
             Some(simulator::Action::ToggleFullscreen) => {
                 self.viewport_full = !self.viewport_full;
             }
@@ -398,28 +399,65 @@ impl StudioShell {
         }
     }
 
+    /// No scene: the viewport idle and the page back to its rails — the
+    /// one way a scene ends, from the button and from the door alike.
+    fn stop_scene(&mut self) {
+        self.viewport = ViewportFeed::idle();
+        self.viewport_full = false;
+    }
+
     /// `f` puts the viewport alone on the page and back (Live, a scene
-    /// running); Escape leaves it; F11 toggles the window itself.
+    /// running); Escape leaves it, and leaves the window's own full
+    /// screen too; F11 toggles the window itself. First presses only:
+    /// a held F toggled at repeat rate (2026-09-13).
     fn fullscreen_keys(&mut self, ctx: &egui::Context) {
-        let typing = ctx.text_edit_focused();
-        let (f, f11, escape) = ctx.input_mut(|i| {
-            (
-                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::F),
-                i.consume_key(egui::Modifiers::NONE, egui::Key::F11),
-                self.viewport_full
-                    && !typing
-                    && i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
-            )
+        let typing = keys::typing(ctx);
+        let window_full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+        let f = !typing && keys::first_press(ctx, egui::Key::F);
+        let f11 = keys::first_press(ctx, egui::Key::F11);
+        let escape = !typing
+            && (self.viewport_full || window_full)
+            && keys::first_press(ctx, egui::Key::Escape);
+        ctx.input_mut(|i| {
+            if !typing {
+                i.consume_key(egui::Modifiers::NONE, egui::Key::F);
+            }
+            i.consume_key(egui::Modifiers::NONE, egui::Key::F11);
+            if !typing && (self.viewport_full || window_full) {
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+            }
         });
         if f && self.shell.section == Section::Live && self.viewport.is_active() {
             self.viewport_full = !self.viewport_full;
         }
         if escape {
             self.viewport_full = false;
+            if window_full {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+            }
         }
         if f11 {
-            let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!window_full));
+        }
+    }
+
+    /// A window that closes full screen would reopen full screen: eframe
+    /// remembers the window as it was at close. So a close request while
+    /// full screen leaves full screen first and closes on the next frame.
+    fn leave_fullscreen_before_close(&mut self, ctx: &egui::Context) {
+        let (close_requested, window_full) = ctx.input(|i| {
+            let v = i.viewport();
+            (v.close_requested(), v.fullscreen.unwrap_or(false))
+        });
+        if self.closing {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        if close_requested && window_full {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+            self.closing = true;
+            ctx.request_repaint();
         }
     }
 }
@@ -703,7 +741,7 @@ impl StudioShell {
                             ViewportFeed::spawn(ui.ctx(), &name, &self.shell.model.project_root);
                         self.shell.section = Section::Live;
                     }
-                    None => self.viewport = ViewportFeed::idle(),
+                    None => self.stop_scene(),
                 }
                 Ok(())
             }
@@ -801,7 +839,8 @@ impl StudioShell {
                             .position(|a| a.name == name)
                             .ok_or_else(|| format!("no actuator {name:?}"))?;
                         self.viewport.send_ctrl(index as u32, value);
-                        self.viewport.stop_editing(1, index);
+                        self.viewport
+                            .stop_editing(viewport::SliderKind::Actuator, index);
                     }
                     if let Some(name) = joint {
                         let j = model
@@ -815,7 +854,8 @@ impl StudioShell {
                                 )
                             })?;
                         self.viewport.send_qpos(j.qpos as u32, value);
-                        self.viewport.stop_editing(0, j.qpos);
+                        self.viewport
+                            .stop_editing(viewport::SliderKind::Joint, j.qpos);
                     }
                 }
                 if let Some(what) = inspect {
@@ -886,13 +926,18 @@ impl StudioShell {
                         }
                         None => 0,
                     };
-                    if model.groups.is_empty() {
+                    if model.groups.is_empty() || model.ngroup == 0 {
                         return Err("this scene reports no group kinds".into());
                     }
-                    if group >= model.ngroup {
-                        return Err(format!("group {group}: 0 to {}", model.ngroup - 1));
+                    let last = model.ngroup.saturating_sub(1);
+                    if group > last {
+                        return Err(format!("group {group}: 0 to {last}"));
                     }
-                    self.viewport.send_group(index as u8, group as u8, on);
+                    let kind_byte = u8::try_from(index)
+                        .map_err(|_| format!("group kind {index} is past the wire's byte"))?;
+                    let group_byte = u8::try_from(group)
+                        .map_err(|_| format!("group {group} is past the wire's byte"))?;
+                    self.viewport.send_group(kind_byte, group_byte, on);
                 }
                 Ok(())
             }
@@ -900,6 +945,9 @@ impl StudioShell {
                 unreachable!("screenshots are taken in apply_commands, after the page")
             }
             Command::Quit => {
+                // Never close full screen: the window would reopen so.
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 Ok(())
             }

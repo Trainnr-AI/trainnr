@@ -29,7 +29,8 @@
 use re_ui::UiExt as _;
 
 use crate::viewport::{
-    SimModel, SimStatus, ViewportFeed, PREVIEW_TASKS, SPEED_RANGE, VIEW_PRESETS, WALK_TASK,
+    SimModel, SimStatus, SliderKind, ViewportFeed, PREVIEW_TASKS, SPEED_RANGE, VIEW_PRESETS,
+    WALK_TASK,
 };
 
 /// What the bar asked the page to do with the viewport itself.
@@ -132,8 +133,12 @@ const OVERLAYS: &[(&str, &str, bool)] = &[
 ];
 /// Rendering flags MuJoCo turns on by default (after mjv_defaultScene).
 const RND_DEFAULT_ON: &[&str] = &["shadow", "reflection", "skybox", "haze", "cullface"];
+/// MuJoCo draws groups below this number by default (`mjv_defaultOption`).
+const MJ_DEFAULT_GROUPS_ON: usize = 3;
+/// The room a flag cell keeps from the drawer's edge.
+const FLAG_CELL_INSET: f32 = 10.0;
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 enum Tab {
     #[default]
     Control,
@@ -148,12 +153,51 @@ enum Tab {
     Commands,
 }
 
+impl Tab {
+    /// Every tab: the door's word for it, the label the drawer shows. One
+    /// table feeds the door, its refusal, the drawer and the tooltip.
+    const ALL: &'static [(Tab, &'static str, &'static str)] = &[
+        (Tab::Control, "control", "Control"),
+        (Tab::Joints, "joints", "Joints"),
+        (Tab::Physics, "physics", "Physics"),
+        (Tab::Visuals, "visuals", "Visuals"),
+        (Tab::Commands, "commands", "Commands"),
+    ];
+    /// The door's word that closes the drawer.
+    const CLOSE: &'static str = "close";
+
+    fn by_slug(slug: &str) -> Option<Tab> {
+        Tab::ALL
+            .iter()
+            .find(|(_, s, _)| *s == slug)
+            .map(|(tab, _, _)| *tab)
+    }
+
+    /// Whether this tab exists for the scene: the Commands tab needs a
+    /// commanded twist to show.
+    fn offered(self, model: &SimModel) -> bool {
+        self != Tab::Commands || model.twist_ranges.is_some()
+    }
+
+    /// The door's choices, for a refusal or a tooltip.
+    fn words() -> String {
+        let mut words: Vec<&str> = Tab::ALL.iter().map(|(_, s, _)| *s).collect();
+        words.push(Tab::CLOSE);
+        words.join(", ")
+    }
+
+    fn labels() -> String {
+        Tab::ALL
+            .iter()
+            .map(|(_, _, l)| *l)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
 /// The twist axes as the door and the rows name them, in wire order.
 /// No slash in a row's name: `short` would take the part after it.
 const TWIST_AXES: [(&str, &str); 3] = [("vx", "forward"), ("vy", "left"), ("wz", "turn")];
-/// The slider kind twist axes are edited under (0 joints, 1 actuators).
-const TWIST_KIND: u8 = 2;
-
 /// Which world a commanded twist goes to: the followed one (the follow
 /// rule's answer now, not the echoed one), else w0.
 fn command_world(ctx: &egui::Context, status: &SimStatus) -> i32 {
@@ -204,18 +248,13 @@ pub fn command_from_door(
 /// Open the drawer on a tab by name, or close it — the agent's door.
 pub fn inspect(ctx: &egui::Context, what: &str) -> Result<(), String> {
     let (_, tab) = drawer_state(ctx);
-    match what {
-        "close" | "" => set_drawer(ctx, false, tab),
-        "control" => set_drawer(ctx, true, Tab::Control),
-        "joints" => set_drawer(ctx, true, Tab::Joints),
-        "physics" => set_drawer(ctx, true, Tab::Physics),
-        "visuals" => set_drawer(ctx, true, Tab::Visuals),
-        "commands" => set_drawer(ctx, true, Tab::Commands),
-        other => {
-            return Err(format!(
-                "inspect {other:?}: one of control, joints, physics, visuals, commands, close"
-            ));
-        }
+    if what.is_empty() || what == Tab::CLOSE {
+        set_drawer(ctx, false, tab);
+        return Ok(());
+    }
+    match Tab::by_slug(what) {
+        Some(wanted) => set_drawer(ctx, true, wanted),
+        None => return Err(format!("inspect {what:?}: one of {}", Tab::words())),
     }
     Ok(())
 }
@@ -390,7 +429,7 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
                 action = Some(Action::ToggleFullscreen);
             }
             let (open, tab) = drawer_state(ui.ctx());
-            if toggle(ui, open, "Inspect", "Control, Joints, Physics  (I)") {
+            if toggle(ui, open, "Inspect", &format!("{}  (I)", Tab::labels())) {
                 set_drawer(ui.ctx(), !open, tab);
             }
         });
@@ -568,13 +607,17 @@ fn flag_index(model: &SimModel, flag: &str, rendering: bool) -> Option<usize> {
 /// first status the defaults are MuJoCo's (rendering flags mostly on,
 /// visualization flags off), and shadows are whatever the stream chose.
 fn flag_on(status: &SimStatus, index: usize, flag: &str, rendering: bool) -> bool {
-    let map = if rendering { &status.rnd } else { &status.vis };
+    let table = if rendering {
+        &status.rnd_table
+    } else {
+        &status.vis_table
+    };
     let default_on = match (rendering, flag) {
         (true, "shadow") => status.shadows,
         (true, _) => RND_DEFAULT_ON.contains(&flag),
         (false, _) => false,
     };
-    map.get(&index.to_string()).copied().unwrap_or(default_on)
+    table.get(index).copied().flatten().unwrap_or(default_on)
 }
 
 fn send_flag(viewport: &mut ViewportFeed, index: usize, rendering: bool, on: bool) {
@@ -612,18 +655,9 @@ pub fn drawer(ctx: &egui::Context, picture: egui::Rect, viewport: &mut ViewportF
                     ui.set_max_height(height);
                     let mut tab = tab;
                     ui.horizontal(|ui| {
-                        let mut tabs = vec![
-                            (Tab::Control, "Control"),
-                            (Tab::Joints, "Joints"),
-                            (Tab::Physics, "Physics"),
-                            (Tab::Visuals, "Visuals"),
-                        ];
-                        if model.twist_ranges.is_some() {
-                            tabs.push((Tab::Commands, "Commands"));
-                        }
-                        for (t, name) in tabs {
-                            if toggle(ui, tab == t, name, "") {
-                                tab = t;
+                        for (t, _, name) in Tab::ALL.iter().filter(|(t, _, _)| t.offered(&model)) {
+                            if toggle(ui, tab == *t, name, "") {
+                                tab = *t;
                             }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -757,7 +791,7 @@ fn control(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, m
     {
         for (i, _) in model.actuators.iter().enumerate() {
             viewport.send_ctrl(i as u32, 0.0);
-            viewport.stop_editing(1, i);
+            viewport.stop_editing(SliderKind::Actuator, i);
         }
     }
     for (group, rows) in groups(&model.actuators, |a| &a.name) {
@@ -775,13 +809,13 @@ fn control(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, m
             let Some(echoed) = status.ctrl.get(i).copied() else {
                 continue;
             };
-            let shown = viewport.slider_value(1, i, echoed);
+            let shown = viewport.slider_value(SliderKind::Actuator, i, echoed);
             let (moved, stopped) = row(ui, &actuator.name, range, shown, status.manual);
             if let Some(v) = moved {
                 viewport.send_ctrl(i as u32, v as f32);
             }
             if stopped {
-                viewport.stop_editing(1, i);
+                viewport.stop_editing(SliderKind::Actuator, i);
             }
         }
     }
@@ -803,13 +837,13 @@ fn joints(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, mo
             let Some(echoed) = status.qpos.get(joint.qpos).copied() else {
                 continue; // not echoed yet: no value to show
             };
-            let shown = viewport.slider_value(0, joint.qpos, echoed);
+            let shown = viewport.slider_value(SliderKind::Joint, joint.qpos, echoed);
             let (moved, stopped) = row(ui, &joint.name, range, shown, status.manual);
             if let Some(v) = moved {
                 viewport.send_qpos(joint.qpos as u32, v as f32);
             }
             if stopped {
-                viewport.stop_editing(0, joint.qpos);
+                viewport.stop_editing(SliderKind::Joint, joint.qpos);
             }
         }
     }
@@ -855,11 +889,11 @@ fn commands(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, 
     let mut moved = false;
     let mut stopped = None;
     for (i, (name, unit)) in TWIST_AXES.iter().enumerate() {
-        let shown = viewport.slider_value(TWIST_KIND, i, values[i]);
+        let shown = viewport.slider_value(SliderKind::Twist, i, values[i]);
         let (change, done) = row(ui, &format!("{name} {unit}"), ranges[i], shown, true);
         twist[i] = change.unwrap_or(shown);
         if let Some(v) = change {
-            viewport.start_editing(TWIST_KIND, i, v);
+            viewport.start_editing(SliderKind::Twist, i, v);
             moved = true;
         }
         if done {
@@ -870,7 +904,7 @@ fn commands(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, 
         viewport.send_twist(world, twist.map(|v| v as f32));
     }
     if let Some(i) = stopped {
-        viewport.stop_editing(TWIST_KIND, i);
+        viewport.stop_editing(SliderKind::Twist, i);
     }
 }
 
@@ -909,10 +943,18 @@ fn visuals(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, m
                 ui.label(kind);
                 let mask = status.groups.get(kind);
                 for g in 0..model.ngroup as usize {
-                    // MuJoCo draws groups 0-2 by default (mjv_defaultOption).
-                    let mut on = mask.and_then(|m| m.get(g).copied()).unwrap_or(g < 3);
-                    if ui.checkbox(&mut on, "").changed() {
-                        viewport.send_group(kind_index as u8, g as u8, on);
+                    let reported = mask.and_then(|m| m.get(g).copied());
+                    let mut on = reported.unwrap_or(g < MJ_DEFAULT_GROUPS_ON);
+                    // Until the stream reports the mask the box shows MuJoCo's
+                    // documented default and takes no click: never a value
+                    // the window invented.
+                    let box_ = ui.add_enabled(reported.is_some(), egui::Checkbox::new(&mut on, ""));
+                    if reported.is_none() {
+                        box_.on_hover_text("unrecorded until the scene reports its groups");
+                    } else if box_.changed() {
+                        if let (Ok(kind), Ok(group)) = (u8::try_from(kind_index), u8::try_from(g)) {
+                            viewport.send_group(kind, group, on);
+                        }
                     }
                 }
                 ui.end_row();
@@ -932,7 +974,7 @@ fn flag_grid(
 ) {
     egui::Grid::new(format!("simulator_flags_{id}"))
         .num_columns(FLAG_COLUMNS)
-        .min_col_width(DRAWER_WIDTH / FLAG_COLUMNS as f32 - 10.0)
+        .min_col_width(DRAWER_WIDTH / FLAG_COLUMNS as f32 - FLAG_CELL_INSET)
         .spacing([4.0, 1.0])
         .show(ui, |ui| {
             for (index, flag) in table.iter().enumerate() {
@@ -1019,21 +1061,11 @@ const PAN_KEYS: [egui::Key; 6] = [
 /// too, and a held W wrote thirty lines a second. Never while a text
 /// field has the keyboard: the log is not a keystroke recorder.
 fn pan_key_press(ctx: &egui::Context, viewport: &ViewportFeed) -> Option<KeyPress> {
-    if ctx.text_edit_focused() {
+    if crate::keys::typing(ctx) {
         return None;
     }
-    let (key, pointer) = ctx.input(|i| {
-        let key = i.events.iter().find_map(|event| match event {
-            egui::Event::Key {
-                key,
-                pressed: true,
-                repeat: false,
-                ..
-            } if PAN_KEYS.contains(key) => Some(*key),
-            _ => None,
-        });
-        (key, i.pointer.latest_pos())
-    });
+    let key = crate::keys::first_press_of(ctx, &PAN_KEYS);
+    let pointer = ctx.input(|i| i.pointer.latest_pos());
     key.map(|key| KeyPress {
         key: format!("{key:?}"),
         picture: viewport.wants_keys(ctx),
@@ -1053,14 +1085,11 @@ pub fn shortcuts(ctx: &egui::Context, viewport: &mut ViewportFeed) -> Option<Key
     pan_keys(ctx, viewport);
     let (status, _) = viewport.report();
     let Some(status) = status else { return press };
-    let (space, right, reset, inspect_key) = ctx.input(|i| {
-        (
-            i.key_pressed(egui::Key::Space),
-            i.key_pressed(egui::Key::ArrowRight),
-            i.key_pressed(egui::Key::R),
-            i.key_pressed(egui::Key::I),
-        )
-    });
+    // First presses only: a held Space flipped run/pause at repeat rate.
+    let space = crate::keys::first_press(ctx, egui::Key::Space);
+    let right = crate::keys::first_press(ctx, egui::Key::ArrowRight);
+    let reset = crate::keys::first_press(ctx, egui::Key::R);
+    let inspect_key = crate::keys::first_press(ctx, egui::Key::I);
     if inspect_key {
         let (open, tab) = drawer_state(ctx);
         set_drawer(ctx, !open, tab);

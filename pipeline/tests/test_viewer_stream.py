@@ -49,7 +49,8 @@ BUNDLE = REPO / "robots" / "rig-drivetrain"
 
 STATS_PAGE = """Overview
 --------
-num_chunks: 9
+num_chunks = 9
+num_rows = 101
 
 Num chunks per entity
 ---------------------
@@ -68,6 +69,7 @@ Scalars:scalars: 2
 Size (schema + data, compressed)
 --------------------------------
 ipc_size_bytes_total = 13.1 KiB
+ipc_size_bytes_min = 910 B
 """
 
 
@@ -189,7 +191,11 @@ class TheReader(unittest.TestCase):
         )
         self.assertEqual(sections[TIMELINES], {"log_time": "7", "tick": "3"})
         self.assertEqual(sections[COMPONENTS], {"Scalars:scalars": "2"})
-        self.assertEqual(sections[SIZE], {"ipc_size_bytes_total": "13.1 KiB"})
+        self.assertEqual(
+            sections[SIZE],
+            {"ipc_size_bytes_total": "13.1 KiB", "ipc_size_bytes_min": "910 B"},
+        )
+        self.assertEqual(sections["Overview"], {"num_chunks": "9", "num_rows": "101"})
 
     @unittest.skipUnless(rr is not None, "the viz extra")
     def test_a_saved_stream_is_described_with_no_window(self) -> None:
@@ -200,6 +206,7 @@ class TheReader(unittest.TestCase):
             for i in range(20):
                 stream.set_time("tick", sequence=i)
                 stream.log("gate/measured", rr.Scalars([0.1 * i]))
+                stream.log("gate/pair", rr.Scalars([0.1 * i, 5.0]))
             stream.log("gate/reading", rr.TextDocument("# r"), static=True)
             stream.flush(timeout_sec=5)
             stream.disconnect()
@@ -212,8 +219,14 @@ class TheReader(unittest.TestCase):
             if query_available():
                 self.assertEqual(d.rows_per_timeline["tick"], 20)
                 [series] = [s for s in d.series if s.entity == "/gate/measured"]
-                self.assertEqual(series.rows, 20)
-                self.assertAlmostEqual(series.last or 0.0, 1.9)
+                self.assertEqual(
+                    (series.timeline, series.rows, series.width), ("tick", 20, 1)
+                )
+                self.assertAlmostEqual((series.last or (0.0,))[0], 1.9)
+                # Every component counted, not the first alone.
+                [pair] = [s for s in d.series if s.entity == "/gate/pair"]
+                self.assertEqual(pair.width, 2)
+                self.assertEqual(pair.maximum, 5.0)
                 self.assertEqual(d.notes, ())
             else:
                 self.assertIn(NEEDS_QUERY, d.notes)

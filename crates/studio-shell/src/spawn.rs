@@ -171,18 +171,26 @@ const TERM_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
 #[cfg(unix)]
 const TERM_POLL: std::time::Duration = std::time::Duration::from_millis(25);
 
-/// End a spawned tree: the process group by `kill -s TERM -- -PGID`
-/// (without the `--`, procps kill can re-parse a negative pgid as a
-/// signal spec plus a DIFFERENT pid — measured 2026-09-01, and the
-/// mis-signaled process was the Studio itself), then - after up to
-/// `TERM_GRACE` for the tree to leave on its own - the child itself,
-/// then reap it.
+/// Signal a child's whole process group (the child leads it; see
+/// `spawn_*` above). Always with the `--`: without it, procps kill can
+/// re-parse a negative pgid as a signal spec plus a DIFFERENT pid —
+/// measured 2026-09-01, and the mis-signaled process was the Studio
+/// itself.
+#[cfg(unix)]
+fn signal_group(child: &Child, signal: &str) {
+    let _ = Command::new("kill")
+        .args(["-s", signal, "--", &format!("-{}", child.id())])
+        .status();
+}
+
+/// End a spawned tree, blocking: TERM to the group, up to `TERM_GRACE`
+/// for the tree to leave on its own, then KILL to the whole group (a
+/// grandchild that ignored TERM must not outlive its parent), then the
+/// child itself, then reap it.
 pub fn kill_tree(child: &mut Child) {
     #[cfg(unix)]
     {
-        let _ = Command::new("kill")
-            .args(["-s", "TERM", "--", &format!("-{}", child.id())])
-            .status();
+        signal_group(child, "TERM");
         let deadline = std::time::Instant::now() + TERM_GRACE;
         while std::time::Instant::now() < deadline {
             if matches!(child.try_wait(), Ok(Some(_))) {
@@ -190,9 +198,27 @@ pub fn kill_tree(child: &mut Child) {
             }
             std::thread::sleep(TERM_POLL);
         }
+        signal_group(child, "KILL");
     }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// End a spawned tree without holding the caller: TERM goes to the
+/// group now (so a quit that ends the process right after still sent
+/// it), and the grace, the KILL and the reap run on their own thread.
+/// The 1.5 s grace on the UI thread froze the window on every scene
+/// change and doubled at quit (2026-09-13).
+pub fn end_tree(mut child: Child) {
+    #[cfg(unix)]
+    signal_group(&child, "TERM");
+    let reap = std::thread::Builder::new()
+        .name("end-tree".to_owned())
+        .spawn(move || kill_tree(&mut child));
+    if let Err(child_back) = reap {
+        // No thread to be had: the blocking way, rather than a leak.
+        drop(child_back);
+    }
 }
 
 #[cfg(test)]

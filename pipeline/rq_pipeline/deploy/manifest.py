@@ -78,6 +78,9 @@ TERM_KEYS = frozenset(
 TWIST_AXES = ("lin_vel_x", "lin_vel_y", "ang_vel_z")
 # The same axes as a door and the Studio name them (forward, left, turn).
 TWIST_SHORT = ("vx", "vy", "wz")
+# The word that hands the commands back to the task (the door, the
+# Studio's Commands tab): mirrored by simulator.rs, tested by name.
+TWIST_RELEASE = "own"
 
 # The observation sources the plain-MuJoCo runtime can compute. A manifest
 # naming another is refused: the runtime never guesses a term.

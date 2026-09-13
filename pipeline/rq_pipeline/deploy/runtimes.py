@@ -14,7 +14,7 @@ from __future__ import annotations
 import platform
 import sys
 from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -54,7 +54,28 @@ class GateRuntime(Protocol):
 
 
 Opener = Callable[..., GateRuntime]
-StackFactory = Callable[..., AbstractContextManager[Any]]
+
+
+class Stack(Protocol):
+    """The processes a runtime needs around the gate: a context that
+    starts them on enter and stops them on exit, and says what the
+    runtime opened inside it must share with it (the DDS stack's one
+    virtual pad)."""
+
+    def __enter__(self) -> Stack: ...
+    def __exit__(self, *exc: object) -> None: ...
+    def runtime_options(self) -> dict[str, Any]: ...
+
+
+class NoStack(AbstractContextManager["NoStack"]):
+    """A runtime that is a library needs nothing around the gate and
+    shares nothing with it."""
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def runtime_options(self) -> dict[str, Any]:
+        return {}
 
 
 @dataclass(frozen=True)
@@ -75,14 +96,15 @@ class RuntimeSpec:
         require_platform(self)
         return getattr(import_module(self.module), self.opener)
 
-    def stack_for(self, manifest: Manifest, **options: Any) -> AbstractContextManager:
+    def stack_for(self, manifest: Manifest, **options: Any) -> Stack:
         """The processes this runtime needs around the gate, started on
-        enter and stopped on exit; nothing for a runtime that is a library."""
+        enter and stopped on exit; `NoStack` for a runtime that is a library."""
         if self.stack is None:
-            return nullcontext()
+            return NoStack()
         require_platform(self)
         module, attr = self.stack.split(":", 1)
-        return getattr(import_module(module), attr)(manifest, **options)
+        stack: Stack = getattr(import_module(module), attr)(manifest, **options)
+        return stack
 
 
 def require_platform(spec: RuntimeSpec) -> None:
@@ -135,7 +157,9 @@ def runtime_spec(name: str) -> RuntimeSpec:
 
 
 def open_named(
-    name: str, manifest: Manifest, *, assets_dir: Path | None
+    name: str, manifest: Manifest, *, assets_dir: Path | None, **shared: Any
 ) -> GateRuntime:
-    """Build the named runtime for a manifest."""
-    return runtime_spec(name).open()(manifest, assets_dir=assets_dir)
+    """Build the named runtime for a manifest. `shared` is what the
+    runtime's stack hands it (`Stack.runtime_options()`): a runtime that
+    needs a stack refuses by name when opened without it."""
+    return runtime_spec(name).open()(manifest, assets_dir=assets_dir, **shared)

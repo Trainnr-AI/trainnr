@@ -63,17 +63,23 @@ pub fn tag(ui: &mut egui::Ui, text: &str) {
 /// curve after more iterations, 2026-09-12) shows fresh instead of the
 /// first picture ever loaded under that path.
 pub fn preview_uri(ui: &egui::Ui, path: &std::path::Path) -> Option<String> {
-    let modified = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_millis());
-    let uri = format!("bytes://{}?{modified}", path.display());
+    // The file is asked about once per reload tick, not once per frame:
+    // a grid of cards stat-ed every file every frame (2026-09-13).
+    let last = egui::Id::new(("preview-uri", path));
+    let now = ui.input(|i| i.time);
+    let checked = egui::Id::new(("preview-checked", path));
+    let previous: Option<String> = ui.ctx().data(|d| d.get_temp(last));
+    let checked_at: Option<f64> = ui.ctx().data(|d| d.get_temp(checked));
+    if let (Some(uri), Some(at)) = (&previous, checked_at) {
+        if now - at < crate::model::RELOAD_EVERY.as_secs_f64() {
+            return Some(uri.clone());
+        }
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(checked, now));
+    let uri = format!("bytes://{}?{}", path.display(), file_version(path));
     // A redrawn file leaves its previous version in egui's caches (bytes
     // and texture); a live run redraws its curve at every refresh, so the
     // old one is forgotten when the new one is registered.
-    let last = egui::Id::new(("preview-uri", path));
-    let previous: Option<String> = ui.ctx().data(|d| d.get_temp(last));
     if previous.as_deref().is_some_and(|p| p != uri) {
         if let Some(previous) = &previous {
             ui.ctx().forget_image(previous);
@@ -87,6 +93,21 @@ pub fn preview_uri(ui: &egui::Ui, path: &std::path::Path) -> Option<String> {
         ui.ctx().include_bytes(uri.clone(), bytes);
     }
     Some(uri)
+}
+
+/// What tells two versions of one file apart in a cache key: its
+/// modification time in milliseconds AND its length. Time alone missed a
+/// file rewritten within one clock tick (a second on some file systems).
+pub fn file_version(path: &std::path::Path) -> String {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return "0-0".to_owned();
+    };
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis());
+    format!("{modified}-{}", meta.len())
 }
 
 pub fn thumbnail(ui: &mut egui::Ui, path: &std::path::Path, rect: egui::Rect) {

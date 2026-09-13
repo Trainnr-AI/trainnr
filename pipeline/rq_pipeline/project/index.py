@@ -19,6 +19,7 @@ its inputs. Where an older artifact recorded no stamp, the index says
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
@@ -32,6 +33,7 @@ from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
 from rq_pipeline.evaluate.commands import describe_twist
+from rq_pipeline.fleet.drift import verdict_word
 from rq_pipeline.project.files import read_json, write_json, write_text
 from rq_pipeline.project.kinds import (
     ACCEPTANCE_FILE,
@@ -506,7 +508,26 @@ def _own_date(kind: Kind, path: Path) -> str | None:
         date = _read(path).get("date")
         if isinstance(date, str) and len(date) >= DATE_CHARS:
             return f"{date[:DATE_CHARS]}T00:00:00+00:00"
+    if kind is Kind.DRIFT:
+        created = _read(path / DRIFT_FILE).get("created_utc")
+        if isinstance(created, str) and created:
+            return created
     return None
+
+
+UNBOUNDED = "unbounded"
+
+
+def interval_text(lower: float | None, upper: float | None) -> str:
+    """An interval as a drawer says it: unrecorded when an end is unknown,
+    unbounded for an infinite end."""
+    if lower is None or upper is None:
+        return UNRECORDED
+
+    def end(v: float) -> str:
+        return UNBOUNDED if not math.isfinite(v) else f"{v:.4g}"
+
+    return f"[{end(lower)}, {end(upper)}]"
 
 
 def _iso(epoch: float) -> str:
@@ -563,14 +584,12 @@ def _summary_drift(path: Path) -> dict[str, Any]:
         return {}
     left = list(d.get("left") or [])
     unresolved = list(d.get("unresolved") or [])
-    out: dict[str, Any] = {
-        "verdict": "drifted" if d.get("drifted") else "within interval",
-    }
+    out: dict[str, Any] = {"verdict": verdict_word(bool(d.get("drifted")))}
     if left:
         out["left"] = ", ".join(left)
     if unresolved:
         out["unresolved"] = ", ".join(unresolved)
-    out["references"] = d.get("references", UNRECORDED)
+    out["references"] = len(d.get("fit") or [])
     return out
 
 

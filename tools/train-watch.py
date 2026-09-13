@@ -725,7 +725,7 @@ def open_sinks(rrd: Path | None) -> None:
     the file fills (measured 2026-08-28). Before the blueprint, so the
     file carries the layout too."""
     if rrd is not None:
-        rr.set_sinks(*sinks(rr, file=rrd))
+        rr.set_sinks(*sinks(rr, file=rrd, wanted=True))
 
 
 # ---- the modes ---------------------------------------------------------------

@@ -28,7 +28,7 @@ use std::thread;
 use egui::{ColorImage, TextureHandle, TextureOptions};
 use re_ui::UiExt as _;
 
-use crate::spawn::{kill_tree, pipeline_command, walk_command, RENDER_STREAM_SCRIPT};
+use crate::spawn::{end_tree, kill_tree, pipeline_command, walk_command, RENDER_STREAM_SCRIPT};
 
 /// The shared-memory frame ring's layout — the Python side's mirror
 /// (`SHM_HEADER`/`SHM_MAGIC` in studio-render-stream.py): magic u32,
@@ -46,6 +46,10 @@ struct ShmReader {
     file: File,
     path: PathBuf,
     last_seq: u32,
+    /// The frame's bytes, kept between reads: a 6 MB allocation per
+    /// frame was the hot path's own cost (2026-09-13). `ColorImage` still
+    /// owns its pixels, so one copy remains.
+    rgb: Vec<u8>,
 }
 
 impl ShmReader {
@@ -67,8 +71,8 @@ impl ShmReader {
         {
             return None;
         }
-        let mut rgb = vec![0u8; width * height * 3];
-        self.file.read_exact(&mut rgb).ok()?;
+        self.rgb.resize(width * height * 3, 0);
+        self.file.read_exact(&mut self.rgb).ok()?;
         // Seqlock close: a write that landed mid-copy moved the counter;
         // discard the torn frame and let the next repaint pick it up.
         self.file.seek(SeekFrom::Start(4)).ok()?;
@@ -78,7 +82,7 @@ impl ShmReader {
             return None;
         }
         self.last_seq = seq;
-        Some(ColorImage::from_rgb([width, height], &rgb))
+        Some(ColorImage::from_rgb([width, height], &self.rgb))
     }
 }
 
@@ -92,6 +96,15 @@ impl Drop for ShmReader {
 /// scroll — tuned by feel against a 1024x576 viewport, not measured.
 /// These stay HERE (pixel-domain input scaling is this side's fact);
 /// every absolute camera fact — defaults, clamps — lives Python-side.
+/// What a slider in the drawer sets: a joint (by qpos address), an
+/// actuator, or one axis of a walk's commanded twist.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SliderKind {
+    Joint,
+    Actuator,
+    Twist,
+}
+
 const DRAG_DEGREES_PER_POINT: f32 = 0.4;
 const ZOOM_METRES_PER_SCROLL_POINT: f32 = 0.004;
 
@@ -220,7 +233,7 @@ pub struct ViewportFeed {
     report: Arc<std::sync::Mutex<SimReport>>,
     /// Slider values the human is editing, so a drag does not fight
     /// the 100 ms status echo: keyed by qpos address / actuator index.
-    editing: std::collections::HashMap<(u8, usize), f64>,
+    editing: std::collections::HashMap<(SliderKind, usize), f64>,
     /// The twist last sent (world, values) while the human holds the
     /// commands: the source the next axis composes from, ahead of the
     /// status echo (two door calls in a row raced on the echo, 2026-09-12).
@@ -327,8 +340,14 @@ pub struct SimStatus {
     pub render_ms: f64,
     #[serde(default)]
     pub vis: std::collections::BTreeMap<String, bool>,
+    /// The same flags by index, filled once when the status lands (the
+    /// drawer asked the map by a formatted index fifty times a frame).
+    #[serde(skip)]
+    pub vis_table: Vec<Option<bool>>,
     #[serde(default)]
     pub rnd: std::collections::BTreeMap<String, bool>,
+    #[serde(skip)]
+    pub rnd_table: Vec<Option<bool>>,
     /// Each group mask as rendered, by kind name.
     #[serde(default)]
     pub groups: std::collections::BTreeMap<String, Vec<bool>>,
@@ -474,6 +493,7 @@ impl ViewportFeed {
                 file,
                 path: shm_path.clone(),
                 last_seq: 0,
+                rgb: Vec::new(),
             });
 
         if task_name == WALK_TASK {
@@ -782,13 +802,13 @@ impl ViewportFeed {
 
     pub fn send_ctrl(&mut self, actuator: u32, value: f32) {
         self.editing
-            .insert((1, actuator as usize), f64::from(value));
+            .insert((SliderKind::Actuator, actuator as usize), f64::from(value));
         self.send_message(&encode_index_value(TAG_CTRL, actuator, value));
     }
 
     pub fn send_qpos(&mut self, qpos_address: u32, value: f32) {
         self.editing
-            .insert((0, qpos_address as usize), f64::from(value));
+            .insert((SliderKind::Joint, qpos_address as usize), f64::from(value));
         self.send_message(&encode_index_value(TAG_QPOS, qpos_address, value));
     }
 
@@ -853,20 +873,19 @@ impl ViewportFeed {
     }
 
     /// The value a slider shows: what the human is dragging, else the
-    /// stream's echo. Kind 0 = a joint (qpos address), 1 = an actuator,
-    /// 2 = a twist axis.
-    pub fn slider_value(&self, kind: u8, index: usize, echoed: f64) -> f64 {
+    /// stream's echo.
+    pub fn slider_value(&self, kind: SliderKind, index: usize, echoed: f64) -> f64 {
         self.editing.get(&(kind, index)).copied().unwrap_or(echoed)
     }
 
     /// A slider the human is dragging shows this until the drag ends
     /// (the stream's echo lags a frame or two behind the hand).
-    pub fn start_editing(&mut self, kind: u8, index: usize, value: f64) {
+    pub fn start_editing(&mut self, kind: SliderKind, index: usize, value: f64) {
         self.editing.insert((kind, index), value);
     }
 
     /// The drag ended: the stream's echo is the truth again.
-    pub fn stop_editing(&mut self, kind: u8, index: usize) {
+    pub fn stop_editing(&mut self, kind: SliderKind, index: usize) {
         self.editing.remove(&(kind, index));
     }
 
@@ -893,8 +912,8 @@ impl Drop for ViewportFeed {
         // kind of leak the crate's own smoke test already checked for by
         // hand — do it here so every caller gets it for free. The child
         // leads its own process group (see `spawn.rs`); the whole tree goes.
-        if let Some(mut child) = self.child.take() {
-            kill_tree(&mut child);
+        if let Some(child) = self.child.take() {
+            end_tree(child);
         }
     }
 }
@@ -918,6 +937,9 @@ fn spawn_token_reader(
 ) {
     thread::spawn(move || {
         let mut token = [0u8; 1];
+        // One body buffer for the stream's life: a status arrives many
+        // times a second, and a fresh allocation per message is waste.
+        let mut body: Vec<u8> = Vec::new();
         while stdout.read_exact(&mut token).is_ok() {
             match token[0] {
                 FRAME_TOKEN => {
@@ -933,7 +955,8 @@ fn spawn_token_reader(
                     let Some(len) = status_length(len) else {
                         break; // corruption: end the stream, loudly (below)
                     };
-                    let mut body = vec![0u8; len];
+                    body.clear();
+                    body.resize(len, 0);
                     if stdout.read_exact(&mut body).is_err() {
                         break;
                     }
@@ -941,6 +964,10 @@ fn spawn_token_reader(
                         if let Ok(mut slot) = report.lock() {
                             if let Some(model) = status.model.take() {
                                 slot.model = Some(Arc::new(model));
+                            }
+                            if let Some(model) = &slot.model {
+                                status.vis_table = flag_table(&status.vis, model.vis_flags.len());
+                                status.rnd_table = flag_table(&status.rnd, model.rnd_flags.len());
                             }
                             slot.status = Some(Arc::new(status));
                         }
@@ -954,6 +981,20 @@ fn spawn_token_reader(
         stream_ended.store(true, Ordering::Relaxed);
         ctx.request_repaint();
     });
+}
+
+/// A flag map keyed by formatted index (the stream's JSON) as a table
+/// by index: `None` where the stream said nothing.
+fn flag_table(map: &std::collections::BTreeMap<String, bool>, len: usize) -> Vec<Option<bool>> {
+    let mut table = vec![None; len];
+    for (key, on) in map {
+        if let Ok(index) = key.parse::<usize>() {
+            if index < len {
+                table[index] = Some(*on);
+            }
+        }
+    }
+    table
 }
 
 /// The largest aspect-preserving sub-rect of `outer` matching the

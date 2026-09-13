@@ -96,5 +96,116 @@ class StudioPort(unittest.TestCase):
         self.assertEqual(address, bound)
 
 
+class WireConstants(unittest.TestCase):
+    """Every fact the Rust shell mirrors from the render stream's wire:
+    the tags, the two tokens, the ring's magic, the initial render size,
+    the speed bounds, the view presets' order. Spelled once per side,
+    compared here (docs/76 §10.2)."""
+
+    TAGS = (
+        "CAMERA",
+        "SELECT",
+        "DRAG",
+        "RELEASE",
+        "PAUSE",
+        "RUN",
+        "STEP",
+        "RESET",
+        "SPEED",
+        "MANUAL",
+        "CTRL",
+        "QPOS",
+        "VIS",
+        "RND",
+        "VIEW",
+        "FOLLOW",
+        "PAN",
+        "GROUP",
+        "TWIST",
+    )
+
+    @staticmethod
+    def _python_tags() -> dict[str, int]:
+        """`TAG_X = n` and `TAG_A, TAG_B = 1, 2` lines, as the stream spells them."""
+        out: dict[str, int] = {}
+        for line in RENDER_STREAM.splitlines():
+            if not line.startswith("TAG_") or "=" not in line:
+                continue
+            names, _, values = line.partition("=")
+            values = values.split("#", 1)[0]
+            for name, value in zip(names.split(","), values.split(","), strict=False):
+                if value.strip().isdigit():  # not the payload table's `{`
+                    out[name.strip()] = int(value.strip())
+        return out
+
+    def test_every_tag_the_shell_names_agrees(self) -> None:
+        """Every tag the Rust side spells (it sends most of the stream's
+        tags, not all) has the stream's number; the stream must know every
+        one the shell names."""
+        python = self._python_tags()
+        rust = re.findall(r"const TAG_(\w+): u8 = (\d+);", VIEWPORT_RS)
+        self.assertGreaterEqual(len(rust), 15)
+        for tag, number in rust:
+            self.assertIn(f"TAG_{tag}", python, tag)
+            self.assertEqual(int(number), python[f"TAG_{tag}"], tag)
+        for tag in self.TAGS:
+            self.assertIn(f"TAG_{tag}", python, tag)
+
+    def test_the_tokens_and_the_magic_agree(self) -> None:
+        for name, rust_pat, py_pat in (
+            (
+                "frame token",
+                r"const FRAME_TOKEN: u8 = 0x([0-9A-Fa-f]+);",
+                r'FRAME_TOKEN = b"\\x([0-9a-fA-F]+)"',
+            ),
+            (
+                "status token",
+                r"const STATUS_TOKEN: u8 = 0x([0-9A-Fa-f]+);",
+                r'STATUS_TOKEN = b"\\x([0-9a-fA-F]+)"',
+            ),
+        ):
+            rust = int(constant(VIEWPORT_RS, rust_pat), 16)
+            python = int(constant(RENDER_STREAM, py_pat), 16)
+            self.assertEqual(rust, python, name)
+        rust_magic = constant(VIEWPORT_RS, r"const SHM_MAGIC: u32 = 0x([0-9A-Fa-f_]+);")
+        py_magic = constant(RENDER_STREAM, r"SHM_MAGIC = 0x([0-9A-Fa-f]+)")
+        self.assertEqual(int(rust_magic.replace("_", ""), 16), int(py_magic, 16))
+
+    def test_the_render_size_and_the_speed_bounds_agree(self) -> None:
+        size = re.search(
+            r"const INITIAL_RENDER_SIZE: \(u32, u32\) = \((\d+), (\d+)\);", VIEWPORT_RS
+        )
+        wh = re.search(r"^WIDTH, HEIGHT = (\d+), (\d+)", RENDER_STREAM, re.M)
+        assert size and wh
+        self.assertEqual(size.groups(), wh.groups())
+        speed = re.search(
+            r"SPEED_RANGE: std::ops::RangeInclusive<f32> = ([\d.]+)\.\.=([\d.]+);",
+            VIEWPORT_RS,
+        )
+        bounds = re.search(
+            r"^SPEED_MIN, SPEED_MAX = ([\d.]+), ([\d.]+)", RENDER_STREAM, re.M
+        )
+        assert speed and bounds
+        self.assertEqual(
+            tuple(map(float, speed.groups())), tuple(map(float, bounds.groups()))
+        )
+
+    def test_the_view_presets_agree_by_index(self) -> None:
+        """The stream's tuple position IS the wire's u8; the shell's table
+        carries the index explicitly, in whatever order its menu likes."""
+        block = VIEWPORT_RS[VIEWPORT_RS.index("pub const VIEW_PRESETS") :]
+        block = block[: block.index("];")]
+        rust = {
+            int(index): name
+            for name, index in re.findall(
+                r'name: "(\w+)",\s*label: "[^"]*",\s*index: (\d+)', block
+            )
+        }
+        python = re.search(r"^VIEW_PRESETS = \(([^)]*)\)", RENDER_STREAM, re.M)
+        assert python
+        names = [n.strip().strip('"') for n in python.group(1).split(",") if n.strip()]
+        self.assertEqual(rust, dict(enumerate(names)))
+
+
 if __name__ == "__main__":
     unittest.main()

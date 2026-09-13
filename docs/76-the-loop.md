@@ -458,9 +458,11 @@ from system identification. A drift check re-identifies from a fresh
 recording and asks, parameter by parameter, whether the fresh interval
 still overlaps the identified one.
 
-**The reference interval is the union of the bundle's fit records**, per
-parameter: the lowest lower bound to the highest upper bound across every
-record the bundle carries. That is the spread rule the repo already
+**The reference interval is the union of the bundle's PINNED fit
+intervals**, per parameter: the lowest lower bound to the highest upper
+bound across every record that pinned it (amended 2026-09-13 by review:
+a record that never pinned a parameter carries an unbounded interval,
+and one of those in the union would make every later check `within`). That is the spread rule the repo already
 trusts (`robot/fit_record.cross_run_spread`: when runs disagree beyond
 their own intervals, trust the spread, never one run). The rig's own
 records show why it must be the union: its right gear differs between
@@ -958,8 +960,9 @@ entity path, every timeline, every component, chunk counts and size —
 enough for an agent to know the picture exists and what is in it. The
 values themselves need Rerun's local catalog, which needs DataFusion
 (98 MB): a separate extra, `viz-query`, so the core stays light; with
-it the door reads the columns — rows per timeline, and for every scalar
-series its count, minimum, maximum and last value. Without it the door
+it the door reads the columns — rows per clock, and for every scalar
+series on each clock it was logged on: its count, its width (components
+per row), minimum and maximum over every component, and the last row. Without it the door
 says so by name and gives the inventory. The door is
 `describe_viewer_recording(artifact)`: the files inside the artifact,
 each described.

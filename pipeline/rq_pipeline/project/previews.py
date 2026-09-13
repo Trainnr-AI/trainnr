@@ -543,6 +543,13 @@ def _font(size: int) -> FreeTypeFont | ImageFontType:
     return ImageFont.load_default(size=size)
 
 
+def _finite_pair(lo: float | None, hi: float | None) -> tuple[float, float] | None:
+    """Both ends known and finite, else nothing to draw."""
+    if lo is None or hi is None or not np.isfinite(lo) or not np.isfinite(hi):
+        return None
+    return float(lo), float(hi)
+
+
 def _render_drift(
     _project: Project, source: Path, out: Path, _summary: dict[str, Any]
 ) -> bool:
@@ -558,6 +565,7 @@ def _render_drift(
         DRIFT_FILE,
         LEFT,
         load_drift_record,
+        verdict_word,
     )
 
     try:
@@ -568,7 +576,7 @@ def _render_drift(
     image = Image.new("RGB", (width, height), GROUND)
     draw = ImageDraw.Draw(image)
     big, small, tiny = _font(72), _font(28), _font(22)
-    word = "drifted" if d.drifted else "within interval"
+    word = verdict_word(d.drifted)
     ink = (255, 107, 107) if d.drifted else (236, 238, 242)
     draw.text((48, 36), word, fill=ink, font=big)
     draw.text(
@@ -584,29 +592,29 @@ def _render_drift(
     x0, x1, y = 48, width - 48, 190
     row = max(28, min(56, (height - y - 24) // len(judged)))
     for p in judged:
-        lows = [p.reference_lower, p.fresh_lower]
-        highs = [p.reference_upper, p.fresh_upper]
-        finite_lo = [v for v in lows if np.isfinite(v)]
-        finite_hi = [v for v in highs if np.isfinite(v)]
-        if not finite_lo or not finite_hi:
+        ref = _finite_pair(p.reference_lower, p.reference_upper)
+        fresh = _finite_pair(p.fresh_lower, p.fresh_upper)
+        ends = [v for pair in (ref, fresh) if pair for v in pair]
+        if not ends:
             y += row
-            continue
-        lo, hi = min(finite_lo), max(finite_hi)
+            continue  # nothing known to draw: the row keeps its place
+        lo, hi = min(ends), max(ends)
         span = (hi - lo) or 1.0
-        px = lambda v, lo=lo, span=span: x0 + int((x1 - x0) * (v - lo) / span)  # noqa: E731
+
+        def px(v: float, lo: float = lo, span: float = span) -> int:
+            return x0 + int((x1 - x0) * (v - lo) / span)
+
         draw.text((x0, y), p.name, fill=(160, 166, 178), font=tiny)
         bar = y + 24
-        draw.rounded_rectangle(
-            [px(p.reference_lower), bar, px(p.reference_upper), bar + 8],
-            radius=4,
-            fill=(70, 74, 84),
-        )
-        fill = (255, 107, 107) if p.verdict == LEFT else (88, 166, 255)
-        draw.rounded_rectangle(
-            [px(p.fresh_lower), bar - 3, px(p.fresh_upper), bar + 11],
-            radius=5,
-            fill=fill,
-        )
+        if ref:
+            draw.rounded_rectangle(
+                [px(ref[0]), bar, px(ref[1]), bar + 8], radius=4, fill=(70, 74, 84)
+            )
+        if fresh:
+            fill = (255, 107, 107) if p.verdict == LEFT else (88, 166, 255)
+            draw.rounded_rectangle(
+                [px(fresh[0]), bar - 3, px(fresh[1]), bar + 11], radius=5, fill=fill
+            )
         y += row
     return _save_pil(image, out)
 

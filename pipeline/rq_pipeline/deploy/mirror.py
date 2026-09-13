@@ -18,18 +18,29 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import numpy as np
 
 from rq_pipeline.deploy.manifest import TWIST_SHORT, Manifest
+from rq_pipeline.viz import (
+    MIRROR_HZ,
+    SIM_TIMELINE,
+    STUDIO_ADDRESS,
+    VISUAL_ONLY_SKIP_GROUPS,
+    RigMirror,
+    open_stream,
+)
 
 APP_ID = "rq-gate"
-TIMELINE = "sim"
-# A frame every second control tick: 25 a second at the Go2's 50 Hz,
-# near the render stream's 20 Hz mirror budget (its MIRROR_HZ); every
-# frame is one log call per geom, and rr.log blocks when it floods.
-EVERY_TICKS = 2
+TIMELINE = SIM_TIMELINE
+
+
+def ticks_per_frame(step_dt: float) -> int:
+    """How many control ticks pass between mirrored frames so the mirror
+    stays near its budget (`viz.MIRROR_HZ`) whatever the manifest's rate:
+    every frame is one log call per geom, and rr.log blocks when it floods."""
+    return max(1, round(1.0 / (max(step_dt, 1e-6) * MIRROR_HZ)))
 
 
 def _rerun() -> Any | None:
@@ -55,12 +66,6 @@ class GateMirror:
     ) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
-        from rq_pipeline.viz import (  # noqa: PLC0415
-            STUDIO_ADDRESS,
-            RigMirror,
-            open_stream,
-        )
-
         self._rr = rr
         self.runtime_name = runtime_name
         self.model = model
@@ -68,10 +73,15 @@ class GateMirror:
         self.joint_qpos = np.array(
             [model.jnt_qposadr[model.joint(j).id] for j in manifest.joints.policy_order]
         )
-        self._mirror = RigMirror(model, model_colors=True, skip_groups=(3, 4, 5))
+        self._mirror = RigMirror(
+            model, model_colors=True, skip_groups=VISUAL_ONLY_SKIP_GROUPS
+        )
+        self.every = ticks_per_frame(manifest.control.step_dt)
         self.ticks = 0
         self.seconds = 0.0
-        open_stream(f"{APP_ID}-{runtime_name}", address=STUDIO_ADDRESS, file=file)
+        open_stream(
+            f"{APP_ID}-{runtime_name}", address=STUDIO_ADDRESS, file=file, rr=rr
+        )
         self._layout()
 
     @classmethod
@@ -80,7 +90,7 @@ class GateMirror:
         manifest: Manifest,
         runtime_name: str,
         *,
-        log: Any = sys.stderr,
+        log: TextIO = sys.stderr,
         file: Path | None = None,
     ) -> GateMirror | None:
         """The mirror, or None with a note when it cannot be one."""
@@ -141,10 +151,10 @@ class GateMirror:
         velocity_b: np.ndarray,
     ) -> None:
         """One control tick: the runtime's pose into the scene, a frame
-        every EVERY_TICKS, the command and the measured planar velocity."""
+        every self.every, the command and the measured planar velocity."""
         self.ticks += 1
         self.seconds += float(dt)
-        if self.ticks % EVERY_TICKS:
+        if self.ticks % self.every:
             return
         import mujoco  # noqa: PLC0415
 

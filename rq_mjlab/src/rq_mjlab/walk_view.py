@@ -37,8 +37,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from rq_pipeline.project.kinds import TASK_FILE
+from rq_pipeline.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
+from rq_pipeline.viz import SIM_TIMELINE
+
+from rq_mjlab.walks import DEFAULT_ROBOT, walk_spec
+
 REPO = Path(__file__).resolve().parents[3]
 OVERVIEW_HZ = 10.0  # the per-world markers into the Studio's viewer
+CHECKPOINT_GLOB = "model_*.pt"  # rsl_rl's checkpoint names, as walk_train writes them
 
 
 def transport():
@@ -73,7 +80,9 @@ class Joystick:
 
     HANDLES = ("_joystick_enabled", "_joystick_sliders", "_joystick_get_env_idx")
 
-    def __init__(self, term, axes: int) -> None:
+    def __init__(self, term, axes: int, command: str) -> None:
+        """`command`: the mailbox word that carries a twist (the render
+        stream's `MAILBOX_TWIST`), named once there."""
         missing = [h for h in self.HANDLES if not hasattr(term, h)]
         if missing:
             raise SystemExit(
@@ -81,6 +90,7 @@ class Joystick:
                 "its viewer joystick, which this mjlab does not have"
             )
         self.axes = axes
+        self.command = command
         self.world = 0
         self.enabled = _Slot(False)
         self.sliders = [_Slot(0.0) for _ in range(axes)]
@@ -92,7 +102,7 @@ class Joystick:
     def on_command(self, name: str, arg_i: int, arg_f: float) -> None:
         """The mailbox's `twist`: arg_i = world * axes + axis, or -1 to
         hand the commands back to the task."""
-        if name != "twist":
+        if name != self.command:
             return
         if arg_i < 0:
             self.enabled.value = False
@@ -168,12 +178,16 @@ def latest_checkpoint(project: Path | None = None) -> Path:
         # A policy artifact first (a judged checkpoint, copied there by
         # the live loop), else any run's checkpoint; newest by time.
         root = Path(project)
-        for pattern in ("policies/*/model_*.pt", "runs/*/model_*.pt"):
-            checkpoints = sorted(root.glob(pattern), key=lambda p: p.stat().st_mtime)
+        for folder in (POLICIES_FOLDER, RUNS_FOLDER):
+            checkpoints = sorted(
+                root.glob(f"{folder}/*/{CHECKPOINT_GLOB}"),
+                key=lambda p: p.stat().st_mtime,
+            )
             if checkpoints:
                 return checkpoints[-1]
         raise SystemExit(
-            f"no model_*.pt under {project}/policies or runs - train a walk first"
+            f"no {CHECKPOINT_GLOB} under {project}/{POLICIES_FOLDER} or "
+            f"{RUNS_FOLDER} - train a walk first"
         )
     checkpoints = sorted(
         [
@@ -199,7 +213,7 @@ def project_walk_robot(project: Path) -> str:
     from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
 
     found = []
-    for task_file in sorted(Path(project).glob("tasks/*/task.json")):
+    for task_file in sorted(Path(project).glob(f"{TASKS_FOLDER}/*/{TASK_FILE}")):
         try:
             robot = walk_robot(
                 str(json.loads(task_file.read_text()).get("task_id", ""))
@@ -278,7 +292,7 @@ def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
     return world_of, device_of
 
 
-def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduck"):
+def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = None):
     """The env built from the checkpoint's identity, and its inference
     policy, identity-gated (the same door walk_play and walk_verdict use)."""
     from dataclasses import asdict  # noqa: PLC0415
@@ -286,11 +300,9 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str = "microduc
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
-    from rq_mjlab.walks import walk_spec  # noqa: PLC0415
-
     trained_file = checkpoint.parent / "identity.json"
     trained = json.loads(trained_file.read_text()) if trained_file.is_file() else {}
-    spec = walk_spec(robot)
+    spec = walk_spec(robot or DEFAULT_ROBOT)
     # The walk in play mode at the nominal point, as walk_play rolls it:
     # a view, not a judgment, so the trained DR basis is not rebuilt
     # (the Go2's declared-constants basis has no span to parse, and this
@@ -380,7 +392,7 @@ class Overview:
             return
         self.last = now
         rr = self.rr
-        rr.set_time("sim", duration=sim_time)
+        rr.set_time(SIM_TIMELINE, duration=sim_time)
         colors = [(220, 60, 60) if d else (70, 200, 110) for d in dones]
         rr.log(
             "worlds/markers",
@@ -480,7 +492,7 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
             *([f"--stage={stage}"] if stage else []),
             *([f"--shm={args.shm}"] if args.shm else []),
             *([f"--project={args.project}"] if args.project else []),
-            f"--rig={robot}-rl",
+            streamer.camera_flag(walk_spec(robot).view.as_dict()),
             *([f"--twist-ranges={twist_bounds}"] if twist_bounds else []),
         ],
         cwd=str(REPO / "pipeline"),
@@ -488,7 +500,9 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
     overview = None if args.no_rerun else Overview(args.envs)
     pump = streamer.PhysicsPump(mirror, None, ring)
     if twist_term is not None:
-        pump.on_command = Joystick(twist_term, streamer.TWIST_AXES).on_command
+        pump.on_command = Joystick(
+            twist_term, streamer.TWIST_AXES, streamer.MAILBOX_TWIST
+        ).on_command
 
     step_seconds = float(env.unwrapped.step_dt)
     obs = env.get_observations()
@@ -514,11 +528,10 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
             try:
                 pump.tick(mirror_data, step_seconds, hold_when_paused=False)
             except streamer.ResetScene:
-                obs = (
-                    env.reset()[0]
-                    if isinstance(env.reset(), tuple)
-                    else env.get_observations()
-                )
+                # One reset: the first call's observation was discarded
+                # by a second call until 2026-09-13.
+                reset = env.reset()
+                obs = reset[0] if isinstance(reset, tuple) else env.get_observations()
                 sim_time = 0.0
             except streamer.TakeOver:
                 print(

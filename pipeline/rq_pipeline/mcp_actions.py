@@ -30,6 +30,7 @@ from typing import Any
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
+from rq_pipeline.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
 from rq_pipeline.mcp_jobs import Cancelled, JobHandle, JobManager, JobStatus
 
 # The checkout this package runs from (rq_pipeline/ -> pipeline/ -> the
@@ -62,8 +63,8 @@ TRAIN_PYTHON = venv_python(PIPELINE_DIR / ".venv-train")
 # The reference checkout Unitree's simulator and controller are built in,
 # for the DDS gate runtime (docs/77 §7): named here, handed to the gate
 # tool, never assumed by it.
-UNITREE_REFERENCE_ENV = "TRAINNR_UNITREE_REFERENCE"
-UNITREE_REFERENCE_DEFAULT = Path("~/.cache/trainnr/unitree_rl_mjlab")
+UNITREE_REFERENCE_ENV = REFERENCE_ENV
+UNITREE_REFERENCE_DEFAULT = REFERENCE_CACHE
 
 
 def unitree_reference() -> Path:

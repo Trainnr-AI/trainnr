@@ -12,7 +12,7 @@ use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::Model;
 use crate::pages::{self, Section, RAIL_ICON};
-use crate::spawn::{kill_tree, pipeline_command, PRESENTER_SCRIPT};
+use crate::spawn::{end_tree, pipeline_command, PRESENTER_SCRIPT};
 use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
@@ -144,8 +144,8 @@ impl Shell {
     }
 
     fn kill_presenter(&mut self) {
-        if let Some(mut child) = self.presenter.take() {
-            kill_tree(&mut child);
+        if let Some(child) = self.presenter.take() {
+            end_tree(child);
         }
     }
 
@@ -166,7 +166,7 @@ impl Shell {
                 if custom_chrome {
                     // This bar is the title bar: drag and double-click,
                     // registered first so the widgets on it win input.
-                    let rect = ui.available_rect_before_wrap();
+                    let rect = crate::chrome::title_bar_rect(ui.available_rect_before_wrap());
                     crate::chrome::title_bar_interaction(ui, rect, ui.id().with("titlebar"));
                 }
                 ui.horizontal(|ui| {
@@ -441,14 +441,19 @@ impl Shell {
     /// ←/→ walk the page's artifacts in the order they are listed. Text
     /// boxes keep their keys.
     fn keys(&mut self, ctx: &egui::Context) {
-        let typing = ctx.memory(|m| m.focused().is_some());
-        let (palette_key, escape, left, right) = ctx.input_mut(|i| {
-            (
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::K),
-                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
-                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft),
-                !typing && i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight),
-            )
+        let typing = crate::keys::typing(ctx);
+        // First presses (a held Escape closed everything at repeat rate);
+        // the keys are consumed either way so no widget below sees them.
+        let escape = !typing && crate::keys::first_press(ctx, egui::Key::Escape);
+        let left = !typing && crate::keys::first_press(ctx, egui::Key::ArrowLeft);
+        let right = !typing && crate::keys::first_press(ctx, egui::Key::ArrowRight);
+        let palette_key = ctx.input_mut(|i| {
+            if !typing {
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
+                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
+            }
+            i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)
         });
         if palette_key {
             self.palette = Some(crate::palette::Palette::open(None));

@@ -5,6 +5,7 @@ and the unmodified recording must come back within."""
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -17,7 +18,11 @@ from rq_pipeline.fleet.drift import (
     ANCHORED,
     DRIFT_FILE,
     DRIFT_SCHEMA,
+    FRESH_NOT_FINITE,
+    FRESH_NOT_PINNED,
     LEFT,
+    MISSING_IN_FRESH,
+    NO_PINNED_REFERENCE,
     RECOMMEND_CLEAN,
     RECOMMEND_DRIFTED,
     UNRESOLVED,
@@ -28,11 +33,12 @@ from rq_pipeline.fleet.drift import (
     recommendation_for,
     reference_intervals,
 )
-from rq_pipeline.project import PROJECT_ENV, create_project, index_project
+from rq_pipeline.project import PROJECT_ENV, index_project
 from rq_pipeline.project.ingest import ingest
 from rq_pipeline.project.kinds import Kind
 from rq_pipeline.robot.fit_record import FitRecord
 from rq_pipeline.robot.identify import IdentificationResult, IdentifiedParameter
+from tests._fixtures import rig_project
 
 REPO = Path(__file__).resolve().parents[2]
 BUNDLE = REPO / "robots" / "rig-drivetrain"
@@ -93,15 +99,46 @@ class TheRule(unittest.TestCase):
         self.assertAlmostEqual(judged["gear"].shift or 0.0, 0.5)
         self.assertEqual(judged["gear"].unit, "N*m per duty")
         self.assertEqual(judged["damp"].verdict, ANCHORED)
-        # A parameter the reference never identified cannot be judged.
+        # A parameter the reference never pinned cannot be judged.
         self.assertEqual(judged["new"].verdict, UNRESOLVED)
+        self.assertEqual(judged["new"].note, NO_PINNED_REFERENCE)
         self.assertIsNone(judged["new"].shift)
-        self.assertTrue(math.isnan(judged["new"].reference_lower))
+        self.assertIsNone(judged["new"].reference_lower)
         left = judge_parameters(records, _fresh(("gear", 1.3, 0.05, True)))[0]
         self.assertEqual(left.verdict, LEFT)
         self.assertGreater(left.shift or 0.0, 1.0)
         wide = judge_parameters(records, _fresh(("gear", 1.3, 0.5, False)))[0]
         self.assertEqual(wide.verdict, UNRESOLVED, "not pinned: no verdict")
+        self.assertEqual(wide.note, FRESH_NOT_PINNED)
+
+    def test_the_reference_is_built_from_pinned_records_only(self) -> None:
+        """One record that never pinned a parameter (an unbounded interval)
+        must not make every later check `within`."""
+        unbounded = _record(("gear", 1.0, math.inf, False))
+        self.assertEqual(reference_intervals((unbounded,)), {})
+        far = judge_parameters((unbounded,), _fresh(("gear", 99.0, 0.01, True)))[0]
+        self.assertEqual(far.verdict, UNRESOLVED)
+        self.assertEqual(far.note, NO_PINNED_REFERENCE)
+        pinned = _record(("gear", 1.0, 0.1, True))
+        far = judge_parameters((unbounded, pinned), _fresh(("gear", 99.0, 0.01, True)))[
+            0
+        ]
+        self.assertEqual(far.verdict, LEFT)
+
+    def test_a_diverged_fit_and_a_missing_parameter_are_unresolved(self) -> None:
+        records = (_record(("gear", 1.0, 0.1, True), ("fric", 0.5, 0.05, True)),)
+        judged = {
+            p.name: p
+            for p in judge_parameters(records, _fresh(("gear", math.nan, 0.1, True)))
+        }
+        self.assertEqual(judged["gear"].verdict, UNRESOLVED)
+        self.assertEqual(judged["gear"].note, FRESH_NOT_FINITE)
+        self.assertIsNone(judged["gear"].fresh_estimate)
+        # The reference names fric; the fresh fit did not return it.
+        self.assertEqual(judged["fric"].verdict, UNRESOLVED)
+        self.assertEqual(judged["fric"].note, MISSING_IN_FRESH)
+        self.assertIsNone(judged["fric"].fresh_lower)
+        self.assertEqual(judged["fric"].reference_lower, 0.45)
 
     def test_the_edge_touching_counts_as_within(self) -> None:
         records = (_record(("gear", 1.0, 0.1, True)),)
@@ -122,7 +159,6 @@ class TheRule(unittest.TestCase):
             recording="x@2",
             method="m",
             fit=("rec-t@000000000000",),
-            references=1,
             parameters=judged,
             drifted=True,
             left=("gear",),
@@ -137,7 +173,22 @@ class TheRule(unittest.TestCase):
             path = record.write(Path(tmp) / DRIFT_FILE)
             back = load_drift_record(path)
             self.assertEqual(back, record)
+            self.assertEqual(DriftRecord.read(path), record, "one reader, not two")
             self.assertEqual(back.schema, DRIFT_SCHEMA)
+            self.assertEqual(back.references, 1)
+            # Strict JSON on disk: a strict parser reads it, no NaN, no Infinity.
+            strict = json.loads(
+                path.read_text(),
+                parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)),
+            )
+            self.assertEqual(strict["parameters"][0]["reference_lower"], 0.9)
+            # A row with no reference writes null, never NaN.
+            unknown = judge_parameters((), _fresh(("x", 1.0, 0.1, True)))
+            loose = DriftRecord(**{**record.__dict__, "parameters": unknown})
+            path2 = loose.write(Path(tmp) / "b" / DRIFT_FILE)
+            self.assertIn("null", path2.read_text())
+            self.assertNotIn("NaN", path2.read_text())
+            self.assertIsNone(load_drift_record(path2).parameters[0].reference_lower)
             path.write_text(path.read_text().replace(DRIFT_SCHEMA, "trainnr-drift/9"))
             with self.assertRaisesRegex(ValueError, "schema"):
                 load_drift_record(path)
@@ -156,12 +207,7 @@ def _worn(source: Path, out: Path, scale: float) -> Path:
 
 
 def _project_with_rig(tmp: Path):
-    project = create_project(tmp / "p", "p")
-    bundle = project.folder("robots") / "rig-drivetrain"
-    bundle.mkdir(parents=True)
-    for name in ("model.xml", "profile.json", "README.md"):
-        shutil.copy2(BUNDLE / name, bundle / name)
-    return project
+    return rig_project(tmp)
 
 
 @unittest.skipUnless(SWEEP_B.is_file() and SWEEP_C.is_file(), "the rig's sweeps")

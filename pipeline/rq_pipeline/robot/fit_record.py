@@ -39,7 +39,7 @@ FITS_DIRECTORY = "fits"
 SPREAD_FILENAME = "SPREAD.json"
 
 
-def _code_version() -> str:
+def code_version() -> str:
     """The git sha the fit ran under; 'unknown' outside a checkout."""
     try:
         return (
@@ -139,7 +139,7 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
             stamp(profile_path.name, profile_path) if profile_path.is_file() else None
         ),
         model=(stamp(model_files[0].name, model_files[0]) if model_files else None),
-        code=_code_version(),
+        code=code_version(),
         units=dict(units),
         pinned_criterion=(
             f"half_width <= {DEFAULT_PINNED_FRACTION} * allowed_range "
@@ -284,7 +284,7 @@ def write_spread_record(bundle_dir: Path) -> Path:
             for name, judged in spread_verdicts(records).items()
         },
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "code": _code_version(),
+        "code": code_version(),
     }
     path = Path(bundle_dir) / FITS_DIRECTORY / SPREAD_FILENAME
     path.write_text(json.dumps(payload, indent=2, allow_nan=False), encoding="utf-8")

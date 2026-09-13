@@ -45,6 +45,7 @@ from rq_pipeline.project.index import (
     ProjectIndex,
     index_project,
     interval_of,
+    interval_text,
     ratio_of,
 )
 from rq_pipeline.project.kinds import (
@@ -925,6 +926,7 @@ def _present_drift(
         ANCHORED,
         DRIFT_FILE,
         load_drift_record,
+        verdict_word,
     )
 
     d = load_drift_record(project.root / artifact.path / DRIFT_FILE)
@@ -936,7 +938,7 @@ def _present_drift(
         lines = [
             f"# {artifact.stamp}",
             "",
-            f"**{'drifted' if d.drifted else 'within interval'}** — {d.recommendation}",
+            f"**{verdict_word(d.drifted)}** — {d.recommendation}",
             "",
             "bars: each parameter's fresh estimate against its reference "
             "interval, in reference half-widths (±1 is the edge); order: "
@@ -944,9 +946,10 @@ def _present_drift(
             "",
         ]
         lines += [
-            f"- {p.name}: **{p.verdict}** · fresh {p.fresh_estimate:.4g} "
-            f"± {p.fresh_half_width:.3g} · reference "
-            f"[{p.reference_lower:.4g}, {p.reference_upper:.4g}]"
+            f"- {p.name}: **{p.verdict}** · fresh "
+            f"{interval_text(p.fresh_lower, p.fresh_upper)} · reference "
+            f"{interval_text(p.reference_lower, p.reference_upper)}"
+            + (f" · {p.note}" if p.note else "")
             for p in d.parameters
         ]
         lines += ["", f"method `{d.method}` · {d.references} reference record(s)"]

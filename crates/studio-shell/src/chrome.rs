@@ -15,8 +15,19 @@
 
 use egui::{CursorIcon, ResizeDirection, ViewportCommand};
 
-const EDGE: f32 = 6.0;
-const CORNER: f32 = 16.0;
+/// The resize zones' depth along an edge and the square at a corner.
+pub const EDGE: f32 = 6.0;
+pub const CORNER: f32 = 16.0;
+
+/// The part of a bar that moves the window: the bar minus the resize
+/// zones over it, so a press in a corner or on the top edge resizes and
+/// never also drags (both fired where the zones overlapped, 2026-09-13).
+pub fn title_bar_rect(bar: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_max(
+        egui::pos2(bar.left() + CORNER, bar.top() + EDGE),
+        egui::pos2(bar.right() - CORNER, bar.bottom()),
+    )
+}
 
 /// Whether this platform draws the chrome itself (Windows and Linux).
 /// The Mac answers false and keeps its traffic lights.
@@ -116,20 +127,32 @@ pub fn resize_handles(ui: &egui::Ui) {
 /// places a new frameless window with that margin above the screen.
 const WSLG_FRAME_MARGIN: f32 = 32.0;
 
-/// Keep the window's outer edge on the screen: WSLg's window manager
-/// opened it 21 px above the top (2026-09-12), and a frame partly off
-/// the screen is where pointer offsets came from. Cheap enough to run
-/// every frame; it sends a command only when something is off-screen.
-pub fn keep_on_screen(ctx: &egui::Context) {
-    let outer = ctx.input(|i| i.viewport().outer_rect);
+/// Keep the window on the screen, every side: WSLg's window manager
+/// opened it 21 px above the top (2026-09-12), a remembered position on
+/// any manager can sit past the right or bottom edge, and a frame partly
+/// off the screen is where pointer offsets came from. Cheap enough to
+/// run every frame; it sends a command only when something is off.
+/// Under WSLg the window keeps its manager's frame margin from the top
+/// and left (`wslg`); elsewhere the screen's own edge is the bound.
+pub fn keep_on_screen(ctx: &egui::Context, wslg: bool) {
+    let (outer, monitor) = ctx.input(|i| {
+        let v = i.viewport();
+        (v.outer_rect, v.monitor_size)
+    });
     let Some(outer) = outer else {
         return;
     };
-    let (x, y) = (outer.min.x, outer.min.y);
-    if x < 0.0 || y < 0.0 {
-        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(
-            x.max(WSLG_FRAME_MARGIN),
-            y.max(WSLG_FRAME_MARGIN),
-        )));
+    let margin = if wslg { WSLG_FRAME_MARGIN } else { 0.0 };
+    let mut wanted = outer.min;
+    if let Some(monitor) = monitor {
+        // Past the far edge first, then the near one wins: a window wider
+        // than the screen keeps its top-left on it.
+        wanted.x = wanted.x.min(monitor.x - outer.width());
+        wanted.y = wanted.y.min(monitor.y - outer.height());
+    }
+    wanted.x = wanted.x.max(margin);
+    wanted.y = wanted.y.max(margin);
+    if wanted != outer.min {
+        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(wanted));
     }
 }

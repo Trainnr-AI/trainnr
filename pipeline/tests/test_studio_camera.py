@@ -31,7 +31,7 @@ class PanReachesTheCamera(unittest.TestCase):
         import mujoco  # noqa: PLC0415 - the sim extra
 
         srs = render_stream()
-        orbit = srs.OrbitCamera(srs.RIG_CAMERAS["go2-rl"])
+        orbit = srs.OrbitCamera(srs.RIG_CAMERAS[srs.DEFAULT_CAMERA])
         cam = mujoco.MjvCamera()
         orbit.apply_to(cam)
         before = list(cam.lookat)
@@ -52,12 +52,12 @@ class PanReachesTheCamera(unittest.TestCase):
         import mujoco  # noqa: PLC0415 - the sim extra
 
         srs = render_stream()
-        orbit = srs.OrbitCamera(srs.RIG_CAMERAS["go2-rl"])
+        orbit = srs.OrbitCamera(srs.RIG_CAMERAS[srs.DEFAULT_CAMERA])
         cam = mujoco.MjvCamera()
         orbit.pan(0.0, 0.0, 1.0)
         orbit.apply_to(cam)
         self.assertAlmostEqual(
-            cam.lookat[2] - srs.RIG_CAMERAS["go2-rl"]["lookat"][2],
+            cam.lookat[2] - srs.RIG_CAMERAS[srs.DEFAULT_CAMERA]["lookat"][2],
             srs.PAN_RATE_PER_S * orbit.distance,
             places=5,
         )

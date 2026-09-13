@@ -103,6 +103,7 @@ class ChaseCamera:
         import mujoco  # noqa: PLC0415
 
         from rq_mjlab.walk_view import transport  # noqa: PLC0415
+        from rq_mjlab.walks import walk_spec  # noqa: PLC0415
 
         self._mujoco = mujoco
         # The bare one-robot mirror: no sky, the model's own shadow map -
@@ -115,7 +116,11 @@ class ChaseCamera:
         self.renderer = mujoco.Renderer(self.model, height=height, width=width)
         self.camera = mujoco.MjvCamera()
         mujoco.mjv_defaultCamera(self.camera)
-        self.camera.distance, self.camera.elevation, self.camera.azimuth = 0.6, -18, 135
+        # The walk's own chase framing (rq_mjlab.walks), not a duck's numbers.
+        chase = walk_spec(robot).chase
+        self.camera.distance = chase.distance
+        self.camera.elevation = chase.elevation
+        self.camera.azimuth = chase.azimuth
 
     def frame_at(self, qpos: Any) -> Any:
         """One chase frame for one world's qpos - the SAME picture the

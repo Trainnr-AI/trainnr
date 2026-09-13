@@ -118,6 +118,7 @@ sys.setswitchinterval(0.0005)
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
+from rq_pipeline.viz import MIRROR_HZ, SIM_TIMELINE  # noqa: E402
 
 BUILDERS = {entry.name: entry for entry in tasks().values()}
 # Tasks whose accepted scripted expert drives the sim for real; anything
@@ -148,19 +149,6 @@ RIG_CAMERAS = {
         "distance": 1.0,
         "lookat": (0.0, 0.0, 0.15),
     },
-    "microduck-rl": {  # the RL view: nine worlds on a grid, seen from above the corner
-        "azimuth": 120.0,
-        "elevation": -20.0,
-        "distance": 3.0,
-        "lookat": (0.0, 0.0, 0.1),
-    },
-    "go2-rl": {  # the RL view for a 70 cm quadruped: a grid of worlds, from above
-        "azimuth": 135.0,
-        "elevation": -28.0,
-        "distance": 4.2,
-        "lookat": (0.0, 0.0, 0.25),
-        "follow": 2.6,
-    },
     "microduck": {
         "azimuth": 120.0,
         "elevation": -15.0,
@@ -187,6 +175,36 @@ def rig_camera(rig: str | None) -> dict:
     return RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
 
 
+# A walk scene's framing comes from the walk's own declaration
+# (rq_mjlab.walks: the spec's `view` framing), not from a preset keyed
+# by the robot's name here: `--camera=` carries it, in this field order.
+CAMERA_FLAG = "--camera="
+CAMERA_FLAG_FIELDS = ("azimuth", "elevation", "distance", "lookat_height", "follow")
+
+
+def camera_flag(framing: dict) -> str:
+    """`--camera=az,el,dist,lookat_z,follow` from a framing's fields."""
+    return CAMERA_FLAG + ",".join(f"{float(framing[k]):g}" for k in CAMERA_FLAG_FIELDS)
+
+
+def parse_camera_flag(text: str) -> dict:
+    """The flag back as a camera preset (`RIG_CAMERAS`' shape)."""
+    values = [float(v) for v in text.removeprefix(CAMERA_FLAG).split(",")]
+    if len(values) != len(CAMERA_FLAG_FIELDS):
+        raise ValueError(
+            f"{CAMERA_FLAG} takes {len(CAMERA_FLAG_FIELDS)} numbers "
+            f"({', '.join(CAMERA_FLAG_FIELDS)}), got {len(values)}"
+        )
+    named = dict(zip(CAMERA_FLAG_FIELDS, values, strict=True))
+    return {
+        "azimuth": named["azimuth"],
+        "elevation": named["elevation"],
+        "distance": named["distance"],
+        "lookat": (0.0, 0.0, named["lookat_height"]),
+        "follow": named["follow"],
+    }
+
+
 # The physics narration into the Studio's embedded Rerun viewer: the same
 # `mj_step` loop that renders the pixels also logs the twin, every named
 # joint, every actuator and the contacts — one clock, so the plots can
@@ -205,7 +223,7 @@ def rig_camera(rig: str | None) -> dict:
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0  # scalar series: plots need no more
 NARRATE_SHARE = 0.25  # narration may take this share of the physics thread, no more
-MIRROR_HZ = 20.0  # the 3D twin: fluid motion; 30 Hz of per-mesh
+# The 3D twin's rate is the one every mirror shares (rq_pipeline.viz).
 # messages (~275 ms/s of Python serialization) blew the loop's realtime
 # budget and slowed BOTH panes (2026-09-01)
 # Shadows are on until the render lane measures that it cannot keep the
@@ -322,7 +340,7 @@ class PhysicsNarrator:
         rate-limit themselves to NARRATE_HZ (a duck marching at 10 Hz
         beside 30 fps pixels read as 'very low frames', 2026-09-01)."""
         rr = self.rr
-        rr.set_time("sim", duration=sim_time)
+        rr.set_time(SIM_TIMELINE, duration=sim_time)
         self.mirror.log(data)
         now_series = sim_time - self._last_series >= 1.0 / NARRATE_HZ
         if not now_series:
@@ -638,7 +656,7 @@ TWIST_AXES = 3
 # The seven `mjvOption` group masks, in one order for the wire and the
 # status: simulate's "Group enable" section, every kind it offers.
 GROUP_KINDS = ("geom", "site", "joint", "tendon", "actuator", "flex", "skin")
-TWIST_RANGES: list[list[float]] | None = None  # set by --twist-ranges (walk scenes)
+TwistRanges = list[list[float]]  # lo,hi per axis (vx, vy, wz): a walk's command bounds
 FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
 VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
@@ -779,7 +797,8 @@ MAILBOX_SLOT_BYTES = 16  # cmd u32, arg i32, arg f64
 MAILBOX_BYTES = 8 + MAILBOX_SLOTS * MAILBOX_SLOT_BYTES  # cseq u32, pad; then the slots
 # `twist`: one axis of one world's commanded twist - arg_i = world *
 # TWIST_AXES + axis (a slot carries one float), -1 hands the commands back.
-MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual", "twist")
+MAILBOX_TWIST = "twist"
+MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual", MAILBOX_TWIST)
 
 
 class StateRing:
@@ -1183,10 +1202,14 @@ class SimControl:
         model: "mujoco.MjModel",
         ring: StateRing,
         camera: "OrbitCamera | None" = None,
+        twist_ranges: TwistRanges | None = None,
     ) -> None:
         self.model = model
         self.ring = ring
         self.camera = camera
+        # A walk scene's command bounds, from the task that runs the
+        # scene; None for a scene without commands.
+        self.twist_ranges = twist_ranges
         self._lock = threading.Lock()
         self._vis: dict[int, bool] = {}
         self._rnd: dict[int, bool] = {}
@@ -1267,10 +1290,10 @@ class SimControl:
         world, *twist = struct.unpack("<ifff", payload)
         self._twist = None if world < 0 else {"world": world, "value": twist}
         if world < 0:
-            self.ring.post_command("twist", -1)
+            self.ring.post_command(MAILBOX_TWIST, -1)
             return
         for axis, value in enumerate(twist):
-            self.ring.post_command("twist", world * TWIST_AXES + axis, value)
+            self.ring.post_command(MAILBOX_TWIST, world * TWIST_AXES + axis, value)
 
     def _handle_view(self, tag: int, payload: bytes) -> None:
         """The render-side switches: a visualization flag, a rendering
@@ -1442,9 +1465,7 @@ class SimControl:
             "groups": list(GROUP_KINDS),
             "ngroup": int(mujoco.mjNGROUP),
             "nworld": self.ring.nworld,
-            # A walk scene's command bounds (vx, vy, wz), from the task
-            # that runs the scene; absent for a scene without commands.
-            "twist_ranges": TWIST_RANGES,
+            "twist_ranges": self.twist_ranges,
         }
 
 
@@ -1825,6 +1846,18 @@ WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched s
 WALK_SCENE_PARTS = 3  # walk:<robot>:<worlds>
 
 
+def parse_twist_ranges(text: str) -> TwistRanges:
+    """`--twist-ranges=lo,hi,lo,hi,lo,hi` (vx, vy, wz) as pairs; refused
+    by name at any other count."""
+    bounds = [float(v) for v in text.split(",")]
+    if len(bounds) != 2 * TWIST_AXES:
+        raise ValueError(
+            f"--twist-ranges takes {2 * TWIST_AXES} numbers: lo,hi for "
+            f"{', '.join(('vx', 'vy', 'wz'))}, got {len(bounds)}"
+        )
+    return [bounds[i : i + 2] for i in range(0, len(bounds), 2)]
+
+
 def walk_scene_of(scene: str) -> tuple[str, int]:
     """`walk:<robot>:<worlds>` -> (robot, worlds); refused by name when the
     robot is missing — the RL view has no robot of its own."""
@@ -1835,9 +1868,6 @@ def walk_scene_of(scene: str) -> tuple[str, int]:
             f"the number of worlds), not {scene!r}"
         )
     return parts[1], int(parts[2])
-
-
-STAGE_XML: str | None = None  # set by --stage= (the task's terrain, walk scenes)
 
 
 def walk_scene(
@@ -1911,21 +1941,29 @@ def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
     return task, spec.compile(), rig
 
 
-def render_on(scene: str, ring_path: str, shm_path: str | None, rig: str) -> None:
+def render_on(  # noqa: PLR0913 - the render side's inputs, each named
+    scene: str,
+    ring_path: str,
+    shm_path: str | None,
+    camera: dict,
+    *,
+    stage_xml: str | None = None,
+    twist_ranges: TwistRanges | None = None,
+) -> None:
     """Render-only, for a physics process that already exists (the RL
-    view's batched worlds): `scene` is `walk:<worlds>` or a model file,
-    the ring was created by that process, the wire and status are the
-    same."""
+    view's batched worlds): `scene` is `walk:<robot>:<worlds>` or a
+    model file, the ring was created by that process, the wire and
+    status are the same. `camera`: the framing (a rig preset or the
+    walk's declared one); `stage_xml`: the task's terrain under a walk
+    scene; `twist_ranges`: the walk's command bounds for the status."""
     if scene.startswith(f"{WALK}:"):
-        model = walk_scene(*walk_scene_of(scene), stage_xml=STAGE_XML)
+        model = walk_scene(*walk_scene_of(scene), stage_xml=stage_xml)
     else:
         model = mujoco.MjModel.from_xml_path(scene)
     ring = StateRing(ring_path, model, create=False)
-    orbit = OrbitCamera(
-        RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
-    )
+    orbit = OrbitCamera(camera)
     perturber = Perturber(model)
-    sim = SimControl(model, ring, orbit)
+    sim = SimControl(model, ring, orbit, twist_ranges=twist_ranges)
     pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
     threading.Thread(
         target=_read_control_messages,
@@ -2063,17 +2101,24 @@ if __name__ == "__main__":
     model_path = None
     ring_path = None
     rig: str | None = None  # the scene's own rig, or the default camera
+    camera: dict | None = None  # a walk's declared framing (--camera=)
+    stage_xml: str | None = None  # the task's terrain under a walk scene
+    twist_ranges: TwistRanges | None = None
     for flag in sys.argv[1:]:
         if flag.startswith("--physics="):
             physics_ring = flag.removeprefix("--physics=")
         elif flag.startswith("--stage="):
-            STAGE_XML = flag.removeprefix("--stage=")
+            stage_xml = flag.removeprefix("--stage=")
         elif flag.startswith("--twist-ranges="):
-            # lo,hi per axis (vx, vy, wz): the walk's command bounds.
-            bounds = [float(v) for v in flag.removeprefix("--twist-ranges=").split(",")]
-            if len(bounds) != 2 * TWIST_AXES:
-                sys.exit("--twist-ranges takes six numbers: lo,hi for vx, vy, wz")
-            TWIST_RANGES = [bounds[i : i + 2] for i in range(0, len(bounds), 2)]
+            try:
+                twist_ranges = parse_twist_ranges(flag.removeprefix("--twist-ranges="))
+            except ValueError as why:
+                sys.exit(str(why))
+        elif flag.startswith(CAMERA_FLAG):
+            try:
+                camera = parse_camera_flag(flag)
+            except ValueError as why:
+                sys.exit(str(why))
         elif flag.startswith("--scene="):
             model_path = flag.removeprefix("--scene=")
         elif flag.startswith("--ring="):
@@ -2087,7 +2132,14 @@ if __name__ == "__main__":
 
             Project(pathlib.Path(flag.removeprefix("--project=")).resolve()).use()
     if model_path and ring_path:
-        render_on(model_path, ring_path, shm, rig)
+        render_on(
+            model_path,
+            ring_path,
+            shm,
+            camera or rig_camera(rig),
+            stage_xml=stage_xml,
+            twist_ranges=twist_ranges,
+        )
         raise SystemExit(0)
     task_name = arguments[0] if arguments else DEFAULT_TASK
     if task_name != DUCK and task_name not in BUILDERS:

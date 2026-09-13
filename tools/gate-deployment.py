@@ -78,8 +78,8 @@ def main() -> None:
     certificate = _certificate(project, manifest.raw.get(Key.CERTIFICATE))
     with stack:
         # What the stack started that the runtime must share (the DDS
-        # stack's one virtual pad); a library runtime shares nothing.
-        shared = getattr(stack, "runtime_options", dict)()
+        # stack's one virtual pad); a library runtime's NoStack shares nothing.
+        shared = stack.runtime_options()
         opener = spec.open()
         record = gate(
             folder,

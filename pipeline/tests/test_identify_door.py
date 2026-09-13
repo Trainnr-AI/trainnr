@@ -6,15 +6,15 @@ loop's 'system identified' state is proved by it; refusals by name."""
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from rq_pipeline.project import PROJECT_ENV, Kind, create_project, index_project
+from rq_pipeline.project import PROJECT_ENV, Kind, index_project
 from rq_pipeline.project.ingest import ingest
 from rq_pipeline.robot.methods import detect, methods, raw_files, resolve
 from tests._extras import needs_sim
+from tests._fixtures import rig_project
 
 REPO = Path(__file__).resolve().parents[2]
 BUNDLE = REPO / "robots" / "rig-drivetrain"
@@ -23,12 +23,7 @@ SWEEP_C = REPO / "recordings" / "sweep-2026-08-24-c.wire"
 
 
 def _project_with_rig(tmp: Path):
-    project = create_project(tmp / "p", "p")
-    bundle = project.folder("robots") / "rig-drivetrain"
-    bundle.mkdir(parents=True)
-    for name in ("model.xml", "profile.json", "README.md"):
-        shutil.copy2(BUNDLE / name, bundle / name)
-    return project
+    return rig_project(tmp)
 
 
 class Registry(unittest.TestCase):

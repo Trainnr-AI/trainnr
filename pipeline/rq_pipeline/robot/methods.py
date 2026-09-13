@@ -29,9 +29,9 @@ class IdentificationMethod(Protocol):
     """What a method must do to sit behind the seam."""
 
     name: str
-    # Parameters the method fixes from outside the data (an anchor): a
-    # drift check reports them and never judges them, they were not measured.
-    anchored: tuple[str, ...]
+    # A method MAY also carry `anchored: tuple[str, ...]` — the parameters
+    # it fixes from outside the data; a drift check reports those and never
+    # judges them (`fleet.drift.method_anchors` reads it, absent = none).
 
     def accepts(self, bundle_dir: Path, recording_dir: Path) -> str | None:
         """None when this method can fit this robot from this recording;

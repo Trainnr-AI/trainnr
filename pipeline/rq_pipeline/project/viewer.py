@@ -10,6 +10,7 @@ saying what the values would need.
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,7 @@ ENTITIES = "Num chunks per entity"
 TIMELINES = "Num chunks per index"
 COMPONENTS = "Num chunks per component"
 SIZE = "Size (schema + data, compressed)"
+NEEDS_VIZ = "the viz extra (Rerun's SDK and command line): uv sync --extra viz"
 NEEDS_QUERY = (
     "the values need the viz-query extra (Rerun's local catalog over DataFusion): "
     "uv sync --extra viz-query"
@@ -38,13 +40,17 @@ WALL_CLOCK = "log_time"  # Rerun's own wall-clock timeline, beside a feed's cloc
 
 @dataclass(frozen=True)
 class SeriesFacts:
-    """One scalar series as the columns hold it."""
+    """One scalar series on one clock, every component counted: `rows`
+    is the rows with a value, `width` the components per row, `minimum`
+    and `maximum` over every component, `last` the last row."""
 
     entity: str
+    timeline: str
     rows: int
+    width: int
     minimum: float | None
     maximum: float | None
-    last: float | None
+    last: tuple[float, ...] | None
 
 
 @dataclass(frozen=True)
@@ -104,6 +110,8 @@ def _counts(section: dict[str, str]) -> dict[str, int]:
 def stats(path: Path) -> dict[str, dict[str, str]]:
     """Rerun's own statistics for the file; refuses by name a file its
     reader cannot load."""
+    if importlib.util.find_spec("rerun") is None:
+        raise ValueError(f"{path}: reading a viewer recording needs {NEEDS_VIZ}")
     done = subprocess.run(
         [*STATS_ARGV, str(path)],
         capture_output=True,
@@ -145,11 +153,12 @@ def _timeline_name(column: Any) -> str:
 
 
 def read_columns(path: Path) -> tuple[dict[str, int], tuple[SeriesFacts, ...]]:
-    """The scalar series through Rerun's local catalog, over a folder
-    holding a copy of this one file (the catalog reads real files, not
-    links). Only the scalar entities are read: a gate's file carries its
-    scene's meshes per tick, and reading every column of a 12 MB file
-    took the reader past the machine's memory (killed, 2026-09-13)."""
+    """Rows per clock and the scalar series per clock, through Rerun's
+    local catalog over a folder holding a copy of this one file (the
+    catalog reads real files, not links). Only the scalar entities are
+    read: a gate's file carries its scene's meshes per tick, and reading
+    every column of a 12 MB file took the reader past the machine's
+    memory (killed, 2026-09-13)."""
     import shutil  # noqa: PLC0415
 
     from rerun.server import Server  # noqa: PLC0415
@@ -177,31 +186,38 @@ def read_columns(path: Path) -> tuple[dict[str, int], tuple[SeriesFacts, ...]]:
                 }
             )
             view = dataset.filter_contents(entities)
-            # The feed's own clock first; the wall clock only when it is all there is.
+            # The feed's own clocks; the wall clock only when it is all there is.
             own = [t for t in timelines if t != WALL_CLOCK] or timelines
-            table = view.reader(index=own[0]).to_arrow_table()
-            rows = {own[0]: int(table.num_rows)}
+            rows: dict[str, int] = {}
             series: list[SeriesFacts] = []
-            for column in scalar_columns:
-                name = _column_name(column)
-                if name not in table.column_names:
-                    continue
-                values = [
-                    float(v[0])
-                    for v in table.column(name).to_pylist()
-                    if v is not None and len(v) > 0
-                ]
-                series.append(
-                    SeriesFacts(
-                        entity=str(
-                            getattr(column, "entity_path", name.split(":", 1)[0])
-                        ),
-                        rows=len(values),
-                        minimum=min(values) if values else None,
-                        maximum=max(values) if values else None,
-                        last=values[-1] if values else None,
+            for timeline in own:
+                table = view.reader(index=timeline).to_arrow_table()
+                rows[timeline] = int(table.num_rows)
+                for column in scalar_columns:
+                    name = _column_name(column)
+                    if name not in table.column_names:
+                        continue
+                    values = [
+                        [float(x) for x in v]
+                        for v in table.column(name).to_pylist()
+                        if v is not None and len(v) > 0
+                    ]
+                    if not values:
+                        continue  # not logged on this clock
+                    flat = [x for row in values for x in row]
+                    series.append(
+                        SeriesFacts(
+                            entity=str(
+                                getattr(column, "entity_path", name.split(":", 1)[0])
+                            ),
+                            timeline=timeline,
+                            rows=len(values),
+                            width=len(values[0]),
+                            minimum=min(flat),
+                            maximum=max(flat),
+                            last=tuple(values[-1]),
+                        )
                     )
-                )
         finally:
             server.shutdown()
     return rows, tuple(series)

@@ -23,14 +23,13 @@ from typing import Protocol
 
 import numpy as np
 
-from rq_pipeline.deploy.gamepad import COMMAND_LIMIT, VirtualPad, sticks_for_command
+from rq_pipeline.deploy.gamepad import COMMAND_LIMIT, sticks_for_command
 from rq_pipeline.deploy.manifest import Manifest
 from rq_pipeline.deploy.runtime import fell_over, rotate_inverse
 from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
 
 TOPIC_STATE = "rt/sportmodestate"  # the base's world position and velocity
 TOPIC_LOW = "rt/lowstate"  # joints and the IMU (the quaternion the frame needs)
-MOTORS = 12  # the Go2's motors in their LowState, the first twelve slots
 NETWORK = "lo"  # their simulator and controller meet on loopback
 DOMAIN_ID = 0
 FSM_SETTLE_S = 2.0  # the fixed stand takes about this long to reach
@@ -49,7 +48,9 @@ class Bus(Protocol):
     publishes, and where the robot is."""
 
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
-        """(quaternion wxyz, world-frame velocity) or None on timeout."""
+        """(quaternion wxyz, world-frame velocity); None when nothing
+        arrived in the budget, or a `TimeoutError` naming which topic
+        stayed silent when the bus can tell."""
 
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """(base position, base quaternion wxyz, motor positions in the
@@ -92,14 +93,23 @@ class SdkBus:
         self._pose: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
 
     def latest(self, timeout_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
+        """One budget for both topics: the second read gets what the first
+        left, and a silent topic is named (two full waits blamed on one
+        topic read as a doubled timeout, 2026-09-13)."""
+        began = time.monotonic()
         state = self._state.Read(timeout_ms)
-        low = self._low.Read(timeout_ms)
-        if state is None or low is None:
-            return None
+        if state is None:
+            raise TimeoutError(_silent(TOPIC_STATE, timeout_ms))
+        spent_ms = int((time.monotonic() - began) * 1000)
+        low = self._low.Read(max(1, timeout_ms - spent_ms))
+        if low is None:
+            raise TimeoutError(_silent(TOPIC_LOW, timeout_ms))
+        # Every motor slot their message carries; the runtime picks the
+        # policy's joints out by the manifest's SDK order.
         self._pose = (
             np.asarray(state.position, dtype=np.float64),
             np.asarray(low.imu_state.quaternion, dtype=np.float64),  # w x y z
-            np.asarray([m.q for m in low.motor_state[:MOTORS]], dtype=np.float64),
+            np.asarray([m.q for m in low.motor_state], dtype=np.float64),
         )
         return self._pose[1].copy(), np.asarray(state.velocity, dtype=np.float64)
 
@@ -109,6 +119,10 @@ class SdkBus:
         if self._pose is None:
             raise RuntimeError("no pose yet: `latest` has not read their state")
         return self._pose
+
+
+def _silent(topic: str, budget_ms: int) -> str:
+    return f"no {topic} within {budget_ms} ms: is their simulator up on {NETWORK}?"
 
 
 class DdsRuntime:
@@ -160,9 +174,9 @@ class DdsRuntime:
 
     def _read(self) -> None:
         latest = self.bus.latest(STATE_TIMEOUT_MS)
-        if latest is None:
+        if latest is None:  # a bus that cannot say which topic was silent
             raise TimeoutError(
-                f"no {TOPIC_STATE} within {STATE_TIMEOUT_MS} ms: is their simulator up?"
+                _silent(f"{TOPIC_STATE} and {TOPIC_LOW}", STATE_TIMEOUT_MS)
             )
         self._quat, self._velocity_w = latest
 
@@ -195,7 +209,8 @@ class DdsRuntime:
         order into the policy order (the manifest's `sdk_order_map`)."""
         position, quat, motors = self.bus.pose()
         order = self.manifest.joints.sdk_order_map
-        joints = motors[list(order)] if order else motors
+        wanted = len(self.manifest.joints.policy_order)
+        joints = motors[list(order)] if order else motors[:wanted]
         return position, quat, joints
 
     def fell_over(self) -> bool:
@@ -217,4 +232,10 @@ def open_dds_runtime(
     A pad of its own here was a second joystick node their simulator
     never read: every chord went to nobody, their FSM stayed Passive and
     the gate read 0/20 on a policy that walks (2026-09-12)."""
-    return DdsRuntime(manifest, bus=bus or SdkBus(), pad=pad or VirtualPad())
+    if pad is None:
+        raise RuntimeError(
+            "the DDS runtime needs the stack's pad: open it inside UnitreeStack "
+            "(gate_deployment(runtime='dds') does; a pad of its own is a second "
+            "joystick their simulator never reads)"
+        )
+    return DdsRuntime(manifest, bus=bus or SdkBus(), pad=pad)

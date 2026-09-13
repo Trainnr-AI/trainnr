@@ -121,9 +121,9 @@ pub enum Command {
         flag: Option<String>,
         #[serde(default)]
         on: Option<bool>,
-        /// One group mask bit: the group number with `on`, of `kind`
-        /// (the stream's first kind, geom, unless said: site, joint,
-        /// tendon, actuator, flex, skin).
+        /// One group mask bit: the group number with `on`, of `kind` —
+        /// one of the kinds the scene reports (`model.groups`), its
+        /// first unless said.
         #[serde(default)]
         group: Option<u32>,
         #[serde(default)]
@@ -133,7 +133,8 @@ pub enum Command {
         /// back to the task. The twist goes to the followed world, else w0.
         #[serde(default)]
         command: Option<String>,
-        /// The Inspect drawer: control, joints, physics, or close.
+        /// The Inspect drawer: a tab by its word (`simulator::Tab::ALL`:
+        /// control, joints, physics, visuals, commands) or close.
         #[serde(default)]
         inspect: Option<String>,
         /// The camera to a named view: front, side, top, reset.
@@ -530,7 +531,7 @@ impl Control {
         let changed = self
             .last_state
             .as_ref()
-            .is_none_or(|last| !same_but_heartbeat(last, &state));
+            .is_none_or(|last| discrete(last) != discrete(&state));
         if !(due || changed) {
             return;
         }
@@ -594,12 +595,35 @@ pub fn parse_command(text: &str) -> Result<Command, String> {
     serde_json::from_str::<Command>(text).map_err(|e| format!("not a command: {e}"))
 }
 
-fn same_but_heartbeat(a: &StudioState, b: &StudioState) -> bool {
-    let mut a = a.clone();
-    let mut b = b.clone();
-    a.heartbeat = 0.0;
-    b.heartbeat = 0.0;
-    a == b
+/// The facts a change of which writes the state at once. The rest — the
+/// simulator's clock and rate, the camera, the on-screen frame rate, the
+/// viewer's cursor — move every frame while a scene runs and ride the
+/// heartbeat instead; comparing whole states wrote and renamed the file
+/// at frame rate (2026-09-13).
+fn discrete(state: &StudioState) -> impl PartialEq + '_ {
+    (
+        state.pid,
+        &state.project,
+        &state.project_name,
+        &state.section,
+        &state.selected,
+        &state.table,
+        &state.live.recording,
+        state.presenter_running,
+        state.jobs_running,
+        &state.viewport_task,
+        state
+            .simulator
+            .as_ref()
+            .map(|s| (s.paused, s.manual, s.speed.to_bits())),
+        state.window.as_ref().map(|w| {
+            (
+                w.width.to_bits(),
+                w.height.to_bits(),
+                w.pixels_per_point.to_bits(),
+            )
+        }),
+    )
 }
 
 /// Write a file in one replace: a reader never sees a half-written

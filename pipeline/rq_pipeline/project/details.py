@@ -1305,7 +1305,12 @@ def _finding(project: Project, root: Path, artifact: Artifact) -> list[Section]:
 def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
     """A drift check: the verdict and what to do, then every parameter's
     fresh interval beside the reference it was judged against."""
-    from rq_pipeline.fleet.drift import DRIFT_FILE, load_drift_record  # noqa: PLC0415
+    from rq_pipeline.fleet.drift import (  # noqa: PLC0415
+        DRIFT_FILE,
+        load_drift_record,
+        verdict_word,
+    )
+    from rq_pipeline.project.index import interval_text  # noqa: PLC0415
 
     try:
         d = load_drift_record(root / DRIFT_FILE)
@@ -1316,7 +1321,7 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
             "Drift check",
             [
                 ("version", artifact.stamp),
-                ("verdict", "drifted" if d.drifted else "within interval"),
+                ("verdict", verdict_word(d.drifted)),
                 ("parameters that left", ", ".join(d.left) or "none"),
                 ("unresolved", ", ".join(d.unresolved) or "none"),
                 ("recommendation", d.recommendation),
@@ -1341,16 +1346,20 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
                 "fresh interval",
                 "shift (reference half-widths)",
                 "unit",
+                "note",
             ],
             [
                 [
                     p.name,
                     p.verdict,
-                    _rng(p.reference_lower, p.reference_upper),
-                    _f(p.fresh_estimate),
-                    _rng(p.fresh_lower, p.fresh_upper),
+                    interval_text(p.reference_lower, p.reference_upper),
+                    _f(p.fresh_estimate)
+                    if p.fresh_estimate is not None
+                    else UNRECORDED,
+                    interval_text(p.fresh_lower, p.fresh_upper),
                     _f(p.shift) if p.shift is not None else UNRECORDED,
                     p.unit,
+                    p.note,
                 ]
                 for p in d.parameters
             ],

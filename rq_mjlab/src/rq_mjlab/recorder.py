@@ -35,7 +35,7 @@ from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
 # One home for the Studio's ingest address (rq-pipeline is a hard dep).
 from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
-from rq_pipeline.viz import open_stream
+from rq_pipeline.viz import VISUAL_ONLY_SKIP_GROUPS, open_stream
 
 
 def _require_rerun() -> Any:
@@ -61,7 +61,7 @@ class RerunRecorder(RecorderTerm):
         self._cfg = cfg
         # The one seam (rq_pipeline.viz.open_stream): the Studio's server
         # and, when the run has a folder, its saved stream too (docs/76 §10.5).
-        open_stream(cfg.app_id, address=cfg.address, file=cfg.file)
+        open_stream(cfg.app_id, address=cfg.address, file=cfg.file, rr=rr)
         # (name, qpos address) per SCALAR joint — hinge/slide only. The
         # first cut indexed qpos by JOINT index, which plots freejoint
         # quaternion components as "joints" on any floating-base robot
@@ -93,7 +93,9 @@ class RerunRecorder(RecorderTerm):
             # collision geoms share surfaces with the visual meshes and
             # z-fight them into shimmering shades (the duck: 5 opaque
             # group-3 collision meshes over 70 visual ones, 2026-09-01).
-            self._mirror = RigMirror(mj_model, model_colors=True, skip_groups=(3, 4, 5))
+            self._mirror = RigMirror(
+                mj_model, model_colors=True, skip_groups=VISUAL_ONLY_SKIP_GROUPS
+            )
         self._said_no_reward = False
         self._began = time.time()
         if cfg.layout:

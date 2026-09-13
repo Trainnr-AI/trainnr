@@ -36,7 +36,7 @@ from typing import Any
 
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
-from rq_pipeline.deploy.manifest import TWIST_SHORT
+from rq_pipeline.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.mcp_jobs import DONE, JobHandle, Refusal, refusal
 from rq_pipeline.physics.registry import engines
@@ -1173,9 +1173,11 @@ def set_simulator_input(
     named = [n for n in (actuator, joint, command) if n is not None]
     if len(named) != 1:
         return refusal("name exactly one of actuator, joint, command")
-    if command is not None and command not in (*TWIST_SHORT, "own"):
-        return refusal(f"command is one of {TWIST_SHORT} or own, not {command!r}")
-    if value is None and command != "own":
+    if command is not None and command not in (*TWIST_SHORT, TWIST_RELEASE):
+        return refusal(
+            f"command is one of {TWIST_SHORT} or {TWIST_RELEASE}, not {command!r}"
+        )
+    if value is None and command != TWIST_RELEASE:
         return refusal("a value is needed")
     return send(
         current_project(),
@@ -1497,6 +1499,7 @@ def check_drift(
                 "fresh": [p.fresh_lower, p.fresh_upper],
                 "estimate": p.fresh_estimate,
                 "shift": p.shift,
+                "note": p.note,
             }
             for p in record.parameters
         ],
@@ -1516,6 +1519,7 @@ def describe_viewer_recording(
     maximum and last value (tens of seconds on a gate's file, so asked
     for, not assumed). Refused by name: an unknown version."""
     from rq_pipeline.project.viewer import describe_folder  # noqa: PLC0415
+    from rq_pipeline.viz import VIEWER_FILE_ENV  # noqa: PLC0415
 
     try:
         project, found = _any_project_artifact(artifact)
@@ -1530,7 +1534,7 @@ def describe_viewer_recording(
         "recordings": files,
         "note": (
             "no saved viewer stream: the artifact was made by a feed that "
-            "streams only, or before 2026-09-13, or with TRAINNR_VIEWER_FILE off"
+            f"streams only, or with {VIEWER_FILE_ENV} off"
             if not files
             else f"{len(files)} saved stream(s); show_in_studio replays them"
         ),

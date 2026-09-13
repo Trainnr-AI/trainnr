@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from rq_pipeline.deploy.dds_runtime import DOMAIN_ID, NETWORK
-from rq_pipeline.deploy.gamepad import VirtualPad
+from rq_pipeline.deploy.gamepad import JOYSTICK_BITS, VirtualPad
 from rq_pipeline.deploy.manifest import Manifest, UnitreeFacts
 from rq_pipeline.deploy.runtimes import RUNTIMES, require_platform
 from rq_pipeline.deploy.unitree_yaml import UNITREE_DEPLOY_FILE, write_unitree_deploy
@@ -46,7 +46,6 @@ SIM_BINARY = "unitree_mujoco"
 SIM_DIR = "simulate"
 CTRL_CONFIG = "config.yaml"
 JOYSTICK_TYPE = "xbox"
-JOYSTICK_BITS = 16  # matches `gamepad.AXIS_MAX`
 SIM_CONFIG = """robot: "{robot}"
 robot_scene: "{scene}"
 domain_id: {domain_id}
