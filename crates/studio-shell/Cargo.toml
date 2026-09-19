@@ -10,12 +10,14 @@ version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"
 
-# The Studio (the-studio doc; chat-free since docs/64, 2026-09-02): a
-# native window where a MuJoCo subprocess renders the sim viewport into
-# a shared-memory ring, and the ACTUAL Rerun viewer fills the data pane
-# (embedded per Rerun's own extend_viewer_ui example, fed by a gRPC
-# server on :9876 inside the app). The agent lives in the developer's
-# own tool and reaches this window through the MCP surface.
+# The Studio (docs/35; chat-free since docs/64, 2026-09-02; code-free
+# since 2026-09-09): the window on the loop (docs/76). A project panel
+# reads the index the Python side writes; a MuJoCo subprocess renders
+# the sim viewport into a shared-memory ring; the ACTUAL Rerun viewer
+# fills the data pane (embedded per Rerun's own extend_viewer_ui
+# example, fed by a gRPC server on :9876 inside the app). The agent
+# lives in the developer's own tool and reaches this window through
+# the MCP surface; code stays on the developer's laptop or GitHub.
 # Run with `cargo run --release` — the debug viewer's slow ingest is a
 # measured hazard (it once wedged the log channel), not a style choice.
 #
@@ -28,18 +30,24 @@ eframe = { version = "0.36.1", default-features = false, features = [
     "default_fonts",
 ] }
 egui = "0.36.1"
-# Both already in this crate's tree (egui_commonmark via re_ui, similar via
-# Rerun) at exactly these versions — the transcript's markdown rendering and
-# ± diffs cost zero new dependency weight (checked in Cargo.lock 2026-08-30).
-egui_commonmark = "0.25.0"
-# Already in the tree too (via re_ui); the `syntect` feature is the one
-# genuinely new dependency here — it upgrades the code panel from the
-# okish built-in highlighter to real grammars for Python/XML/TOML/etc.
-egui_extras = { version = "0.36.1", features = ["syntect"] }
 mimalloc = "0.1.52"
 re_ui = "0.36.3"
 rerun = { version = "0.36.3", default-features = false, features = ["native_viewer", "sdk", "server"] }
-similar = "2.7.0"
+# The project panel reads `.index/project.json`, written by the Python
+# side (rq_pipeline.project) — the Studio never speaks MCP itself
+# (decision 2026-09-08). Both crates are already in Rerun's tree.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Tables for the section views; already in the tree via re_ui (which
+# styles them: `setup_table_body`). No new dependency weight.
+egui_extras = "0.36.1"
+# PNG encoding for the agent's screenshots (control.rs); already in the
+# tree through egui_extras, pinned to the same major.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# The window backend choice on WSLg (main.rs::prefer_x11_under_wslg):
+# winit's X11 extension trait is not re-exported by eframe. Same crate
+# instance eframe uses (cargo unifies the version; 0.30 locked).
+winit = { version = "0.30", default-features = false, features = ["x11"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 # This standalone workspace has no [workspace.lints] to inherit from (see

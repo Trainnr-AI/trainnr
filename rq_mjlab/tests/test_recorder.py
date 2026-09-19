@@ -72,6 +72,17 @@ class TheRecorder(unittest.TestCase):
         term.record_post_step()
         self.assertGreater(memory.num_msgs(), 0)
 
+    def test_post_step_logs_every_reward_term(self) -> None:
+        env = _env(steps=10)
+        env.reward_manager = _Duck(
+            get_active_iterable_terms=lambda i: [("pose", [0.25]), ("upright", [0.9])]
+        )
+        term, memory = self._term(env)
+        before = memory.num_msgs()
+        term.record_post_step()
+        # the total, two terms, the joint, the episode length, and the clock
+        self.assertGreaterEqual(memory.num_msgs() - before, 5)
+
     def test_the_throttle_skips_off_beat_steps(self) -> None:
         env = _env(steps=11)
         term, memory = self._term(env)
@@ -104,6 +115,23 @@ class TheRecorder(unittest.TestCase):
         without = memory.num_msgs() - before
         # The mirror adds the 3D leg on top of the scalar story.
         self.assertGreater(with_mirror, without)
+
+    def test_the_cfg_carries_the_saved_stream_and_opens_through_the_seam(self) -> None:
+        from rq_pipeline import viz  # noqa: PLC0415
+
+        from rq_mjlab import recorder  # noqa: PLC0415
+        from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
+
+        self.assertIsNone(
+            RerunRecorderCfg().file, "live only unless a run names its folder"
+        )
+        self.assertEqual(
+            RerunRecorderCfg(file="runs/x/.viewer/train.rrd").file,
+            "runs/x/.viewer/train.rrd",
+        )
+        self.assertIs(
+            recorder.open_stream, viz.open_stream, "one seam opens every stream"
+        )
 
     def test_the_cfg_names_its_term_class(self) -> None:
         from rq_mjlab.recorder import RerunRecorder, RerunRecorderCfg  # noqa: PLC0415

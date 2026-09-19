@@ -22,6 +22,8 @@ dependencies = [
     "mjlab==1.6.0",
     # The certified-bundle store's reader and verifier (A1) — a path
     # dependency; the pipeline's BASE install carries no heavy extras.
+    "onnx>=1.22.0",
+    "onnxruntime>=1.30.0",
     "rq-pipeline",
 ]
 
@@ -51,8 +53,24 @@ line-length = 88
 select = ["E", "F", "I", "B", "PL", "RUF"]
 
 [tool.mypy]
-# Zero errors as of 2026-09-01; tools/verify.sh gates it. mjlab ships
-# py.typed and is checked; warp and mujoco do not.
+# Zero errors is the baseline; tools/verify.sh gates it, run INSIDE this
+# project's environment so mjlab (py.typed) and rq_pipeline (py.typed
+# since 2026-09-13) are checked for real - the isolated check had read
+# both as Any and missed an import of a function removed on 2026-09-09.
 python_version = "3.12"
 ignore_missing_imports = true
 files = ["src/rq_mjlab"]
+# rq_pipeline by the same relative path the dependency names: its
+# editable install is setuptools' import-hook finder, which mypy cannot
+# follow (the verdict's alias of its TrackingOutcome read as unknown).
+mypy_path = "../pipeline"
+
+[[tool.mypy.overrides]]
+# Read for its types; its own errors belong to the pipeline's step.
+module = ["rq_pipeline", "rq_pipeline.*"]
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+# The untyped C extensions (no py.typed; their API is compiled).
+module = ["mujoco", "mujoco.*", "mujoco_warp", "mujoco_warp.*", "warp", "warp.*"]
+follow_imports = "skip"

@@ -17,6 +17,7 @@ from typing import Any
 from rq_pipeline.bundles.hashing import content_stamp
 from rq_pipeline.collect.choreography import Episode, Waypoint
 from rq_pipeline.tasks.aloha2.kitting import (
+    KITTING,
     KITTING_SPEC,
     KittingSpec,
     part_qpos_slice,
@@ -30,6 +31,7 @@ from rq_pipeline.tasks.aloha2.rig import (
     SERVOS_PER_ARM,
     gripper_ctrl_from_normalized,
 )
+from rq_pipeline.tasks.registry import register_expert
 
 KITTING_EXPERT = "kitting-expert"  # the stamp's name half
 
@@ -321,6 +323,7 @@ def _run_arm(
     session.park(episode)
 
 
+@register_expert(KITTING)
 def scripted_kitting_episode(
     model: Any,
     initial_state: Any,

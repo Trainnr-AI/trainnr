@@ -111,6 +111,11 @@ class DatasetProvenance(JsonRecord):
         "metres) — what the harness's vision rollout observes with state_width=14"
     )
     action_semantics: str = "fourteen commanded actuator positions, ctrl order"
+    # The batch's content stamp (`name@hash`, the hashed-files rule of
+    # bundles/hashing). `source` stays the NAME for the union check;
+    # this is the lineage a project index reads. Empty on datasets
+    # exported before 2026-09-09 — reported as unrecorded, never invented.
+    source_stamp: str = ""
 
 
 def write_episode(  # noqa: PLR0913 - the whole episode, every part named
@@ -135,14 +140,13 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
     episode_dir = demos_dir / DemoLayout.EPISODE_DIR.format(index=index)
     frames_dir = episode_dir / DemoLayout.FRAMES_DIR
     frames_dir.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        episode_dir / DemoLayout.TRAJECTORY_FILE,
-        **{
-            DemoLayout.STATES: np.asarray(states, dtype=np.float32),
-            DemoLayout.SENSORS: np.asarray(sensors, dtype=np.float32),
-            DemoLayout.ACTIONS: np.asarray(actions, dtype=np.float32),
-        },
-    )
+    # Any: numpy's stub types **kwargs against savez's own keywords.
+    arrays: dict[str, Any] = {
+        DemoLayout.STATES: np.asarray(states, dtype=np.float32),
+        DemoLayout.SENSORS: np.asarray(sensors, dtype=np.float32),
+        DemoLayout.ACTIONS: np.asarray(actions, dtype=np.float32),
+    }
+    np.savez_compressed(episode_dir / DemoLayout.TRAJECTORY_FILE, **arrays)
     flat = list(frames)
     if flat and camera_frames:
         raise ValueError("an episode stores flat frames OR per-camera frames, not both")

@@ -1,0 +1,7 @@
+# Projects hold artifacts by hash, not source (docs/76). Only the sample
+# that makes the Studio's cold open demonstrable on a fresh clone is tracked.
+*
+!.gitignore
+!sample/
+!sample/project.json
+!sample/**/README.md

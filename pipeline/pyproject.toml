@@ -9,6 +9,13 @@ description = "Train, validate and serve robot policies with numbers you can sig
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "FSL-1.1-ALv2" }
+dependencies = [
+    "onnx>=1.22.0",
+    "onnxruntime>=1.24.3",
+    # pydantic reads the job handles' TypedDicts; on Python < 3.12 only
+    # typing_extensions' TypedDict is accepted (mcp_jobs.py).
+    "typing-extensions>=4.6; python_version < '3.12'",
+]
 
 # The core is dependency-free on purpose: the statistics and bundle layers
 # must be recomputable anywhere a report is audited — any Python >= 3.10,
@@ -40,18 +47,38 @@ gpu = ["mujoco-warp~=3.11.0; sys_platform != 'darwin'"]
 # a trial). The engine version is part of the identified artifact; it
 # moves by decision, never as a dependency side effect.
 mjx = ["mujoco-mjx[warp]~=3.11.0"]
-viz = ["rerun-sdk>=0.20"]  # the Rerun viewer; no GPU vendor requirement
+# viz: the Rerun viewer (no GPU vendor requirement) and TensorBoard's event
+# reader - the presenter reads the file rsl_rl already writes into every run
+# (all reward terms, the curriculum, the timings) instead of re-deriving a
+# curve from console text (2026-09-11: additive over the libraries).
+viz = ["rerun-sdk>=0.20", "tensorboard>=2.15"]
+# Reading a saved viewer recording back as columns (the headless door):
+# Rerun's local catalog needs DataFusion.
+viz-query = ["rerun-sdk[datafusion]>=0.20"]
+# deploy: the manifest-driven runtime and the sim-to-sim gate run the
+# exported ONNX policy; onnx reads the metadata the exporter attached.
+deploy = ["onnxruntime>=1.20", "onnx>=1.16"]
 # The instrument's MCP surface (rq_pipeline/mcp_server.py): bundles, tasks,
 # engines, actuators, runs as queryable tools for any MCP client — the
 # Studio's agent panel first. Official SDK, MIT; v2 is a rework of v1, so
 # the pin holds the major.
-mcp = ["mcp~=2.1"]
+# psutil: the Studio's process liveness (`project/control`), cross-platform.
+mcp = ["mcp~=2.1", "psutil>=5.9"]
 # openpi's own websocket client (rq_pipeline/envs/openpi_policy.py): pi0 /
 # pi0.5 served from their process, evaluated through our env. Pinned to the
 # commit it was read at (docs/e2e-research/43); not on PyPI. Its numpy<2 pin
 # is overridden below - measured working on numpy 2.2 (2026-08-27).
 remote = [
     "openpi-client @ git+https://github.com/Physical-Intelligence/openpi.git@215abfb217dbac7d5f1273282331b9b1866c0479#subdirectory=packages/openpi-client",
+]
+# dds: the second gate - Unitree's own simulator and controller (docs/77 §7).
+# cyclonedds builds against the C library unitree_sdk2 installs under
+# /usr/local (`CYCLONEDDS_HOME=/usr/local uv sync --extra dds`); the SDK
+# is not on PyPI, hence the git source; evdev is the virtual gamepad.
+dds = [
+    "cyclonedds>=0.10.2",
+    "evdev>=1.9.3",
+    "unitree-sdk2py",
 ]
 
 # The task registry's plugin door (rq_pipeline/tasks/registry.py): a third
@@ -73,8 +100,23 @@ mjx-warp = "rq_pipeline.physics.mjx_backend"
 [project.entry-points."rq_pipeline.gpu_providers"]
 runpod = "rq_pipeline.cloud.runpod"
 
+# The robot-adapter registry's plugin door (rq_pipeline/robots/adapter.py):
+# a source format registers itself with @adapter(name) and is listed here.
+[project.entry-points."rq_pipeline.robot_adapters"]
+wire = "rq_pipeline.robots.adapters.wire"
+lerobot = "rq_pipeline.robots.adapters.lerobot"
+mcap = "rq_pipeline.robots.adapters.mcap"
+
+[project.entry-points."rq_pipeline.identification_methods"]
+drivetrain-ratio = "rq_pipeline.robot.methods:DrivetrainRatio"
+
 [tool.setuptools.packages.find]
 include = ["rq_pipeline*"]
+
+[tool.setuptools.package-data]
+# PEP 561: the package's own annotations are its types for whoever
+# imports it (rq_mjlab, third parties).
+rq_pipeline = ["py.typed"]
 
 # Ruff is the whole lint/format story — same role clippy+rustfmt play for
 # the crates, and the pre-commit gate runs it the same way. Rules mirror
@@ -85,6 +127,9 @@ include = ["rq_pipeline*"]
 # msgpack-numpy codec round-trips on numpy 2.2 (measured) and the train
 # venv's torch/mujoco/jax need numpy 2, so the pin is overridden here, once.
 override-dependencies = ["numpy>=1.26"]
+
+[tool.uv.sources]
+unitree-sdk2py = { git = "https://github.com/unitreerobotics/unitree_sdk2_python" }
 
 [tool.ruff]
 target-version = "py310"
@@ -107,9 +152,18 @@ select = [
 # Rust crates.
 
 [tool.mypy]
-# Zero errors as of 2026-09-01; tools/verify.sh gates it. The global
-# ignore covers the untyped C extensions (mujoco, mujoco_warp, lerobot);
-# rerun/torch/jax/numpy/gymnasium all ship py.typed and are checked.
+# Zero errors is the baseline; tools/verify.sh gates it, run INSIDE this
+# project's environment so rerun/torch/jax/numpy/gymnasium (py.typed) are
+# checked for real. Run isolated (plain `uvx mypy`, until 2026-09-13)
+# every installed package read as Any and the check proved nothing about
+# how we call them. The global ignore covers packages absent here.
 python_version = "3.10"
 ignore_missing_imports = true
 files = ["rq_pipeline"]
+
+[[tool.mypy.overrides]]
+# The untyped C extensions: no py.typed, their API lives in compiled
+# modules mypy cannot read, so their Python shells are skipped (Any)
+# rather than read as modules with no attributes.
+module = ["mujoco", "mujoco.*", "mujoco_warp", "mujoco_warp.*", "warp", "warp.*", "lerobot", "lerobot.*"]
+follow_imports = "skip"

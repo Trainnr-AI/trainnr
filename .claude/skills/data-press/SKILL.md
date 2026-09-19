@@ -15,20 +15,21 @@ span). Every run writes `datasheet.md` beside the batch.
 ## MCP doors (any agent, docs/64 stage 1)
 
 With the rq MCP server connected, the same work is tool calls:
-`generate_demos(episodes, seed, out)` → job handle;
+`generate_kitting_demos(episodes, seed, out)` → job handle;
 `multiply_demos(seeds_dir, out, ...)` (GPU box);
-`run_chain(name, scale, ...)` — the whole press→train→certify chain;
-`press_walk(checkpoint|latest, episodes, worlds, seed, out)` — the RL
-teacher presses demonstrations (docs/66 D2: keepers judged by the
-certificate's criterion, discards to `failures.jsonl`); the batch
+`run_chain(name, scale, ...)` — the whole generate→train→evaluate chain;
+`generate_walk_demos(checkpoint|latest, episodes, worlds, seed, out)` — the RL
+teacher generates demonstrations (docs/66 D2: keepers judged by the
+evaluation's criterion, discards to `failures.jsonl`); the batch
 writes an `export.json`, so `demo_export.export_batch(demos, root,
 repo_id=...)` makes the LeRobot dataset with no Task in hand;
-`press_planned(task, episodes, seed, dr_span, out, shards)` — the planner expert
-(docs/66 D3) presses an SO-101 task: beats written from the seated
-scene, executed by chained IK, kept by the referee, stamped
-`planner@<knobs>`; `shards=N` presses in N parallel runs and merges them,
-the datasheet then stating the keep rate exactly (docs/66 D4);
-`certify_walk(checkpoint, student=<pretrained_model>, horizon, ...)` judges
+`generate_planned_demos(task, episodes, seed, dr_span, out, shards)` — the
+planner expert (docs/66 D3) generates demonstrations on a task from the
+registry: beats written from the seated scene, executed by chained IK,
+kept by the success criterion, stamped `planner@<knobs>`; `shards=N`
+generates in N parallel runs and merges them, the datasheet then stating
+the keep rate exactly (docs/66 D4);
+`evaluate_walk(checkpoint, student=<pretrained_model>, horizon, ...)` judges
 the distilled vision student through the same chase camera, over the
 policy bridge (`rq_pipeline.envs.policy_bridge`);
 `job_status(job_id)` polls, artifacts land under `runs/` as always.

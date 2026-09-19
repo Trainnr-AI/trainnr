@@ -260,6 +260,7 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
     provenance = DatasetProvenance(
         bundle=stamp(bundle_dir.name, bundle_dir),
         source=Path(demos_dir).name,
+        source_stamp=stamp(Path(demos_dir).name, Path(demos_dir)),
         expert=expert,
         episodes=len(episodes),
         frames=frame_counts,

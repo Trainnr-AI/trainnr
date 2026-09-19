@@ -254,8 +254,8 @@ def _keep_rate_line(summary: DatasheetSummary) -> str:
     if summary.shards == 1:
         return (
             f"- highest attempt number recorded: {summary.max_attempt}"
-            f" (keep rate ≤ {summary.keep_rate_bound:.0%} — attempts after the"
-            " last keep are not recorded)"
+            f" (success rate ≤ {summary.keep_rate_bound:.0%} — attempts after the"
+            " last success are not recorded)"
         )
     return (
         f"- {summary.shards} shards in this directory: no single"
@@ -268,22 +268,22 @@ def render(summary: DatasheetSummary) -> str:
     lines = [
         "# Datasheet",
         "",
-        "Every episode in this batch passed its task's own referee; the",
-        "counts below are of SUCCESSFUL episodes only.",
+        "Every episode in this dataset passed its environment's success",
+        "criterion; the counts below are of SUCCESSFUL episodes only.",
         "",
-        f"- episodes kept: **{summary.episodes}**",
+        f"- successful episodes: **{summary.episodes}**",
         _keep_rate_line(summary),
-        f"- expert retries across the batch: {summary.retries_total}",
+        f"- scripted-policy retries across the dataset: {summary.retries_total}",
         "",
-        "## Stamps",
+        "## Versions",
         "",
-        f"- task: {', '.join(summary.tasks)}",
-        f"- expert: {', '.join(summary.experts)}",
-        f"- instrument: {', '.join(summary.instruments)}",
+        f"- environment: {', '.join(summary.tasks)}",
+        f"- scripted policy: {', '.join(summary.experts)}",
+        f"- simulator build: {', '.join(summary.instruments)}",
         "",
-        "## Dynamics draws",
+        "## Domain randomization draws",
         "",
-        f"Basis: {', '.join(summary.bases)}",
+        f"Range: {', '.join(summary.bases)}",
         "",
         "| parameter | low | mean | high |",
         "|---|---|---|---|",
@@ -297,7 +297,7 @@ def render(summary: DatasheetSummary) -> str:
             "",
             "## Visual draws",
             "",
-            f"Basis: {', '.join(summary.visual_bases)}",
+            f"Range: {', '.join(summary.visual_bases)}",
             "",
             "| knob | low | mean | high |",
             "|---|---|---|---|",

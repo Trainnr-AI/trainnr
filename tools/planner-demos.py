@@ -21,7 +21,7 @@ from _lab import PREVIEW_EVERY_TICKS, bootstrap
 bootstrap()
 
 from rq_pipeline.collect.planner_demos import generate_planned_demos  # noqa: E402
-from rq_pipeline.collect.press_feed import StudioPressFeed  # noqa: E402
+from rq_pipeline.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
 from rq_pipeline.collect.shards import (  # noqa: E402
     ShardSpec,
     plan_shards,
@@ -30,6 +30,7 @@ from rq_pipeline.collect.shards import (  # noqa: E402
 )
 from rq_pipeline.tasks.registry import resolve  # noqa: E402
 from rq_pipeline.tasks.so101 import planner_rig  # noqa: E402
+from rq_pipeline.viz import viewer_file  # noqa: E402
 
 DEFAULT_OUT = Path("runs/planner-demos")
 
@@ -95,7 +96,13 @@ def main() -> None:
     run_name = (
         out.name if args.shard_index is None else f"{out.name}-s{args.shard_index}"
     )
-    feed = None if args.no_studio else StudioPressFeed.connect(run_name, say=say)
+    feed = (
+        None
+        if args.no_studio
+        else StudioPressFeed.connect(
+            run_name, say=say, file=viewer_file(args.out, PRESS_STREAM)
+        )
+    )
     batch = generate_planned_demos(
         out,
         task_factory=resolve(args.task).build,

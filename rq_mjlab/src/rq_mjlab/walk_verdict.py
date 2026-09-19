@@ -36,11 +36,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
+from rq_pipeline.evaluate.tracking import (
+    ERR_FLOOR_MPS,
+    ERR_RATIO_BOUND,
+    TrackingOutcome,
+    criterion_text,
+)
+from rq_pipeline.viz import viewer_file
 
-# The judgment's constants, declared where the certificate cites them.
-ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
-ERR_FLOOR = 0.1  # m/s; below this commanded speed the ratio's denominator floors
+from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+
+# The judgment's rule lives in `rq_pipeline.evaluate.tracking`, shared
+# with the deployment gate; these names stay for the callers here.
+ERR_FLOOR = ERR_FLOOR_MPS
 
 # The observation group the actor reads and the capture records: what a
 # captured (T, obs) row IS, and the key a labeler must hand back to the
@@ -49,32 +58,13 @@ ACTOR_OBS_GROUP = "actor"
 
 
 @dataclass(frozen=True)
-class EpisodeOutcome:
-    """One episode's measured facts, before any threshold is applied."""
+class EpisodeOutcome(TrackingOutcome):
+    """The tracking judgment (`rq_pipeline.evaluate.tracking`, shared with
+    the sim-to-sim gate) plus what the walk evaluation measures beside
+    it: the RMS velocity, acceleration and jerk of the issued targets
+    (docs/e2e-research/71 E0) - the smoothness a video shows, as numbers."""
 
-    steps: int
-    fell: bool
-    mean_err: float  # mean |v_xy - v*_xy| over the episode, m/s
-    mean_cmd: float  # mean ‖v*_xy‖ over the episode, m/s
-    # RMS velocity / acceleration / jerk of the issued targets (docs/
-    # e2e-research/71 E0): the smoothness a video shows, as numbers.
     smoothness: Any = None
-
-    @property
-    def err_ratio(self) -> float:
-        return self.mean_err / max(self.mean_cmd, ERR_FLOOR)
-
-    @property
-    def survived(self) -> bool:
-        return not self.fell
-
-    @property
-    def tracked(self) -> bool:
-        return self.err_ratio < ERR_RATIO_BOUND
-
-    @property
-    def success(self) -> bool:
-        return self.survived and self.tracked
 
 
 @dataclass(frozen=True)
@@ -105,7 +95,7 @@ def instrument_for(device: str) -> str:
 
 
 def rollout_episodes(
-    env, policy, trials: int, *, capture: bool = False
+    env, policy, trials: int, *, capture: bool = False, max_ticks: int | None = None
 ) -> list[WorldEpisode]:
     """One completed episode per world, judged from the live managers:
     the commanded twist from the command manager, the base-frame
@@ -113,7 +103,9 @@ def rollout_episodes(
     manager. Worlds that finish early keep stepping (the env auto-
     resets) but only each world's FIRST episode is recorded. With
     `capture`, the per-tick observation/action/qpos of that first
-    episode ride along (the rollout->dataset writer's raw material)."""
+    episode ride along (the rollout->dataset writer's raw material).
+    With `max_ticks`, a world still open at that tick is closed as
+    survived so far (the stills tool wants one frame, not a verdict)."""
     import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
 
@@ -144,8 +136,8 @@ def rollout_episodes(
             act = actions.detach().cpu().numpy()
             pose = device_qpos.detach().cpu().numpy()
             still_open = open_worlds.cpu().numpy()
-            for i in np.flatnonzero(still_open):
-                trace[i].append((actor[i], act[i], pose[i]))
+            for world in np.flatnonzero(still_open):
+                trace[world].append((actor[world], act[world], pose[world]))
         obs, _, dones, _ = env.step(actions)
         command = unwrapped.command_manager.get_command("twist")
         velocity = unwrapped.scene["robot"].data.root_link_lin_vel_b
@@ -155,6 +147,8 @@ def rollout_episodes(
         cmd_sum += cmd * open_worlds
         steps += open_worlds.long()
         closing = open_worlds & dones.bool()
+        if max_ticks is not None:
+            closing |= open_worlds & (steps >= max_ticks)
         if closing.any():
             fell |= closing & unwrapped.termination_manager.terminated
             recorded_steps = torch.where(closing, steps, recorded_steps)
@@ -196,19 +190,18 @@ class VerdictFeed:
 
     ROOT = "verdict"
 
-    def __init__(self, run_name: str) -> None:
+    def __init__(self, run_name: str, file: Path | None = None) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
-        from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: PLC0415
+        from rq_pipeline.viz import STUDIO_ADDRESS, open_stream  # noqa: PLC0415
 
         self._rr: Any = rr
-        rr.init(f"rq-verdict-{run_name}")
-        rr.connect_grpc(STUDIO_ADDRESS)
+        open_stream(f"rq-verdict-{run_name}", address=STUDIO_ADDRESS, file=file)
         self._tick = 0
 
     @classmethod
-    def connect(cls, run_name: str) -> VerdictFeed | None:
+    def connect(cls, run_name: str, file: Path | None = None) -> VerdictFeed | None:
         try:
-            return cls(run_name)
+            return cls(run_name, file)
         except ImportError:
             print(
                 "no rerun-sdk in this venv - the verdict runs UNWATCHED",
@@ -381,6 +374,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
+    parser.add_argument(
         "--robot",
         choices=ROBOTS,
         default=DEFAULT_ROBOT,
@@ -527,8 +526,12 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
         # by an audit reading the rows). The rows are appended and stay
         # the primary artifact; the previous file is kept beside the new.
         stamp_prev = json.loads(verdict_path.read_text())
+        # Named by what it judged too: two checkpoints of one run judged
+        # under the same suffix would otherwise share a backup name, and
+        # the second rotation would overwrite the first (2026-09-11).
         previous = out_dir / (
-            f"walk-verdict-{suffix}.seed{stamp_prev['protocol'].get('seed')}"
+            f"walk-verdict-{suffix}.{stamp_prev.get('policy', 'policy')}"
+            f".seed{stamp_prev['protocol'].get('seed')}"
             f".n{stamp_prev['trials']}.json"
         )
         if not previous.exists():
@@ -562,6 +565,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
 
     if args.judge_at_fit and args.judge_span is not None:
         raise SystemExit("--judge-at-fit and --judge-span exclude each other")
+    use_project(args.project)
     spec = walk_spec(args.robot)
     default_span = spec.default_span
     judge_span = default_span if args.judge_span is None else args.judge_span
@@ -589,6 +593,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
                 raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
         identity = {
             **identity,
+            "task": trained_identity.get("task"),
             "trained_dr_basis": trained_identity.get("dr_basis"),
             # The training run's seed (walk_train --seed; mjlab's default
             # 42 when the run predates the knob) — a replicate's name.
@@ -597,17 +602,29 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
-    source = f"{spec.source_prefix}@{fields_hash(identity)}"
+    # The environment the certificate cites: the declared task the run was
+    # trained against (its content stamp, the project's environment card)
+    # when the run recorded one; else the walk spec's identity hash.
+    source = identity.get("task") or f"{spec.source_prefix}@{fields_hash(identity)}"
+    agent = spec.agent(1)
+    # The commands the checkpoint trained under, not the curriculum's
+    # first stage a fresh env would restart at (rq_mjlab.envelope).
+    envelope = pin_command_envelope(
+        cfg, checkpoint_iteration(args.checkpoint.stem), agent.num_steps_per_env
+    )
     protocol = {
         "trials": args.trials,
         "seed": args.seed,
-        "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
+        "criterion": criterion_text(),
+        "err_ratio_bound": ERR_RATIO_BOUND,
         "err_floor_mps": ERR_FLOOR,
         "dr_basis": identity["dr_basis"],
+        "commands": envelope["commands"],
+        "command_basis": envelope["basis"],
     }
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
+    print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")
 
-    agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
@@ -655,7 +672,15 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
             "camera": CAMERA_BLANKED if args.blank_camera else CAMERA_SIGHTED,
             "state": STATE_BLANKED if args.blank_state else STATE_GIVEN,
         }
-    feed = None if args.no_studio else VerdictFeed.connect(policy_name.split("@")[0])
+    feed = (
+        None
+        if args.no_studio
+        else VerdictFeed.connect(
+            policy_name.split("@")[0],
+            # The saved stream lands in the run the checkpoint belongs to.
+            viewer_file(args.checkpoint.parent, f"verdict-{args.checkpoint.stem}"),
+        )
+    )
     if isinstance(policy, StudentPolicy):
         policy.feed = feed
     outcomes = rollout_outcomes(env, policy, args.trials)

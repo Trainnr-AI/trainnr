@@ -20,13 +20,15 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 
 use egui::{ColorImage, TextureHandle, TextureOptions};
 use re_ui::UiExt as _;
+
+use crate::spawn::{end_tree, kill_tree, pipeline_command, walk_command, RENDER_STREAM_SCRIPT};
 
 /// The shared-memory frame ring's layout — the Python side's mirror
 /// (`SHM_HEADER`/`SHM_MAGIC` in studio-render-stream.py): magic u32,
@@ -44,6 +46,10 @@ struct ShmReader {
     file: File,
     path: PathBuf,
     last_seq: u32,
+    /// The frame's bytes, kept between reads: a 6 MB allocation per
+    /// frame was the hot path's own cost (2026-09-13). `ColorImage` still
+    /// owns its pixels, so one copy remains.
+    rgb: Vec<u8>,
 }
 
 impl ShmReader {
@@ -65,8 +71,8 @@ impl ShmReader {
         {
             return None;
         }
-        let mut rgb = vec![0u8; width * height * 3];
-        self.file.read_exact(&mut rgb).ok()?;
+        self.rgb.resize(width * height * 3, 0);
+        self.file.read_exact(&mut self.rgb).ok()?;
         // Seqlock close: a write that landed mid-copy moved the counter;
         // discard the torn frame and let the next repaint pick it up.
         self.file.seek(SeekFrom::Start(4)).ok()?;
@@ -76,7 +82,7 @@ impl ShmReader {
             return None;
         }
         self.last_seq = seq;
-        Some(ColorImage::from_rgb([width, height], &rgb))
+        Some(ColorImage::from_rgb([width, height], &self.rgb))
     }
 }
 
@@ -90,6 +96,15 @@ impl Drop for ShmReader {
 /// scroll — tuned by feel against a 1024x576 viewport, not measured.
 /// These stay HERE (pixel-domain input scaling is this side's fact);
 /// every absolute camera fact — defaults, clamps — lives Python-side.
+/// What a slider in the drawer sets: a joint (by qpos address), an
+/// actuator, or one axis of a walk's commanded twist.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SliderKind {
+    Joint,
+    Actuator,
+    Twist,
+}
+
 const DRAG_DEGREES_PER_POINT: f32 = 0.4;
 const ZOOM_METRES_PER_SCROLL_POINT: f32 = 0.004;
 
@@ -111,6 +126,75 @@ const MAX_RENDER_SIDE: u32 = 1920;
 /// Orbit/zoom are exempt: they're cheap per-frame camera fields, and
 /// holding them back would make dragging feel laggy.
 const RESIZE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+/// How long the bar shows what the agent just did.
+const AGENT_FLASH: std::time::Duration = std::time::Duration::from_millis(1800);
+/// The longest status message the reader accepts. The stream's status is
+/// a few kilobytes (the model description once, then the clock and the
+/// inputs); a length past this is a torn pipe, not a message, and ends
+/// the stream loudly rather than allocating whatever four bytes say.
+const MAX_STATUS_BYTES: usize = 16 << 20;
+/// The speed factors the stream accepts (`SPEED_MIN`/`SPEED_MAX` in
+/// studio-render-stream.py, mirrored): what the agent may ask for.
+pub const SPEED_RANGE: std::ops::RangeInclusive<f32> = 0.01..=100.0;
+
+/// A named camera view: the name the agent and the menu use, the label
+/// the menu shows, and the wire's `TAG_VIEW` index (`VIEW_PRESETS` in
+/// the stream, in its order).
+pub struct ViewPreset {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub index: u8,
+}
+
+/// The camera's named views, one table for the menu and the door.
+pub const VIEW_PRESETS: &[ViewPreset] = &[
+    ViewPreset {
+        name: "front",
+        label: "Front",
+        index: 1,
+    },
+    ViewPreset {
+        name: "side",
+        label: "Side",
+        index: 2,
+    },
+    ViewPreset {
+        name: "top",
+        label: "Top",
+        index: 3,
+    },
+    ViewPreset {
+        name: "reset",
+        label: "Reset view",
+        index: 0,
+    },
+];
+
+/// The wire index of a view by its name.
+pub fn view_preset(name: &str) -> Option<u8> {
+    let wanted = name.trim().to_lowercase();
+    VIEW_PRESETS
+        .iter()
+        .find(|v| v.name == wanted)
+        .map(|v| v.index)
+}
+
+/// The names `view_preset` accepts, for a refusal.
+pub fn view_preset_names() -> Vec<&'static str> {
+    VIEW_PRESETS.iter().map(|v| v.name).collect()
+}
+
+/// How the RL view is spawned: the walk package's module, and how many
+/// policy-driven worlds it rolls (a 3 × 3 tile of the batched sim).
+struct WalkSpawn {
+    module: &'static str,
+    envs: u32,
+}
+
+const WALK_SPAWN: WalkSpawn = WalkSpawn {
+    module: "rq_mjlab.walk_view",
+    envs: 4, // what the operator compared against mjlab's own viewer (2026-09-12)
+};
 
 /// Owns the render-stream subprocess, the shared-memory frame ring, and
 /// the orbit/perturb state the user drives with the mouse over the image.
@@ -137,19 +221,180 @@ pub struct ViewportFeed {
     /// request killed the renderer and the panel just... stopped) —
     /// `show` turns this into a visible error instead.
     stream_ended: Arc<AtomicBool>,
+    /// The scene this feed runs (a preview task name), for the state file.
+    task: Option<String>,
+    /// When each of the last frames was drawn, for the on-screen rate.
+    drawn_at: std::collections::VecDeque<std::time::Instant>,
+    /// The rate as last shown to a panel, and when (see `fps_settled`).
+    fps_shown: std::cell::Cell<(Option<f32>, Option<std::time::Instant>)>,
+    /// The agent's last action on the simulator, and when (see `flash`).
+    agent_flash: Option<(String, std::time::Instant)>,
+    /// The stream's status and model description (reader thread writes).
+    report: Arc<std::sync::Mutex<SimReport>>,
+    /// Slider values the human is editing, so a drag does not fight
+    /// the 100 ms status echo: keyed by qpos address / actuator index.
+    editing: std::collections::HashMap<(SliderKind, usize), f64>,
+    /// The twist last sent (world, values) while the human holds the
+    /// commands: the source the next axis composes from, ahead of the
+    /// status echo (two door calls in a row raced on the echo, 2026-09-12).
+    twist_held: Option<(i32, [f32; 3])>,
+    /// Whether the picture had the pointer over it, and whether it had
+    /// keyboard focus, on its last frame: where the keys go (`wants_keys`).
+    hovered: bool,
+    focused: bool,
+}
+
+/// One joint the Joint panel can slide (hinge or slide; free and ball
+/// joints have no scalar, simulate's own rule) — from the stream's
+/// `model` status.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SimJoint {
+    pub name: String,
+    pub qpos: usize,
+    pub range: [f64; 2],
+    pub limited: bool,
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SimActuator {
+    pub name: String,
+    pub range: [f64; 2],
+    pub limited: bool,
+}
+
+/// The model as the stream describes it once: what the panels need.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimModel {
+    #[serde(default)]
+    pub joints: Vec<SimJoint>,
+    #[serde(default)]
+    pub actuators: Vec<SimActuator>,
+    #[serde(default)]
+    pub keyframes: Vec<String>,
+    #[serde(default)]
+    pub timestep: f64,
+    #[serde(default)]
+    pub integrator: String,
+    #[serde(default)]
+    pub solver: String,
+    #[serde(default)]
+    pub iterations: u32,
+    #[serde(default)]
+    pub gravity: [f64; 3],
+    #[serde(default)]
+    pub nbody: u32,
+    #[serde(default)]
+    pub ngeom: u32,
+    /// MuJoCo's own flag names in index order (`mjtVisFlag`, `mjtRndFlag`).
+    #[serde(default)]
+    pub vis_flags: Vec<String>,
+    #[serde(default)]
+    pub rnd_flags: Vec<String>,
+    /// The group-mask kinds the stream offers (geom, site, joint, …),
+    /// in wire order, and how many groups each has (MuJoCo's mjNGROUP).
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub ngroup: u32,
+    /// Worlds in a many-worlds scene (0 for a single world).
+    #[serde(default)]
+    pub nworld: u32,
+    /// A walk scene's command bounds - forward, left, turn - from the
+    /// task that runs it; absent for a scene without commands.
+    #[serde(default)]
+    pub twist_ranges: Option<[[f64; 2]; 3]>,
+}
+
+/// The twist the human commands in a walk scene: which world, and the
+/// forward, left and turn values.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimTwist {
+    #[serde(default)]
+    pub world: i64,
+    #[serde(default)]
+    pub value: [f64; 3],
+}
+
+/// The clock and the inputs, every 100 ms (the stream's status message).
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimStatus {
+    #[serde(default)]
+    pub time: f64,
+    #[serde(default)]
+    pub rtf: f64,
+    #[serde(default)]
+    pub paused: bool,
+    #[serde(default)]
+    pub manual: bool,
+    #[serde(default)]
+    pub speed: f64,
+    #[serde(default)]
+    pub qpos: Vec<f64>,
+    #[serde(default)]
+    pub ctrl: Vec<f64>,
+    #[serde(default)]
+    pub shadows: bool,
+    #[serde(default)]
+    pub render_ms: f64,
+    #[serde(default)]
+    pub vis: std::collections::BTreeMap<String, bool>,
+    /// The same flags by index, filled once when the status lands (the
+    /// drawer asked the map by a formatted index fifty times a frame).
+    #[serde(skip)]
+    pub vis_table: Vec<Option<bool>>,
+    #[serde(default)]
+    pub rnd: std::collections::BTreeMap<String, bool>,
+    #[serde(skip)]
+    pub rnd_table: Vec<Option<bool>>,
+    /// Each group mask as rendered, by kind name.
+    #[serde(default)]
+    pub groups: std::collections::BTreeMap<String, Vec<bool>>,
+    /// The commanded twist while the human holds it; None while the
+    /// task commands.
+    #[serde(default)]
+    pub twist: Option<SimTwist>,
+    /// Where the camera is: azimuth, elevation, distance, lookat x y z.
+    #[serde(default)]
+    pub camera: Vec<f64>,
+    #[serde(default)]
+    pub follow: i64,
+    #[serde(default)]
+    pub worlds: Vec<SimWorld>,
+    #[serde(default)]
+    pub model: Option<SimModel>,
+}
+
+/// One world of a many-worlds scene, as the status reports it.
+#[derive(serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct SimWorld {
+    #[serde(default)]
+    pub reward: f64,
+    #[serde(default)]
+    pub done: bool,
+}
+
+/// What the reader thread learned from the stream's status messages —
+/// shared, not copied: the panels ask for it several times a frame, and
+/// a status carries every joint and control value.
+#[derive(Default)]
+pub struct SimReport {
+    pub status: Option<Arc<SimStatus>>,
+    pub model: Option<Arc<SimModel>>,
 }
 
 /// The scene previews the idle strip offers — pipeline-registry tasks
 /// `studio-render-stream.py` can run. The LIVE scene never comes from
 /// here: a training run mirrors itself into the Rerun 3D view below
 /// (`world/robot`, the recorder's mirror).
-const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
+pub const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 
 /// The RL view: `rq_mjlab.walk_view` rolls the newest trained walk
 /// checkpoint (policy-driven worlds on the GPU, CPU mirror into the
 /// same frame ring, Ctrl+drag shoves land in the batched sim). Its own
 /// spawn shape: the rq_mjlab venv, not the pipeline's.
-const WALK_TASK: &str = "walk";
+pub const WALK_TASK: &str = "walk";
 
 impl ViewportFeed {
     /// No subprocess, no canned scene: the panel starts as a slim strip
@@ -169,11 +414,49 @@ impl ViewportFeed {
             last_resize_sent: None,
             perturbing: false,
             stream_ended: Arc::new(AtomicBool::new(false)),
+            task: None,
+            drawn_at: std::collections::VecDeque::new(),
+            fps_shown: std::cell::Cell::new((None, None)),
+            agent_flash: None,
+            report: Arc::new(std::sync::Mutex::new(SimReport::default())),
+            editing: std::collections::HashMap::new(),
+            twist_held: None,
+            hovered: false,
+            focused: false,
         }
     }
 
     /// Whether a preview is running (or died trying) — the panel sizes
     /// itself by this.
+    /// The preview task running, if any.
+    pub fn task(&self) -> Option<&str> {
+        self.task.as_deref()
+    }
+
+    /// The frame rate for a panel: refreshed once a second, so the
+    /// number does not change under the reader's eyes every frame.
+    pub fn fps_settled(&self) -> Option<f32> {
+        let now = std::time::Instant::now();
+        let (shown, at) = self.fps_shown.get();
+        if at.is_some_and(|t| now.duration_since(t) < std::time::Duration::from_secs(1)) {
+            return shown;
+        }
+        let fresh = self.fps().map(f32::round);
+        self.fps_shown.set((fresh, Some(now)));
+        fresh
+    }
+
+    /// Frames drawn to the screen in the last second, once any were.
+    pub fn fps(&self) -> Option<f32> {
+        let now = std::time::Instant::now();
+        let recent = self
+            .drawn_at
+            .iter()
+            .filter(|t| now.duration_since(**t) <= std::time::Duration::from_secs(1))
+            .count();
+        (!self.drawn_at.is_empty()).then_some(recent as f32)
+    }
+
     pub fn is_active(&self) -> bool {
         self.child.is_some() || self.spawn_error.is_some() || self.texture.is_some()
     }
@@ -182,23 +465,15 @@ impl ViewportFeed {
     /// environment. `ctx` is cloned into the reader thread so it can wake
     /// the UI (`request_repaint`) the moment a new frame lands — egui does
     /// not otherwise know that a background thread produced fresh pixels.
-    pub fn spawn(ctx: &egui::Context, task_name: &str) -> Self {
-        let repo_root = crate::repo_root();
-        let pipeline_dir = repo_root.join("pipeline");
-        let script = repo_root.join("tools").join("studio-render-stream.py");
-
-        // `viz` brings rerun-sdk: the script narrates the physics into
-        // the app's own embedded viewer (best-effort — see the script).
-        let mut command = Command::new("uv");
-        // Its own process group, so stop/drop can reap the WHOLE tree:
-        // killing only the `uv` wrapper left the python grandchild
-        // alive and flooding the ingest channel (the zombie stream,
-        // 2026-09-01).
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt as _;
-            command.process_group(0);
-        }
+    pub fn spawn(ctx: &egui::Context, task_name: &str, project_root: &std::path::Path) -> Self {
+        // The RL view runs in the rq_mjlab venv (torch + warp + mjlab);
+        // the previews in the pipeline's. Same ring, same stdin
+        // protocol, different door (`spawn.rs` builds both).
+        let mut command = if task_name == WALK_TASK {
+            walk_command(WALK_SPAWN.module)
+        } else {
+            pipeline_command(RENDER_STREAM_SCRIPT)
+        };
         // The frame ring: created HERE (the reader's lifetime owns it),
         // sized for the largest frame the wire allows, handed to the
         // script by path. See ShmReader for the layout.
@@ -218,38 +493,19 @@ impl ViewportFeed {
                 file,
                 path: shm_path.clone(),
                 last_seq: 0,
+                rgb: Vec::new(),
             });
 
         if task_name == WALK_TASK {
-            // The RL view runs in the rq_mjlab venv (torch + warp +
-            // mjlab); same ring, same stdin protocol, different door.
+            // The project's own walk: its robot, its latest checkpoint.
             command
-                .args(["run", "--offline", "python", "-m", "rq_mjlab.walk_view"])
-                .args(["--latest", "--envs", "9"])
-                .arg(format!("--shm={}", shm_path.display()))
-                .current_dir(repo_root.join("rq_mjlab"));
+                .arg("--latest")
+                .arg(format!("--envs={}", WALK_SPAWN.envs))
+                .arg(format!("--project={}", project_root.display()));
         } else {
-            command
-                .args(["run", "--extra", "sim", "--extra", "viz", "python"])
-                .arg(&script)
-                .arg(task_name)
-                .arg(format!("--shm={}", shm_path.display()))
-                .current_dir(&pipeline_dir);
+            command.arg(task_name);
         }
-        // The pipeline's own wsl.env, spelled here because this spawn
-        // does not go through a tool wrapper: without these, MuJoCo's
-        // offscreen GL on WSL falls back to llvmpipe — the SOFTWARE
-        // rasterizer at ~300 ms/frame and ~300% CPU (measured on the
-        // kitting preview, 2026-09-01; the box's documented gotcha).
-        // Harmless on native Linux; macOS must not get MUJOCO_GL=egl.
-        #[cfg(target_os = "linux")]
-        {
-            command
-                .env("MUJOCO_GL", "egl")
-                .env("GALLIUM_DRIVER", "d3d12")
-                .env("LD_LIBRARY_PATH", "/usr/lib/wsl/lib")
-                .env("OMP_NUM_THREADS", "1");
-        }
+        command.arg(format!("--shm={}", shm_path.display()));
         let spawned = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -263,10 +519,12 @@ impl ViewportFeed {
             (Ok(mut child), Ok(shm)) => {
                 let stdout = child.stdout.take().expect("piped stdout, always present");
                 let stdin = child.stdin.take().expect("piped stdin, always present");
+                let report = Arc::new(std::sync::Mutex::new(SimReport::default()));
                 spawn_token_reader(
                     stdout,
                     Arc::clone(&frames_published),
                     Arc::clone(&stream_ended),
+                    Arc::clone(&report),
                     ctx.clone(),
                 );
                 Self {
@@ -281,19 +539,26 @@ impl ViewportFeed {
                     last_resize_sent: None,
                     perturbing: false,
                     stream_ended,
+                    task: Some(task_name.to_owned()),
+                    drawn_at: std::collections::VecDeque::new(),
+                    fps_shown: std::cell::Cell::new((None, None)),
+                    agent_flash: None,
+                    report,
+                    editing: std::collections::HashMap::new(),
+                    twist_held: None,
+                    hovered: false,
+                    focused: false,
                 }
             }
             (Ok(mut child), Err(err)) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_tree(&mut child);
                 Self::errored(format!(
                     "could not create the frame ring at {}: {err}",
                     shm_path.display()
                 ))
             }
             (Err(err), _) => Self::errored(format!(
-                "could not start {}: {err} (is `uv` on PATH?)",
-                script.display()
+                "could not start the {task_name} scene: {err} (is `uv` on PATH?)"
             )),
         }
     }
@@ -307,41 +572,33 @@ impl ViewportFeed {
     /// Draws the newest frame into `ui`, or a placeholder/error message
     /// before the first frame arrives or if the subprocess never started.
     /// Dragging orbits the camera; scrolling while hovered zooms it.
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    /// Returns the rect the picture occupies, for overlays drawn on it.
+    pub fn show(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
         if !self.is_active() {
-            ui.horizontal(|ui| {
+            ui.centered_and_justified(|ui| {
                 ui.label(
-                    "Live physics streams into the 3D view below while a run is on. \
-                     Preview a pipeline scene:",
-                );
-                for task in PREVIEW_TASKS {
-                    if ui.button(*task).clicked() {
-                        *self = Self::spawn(ui.ctx(), task);
-                    }
-                }
-                if ui
-                    .button(WALK_TASK)
-                    .on_hover_text(
-                        "the newest trained walk checkpoint, live — \
-                         Ctrl+drag shoves a duck and the policy recovers",
+                    egui::RichText::new(
+                        "No scene is running. Pick one from the bar below — a training \
+                         run streams into the viewer underneath on its own.",
                     )
-                    .clicked()
-                {
-                    *self = Self::spawn(ui.ctx(), WALK_TASK);
-                }
+                    .color(ui.visuals().weak_text_color()),
+                );
             });
-            return;
+            return None;
         }
-        ui.horizontal(|ui| {
-            ui.label("scene preview (not the live run)");
-            if ui.button("✕ stop").clicked() {
-                *self = Self::idle();
-            }
-        });
         let published = self.frames_published.load(Ordering::Relaxed);
         if published != self.frames_drawn {
             if let Some(image) = self.shm.as_mut().and_then(ShmReader::latest) {
                 self.frames_drawn = published;
+                let now = std::time::Instant::now();
+                self.drawn_at.push_back(now);
+                while self
+                    .drawn_at
+                    .front()
+                    .is_some_and(|t| now.duration_since(*t) > std::time::Duration::from_secs(2))
+                {
+                    self.drawn_at.pop_front();
+                }
                 match &mut self.texture {
                     // Update in place: `load_texture` allocates a brand-new
                     // texture every call, and this runs at frame rate.
@@ -370,7 +627,7 @@ impl ViewportFeed {
             } else {
                 ui.info_label("Waiting for the first frame from MuJoCo…");
             }
-            return;
+            return None;
         };
 
         // `max_size` only ever caps — it never grows an image up to fill
@@ -403,6 +660,15 @@ impl ViewportFeed {
         // mjvPerturb; this side only names the gesture.
         let ctrl_held = ui.input(|i| i.modifiers.ctrl);
         let image_rect = fitted_rect(response.rect, texture.aspect_ratio());
+        // A click on the picture takes the keyboard from whatever held
+        // it (Rerun's own views take focus when clicked, and every
+        // shortcut went silent after one, 2026-09-12); hovering is
+        // enough too - keys go where the pointer is, as in every 3D tool.
+        if response.clicked() || response.drag_started() {
+            response.request_focus();
+        }
+        self.hovered = response.hovered();
+        self.focused = response.has_focus();
         let mut d_azimuth = 0.0f32;
         let mut d_elevation = 0.0f32;
         let mut d_distance = 0.0f32;
@@ -470,6 +736,157 @@ impl ViewportFeed {
         {
             self.send_update(d_azimuth, d_elevation, d_distance);
         }
+        Some(image_rect)
+    }
+
+    /// Whether the keys belong to the picture this frame: the pointer is
+    /// over it or it was clicked last, and no text field is being typed
+    /// in. With nothing focused at all the keys are the picture's too
+    /// (the transport bar's shortcuts always worked that way).
+    pub fn wants_keys(&self, ctx: &egui::Context) -> bool {
+        if !self.is_active() || ctx.text_edit_focused() {
+            return false;
+        }
+        self.hovered || self.focused || !ctx.egui_wants_keyboard_input()
+    }
+
+    /// Who has the keys, for the event log: none, picture, other, text.
+    pub fn focus_owner(&self, ctx: &egui::Context) -> &'static str {
+        if ctx.text_edit_focused() {
+            "text"
+        } else if self.focused {
+            "picture"
+        } else if ctx.egui_wants_keyboard_input() {
+            "other"
+        } else {
+            "none"
+        }
+    }
+
+    /// The stream's latest status and model, for the panel and the state
+    /// file: two reference counts bumped, nothing copied.
+    pub fn report(&self) -> (Option<Arc<SimStatus>>, Option<Arc<SimModel>>) {
+        self.report
+            .lock()
+            .map(|r| (r.status.clone(), r.model.clone()))
+            .unwrap_or((None, None))
+    }
+
+    pub fn send_run(&mut self, run: bool) {
+        self.send_message(&[TAG_RUN, u8::from(run)]);
+    }
+
+    pub fn send_step(&mut self, steps: u32) {
+        self.send_message(&encode_u32(TAG_STEP, steps));
+    }
+
+    /// Reset to a keyframe, or to the model's initial state with `None`.
+    pub fn send_reset(&mut self, keyframe: Option<u32>) {
+        let key = keyframe.map_or(-1i32, |k| k as i32);
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_RESET;
+        bytes[1..5].copy_from_slice(&key.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
+    pub fn send_speed(&mut self, factor: f32) {
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_SPEED;
+        bytes[1..5].copy_from_slice(&factor.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
+    pub fn send_manual(&mut self, on: bool) {
+        self.send_message(&[TAG_MANUAL, u8::from(on)]);
+    }
+
+    pub fn send_ctrl(&mut self, actuator: u32, value: f32) {
+        self.editing
+            .insert((SliderKind::Actuator, actuator as usize), f64::from(value));
+        self.send_message(&encode_index_value(TAG_CTRL, actuator, value));
+    }
+
+    pub fn send_qpos(&mut self, qpos_address: u32, value: f32) {
+        self.editing
+            .insert((SliderKind::Joint, qpos_address as usize), f64::from(value));
+        self.send_message(&encode_index_value(TAG_QPOS, qpos_address, value));
+    }
+
+    pub fn send_vis(&mut self, flag: u32, on: bool) {
+        self.send_message(&encode_flag(TAG_VIS, flag, on));
+    }
+
+    pub fn send_rnd(&mut self, flag: u32, on: bool) {
+        self.send_message(&encode_flag(TAG_RND, flag, on));
+    }
+
+    /// The commanded twist for one world of a walk scene; world -1 hands
+    /// the commands back to the task.
+    pub fn send_twist(&mut self, world: i32, twist: [f32; 3]) {
+        self.twist_held = (world >= 0).then_some((world, twist));
+        self.send_message(&encode_twist(world, twist));
+    }
+
+    /// The twist the human holds, as last sent (None: the task's own).
+    pub fn twist_held(&self) -> Option<(i32, [f32; 3])> {
+        self.twist_held
+    }
+
+    /// One bit of a group mask: the kind by its wire index (the model's
+    /// `groups` order), the group 0..ngroup.
+    pub fn send_group(&mut self, kind: u8, group: u8, on: bool) {
+        self.send_message(&[TAG_GROUP, kind, group, u8::from(on)]);
+    }
+
+    /// The camera to a named view, by its wire index ([`VIEW_PRESETS`]).
+    pub fn send_view(&mut self, preset: u8) {
+        self.send_message(&[TAG_VIEW, preset]);
+    }
+
+    /// Keep the camera on one world of a many-worlds scene (-1: none).
+    pub fn send_follow(&mut self, world: i32) {
+        let mut bytes = [0u8; 5];
+        bytes[0] = TAG_FOLLOW;
+        bytes[1..5].copy_from_slice(&world.to_le_bytes());
+        self.send_message(&bytes);
+    }
+
+    /// Move the camera's lookat in its own frame — forward, right, up —
+    /// by seconds of key held per axis (signed). The metres per second
+    /// are the stream's fact (it knows the distance); this side only
+    /// says how long a key was down.
+    pub fn send_pan(&mut self, forward_s: f32, right_s: f32, up_s: f32) {
+        self.send_message(&encode_pan(forward_s, right_s, up_s));
+    }
+
+    /// The agent pressed something: the bar shows it for a moment.
+    pub fn flash(&mut self, what: &str) {
+        self.agent_flash = Some((what.to_owned(), std::time::Instant::now()));
+    }
+
+    /// What the agent last did, while it is worth showing.
+    pub fn flashing(&self) -> Option<&str> {
+        self.agent_flash
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() < AGENT_FLASH)
+            .map(|(what, _)| what.as_str())
+    }
+
+    /// The value a slider shows: what the human is dragging, else the
+    /// stream's echo.
+    pub fn slider_value(&self, kind: SliderKind, index: usize, echoed: f64) -> f64 {
+        self.editing.get(&(kind, index)).copied().unwrap_or(echoed)
+    }
+
+    /// A slider the human is dragging shows this until the drag ends
+    /// (the stream's echo lags a frame or two behind the hand).
+    pub fn start_editing(&mut self, kind: SliderKind, index: usize, value: f64) {
+        self.editing.insert((kind, index), value);
+    }
+
+    /// The drag ended: the stream's echo is the truth again.
+    pub fn stop_editing(&mut self, kind: SliderKind, index: usize) {
+        self.editing.remove(&(kind, index));
     }
 
     fn send_update(&mut self, d_azimuth: f32, d_elevation: f32, d_distance: f32) {
@@ -493,24 +910,19 @@ impl Drop for ViewportFeed {
         // `Child` does not kill on drop (the standard library leaves that
         // to the caller); an orphaned render-stream process is exactly the
         // kind of leak the crate's own smoke test already checked for by
-        // hand — do it here so every caller gets it for free.
-        if let Some(mut child) = self.child.take() {
-            // The child leads its own process group (see spawn); kill
-            // the group so the python grandchild dies with the wrapper.
-            #[cfg(unix)]
-            {
-                // `-s TERM -- -PGID`: without the `--`, procps kill can
-                // re-parse a negative pgid as a signal spec plus a DIFFERENT
-                // pid — measured 2026-09-01, and the mis-signaled process
-                // was the Studio itself (stop closed the whole app).
-                let _ = Command::new("kill")
-                    .args(["-s", "TERM", "--", &format!("-{}", child.id())])
-                    .status();
-            }
-            let _ = child.kill();
-            let _ = child.wait();
+        // hand — do it here so every caller gets it for free. The child
+        // leads its own process group (see `spawn.rs`); the whole tree goes.
+        if let Some(child) = self.child.take() {
+            end_tree(child);
         }
     }
+}
+
+/// The length prefix of a status message, or `None` when it is past
+/// [`MAX_STATUS_BYTES`] — a torn pipe, not a message.
+fn status_length(prefix: [u8; 4]) -> Option<usize> {
+    let len = u32::from_le_bytes(prefix) as usize;
+    (len <= MAX_STATUS_BYTES).then_some(len)
 }
 
 /// The wake-up channel: the script writes one byte per frame published
@@ -520,19 +932,69 @@ fn spawn_token_reader(
     mut stdout: ChildStdout,
     frames_published: Arc<AtomicU64>,
     stream_ended: Arc<AtomicBool>,
+    report: Arc<std::sync::Mutex<SimReport>>,
     ctx: egui::Context,
 ) {
     thread::spawn(move || {
         let mut token = [0u8; 1];
+        // One body buffer for the stream's life: a status arrives many
+        // times a second, and a fresh allocation per message is waste.
+        let mut body: Vec<u8> = Vec::new();
         while stdout.read_exact(&mut token).is_ok() {
-            frames_published.fetch_add(1, Ordering::Relaxed);
-            ctx.request_repaint();
+            match token[0] {
+                FRAME_TOKEN => {
+                    frames_published.fetch_add(1, Ordering::Relaxed);
+                    ctx.request_repaint();
+                }
+                STATUS_TOKEN => {
+                    // u32 LE length, then JSON (the stream's `SimControl.status`).
+                    let mut len = [0u8; 4];
+                    if stdout.read_exact(&mut len).is_err() {
+                        break;
+                    }
+                    let Some(len) = status_length(len) else {
+                        break; // corruption: end the stream, loudly (below)
+                    };
+                    body.clear();
+                    body.resize(len, 0);
+                    if stdout.read_exact(&mut body).is_err() {
+                        break;
+                    }
+                    if let Ok(mut status) = serde_json::from_slice::<SimStatus>(&body) {
+                        if let Ok(mut slot) = report.lock() {
+                            if let Some(model) = status.model.take() {
+                                slot.model = Some(Arc::new(model));
+                            }
+                            if let Some(model) = &slot.model {
+                                status.vis_table = flag_table(&status.vis, model.vis_flags.len());
+                                status.rnd_table = flag_table(&status.rnd, model.rnd_flags.len());
+                            }
+                            slot.status = Some(Arc::new(status));
+                        }
+                    }
+                }
+                _ => {} // a token this build does not know: skip it
+            }
         }
         // Loud, not quiet: a dead stream shows as an error in the panel
         // rather than a frame silently frozen mid-motion.
         stream_ended.store(true, Ordering::Relaxed);
         ctx.request_repaint();
     });
+}
+
+/// A flag map keyed by formatted index (the stream's JSON) as a table
+/// by index: `None` where the stream said nothing.
+fn flag_table(map: &std::collections::BTreeMap<String, bool>, len: usize) -> Vec<Option<bool>> {
+    let mut table = vec![None; len];
+    for (key, on) in map {
+        if let Ok(index) = key.parse::<usize>() {
+            if index < len {
+                table[index] = Some(*on);
+            }
+        }
+    }
+    table
 }
 
 /// The largest aspect-preserving sub-rect of `outer` matching the
@@ -576,6 +1038,26 @@ const TAG_CAMERA: u8 = 1;
 const TAG_SELECT: u8 = 2;
 const TAG_DRAG: u8 = 3;
 const TAG_RELEASE: u8 = 4;
+// The simulate controls (studio-render-stream.py `TAG_RUN` …): run,
+// step, reset, speed, manual, an actuator value, a joint value, a
+// visualization flag, a rendering flag.
+const TAG_RUN: u8 = 6;
+const TAG_STEP: u8 = 7;
+const TAG_RESET: u8 = 8;
+const TAG_SPEED: u8 = 9;
+const TAG_MANUAL: u8 = 10;
+const TAG_CTRL: u8 = 11;
+const TAG_QPOS: u8 = 12;
+const TAG_VIS: u8 = 13;
+const TAG_RND: u8 = 14;
+const TAG_VIEW: u8 = 15;
+const TAG_FOLLOW: u8 = 16;
+const TAG_PAN: u8 = 17;
+const TAG_GROUP: u8 = 18;
+const TAG_TWIST: u8 = 19;
+/// The stdout tokens: a frame published, a status message follows.
+const FRAME_TOKEN: u8 = 0xF7;
+const STATUS_TOKEN: u8 = 0xF8;
 
 /// One camera+size update: tag then Python's `struct.unpack("<fffII", …)`
 /// exactly — three little-endian f32 deltas, two little-endian u32
@@ -594,6 +1076,29 @@ fn encode_camera_update(
     bytes[9..13].copy_from_slice(&d_distance.to_le_bytes());
     bytes[13..17].copy_from_slice(&size.0.to_le_bytes());
     bytes[17..21].copy_from_slice(&size.1.to_le_bytes());
+    bytes
+}
+
+/// One pan: tag then Python's `struct.unpack("<fff", …)` — seconds a
+/// key was held along each camera axis, signed.
+fn encode_pan(forward_s: f32, right_s: f32, up_s: f32) -> [u8; 13] {
+    let mut bytes = [0u8; 13];
+    bytes[0] = TAG_PAN;
+    bytes[1..5].copy_from_slice(&forward_s.to_le_bytes());
+    bytes[5..9].copy_from_slice(&right_s.to_le_bytes());
+    bytes[9..13].copy_from_slice(&up_s.to_le_bytes());
+    bytes
+}
+
+/// One twist: tag then Python's `struct.unpack("<ifff", …)` — the world
+/// and the forward, left, turn values.
+fn encode_twist(world: i32, twist: [f32; 3]) -> [u8; 17] {
+    let mut bytes = [0u8; 17];
+    bytes[0] = TAG_TWIST;
+    bytes[1..5].copy_from_slice(&world.to_le_bytes());
+    for (i, v) in twist.iter().enumerate() {
+        bytes[5 + 4 * i..9 + 4 * i].copy_from_slice(&v.to_le_bytes());
+    }
     bytes
 }
 
@@ -618,9 +1123,73 @@ fn encode_perturb_drag(dx: f32, dy: f32) -> [u8; 9] {
     bytes
 }
 
+fn encode_u32(tag: u8, value: u32) -> [u8; 5] {
+    let mut bytes = [0u8; 5];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&value.to_le_bytes());
+    bytes
+}
+
+/// `struct.pack("<If", index, value)` after the tag.
+fn encode_index_value(tag: u8, index: u32, value: f32) -> [u8; 9] {
+    let mut bytes = [0u8; 9];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&index.to_le_bytes());
+    bytes[5..9].copy_from_slice(&value.to_le_bytes());
+    bytes
+}
+
+/// `struct.pack("<IB", flag, on)` after the tag.
+fn encode_flag(tag: u8, flag: u32, on: bool) -> [u8; 6] {
+    let mut bytes = [0u8; 6];
+    bytes[0] = tag;
+    bytes[1..5].copy_from_slice(&flag.to_le_bytes());
+    bytes[5] = u8::from(on);
+    bytes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_simulate_controls_match_pythons_struct_formats() {
+        // struct.pack("<If", 3, 0.5) and struct.pack("<IB", 14, 1), tag first.
+        assert_eq!(
+            encode_index_value(TAG_CTRL, 3, 0.5),
+            [11, 3, 0, 0, 0, 0, 0, 0, 0x3F]
+        );
+        assert_eq!(encode_flag(TAG_VIS, 14, true), [13, 14, 0, 0, 0, 1]);
+        assert_eq!(encode_u32(TAG_STEP, 10), [7, 10, 0, 0, 0]);
+        // struct.pack("<fff", 0.5, -1.0, 0.0), tag first.
+        assert_eq!(
+            encode_pan(0.5, -1.0, 0.0),
+            [17, 0, 0, 0, 0x3F, 0, 0, 0x80, 0xBF, 0, 0, 0, 0]
+        );
+        // struct.pack("<ifff", -1, 1.0, 0.0, 0.0), tag first.
+        assert_eq!(
+            encode_twist(-1, [1.0, 0.0, 0.0]),
+            [19, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0x80, 0x3F, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn a_status_message_parses_with_its_model_once() {
+        let text = r#"{"time":1.5,"rtf":0.99,"paused":false,"manual":true,"speed":1.0,
+            "qpos":[0.1],"ctrl":[0.2],"shadows":false,"render_ms":10.4,"vis":{"14":true},"rnd":{},
+            "model":{"joints":[{"name":"hip","qpos":7,"range":[-1.0,1.0],"limited":true,"type":"hinge"}],
+            "actuators":[{"name":"hip","range":[-1.0,1.0],"limited":true}],"keyframes":["home"],
+            "timestep":0.002,"integrator":"EULER","solver":"NEWTON","iterations":100,
+            "gravity":[0.0,0.0,-9.81],"nbody":2,"ngeom":3,"vis_flags":["convexhull"],"rnd_flags":["shadow"]}}"#;
+        let status: SimStatus = serde_json::from_str(text).expect("parses");
+        assert!(status.manual);
+        let model = status.model.expect("model once");
+        assert_eq!(model.joints[0].qpos, 7);
+        assert_eq!(model.keyframes, vec!["home"]);
+        assert_eq!(model.integrator, "EULER");
+        let bare: SimStatus = serde_json::from_str(r#"{"time":2.0}"#).expect("parses");
+        assert!(bare.model.is_none());
+    }
 
     #[test]
     fn the_wire_matches_pythons_struct_format() {
@@ -685,6 +1254,25 @@ mod tests {
         // them (framebuffer safety beats exact aspect there).
         let (w, h) = render_size(egui::vec2(10_000.0, 10.0));
         assert!(w <= MAX_RENDER_SIDE && h >= MIN_RENDER_SIDE);
+    }
+
+    #[test]
+    fn a_status_length_past_the_cap_is_corruption() {
+        assert_eq!(status_length(512u32.to_le_bytes()), Some(512));
+        assert_eq!(
+            status_length((MAX_STATUS_BYTES as u32).to_le_bytes()),
+            Some(MAX_STATUS_BYTES)
+        );
+        assert_eq!(status_length(u32::MAX.to_le_bytes()), None);
+    }
+
+    #[test]
+    fn views_are_named_once_for_the_menu_and_the_door() {
+        assert_eq!(view_preset("front"), Some(1));
+        assert_eq!(view_preset(" Reset "), Some(0));
+        assert_eq!(view_preset("behind"), None);
+        assert_eq!(view_preset_names(), vec!["front", "side", "top", "reset"]);
+        assert!(SPEED_RANGE.contains(&1.0) && !SPEED_RANGE.contains(&0.0));
     }
 
     #[test]

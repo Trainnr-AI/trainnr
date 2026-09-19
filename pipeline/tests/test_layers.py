@@ -22,10 +22,14 @@ TIER = {
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
     "rl": 2,  # SmoothRL's pure and torch halves (docs/71); nothing above stats
+    "deploy": 2,  # the sim-to-sim gate: plain MuJoCo + ONNX, judged by evaluate's rule
+    "fleet": 3,  # drift: the identifier's method over a recording, judged
     "physics": 3,
     "tasks": 3,
     "collect": 3,
     "envs": 4,
+    "project": 4,  # the index over every kind: imports their marker constants
+    "robots": 4,  # the ingest seam: reads collect's wire, writes project artifacts
 }
 # Modules placed below their package: stdlib gates the lower tiers import.
 MODULE_TIER = {"rq_pipeline.robot.model_checks": 1}

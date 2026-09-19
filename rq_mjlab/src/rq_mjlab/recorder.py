@@ -35,6 +35,7 @@ from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
 # One home for the Studio's ingest address (rq-pipeline is a hard dep).
 from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
+from rq_pipeline.viz import VISUAL_ONLY_SKIP_GROUPS, open_stream
 
 
 def _require_rerun() -> Any:
@@ -47,6 +48,9 @@ def _require_rerun() -> Any:
     return rr
 
 
+FRAME_JPEG_QUALITY = 85  # camera frames go over the wire encoded
+
+
 class RerunRecorder(RecorderTerm):
     """Stream one watched world's training story to a Rerun endpoint."""
 
@@ -55,8 +59,9 @@ class RerunRecorder(RecorderTerm):
         rr = _require_rerun()
         self._rr = rr
         self._cfg = cfg
-        rr.init(cfg.app_id, spawn=False)
-        rr.connect_grpc(cfg.address)
+        # The one seam (rq_pipeline.viz.open_stream): the Studio's server
+        # and, when the run has a folder, its saved stream too (docs/76 §10.5).
+        open_stream(cfg.app_id, address=cfg.address, file=cfg.file, rr=rr)
         # (name, qpos address) per SCALAR joint — hinge/slide only. The
         # first cut indexed qpos by JOINT index, which plots freejoint
         # quaternion components as "joints" on any floating-base robot
@@ -88,7 +93,9 @@ class RerunRecorder(RecorderTerm):
             # collision geoms share surfaces with the visual meshes and
             # z-fight them into shimmering shades (the duck: 5 opaque
             # group-3 collision meshes over 70 visual ones, 2026-09-01).
-            self._mirror = RigMirror(mj_model, model_colors=True, skip_groups=(3, 4, 5))
+            self._mirror = RigMirror(
+                mj_model, model_colors=True, skip_groups=VISUAL_ONLY_SKIP_GROUPS
+            )
         self._said_no_reward = False
         self._began = time.time()
         if cfg.layout:
@@ -120,7 +127,14 @@ class RerunRecorder(RecorderTerm):
                     rrb.Grid(
                         rrb.Spatial3DView(origin="world", name="physics"),
                         rrb.Spatial2DView(origin="camera", name="camera"),
-                        rrb.TimeSeriesView(origin="train", name="training"),
+                        rrb.TimeSeriesView(
+                            origin="train",
+                            name="training",
+                            contents=["+ $origin/**", "- $origin/reward_terms/**"],
+                        ),
+                        rrb.TimeSeriesView(
+                            origin="train/reward_terms", name="reward terms"
+                        ),
                         rrb.TextLogView(origin="recorder", name="events"),
                     ),
                     collapse_panels=False,
@@ -145,13 +159,18 @@ class RerunRecorder(RecorderTerm):
         if self._qpos is None:
             from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
-            self._qpos = as_torch(env.sim.data.qpos)
+            # mjlab types sim.data as an alias of mujoco_warp's Data, which
+            # has no type information: the fields are read as Any.
+            data: Any = env.sim.data
+            self._qpos = as_torch(data.qpos)
         qpos = self._qpos[watched]
         for name, qpos_adr in self._joints:
             rr.log(f"train/qpos/{name}", rr.Scalars(float(qpos[qpos_adr])))
         reward = getattr(env, "reward_buf", None)
         if isinstance(reward, torch.Tensor) and reward.numel() > watched:
             rr.log("train/reward", rr.Scalars(float(reward[watched])))
+            if self._cfg.terms:
+                self._log_terms(watched)
         elif not self._said_no_reward:
             # Once, by name — and the two absences are different: a
             # missing buffer is an env without rewards, a short one is a
@@ -176,12 +195,26 @@ class RerunRecorder(RecorderTerm):
         ):
             self._log_frame(watched)
 
+    def _log_terms(self, watched: int) -> None:
+        """Every reward term's value this step for the watched world -
+        mjlab's reward manager keeps them per step (the hook Isaac Lab's
+        live visualizer reads too); the total alone said nothing about
+        WHY a curve moved (the Go2's step at iteration 5000, 2026-09-11)."""
+        manager = getattr(self._env, "reward_manager", None)
+        terms = getattr(manager, "get_active_iterable_terms", None)
+        if terms is None:
+            return
+        for name, values in terms(watched):
+            self._rr.log(
+                f"train/reward_terms/{name}", self._rr.Scalars(float(values[0]))
+            )
+
     def _log_mirror(self, mirror: RigMirror, watched: int) -> None:
         """One world's geoms out of the batched engine, into 3D."""
         if self._geom_views is None:
             from rq_mjlab.actuator import as_torch  # noqa: PLC0415
 
-            data = self._env.sim.data
+            data: Any = self._env.sim.data  # untyped mujoco_warp Data (above)
             self._geom_views = (as_torch(data.geom_xpos), as_torch(data.geom_xmat))
         xpos_view, xmat_view = self._geom_views
 
@@ -250,7 +283,13 @@ class RerunRecorder(RecorderTerm):
             spread = np.linalg.norm(mj_data.geom_xpos[robot] - mj_data.xpos[1], axis=1)
             camera.distance = 4.0 * float(max(spread.max(), 0.05))
         renderer.update_scene(mj_data, camera=camera)
-        self._rr.log("camera/watched", self._rr.Image(renderer.render()))
+        # JPEG on the way in: a raw 640x360 frame is 690 KB and a play
+        # session grew to 1.2 GiB in the viewer in half an hour (2026-09-11);
+        # Rerun encodes it here, ~25x smaller, the viewer decodes.
+        self._rr.log(
+            "camera/watched",
+            self._rr.Image(renderer.render()).compress(jpeg_quality=FRAME_JPEG_QUALITY),
+        )
 
     def record_pre_reset(self, env_ids: torch.Tensor) -> None:
         if (env_ids == self._cfg.watched_env).any():
@@ -279,10 +318,13 @@ class RerunRecorderCfg(RecorderTermCfg):
     func: type[RerunRecorder] = RerunRecorder
     address: str = DEFAULT_ADDRESS
     app_id: str = "rq-mjlab-train"
+    # The saved stream, inside the run's folder (docs/76 §10.5); None: live only.
+    file: str | None = None
     watched_env: int = 0
     mirror: bool = True  # the 3D scene beside the series
     frames: bool = True  # MuJoCo-rendered camera images of the watched world
     layout: bool = True  # send a purposeful view layout on connect
+    terms: bool = True  # every reward term per step beside the total
     frame_every: int = 25  # control steps between camera frames (renders cost ~30 ms)
     every: int = (
         10  # control steps between samples: the viewer's rate, not the trainer's

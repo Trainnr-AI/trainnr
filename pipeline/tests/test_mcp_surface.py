@@ -11,6 +11,7 @@ from pathlib import Path
 
 from rq_pipeline.mcp_server import (
     bundle_names,
+    create_project_dir,
     describe_actuator,
     describe_actuator_bundle,
     describe_actuator_bundles,
@@ -20,12 +21,14 @@ from rq_pipeline.mcp_server import (
     describe_datasheet,
     describe_engines,
     describe_eval,
+    describe_project,
     describe_runs,
     describe_task,
     describe_tasks,
     friction_curve,
     list_eval_records,
 )
+from rq_pipeline.project import PROJECT_ENV
 from tests._extras import needs_mcp, needs_numpy, needs_sim
 
 
@@ -138,7 +141,8 @@ class Datasheets(unittest.TestCase):
 class Registries(unittest.TestCase):
     def test_tasks_include_both_rigs(self) -> None:
         rigs = {entry["rig"] for entry in describe_tasks()}
-        self.assertEqual(rigs, {"aloha2", "so101"})
+        self.assertTrue({"aloha2", "so101"} <= rigs)
+        self.assertIn("go2", rigs)  # the walk families (docs/77)
 
     def test_engines_include_both_backends(self) -> None:
         names = {entry["name"] for entry in describe_engines()}
@@ -151,7 +155,17 @@ class Registries(unittest.TestCase):
         # has content to hash, and a code-only task saying "no stamp" is
         # the honest answer, not a gap. Both kinds must exist and both
         # must round-trip through the window unchanged.
-        details = [describe_task(t["task_id"]) for t in describe_tasks()]
+        from rq_pipeline.tasks.walks import walk_robot  # noqa: PLC0415
+
+        details = []
+        for t in describe_tasks():
+            try:
+                details.append(describe_task(t["task_id"]))
+            except FileNotFoundError as why:
+                # A walk family builds on the project's robot; with no
+                # project open it refuses by name, which is the answer.
+                self.assertIsNotNone(walk_robot(t["task_id"]))
+                self.assertIn("onboard_robot", str(why))
         with_spec = [d for d in details if "spec" in d]
         self.assertTrue(with_spec, "no spec-carrying task in the registry?")
         for detail in details:
@@ -215,6 +229,55 @@ class Runs(unittest.TestCase):
         self.assertEqual(describe_runs(Path("/nonexistent/runs")), [])
 
 
+class TheProjectDoors(unittest.TestCase):
+    def test_create_then_describe_names_every_state_missing(self) -> None:
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            self.assertEqual(made["name"], "p")
+            with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
+                index = describe_project()
+            self.assertEqual(index["project"], "p")
+            self.assertEqual(index["artifacts"], [])
+            self.assertFalse(any(s["present"] for s in index["states"]))
+            self.assertIn("record", index["next_move"])
+            self.assertTrue((Path(made["root"]) / ".index" / "project.json").is_file())
+
+    def test_describe_returns_the_written_index_with_its_previews(self) -> None:
+        """The agent must see the same index the Studio reads — including
+        the preview paths write_index records (a stale in-memory copy once
+        said None while the file on disk had the picture, 2026-09-09)."""
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.project import current_project  # noqa: PLC0415
+        from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
+
+        repo = Path(__file__).resolve().parents[2]
+        wire = repo / "recordings" / "chase-arm-2026-08-17.wire"
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
+                ingest(current_project(), wire, name="chase")
+                index = describe_project()
+            rec = next(a for a in index["artifacts"] if a["kind"] == "recording")
+            self.assertIsNotNone(
+                rec["preview"], "preview path missing from the returned index"
+            )
+            self.assertTrue((Path(made["root"]) / rec["preview"]).is_file())
+
+    def test_the_committed_sample_describes(self) -> None:
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        sample = Path(__file__).resolve().parents[2] / "projects" / "sample"
+        with mock.patch.dict(os.environ, {PROJECT_ENV: str(sample)}):
+            index = describe_project(refresh=False)
+        self.assertEqual(index["project"], "sample")
+
+
 class ServerFraming(unittest.TestCase):
     @needs_mcp
     def test_the_server_builds_with_every_tool_registered(self) -> None:
@@ -222,6 +285,112 @@ class ServerFraming(unittest.TestCase):
 
         server = build_server()
         self.assertEqual(server._lowlevel_server.name, "robotiq")
+
+
+class StudioDoors(unittest.TestCase):
+    def test_every_studio_door_answers_without_a_studio(self) -> None:
+        """No window, no waiting: describe reports it, every act door refuses
+        by name and points at launch_studio, the event log is empty."""
+        import os  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            compare_in_studio,
+            control_simulator,
+            describe_studio,
+            open_in_studio,
+            read_studio_events,
+            screenshot_studio,
+            set_simulator_input,
+            set_simulator_view,
+            set_studio_panels,
+            set_studio_time,
+            show_in_studio,
+            simulate_in_studio,
+        )
+        from rq_pipeline.project import PROJECT_ENV, create_project  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            create_project(Path(tmp) / "p", "p")
+            os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
+            try:
+                self.assertFalse(describe_studio()["alive"])
+                for answer in (
+                    open_in_studio(section="robots"),
+                    show_in_studio("a@000000000000"),
+                    compare_in_studio("a@000000000000", "b@000000000000"),
+                    set_studio_time(play=True),
+                    set_studio_panels(blueprint="expand"),
+                    screenshot_studio(),
+                    simulate_in_studio("kitting"),
+                    control_simulator(run=False),
+                    set_simulator_input(0.5, actuator="left/waist"),
+                    set_simulator_view("contactforce", True),
+                ):
+                    self.assertEqual(answer["status"], "refused")
+                    self.assertIn("launch_studio", answer["reason"])
+                self.assertIn("no page", open_in_studio(section="dance")["reason"])
+                # The walk's twist axes: named from a fixed set, valued unless
+                # handing back; never more than one input per call.
+                self.assertIn("vx", set_simulator_input(1.0, command="vq")["reason"])
+                self.assertIn("value", set_simulator_input(command="vx")["reason"])
+                self.assertIn(
+                    "exactly one",
+                    set_simulator_input(1.0, actuator="a", command="vx")["reason"],
+                )
+                self.assertIn(
+                    "launch_studio", set_simulator_input(command="own")["reason"]
+                )
+                self.assertIn("on", set_simulator_view(group=1)["reason"])
+                self.assertIn(
+                    "launch_studio",
+                    open_in_studio(section="evaluations", view="matrix")["reason"],
+                )
+                self.assertIn(
+                    "launch_studio", open_in_studio(search="narrow")["reason"]
+                )
+                self.assertIn(
+                    "not one of", set_studio_panels(selection="hide")["reason"]
+                )
+                self.assertEqual(read_studio_events(), [])
+            finally:
+                os.environ.pop(PROJECT_ENV, None)
+
+
+class TaskDoors(unittest.TestCase):
+    """A4: an environment declared by conversation; refusals by name
+    before any scene is built."""
+
+    def test_the_doors_refuse_by_name_without_building(self) -> None:
+        import os  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            accept_task,
+            create_task,
+            describe_task_families,
+        )
+        from rq_pipeline.project import PROJECT_ENV, create_project  # noqa: PLC0415
+
+        families = describe_task_families()
+        self.assertIn("robotiq/kitting", families)
+        self.assertEqual(families["robotiq/kitting"]["fields"]["trials"]["default"], 4)
+        with tempfile.TemporaryDirectory() as tmp:
+            create_project(Path(tmp) / "p", "p")
+            os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
+            try:
+                bad = create_task("kitting", "x", {"tray_centre": [0, 0]})
+                self.assertEqual(bad["status"], "refused")
+                self.assertIn("tray_center", bad["reason"])
+                fixed = create_task("robotiq/reach", "x", {})
+                self.assertEqual(fixed["status"], "refused")
+                self.assertIn("robotiq/kitting", fixed["reason"])
+                self.assertEqual(create_task("acme/pour", "x", {})["status"], "refused")
+                ghost = accept_task("ghost")
+                self.assertEqual(ghost["status"], "refused")
+                self.assertIn("ghost", ghost["reason"])
+            finally:
+                os.environ.pop(PROJECT_ENV, None)
 
 
 if __name__ == "__main__":

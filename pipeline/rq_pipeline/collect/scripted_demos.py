@@ -198,6 +198,8 @@ def _attempt(  # noqa: PLR0913 - bound by the closure below, not callers
     trial = int(rng.integers(protocol.trials))
     initial = protocol.perturb(trial, home)
     draws: dict[str, Any] = {"trial": trial}
+    # `cameras` is the caller's selection by name; the capture is its own
+    # object (one name held both, and the type checker could not follow).
     capture = CameraCapture(
         model,
         # A test task may declare none; a study may ask for a subset.

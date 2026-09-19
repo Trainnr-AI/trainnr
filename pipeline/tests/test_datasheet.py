@@ -112,7 +112,7 @@ class ShardsAndAbsences(unittest.TestCase):
             self.assertEqual(summary.shards, 2)
             page = render(summary)
             self.assertIn("2 shards in this directory", page)
-            self.assertNotIn("keep rate ≤", page)
+            self.assertNotIn("success rate ≤", page)
 
     def test_same_seed_shards_are_caught_by_the_attempt_restart(self) -> None:
         # Two runs with the DEFAULT seed and disjoint episode ranges —
@@ -142,8 +142,8 @@ class Rendering(unittest.TestCase):
             write_manifest(root, 0, press_manifest(4, 1.02))
             page = render(summarize(root))
             for needle in (
-                "episodes kept: **1**",
-                "keep rate ≤ 25%",
+                "successful episodes: **1**",
+                "success rate ≤ 25%",
                 "demo-task@abc123",
                 "identified-interval",
                 "| friction |",

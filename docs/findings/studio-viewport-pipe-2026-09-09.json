@@ -1,0 +1,72 @@
+{
+ "id": "studio-viewport-pipe-2026-09-09",
+ "claim": "The Studio's MuJoCo viewport pipe delivers 32.6 fps (p50 30.6 ms, p90 34.0 ms between frames) on the kitting scene on this Mac, against a native window's display rate; the render is 26.1 ms/frame at 1024x576 and the same at 1920x1080, of which the shadow pass is 17 ms and reflection 3.5 ms (6.2 ms with both off); with shadows off the pipe delivers 41.0 fps, bounded next by the render running inline with physics on macOS; a CGL context renders from a background thread at 12.2 ms/frame, so that coupling is removable.",
+ "date": "2026-09-09",
+ "repo_commit": "b28df24",
+ "argv": [
+  "tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (14 s)",
+  "mujoco.Renderer(model, 576, 1024).render() x40 with scene.flags toggled",
+  "MUJOCO_GL=cgl; mujoco.Renderer in a threading.Thread x60"
+ ],
+ "instrument": "mujoco-3.11.0 (python, CGL offscreen), macOS 25.5.0 Apple Silicon, Python 3.12, rerun narration on unless stated",
+ "outcome": {
+  "stream_fps": {
+   "default": 32.6,
+   "no_rerun": 37.3,
+   "shadows_off": 41.0
+  },
+  "stream_interval_ms": {
+   "default": {
+    "p50": 30.6,
+    "p90": 34.0,
+    "max": 42.5
+   },
+   "no_rerun": {
+    "p50": 26.3,
+    "p90": 28.1,
+    "max": 99.4
+   },
+   "shadows_off": {
+    "p50": 24.1,
+    "p90": 30.4,
+    "max": 124.9
+   }
+  },
+  "render_ms_per_frame": {
+   "1024x576": 26.1,
+   "1600x900": 28.1,
+   "1920x1080": 29.3,
+   "256x144": 25.2
+  },
+  "render_ms_by_flags": {
+   "all_on": 27.3,
+   "shadow_off": 9.7,
+   "shadow_reflection_off": 6.2,
+   "shadow_reflection_skybox_off": 6.1
+  },
+  "update_scene_ms": 0.0,
+  "mj_step_ms": 0.323,
+  "timestep_s": 0.002,
+  "physics_realtime_factor_ceiling": 6,
+  "background_thread_render_ms_cgl": 12.2,
+  "first_frame_s": {
+   "default": 1.0,
+   "no_rerun": 0.56,
+   "shadows_off": 1.13
+  },
+  "scene": "kitting: 23 bodies, 105 geoms, 24 meshes"
+ },
+ "artifacts": {
+  "doc": "docs/35-the-studio.md",
+  "script": "tools/studio-render-stream.py"
+ },
+ "sources": {
+  "studio-render-stream": "SHADOW_GEOM_BUDGET=400 keeps shadows on below 400 geoms; the Darwin path renders inline in tick() (module comment: Cocoa's main-thread GL rule)"
+ },
+ "protocol": "delivered rate = 0xF7 tokens per second on the stream's stdout under --shm, measured by a reader over 14 s after the first frame; render cost = wall time of update_scene+render over 40 frames after one warm-up; thread test = the same Renderer built and run inside threading.Thread with MUJOCO_GL=cgl",
+ "caveats": [
+  "One machine, one scene; the flock scene measured 43 vs 10.5 ms with/without shadows on 2026-09-01, so the shadow cost is not a constant across scenes.",
+  "The native window was not measured here; its display-rate claim rests on MuJoCo's simulate rendering to the window buffer with no readback.",
+  "The Studio's on-screen rate (token -> repaint -> texture upload) was not measured; only what the pipe delivers to it."
+ ]
+}

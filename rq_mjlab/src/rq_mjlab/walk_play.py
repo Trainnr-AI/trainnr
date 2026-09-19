@@ -23,11 +23,26 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path, help="model_*.pt from a walk run")
     parser.add_argument("--envs", type=int, default=9)
+    parser.add_argument("--robot", default=DEFAULT_ROBOT, choices=ROBOTS)
+    parser.add_argument(
+        "--viewer",
+        default="native",
+        choices=("native", "viser"),
+        help="mjlab's MuJoCo window, or its browser viewer (a URL on the log)",
+    )
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
     parser.add_argument(
         "--no-recorder",
         action="store_true",
@@ -44,13 +59,15 @@ def main() -> None:
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
-    from mjlab.viewer import NativeMujocoViewer  # noqa: PLC0415
+    from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer  # noqa: PLC0415
 
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
-    from rq_mjlab.walk_train import g3_agent  # noqa: PLC0415
 
-    cfg, identity = microduck_walk_env_cfg()
+    use_project(args.project)
+    spec = walk_spec(args.robot)
+    # The walk in play mode: the curriculum and the pushes off, episodes
+    # open-ended, the same robot, actuator and gains it trained under.
+    cfg, identity = spec.env_cfg(play=True, dr_span=None, pin_scale=None)
     cfg.scene.num_envs = args.envs
     if not args.no_recorder:
         cfg.recorders = {
@@ -63,12 +80,13 @@ def main() -> None:
     if trained.is_file():
         recorded = json.loads(trained.read_text())
         print(f"[play] run identity:  {recorded}")
-        if recorded != identity:
-            raise SystemExit(f"identity mismatch: this env is {identity}")
+        for key in ("robot", "actuator"):
+            if recorded.get(key) not in (None, identity.get(key)):
+                raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
     print(f"[play] env identity:  {identity}")
     print(f"[play] {args.envs} envs on {device}; checkpoint {args.checkpoint.name}")
 
-    agent = g3_agent(iterations=1)  # the net shapes; iterations unused at inference
+    agent = spec.agent(1)  # the net shapes; iterations unused at inference
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
@@ -80,7 +98,13 @@ def main() -> None:
         map_location=device,
     )
     policy = runner.get_inference_policy(device=device)
-    NativeMujocoViewer(env, policy).run()
+    # mjlab's two viewers as they are. The native window drew at 0 FPS
+    # on the WSLg box's X11 path (2026-09-11); the browser one does not
+    # touch that path.
+    if args.viewer == "viser":
+        ViserPlayViewer(env, policy).run()
+    else:
+        NativeMujocoViewer(env, policy).run()
     env.close()
 
 

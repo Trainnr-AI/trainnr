@@ -99,15 +99,12 @@ def viewer_executable() -> str | None:
     SDK — so tools launched from the train venv used to need
     `PATH="$PWD/.venv/bin:$PATH"` (2026-08-26). None means "on PATH"."""
 
+    from rq_pipeline.mcp_actions import venv_bin  # noqa: PLC0415 - after bootstrap
+
     if shutil.which("rerun"):
         return None
-    for candidate in (
-        REPO / "pipeline" / ".venv" / "bin" / "rerun",
-        REPO / "pipeline" / ".venv" / "Scripts" / "rerun.exe",
-    ):
-        if candidate.exists():
-            return str(candidate)
-    return None
+    candidate = venv_bin(REPO / "pipeline" / ".venv", "rerun")
+    return str(candidate) if candidate.exists() else None
 
 
 # The Rerun viewer decodes H.264 (LeRobot's eval videos) through an

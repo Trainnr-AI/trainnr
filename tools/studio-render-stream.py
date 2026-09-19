@@ -13,6 +13,13 @@ MuJoCo already renders correctly from Python everywhere this repo runs it
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
 any language can display it without touching MuJoCo's C API directly.
 
+Process shape (2026-09-09): TWO processes. This one renders; it spawns
+itself again with `--physics=<ring>` for the physics loop, and the two
+meet in a memory-mapped state ring (`StateRing`): physics publishes
+time/qpos/mocap each step, the renderer publishes the perturbation
+wrench each frame. One interpreter could not do both — MuJoCo's render
+holds the GIL (finding studio-viewport-pipe-2026-09-09).
+
 Frame transport (2026-09-02, the Rust piping rebuild): with `--shm
 <path>` frames go through a MEMORY-MAPPED ring the controller created —
 16-byte header (magic u32, seq u32, width u32, height u32, all LE) then
@@ -29,6 +36,10 @@ Fallback wire format, stdout, per frame, flushed immediately:
     height : u32 little-endian
     pixels : width * height * 3 raw RGB8 bytes, row-major, no padding
 
+Flags: `--shm=<ring>` (the controller's frame ring), `--shadows=on|off|auto`
+(auto, the default, keeps shadows while the measured render fits one
+60 Hz frame), `--no-rerun` (no narration into the viewer).
+
 Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
 
     0x01 camera : f32 d_azimuth (degrees to ADD, MuJoCo's convention),
@@ -42,6 +53,17 @@ Wire format, stdin — TAGGED messages, one u8 tag then a fixed payload:
                   active perturbation (MuJoCo's own mjv_movePerturb)
     0x04 release: end the perturbation
     0x05 pause  : toggle the physics loop
+    0x11 pan    : f32 forward, f32 right, f32 up — SECONDS a key was
+                  held per axis (signed); this side turns them into
+                  metres of lookat travel in the camera's own frame,
+                  scaled by the distance (WASD/QE, 2026-09-12)
+    0x12 group  : u8 kind (GROUP_KINDS: geom, site, joint, tendon,
+                  actuator, flex, skin), u8 group 0-5, u8 on — one bit
+                  of the matching mjvOption group mask (2026-09-12)
+    0x13 twist  : i32 world, f32 vx, f32 vy, f32 wz — the commanded
+                  twist for one world of a walk scene (mjlab's own
+                  joystick override on the velocity term); world -1
+                  hands the commands back to the task (2026-09-12)
 
 Camera values arrive as DELTAS and this side integrates them: every
 absolute camera fact — the per-rig starting pose, the clamps — lives
@@ -62,6 +84,7 @@ import struct
 import sys
 import threading
 import time
+from collections.abc import Callable
 
 # Must run before `import mujoco` — this repo's own convention everywhere
 # else offscreen rendering happens on Linux (tools/e2e-smoke.py,
@@ -70,14 +93,32 @@ import time
 # an operator override either platform's choice via their own environment.
 if sys.platform.startswith("linux"):
     os.environ.setdefault("MUJOCO_GL", "egl")
+elif sys.platform == "darwin":
+    # CGL, not GLFW: a CGL offscreen context is not bound to Cocoa's main
+    # thread, so the render lane can be a thread here too (measured
+    # 2026-09-09: 12 ms/frame from a background thread on Apple Silicon;
+    # finding studio-viewport-pipe-2026-09-09). An operator's own
+    # MUJOCO_GL still wins.
+    os.environ.setdefault("MUJOCO_GL", "cgl")
 
 from _lab import bootstrap
 
 bootstrap()
 
+# Two threads share the interpreter: physics with the scripted policy
+# (long Python stretches) and the render lane (a few short Python
+# stretches between C calls that release the GIL). At CPython's default
+# 5 ms switch interval each of the lane's GIL acquisitions can wait 5 ms
+# behind the policy thread — measured 2026-09-09 on kitting: a 10.6 ms
+# render took 25 ms per lane frame (finding studio-viewport-pipe). A
+# shorter interval hands the GIL over sooner at a cost the physics thread
+# never notices (mj_step releases the GIL).
+sys.setswitchinterval(0.0005)
+
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from rq_pipeline.tasks.registry import tasks  # noqa: E402
+from rq_pipeline.viz import MIRROR_HZ, SIM_TIMELINE  # noqa: E402
 
 BUILDERS = {entry.name: entry for entry in tasks().values()}
 # Tasks whose accepted scripted expert drives the sim for real; anything
@@ -88,7 +129,10 @@ DEFAULT_TASK = "kitting"
 WIDTH, HEIGHT = 1024, 576
 # 60 with the shared-memory ring (a frame is one memcpy); the stdout
 # fallback stays honest at 30 (6 MB/frame through a pipe, measured).
-TARGET_HZ = 60.0
+# Above the display's 60 on purpose: Event.wait overshoots its timeout by
+# 2-3 ms on macOS (measured 2026-09-09: a 2.6 ms render paced to 60 Hz
+# delivered 52 fps), and the Studio's vsync caps what is drawn anyway.
+TARGET_HZ = 75.0
 FALLBACK_HZ = 30.0
 SHM_HEADER = 16  # magic u32, seq u32, width u32, height u32 - all LE
 SHM_MAGIC = 0x524A4D51  # "QMJR"
@@ -97,7 +141,14 @@ FRAME_TOKEN = b"\xf7"  # one byte on stdout per published shm frame
 # Free-camera framing per rig, seeded from each rig's own viewer tools
 # (show-aloha2's frame_viewer; the SO-101 numbers tuned by eye earlier) —
 # a starting pose the operator immediately corrects by dragging.
+DEFAULT_CAMERA = "default"  # a rig with no preset of its own
 RIG_CAMERAS = {
+    DEFAULT_CAMERA: {  # a metre-scale scene seen from the front, slightly above
+        "azimuth": 90.0,
+        "elevation": -20.0,
+        "distance": 1.0,
+        "lookat": (0.0, 0.0, 0.15),
+    },
     "microduck": {
         "azimuth": 120.0,
         "elevation": -15.0,
@@ -118,6 +169,42 @@ RIG_CAMERAS = {
     },
 }
 
+
+def rig_camera(rig: str | None) -> dict:
+    """The rig's own framing, else the default preset."""
+    return RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+
+
+# A walk scene's framing comes from the walk's own declaration
+# (rq_mjlab.walks: the spec's `view` framing), not from a preset keyed
+# by the robot's name here: `--camera=` carries it, in this field order.
+CAMERA_FLAG = "--camera="
+CAMERA_FLAG_FIELDS = ("azimuth", "elevation", "distance", "lookat_height", "follow")
+
+
+def camera_flag(framing: dict) -> str:
+    """`--camera=az,el,dist,lookat_z,follow` from a framing's fields."""
+    return CAMERA_FLAG + ",".join(f"{float(framing[k]):g}" for k in CAMERA_FLAG_FIELDS)
+
+
+def parse_camera_flag(text: str) -> dict:
+    """The flag back as a camera preset (`RIG_CAMERAS`' shape)."""
+    values = [float(v) for v in text.removeprefix(CAMERA_FLAG).split(",")]
+    if len(values) != len(CAMERA_FLAG_FIELDS):
+        raise ValueError(
+            f"{CAMERA_FLAG} takes {len(CAMERA_FLAG_FIELDS)} numbers "
+            f"({', '.join(CAMERA_FLAG_FIELDS)}), got {len(values)}"
+        )
+    named = dict(zip(CAMERA_FLAG_FIELDS, values, strict=True))
+    return {
+        "azimuth": named["azimuth"],
+        "elevation": named["elevation"],
+        "distance": named["distance"],
+        "lookat": (0.0, 0.0, named["lookat_height"]),
+        "follow": named["follow"],
+    }
+
+
 # The physics narration into the Studio's embedded Rerun viewer: the same
 # `mj_step` loop that renders the pixels also logs the twin, every named
 # joint, every actuator and the contacts — one clock, so the plots can
@@ -135,12 +222,28 @@ RIG_CAMERAS = {
 # 10 Hz is ample for glanceable telemetry and stays far under the drain
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0  # scalar series: plots need no more
-MIRROR_HZ = 20.0  # the 3D twin: fluid motion; 30 Hz of per-mesh
+NARRATE_SHARE = 0.25  # narration may take this share of the physics thread, no more
+# The 3D twin's rate is the one every mirror shares (rq_pipeline.viz).
 # messages (~275 ms/s of Python serialization) blew the loop's realtime
 # budget and slowed BOTH panes (2026-09-01)
-# Past this geom count the shadow pass costs more than it lights (43 vs
-# 10.5 ms/frame on the 20-duck flock, 2026-09-01).
-SHADOW_GEOM_BUDGET = 400
+# Shadows are on until the render lane measures that it cannot keep the
+# display rate with them: a shadow pass is a flat cost per frame on some
+# GPUs (17 ms of a 26 ms frame on the kitting scene, Apple Silicon,
+# 2026-09-09, finding studio-viewport-pipe-2026-09-09), proportional to
+# geoms on others (43 vs 10.5 ms on the 20-duck flock, 2026-09-01). A
+# geom count cannot tell the two apart; the frame time can. `--shadows=`
+# on|off|auto overrides.
+SHADOW_BUDGET_MS = 14.0  # the render lane must fit under one 60 Hz display frame
+SHADOW_PROBE_FRAMES = 30  # frames averaged before shadows are judged
+SHADOW_PROBE_MS = 1000.0  # or this much render time, whichever comes first
+SHADOWS_MODE = "auto"
+# The lane reports itself on stderr this often: frames, render and ship
+# times — the same facts MuJoCo's simulate shows in its Info overlay.
+LANE_STATS_EVERY_S = 5.0
+RTF_WINDOW_S = 1.0  # the real-time factor the status reports, over this window
+# The last slice of each physics tick is spun, not slept, for accuracy.
+PACE_SPIN_S = 0.0015
+SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
 
 
 class PhysicsNarrator:
@@ -149,11 +252,12 @@ class PhysicsNarrator:
     def __init__(self, model: "mujoco.MjModel", task_name: str) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
-        from rq_pipeline.viz import RigMirror  # noqa: PLC0415
+        from rq_pipeline.viz import RigMirror, leave_cleanly_on_term  # noqa: PLC0415
 
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)
         rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
+        leave_cleanly_on_term(rr)
         # Narrate ONE robot even when the scene holds a flock: rr.log
         # BLOCKS when the channel floods, and twenty ducks' series plus
         # 700 mesh transforms per tick froze the whole sim loop inside
@@ -236,7 +340,7 @@ class PhysicsNarrator:
         rate-limit themselves to NARRATE_HZ (a duck marching at 10 Hz
         beside 30 fps pixels read as 'very low frames', 2026-09-01)."""
         rr = self.rr
-        rr.set_time("sim", duration=sim_time)
+        rr.set_time(SIM_TIMELINE, duration=sim_time)
         self.mirror.log(data)
         now_series = sim_time - self._last_series >= 1.0 / NARRATE_HZ
         if not now_series:
@@ -298,6 +402,13 @@ MAX_RENDER_SIDE = 1920
 MAX_ELEVATION_DEG = 89.0
 MIN_DISTANCE_M = 0.15
 MAX_DISTANCE_M = 6.0
+# A held pan key moves the lookat this fraction of the camera's distance
+# per second: the same key crosses a whole close-up or a whole wide shot
+# in the same time, which is what a hand expects. 0.6 read as "nothing"
+# on a tap (a 100 ms press moved 25 cm in a 4-world scene, 2026-09-12);
+# 2.0 puts a tap at most of a metre, and Shift on the Studio side
+# triples it.
+PAN_RATE_PER_S = 2.0
 
 
 class OrbitCamera:
@@ -307,6 +418,11 @@ class OrbitCamera:
 
     def __init__(self, defaults: dict) -> None:
         self._lock = threading.Lock()
+        self._defaults = defaults
+        self.default_distance = defaults["distance"]
+        # A followed world is one robot, closed in on at the rig's own
+        # distance: a microduck at 0.9 m, a Go2 at 2.6 m (2026-09-12).
+        self.follow_distance = float(defaults.get("follow", FOLLOW_DISTANCE_M))
         self.azimuth = defaults["azimuth"]
         self.elevation = defaults["elevation"]
         self.distance = defaults["distance"]
@@ -315,16 +431,67 @@ class OrbitCamera:
         self.height = HEIGHT
 
     def apply_to(self, cam: "mujoco.MjvCamera") -> None:
+        """Every camera field, every frame - the lookat too: it used to be
+        copied only at creation and while following, so a pan moved the
+        status echo and not the picture (2026-09-12, the operator's
+        "WASD does nothing" after two "fixes" judged by that echo)."""
         with self._lock:
             cam.azimuth, cam.elevation, cam.distance = (
                 self.azimuth,
                 self.elevation,
                 self.distance,
             )
+            cam.lookat = list(self.lookat)
 
     def size(self) -> tuple[int, int]:
         with self._lock:
             return self.width, self.height
+
+    def pose(self) -> list[float]:
+        """Azimuth, elevation, distance, then the lookat - the status
+        echoes it so an agent (or a test) knows where the camera is."""
+        with self._lock:
+            return [self.azimuth, self.elevation, self.distance, *self.lookat]
+
+    def zoom_to(self, distance: float) -> None:
+        """A followed world is small: the camera closes in on it; an
+        unfollow returns to the rig's default distance."""
+        with self._lock:
+            self.distance = max(MIN_DISTANCE_M, min(MAX_DISTANCE_M, distance))
+
+    def set_view(self, preset: str) -> None:
+        """A named view from the rig's default: `reset` restores it, `front`
+        looks along the rig's default azimuth, `side` a quarter turn on,
+        `top` straight down; the distance is the default's."""
+        d = self._defaults
+        with self._lock:
+            self.distance = d["distance"]
+            if preset == "front":
+                self.azimuth, self.elevation = d["azimuth"], -15.0
+            elif preset == "side":
+                self.azimuth, self.elevation = d["azimuth"] + 90.0, -15.0
+            elif preset == "top":
+                self.azimuth, self.elevation = d["azimuth"], -MAX_ELEVATION_DEG
+            else:
+                self.azimuth, self.elevation = d["azimuth"], d["elevation"]
+
+    def pan(self, forward_s: float, right_s: float, up_s: float) -> None:
+        """Move the lookat in the camera's frame — forward along the
+        view direction flattened to the ground, right across it, up the
+        world's z — by seconds of key held (the wire's unit), at
+        PAN_RATE_PER_S of the current distance per second. MuJoCo's free
+        camera looks along (cos el·cos az, cos el·sin az, sin el), so
+        the ground-plane forward is (cos az, sin az) and right is a
+        quarter turn clockwise from it."""
+        with self._lock:
+            step = PAN_RATE_PER_S * self.distance
+            az = math.radians(self.azimuth)
+            x, y, z = self.lookat
+            self.lookat = (
+                x + step * (forward_s * math.cos(az) + right_s * math.sin(az)),
+                y + step * (forward_s * math.sin(az) - right_s * math.cos(az)),
+                z + step * up_s,
+            )
 
     def apply_deltas(
         self,
@@ -457,30 +624,72 @@ class Perturber:
     def _body_pos(self) -> "np.ndarray":
         return self._live_xpos[self.pert.select].copy()
 
-    # -- physics side -----------------------------------------------------
-    def apply(self, data: "mujoco.MjData") -> None:
-        """Each physics step: the standard simulate.cc ritual — clear,
-        then let MuJoCo turn the reference offset into a force."""
-        data.xfrc_applied[:] = 0.0
-        if self.pert.active:
-            mujoco.mjv_applyPerturbForce(self._model, data, self.pert)
-        # The render lane draws the connector from the LIVE body pose.
-        self._live_xpos = data.xpos
+    # -- render-process side: the force, computed where the scene is ----
+    def force(self, local: "mujoco.MjData") -> "tuple[int, np.ndarray] | None":
+        """The wrench the reference offset asks for, on the render side's
+        copy of the state (one frame behind the physics — the native
+        viewer's own lag, since it too resolves against the last drawn
+        scene). The physics process applies exactly this wrench."""
+        self._live_xpos = local.xpos
+        if not self.pert.active:
+            return None
+        local.xfrc_applied[:] = 0.0
+        mujoco.mjv_applyPerturbForce(self._model, local, self.pert)
+        body = int(self.pert.select)
+        return body, local.xfrc_applied[body].copy()
 
 
 # The stdin protocol's tags, one home (mirrored by viewport.rs).
 TAG_CAMERA, TAG_SELECT, TAG_DRAG, TAG_RELEASE, TAG_PAUSE = 1, 2, 3, 4, 5
+# The simulate controls (2026-09-09, docs/76 §10.2): what MuJoCo's own
+# window offers in its Simulation, Joint, Control, Visualization and
+# Rendering sections, one tag each. RUN/STEP/RESET/SPEED/MANUAL/CTRL/QPOS
+# reach the physics process through the ring; VIS/RND stay on the render
+# side.
+TAG_RUN, TAG_STEP, TAG_RESET, TAG_SPEED, TAG_MANUAL = 6, 7, 8, 9, 10
+TAG_CTRL, TAG_QPOS, TAG_VIS, TAG_RND, TAG_VIEW = 11, 12, 13, 14, 15
+TAG_FOLLOW = 16  # i32 world to keep the camera on, -1 for none
+TAG_PAN = 17  # f32 forward, f32 right, f32 up: seconds of pan key held
+TAG_GROUP = 18  # u8 kind (GROUP_KINDS index), u8 group 0-5, u8 on
+TAG_TWIST = 19  # i32 world (-1 releases), f32 vx, f32 vy, f32 wz
+TWIST_AXES = 3
+# The seven `mjvOption` group masks, in one order for the wire and the
+# status: simulate's "Group enable" section, every kind it offers.
+GROUP_KINDS = ("geom", "site", "joint", "tendon", "actuator", "flex", "skin")
+TwistRanges = list[list[float]]  # lo,hi per axis (vx, vy, wz): a walk's command bounds
+FOLLOW_DISTANCE_M = 0.9  # a followed world is one small robot: close in on it
+VIEW_PRESETS = ("reset", "front", "side", "top")  # TAG_VIEW's u8, in order
 TAG_PAYLOAD_BYTES = {
     TAG_CAMERA: 20,
     TAG_SELECT: 8,
     TAG_DRAG: 8,
     TAG_RELEASE: 0,
     TAG_PAUSE: 0,
+    TAG_RUN: 1,  # u8: 1 run, 0 pause
+    TAG_STEP: 4,  # u32 steps (pauses first; takes manual control)
+    TAG_RESET: 4,  # i32 keyframe, -1 for the model's initial state
+    TAG_SPEED: 4,  # f32 real-time factor asked for
+    TAG_MANUAL: 1,  # u8: 1 the sliders drive the scene, 0 its own motion again
+    TAG_CTRL: 8,  # u32 actuator, f32 value (manual)
+    TAG_QPOS: 8,  # u32 qpos address, f32 value (manual)
+    TAG_VIS: 5,  # u32 mjtVisFlag, u8 on
+    TAG_RND: 5,  # u32 mjtRndFlag, u8 on
+    TAG_VIEW: 1,  # u8 VIEW_PRESETS index: the camera to a named view
+    TAG_FOLLOW: 4,  # i32 world index, -1 none (many-worlds scenes)
+    TAG_PAN: 12,  # f32 forward, f32 right, f32 up (seconds held, signed)
+    TAG_GROUP: 3,  # u8 kind, u8 group, u8 on: one mjvOption group mask bit
+    TAG_TWIST: 16,  # i32 world, f32 vx, f32 vy, f32 wz (walk scenes)
 }
+STATUS_TOKEN = b"\xf8"  # then u32 LE length, then a JSON status (module docstring)
+STATUS_EVERY_S = 1.0 / 30.0  # the sliders echo the scene at this rate
 
 
-def _read_control_messages(
-    camera: OrbitCamera, perturber, poke, exit_on_eof: bool = False
+def _read_control_messages(  # noqa: PLR0912 - one branch per wire tag
+    camera: OrbitCamera,
+    perturber,
+    poke,
+    exit_on_eof: bool = False,
+    sim: "SimControl | None" = None,
 ) -> None:
     """The tagged stdin protocol (module docstring): camera deltas,
     perturbation gestures, pause. `poke` wakes the render lane so a
@@ -507,6 +716,12 @@ def _read_control_messages(
             return
         if tag == TAG_CAMERA:
             camera.apply_deltas(*struct.unpack("<fffII", payload))
+        elif tag == TAG_VIEW:
+            index = payload[0]
+            if index < len(VIEW_PRESETS):
+                camera.set_view(VIEW_PRESETS[index])
+        elif tag == TAG_PAN:
+            camera.pan(*struct.unpack("<fff", payload))
         elif tag == TAG_SELECT:
             perturber.queue_select(*struct.unpack("<ff", payload))
         elif tag == TAG_DRAG:
@@ -515,6 +730,10 @@ def _read_control_messages(
             perturber.queue_release()
         elif tag == TAG_PAUSE:
             perturber.toggle_pause()
+            if sim is not None:
+                sim.handle(TAG_RUN, bytes([int(sim.paused)]))  # toggles Run
+        elif sim is not None:
+            sim.handle(tag, payload)
         poke()
 
 
@@ -537,6 +756,15 @@ class FrameSink:
     def shared(self) -> bool:
         return self._mm is not None
 
+    def status(self, payload: bytes) -> None:
+        """A JSON status to the controller (only on the token wire: the
+        raw-frame fallback has no room for a second message kind)."""
+        if not self.shared:
+            return
+        out = sys.stdout.buffer
+        out.write(STATUS_TOKEN + struct.pack("<I", len(payload)) + payload)
+        out.flush()
+
     def ship(self, frame: "np.ndarray", width: int, height: int) -> None:
         out = sys.stdout.buffer
         if self._mm is None:
@@ -555,124 +783,766 @@ class FrameSink:
         out.flush()
 
 
-class RenderPump:
-    """Everything one observed physics step needs: resize, orbit, render,
-    frame out, narration — shared by the expert's `on_control` hook and
-    the no-expert idle loop, so both paths behave identically."""
+STATE_MAGIC = 0x5354_4154  # "STAT": the physics -> render state ring
+# The ring header, all u32 LE: magic, seq, nq, nmocap, then the
+# perturbation seqlock, active, body, paused; then nworld and reserved
+# words. A many-worlds scene (the RL view) publishes per-world stats —
+# reward, done — after the state floats.
+STATE_HEADER = 48
+WORLD_STATS = 2  # floats per world: reward, done
+PERTURB_FLOATS = 6  # one wrench: force xyz, torque xyz
+STATE_STATS = 4  # floats before qpos in the state region: time, rtf, manual, spare
+MAILBOX_SLOTS = 16  # commands queued between two physics polls; older ones are dropped
+MAILBOX_SLOT_BYTES = 16  # cmd u32, arg i32, arg f64
+MAILBOX_BYTES = 8 + MAILBOX_SLOTS * MAILBOX_SLOT_BYTES  # cseq u32, pad; then the slots
+# `twist`: one axis of one world's commanded twist - arg_i = world *
+# TWIST_AXES + axis (a slot carries one float), -1 hands the commands back.
+MAILBOX_TWIST = "twist"
+MAILBOX_COMMANDS = ("none", "step", "reset", "speed", "manual", MAILBOX_TWIST)
+
+
+class StateRing:
+    """The seam between the physics process and the render process: one
+    memory-mapped file the render side creates. Physics publishes its
+    state (time, qpos, mocap) under a seqlock; the render side reads the
+    newest stable one. The render side publishes the perturbation wrench
+    (which body, which force) under its own seqlock; physics applies it
+    every step. Two processes because two threads share one
+    interpreter, and MuJoCo's render holds the interpreter lock: measured
+    2026-09-09, a 12 ms render took 41 ms beside a busy Python thread
+    and a 109 ms flock render slowed the physics to a crawl (finding
+    studio-viewport-pipe-2026-09-09). The native viewer's physics thread
+    is C and shares nothing; a second process is the same thing here."""
+
+    def __init__(
+        self, path: str, model: "mujoco.MjModel", *, create: bool, nworld: int = 0
+    ) -> None:
+        import mmap  # noqa: PLC0415
+
+        self.nq, self.nmocap, self.nu = int(model.nq), int(model.nmocap), int(model.nu)
+        self.nv, self.na = int(model.nv), int(model.na)
+        if not create:
+            nworld = self._peek_nworld(path)
+        self.nworld = int(nworld)
+        # State: time, rtf, manual flag, spare; then qpos; then mocap pos +
+        # quat; then ctrl; then per-world stats.
+        # qvel and act travel too: a forward pass on the render side then
+        # reproduces the physics' contact forces (at zero velocity it drew
+        # the support force of a frozen pose, up to 13 % off, 2026-09-09).
+        floats = (
+            STATE_STATS
+            + self.nq
+            + 7 * self.nmocap
+            + self.nu
+            + self.nv
+            + self.na
+            + WORLD_STATS * self.nworld
+        )
+        self._state_off = STATE_HEADER
+        self._pert_off = self._state_off + 8 * floats
+        # The mailbox (render -> physics): cseq u32, cmd u32, arg i32, pad, arg f64.
+        self._mail_off = self._pert_off + 8 * PERTURB_FLOATS
+        # The manual arrays (render -> physics): mseq u32, pad; ctrl[nu]; qpos[nq].
+        self._manual_off = self._mail_off + MAILBOX_BYTES
+        size = self._manual_off + 8 + 8 * (self.nu + self.nq)
+        if create:
+            with open(path, "wb") as f:
+                f.write(b"\0" * size)
+        with open(path, "r+b") as handle:  # mmap keeps its own reference
+            self._mm = mmap.mmap(handle.fileno(), size)
+        if create:
+            struct.pack_into("<IIII", self._mm, 0, STATE_MAGIC, 0, self.nq, self.nmocap)
+            struct.pack_into("<I", self._mm, 32, self.nworld)
+        else:
+            magic, _, nq, nmocap = struct.unpack_from("<IIII", self._mm, 0)
+            if (magic, nq, nmocap) != (STATE_MAGIC, self.nq, self.nmocap):
+                raise RuntimeError(
+                    f"state ring {path}: header {(magic, nq, nmocap)} does not match "
+                    f"this model {(STATE_MAGIC, self.nq, self.nmocap)}"
+                )
+        self.world_stats = np.zeros((self.nworld, WORLD_STATS))
+        self._seq = 0
+        self._pseq = 0
+        self._cseq = 0
+        self._mseq = 0
+        self._buf = np.zeros(floats)
+        self._manual_ctrl = np.zeros(self.nu)
+        self._manual_qpos = np.zeros(self.nq)
+        self._seen_cseq = 0
+        self._seen_mseq = 0
+
+    @staticmethod
+    def _peek_nworld(path: str) -> int:
+        with open(path, "rb") as f:
+            f.seek(32)
+            return struct.unpack("<I", f.read(4))[0]
+
+    # -- physics side --------------------------------------------------------
+    def publish(
+        self, data: "mujoco.MjData", rtf: float = 0.0, manual: bool = False
+    ) -> None:
+        self._seq += 1
+        struct.pack_into("<I", self._mm, 4, self._seq * 2 - 1)  # odd: writing
+        buf = self._buf
+        buf[0] = data.time
+        buf[1] = rtf
+        buf[2] = 1.0 if manual else 0.0
+        k0 = STATE_STATS
+        buf[k0 : k0 + self.nq] = data.qpos
+        if self.nmocap:
+            k = k0 + self.nq
+            buf[k : k + 3 * self.nmocap] = data.mocap_pos.ravel()
+            buf[k + 3 * self.nmocap : k + 7 * self.nmocap] = data.mocap_quat.ravel()
+        k1 = k0 + self.nq + 7 * self.nmocap
+        if self.nu:
+            buf[k1 : k1 + self.nu] = data.ctrl
+        k2 = k1 + self.nu
+        buf[k2 : k2 + self.nv] = data.qvel
+        if self.na:
+            buf[k2 + self.nv : k2 + self.nv + self.na] = data.act
+        if self.nworld:
+            buf[k2 + self.nv + self.na :] = self.world_stats.ravel()
+        self._mm[self._state_off : self._state_off + 8 * len(buf)] = buf.tobytes()
+        struct.pack_into("<I", self._mm, 4, self._seq * 2)  # even: stable
+
+    def read_perturbation(self) -> "tuple[int, np.ndarray] | None":
+        """The wrench the render side asks for, or None; also the pause."""
+        for _ in range(3):
+            pseq, active, body, _paused = struct.unpack_from("<IIII", self._mm, 16)
+            if pseq % 2:
+                continue
+            wrench = np.frombuffer(
+                self._mm, dtype="<f8", count=PERTURB_FLOATS, offset=self._pert_off
+            ).copy()
+            if struct.unpack_from("<I", self._mm, 16)[0] == pseq:
+                return (int(body), wrench) if active else None
+        return None
+
+    def paused(self) -> bool:
+        return bool(struct.unpack_from("<I", self._mm, 28)[0])
+
+    def take_command(self) -> "tuple[str, int, float] | None":
+        """The oldest mailbox command not yet taken: (name, int arg, float
+        arg). A queue, not a slot: a reset followed at once by a speed
+        change lost the reset when the slot held only the newest
+        (2026-09-09); commands older than MAILBOX_SLOTS are dropped."""
+        cseq = struct.unpack_from("<I", self._mm, self._mail_off)[0]
+        if cseq % 2 or cseq <= self._seen_cseq:
+            return None
+        self._seen_cseq = max(self._seen_cseq, cseq - 2 * MAILBOX_SLOTS)
+        self._seen_cseq += 2
+        slot = (self._seen_cseq // 2) % MAILBOX_SLOTS
+        cmd, arg_i, arg_f = struct.unpack_from(
+            "<Iid", self._mm, self._mail_off + 8 + slot * MAILBOX_SLOT_BYTES
+        )
+        return (MAILBOX_COMMANDS[cmd], arg_i, arg_f)
+
+    def manual_inputs(self) -> "tuple[np.ndarray, np.ndarray] | None":
+        """The sliders' ctrl and qpos, when they moved since last read."""
+        mseq = struct.unpack_from("<I", self._mm, self._manual_off)[0]
+        if mseq == self._seen_mseq or mseq % 2:
+            return None
+        off = self._manual_off + 8
+        ctrl = np.frombuffer(self._mm, dtype="<f8", count=self.nu, offset=off).copy()
+        qpos = np.frombuffer(
+            self._mm, dtype="<f8", count=self.nq, offset=off + 8 * self.nu
+        ).copy()
+        if struct.unpack_from("<I", self._mm, self._manual_off)[0] != mseq:
+            return None
+        self._seen_mseq = mseq
+        return ctrl, qpos
+
+    # -- render side ---------------------------------------------------------
+    def read_into(self, local: "mujoco.MjData") -> bool:
+        """The newest stable state into `local`; False when none yet."""
+        for _ in range(3):
+            seq = struct.unpack_from("<I", self._mm, 4)[0]
+            if seq == 0 or seq % 2:
+                continue
+            buf = np.frombuffer(
+                self._mm, dtype="<f8", count=len(self._buf), offset=self._state_off
+            ).copy()
+            if struct.unpack_from("<I", self._mm, 4)[0] != seq:
+                continue
+            local.time = buf[0]
+            self.rtf, self.manual = float(buf[1]), bool(buf[2])
+            k0 = STATE_STATS
+            local.qpos[:] = buf[k0 : k0 + self.nq]
+            if self.nmocap:
+                k = k0 + self.nq
+                local.mocap_pos[:] = buf[k : k + 3 * self.nmocap].reshape(-1, 3)
+                local.mocap_quat[:] = buf[
+                    k + 3 * self.nmocap : k + 7 * self.nmocap
+                ].reshape(-1, 4)
+            k1 = k0 + self.nq + 7 * self.nmocap
+            if self.nu:
+                local.ctrl[:] = buf[k1 : k1 + self.nu]
+            k2 = k1 + self.nu
+            local.qvel[:] = buf[k2 : k2 + self.nv]
+            if self.na:
+                local.act[:] = buf[k2 + self.nv : k2 + self.nv + self.na]
+            if self.nworld:
+                self.world_stats[:] = buf[k2 + self.nv + self.na :].reshape(
+                    self.nworld, WORLD_STATS
+                )
+            return True
+        return False
+
+    rtf = 0.0
+    manual = False
+
+    def set_paused(self, paused: bool) -> None:
+        struct.pack_into("<I", self._mm, 28, int(paused))
+
+    def post_command(self, name: str, arg_i: int = 0, arg_f: float = 0.0) -> None:
+        """One command into the queue, in order."""
+        self._cseq += 2
+        slot = (self._cseq // 2) % MAILBOX_SLOTS
+        struct.pack_into("<I", self._mm, self._mail_off, self._cseq - 1)
+        struct.pack_into(
+            "<Iid",
+            self._mm,
+            self._mail_off + 8 + slot * MAILBOX_SLOT_BYTES,
+            MAILBOX_COMMANDS.index(name),
+            arg_i,
+            arg_f,
+        )
+        struct.pack_into("<I", self._mm, self._mail_off, self._cseq)
+
+    def set_manual_input(
+        self, ctrl_index: int | None, qpos_index: int | None, value: float
+    ) -> None:
+        """One slider moved: rewrite the manual arrays under their seqlock."""
+        if ctrl_index is not None and 0 <= ctrl_index < self.nu:
+            self._manual_ctrl[ctrl_index] = value
+        if qpos_index is not None and 0 <= qpos_index < self.nq:
+            self._manual_qpos[qpos_index] = value
+        self._mseq += 2
+        struct.pack_into("<I", self._mm, self._manual_off, self._mseq - 1)
+        off = self._manual_off + 8
+        self._mm[off : off + 8 * self.nu] = self._manual_ctrl.tobytes()
+        self._mm[off + 8 * self.nu : off + 8 * (self.nu + self.nq)] = (
+            self._manual_qpos.tobytes()
+        )
+        struct.pack_into("<I", self._mm, self._manual_off, self._mseq)
+
+    def seed_manual(self, ctrl: "np.ndarray", qpos: "np.ndarray") -> None:
+        """Start the manual arrays from the live state, so taking control
+        does not snap the scene to zero."""
+        self._manual_ctrl[:] = ctrl
+        self._manual_qpos[:] = qpos
+
+    def write_perturbation(self, wrench: "tuple[int, np.ndarray] | None") -> None:
+        """The wrench only: the pause word at offset 28 belongs to
+        `set_paused` (writing it here every frame erased a pause, 2026-09-09)."""
+        self._pseq += 1
+        struct.pack_into("<I", self._mm, 16, self._pseq * 2 - 1)
+        body, force = wrench if wrench is not None else (0, np.zeros(PERTURB_FLOATS))
+        struct.pack_into("<II", self._mm, 20, int(wrench is not None), body)
+        self._mm[self._pert_off : self._pert_off + 8 * PERTURB_FLOATS] = force.tobytes()
+        struct.pack_into("<I", self._mm, 16, self._pseq * 2)
+
+
+class TakeOver(Exception):  # noqa: N818 - a hand-over, not an error
+    """Raised out of a scene loop when the human takes the controls (a
+    slider, a step): the physics process continues in the manual loop
+    from the state the loop had reached."""
+
+    def __init__(self, data: "mujoco.MjData", steps: int = 0) -> None:
+        super().__init__("manual control")
+        self.data = data
+        self.steps = steps
+
+
+class ResetScene(Exception):  # noqa: N818 - a hand-over, not an error
+    """Raised out of any loop on Reset: the scene restarts from its
+    initial state (or a keyframe), under its own motion again."""
+
+    def __init__(self, keyframe: int = -1) -> None:
+        super().__init__("reset")
+        self.keyframe = keyframe
+
+
+class PhysicsPump:
+    """What one observed physics step does in the PHYSICS process: apply
+    the render side's perturbation, take the mailbox's command, narrate,
+    publish the state, pace to real time (times the asked speed). Same
+    `tick` the scene loops call; no pixels here."""
+
+    def __init__(self, model: "mujoco.MjModel", narrator, ring: StateRing) -> None:
+        self.model = model
+        self.narrator = narrator
+        self.ring = ring
+        self.last_narrated = 0.0
+        self.time_offset = 0.0
+        self.last_sim_time = 0.0
+        self._stats_since = time.monotonic()
+        self._stats_sim = 0.0
+        self._stats_ticks = 0
+        # Pacing runs against an absolute deadline, not a per-tick sleep:
+        # time.sleep overshoots by several ms on macOS and a per-tick sleep
+        # accumulates it (measured 2026-09-09: a 20 ms tick paced at
+        # 25 ms, RTF 0.79, for a policy that alone runs 22x real time).
+        self._deadline: float | None = None
+        self._narrate_every = 1.0 / MIRROR_HZ
+        self._rtf_since = time.monotonic()
+        self._rtf_sim = 0.0
+        self.speed = 1.0  # the real-time factor asked for (simulate's Speed)
+        # Mailbox commands the pump does not know go here: a scene loop
+        # with its own switches (the walk's twist) sets it.
+        self.on_command: Callable[[str, int, float], None] | None = None
+        self.rtf = 0.0  # the one achieved, over the last statistics window
+        self.manual = False
+
+    def take_mail(self, data: "mujoco.MjData") -> None:
+        """The mailbox: speed applies here; step, reset and manual hand
+        the loop over (exceptions, because the scene loops own their
+        stepping and cannot be told from inside a callback)."""
+        command = self.ring.take_command()
+        if command is None:
+            return
+        name, arg_i, arg_f = command
+        if name == "speed":
+            self.speed = max(SPEED_MIN, min(SPEED_MAX, arg_f))
+            self._deadline = None
+        elif name == "reset":
+            raise ResetScene(arg_i)
+        elif name == "step":
+            raise TakeOver(data, steps=max(1, arg_i))
+        elif name == "manual":
+            if arg_i and not self.manual:
+                raise TakeOver(data)
+            if not arg_i and self.manual:
+                raise ResetScene(-1)
+        elif self.on_command is not None:
+            self.on_command(name, arg_i, arg_f)
+
+    def tick(
+        self, data: "mujoco.MjData", pace_seconds: float, hold_when_paused: bool = True
+    ) -> None:
+        """`hold_when_paused=False` is the manual loop stepping through a
+        pause on purpose (Step n): observe and publish, do not hold."""
+        self.last_sim_time = data.time
+        now = time.monotonic()
+        self._stats_ticks += 1
+        self._stats_sim += pace_seconds
+        self.take_mail(data)
+        self._rtf_sim += pace_seconds
+        if now - self._rtf_since >= RTF_WINDOW_S:
+            self.rtf = self._rtf_sim / (now - self._rtf_since)
+            self._rtf_since, self._rtf_sim = now, 0.0
+        if now - self._stats_since >= LANE_STATS_EVERY_S:
+            wall = now - self._stats_since
+            # The real-time factor, the number Gazebo's World Stats and
+            # simulate's info overlay show: simulated seconds per wall second.
+            print(
+                f"physics: sim +{self._stats_sim:.2f} s in {wall:.2f} s wall "
+                f"(RTF {self._stats_sim / wall:.2f}); "
+                f"{self._stats_ticks / wall:.0f} ticks/s",
+                file=sys.stderr,
+                flush=True,
+            )
+            self._stats_since, self._stats_sim, self._stats_ticks = now, 0.0, 0
+        data.xfrc_applied[:] = 0.0
+        wrench = self.ring.read_perturbation()
+        if wrench is not None:
+            body, force = wrench
+            if 0 < body < self.model.nbody:
+                data.xfrc_applied[body] = force
+        if (
+            self.narrator is not None
+            and now - self.last_narrated >= self._narrate_every
+        ):
+            self.last_narrated = now
+            self.narrator.log(data, self.time_offset + data.time)
+            # Narration on a budget: it may take at most NARRATE_SHARE of
+            # the physics thread, so its rate falls where a log is slow
+            # (the 20-duck flock: a mirror pass over 1500 geoms cost the
+            # whole real-time budget at 20 Hz — RTF 0.06 with it, 1.00
+            # without, measured 2026-09-09).
+            took = time.monotonic() - now
+            self._narrate_every = max(1.0 / MIRROR_HZ, took / NARRATE_SHARE)
+        self.ring.publish(data, self.rtf, self.manual)
+        self._pace(pace_seconds / self.speed)
+        # Paused (Run off): hold here, still publishing so a drag on a
+        # paused scene shows its connector; a step or reset gets out.
+        if hold_when_paused and self.ring.paused():
+            while self.ring.paused():
+                time.sleep(0.02)
+                self.take_mail(data)
+                self.ring.publish(data, 0.0, self.manual)
+            self._deadline = None  # resume from now, not from before the pause
+
+    def _pace(self, pace_seconds: float) -> None:
+        """Hold the loop to real time against a running deadline: sleep
+        for all but the last slice, spin for that slice (sleep's
+        granularity is coarser than a physics tick). A loop that has
+        fallen behind by more than one tick does not try to catch up —
+        the deadline is reset, so a stall shows as a low RTF in the
+        statistics line instead of a burst of fast motion afterwards."""
+        now = time.monotonic()
+        if self._deadline is None or now - self._deadline > pace_seconds:
+            self._deadline = now
+        self._deadline += pace_seconds
+        remaining = self._deadline - now
+        if remaining > PACE_SPIN_S:
+            time.sleep(remaining - PACE_SPIN_S)
+        while time.monotonic() < self._deadline:
+            pass
+
+
+class SimControl:
+    """The render process's half of the simulate controls: the stdin
+    tags land here (reader thread); the lane applies the visualization
+    toggles and forwards the rest through the ring; every STATUS_EVERY_S
+    it reports the clock, the inputs and, once, the model."""
 
     def __init__(
         self,
         model: "mujoco.MjModel",
+        ring: StateRing,
+        camera: "OrbitCamera | None" = None,
+        twist_ranges: TwistRanges | None = None,
+    ) -> None:
+        self.model = model
+        self.ring = ring
+        self.camera = camera
+        # A walk scene's command bounds, from the task that runs the
+        # scene; None for a scene without commands.
+        self.twist_ranges = twist_ranges
+        self._lock = threading.Lock()
+        self._vis: dict[int, bool] = {}
+        self._rnd: dict[int, bool] = {}
+        self._groups: dict[tuple[str, int], bool] = {}
+        # The twist the human commands (walk scenes): world and values,
+        # echoed in the status; None while the task commands.
+        self._twist: dict | None = None
+        self.paused = False
+        self.manual = False
+        self.speed = 1.0
+        self._model_sent = False
+        self._last_status = 0.0
+        # The live ctrl and qpos as last drawn: what the sliders start
+        # from when the human takes control (without this the first
+        # slider sent every OTHER actuator as zero — arms collapsed onto
+        # the table in a burst of contact arrows, 2026-09-09).
+        self._live_ctrl = np.zeros(model.nu)
+        self._live_qpos = np.zeros(model.nq)
+        # Many-worlds scenes: the world the camera keeps in view (-1 none);
+        # its root is the first body named `wNN/...` for that world.
+        self.follow = -1
+        self._world_roots = {}
+        for body in range(1, model.nbody):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body) or ""
+            prefix, sep, _ = name.partition("/")
+            if sep and prefix.startswith("w") and prefix[1:].isdigit():
+                self._world_roots.setdefault(int(prefix[1:]), body)
+
+    # -- reader thread ----------------------------------------------------
+    def handle(self, tag: int, payload: bytes) -> None:
+        if tag == TAG_RUN:
+            self.paused = not bool(payload[0])
+            self.ring.set_paused(self.paused)
+        elif tag == TAG_STEP:
+            (n,) = struct.unpack("<I", payload)
+            self.paused = True
+            self.manual = True
+            self.ring.set_paused(True)
+            self.ring.post_command("step", n)
+        elif tag == TAG_RESET:
+            (key,) = struct.unpack("<i", payload)
+            self.ring.post_command("reset", key)
+        elif tag == TAG_SPEED:
+            (factor,) = struct.unpack("<f", payload)
+            self.speed = max(SPEED_MIN, min(SPEED_MAX, factor))
+            self.ring.post_command("speed", 0, self.speed)
+        elif tag == TAG_MANUAL:
+            on = bool(payload[0])
+            if on and not self.manual:
+                self.ring.seed_manual(self._live_ctrl, self._live_qpos)
+            self.manual = on
+            self.ring.post_command("manual", int(self.manual))
+        elif tag == TAG_CTRL:
+            index, value = struct.unpack("<If", payload)
+            self._take_control()
+            self.ring.set_manual_input(index, None, value)
+        elif tag == TAG_QPOS:
+            index, value = struct.unpack("<If", payload)
+            self._take_control()
+            self.ring.set_manual_input(None, index, value)
+        elif tag == TAG_FOLLOW:
+            (world,) = struct.unpack("<i", payload)
+            self.follow = world if world in self._world_roots else -1
+            if self.camera is not None:
+                self.camera.zoom_to(
+                    self.camera.follow_distance
+                    if self.follow >= 0
+                    else self.camera.default_distance
+                )
+        elif tag == TAG_TWIST:
+            self._handle_twist(payload)
+        elif tag in (TAG_VIS, TAG_RND, TAG_GROUP):
+            self._handle_view(tag, payload)
+
+    def _handle_twist(self, payload: bytes) -> None:
+        """A walk scene's commanded twist: one mailbox slot per axis
+        (world * axes + axis), or -1 to hand the commands back."""
+        world, *twist = struct.unpack("<ifff", payload)
+        self._twist = None if world < 0 else {"world": world, "value": twist}
+        if world < 0:
+            self.ring.post_command(MAILBOX_TWIST, -1)
+            return
+        for axis, value in enumerate(twist):
+            self.ring.post_command(MAILBOX_TWIST, world * TWIST_AXES + axis, value)
+
+    def _handle_view(self, tag: int, payload: bytes) -> None:
+        """The render-side switches: a visualization flag, a rendering
+        flag, or one bit of a group mask - applied at the next frame."""
+        with self._lock:
+            if tag == TAG_GROUP:
+                kind, group, on = payload
+                if kind < len(GROUP_KINDS) and group < mujoco.mjNGROUP:
+                    self._groups[(GROUP_KINDS[kind], group)] = bool(on)
+                return
+            flag, on = struct.unpack("<IB", payload)
+            (self._vis if tag == TAG_VIS else self._rnd)[flag] = bool(on)
+
+    def _take_control(self) -> None:
+        """A slider moved: the human drives the scene from here on, from
+        the pose and controls it had."""
+        if not self.manual:
+            self.ring.seed_manual(self._live_ctrl, self._live_qpos)
+            self.manual = True
+            self.ring.post_command("manual", 1)
+
+    # -- render lane ------------------------------------------------------
+    def apply_flags(self, vopt: "mujoco.MjvOption", scene: "mujoco.MjvScene") -> None:
+        with self._lock:
+            vis, rnd, groups = dict(self._vis), dict(self._rnd), dict(self._groups)
+        for flag, on in vis.items():
+            if 0 <= flag < len(vopt.flags):
+                vopt.flags[flag] = on
+        for flag, on in rnd.items():
+            if 0 <= flag < len(scene.flags):
+                scene.flags[flag] = on
+        for (kind, group), on in groups.items():
+            getattr(vopt, f"{kind}group")[group] = on
+
+    def follow_lookat(self, local: "mujoco.MjData") -> "np.ndarray | None":
+        """Where the camera should look: the followed world's root, if any."""
+        body = self._world_roots.get(self.follow)
+        return None if body is None else local.xpos[body].copy()
+
+    def status(self, local: "mujoco.MjData", lane: dict, state: dict) -> bytes | None:
+        """The JSON status, or None until STATUS_EVERY_S has passed."""
+        import json  # noqa: PLC0415
+
+        if not self.manual:
+            self._live_ctrl[:] = local.ctrl
+            self._live_qpos[:] = local.qpos
+        now = time.monotonic()
+        if now - self._last_status < STATUS_EVERY_S:
+            return None
+        self._last_status = now
+        # Every flag's value as rendered — the toolbar shows the truth,
+        # not the ones the human touched.
+        vopt, scene = state.get("vopt"), lane.get("scene")
+        vis = (
+            {str(i): bool(v) for i, v in enumerate(vopt.flags)}
+            if vopt is not None
+            else {}
+        )
+        rnd = (
+            {str(i): bool(v) for i, v in enumerate(scene.flags)}
+            if scene is not None
+            else {}
+        )
+        groups = (
+            {k: [bool(v) for v in getattr(vopt, f"{k}group")] for k in GROUP_KINDS}
+            if vopt is not None
+            else {}
+        )
+        body: dict = {
+            "time": float(local.time),
+            "rtf": float(self.ring.rtf),
+            "paused": self.paused,
+            "manual": bool(self.ring.manual),
+            "speed": self.speed,
+            "qpos": [float(v) for v in local.qpos],
+            "ctrl": [float(v) for v in local.ctrl],
+            "shadows": bool(state.get("shadows", True)),
+            "render_ms": float(lane.get("last_render_ms", 0.0)),
+            "vis": vis,
+            "rnd": rnd,
+            "groups": groups,
+            "twist": self._twist,
+            "camera": self.camera.pose() if self.camera is not None else [],
+            "follow": self.follow,
+            "worlds": [
+                {"reward": float(r), "done": bool(d)} for r, d in self.ring.world_stats
+            ],
+        }
+        if not self._model_sent:
+            self._model_sent = True
+            body["model"] = self.describe_model()
+        return json.dumps(body).encode()
+
+    def describe_model(self) -> dict:
+        """What the panels need once: joints with their qpos addresses
+        and ranges, actuators with their control ranges, keyframes, the
+        physics facts, and the flag tables in MuJoCo's own names."""
+        m = self.model
+        joints = []
+        for j in range(m.njnt):
+            jtype = int(m.jnt_type[j])
+            if jtype not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+                continue  # free and ball joints have no scalar slider (simulate's rule)
+            joints.append(
+                {
+                    "name": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j)
+                    or f"joint{j}",
+                    "qpos": int(m.jnt_qposadr[j]),
+                    "range": [float(m.jnt_range[j][0]), float(m.jnt_range[j][1])],
+                    "limited": bool(m.jnt_limited[j]),
+                    "type": "hinge"
+                    if jtype == mujoco.mjtJoint.mjJNT_HINGE
+                    else "slide",
+                }
+            )
+        actuators = [
+            {
+                "name": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
+                or f"actuator{a}",
+                "range": [
+                    float(m.actuator_ctrlrange[a][0]),
+                    float(m.actuator_ctrlrange[a][1]),
+                ],
+                "limited": bool(m.actuator_ctrllimited[a]),
+            }
+            for a in range(m.nu)
+        ]
+        keyframes = [
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_KEY, k) or f"key{k}"
+            for k in range(m.nkey)
+        ]
+        vis_names = [
+            name.removeprefix("mjVIS_").lower()
+            for name, _ in sorted(
+                (
+                    (n, int(v))
+                    for n, v in mujoco.mjtVisFlag.__members__.items()
+                    if n != "mjNVISFLAG"
+                ),
+                key=lambda kv: kv[1],
+            )
+        ]
+        rnd_names = [
+            name.removeprefix("mjRND_").lower()
+            for name, _ in sorted(
+                (
+                    (n, int(v))
+                    for n, v in mujoco.mjtRndFlag.__members__.items()
+                    if n != "mjNRNDFLAG"
+                ),
+                key=lambda kv: kv[1],
+            )
+        ]
+        return {
+            "joints": joints,
+            "actuators": actuators,
+            "keyframes": keyframes,
+            "timestep": float(m.opt.timestep),
+            "integrator": mujoco.mjtIntegrator(m.opt.integrator).name.removeprefix(
+                "mjINT_"
+            ),
+            "solver": mujoco.mjtSolver(m.opt.solver).name.removeprefix("mjSOL_"),
+            "iterations": int(m.opt.iterations),
+            "gravity": [float(g) for g in m.opt.gravity],
+            "nbody": int(m.nbody),
+            "ngeom": int(m.ngeom),
+            "vis_flags": vis_names,
+            "rnd_flags": rnd_names,
+            "groups": list(GROUP_KINDS),
+            "ngroup": int(mujoco.mjNGROUP),
+            "nworld": self.ring.nworld,
+            "twist_ranges": self.twist_ranges,
+        }
+
+
+class RenderPump:
+    """The RENDER process: reads the newest physics state from the ring,
+    resolves camera and perturbation against the freshly drawn scene,
+    renders at the display's rate, ships the frame. The perturbation
+    wrench it computes goes back through the ring."""
+
+    def __init__(  # noqa: PLR0913, PLR0917 - the lane's five collaborators, by name
+        self,
+        model: "mujoco.MjModel",
         orbit: OrbitCamera,
-        narrator,
-        perturber: Perturber | None = None,
-        sink: FrameSink | None = None,
+        perturber: Perturber,
+        sink: "FrameSink",
+        ring: StateRing,
+        sim: "SimControl | None" = None,
     ) -> None:
         self.model = model
         self.orbit = orbit
-        self.narrator = narrator
-        self.perturber = perturber or Perturber(model)
-        self.sink = sink or FrameSink(None)
+        self.perturber = perturber
+        self.sink = sink
+        self.ring = ring
+        self.sim = sim
         self.hz = TARGET_HZ if self.sink.shared else FALLBACK_HZ
-        self.last_narrated = 0.0
-        # Episodes reset `data.time` to zero; the narration timeline must
-        # not rewind with them, so it runs on an offset the episode loop
-        # advances at each boundary.
-        self.time_offset = 0.0
-        self.last_sim_time = 0.0
-        # The render lane: its own THREAD with its own MjData — physics
-        # never waits for the GPU, drags track at true frame rate, and
-        # the two big budget lines overlap instead of queueing (the
-        # leanest fix, 2026-09-01: mj_step/render/pipe-write all release
-        # the GIL, so a second thread is real parallelism). The staging
-        # MjData carries the latest state; the render thread copies it
-        # under the lock, forwards, and draws. The EGL context is
-        # thread-affine, so the Renderer is BUILT in the render thread.
-        self._staging = mujoco.MjData(model)
-        self._staging_lock = threading.Lock()
+        # A camera or perturb gesture re-renders NOW (the stdin reader
+        # sets it), not at the next lane tick.
         self._fresh = threading.Event()
-        # macOS: Cocoa wants GL on the main thread (MuJoCo's offscreen
-        # path rides GLFW there) — render inline instead of in a lane.
-        self._threaded = sys.platform != "darwin"
-        if self._threaded:
-            threading.Thread(target=self._render_lane, daemon=True).start()
-        else:
-            self._inline_state = None  # built lazily by _render_once
 
-    def tick(self, data: "mujoco.MjData", pace_seconds: float) -> None:
-        """Observe one step: narrate (rate-limited), hand the render lane
-        a snapshot, then sleep toward real time — `pace_seconds` is how
-        much simulated time this step advanced."""
-        self.last_sim_time = data.time
-        # The shove, if one is active: xfrc for the caller's NEXT steps.
-        self.perturber.apply(data)
-        now = time.monotonic()
-        if self.narrator is not None and now - self.last_narrated >= 1.0 / MIRROR_HZ:
-            self.last_narrated = now
-            self.narrator.log(data, self.time_offset + data.time)
-
-        with self._staging_lock:
-            self._staging.qpos[:] = data.qpos
-            if self.model.nmocap:
-                self._staging.mocap_pos[:] = data.mocap_pos
-                self._staging.mocap_quat[:] = data.mocap_quat
-        self._fresh.set()
-        if not self._threaded:
-            self._render_inline(now)
-
-        # Pace toward real time: sleep off whatever of this step's
-        # simulated duration wall time hasn't already consumed.
-        remaining = pace_seconds - (time.monotonic() - now)
-        if remaining > 0:
-            time.sleep(remaining)
-
-    def _render_inline(self, now: float) -> None:
-        """The Darwin path: one render lane's body, run synchronously at
-        the pump's rate inside tick (Cocoa's main-thread GL rule)."""
-        if self._inline_state is None:
-            self._inline_state = {"last": 0.0}
-        if now - self._inline_state["last"] < 1.0 / self.hz:
-            return
-        self._inline_state["last"] = now
-        self._render_step(self._inline_state)
-
-    def _render_lane(self) -> None:
+    def run_forever(self) -> None:
+        """The lane, on the calling thread (GL contexts are thread-affine;
+        the main thread works under every backend, GLFW included)."""
         state: dict = {}
         interval = 1.0 / self.hz
-        while True:
-            self._fresh.wait(timeout=interval)
-            self._fresh.clear()
-            began = time.monotonic()
-            self._render_step(state)
-            # Hold the lane to the target rate.
-            leftover = interval - (time.monotonic() - began)
-            if leftover > 0:
-                time.sleep(leftover)
+        try:
+            while True:
+                began = time.monotonic()
+                self._render_step(state)
+                # One frame per interval; a poke (camera, perturbation)
+                # ends the wait early and re-renders at once.
+                remaining = interval - (time.monotonic() - began)
+                if remaining > 0:
+                    self._fresh.wait(timeout=remaining)
+                self._fresh.clear()
+        except BrokenPipeError:
+            # The Studio closed the frame pipe: we are done. A hard exit,
+            # because the stdin reader (a daemon thread) holds stdin's
+            # buffer lock and a normal shutdown trips over it.
+            os._exit(0)
+
+    def _aim(self, state: dict, local: "mujoco.MjData") -> None:
+        """A followed world keeps the camera's lookat on its root."""
+        if self.sim is None:
+            return
+        target = self.sim.follow_lookat(local)
+        if target is not None:
+            self.orbit.lookat = target
+            state["cam"].lookat = list(target)
 
     def _render_step(self, state: dict) -> None:
-        """One frame: snapshot -> forward -> (re)size -> render -> ship.
-        `state` persists the renderer/camera between calls; built on
-        first use IN THE CALLING THREAD (GL contexts are thread-affine).
-        Shadow budget: measured on the 20-duck flock at 1300x400,
-        43 ms/frame with shadows vs 10.5 without (2026-09-01)."""
+        """One frame: ring -> forward -> (re)size -> render -> ship.
+        `state` persists the renderer/camera between calls."""
         model = self.model
         if "renderer" not in state:
             state["width"], state["height"] = WIDTH, HEIGHT
             state["renderer"] = mujoco.Renderer(
                 model, height=state["height"], width=state["width"]
             )
-            state["shadows"] = model.ngeom <= SHADOW_GEOM_BUDGET
+            state["shadows"] = SHADOWS_MODE != "off"
+            state["render_ms"] = []  # the last SHADOW_PROBE_FRAMES render times
             cam = mujoco.MjvCamera()
             cam.type = mujoco.mjtCamera.mjCAMERA_FREE
             cam.lookat = list(self.orbit.lookat)
             state["cam"] = cam
             state["local"] = mujoco.MjData(model)
         local = state["local"]
-        with self._staging_lock:
-            local.qpos[:] = self._staging.qpos
-            if model.nmocap:
-                local.mocap_pos[:] = self._staging.mocap_pos
-                local.mocap_quat[:] = self._staging.mocap_quat
+        self.ring.read_into(local)  # before the first publish: the zero pose
         mujoco.mj_forward(model, local)
         want_width, want_height = self.orbit.size()
         # Clamp to the compiled framebuffer no matter what the viewer
@@ -689,26 +1559,93 @@ class RenderPump:
                 model, height=state["height"], width=state["width"]
             )
         if "vopt" not in state:
-            # The physics made visible (rung 1, 2026-09-02): the same
-            # scene-option flags the native viewer toggles with F -
-            # contact forces as arrows, drawn by mjv_updateScene itself.
-            vopt = mujoco.MjvOption()
-            vopt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
-            state["vopt"] = vopt
+            # MuJoCo's own defaults, as simulate starts: the Visualization
+            # panel (and the agent's set_simulator_view) turns contact
+            # forces and the rest on. They were on by default from
+            # 2026-09-02 to 2026-09-09; at the model's force scale a
+            # collapsed arm drew metre-long arrows across the whole frame.
+            state["vopt"] = mujoco.MjvOption()
+        self._aim(state, local)
         self.orbit.apply_to(state["cam"])
         renderer = state["renderer"]
+        if self.sim is not None:
+            self.sim.apply_flags(state["vopt"], renderer.scene)
         renderer.update_scene(local, camera=state["cam"], scene_option=state["vopt"])
         self.perturber.resolve(
             local, renderer.scene, state["vopt"], state["width"] / state["height"]
         )
+        self.ring.write_perturbation(self.perturber.force(local))
         self.perturber.draw(renderer.scene)
         if not state["shadows"]:
             renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        began = time.monotonic()
         frame = renderer.render()  # HxWx3 uint8, C-contiguous
+        rendered = time.monotonic()
+        self._judge_shadows(state, (rendered - began) * 1000.0)
         self.sink.ship(frame, state["width"], state["height"])
+        self._lane_stats(
+            state, (rendered - began) * 1000.0, (time.monotonic() - rendered) * 1000.0
+        )
+        if self.sim is not None:
+            lane = state.setdefault("lane", {})
+            lane["last_render_ms"] = (rendered - began) * 1000.0
+            lane["scene"] = renderer.scene  # its flags, as rendered, for the status
+            status = self.sim.status(local, lane, state)
+            if status is not None:
+                self.sink.status(status)
+
+    def _lane_stats(self, state: dict, render_ms: float, ship_ms: float) -> None:
+        """One stderr line per LANE_STATS_EVERY_S: what the lane actually
+        achieves, so a slow viewport is diagnosed from the log, not guessed."""
+        stats = state.setdefault(
+            "lane", {"since": time.monotonic(), "render": [], "ship": []}
+        )
+        stats["render"].append(render_ms)
+        stats["ship"].append(ship_ms)
+        elapsed = time.monotonic() - stats["since"]
+        if elapsed < LANE_STATS_EVERY_S:
+            return
+        r = sorted(stats["render"])
+        sh = sorted(stats["ship"])
+        n = len(r)
+        print(
+            f"lane: {n} frames in {elapsed:.1f} s ({n / elapsed:.1f} fps); "
+            f"render p50 {r[n // 2]:.1f} ms p90 {r[int(n * 0.9)]:.1f} ms; "
+            f"ship p50 {sh[n // 2]:.2f} ms; "
+            f"shadows {'on' if state['shadows'] else 'off'}; "
+            f"{state['width']}x{state['height']}",
+            file=sys.stderr,
+            flush=True,
+        )
+        stats["since"] = time.monotonic()
+        stats["render"].clear()
+        stats["ship"].clear()
+
+    def _judge_shadows(self, state: dict, render_ms: float) -> None:
+        """Shadows stay while the measured render fits the display budget;
+        past it they go, once, and the decision is logged with the number."""
+        if SHADOWS_MODE != "auto" or not state["shadows"]:
+            return
+        times = state["render_ms"]
+        times.append(render_ms)
+        # Judge after the probe window, or sooner when the frames are so
+        # slow that waiting for the window would itself take seconds (the
+        # 20-duck flock: 274 ms/frame with shadows).
+        if len(times) < SHADOW_PROBE_FRAMES and sum(times) < SHADOW_PROBE_MS:
+            return
+        mean = sum(times) / len(times)
+        if mean > SHADOW_BUDGET_MS:
+            state["shadows"] = False
+            print(
+                f"shadows off: render averaged {mean:.1f} ms over {len(times)} frames, "
+                f"budget {SHADOW_BUDGET_MS:g} ms",
+                file=sys.stderr,
+                flush=True,
+            )
+        del times[:]  # judge again on the next window if shadows survived
 
 
-def run_expert_forever(task: "object", pump: RenderPump) -> None:
+def run_expert_forever(task: "object", pump: PhysicsPump) -> None:
     """The real thing: the task's accepted scripted expert drives the sim,
     cycling the protocol's own paired trial starts — the same
     `perturb(trial, home)` draws the acceptance verdict ran on. The pump
@@ -742,7 +1679,7 @@ def run_expert_forever(task: "object", pump: RenderPump) -> None:
         trial = (trial + 1) % protocol.trials
 
 
-def run_idle_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+def run_idle_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None:
     """No expert registered for this task: a slow sinusoid on every
     actuator — visible, harmless placeholder motion so 'streaming' and
     'stalled' can be told apart at a glance."""
@@ -789,7 +1726,14 @@ def duck_scene() -> "object":
     # sits ~0.144 m ABOVE the root origin (onshape's export frame), so
     # the stand goes just below zero and the weld's sag rests the feet
     # onto ground contact.
-    count, spacing = 20, 0.4
+    # The flock's size is a render budget, not a taste: each microduck is
+    # 431,750 faces (onshape's export, 21k-face PCBs and bearings), and
+    # the offscreen path draws ~7 ms per duck here (1 duck 11.5 ms, 4
+    # ducks 39 ms, 20 ducks 156 ms; Apple M1 Pro, 2026-09-09). Twenty is
+    # a slideshow in every viewer, MuJoCo's own included; four is a
+    # parade at ~25 fps. Decimated preview meshes at onboarding would
+    # give the twenty back — an asset job, not a viewer one.
+    count, spacing = FLOCK_COUNT, 0.4
     columns = 5
     xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
     for index in range(count):
@@ -825,12 +1769,13 @@ def duck_scene() -> "object":
     return scene
 
 
+FLOCK_COUNT = 4
 GAIT_HZ = 1.6  # step frequency of the parade waddle
 PARADE_SPEED = 0.12  # m/s along +x, wrapping at the floor's edge
 PARADE_WRAP_X = 2.4
 
 
-def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
+def run_flock_parade_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None:
     """The duck parade: a scripted waddle on every duck's leg servos
     (phase-offset per duck) while each mocap stand glides forward -
     the legs are real physics under weak real servos; the forward
@@ -897,7 +1842,92 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: RenderPump) -> None:
         pump.tick(data, dt * substeps)
 
 
-def stream(task_name: str, shm_path: str | None) -> None:
+WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched sim
+WALK_SCENE_PARTS = 3  # walk:<robot>:<worlds>
+
+
+def parse_twist_ranges(text: str) -> TwistRanges:
+    """`--twist-ranges=lo,hi,lo,hi,lo,hi` (vx, vy, wz) as pairs; refused
+    by name at any other count."""
+    bounds = [float(v) for v in text.split(",")]
+    if len(bounds) != 2 * TWIST_AXES:
+        raise ValueError(
+            f"--twist-ranges takes {2 * TWIST_AXES} numbers: lo,hi for "
+            f"{', '.join(('vx', 'vy', 'wz'))}, got {len(bounds)}"
+        )
+    return [bounds[i : i + 2] for i in range(0, len(bounds), 2)]
+
+
+def walk_scene_of(scene: str) -> tuple[str, int]:
+    """`walk:<robot>:<worlds>` -> (robot, worlds); refused by name when the
+    robot is missing — the RL view has no robot of its own."""
+    parts = scene.split(":")
+    if len(parts) != WALK_SCENE_PARTS or not parts[1] or not parts[2].isdigit():
+        raise ValueError(
+            f"a walk scene is {WALK}:<robot>:<worlds> (the robot's bundle name and "
+            f"the number of worlds), not {scene!r}"
+        )
+    return parts[1], int(parts[2])
+
+
+def walk_scene(
+    robot: str,
+    worlds: int,
+    offscreen_side: int = MAX_RENDER_SIDE,
+    stage_xml: str | None = None,
+    *,
+    dressed: bool = True,
+) -> "mujoco.MjModel":
+    """One CPU model holding `worlds` copies of the walk robot on one
+    ground plane, each under a `wNN/` prefix at its grid cell (the RL
+    view's mirror; rq_mjlab.walk_view fills its qpos from the batched
+    sim). The batched env's world origins are already in each free
+    joint's global qpos, so the copies land on their origins by the copy
+    alone. Built here, not in rq_mjlab, so the render process — the
+    pipeline venv, no mjlab — can build the same model. The robot's model
+    is the one its bundle records (project first, then the library).
+    `stage_xml`: the task's own terrain and dressing, as the walk view
+    exported them from mjlab's scene - the ground the policy walks on,
+    instead of the plain plane. `dressed`: the Studio's dressing, a sky
+    and the live shadow budget; False is the bare mirror of 2026-09-09,
+    for a camera whose pixels are data (the walk press's chase camera)."""
+    from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
+    from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
+    from rq_pipeline.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
+
+    bundle = find_bundle(robot)
+    model_file = model_file_of(bundle) if bundle is not None else None
+    if bundle is None or model_file is None:
+        raise FileNotFoundError(
+            f"no bundle {robot!r} with a model file in the project or the library"
+        )
+    stage = mujoco.MjSpec.from_file(stage_xml) if stage_xml else None
+    scene, _ = grid_of(
+        f"{robot}-rl-{worlds}",
+        (mujoco.MjSpec.from_file(str(model_file)) for _ in range(worlds)),
+        pitch=0.0,
+        stage=stage,
+        sky=dressed,
+    )
+    if stage is None:
+        for geom in scene.geoms:
+            if geom.name == "ground":
+                geom.pos[2] = 0.0  # the display grids' table offset; walks at z=0
+    scene.visual.global_.offwidth = offscreen_side
+    scene.visual.global_.offheight = offscreen_side
+    if dressed:
+        # mjlab's stage asks for an 8192 shadow map; every live view draws
+        # at the scene budget's size.
+        scene.visual.quality.shadowsize = min(
+            scene.visual.quality.shadowsize, RenderBudget.SHADOWSIZE
+        )
+    return scene.compile()
+
+
+def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
+    """The task (or None for the duck preview), its compiled model with
+    the offscreen budget raised to the viewer's cap, and its rig name.
+    Both processes build the same model from the same spec path."""
     if task_name == DUCK:
         task, spec, rig = None, duck_scene(), "microduck"
     else:
@@ -908,28 +1938,153 @@ def stream(task_name: str, shm_path: str | None) -> None:
     # MAX_RENDER_SIDE's comment for the measured failure without this.
     spec.visual.global_.offwidth = max(spec.visual.global_.offwidth, MAX_RENDER_SIDE)
     spec.visual.global_.offheight = max(spec.visual.global_.offheight, MAX_RENDER_SIDE)
-    model = spec.compile()
+    return task, spec.compile(), rig
 
-    orbit = OrbitCamera(RIG_CAMERAS.get(rig, RIG_CAMERAS["so101"]))
+
+def render_on(  # noqa: PLR0913 - the render side's inputs, each named
+    scene: str,
+    ring_path: str,
+    shm_path: str | None,
+    camera: dict,
+    *,
+    stage_xml: str | None = None,
+    twist_ranges: TwistRanges | None = None,
+) -> None:
+    """Render-only, for a physics process that already exists (the RL
+    view's batched worlds): `scene` is `walk:<robot>:<worlds>` or a
+    model file, the ring was created by that process, the wire and
+    status are the same. `camera`: the framing (a rig preset or the
+    walk's declared one); `stage_xml`: the task's terrain under a walk
+    scene; `twist_ranges`: the walk's command bounds for the status."""
+    if scene.startswith(f"{WALK}:"):
+        model = walk_scene(*walk_scene_of(scene), stage_xml=stage_xml)
+    else:
+        model = mujoco.MjModel.from_xml_path(scene)
+    ring = StateRing(ring_path, model, create=False)
+    orbit = OrbitCamera(camera)
     perturber = Perturber(model)
-    pump = RenderPump(
-        model, orbit, narrator_for(model, task_name), perturber, FrameSink(shm_path)
-    )
-    # `poke` = the render lane's own event: a camera or perturb gesture
-    # re-renders NOW, not at the next physics tick (the native viewer's
-    # decoupling, reproduced across the process boundary).
+    sim = SimControl(model, ring, orbit, twist_ranges=twist_ranges)
+    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
     threading.Thread(
         target=_read_control_messages,
-        args=(orbit, perturber, pump._fresh.set, pump.sink.shared),
+        args=(orbit, perturber, pump._fresh.set, pump.sink.shared, sim),
         daemon=True,
     ).start()
+    pump.run_forever()
 
-    if task is not None and task_name in TASKS_WITH_EXPERTS:
-        run_expert_forever(task, pump)
-    elif task_name == DUCK:
-        run_flock_parade_forever(model, pump)
-    else:
-        run_idle_forever(model, pump)
+
+def stream(task_name: str, shm_path: str | None) -> None:
+    """The render process: the one the Studio spawns. It creates the
+    state ring, spawns the physics process on it, and renders."""
+    import subprocess  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    _task, model, rig = build_scene(task_name)
+    fd, ring_path = tempfile.mkstemp(prefix="studio-state-", suffix=".ring")
+    os.close(fd)
+    ring = StateRing(ring_path, model, create=True)
+    physics_args = [
+        sys.executable,
+        os.path.abspath(__file__),
+        task_name,
+        f"--physics={ring_path}",
+    ]
+    if "--no-rerun" in sys.argv:
+        physics_args.append("--no-rerun")
+    # The child's stdin is a pipe this process never writes: when this
+    # process dies, the pipe closes and the child exits on EOF — no
+    # orphaned physics at 100 % of a core.
+    physics = subprocess.Popen(physics_args, stdin=subprocess.PIPE)
+
+    orbit = OrbitCamera(
+        RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+    )
+    perturber = Perturber(model)
+    sim = SimControl(model, ring, orbit)
+    pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
+    threading.Thread(
+        target=_read_control_messages,
+        args=(orbit, perturber, pump._fresh.set, pump.sink.shared, sim),
+        daemon=True,
+    ).start()
+    try:
+        pump.run_forever()
+    finally:
+        physics.terminate()
+        pathlib.Path(ring_path).unlink(missing_ok=True)
+
+
+def run_manual_forever(
+    model: "mujoco.MjModel", data: "mujoco.MjData", pump: PhysicsPump, steps: int = 0
+) -> None:
+    """The human's loop (simulate's own): ctrl from the Control sliders,
+    qpos edits from the Joint sliders applied with a forward pass, Run
+    on or off, Step n while paused. Leaves by ResetScene (Reset, or
+    manual off) — the scene's own motion resumes from its start."""
+    pump.manual = True
+    dt = model.opt.timestep
+    pending = steps
+    while True:
+        inputs = pump.ring.manual_inputs()
+        if inputs is not None:
+            ctrl, qpos = inputs
+            if not np.array_equal(qpos, data.qpos):
+                data.qpos[:] = qpos
+                data.qvel[:] = 0.0
+                mujoco.mj_forward(model, data)
+            data.ctrl[:] = ctrl
+        if pending > 0 or not pump.ring.paused():
+            mujoco.mj_step(model, data)
+            pending = max(0, pending - 1)
+            pump.tick(data, dt, hold_when_paused=False)
+        else:
+            try:
+                pump.take_mail(data)
+            except TakeOver as more:  # a further step while paused
+                pending += more.steps
+            pump.ring.publish(data, 0.0, True)
+            time.sleep(0.02)
+
+
+def physics_main(task_name: str, ring_path: str) -> None:
+    """The physics process: the scene loop with the narrator, publishing
+    into the ring the render process created; exits when its stdin
+    closes (the render process is gone). Hand-overs (TakeOver, ResetScene)
+    move it between the scene's own loop and the manual loop."""
+    task, model, _rig = build_scene(task_name)
+    ring = StateRing(ring_path, model, create=False)
+
+    def watch_parent() -> None:
+        sys.stdin.buffer.read()  # EOF when the render process dies
+        os._exit(0)
+
+    threading.Thread(target=watch_parent, daemon=True).start()
+    pump = PhysicsPump(model, narrator_for(model, task_name), ring)
+    manual: tuple[mujoco.MjData, int] | None = None
+    while True:
+        try:
+            if manual is not None:
+                data, steps = manual
+                run_manual_forever(model, data, pump, steps)
+            elif task is not None and task_name in TASKS_WITH_EXPERTS:
+                run_expert_forever(task, pump)
+            elif task_name == DUCK:
+                run_flock_parade_forever(model, pump)
+            else:
+                run_idle_forever(model, pump)
+        except TakeOver as hand:
+            ring.seed_manual(hand.data.ctrl.copy(), hand.data.qpos.copy())
+            manual = (hand.data, hand.steps)
+        except ResetScene as reset:
+            pump.manual = False
+            pump.time_offset += pump.last_sim_time
+            if manual is not None and reset.keyframe >= 0:
+                data = manual[0]
+                mujoco.mj_resetDataKeyframe(model, data, reset.keyframe)
+                mujoco.mj_forward(model, data)
+                manual = (data, 0)
+            else:
+                manual = None  # the scene's own loop, from its start
 
 
 if __name__ == "__main__":
@@ -938,7 +2093,58 @@ if __name__ == "__main__":
     for flag in sys.argv[1:]:
         if flag.startswith("--shm="):
             shm = flag.removeprefix("--shm=")
+        elif flag.startswith("--shadows="):
+            SHADOWS_MODE = flag.removeprefix("--shadows=")
+            if SHADOWS_MODE not in ("on", "off", "auto"):
+                sys.exit(f"--shadows must be on, off or auto, not {SHADOWS_MODE!r}")
+    physics_ring = None
+    model_path = None
+    ring_path = None
+    rig: str | None = None  # the scene's own rig, or the default camera
+    camera: dict | None = None  # a walk's declared framing (--camera=)
+    stage_xml: str | None = None  # the task's terrain under a walk scene
+    twist_ranges: TwistRanges | None = None
+    for flag in sys.argv[1:]:
+        if flag.startswith("--physics="):
+            physics_ring = flag.removeprefix("--physics=")
+        elif flag.startswith("--stage="):
+            stage_xml = flag.removeprefix("--stage=")
+        elif flag.startswith("--twist-ranges="):
+            try:
+                twist_ranges = parse_twist_ranges(flag.removeprefix("--twist-ranges="))
+            except ValueError as why:
+                sys.exit(str(why))
+        elif flag.startswith(CAMERA_FLAG):
+            try:
+                camera = parse_camera_flag(flag)
+            except ValueError as why:
+                sys.exit(str(why))
+        elif flag.startswith("--scene="):
+            model_path = flag.removeprefix("--scene=")
+        elif flag.startswith("--ring="):
+            ring_path = flag.removeprefix("--ring=")
+        elif flag.startswith("--rig="):
+            rig = flag.removeprefix("--rig=")
+        elif flag.startswith("--project="):
+            # A walk scene names its robot by bundle; the project's robots
+            # are searched first (the Go2 lives only there, 2026-09-12).
+            from rq_pipeline.project.locate import Project
+
+            Project(pathlib.Path(flag.removeprefix("--project=")).resolve()).use()
+    if model_path and ring_path:
+        render_on(
+            model_path,
+            ring_path,
+            shm,
+            camera or rig_camera(rig),
+            stage_xml=stage_xml,
+            twist_ranges=twist_ranges,
+        )
+        raise SystemExit(0)
     task_name = arguments[0] if arguments else DEFAULT_TASK
     if task_name != DUCK and task_name not in BUILDERS:
         sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")
-    stream(task_name, shm)
+    if physics_ring:
+        physics_main(task_name, physics_ring)
+    else:
+        stream(task_name, shm)

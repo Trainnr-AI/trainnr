@@ -37,9 +37,9 @@ from rq_pipeline.bundles.hashing import fields_hash, stamp
 from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
 from rq_pipeline.collect.provenance import dagger_stamp
+from rq_pipeline.evaluate.tracking import criterion_text
 
 from rq_mjlab.walk_verdict import (
-    ERR_RATIO_BOUND,
     WorldEpisode,
     instrument_for,
     rollout_episodes,
@@ -99,18 +99,28 @@ class ChaseCamera:
     one-robot CPU mirror (the batched engine's memory is invisible to
     any renderer; the recorder's camera leg is the same idea)."""
 
-    def __init__(self, width: int, height: int) -> None:
+    def __init__(self, width: int, height: int, robot: str = BUNDLE) -> None:
         import mujoco  # noqa: PLC0415
 
-        from rq_mjlab.walk_view import mirror_of  # noqa: PLC0415
+        from rq_mjlab.walk_view import transport  # noqa: PLC0415
+        from rq_mjlab.walks import walk_spec  # noqa: PLC0415
 
         self._mujoco = mujoco
-        self.model = mirror_of(1, max(width, height))
+        # The bare one-robot mirror: no sky, the model's own shadow map -
+        # the picture the student's datasets were pressed with. It was
+        # `walk_view.mirror_of` until that went with the many-worlds scene
+        # (2026-09-09) and left this import pointing at nothing; mypy
+        # against the real packages found it (2026-09-13).
+        self.model = transport().walk_scene(robot, 1, max(width, height), dressed=False)
         self.data = mujoco.MjData(self.model)
         self.renderer = mujoco.Renderer(self.model, height=height, width=width)
         self.camera = mujoco.MjvCamera()
         mujoco.mjv_defaultCamera(self.camera)
-        self.camera.distance, self.camera.elevation, self.camera.azimuth = 0.6, -18, 135
+        # The walk's own chase framing (rq_mjlab.walks), not a duck's numbers.
+        chase = walk_spec(robot).chase
+        self.camera.distance = chase.distance
+        self.camera.elevation = chase.elevation
+        self.camera.azimuth = chase.azimuth
 
     def frame_at(self, qpos: Any) -> Any:
         """One chase frame for one world's qpos - the SAME picture the
@@ -249,7 +259,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         ],
         notes={
             "teacher": expert,
-            "criterion": f"survived and err_ratio<{ERR_RATIO_BOUND}",
+            "criterion": criterion_text(),
         },
     ).write_to(out)
     camera = ChaseCamera(*frame_size)
@@ -311,7 +321,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             frame_every_control_ticks=frame_every,
             dynamics_basis=basis,
             action_semantics=ACTION_SEMANTICS,
-            verdict=f"success (survived and err_ratio<{ERR_RATIO_BOUND})",
+            verdict=f"success ({criterion_text()})",
         )
 
     try:

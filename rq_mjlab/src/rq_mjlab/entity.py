@@ -13,6 +13,7 @@ stamp on the run's record.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import mujoco
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
@@ -65,12 +66,14 @@ def entity_from_bundle(
             "mjlab actuators are ordered, not named; pass (cfg,) not "
             "{'name': cfg}"
         )
+    # Only a given init_state replaces EntityCfg's own default.
+    optional: dict[str, Any] = {} if init_state is None else {"init_state": init_state}
     cfg = EntityCfg(
         spec_fn=lambda: mujoco.MjSpec.from_file(str(model_path)),
         articulation=EntityArticulationInfoCfg(
             actuators=tuple(actuators),
             soft_joint_pos_limit_factor=soft_joint_pos_limit_factor,
         ),
-        **({"init_state": init_state} if init_state is not None else {}),
+        **optional,
     )
     return cfg, bundle_stamp

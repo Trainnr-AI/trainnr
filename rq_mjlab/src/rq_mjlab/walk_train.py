@@ -36,18 +36,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, walk_spec
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
     "smoke": {"envs": 256, "iterations": 20, "every": 10},
 }
+
+
+# The saved stream of a training run, inside its folder (docs/76 §10.5).
+TRAIN_STREAM = "train"
 
 
 def smoke_agent(iterations: int) -> Any:
@@ -68,7 +73,8 @@ def g3_agent(iterations: int) -> Any:
         RslRlPpoAlgorithmCfg,
     )
 
-    model_cfg = dict(
+    # One recipe for both networks; Any so it unpacks into either.
+    model_cfg: dict[str, Any] = dict(
         hidden_dims=(512, 256, 128),
         activation="elu",
         obs_normalization=True,
@@ -100,9 +106,39 @@ def _span(text: str) -> float | str:
     return float(text)
 
 
-def main() -> None:
+class Tee:
+    """A stream that writes to the console and to a file, line-buffered
+    so a reader of the file sees an iteration as soon as it is printed."""
+
+    def __init__(self, console: Any, path: Path) -> None:
+        self._console = console
+        self._file = path.open("a", buffering=1, encoding="utf-8", errors="replace")
+
+    def write(self, text: str) -> int:
+        self._console.write(text)
+        self._file.write(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self._console.flush()
+        self._file.flush()
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._console, "isatty", lambda: False)())
+
+    def fileno(self) -> int:
+        return self._console.fileno()
+
+
+def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--agent", choices=sorted(DEFAULTS), default="g3")
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
     parser.add_argument(
         "--robot",
         choices=ROBOTS,
@@ -155,6 +191,11 @@ def main() -> None:
         help="archive here instead of <log-root>/<timestamp> (a study names its arms)",
     )
     parser.add_argument(
+        "--task-stamp",
+        default=None,
+        help="the declared environment's version (a project's task): cited by the run",
+    )
+    parser.add_argument(
         "--no-recorder",
         action="store_true",
         help="headless run (a pod with no Studio listening on :9876)",
@@ -172,9 +213,11 @@ def main() -> None:
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
 
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
+    use_project(args.project)
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
     cfg, identity = spec.env_cfg(
@@ -186,6 +229,14 @@ def main() -> None:
     if args.seed is not None:
         cfg.seed = args.seed
     identity = {**identity, "seed": cfg.seed}
+    if args.task_stamp:
+        identity["task"] = args.task_stamp
+    # The smoke gate archives nothing; g3 archives itself with identity,
+    # and its saved stream lands inside that folder (docs/76 §10.5).
+    log_dir = None
+    if args.agent == "g3":
+        log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_dir.mkdir(parents=True, exist_ok=True)
     cfg.recorders = (
         {}
         if args.no_recorder
@@ -194,17 +245,18 @@ def main() -> None:
                 app_id=f"rq-walk-{args.agent}",
                 every=every,
                 frame_every=args.frame_every,
+                file=str(viewer_file(log_dir, TRAIN_STREAM)) if log_dir else None,
             )
         }
     )
 
     agent = smoke_agent(iterations) if args.agent == "smoke" else spec.agent(iterations)
-    # The smoke gate archives nothing; g3 archives itself with identity.
-    log_dir = None
-    if args.agent == "g3":
-        log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
-        log_dir.mkdir(parents=True, exist_ok=True)
+    if log_dir is not None:
         (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
+        # The console also lands in the run folder as train.log: the
+        # project's live view reads it while the run trains (docs/77).
+        sys.stdout = Tee(sys.stdout, log_dir / "train.log")
+        sys.stderr = Tee(sys.stderr, log_dir / "train.log")
         print(f"[g3] log_dir: {log_dir}")
 
     tag = args.agent

@@ -44,7 +44,7 @@ if [ "$from" != press ] && [ -d "$root/demos" ]; then
   # kept + the discards in failures.jsonl.
   # The datasheet's count survives a pruned batch (episode dirs deleted
   # after conversion, 2026-09-03); the directory count is the fallback.
-  kept=$(grep -oE 'episodes kept: \*\*[0-9]+' "$root/demos/datasheet.md" 2>/dev/null | grep -oE '[0-9]+$' || true)
+  kept=$(grep -oE '(episodes kept|successful episodes): \*\*[0-9]+' "$root/demos/datasheet.md" 2>/dev/null | grep -oE '[0-9]+$' || true)
   [ -n "$kept" ] || kept=$(find "$root/demos" -maxdepth 1 -type d -name 'episode_*' | wc -l | tr -d ' ')
   failed=0; [ -f "$root/demos/failures.jsonl" ] && failed=$(wc -l < "$root/demos/failures.jsonl" | tr -d ' ')
   echo "kept $kept/$((kept + failed)) episodes -> $root/demos (replayed from the batch on disk: $failed rows in failures.jsonl)"
