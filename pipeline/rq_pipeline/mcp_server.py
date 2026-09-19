@@ -446,14 +446,22 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
         return refusal(str(why))
 
 
-def export_deployment(
-    run: str, checkpoint: str, name: str, certificate: str | None = None
+def export_deployment(  # noqa: PLR0911 - each return is one named refusal
+    run: str,
+    checkpoint: str,
+    name: str,
+    certificate: str | None = None,
+    unevaluated: bool = False,
 ) -> JobHandle | Refusal:
     """Export a trained policy for deployment: `run` is an experiment in
     the project (its folder under runs/), `checkpoint` a file in it
     (model_7999.pt), `name` the deployment's folder. The policy artifact
     and, unless named, the newest evaluation of that checkpoint are cited
-    from the index. The manifest carries everything a runtime needs —
+    from the index. A checkpoint with no evaluation is refused by name —
+    a deployment the gates cannot judge is one nobody can trust — unless
+    `unevaluated` says the export is deliberate (a smoke, a mechanics
+    check); the order that closes the loop is evaluate, export, gate.
+    The manifest carries everything a runtime needs —
     joint and actuator orders, gains, home pose, action scale, the
     ordered observations, the control rate — read from the built
     environment; the ONNX has normalization folded in; the trained scene
@@ -491,6 +499,12 @@ def export_deployment(
     if certificate is None and policy is not None:
         newest = newest_evaluation_of(index.artifacts, policy.stamp)
         certificate = newest.stamp if newest else None
+    if certificate is None and not unevaluated:
+        return refusal(
+            f"{run}/{checkpoint} has no evaluation to cite: evaluate it first "
+            "(evaluate_walk), or pass unevaluated=True for a deliberate export "
+            "whose gates will report and judge nothing"
+        )
     return Actions(JobManager(_jobs_root())).export_deployment(
         str(path),
         name=name,
@@ -1828,7 +1842,9 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Export a trained walk policy for deployment: ONNX with "
         "normalization folded in, a manifest read from the built environment "
         "(joint and actuator orders, gains, home pose, action scale, ordered "
-        "observations, control rate), the trained scene as MJCF. Job handle."
+        "observations, control rate), the trained scene as MJCF; cites the "
+        "checkpoint's newest evaluation and refuses one that has none unless "
+        "unevaluated=True. Job handle."
     )(export_deployment)
     server.tool(
         description="The sim-to-sim gate: drive the exported policy through its "

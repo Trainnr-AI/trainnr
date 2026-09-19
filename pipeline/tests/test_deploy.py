@@ -206,6 +206,20 @@ class TheDoors(unittest.TestCase):
                 out = server.export_deployment("ghost", "model_1.pt", "d")
                 self.assertEqual(out["status"], "refused")
                 self.assertIn("model_1.pt", out["reason"])
+                # A checkpoint nobody evaluated is refused by name; the
+                # deliberate export is a stated choice (friction 38).
+                run = project.folder("runs") / "r"
+                run.mkdir(parents=True)
+                (run / "identity.json").write_text(
+                    json.dumps(
+                        {"robot": "go2@000000000000", "task": "robotiq/go2-walk"}
+                    )
+                )
+                (run / "model_1.pt").write_bytes(b"\x00")
+                out = server.export_deployment("r", "model_1.pt", "d")
+                self.assertEqual(out["status"], "refused")
+                self.assertIn("no evaluation", out["reason"])
+                self.assertIn("unevaluated=True", out["reason"])
                 out = server.gate_deployment("ghost")
                 self.assertEqual(out["status"], "refused")
                 self.assertIn("ghost", out["reason"])

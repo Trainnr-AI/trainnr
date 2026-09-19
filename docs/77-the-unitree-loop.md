@@ -71,9 +71,9 @@ read differently, and the window must say so rather than show a gap.
 | environment defined | the walk families (`rq_pipeline/tasks/walks.py`): `robotiq/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; rq_mjlab builds the simulator environment from it (`rq_mjlab/src/rq_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
-| policy evaluated | the walk verdict: paired trials, exact interval, the funnel; under the fit and under pushes | `evaluate_walk` (`certify_walk` until 2026-09-12) → generic `evaluate_policy` (A5) | to build |
+| policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12) → generic `evaluate_policy` (A5, still walk-shaped) | done 2026-09-10 on the box: go2-c1 40/40 twice, go2-c2 38/40 |
 | deployment exported | the deploy manifest (A6, `rq_mjlab/src/rq_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`rq_pipeline/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
-| drift monitored | synthetic drift into the declared basis until a Go2 exists; then the SDK2 adapter | `monitor_drift` (A7) | to build |
+| drift monitored | fresh telemetry identified without writing a fit record, judged against the union of the pinned intervals (docs/76 §9.1); empty on the Go2 by design — no telemetry, no method (§8) | `check_drift` (A7) | built 2026-09-13, proved on the rig; waits on a real Go2 here |
 
 ## 3. Frictions found, in the order the loop found them
 
@@ -182,11 +182,12 @@ read differently, and the window must say so rather than show a gap.
     run was launched with (`identity.json`, or a LeRobot run's
     `run.json`), the rule tasks already followed; the index, the
     importer and the live loop share it. The policy's and the
-    certificate's `run` now resolve to the run card. Open: the
-    certificate cites the task by rq_mjlab's walk-spec hash
-    (`go2-walk@83d8a180bfda`) while the project's task is
-    `go2-walk@0e7e123a7de7` (the declared spec's content hash), so the
-    environment card is not yet cited by its evaluation.
+    certificate's `run` now resolve to the run card. Closed for runs
+    trained by the door (2026-09-11, the box, friction 18): `train_walk`
+    hands the project's task stamp to the trainer, the run's identity
+    carries it, and the verdict cites it, so the environment card is
+    cited by its evaluation. A run launched by hand still cites the
+    walk-spec hash, which is what it trained under.
 
 11. **What the policy looked like every hundred iterations** (asked
     2026-09-10: "one image of each 100 iterations, like 80 images",
@@ -689,8 +690,8 @@ policy `go2-c2-model_1499`, certificate 38/40, and both gates JUDGED
 against it: MuJoCo 20/20 passed, DDS 20/20 passed (rate 1.0 against
 the certificate's 0.95, tolerance 0.1). The order that closes the
 loop is certificate, then export, then the gates; the export door
-should refuse a checkpoint without an evaluation unless told
-otherwise (open).
+refuses a checkpoint without an evaluation unless `unevaluated=True`
+says the export is deliberate (closed 2026-09-20, the Mac).
 
 Friction 33 (fixed, 2026-09-12): **"where are the iterations visible
 in the Studio?"** They are the Experiments card (the reward sparkline
