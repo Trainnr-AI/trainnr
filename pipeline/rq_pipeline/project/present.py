@@ -965,7 +965,122 @@ def _present_drift(
     }
 
 
+def _present_scene(
+    project: Project, artifact: Artifact, rr_: Any, root: str = "scene"
+) -> Shown:
+    """A captured scene: the splat as Rerun's own splat archetype beside
+    the collision proxy as a translucent mesh, so the gap is a picture;
+    the record's facts as a reading."""
+    import numpy as np  # noqa: PLC0415
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from rq_pipeline.scenes.record import (  # noqa: PLC0415
+        PROXY_FILE,
+        SCENE_FILE,
+        SPLAT_FILE,
+        load_scene_record,
+    )
+    from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+
+    folder = project.root / artifact.path
+    s = load_scene_record(folder / SCENE_FILE)
+    splats = read_ply(folder / SPLAT_FILE)
+    with _AsDefault(rr_):
+        rr_.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+        rr_.log(
+            f"{root}/splat",
+            rr.GaussianSplats3D(
+                centers=splats.means,
+                scales=splats.scales,
+                quaternions=splats.quats[:, [1, 2, 3, 0]],  # Rerun takes (x, y, z, w)
+                colors=np.concatenate(
+                    [
+                        (splats.colors * 255).astype(np.uint8),
+                        (splats.opacities * 255).astype(np.uint8)[:, None],
+                    ],
+                    axis=1,
+                ),
+            ),
+            static=True,
+        )
+        proxy = _obj_mesh(folder / PROXY_FILE)
+        if proxy is not None:
+            vertices, faces = proxy
+            rr_.log(
+                f"{root}/proxy",
+                rr.Mesh3D(
+                    vertex_positions=vertices,
+                    triangle_indices=faces,
+                    albedo_factor=[90, 160, 255, 90],
+                ),
+                static=True,
+            )
+        g = s.gap
+        lines = [
+            f"# {artifact.stamp}",
+            "",
+            f"source `{s.source}` · {s.splat.get('count')} gaussians · "
+            f"proxy {s.proxy.get('faces')} faces",
+            "",
+            "**the gap** (visible surface against the collision proxy): "
+            + _gap_line(g),
+            "",
+        ]
+        lines += [
+            f"- {p.name}: {p.value} · **{p.basis}**"
+            + (f" ±{p.span:g}" if p.span is not None else "")
+            + (f" [{p.interval[0]:.4g}, {p.interval[1]:.4g}]" if p.interval else "")
+            for p in s.physics
+        ]
+        lines.append(_lineage(artifact))
+        rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
+    return {
+        "paths": [f"{root}/splat", f"{root}/proxy", f"{root}/reading"],
+        "view": "splat + proxy + reading",
+        "layout": rrb.Horizontal(
+            rrb.Spatial3DView(origin="/", name=artifact.stamp),
+            rrb.TextDocumentView(origin=f"{root}/reading", name="scene"),
+            column_shares=[3, 1],
+        ),
+    }
+
+
+def _gap_line(g: Any) -> str:
+    """The four numbers in one line, or why there are none."""
+    if not isinstance(g.p95_m, (int, float)):
+        return f"not measured ({g.note})"
+    return (
+        f"chamfer {g.chamfer_m * 100:.2f} cm · p95 {g.p95_m * 100:.2f} cm · "
+        f"{g.beyond_tolerance_fraction * 100:.1f} % of the visible surface "
+        f"beyond {g.tolerance_m * 100:.0f} cm of any collider · "
+        f"{g.hidden_fraction * 100:.1f} % of the proxy unseen"
+    )
+
+
+def _obj_mesh(path: Path) -> tuple[Any, Any] | None:
+    """A Wavefront OBJ's triangles (v and f lines; quads split), or None."""
+    import numpy as np  # noqa: PLC0415
+
+    if not path.is_file():
+        return None
+    vertices: list[list[float]] = []
+    faces: list[list[int]] = []
+    with path.open("r", encoding="utf-8", errors="replace") as src:
+        for line in src:
+            if line.startswith("v "):
+                vertices.append([float(x) for x in line.split()[1:4]])
+            elif line.startswith("f "):
+                idx = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
+                for i in range(1, len(idx) - 1):
+                    faces.append([idx[0], idx[i], idx[i + 1]])
+    if not vertices or not faces:
+        return None
+    return np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32)
+
+
 _PRESENTERS: dict[Kind, Presenter] = {
+    Kind.SCENE: _present_scene,
     Kind.DRIFT: _present_drift,
     Kind.ROBOT: _present_robot,
     Kind.DEPLOY: _present_deploy,

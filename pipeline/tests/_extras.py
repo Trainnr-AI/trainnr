@@ -35,6 +35,9 @@ MJX_CPU_OPT_IN = os.environ.get("RQ_MJX_CPU_TESTS") == "1"
 NUMPY = installed("numpy")
 TRAIN = installed("lerobot")
 REMOTE = installed("openpi_client", "mujoco")
+SCENE = installed("open3d")
+SCENE_LINE = "scene extra not installed (uv sync --extra scene)"
+needs_scene = unittest.skipUnless(SCENE, SCENE_LINE)
 
 SIM_LINE = "sim extra not installed (uv sync --extra sim)"
 TRAIN_LINE = "train extra not installed (use .venv-train)"

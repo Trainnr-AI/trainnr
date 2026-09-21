@@ -1521,6 +1521,86 @@ def check_drift(
     }
 
 
+def import_scene(source: str, name: str) -> dict[str, Any] | Refusal:
+    """Bring a captured scene into the project as an artifact (docs/78
+    §3): today a Neverwhere benchmark scene folder (MIT; a web splat, a
+    collision mesh already in the world frame, the alignment that takes
+    the splat there, a MuJoCo XML declaring the floor's friction). The
+    splat is moved into the world frame and written as a 3DGS PLY, the
+    mesh becomes the collision proxy with an MJCF wrapper, the
+    visible-surface-to-proxy GAP is measured (chamfer, 95th percentile,
+    the fraction beyond 2 cm, the proxy fraction unseen) and recorded
+    whatever it is, the declared friction is recorded as declared with
+    the span this project randomizes over. Refused by name: a folder
+    that is not a scene, a name already taken, a bad name."""
+    from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+    from rq_pipeline.project.index import UNRECORDED  # noqa: PLC0415
+    from rq_pipeline.project.locate import current_project, plain_name  # noqa: PLC0415
+    from rq_pipeline.scenes import neverwhere  # noqa: PLC0415
+    from rq_pipeline.scenes.record import load_scene_record  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(name, "scene name")
+        folder = Path(source).expanduser().resolve()
+        if not folder.is_dir():
+            raise FileNotFoundError(f"no folder {folder}")
+        record_path = neverwhere.import_scene(folder, project.scenes / name, name=name)
+    except (FileNotFoundError, ValueError, OSError) as refused:
+        return refusal(_reason(refused))
+    record = load_scene_record(record_path)
+    index = index_project(project)
+    write_index(project, index)
+    stamp = next(
+        (
+            a.stamp
+            for a in index.artifacts
+            if a.kind == "scene" and a.path == f"scenes/{name}"
+        ),
+        UNRECORDED,
+    )
+    g = record.gap
+    return {
+        "status": DONE,
+        "scene": stamp,
+        "source": record.source,
+        "record": str(record_path.relative_to(project.root)),
+        "splats": record.splat.get("count"),
+        "proxy_faces": record.proxy.get("faces"),
+        "proxy_watertight": record.proxy.get("watertight"),
+        "gap": {
+            "chamfer_m": g.chamfer_m,
+            "p95_m": g.p95_m,
+            "beyond_tolerance_fraction": g.beyond_tolerance_fraction,
+            "hidden_fraction": g.hidden_fraction,
+            "tolerance_m": g.tolerance_m,
+            "note": g.note,
+        },
+        "declared": list(record.declared),
+        "notes": list(record.notes),
+    }
+
+
+def describe_scene(scene: str) -> dict[str, Any] | Refusal:
+    """A captured scene's record (by version): its source and capture,
+    the chain that made it with every licence, the splat's and proxy's
+    facts, the alignment, the gap's four numbers, and every physics
+    parameter with its basis - measured with an interval, or declared
+    with a span."""
+    from dataclasses import asdict  # noqa: PLC0415
+
+    from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record  # noqa: PLC0415
+
+    try:
+        project, found = _any_project_artifact(scene)
+        if found.kind != "scene":
+            raise ValueError(f"{scene} is a {found.kind}, not a scene")
+        record = load_scene_record(project.root / found.path / SCENE_FILE)
+    except (FileNotFoundError, KeyError, ValueError) as refused:
+        return refusal(_reason(refused))
+    return {"status": DONE, "scene": found.stamp, **asdict(record)}
+
+
 def describe_viewer_recording(
     artifact: str, values: bool = False
 ) -> dict[str, Any] | Refusal:
@@ -1752,6 +1832,18 @@ def build_server() -> Any:  # noqa: PLR0915
         "timelines, components and size; with the viz-query extra, the scalar "
         "series' count, min, max and last value."
     )(describe_viewer_recording)
+    server.tool(
+        description="Bring a captured scene into the project (a Neverwhere benchmark "
+        "scene folder today): the splat in the world frame, the collision proxy, the "
+        "visible-surface-to-proxy gap measured, the floor's declared friction with its "
+        "span. Refuses a folder that is not a scene."
+    )(import_scene)
+    server.tool(
+        description="A captured scene's record: source, capture, the tool chain with "
+        "licences, the splat and proxy facts, the alignment, the gap's four numbers, "
+        "and every physics parameter with its basis (measured with an interval, or "
+        "declared with a span)."
+    )(describe_scene)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
         "version) without writing a fit record and judge every parameter against "

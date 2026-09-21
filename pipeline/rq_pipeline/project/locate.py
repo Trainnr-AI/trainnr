@@ -46,6 +46,7 @@ POLICIES_FOLDER = "policies"
 CERTIFICATES_FOLDER = "certificates"
 DEPLOY_FOLDER = "deploy"
 MONITORING_FOLDER = "monitoring"  # drift checks: fresh telemetry judged
+SCENES_FOLDER = "scenes"  # captured scenes: splat, proxy, the gap (docs/78)
 FINDINGS_FOLDER = "findings"
 FOLDERS = (
     ROBOTS_FOLDER,
@@ -59,6 +60,7 @@ FOLDERS = (
     CERTIFICATES_FOLDER,
     DEPLOY_FOLDER,
     MONITORING_FOLDER,
+    SCENES_FOLDER,
     FINDINGS_FOLDER,
 )
 
@@ -158,6 +160,10 @@ class Project:
     @property
     def monitoring(self) -> Path:
         return self.folder(MONITORING_FOLDER)
+
+    @property
+    def scenes(self) -> Path:
+        return self.folder(SCENES_FOLDER)
 
     @property
     def findings(self) -> Path:

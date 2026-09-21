@@ -77,7 +77,7 @@ nothing downstream ever invents a name.
 | task | a specification, stamped over its fields | yes |
 | recording | telemetry from a real robot, with its source and clock | yes (2026-09-09): `robots/ingest` |
 | fit | an identification record: estimates, intervals, pinned verdict, anchor | yes |
-| scene | a captured or composed environment | no — reserved, see §7 |
+| scene | a captured environment: the splat the cameras see, the collision proxy the solver touches, the gap between them measured, physics by basis | yes — built 2026-09-22 (docs/78 §3, E1) |
 | batch | pressed episodes with a datasheet and per-episode manifests | cites, not stamped |
 | dataset | a training dataset with its provenance sidecar | cites, not stamped |
 | run | a training run with its manifest | cites, not stamped |

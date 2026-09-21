@@ -41,6 +41,7 @@ const CLOUD_ENDPOINT_ENV: &str = "TRAINNR_ENDPOINT";
 pub mod kind {
     pub const ROBOT: &str = "robot";
     pub const TASK: &str = "task";
+    pub const SCENE: &str = "scene";
     pub const RECORDING: &str = "recording";
     pub const BATCH: &str = "batch";
     pub const DATASET: &str = "dataset";
@@ -76,6 +77,12 @@ pub const KINDS: &[Kind] = &[
         section: Section::Environments,
         icon: &icons::VIEW_3D,
         word: "environment",
+    },
+    Kind {
+        name: kind::SCENE,
+        section: Section::Environments,
+        icon: &icons::VIEW_3D,
+        word: "scene",
     },
     Kind {
         name: kind::RECORDING,
@@ -286,7 +293,7 @@ impl Section {
     pub fn empty_hint(self) -> &'static str {
         match self {
             Self::Robots => "No assets yet. Ask your agent to onboard a robot model (MJCF or URDF) or record its telemetry.",
-            Self::Environments => "No environments yet. Ask your agent to define a task and run acceptance.",
+            Self::Environments => "No environments yet. Ask your agent to define a task and run acceptance, or import a captured scene.",
             Self::Recordings => "No recordings yet. Record telemetry from a robot, a ROS 2 bag, a LeRobot dataset, or motion capture.",
             Self::Datasets => "No datasets yet. Ask your agent to generate demonstrations.",
             Self::Experiments => "No experiments yet. Ask your agent to train a policy on a dataset.",
@@ -1658,6 +1665,7 @@ mod tests {
             kind::ROBOT,
             kind::RECORDING,
             kind::TASK,
+            kind::SCENE,
             kind::BATCH,
             kind::DATASET,
             kind::RUN,

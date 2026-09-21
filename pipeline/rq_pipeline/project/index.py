@@ -45,6 +45,7 @@ from rq_pipeline.project.kinds import (
     POLICY_FILE,
     RECORDING_FILE,
     REJECTED,
+    SCENE_FILE,
     TASK_FILE,
     UNREVIEWED,
     Kind,
@@ -508,8 +509,9 @@ def _own_date(kind: Kind, path: Path) -> str | None:
         date = _read(path).get("date")
         if isinstance(date, str) and len(date) >= DATE_CHARS:
             return f"{date[:DATE_CHARS]}T00:00:00+00:00"
-    if kind is Kind.DRIFT:
-        created = _read(path / DRIFT_FILE).get("created_utc")
+    if kind in (Kind.DRIFT, Kind.SCENE):
+        marker = DRIFT_FILE if kind is Kind.DRIFT else SCENE_FILE
+        created = _read(path / marker).get("created_utc")
         if isinstance(created, str) and created:
             return created
     return None
@@ -593,7 +595,30 @@ def _summary_drift(path: Path) -> dict[str, Any]:
     return out
 
 
+def _summary_scene(path: Path) -> dict[str, Any]:
+    """What a card says about a scene: the gap first, then what it holds."""
+    s = _read(path / SCENE_FILE)
+    if not s:
+        return {}
+    gap = s.get("gap") or {}
+    p95 = gap.get("p95_m")
+    out: dict[str, Any] = {
+        "gap p95": f"{p95 * 100:.1f} cm"
+        if isinstance(p95, (int, float))
+        else UNRECORDED,
+        "splats": (s.get("splat") or {}).get("count", UNRECORDED),
+        "source": s.get("source", UNRECORDED),
+    }
+    declared = [
+        p.get("name") for p in s.get("physics", []) if p.get("basis") == "declared"
+    ]
+    if declared:
+        out["declared"] = ", ".join(declared)
+    return out
+
+
 _SUMMARY_READERS: dict[Kind, SummaryReader] = {
+    Kind.SCENE: _summary_scene,
     Kind.DRIFT: _summary_drift,
     Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},

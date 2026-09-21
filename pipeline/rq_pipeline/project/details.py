@@ -1371,7 +1371,141 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
     return sections
 
 
+GAP_NOTE = (
+    "The gap the field never audits: altering only the collision geometry drops "
+    "real success 61.7 points while the simulation looks unchanged "
+    "(docs/e2e-research/75 §2)."
+)
+BASIS_NOTE = (
+    "measured: a robot touched it and a fit record carries the interval; declared: "
+    "someone said so, with the span this project randomizes over."
+)
+
+
+def _splat_line(splat: dict[str, Any]) -> str:
+    count, degree = splat.get("count", UNRECORDED), splat.get("sh_degree", UNRECORDED)
+    visible = splat.get("visible_count", UNRECORDED)
+    return f"{count} gaussians, harmonics degree {degree}, {visible} visible"
+
+
+def _proxy_line(proxy: dict[str, Any]) -> str:
+    vertices, faces = proxy.get("vertices", UNRECORDED), proxy.get("faces", UNRECORDED)
+    tight = proxy.get("watertight", UNRECORDED)
+    return f"{vertices} vertices, {faces} faces, watertight {tight}"
+
+
+def _alignment_line(a: Any) -> str:
+    euler = tuple(round(v, 3) for v in a.rotation_euler_xyz)
+    translation = tuple(round(v, 3) for v in a.translation)
+    return f"scale {a.scale:.4g}, euler {euler}, translation {translation} ({a.source})"
+
+
+def _scene(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    """A captured scene: the gap first (what the eye sees against what
+    the solver touches), the physics by basis, the capture and the
+    chain that made it, the splat's and the proxy's facts."""
+    from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record  # noqa: PLC0415
+
+    try:
+        s = load_scene_record(root / SCENE_FILE)
+    except (OSError, ValueError, TypeError) as why:
+        return [_kv("Scene", [("unreadable", str(why))])]
+    g = s.gap
+
+    def cm(v: float | None) -> Any:
+        return f"{v * 100:.2f} cm" if isinstance(v, (int, float)) else UNRECORDED
+
+    def pct(v: float | None) -> Any:
+        return f"{v * 100:.1f} %" if isinstance(v, (int, float)) else UNRECORDED
+
+    tol = f"{g.tolerance_m * 100:.0f} cm"
+    sections: list[Section] = [
+        _kv(
+            "Scene",
+            [
+                ("version", artifact.stamp),
+                ("source", s.source),
+                ("splat", _splat_line(s.splat)),
+                ("proxy", _proxy_line(s.proxy)),
+                ("alignment", _alignment_line(s.alignment)),
+                ("created", s.created_utc),
+                ("code", s.code),
+            ],
+        ),
+        _kv(
+            "Visible surface against the collision proxy",
+            [
+                ("chamfer", cm(g.chamfer_m)),
+                ("95th percentile, visible to proxy", cm(g.p95_m)),
+                (
+                    f"visible surface beyond {tol} of any collider",
+                    pct(g.beyond_tolerance_fraction),
+                ),
+                (
+                    f"proxy surface beyond {tol} of any visible gaussian",
+                    pct(g.hidden_fraction),
+                ),
+                (
+                    "visible surface inside the proxy's footprint",
+                    pct(g.footprint_fraction),
+                ),
+                (
+                    "samples",
+                    f"{g.visible_samples} visible in the footprint, "
+                    f"{g.proxy_samples} on the proxy",
+                ),
+                ("method", g.method),
+            ]
+            + ([("not measured", g.note)] if g.note else []),
+            note=GAP_NOTE,
+        ),
+        _table(
+            "Physics, by basis",
+            ["parameter", "value", "basis", "span or interval", "cites", "unit"],
+            [
+                [
+                    p.name,
+                    p.value,
+                    p.basis,
+                    (
+                        f"±{p.span:g}"
+                        if p.span is not None
+                        else (
+                            f"[{p.interval[0]:.4g}, {p.interval[1]:.4g}]"
+                            if p.interval
+                            else ""
+                        )
+                    ),
+                    p.cites,
+                    p.unit,
+                ]
+                for p in s.physics
+            ],
+            note=BASIS_NOTE,
+        ),
+        _kv(
+            "Capture and chain",
+            [
+                ("device", s.capture.device),
+                ("app", s.capture.app),
+                ("frames", s.capture.frames),
+                ("resolution", s.capture.resolution),
+                ("duration (s)", s.capture.duration_s),
+                ("lighting", s.capture.lighting),
+            ]
+            + [
+                (f"tool: {t.name}", f"{t.version} · {t.license} · {t.role}")
+                for t in s.tools
+            ],
+        ),
+    ]
+    if s.notes:
+        sections.append(_kv("Notes", [(f"{i + 1}", n) for i, n in enumerate(s.notes)]))
+    return sections
+
+
 _WRITERS: dict[str, Writer] = {
+    "scene": _scene,
     "drift": _drift,
     "deploy": _deploy,
     "robot": _robot,

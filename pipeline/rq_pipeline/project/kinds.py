@@ -30,6 +30,7 @@ from rq_pipeline.envs.lerobot_train_log import CHECKPOINT_WEIGHTS, RUN_MANIFEST_
 from rq_pipeline.fleet.drift import DRIFT_FILE as _DRIFT_FILE
 from rq_pipeline.project.files import read_json
 from rq_pipeline.robots.recording import MANIFEST_FILE as RECORDING_FILE
+from rq_pipeline.scenes.record import SCENE_FILE
 
 # Markers this module owns because no writer exists yet (docs/76 §2):
 # a drift record. The rest are imported from their writers above or
@@ -64,6 +65,7 @@ class Kind(str, Enum):
     CERTIFICATE = "certificate"
     DEPLOY = "deploy"
     DRIFT = "drift"
+    SCENE = "scene"  # a captured scene: splat, proxy, the gap (docs/78 §3)
     FINDING = "finding"
 
 
@@ -104,6 +106,7 @@ RULES: dict[Kind, tuple[Marker, ...]] = {
     Kind.CERTIFICATE: (Marker(file=CERTIFICATE_FILE),),
     Kind.DEPLOY: (Marker(file=DEPLOY_FILE),),
     Kind.DRIFT: (Marker(file=DRIFT_FILE),),
+    Kind.SCENE: (Marker(file=SCENE_FILE),),
     Kind.ROBOT: (Marker(suffix=ROBOT_MODEL_SUFFIX, fallback=True),),
     Kind.POLICY: (
         Marker(file=CHECKPOINT_WEIGHTS, fallback=True),

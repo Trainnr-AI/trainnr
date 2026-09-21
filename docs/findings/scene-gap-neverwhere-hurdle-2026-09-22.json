@@ -1,0 +1,41 @@
+{
+ "id": "scene-gap-neverwhere-hurdle-2026-09-22",
+ "claim": "The first audit of a published splat scene's visible surface against its own collision proxy: on Neverwhere's hurdle_226_blue_carpet_v3 (MIT; 753,226 gaussians in the web splat, 145,241 collision faces, not watertight), the splat and the proxy are well aligned at the floor (the splats over the course sit at a median height of -0.002 m, median distance to the proxy 0.014 m) yet the gap is large away from it: inside the proxy's footprint the chamfer is 0.046 m, the 95th-percentile visible-to-proxy distance 0.185 m, 44.8 % of the visible surface lies more than 0.02 m from any collider, and 73.6 % of the proxy's surface lies more than 0.02 m from any visible gaussian (32 % beyond 0.05 m, 7 % beyond 0.10 m; the unseen samples sit at a median height of 0.17 m: hurdle faces and low walls). 91.0 % of the scene's visible surface lies inside the proxy's footprint at all; the rest is the corridor the course never covers. A first pass that audited the whole capture instead of the footprint reported a 3.2 m 95th percentile on this well-aligned scene, which is why the audit is scoped.",
+ "date": "2026-09-22",
+ "repo_commit": "49ffccd",
+ "argv": [
+  "import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the Mac]",
+  "rq_pipeline.scenes.gap.measure(splats, proxy.obj, tolerance_m=0.02, seed=0): visible = opacity >= 0.5; footprint = the proxy's extent grown by 0.5 m; 200,000 visible centres sampled inside it against the proxy by Open3D ray casting; 100,000 proxy surface samples against the nearest visible centre anywhere by k-d tree",
+  "diagnostic (scratch venv): the hidden fraction at 0.02 / 0.05 / 0.10 m tolerances and the unseen samples' height; the checkpoint's centres against the web file's (nearest 0.0000 m: the same frame); the author's visual mesh under collision_tf.json against the collision mesh (median 0.000 m)"
+ ],
+ "instrument": "rq_pipeline.scenes (numpy), Open3D 0.20.0, Python 3.12, macOS 25.5.0 Apple M1 Pro; the scene's own collision_tf.json (scale 0.4313, euler radians (2.592, 1.268, 2.114), translation (1.662, 0.054, 0.661)) applied as MuJoCo's intrinsic x-y-z euler, verified against mujoco 3.11 xmat to 1e-9",
+ "outcome": {
+  "scene": "neverwhere/hurdle_226_blue_carpet_v3 -> scenes-mac/scenes/hurdle-blue-carpet (hurdle-blue-carpet@09bd014138dd)",
+  "splat": {"count": 753226, "visible_opacity_ge_0.5": 393684, "sh_degree_in_web_file": 0, "extent_m": [[-12.538, -9.651, -2.263], [11.193, 9.964, 5.132]]},
+  "proxy": {"faces": 145241, "vertices": 72959, "watertight": false, "edge_manifold": false, "extent_m": [[-2.0, -3.0, -0.045], [9.978, 3.0, 2.847]], "faces_facing_up": 0.71, "faces_facing_sideways": 0.26, "faces_facing_down": 0.03},
+  "alignment_checks": {"web_splat_vs_checkpoint_nearest_m": {"median": 0.0, "p95": 0.0}, "visual_mesh_under_tf_vs_collision_m": {"median": 0.0, "p95": 1.018, "beyond_0.02": 0.09}, "splats_over_course_height_m_percentiles_5_50_95": [-0.069, -0.002, 0.909], "splats_over_course_to_collision_m": {"median": 0.014, "p95": 0.132, "beyond_0.02": 0.43}},
+  "gap_in_footprint": {"chamfer_m": 0.0464, "p95_m": 0.1845, "beyond_0.02_fraction": 0.448, "hidden_fraction_0.02": 0.736, "footprint_fraction": 0.910, "visible_samples": 200000, "proxy_samples": 100000},
+  "hidden_fraction_by_tolerance": {"0.02": 0.74, "0.05": 0.32, "0.10": 0.07, "unseen_samples_height_m_percentiles_5_50_95": [-0.02, 0.17, 1.22]},
+  "whole_scene_first_pass": {"p95_m": 3.208, "beyond_0.02_fraction": 0.497, "note": "the audit before scoping; recorded so the scoping decision is auditable"}
+ },
+ "inputs": {
+  "scene_zip_sha256_prefix": "b36604d74cf4b733",
+  "source": "https://huggingface.co/datasets/ziyc/neverwhere (MIT), scenes/hurdle_226_blue_carpet_v3.zip, 198,253,978 bytes, manifest dated 2026-09-16"
+ },
+ "artifacts": {
+  "record": "projects/scenes-mac/scenes/hurdle-blue-carpet/scene.json (the Mac; projects/ is not tracked)",
+  "splat": "projects/scenes-mac/scenes/hurdle-blue-carpet/splat.ply (world frame, 3DGS PLY)",
+  "proxy": "projects/scenes-mac/scenes/hurdle-blue-carpet/proxy.obj + proxy.xml"
+ },
+ "sources": {
+  "neverwhere": "arXiv 2609.16443, dataset card read 2026-09-22",
+  "collision_mesh_poisoning": "arXiv 2609.18122: the reason the gap is audited at all (docs/e2e-research/75 §2)"
+ },
+ "protocol": "docs/78-the-scene-loop.md §3 (the gap) and §4 E1",
+ "caveats": [
+  "One scene, one tolerance on the record (0.02 m); the three-tolerance hidden fractions come from the diagnostic run, not the record.",
+  "The web splat is opacity-quantised; the visible set is opacity >= 0.5 of that. The checkpoint's opacities give 350,336 over the course against the web file's count; the audit ran on the web file.",
+  "Their simulator collides against this mesh as a signed-distance field; ours would use its convex hull or a decomposition, so the gap a MuJoCo task actually sees is this one plus the decomposition's, still unmeasured.",
+  "A gap number is not a verdict: what a robot tolerates is the task's declaration. This record measures; docs/78 §3 says the threshold is the task's."
+ ]
+}

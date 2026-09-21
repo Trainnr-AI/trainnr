@@ -55,6 +55,9 @@ viz = ["rerun-sdk>=0.20", "tensorboard>=2.15"]
 # Reading a saved viewer recording back as columns (the headless door):
 # Rerun's local catalog needs DataFusion.
 viz-query = ["rerun-sdk[datafusion]>=0.20"]
+# Captured scenes (docs/78): the visible-surface-to-proxy audit needs Open3D's
+# ray casting; collision proxies from meshes need CoACD (MIT; V-HACD is archived).
+scene = ["open3d>=0.19", "coacd>=1.0"]
 # deploy: the manifest-driven runtime and the sim-to-sim gate run the
 # exported ONNX policy; onnx reads the metadata the exporter attached.
 deploy = ["onnxruntime>=1.20", "onnx>=1.16"]

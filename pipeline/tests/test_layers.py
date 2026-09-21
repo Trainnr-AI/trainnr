@@ -24,6 +24,7 @@ TIER = {
     "rl": 2,  # SmoothRL's pure and torch halves (docs/71); nothing above stats
     "deploy": 2,  # the sim-to-sim gate: plain MuJoCo + ONNX, judged by evaluate's rule
     "fleet": 3,  # drift: the identifier's method over a recording, judged
+    "scenes": 3,  # captured scenes: numpy splats, the proxy audit; robot's code version
     "physics": 3,
     "tasks": 3,
     "collect": 3,

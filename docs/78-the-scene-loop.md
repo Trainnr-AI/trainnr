@@ -101,7 +101,7 @@ number).
 | # | experiment | gate, provable here |
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding |
-| E1 | **Capture to scene.** `capture_scene(video, name)`: poses, splat, proxy, alignment, the gap, the declared physics, the record; the Studio reads it. First capture: a real floor the operator walks with a phone. | a stamped scene whose record carries every field of §3; the gap measured on the first capture and recorded as a finding; the card, drawer and viewer checked by capture |
+| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the phone-video capture waits on the operator's video |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
@@ -164,3 +164,47 @@ does not ship; the visual–collision gap measured and carried on every
 scene against a field that never audits it; scene physics with an
 interval and a drift check against a field of point estimates and
 hand-picked spans.
+
+## 8. E1 as built (2026-09-22, the Mac)
+
+`rq_pipeline/scenes/`: `splat.py` (the 3DGS PLY read and written with
+the activations applied at the file boundary, the web `.splat` read,
+a similarity applied to centres, rotations and scales together;
+MuJoCo's intrinsic x-y-z euler in radians, checked against `xmat`),
+`record.py` (schema `trainnr-scene/1`: capture, tools with licences,
+splat and proxy facts, alignment, the gap, physics by basis - a
+declared value must carry its span, a measured one its interval),
+`gap.py` (the four numbers plus coverage, scoped to the proxy's
+footprint), `neverwhere.py` (the import). The kind on both sides, the
+`scenes/` folder, the card, the drawer, the top-down tile, the viewer
+presentation through Rerun's splat archetype beside the proxy mesh,
+the doors `import_scene` and `describe_scene`, the `scene` extra
+(Open3D, CoACD), eleven tests.
+
+What the first real scene taught, in the order it was learned:
+
+1. **The web splat shares the checkpoint's frame** (nearest
+   neighbour 0.0000 m), so the cheap file is the right input for the
+   audit; the checkpoint's degree-3 harmonics are for a finer export.
+2. **MuJoCo's `euler` is degrees by default and radians in every
+   robot file that sets the compiler so.** The scene's transform is
+   radians; the first unit test used the default and failed until the
+   compiler said radian. The convention itself, intrinsic x-y-z,
+   matched to 1e-9.
+3. **An audit of the whole capture is not an audit of the course.** A
+   capture sees the corridor; the proxy covers the hurdles. The first
+   pass reported a 3.2 m 95th percentile on a floor aligned to 1.4 cm.
+   The audit is now scoped to the proxy's footprint (its extent grown
+   by half a metre), and the share of the visible surface inside that
+   footprint is reported beside the four numbers as coverage.
+4. **The honest gap on the field's benchmark is not small.** Over the
+   course: chamfer 4.6 cm, 95th percentile 18.5 cm, 45 % of the visible
+   surface more than 2 cm from any collider, 74 % of the proxy more
+   than 2 cm from any visible gaussian (32 % beyond 5 cm, 7 % beyond
+   10 cm), mostly hurdle faces and low walls. The floor is tight; the
+   obstacles are coarse. Whether a walk tolerates that is the task's
+   declaration; the record now carries the number the task can cite.
+5. **Their collider is a signed-distance field, ours would be a hull.**
+   A hurdle is not convex, so a MuJoCo task on this scene decomposes
+   the proxy (CoACD) or loads MuJoCo's SDF plugin, and the record's
+   notes say so; the decomposition's own gap is E2's to measure.

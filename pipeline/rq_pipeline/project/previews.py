@@ -619,7 +619,89 @@ def _render_drift(
     return _save_pil(image, out)
 
 
+TILE_SPLATS = 60_000  # points a tile draws; more is invisible at its size
+
+
+def _extent_pair(extent: Any) -> tuple[list[float], list[float]] | None:
+    """A recorded [[lo], [hi]] extent, both ends present, else None."""
+    if isinstance(extent, list) and len(extent) == 2:  # noqa: PLR2004 - a pair
+        return list(extent[0]), list(extent[1])
+    return None
+
+
+def _render_scene(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
+    """A scene from above: the visible gaussians as points in their own
+    colour, the proxy's footprint as a box, the gap's headline number."""
+    try:
+        from PIL import Image, ImageDraw  # noqa: PLC0415
+    except ImportError:
+        return False
+    from rq_pipeline.scenes.record import (  # noqa: PLC0415
+        SCENE_FILE,
+        SPLAT_FILE,
+        load_scene_record,
+    )
+    from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+
+    try:
+        s = load_scene_record(source / SCENE_FILE)
+        splats = read_ply(source / SPLAT_FILE).visible()
+    except (OSError, ValueError, TypeError):
+        return False
+    width, height = PREVIEW_SIZE
+    image = Image.new("RGB", (width, height), GROUND)
+    draw = ImageDraw.Draw(image)
+    extent = _extent_pair(s.proxy.get("extent_m"))
+    xy = splats.means[:, :2]
+    if extent:
+        lo = np.array(extent[0][:2], dtype=np.float64) - 0.5
+        hi = np.array(extent[1][:2], dtype=np.float64) + 0.5
+    else:
+        lo, hi = np.percentile(xy, 2, axis=0), np.percentile(xy, 98, axis=0)
+    span = np.maximum(hi - lo, 1e-6)
+    keep = np.all((xy >= lo) & (xy <= hi), axis=1)
+    pts, cols = xy[keep], (splats.colors[keep] * 255).astype(np.uint8)
+    if pts.shape[0] > TILE_SPLATS:
+        pick = np.random.default_rng(0).choice(pts.shape[0], TILE_SPLATS, replace=False)
+        pts, cols = pts[pick], cols[pick]
+    margin, top = 24, 112  # below the two text lines
+    sx, sy = (width - 2 * margin) / span[0], (height - top - margin) / span[1]
+    scale = min(sx, sy)
+    px = (margin + (pts[:, 0] - lo[0]) * scale).astype(int)
+    py = (height - margin - (pts[:, 1] - lo[1]) * scale).astype(int)
+    pixels = image.load()
+    for x, y, c in zip(px, py, cols, strict=True):
+        if 0 <= x < width and 0 <= y < height:
+            pixels[x, y] = (int(c[0]), int(c[1]), int(c[2]))
+    if extent:
+        x0 = margin + (extent[0][0] - lo[0]) * scale
+        x1 = margin + (extent[1][0] - lo[0]) * scale
+        y0 = height - margin - (extent[1][1] - lo[1]) * scale
+        y1 = height - margin - (extent[0][1] - lo[1]) * scale
+        draw.rectangle([x0, y0, x1, y1], outline=(88, 166, 255), width=2)
+    g = s.gap
+    head = (
+        f"gap p95 {g.p95_m * 100:.1f} cm"
+        if isinstance(g.p95_m, (int, float))
+        else "gap unmeasured"
+    )
+    # The headline's descenders reach ~y=72 at 48 px; the subtitle sits
+    # below them (measured on the first scene tile, 2026-09-22).
+    draw.text((48, 24), head, fill=(236, 238, 242), font=_font(48))
+    draw.text(
+        (48, 84),
+        f"{s.splat.get('count', '?')} gaussians · {s.proxy.get('faces', '?')} "
+        f"proxy faces · {s.source}",
+        fill=(160, 166, 178),
+        font=_font(22),
+    )
+    return _save_pil(image, out)
+
+
 _RENDERERS: dict[str, Renderer] = {
+    "scene": _render_scene,
     "drift": _render_drift,
     "recording": _render_recording,
     "robot": _render_robot,
