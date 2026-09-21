@@ -130,6 +130,37 @@ instrument step and every GPU rate when the box returns. The scratch
 venv with mujoco_warp 3.13 stays beside the repo; the walk package's
 pins do not move until E0.
 
+### 4.1 Amended by the physics pass (2026-09-22, docs/e2e-research/76)
+
+The proxy stays under E2: for thousands of environments the field's only
+working recipe is rigid physics on a proxy with gaussians as the
+renderer, and every alternative (continuum physics on gaussians,
+gradients through contact, learned gaussian dynamics, a pure gaussian
+world model) either trains no deployed policy or does not scale. Three
+amendments:
+
+- **E2 gains a contact-site gap and a perturbation assay.** Moving a
+  collision mesh by 20 mm and 5° zeroed a contact task while the image
+  did not change (2608.21416, simulation, 39 scenes). So beside the
+  scene's four numbers over its footprint, a task records the same four
+  within its contact regions (for a walk, the ground under the paths
+  the feet take), and E2 runs the assay: the proxy shifted ±20 mm and
+  ±5°, the walk's evaluation re-measured, the cliff recorded. The
+  cliff, never a visual metric, sets the collision tolerance the task
+  declares and the geometric span it randomises over.
+- **Movable objects follow Newton's design when they come.** Gaussians
+  attached to bodies as shapes with their own BVH refit from forward
+  kinematics, a collision proxy built from the gaussians, the gaussians
+  never colliding (Newton 1.6.0, verified in source). The bounded port
+  into mujoco_warp is the route; until a task needs a moving object the
+  camera must see, objects stay meshes.
+- **E5 is a sampling fit with intervals over a tracked-pose residual.**
+  No shipped engine differentiates contact make and break; the twin
+  line that tried dropped gradients for a sampling fit. A gaussian pose
+  tracker is the front end, `mujoco.sysid`'s Gauss-Newton with
+  intervals or a DROPO-style posterior the fitter, the span from the
+  interval; RigPI's 1.5–7 % on mass is the bar.
+
 ## 5. Frictions expected, named before they are found
 
 - The splat renderer keeps splats static: a scene is a stage, never a
@@ -208,3 +239,27 @@ What the first real scene taught, in the order it was learned:
    A hurdle is not convex, so a MuJoCo task on this scene decomposes
    the proxy (CoACD) or loads MuJoCo's SDF plugin, and the record's
    notes say so; the decomposition's own gap is E2's to measure.
+
+## 9. How a scene's physics gets certified for a task
+
+Assembled from what exists (docs/e2e-research/76 §7), every step but
+the last runnable here today:
+
+1. Identify the floor's or object's friction, mass and centre of mass
+   by a scripted interaction; report the spread over at least five
+   repeats and the interval (E5).
+2. Replay at least ten recorded real trajectories open-loop; report the
+   pose after interaction (the field's good pipelines: 0.4–1.5 cm) and
+   the joint-tracking error.
+3. Run the perturbation assay on the task's contact sites (±20 mm,
+   ±5°); report the success cliff; the cliff sets the collision
+   tolerance and the geometric span.
+4. Evaluate at least three policies with paired real and simulated
+   trials, at least twenty a cell; report the correlation, the
+   rank-violation rate, a prediction-powered or conformal interval, and
+   the bias in points.
+5. Fix and publish the seeds.
+
+Steps 1, 2 and 4 need a robot; step 3 and the seeds are E2's. A scene
+record that has not been through this is a scene, not a certified one,
+and its card says which.
