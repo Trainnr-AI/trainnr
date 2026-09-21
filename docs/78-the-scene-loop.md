@@ -110,6 +110,26 @@ number).
 E0 through E3 need the box's GPU and a phone. E4 needs their data and
 a day. E5 needs a robot and is where the loop closes.
 
+**The Mac order (2026-09-22, the box unavailable).** Probed the same
+day, before any building: mujoco_warp 3.13's splat renderer runs on a
+CPU-only Warp on this Mac and composites correctly, at about 3 frames a
+second for four worlds at 320 by 240 (finding
+`splat-renderer-cpu-2026-09-22`), so E2 can be smoked here at a small
+resolution and measured for real on the box later. Brush ships an
+Apple-Silicon binary under Apache that trains a splat from COLMAP data
+on Metal and logs into Rerun; COLMAP 4.2 installs from Homebrew; CoACD
+and Open3D install from PyPI. And Neverwhere's scenes (MIT) each ship
+a gsplat checkpoint, a web splat, a MuJoCo collision mesh with its
+alignment transform, the COLMAP poses, the dense reconstruction and
+the original capture — a complete scene artifact by another author,
+one of them under 200 MB. So the order on the Mac is: E4's data first
+as E1's first scene (import, the record, the gap measured against
+their own collision mesh, the Studio); the operator's phone video as
+E1's second scene through the Brush chain; E2 smoked on the CPU; E0 the
+instrument step and every GPU rate when the box returns. The scratch
+venv with mujoco_warp 3.13 stays beside the repo; the walk package's
+pins do not move until E0.
+
 ## 5. Frictions expected, named before they are found
 
 - The splat renderer keeps splats static: a scene is a stage, never a
