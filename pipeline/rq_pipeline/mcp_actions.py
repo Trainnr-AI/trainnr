@@ -517,6 +517,39 @@ class Actions:
         argv += ["--runtime", runtime, "--reference", str(unitree_reference())]
         return self.jobs.start("gate-deployment", argv, PIPELINE_DIR)
 
+    def assay_deployment(
+        self,
+        name: str,
+        scene: str,
+        *,
+        project: str,
+        trials: int = 20,
+        seed: int = 1000,
+    ) -> JobHandle:
+        """The perturbation assay (docs/78 §4.1): the deployment staged on
+        the scene nine times - nominal, ±20 mm on each axis, ±5° of yaw
+        about the start - and gated on each with the same seed; the
+        success cliff lands in `assay.json` on the nominal stage. A job."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        plain_name(scene, "scene name")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "deploy", "viz", "scene"),
+            str(TOOLS_DIR / "assay-deployment.py"),
+            "--project",
+            project,
+            "--name",
+            name,
+            "--scene",
+            scene,
+            "--trials",
+            str(trials),
+            "--seed",
+            str(seed),
+        ]
+        return self.jobs.start("assay-deployment", argv, PIPELINE_DIR)
+
     def open_studio(self) -> JobHandle:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun

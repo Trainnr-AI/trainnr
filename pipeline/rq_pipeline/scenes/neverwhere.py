@@ -28,6 +28,7 @@ import numpy as np
 
 from rq_pipeline.robot.fit_record import code_version
 from rq_pipeline.scenes import gap as gap_audit
+from rq_pipeline.scenes.proxy import PARTS_FILE, ensure_parts
 from rq_pipeline.scenes.record import (
     DECLARED,
     PROXY_FILE,
@@ -97,6 +98,23 @@ def _declared_friction(folder: Path) -> list[float] | None:
         if m:
             return [float(v) for v in m.group(1).split()]
     return None
+
+
+WAYPOINT_BODY = re.compile(
+    r'<body\s+name="waypoint-(\d+)"[^>]*?\bpos="([^"]+)"', re.IGNORECASE
+)
+WAYPOINT_SOURCE = "the scene's XML: its mocap bodies named waypoint-N, in order"
+
+
+def _waypoints(source: Path) -> list[list[float]]:
+    """The course's waypoint positions from the scene's own XML, in the
+    order their names give; empty when the scene lays out none."""
+    for xml in sorted(source.glob("*.xml")):
+        found = WAYPOINT_BODY.findall(xml.read_text(encoding="utf-8", errors="replace"))
+        if found:
+            ordered = sorted(found, key=lambda m: int(m[0]))
+            return [[float(v) for v in pos.split()] for _, pos in ordered]
+    return []
 
 
 def _proxy_mjcf(mesh_file: str, friction: list[float] | None) -> str:
@@ -175,6 +193,14 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
         measured = gap_audit.measure(splats, out_dir / PROXY_FILE)
     except ImportError as missing:
         measured = gap_audit.unmeasured(str(missing))
+    proxy_facts = _mesh_facts(out_dir / PROXY_FILE)
+    try:
+        parts = ensure_parts(out_dir)
+        proxy_facts["parts"] = parts.parts
+        proxy_facts["parts_file"] = PARTS_FILE
+    except ImportError as missing:
+        proxy_facts["parts"] = UNRECORDED
+        proxy_facts["parts_note"] = str(missing)
     physics: list[Physics] = []
     if friction is not None:
         physics.append(
@@ -224,7 +250,7 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
             ),
         ),
         splat={"file": SPLAT_FILE, "from": str(WEB_SPLAT), **describe(splats)},
-        proxy=_mesh_facts(out_dir / PROXY_FILE),
+        proxy=proxy_facts,
         alignment=Alignment(
             scale=scale,
             rotation_euler_xyz=euler,
@@ -236,5 +262,8 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
         created_utc=datetime.now(timezone.utc).isoformat(),
         code=code_version(),
         notes=tuple(notes),
+        course={"waypoints": waypoints, "source": WAYPOINT_SOURCE}
+        if (waypoints := _waypoints(source))
+        else {},
     )
     return record.write(out_dir / SCENE_FILE)

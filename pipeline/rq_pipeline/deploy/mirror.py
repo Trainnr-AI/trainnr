@@ -22,13 +22,14 @@ from typing import Any, TextIO
 
 import numpy as np
 
-from rq_pipeline.deploy.manifest import TWIST_SHORT, Manifest
+from rq_pipeline.deploy.manifest import TWIST_SHORT, Key, Manifest
 from rq_pipeline.viz import (
     MIRROR_HZ,
     SIM_TIMELINE,
     STUDIO_ADDRESS,
     VISUAL_ONLY_SKIP_GROUPS,
     RigMirror,
+    gaussians,
     open_stream,
 )
 
@@ -51,11 +52,16 @@ def _rerun() -> Any | None:
     return rr
 
 
+SCENE_PATH = "world/scene/splat"
+CAMERAS_PATH = "cameras"  # the stage cameras' pictures, one entity each
+CAMERA_HZ = 2  # pictures a second: the ray tracer on a CPU takes seconds a frame
+
+
 class GateMirror:
     """One gate run's picture: the deployment's scene driven by the
     runtime's poses, one Rerun recording named for the runtime."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the picture's own knobs, each named
         self,
         manifest: Manifest,
         model: Any,
@@ -63,6 +69,7 @@ class GateMirror:
         *,
         rr: Any,
         file: Path | None = None,
+        scene_dir: Path | None = None,
     ) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
@@ -78,11 +85,16 @@ class GateMirror:
         )
         self.every = ticks_per_frame(manifest.control.step_dt)
         self.ticks = 0
+        self.frames = 0
         self.seconds = 0.0
+        self.manifest = manifest
+        self._cameras: Any = None
         open_stream(
             f"{APP_ID}-{runtime_name}", address=STUDIO_ADDRESS, file=file, rr=rr
         )
         self._layout()
+        if scene_dir is not None:
+            self._scene(scene_dir)
 
     @classmethod
     def open(
@@ -92,8 +104,11 @@ class GateMirror:
         *,
         log: TextIO = sys.stderr,
         file: Path | None = None,
+        scene_dir: Path | None = None,
     ) -> GateMirror | None:
-        """The mirror, or None with a note when it cannot be one."""
+        """The mirror, or None with a note when it cannot be one; with a
+        `scene_dir` (a staged deployment) the scene's splat is the
+        picture's ground, the collision parts stay hidden (group 3)."""
         rr = _rerun()
         if rr is None:
             print("[gate] no Rerun SDK: the picture stays in the runtime", file=log)
@@ -105,12 +120,55 @@ class GateMirror:
 
         try:
             model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
-            return cls(manifest, model, runtime_name, rr=rr, file=file)
+            return cls(
+                manifest, model, runtime_name, rr=rr, file=file, scene_dir=scene_dir
+            )
         except (FileNotFoundError, ValueError, KeyError) as why:
             # an unloadable scene, or a joint the manifest names and the
             # scene lacks: the gate runs, the picture does not
             print(f"[gate] no mirror: {why!r}", file=log)
             return None
+
+    def _scene(self, scene_dir: Path) -> None:
+        """The captured scene's splat under the robot, once, static; and
+        the stage's cameras seeing it, when the instrument can render
+        them (`scenes.cameras`), else a note saying why not."""
+        from rq_pipeline.scenes.cameras import open_cameras  # noqa: PLC0415
+        from rq_pipeline.scenes.record import SPLAT_FILE  # noqa: PLC0415
+        from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+
+        rr = self._rr
+        splats = read_ply(Path(scene_dir) / SPLAT_FILE)
+        rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+        rr.log(SCENE_PATH, gaussians(rr, splats), static=True)
+        names = self._camera_names()
+        self._cameras, why = (
+            open_cameras(self.model, splats, names=names) if names else (None, "")
+        )
+        if self._cameras is None:
+            rr.log(
+                "gate/notes", rr.TextLog(f"no camera pictures: {why or 'no cameras'}")
+            )
+        else:
+            rr.log(
+                "gate/notes",
+                rr.TextLog(
+                    f"cameras {', '.join(names)} at {CAMERA_HZ} Hz from "
+                    f"{self._cameras.splats} splats on {self._cameras.instrument}"
+                ),
+            )
+
+    def _camera_names(self) -> tuple[str, ...]:
+        """The stage's cameras, named by its manifest; none for a plane."""
+        return tuple((self.manifest.raw.get(Key.SCENE) or {}).get("cameras") or ())
+
+    def _pictures(self) -> None:
+        """One frame per stage camera, at the camera cadence."""
+        if self._cameras is None or (self.frames % max(MIRROR_HZ // CAMERA_HZ, 1)):
+            return
+        rr = self._rr
+        for name, frame in self._cameras.render(self.model, self.data).items():
+            rr.log(f"{CAMERAS_PATH}/{name}", rr.Image(frame))
 
     def _layout(self) -> None:
         rr = self._rr
@@ -124,6 +182,14 @@ class GateMirror:
                             origin="world", name=f"gate · {self.runtime_name}"
                         ),
                         rrb.Vertical(
+                            rrb.Horizontal(
+                                *(
+                                    rrb.Spatial2DView(
+                                        origin=f"{CAMERAS_PATH}/{name}", name=name
+                                    )
+                                    for name in self._camera_names()
+                                )
+                            ),
                             rrb.TimeSeriesView(origin="gate/command", name="command"),
                             rrb.TimeSeriesView(origin="gate/velocity", name="measured"),
                             rrb.TextLogView(origin="gate/notes", name="trials"),
@@ -168,6 +234,8 @@ class GateMirror:
         mujoco.mj_forward(self.model, self.data)
         rr.set_time(TIMELINE, duration=self.seconds)
         self._mirror.log(self.data)
+        self.frames += 1
+        self._pictures()
         for axis, value in zip(TWIST_SHORT, command, strict=True):
             rr.log(f"gate/command/{axis}", rr.Scalars(float(value)))
         for axis, value in zip(TWIST_SHORT[:2], velocity_b[:2], strict=True):

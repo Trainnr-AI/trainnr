@@ -216,6 +216,9 @@ class DdsRuntime:
     def fell_over(self) -> bool:
         return fell_over(self._quat, self.manifest.termination.fell_over_deg)
 
+    def contact_points(self) -> np.ndarray | None:
+        return None  # their simulator's contacts never cross the bus
+
     def close(self) -> None:
         self.pad.sticks(**STICKS_CENTERED)
 

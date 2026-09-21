@@ -54,16 +54,18 @@ class Trial(TrackingOutcome):
 GATE_STREAM = "gate"
 
 
-def run_trial(
+def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     manifest: Manifest,
     runtime: GateRuntime,
     command: np.ndarray,
     *,
     mirror: GateMirror | None = None,
     index: int = 0,
+    contacts: list[np.ndarray] | None = None,
 ) -> Trial:
     """One episode at a held command, the manifest's length and rate;
-    with a `mirror`, every tick's pose goes to the Studio."""
+    with a `mirror`, every tick's pose goes to the Studio; with a
+    `contacts` list, every tick's contact points are appended to it."""
     runtime.reset()
     runtime.command = command.astype(np.float32)
     err_sum = cmd_sum = 0.0
@@ -77,6 +79,10 @@ def run_trial(
         v = runtime.base_velocity_b()
         if mirror is not None:
             mirror.tick(manifest.control.step_dt, runtime.pose(), command, v)
+        if contacts is not None:
+            touched = runtime.contact_points()
+            if touched is not None and len(touched):
+                contacts.append(touched)
         err_sum += float(np.linalg.norm(v[:2] - command[:2]))
         cmd_sum += float(np.linalg.norm(command[:2]))
         steps += 1
@@ -112,12 +118,15 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     certificate: dict[str, Any] | None = None,
     open: Opener | None = None,
     narrate: bool = False,
+    scene_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run the gate under the named runtime and write its record beside
     the manifest; returns the record. `open` replaces the registry's
     opener (a fake runtime under test); the judge, the draw, the interval
     and the tolerance rule are the same whatever drives the policy.
-    `narrate` mirrors every trial into the Studio (`deploy/mirror.py`)."""
+    `narrate` mirrors every trial into the Studio (`deploy/mirror.py`),
+    over the captured scene's splat when the deployment stands on one
+    (`scene_dir`, a staged deployment; `scenes.stage`)."""
     spec = runtime_spec(runtime)
     manifest = load_manifest(deployment_dir)
     opener = open if open is not None else spec.open()
@@ -128,6 +137,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
             spec.name,
             # The gate's picture, saved inside the deployment (docs/76 §10.5).
             file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
+            scene_dir=scene_dir,
         )
         if narrate
         else None
@@ -150,8 +160,9 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         protocol["commands"] = (
             f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
         )
+    contacts: list[np.ndarray] = []
     results = [
-        run_trial(manifest, driver, c, mirror=mirror, index=i)
+        run_trial(manifest, driver, c, mirror=mirror, index=i, contacts=contacts)
         for i, c in enumerate(commands)
     ]
     k = sum(t.success for t in results)
@@ -172,6 +183,13 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
     record["verdict"] = _verdict(k, trials, tolerance, certificate)
+    record["contacts"] = _contacts_record(
+        deployment_dir,
+        spec.name,
+        contacts,
+        scene_dir,
+        seen=driver.contact_points() is not None,
+    )
     if certificate:
         record["certificate"] = {
             "stamp": manifest.raw.get(Key.CERTIFICATE),
@@ -206,3 +224,49 @@ def _verdict(
         "gate_rate": rate,
         "certificate_rate": cert_rate,
     }
+
+
+# Where the task touched: the sites' file beside the record, and the
+# scene's gap within this radius of them (docs/78 §4.1).
+CONTACTS_FILE = "contacts-{runtime}.npy"
+CONTACT_SITE_RADIUS_M = 0.10
+CONTACTS_UNSEEN = "unrecorded: this runtime cannot see its contacts"
+
+
+def _contacts_record(
+    deployment_dir: Path,
+    runtime_name: str,
+    contacts: list[np.ndarray],
+    scene_dir: Path | None,
+    *,
+    seen: bool,
+) -> dict[str, Any]:
+    """The contact sites saved as a point file and, on a captured scene,
+    the gap measured at them; honest when there were none to see."""
+    if not seen:
+        return {"points": CONTACTS_UNSEEN}
+    points = (
+        np.concatenate(contacts, axis=0) if contacts else np.zeros((0, 3), np.float64)
+    )
+    name = CONTACTS_FILE.format(runtime=runtime_name)
+    np.save(Path(deployment_dir) / name, points.astype(np.float32))
+    out: dict[str, Any] = {"file": name, "points": int(points.shape[0])}
+    if scene_dir is None or not points.shape[0]:
+        return out
+    from dataclasses import asdict  # noqa: PLC0415
+
+    from rq_pipeline.scenes import gap as gap_audit  # noqa: PLC0415
+    from rq_pipeline.scenes.record import PROXY_FILE, SPLAT_FILE  # noqa: PLC0415
+    from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+
+    try:
+        site_gap = gap_audit.measure(
+            read_ply(Path(scene_dir) / SPLAT_FILE),
+            Path(scene_dir) / PROXY_FILE,
+            sites=points,
+            radius_m=CONTACT_SITE_RADIUS_M,
+        )
+    except ImportError as missing:
+        site_gap = gap_audit.unmeasured(str(missing))
+    out["site_gap"] = asdict(site_gap) | {"radius_m": CONTACT_SITE_RADIUS_M}
+    return out

@@ -121,6 +121,10 @@ class SceneRecord(JsonRecord):
     code: str
     schema: str = SCENE_SCHEMA
     notes: tuple[str, ...] = field(default_factory=tuple)
+    # The course the scene's author laid out, when the scene names one:
+    # ordered waypoints in the world frame and where they came from. A
+    # task's start is derived from it (`scenes.stage`), never guessed.
+    course: dict[str, Any] = field(default_factory=dict)
 
     @property
     def declared(self) -> tuple[str, ...]:

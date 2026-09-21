@@ -49,6 +49,7 @@ from rq_pipeline.robot.actuator_library import (
     list_models,
     load_actuator,
 )
+from rq_pipeline.scenes.terrain import DEFAULT_TERRAIN
 from rq_pipeline.tasks.registry import resolve, tasks
 
 # robots/actuators is the actuator LIBRARY (per-servo friction models,
@@ -646,6 +647,120 @@ def gate_deployment(
         seed=seed,
         tolerance=tolerance,
         runtime=runtime,
+    )
+
+
+def stage_deployment(  # noqa: PLR0913, PLR0917 - the stage's own knobs, each named
+    deployment: str,
+    scene: str,
+    name: str | None = None,
+    start_x: float | None = None,
+    start_y: float | None = None,
+    heading_deg: float | None = None,
+    terrain: str = DEFAULT_TERRAIN,
+) -> dict[str, Any] | Refusal:
+    """Put a deployment on a captured scene, as a new deployment (docs/78
+    §4 E2): the trained scene's plane floor is replaced by the scene's
+    collision proxy as `terrain` - `heightfield` (the proxy's top
+    surface on a 2 cm grid, the field's own representation for legged
+    terrain; undersides absent) or `hulls` (CoACD convex parts; MuJoCo
+    collides a mesh as its hull, so a course as one mesh would be a box)
+    - each with its gap against the proxy measured and recorded, with the
+    scene's declared friction; the robot starts one metre before the
+    scene's first waypoint along its course unless a start is given; a
+    head camera and a course camera are added for the splat renderer.
+    Synchronous, seconds. The result is a deployment: `gate_deployment`
+    judges the policy on it and the Studio shows the run over the splat.
+    Refused by name: an unknown deployment, scene or terrain, a scene
+    laying out no course when no start is given, a name already taken."""
+    from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
+        MANIFEST_FILE,
+        load_manifest,
+    )
+    from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: PLC0415
+    from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+    from rq_pipeline.project.locate import current_project, plain_name  # noqa: PLC0415
+    from rq_pipeline.scenes import stage as staging  # noqa: PLC0415
+    from rq_pipeline.scenes.record import SCENE_FILE  # noqa: PLC0415
+
+    project = current_project()
+    name = name or f"{deployment}-on-{scene}"
+    try:
+        plain_name(deployment, "deployment name")
+        plain_name(scene, "scene name")
+        plain_name(name, "deployment name")
+        source = project.folder("deploy") / deployment
+        if not (source / MANIFEST_FILE).is_file():
+            raise FileNotFoundError(f"no deployment {deployment!r} in this project")
+        scene_dir = project.scenes / scene
+        if not (scene_dir / SCENE_FILE).is_file():
+            raise FileNotFoundError(f"no scene {scene!r} in this project")
+        start_xy = None
+        if start_x is not None and start_y is not None:
+            start_xy = (float(start_x), float(start_y))
+        elif start_x is not None or start_y is not None:
+            raise ValueError("a start needs both start_x and start_y")
+        staged = staging.stage_deployment(
+            source,
+            scene_dir,
+            project.folder("deploy") / name,
+            assets_dir=assets_dir_of(load_manifest(source)),
+            start_xy=start_xy,
+            heading_deg=heading_deg,
+            terrain=terrain,
+        )
+    except (FileNotFoundError, FileExistsError, ValueError, ImportError) as why:
+        return refusal(_reason(why))
+    write_index(project, index_project(project))
+    facts = staged.facts()
+    return {
+        "status": DONE,
+        "deployment": name,
+        "scene": staged.scene,
+        "terrain": facts["terrain"],
+        "terrain_kind": facts["terrain_kind"],
+        "terrain_geoms": facts["terrain_geoms"],
+        "terrain_gap": facts["terrain_gap"],
+        "start": facts["start"],
+        "heading_deg": facts["heading_deg"],
+        "surface_z": facts["surface_z"],
+        "floor": facts["floor"],
+        "cameras": facts["cameras"],
+        "trained_floor_removed": staged.floor_removed,
+        "next": f"gate_deployment({name!r}) judges the policy on the scene",
+    }
+
+
+def assay_deployment(
+    deployment: str, scene: str, trials: int = 20, seed: int = 1000
+) -> JobHandle | Refusal:
+    """The perturbation assay (docs/78 §4.1): the deployment on the scene
+    nine times - nominal, the terrain shifted ±20 mm on each axis, turned
+    ±5° about the start - gated on each with the same seed. The success
+    cliff (nominal rate minus the worst) is what sets the collision
+    tolerance a task declares and the span it randomizes over; a visual
+    metric never does. A job; `assay.json` lands on the nominal stage
+    beside its gate. Honest when nothing walked at nominal: the cliff is
+    then unmeasurable and the record says so."""
+    from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.scenes.record import SCENE_FILE  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(deployment, "deployment name")
+        plain_name(scene, "scene name")
+    except ValueError as why:
+        return refusal(str(why))
+    if not (project.folder("deploy") / deployment / MANIFEST_FILE).is_file():
+        return refusal(f"no deployment {deployment!r} in this project")
+    if not (project.scenes / scene / SCENE_FILE).is_file():
+        return refusal(f"no scene {scene!r} in this project")
+    return Actions(JobManager(_jobs_root())).assay_deployment(
+        deployment, scene, project=str(project.root), trials=trials, seed=seed
     )
 
 
@@ -1844,6 +1959,18 @@ def build_server() -> Any:  # noqa: PLR0915
         "and every physics parameter with its basis (measured with an interval, or "
         "declared with a span)."
     )(describe_scene)
+    server.tool(
+        description="Put a deployment on a captured scene as a new deployment: the "
+        "plane floor replaced by the scene's collision proxy in convex parts with "
+        "its declared friction, the robot started on the scene's course, cameras "
+        "added for the splat renderer. gate_deployment then judges the policy there."
+    )(stage_deployment)
+    server.tool(
+        description="The perturbation assay on a captured scene: the deployment "
+        "staged nine times (nominal, ±20 mm per axis, ±5° yaw about the start) "
+        "and gated on each with one seed; the success cliff that sets a task's "
+        "collision tolerance and span. A job; assay.json on the nominal stage."
+    )(assay_deployment)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
         "version) without writing a fit record and judge every parameter against "

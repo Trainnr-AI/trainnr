@@ -55,6 +55,7 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
+from rq_pipeline.scenes.stage import scene_name_of
 
 # The one word for a fact an artifact never recorded - never a guess.
 UNRECORDED = "unrecorded"
@@ -569,6 +570,10 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
         out["gate (DDS)"] = gate_word(gates["dds"])
     out["checkpoint"] = m.get("checkpoint", UNRECORDED)
     out["control"] = _hz((m.get("control") or {}).get("control_hz"))
+    scene = scene_name_of(m)
+    if scene:  # a staged deployment: the card says what it stands on
+        out["scene"] = scene
+        out["terrain"] = (m.get("scene") or {}).get("terrain_kind", UNRECORDED)
     return out
 
 

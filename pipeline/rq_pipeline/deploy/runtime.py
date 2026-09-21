@@ -177,6 +177,20 @@ class Runtime:
         compares to the command)."""
         return rotate_inverse(self.quat, self.data.qvel[0:3].copy())
 
+    def contact_points(self) -> np.ndarray | None:
+        """The active contacts between the robot's bodies and the rest
+        of the world, as positions; the robot is the floating base's
+        kinematic tree."""
+        root = int(self.model.body_rootid[self.model.jnt_bodyid[0]])
+        roots = self.model.body_rootid
+        points = [
+            self.data.contact[i].pos.copy()
+            for i in range(self.data.ncon)
+            if (roots[self.model.geom_bodyid[self.data.contact[i].geom1]] == root)
+            != (roots[self.model.geom_bodyid[self.data.contact[i].geom2]] == root)
+        ]
+        return np.array(points, dtype=np.float64).reshape(-1, 3)
+
     def fell_over(self) -> bool:
         return fell_over(self.quat, self.manifest.termination.fell_over_deg)
 

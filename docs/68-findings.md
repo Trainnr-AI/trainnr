@@ -30,6 +30,32 @@ not this page.
   - A synthetic scene of a few thousand splats; a captured scene is hundreds of thousands to millions, and the CPU cost will scale with the BVH depth and the hits per ray (max 32).
   - Timing by wall clock around wp.synchronize() on a laptop with other processes; the median of ten is reported, not the minimum.
 
+## scene-stage-heightfield-vs-hulls-2026-09-22
+
+**The collision proxy of a captured scene, as MuJoCo can touch it, two ways on Neverwhere's hurdle_226_blue_carpet_v3 (145,241 faces): as convex parts (CoACD, threshold 0.05, 64 hulls max) the course becomes 59 hulls in 16 s whose surface sits a mean 9.4 cm (95th percentile 21.7 cm) from the proxy - the hulls roof the 29 cm hurdles into a 36 cm plateau, so a walk would stand on a box; tightening to 230 hulls (26 s) still leaves a 12.3 cm 95th percentile, 512 hulls (218 s) 21.5 cm. As a heightfield of the proxy's top surface on a 2 cm grid the terrain matches the top surface to a median of 0.09 mm (mean 2.6 cm, 95th percentile 15.6 cm, both carried by samples within a cell of a hurdle edge, where the grid is a cliff), with 38.5 % of the proxy's surface (vertical faces, undersides) carried only as cliffs and 31.7 % of the grid's cells filled with the lowest height because nothing lies under them. The heightfield is the stage's default terrain; both gaps are recorded on every staged deployment.**
+
+- date: 2026-09-22 · commit: `a423f1d`
+- instrument: `rq_pipeline.scenes (numpy), CoACD 1.0.14, Open3D 0.20.0, mujoco 3.11.0, Python 3.12, macOS 25.5.0 Apple M1 Pro`
+- command: `rq_pipeline.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene) rq_pipeline.scenes.terrain.heightfield: sample_grid(cell 0.02 m) over the proxy's footprint, heightfield_gap over 50,000 proxy surface samples (topmost at their (x, y) by a ray from above, 1 mm tolerance) against the grid's bilinear height stage_deployment('review-check', 'hurdle-blue-carpet') [MCP door, project go2-walk on the Mac]: the Go2 deployment's plane floor replaced by the terrain, the robot started 1 m before waypoint-0 heading along the course`
+- protocol: docs/78-the-scene-loop.md §4 E2 and §4.1
+- outcome:
+  - hulls_default: {'parts': 59, 'vertices': 3543, 'vertices_max_per_part': 100, 'seconds': 15.84, 'hulls_to_proxy_mean_m': 0.0936, 'hulls_to_proxy_p95_m': 0.21655, 'proxy_to_hulls_mean_m': 0.07704, 'proxy_to_hulls_p95_m': 0.17489}
+  - hulls_tighter: [{'threshold': 0.02, 'max_convex_hull': 256, 'resolution': 4000, 'parts': 230, 'seconds': 26, 'hulls_to_proxy_mean_m': 0.06391, 'hulls_to_proxy_p95_m': 0.12304, 'proxy_to_hulls_p95_m': 0.09429}, {'threshold': 0.01, 'max_convex_hull': 512, 'resolution': 6000, 'preprocess_mode': 'off', 'parts': 512, 'seconds': 218, 'hulls_to_proxy_mean_m': 0.05471, 'hulls_to_proxy_p95_m': 0.21491, 'proxy_to_hulls_p95_m': 0.04443}]
+  - hulls_under_the_course_m: {'proxy_top_at_x_1.0': 0.291, 'hulls_top_at_x_1.0': 0.359, 'proxy_top_at_x_2.5': 0.296, 'hulls_top_at_x_2.5': 0.362, 'proxy_at_x_-1.0': -0.014, 'hulls_at_x_-1.0': 0.239}
+  - heightfield: {'cell_m': 0.02, 'top_surface_median_m': 9e-05, 'top_surface_mean_m': 0.02616, 'top_surface_p95_m': 0.15615, 'not_top_surface_fraction': 0.38454, 'holes_filled_fraction': 0.31737, 'samples': 50000, 'surface_z_under_start_m': -0.0104}
+  - stage: {'deployment': 'review-check-on-hurdle-blue-carpet', 'scene': 'hurdle-blue-carpet@bc05c8723d7a', 'start_m': [0.0, 0.0, 0.3096], 'heading_deg': 0.0, 'cameras': ['head', 'course'], 'stage_xml_bytes': 1341112}
+- artifacts:
+  - parts_record: projects/go2-walk/scenes/hurdle-blue-carpet/proxy-parts.json (the Mac; projects/ is not tracked)
+  - stage: projects/go2-walk/deploy/review-check-on-hurdle-blue-carpet/{deploy.json,stage.xml}
+- sources:
+  - scene_gap: docs/findings/scene-gap-neverwhere-hurdle-2026-09-22.json (the scene's own gap; this record is the decomposition's, the caveat that record named)
+  - mujoco_hulls: MuJoCo collides a mesh geom as its convex hull (Modeling: mesh; the SDF plugin is the exception Neverwhere's simulator uses)
+- caveats:
+  - One scene. The hull roofing is a property of a hurdle course (concave by design); a flat room would decompose cleanly.
+  - The heightfield's mean and 95th percentile are edge samples: a 2 cm grid renders a vertical hurdle face as a 2 cm-wide ramp, and every top-surface sample within that cell of an edge reads the ramp. The median says where the feet land; the tail says where the edges are.
+  - The hull gaps at tighter settings come from a scratch run with the same code path and are not on the scene's record; the default is.
+  - Neither number is a verdict; docs/78 §4.1 makes the perturbation assay's cliff the task's number.
+
 ## scene-gap-neverwhere-hurdle-2026-09-22
 
 **The first audit of a published splat scene's visible surface against its own collision proxy: on Neverwhere's hurdle_226_blue_carpet_v3 (MIT; 753,226 gaussians in the web splat, 145,241 collision faces, not watertight), the splat and the proxy are well aligned at the floor (the splats over the course sit at a median height of -0.002 m, median distance to the proxy 0.014 m) yet the gap is large away from it: inside the proxy's footprint the chamfer is 0.046 m, the 95th-percentile visible-to-proxy distance 0.185 m, 44.8 % of the visible surface lies more than 0.02 m from any collider, and 73.6 % of the proxy's surface lies more than 0.02 m from any visible gaussian (32 % beyond 0.05 m, 7 % beyond 0.10 m; the unseen samples sit at a median height of 0.17 m: hurdle faces and low walls). 91.0 % of the scene's visible surface lies inside the proxy's footprint at all; the rest is the corridor the course never covers. A first pass that audited the whole capture instead of the footprint reported a 3.2 m 95th percentile on this well-aligned scene, which is why the audit is scoped.**
@@ -61,6 +87,34 @@ not this page.
   - The web splat is opacity-quantised; the visible set is opacity >= 0.5 of that. The checkpoint's opacities give 350,336 over the course against the web file's count; the audit ran on the web file.
   - Their simulator collides against this mesh as a signed-distance field; ours would use its convex hull or a decomposition, so the gap a MuJoCo task actually sees is this one plus the decomposition's, still unmeasured.
   - A gap number is not a verdict: what a robot tolerates is the task's declaration. This record measures; docs/78 §3 says the threshold is the task's.
+
+## scene-cameras-and-assay-smoke-2026-09-22
+
+**E2 smoked on the Mac: the Go2 deployment staged on Neverwhere's hurdle course (heightfield terrain), gated through its manifest by plain MuJoCo with the contact sites kept, the scene's gap measured at them, the two stage cameras rendered from the scene's 393,684 visible gaussians by mujoco_warp 3.13.0's ray tracer on CPU Warp (the scratch instrument; the walk package stays pinned at 3.11 until E0), and the perturbation assay run over nine stages. The pictures: both cameras at 160x120 for one world take 1.47 s a frame at the full splat and 0.26 s at 60,000 gaussians (the context builds in 0.3 s); 320x240 takes 6.5 s; a one-trial gate (20 s of simulation) with pictures at 2 Hz took 1 min 54 s wall, its recording carrying 50 chunks per camera. Checked by eye: the head camera sees the first hurdle ahead across the blue carpet, the course camera sees the hurdle row with the robot in it, the robot's meshes occluding the splat. The gap where the robot touched (13,720 contact points, a 10 cm ball around each): chamfer 2.3 cm, 95th percentile 7.3 cm, 55 % of the visible surface beyond 2 cm from the proxy, 37 % of the proxy unseen - tighter than the course-wide 4.6 / 18.5 cm because the feet stayed on the carpet. The assay: nine stages (nominal, ±20 mm per axis, ±5° yaw), every gate 0/2 with the smoke policy that scores 0/4 on a plane, so the cliff is recorded as unmeasurable; the assay's plumbing is proven, its number waits for a policy that walks (go2-c2, on the box).**
+
+- date: 2026-09-22 · commit: `a423f1d`
+- instrument: `macOS 25.5.0 Apple M1 Pro; pinned: mujoco 3.11.0 + onnxruntime; scratch: mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cpu (arm)`
+- command: `stage_deployment('review-check', 'hurdle-blue-carpet') and stage_deployment('review-check', 'hurdle-blue-carpet', name='review-check-on-hurdle-cams') [MCP doors, project go2-walk] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv: mujoco 3.11.0, no renderer, the mirror notes why] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-cams --trials 1 --seed 1000 [scratch venv mjw313: mujoco 3.13.0, mujoco_warp 3.13.0, warp 1.17.0 CPU, onnxruntime 1.30.0, rerun 0.36.2; cameras head+course at 160x120, 2 Hz] scratch: rq_pipeline.scenes.cameras.open_cameras(...).render at 160x120 (60,000 and 393,684 gaussians, three renders each) and 320x240 (full) tools/assay-deployment.py --project projects/go2-walk --name review-check --scene hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv]`
+- protocol: docs/78-the-scene-loop.md §4 E2
+- outcome:
+  - render_s_per_frame_both_cameras_one_world: {'160x120_393684_splats': [1.485, 1.469, 1.472], '160x120_60000_splats': [2.196, 0.259, 0.258], '320x240_393684_splats': 6.52, 'context_build_s': 0.3, 'note': "the first render at 60,000 includes Warp's kernel compilation"}
+  - camera_gate: {'deployment': 'review-check-on-hurdle-cams', 'instrument': 'mujoco-3.13.0', 'trials': 1, 'successes': 0, 'ci95': [0.0, 0.975], 'steps': 1000, 'fell': False, 'wall_s': 114, 'recording_chunks_per_camera': 50, 'recording_bytes': 49430737}
+  - contact_site_gap: {'deployment': 'review-check-on-hurdle-cams', 'points': 13720, 'radius_m': 0.1, 'chamfer_m': 0.02271, 'p95_m': 0.0726, 'beyond_tolerance_fraction': 0.55253, 'hidden_fraction': 0.36667, 'tolerance_m': 0.02, 'visible_samples': 2570, 'proxy_samples': 270}
+  - assay: {'stages': 9, 'trials_each': 2, 'successes_each': 0, 'ci95_each': [0.0, 0.8419], 'cliff': {'nominal_rate': 0.0, 'worst_rate': 0.0, 'drop': 0.0, 'measurable': False}}
+- artifacts:
+  - recording: projects/go2-walk/deploy/review-check-on-hurdle-cams/.viewer/gate-mujoco.rrd (the Mac; /cameras/head, /cameras/course, /world/scene/splat)
+  - contacts: projects/go2-walk/deploy/review-check-on-hurdle-cams/contacts-mujoco.npy
+  - assay: projects/go2-walk/deploy/review-check-on-hurdle-blue-carpet/assay.json and the eight perturbed stages beside it
+  - frames_checked: scratch cams/module-head.png, cams/module-course.png (320x240)
+- sources:
+  - renderer: docs/findings/splat-renderer-cpu-2026-09-22.json (the renderer's first CPU timing); mujoco_warp PR 1585
+  - terrain: docs/findings/scene-stage-heightfield-vs-hulls-2026-09-22.json
+  - assay_design: docs/78 §4.1 and §9 step 3; arXiv 2608.21416 (the ±20 mm / ±5° number)
+- caveats:
+  - One world on a CPU: the field's GPU number for splats is still unpublished and ours waits for the box (E0).
+  - The policy is the smoke checkpoint (0/4 on a plane, docs/07 2026-09-20); nothing here says anything about walking on the course. The assay's cliff is unmeasurable until go2-c2 runs here.
+  - The camera gate's 0/1 is not a verdict either: one trial, an unevaluated policy, no evaluation cited.
+  - The head camera is placed by hand (38 cm ahead of the base, 6 cm up); the Go2's real camera pose is not read from the bundle yet.
 
 ## dds-gate-go2-c2-2026-09-13
 

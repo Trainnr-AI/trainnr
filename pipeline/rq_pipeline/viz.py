@@ -340,3 +340,22 @@ class RigMirror:
                 ),
                 static=static,
             )
+
+
+def gaussians(rr: Any, splats: Any) -> Any:
+    """A scene's splat as Rerun's archetype: centres, scales, rotations
+    reordered to Rerun's (x, y, z, w), colour and opacity as bytes."""
+    import numpy as np  # noqa: PLC0415
+
+    return rr.GaussianSplats3D(
+        centers=splats.means,
+        scales=splats.scales,
+        quaternions=splats.quats[:, [1, 2, 3, 0]],
+        colors=np.concatenate(
+            [
+                (splats.colors * 255).astype(np.uint8),
+                (splats.opacities * 255).astype(np.uint8)[:, None],
+            ],
+            axis=1,
+        ),
+    )

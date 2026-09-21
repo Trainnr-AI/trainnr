@@ -1538,6 +1538,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coacd", marker = "extra == 'scene'", specifier = ">=1.0" },
     { name = "cyclonedds", marker = "extra == 'dds'", specifier = ">=0.10.2" },
     { name = "evdev", marker = "extra == 'dds'", specifier = ">=1.9.3" },
     { name = "gymnasium", marker = "extra == 'sim'", specifier = ">=1.1.1,<2" },
@@ -1550,6 +1551,7 @@ requires-dist = [
     { name = "onnx", marker = "extra == 'deploy'", specifier = ">=1.16" },
     { name = "onnxruntime", specifier = ">=1.24.3" },
     { name = "onnxruntime", marker = "extra == 'deploy'", specifier = ">=1.20" },
+    { name = "open3d", marker = "extra == 'scene'", specifier = ">=0.19" },
     { name = "openpi-client", marker = "extra == 'remote'", git = "https://github.com/Physical-Intelligence/openpi.git?subdirectory=packages%2Fopenpi-client&rev=215abfb217dbac7d5f1273282331b9b1866c0479" },
     { name = "psutil", marker = "extra == 'mcp'", specifier = ">=5.9" },
     { name = "rerun-sdk", marker = "extra == 'viz'", specifier = ">=0.20" },
@@ -1558,7 +1560,7 @@ requires-dist = [
     { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.6" },
     { name = "unitree-sdk2py", marker = "extra == 'dds'", git = "https://github.com/unitreerobotics/unitree_sdk2_python" },
 ]
-provides-extras = ["sim", "train", "gpu", "mjx", "viz", "viz-query", "deploy", "mcp", "remote", "dds"]
+provides-extras = ["sim", "train", "gpu", "mjx", "viz", "viz-query", "scene", "deploy", "mcp", "remote", "dds"]
 
 [[package]]
 name = "rsl-rl-lib"

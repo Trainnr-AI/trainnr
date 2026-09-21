@@ -102,7 +102,7 @@ number).
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding |
 | E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the phone-video capture waits on the operator's video |
-| E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) |
+| E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
 | E5 | **The physics, measured (designed, gated on hardware).** A robot on the real floor of E1's capture: friction from interaction with an interval (the field's DROPO shape through `mujoco.sysid`'s intervals), the randomization span set from the interval, `check_drift` on a later recording of the same floor. | waits on a robot; the record's fields and the door's refusal ("declared, not measured") are built in E1 |
@@ -239,6 +239,73 @@ What the first real scene taught, in the order it was learned:
    A hurdle is not convex, so a MuJoCo task on this scene decomposes
    the proxy (CoACD) or loads MuJoCo's SDF plugin, and the record's
    notes say so; the decomposition's own gap is E2's to measure.
+
+## 8.1 E2 as built, the Mac half (2026-09-22)
+
+The stage. `rq_pipeline/scenes/`: `obj.py` (the one OBJ parser; the
+viewer's copy now delegates), `proxy.py` (CoACD convex parts with their
+own two-way gap, written once beside the proxy as `proxy-parts.json`),
+`terrain.py` (the registry: `heightfield`, the proxy's top surface on a
+2 cm vertex grid with bilinear heights, the default; `hulls`, the
+parts; each builder adds its geoms to the stage's terrain body and
+returns the facts the manifest records), `stage.py` (MjSpec: the
+trained scene's plane floor deleted, the terrain body added with the
+scene's declared friction, the robot's keyframe moved to one metre
+before the scene's first waypoint heading along its course - the
+importer now reads the course from the scene's own XML, and a scene
+that lays out none refuses a guessed start - a head camera on the base
+and a course camera behind it, the hulls' vertices and the
+heightfield's data embedded so `stage.xml` stands alone; the
+perturbation as a rigid move of the terrain body about the start),
+`cameras.py` (mujoco_warp's ray tracer over the model and the scene's
+visible gaussians, refusing by name on an instrument older than 3.13),
+`assay.py` (nine stages gated with one seed, the cliff on the nominal
+stage, honest when nothing walked). The gate keeps every tick's contact
+points (`GateRuntime.contact_points`; the DDS runtime answers None and
+the record says unrecorded), saves them beside its record, and measures
+the scene's gap within 10 cm of them; its mirror draws the splat under
+the robot and, when the instrument can, the cameras' pictures at 2 Hz.
+Doors `stage_deployment` (synchronous) and `assay_deployment` (a job);
+the deployment card names the scene and terrain it stands on; the
+drawer shows the contact-site gap and the assay's table. `deploy`
+moves to tier 3 beside `scenes`. Fourteen new tests.
+
+What the first stage taught:
+
+1. **MuJoCo collides a mesh as its hull, and a hurdle course as hulls
+   is a plateau.** CoACD's 59 parts sat a mean 9.4 cm from the proxy
+   and roofed the 29 cm hurdles into a 36 cm shelf the robot would
+   stand on; 230 or 512 parts did not fix it (finding
+   `scene-stage-heightfield-vs-hulls-2026-09-22`). The heightfield -
+   the field's own representation for legged terrain - matches the top
+   surface to a median of 0.09 mm, and its 95th percentile (15.6 cm) is
+   the edge cells where a vertical face becomes a 2 cm ramp. Both gaps
+   are recorded on every staged deployment; the heightfield is the
+   default and the hulls stay for scenes with undersides.
+2. **The ray that finds the ground must ask the terrain, not the
+   group.** The first start height came from the Go2's own base
+   collider answering a group-3 ray; the stage now rays the terrain
+   body's geoms by name.
+3. **The gap where the robot touched is tighter than the course's.**
+   Over the carpet the feet stood on: chamfer 2.3 cm, 95th percentile
+   7.3 cm, against 4.6 / 18.5 cm course-wide; the hurdle faces the
+   course-wide number is made of are where a walking policy will meet
+   it (finding `scene-cameras-and-assay-smoke-2026-09-22`).
+4. **The pictures cost seconds a frame on a CPU.** Both cameras at
+   160x120, one world, the full 393,684 gaussians: 1.47 s; 60,000
+   gaussians: 0.26 s. The mirror renders at 2 Hz for that reason; the
+   gate's picture is a film strip, and the smoke train's cameras wait
+   for the box. Checked by eye: the head camera sees the first hurdle
+   across the carpet, the course camera sees the row with the robot in
+   it, the meshes occluding the splat.
+5. **The assay's plumbing runs; its number waits for a walker.** Nine
+   stages, every gate 0/2 with the smoke checkpoint, the cliff recorded
+   as unmeasurable by name. go2-c2 on the box is the first policy that
+   can measure it.
+
+Still E2's: the smoke train with camera observations (mjlab's
+CameraSensor passing the splat arrays through, the box's GPU), the
+frame rate at N worlds, the Go2's real camera pose from the bundle.
 
 ## 9. How a scene's physics gets certified for a task
 

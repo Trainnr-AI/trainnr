@@ -65,6 +65,7 @@ from rq_pipeline.project.kinds import (
     UNREVIEWED,
 )
 from rq_pipeline.project.locate import INDEX_DIR, Project
+from rq_pipeline.scenes.assay import read_assay
 from rq_pipeline.tasks.overlay import jsonable as _plain_jsonable
 
 if TYPE_CHECKING:
@@ -1065,6 +1066,17 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             ),
             ("judged", g.get("judged", UNRECORDED)),
         ]
+        contacts = g.get("contacts") or {}
+        if contacts:
+            rows.append(("contact points kept", contacts.get("points", UNRECORDED)))
+            site = contacts.get("site_gap") or {}
+            if site:
+                rows.append(
+                    (
+                        f"gap at the contact sites (within {site.get('radius_m')} m)",
+                        _site_gap_line(site),
+                    )
+                )
         sections.append(
             _kv(
                 f"Sim-to-sim gate: {instrument}",
@@ -1087,6 +1099,29 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                     ]
                     for r in g.get("records", [])
                 ],
+            )
+        )
+    assay = read_assay(root)
+    if assay:
+        cliff = assay.get("cliff") or {}
+        sections.append(
+            _table(
+                "Perturbation assay (the terrain moved, the policy not told)",
+                ["perturbation", "successes", "95% confidence interval (exact)"],
+                [
+                    [
+                        (r.get("perturbation") or {}).get("label", UNRECORDED),
+                        ratio_of(r),
+                        _interval(r),
+                    ]
+                    for r in assay.get("perturbations", [])
+                ],
+                note=(
+                    f"cliff: nominal {cliff.get('nominal_rate')} to worst "
+                    f"{cliff.get('worst_rate')} ({cliff.get('worst')}), drop "
+                    f"{cliff.get('drop')}"
+                    + (f"; {cliff['note']}" if cliff.get("note") else "")
+                ),
             )
         )
     if not gates:
@@ -1518,3 +1553,15 @@ _WRITERS: dict[str, Writer] = {
     "policy": _policy,
     "finding": _finding,
 }
+
+
+def _site_gap_line(site: dict[str, Any]) -> str:
+    """The four numbers at the contact sites, or the reason there are none."""
+    if site.get("chamfer_m") is None:
+        return site.get("note") or UNRECORDED
+    beyond, hidden = site["beyond_tolerance_fraction"], site["hidden_fraction"]
+    return (
+        f"chamfer {site['chamfer_m'] * 100:.1f} cm · p95 {site['p95_m'] * 100:.1f} cm"
+        f" · {beyond * 100:.0f} % of the visible surface beyond "
+        f"{site['tolerance_m'] * 100:.0f} cm · {hidden * 100:.0f} % of the proxy unseen"
+    )

@@ -14,9 +14,11 @@ from pathlib import Path
 
 import numpy as np
 
+from rq_pipeline.deploy.manifest import Key, load_manifest
 from rq_pipeline.project import PROJECT_ENV, create_project, index_project
 from rq_pipeline.project.kinds import Kind
-from rq_pipeline.scenes import neverwhere
+from rq_pipeline.scenes import neverwhere, proxy, stage, terrain
+from rq_pipeline.scenes.obj import read_obj, write_obj
 from rq_pipeline.scenes.record import (
     DECLARED,
     MEASURED,
@@ -39,6 +41,7 @@ from rq_pipeline.scenes.splat import (
     write_ply,
 )
 from tests._extras import SCENE, needs_scene, needs_sim
+from tests.test_deploy import _manifest
 
 
 def _splats(n: int = 50, seed: int = 0, sh: int = 0) -> Splats:
@@ -162,14 +165,15 @@ class TheRecord(unittest.TestCase):
             Physics(name="f", value=1.0, basis="guessed")
 
 
-def _neverwhere_folder(tmp: Path, *, friction: str = "1.25 0.3 0.3") -> Path:
+def _neverwhere_folder(
+    tmp: Path, *, friction: str = "1.25 0.3 0.3", n: int = 400
+) -> Path:
     """A fake Neverwhere scene: a splat plane at z=0.5 in a frame the
     transform scales by 2 and lifts by 1, over a proxy plane at z=2."""
     src = tmp / "hurdle_fake_v1"
     (src / "3dgs").mkdir(parents=True)
     (src / "geometry").mkdir()
     rng = np.random.default_rng(1)
-    n = 400
     means = np.stack(
         [rng.uniform(-1, 1, n), rng.uniform(-1, 1, n), np.full(n, 0.5)], 1
     ).astype(np.float32)
@@ -313,3 +317,378 @@ class TheProjectAndTheDoor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _l_shape_obj(path: Path) -> Path:
+    """A non-convex step: a 2 m floor slab with a 0.3 m block on one half -
+    one convex hull would roof the whole slab at the block's height."""
+    boxes = [((-1.0, -1.0, -0.1), (1.0, 1.0, 0.0)), ((0.0, -1.0, 0.0), (1.0, 1.0, 0.3))]
+    vertices: list[list[float]] = []
+    faces: list[list[int]] = []
+    for lo, hi in boxes:
+        base = len(vertices)
+        for dz in (lo[2], hi[2]):
+            for dy in (lo[1], hi[1]):
+                for dx in (lo[0], hi[0]):
+                    vertices.append([dx, dy, dz])
+        quads = [
+            (0, 1, 3, 2),
+            (4, 6, 7, 5),
+            (0, 4, 5, 1),
+            (2, 3, 7, 6),
+            (0, 2, 6, 4),
+            (1, 5, 7, 3),
+        ]
+        for a, b, c, d in quads:
+            faces.append([base + a, base + b, base + c])
+            faces.append([base + a, base + c, base + d])
+    return write_obj(path, np.array(vertices), np.array(faces))
+
+
+class TheProxyParts(unittest.TestCase):
+    def test_obj_round_trips_and_refuses_a_faceless_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            p = write_obj(Path(tmp) / "t.obj", np.eye(3), np.array([[0, 1, 2]]))
+            v, f = read_obj(p)
+            self.assertEqual(v.shape, (3, 3))
+            self.assertEqual(f.tolist(), [[0, 1, 2]])
+            (Path(tmp) / "empty.obj").write_text("v 0 0 0\n")
+            with self.assertRaisesRegex(ValueError, "no faces"):
+                read_obj(Path(tmp) / "empty.obj")
+
+    @needs_scene
+    def test_a_step_becomes_more_than_one_hull_and_the_record_reads_back(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = Path(tmp)
+            _l_shape_obj(scene / "proxy.obj")
+            first = proxy.ensure_parts(scene)
+            self.assertGreaterEqual(first.parts, 2, "one hull would roof the step")
+            self.assertEqual(len(first.files), first.parts)
+            self.assertTrue((scene / proxy.PARTS_DIR / first.files[0]).is_file())
+            self.assertIn("CoACD", first.tool)
+            # the hulls of a union of boxes sit on the boxes: a small gap
+            self.assertLess(first.gap["hulls_to_proxy_p95_m"], 0.06)
+            self.assertLess(first.gap["proxy_to_hulls_p95_m"], 0.06)
+            again = proxy.ensure_parts(scene)
+            self.assertEqual(again, first, "a second call reads the record")
+            with self.assertRaises(FileExistsError):
+                proxy.decompose(scene / "proxy.obj", scene / proxy.PARTS_DIR)
+
+
+TINY_ROBOT = """<mujoco>
+  <option timestep="0.005"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="0 0 0.01"/>
+    <body name="base">
+      <freejoint/>
+      <geom size="0.1"/>
+      <body name="leg">
+        <joint name="j" axis="0 1 0"/>
+        <geom name="foot" size="0.05" pos="0 0 -0.2" group="3"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator><position joint="j" name="j"/></actuator>
+  <keyframe><key name="home" qpos="0 0 0.3 1 0 0 0 0"/></keyframe>
+</mujoco>
+"""
+
+
+def _staged_scene(tmp: Path, *, n: int = 400) -> Path:
+    """The fake Neverwhere scene imported, with a two-waypoint course
+    laid out along +x at the proxy plane's height (z=2)."""
+    src = _neverwhere_folder(tmp, n=n)
+    (src / "hurdle_fake_v1.xml").write_text(
+        '<mujoco><worldbody><geom type="sdf" name="collision_mesh_geom" '
+        'mesh="collision_mesh" friction="1.25 0.3 0.3"/>'
+        '<body name="waypoint-1" mocap="true" pos="1 0 2.3"/>'
+        '<body name="waypoint-0" mocap="true" pos="0 0 2.3"/>'
+        "</worldbody></mujoco>"
+    )
+    neverwhere.import_scene(src, tmp / "fake", name="fake")
+    return tmp / "fake"
+
+
+@needs_scene
+@needs_sim
+class TheStage(unittest.TestCase):
+    def test_the_course_gives_the_start_and_the_terrain_replaces_the_floor(
+        self,
+    ) -> None:
+        import mujoco  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = _staged_scene(Path(tmp))
+            record = load_scene_record(scene / SCENE_FILE)
+            self.assertEqual(record.course["waypoints"], [[0, 0, 2.3], [1, 0, 2.3]])
+            s = stage.compose(
+                TINY_ROBOT, {}, scene, scene_stamp="fake@1", terrain=terrain.HULLS
+            )
+            self.assertTrue(s.floor_removed)
+            self.assertEqual(s.heading_deg, 0.0)
+            # the hulls of a flat proxy carry CoACD's thickness: within the
+            # decomposition's own recorded gap of the plane at z=2
+            parts = proxy.load_decomposition(scene)
+            assert parts is not None
+            self.assertLess(
+                abs(s.surface_z - 2.0), parts.gap["hulls_to_proxy_p95_m"] + 0.01
+            )
+            # one metre before the first waypoint, standing 0.3 m over the surface
+            self.assertAlmostEqual(s.start[0], -1.0)
+            self.assertAlmostEqual(s.start[2], s.surface_z + 0.3, places=6)
+            model = mujoco.MjModel.from_xml_string(s.xml)  # self-contained: no assets
+            self.assertEqual(
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor"), -1
+            )
+            self.assertEqual(model.ncam, 2)
+            self.assertGreaterEqual(model.nmesh, s.terrain.geoms)
+            self.assertEqual(s.terrain.kind, terrain.HULLS)
+            np.testing.assert_allclose(
+                model.key_qpos[0][:3], s.start, atol=1e-5
+            )  # the XML rounds
+            geom = model.geom(terrain.PART_MESH.format(index=0))
+            np.testing.assert_allclose(geom.friction, [1.25, 0.3, 0.3])
+            self.assertEqual(int(geom.group), neverwhere.COLLISION_GROUP)
+
+    def test_a_perturbation_moves_the_terrain_not_the_robot(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = _staged_scene(Path(tmp))
+            lifted = stage.compose(
+                TINY_ROBOT,
+                {},
+                scene,
+                scene_stamp="fake@1",
+                perturbation=stage.Perturbation("z+20mm", (0, 0, 0.02)),
+            )
+            nominal = lifted.surface_z  # the nominal height, recorded
+            self.assertAlmostEqual(
+                lifted.start[2], nominal + 0.3, places=6
+            )  # the robot stays
+            model = mujoco.MjModel.from_xml_string(lifted.xml)
+            self.assertAlmostEqual(
+                stage._surface_z(model, -1.0, 0.0), nominal + 0.02, places=4
+            )
+            turned = stage.compose(
+                TINY_ROBOT,
+                {},
+                scene,
+                scene_stamp="fake@1",
+                perturbation=stage.Perturbation("yaw+5deg", yaw_deg=5.0),
+            )
+            model = mujoco.MjModel.from_xml_string(turned.xml)
+            # a yaw about the start leaves the ground under the start where it was
+            self.assertAlmostEqual(
+                stage._surface_z(model, -1.0, 0.0), nominal, places=4
+            )
+            self.assertEqual(turned.facts()["perturbation"]["yaw_deg"], 5.0)
+
+    def test_a_scene_without_a_course_refuses_a_guessed_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = _neverwhere_folder(Path(tmp))
+            neverwhere.import_scene(src, Path(tmp) / "scene", name="fake")
+            with self.assertRaisesRegex(ValueError, "lays out no course"):
+                stage.compose(TINY_ROBOT, {}, Path(tmp) / "scene", scene_stamp="fake@1")
+            s = stage.compose(
+                TINY_ROBOT,
+                {},
+                Path(tmp) / "scene",
+                scene_stamp="fake@1",
+                start_xy=(0.5, 0.5),
+                heading_deg=90.0,
+            )
+            self.assertAlmostEqual(s.start[1], 0.5)
+
+    def test_a_staged_deployment_is_a_deployment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = _staged_scene(Path(tmp))
+            (Path(tmp) / "tiny").mkdir()
+            deployment = _manifest(Path(tmp) / "tiny")
+            (deployment / "scene.xml").write_text(TINY_ROBOT)
+            (Path(tmp) / "assets").mkdir()
+            staged = Path(tmp) / "tiny-on-fake"
+            s = stage.stage_deployment(
+                deployment, scene, staged, assets_dir=Path(tmp) / "assets"
+            )
+            m = load_manifest(staged)  # loads: the schema and keys are the same
+            self.assertEqual(m.scene_path, staged / stage.STAGE_FILE)
+            block = m.raw[Key.SCENE]
+            self.assertTrue(block["terrain"].startswith("scene fake@"))
+            self.assertEqual(block["terrain_kind"], terrain.HEIGHTFIELD)
+            self.assertEqual(block["terrain_geoms"], s.terrain.geoms)
+            self.assertIn("top_surface_p95_m", block["terrain_gap"])
+            self.assertEqual(block["staged_from"]["deployment"], "tiny")
+            self.assertTrue(m.raw[Key.STAMP_OF].endswith(" on fake"))
+            self.assertTrue((staged / "policy.onnx").is_file())
+            with self.assertRaises(FileExistsError):
+                stage.stage_deployment(
+                    deployment, scene, staged, assets_dir=Path(tmp) / "assets"
+                )
+
+
+def _slope_obj(path: Path) -> Path:
+    """A 4 m square plane rising 0.1 m per metre along x, at z=2 at x=0."""
+    xs = np.array([-2.0, 2.0, 2.0, -2.0])
+    ys = np.array([-2.0, -2.0, 2.0, 2.0])
+    vertices = np.column_stack([xs, ys, 2.0 + 0.1 * xs])
+    return write_obj(path, vertices, np.array([[0, 1, 2], [0, 2, 3]]))
+
+
+@needs_scene
+@needs_sim
+class TheHeightfield(unittest.TestCase):
+    def test_the_grid_reads_the_top_surface_the_right_way_round(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = _neverwhere_folder(Path(tmp))
+            _slope_obj(src / neverwhere.COLLISION_MESH)
+            neverwhere.import_scene(src, Path(tmp) / "slope", name="slope")
+            s = stage.compose(
+                TINY_ROBOT,
+                {},
+                Path(tmp) / "slope",
+                scene_stamp="slope@1",
+                start_xy=(0.0, 0.0),
+                heading_deg=0.0,
+            )
+            self.assertEqual(s.terrain.kind, terrain.HEIGHTFIELD)
+            self.assertEqual(s.terrain.geoms, 1)
+            self.assertLess(s.terrain.gap["top_surface_p95_m"], 0.005)
+            self.assertEqual(s.terrain.gap["not_top_surface_fraction"], 0.0)
+            self.assertAlmostEqual(s.surface_z, 2.0, places=2)
+            model = mujoco.MjModel.from_xml_string(s.xml)  # data rides inline
+            self.assertEqual(model.nhfield, 1)
+            # x is the slope's axis: +1 m along x is 0.1 m higher, along y nothing
+            self.assertAlmostEqual(stage._surface_z(model, 1.0, 0.0), 2.1, places=2)
+            self.assertAlmostEqual(stage._surface_z(model, 0.0, 1.0), 2.0, places=2)
+            self.assertAlmostEqual(stage._surface_z(model, -1.5, -1.5), 1.85, places=2)
+
+    def test_an_unknown_terrain_is_refused_by_name(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no terrain 'sand'"):
+            terrain.terrain_builder("sand")
+        self.assertEqual(terrain.terrain_names(), ("heightfield", "hulls"))
+
+
+class _StandingRuntime:
+    """A fake gate runtime: never moves, never falls, one contact under
+    the base every tick - enough to drive the assay's plumbing."""
+
+    instrument = "fake"
+    command_limit = None
+
+    def __init__(self, start: tuple[float, float, float]) -> None:
+        self.command = np.zeros(3, np.float32)
+        self.start = np.array(start)
+
+    def reset(self) -> None:
+        pass
+
+    def observe(self) -> np.ndarray:
+        return np.zeros(1, np.float32)
+
+    def act(self, obs: np.ndarray) -> np.ndarray:
+        return np.zeros(1, np.float32)
+
+    def apply(self, action: np.ndarray) -> None:
+        pass
+
+    def base_velocity_b(self) -> np.ndarray:
+        return np.zeros(3)
+
+    def fell_over(self) -> bool:
+        return False
+
+    def contact_points(self) -> np.ndarray | None:
+        return self.start[None, :] - [0.0, 0.0, 0.3]
+
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        return self.start, np.array([1.0, 0, 0, 0]), np.zeros(1)
+
+
+@needs_scene
+@needs_sim
+class TheAssayAndTheContactSites(unittest.TestCase):
+    def test_the_assay_stages_every_perturbation_and_reads_the_cliff(self) -> None:
+        from rq_pipeline.deploy.gate import CONTACTS_FILE  # noqa: PLC0415
+        from rq_pipeline.scenes import assay  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # dense enough that a 10 cm ball around a contact holds gaussians
+            scene = _staged_scene(Path(tmp), n=20_000)
+            (Path(tmp) / "tiny").mkdir()
+            deployment = _manifest(Path(tmp) / "tiny")
+            (deployment / "scene.xml").write_text(TINY_ROBOT)
+            (Path(tmp) / "assets").mkdir()
+            root = Path(tmp) / "deploy"
+            root.mkdir()
+            short = (
+                stage.NOMINAL,
+                stage.Perturbation("z-20mm", (0, 0, -0.02)),
+            )
+            record = assay.assay(
+                deployment,
+                scene,
+                root,
+                "tiny-on-fake",
+                assets_dir=Path(tmp) / "assets",
+                trials=2,
+                seed=1,
+                perturbations=short,
+                open=lambda manifest, assets_dir=None: _StandingRuntime(
+                    tuple(manifest.raw["scene"]["start"])
+                ),
+            )
+            self.assertEqual(
+                [r["deployment"] for r in record["perturbations"]],
+                [
+                    "tiny-on-fake",
+                    "tiny-on-fake-z-20mm",
+                ],
+            )
+            self.assertTrue((root / "tiny-on-fake-z-20mm" / stage.STAGE_FILE).is_file())
+            self.assertFalse(record["cliff"]["measurable"])  # nothing walked
+            self.assertIn("unmeasurable", record["cliff"]["note"])
+            self.assertIsNotNone(assay.read_assay(root / "tiny-on-fake"))
+            # the gate kept where the fake touched and measured the gap there
+            gate = json.loads((root / "tiny-on-fake" / "gate.json").read_text())
+            contacts = gate["contacts"]
+            self.assertEqual(contacts["file"], CONTACTS_FILE.format(runtime="mujoco"))
+            self.assertEqual(contacts["points"], 2 * 50)  # two 1 s trials at 50 Hz
+            self.assertEqual(contacts["site_gap"]["radius_m"], 0.1)
+            self.assertIsNotNone(contacts["site_gap"]["chamfer_m"])
+            self.assertIn("contact sites", contacts["site_gap"]["method"])
+
+    def test_the_mujoco_runtime_sees_its_contacts(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.deploy.runtime import Runtime  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "tiny").mkdir()
+            deployment = _manifest(Path(tmp) / "tiny")
+            (deployment / "scene.xml").write_text(TINY_ROBOT)
+            manifest = load_manifest(deployment)
+            model = mujoco.MjModel.from_xml_string(TINY_ROBOT)
+            data = mujoco.MjData(model)
+            runtime = Runtime(manifest=manifest, model=model, data=data, session=None)
+            data.qpos[2] = 0.15  # the foot sphere (r 0.05 at -0.2) into the floor
+            mujoco.mj_forward(model, data)
+            points = runtime.contact_points()
+            assert points is not None
+            self.assertEqual(points.shape[1], 3)
+            self.assertGreaterEqual(points.shape[0], 1)
+            self.assertLess(abs(points[0][2]), 0.06)  # at the floor
+
+    def test_the_cameras_refuse_by_name_without_the_renderer(self) -> None:
+        from rq_pipeline.scenes import cameras  # noqa: PLC0415
+
+        found = cameras._version()
+        if found is not None and found >= cameras.RENDERER_SINCE:
+            self.skipTest("this instrument has the renderer")
+        opened, why = cameras.open_cameras(None, _splats(), names=("head",))
+        self.assertIsNone(opened)
+        self.assertIn("3.13", why)
+        pixel = np.array([0x0A0B0C], np.uint32)
+        self.assertEqual(cameras.unpack(pixel).tolist(), [[10, 11, 12]])

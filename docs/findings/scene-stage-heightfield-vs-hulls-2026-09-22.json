@@ -1,0 +1,38 @@
+{
+ "id": "scene-stage-heightfield-vs-hulls-2026-09-22",
+ "claim": "The collision proxy of a captured scene, as MuJoCo can touch it, two ways on Neverwhere's hurdle_226_blue_carpet_v3 (145,241 faces): as convex parts (CoACD, threshold 0.05, 64 hulls max) the course becomes 59 hulls in 16 s whose surface sits a mean 9.4 cm (95th percentile 21.7 cm) from the proxy - the hulls roof the 29 cm hurdles into a 36 cm plateau, so a walk would stand on a box; tightening to 230 hulls (26 s) still leaves a 12.3 cm 95th percentile, 512 hulls (218 s) 21.5 cm. As a heightfield of the proxy's top surface on a 2 cm grid the terrain matches the top surface to a median of 0.09 mm (mean 2.6 cm, 95th percentile 15.6 cm, both carried by samples within a cell of a hurdle edge, where the grid is a cliff), with 38.5 % of the proxy's surface (vertical faces, undersides) carried only as cliffs and 31.7 % of the grid's cells filled with the lowest height because nothing lies under them. The heightfield is the stage's default terrain; both gaps are recorded on every staged deployment.",
+ "date": "2026-09-22",
+ "repo_commit": "a423f1d",
+ "argv": [
+  "rq_pipeline.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way",
+  "the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene)",
+  "rq_pipeline.scenes.terrain.heightfield: sample_grid(cell 0.02 m) over the proxy's footprint, heightfield_gap over 50,000 proxy surface samples (topmost at their (x, y) by a ray from above, 1 mm tolerance) against the grid's bilinear height",
+  "stage_deployment('review-check', 'hurdle-blue-carpet') [MCP door, project go2-walk on the Mac]: the Go2 deployment's plane floor replaced by the terrain, the robot started 1 m before waypoint-0 heading along the course"
+ ],
+ "instrument": "rq_pipeline.scenes (numpy), CoACD 1.0.14, Open3D 0.20.0, mujoco 3.11.0, Python 3.12, macOS 25.5.0 Apple M1 Pro",
+ "outcome": {
+  "hulls_default": {"parts": 59, "vertices": 3543, "vertices_max_per_part": 100, "seconds": 15.84, "hulls_to_proxy_mean_m": 0.0936, "hulls_to_proxy_p95_m": 0.21655, "proxy_to_hulls_mean_m": 0.07704, "proxy_to_hulls_p95_m": 0.17489},
+  "hulls_tighter": [
+   {"threshold": 0.02, "max_convex_hull": 256, "resolution": 4000, "parts": 230, "seconds": 26, "hulls_to_proxy_mean_m": 0.06391, "hulls_to_proxy_p95_m": 0.12304, "proxy_to_hulls_p95_m": 0.09429},
+   {"threshold": 0.01, "max_convex_hull": 512, "resolution": 6000, "preprocess_mode": "off", "parts": 512, "seconds": 218, "hulls_to_proxy_mean_m": 0.05471, "hulls_to_proxy_p95_m": 0.21491, "proxy_to_hulls_p95_m": 0.04443}
+  ],
+  "hulls_under_the_course_m": {"proxy_top_at_x_1.0": 0.291, "hulls_top_at_x_1.0": 0.359, "proxy_top_at_x_2.5": 0.296, "hulls_top_at_x_2.5": 0.362, "proxy_at_x_-1.0": -0.014, "hulls_at_x_-1.0": 0.239},
+  "heightfield": {"cell_m": 0.02, "top_surface_median_m": 0.00009, "top_surface_mean_m": 0.02616, "top_surface_p95_m": 0.15615, "not_top_surface_fraction": 0.38454, "holes_filled_fraction": 0.31737, "samples": 50000, "surface_z_under_start_m": -0.0104},
+  "stage": {"deployment": "review-check-on-hurdle-blue-carpet", "scene": "hurdle-blue-carpet@bc05c8723d7a", "start_m": [0.0, 0.0, 0.3096], "heading_deg": 0.0, "cameras": ["head", "course"], "stage_xml_bytes": 1341112}
+ },
+ "artifacts": {
+  "parts_record": "projects/go2-walk/scenes/hurdle-blue-carpet/proxy-parts.json (the Mac; projects/ is not tracked)",
+  "stage": "projects/go2-walk/deploy/review-check-on-hurdle-blue-carpet/{deploy.json,stage.xml}"
+ },
+ "sources": {
+  "scene_gap": "docs/findings/scene-gap-neverwhere-hurdle-2026-09-22.json (the scene's own gap; this record is the decomposition's, the caveat that record named)",
+  "mujoco_hulls": "MuJoCo collides a mesh geom as its convex hull (Modeling: mesh; the SDF plugin is the exception Neverwhere's simulator uses)"
+ },
+ "protocol": "docs/78-the-scene-loop.md §4 E2 and §4.1",
+ "caveats": [
+  "One scene. The hull roofing is a property of a hurdle course (concave by design); a flat room would decompose cleanly.",
+  "The heightfield's mean and 95th percentile are edge samples: a 2 cm grid renders a vertical hurdle face as a 2 cm-wide ramp, and every top-surface sample within that cell of an edge reads the ramp. The median says where the feet land; the tail says where the edges are.",
+  "The hull gaps at tighter settings come from a scratch run with the same code path and are not on the scene's record; the default is.",
+  "Neither number is a verdict; docs/78 §4.1 makes the perturbation assay's cliff the task's number."
+ ]
+}

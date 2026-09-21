@@ -69,19 +69,44 @@ def _footprint(surface: np.ndarray, margin: float) -> tuple[np.ndarray, np.ndarr
     return surface.min(0) - margin, surface.max(0) + margin
 
 
-def measure(
+# Contact sites: at most this many are kept (drawn with the seed), and
+# the audit's scope is the ball of `radius_m` around each.
+SITE_SAMPLES = 2000
+NEAR_CHUNK = 20_000
+SITE_METHOD = (
+    "scoped to the {sites} contact sites' {radius:g} m surroundings instead of the "
+    "proxy's footprint (docs/78 §4.1: the gap where the task touches)"
+)
+
+
+def _near(points: np.ndarray, sites: np.ndarray, radius: float) -> np.ndarray:
+    """Which points lie within `radius` of any site (chunked, numpy only)."""
+    keep = np.zeros(points.shape[0], dtype=bool)
+    r2 = radius * radius
+    for start in range(0, points.shape[0], NEAR_CHUNK):
+        chunk = points[start : start + NEAR_CHUNK].astype(np.float64)
+        d2 = ((chunk[:, None, :] - sites[None, :, :]) ** 2).sum(-1)
+        keep[start : start + NEAR_CHUNK] = d2.min(1) <= r2
+    return keep
+
+
+def measure(  # noqa: PLR0913 - the audit's own knobs, each named
     splats: Splats,
     proxy_obj: Path,
     *,
     tolerance_m: float = DEFAULT_TOLERANCE_M,
     seed: int = 0,
+    sites: np.ndarray | None = None,
+    radius_m: float = 0.1,
 ) -> Gap:
     """The four numbers for one scene, scoped to the proxy's FOOTPRINT:
     the visible gaussians inside the proxy's extent (grown by
     `FOOTPRINT_MARGIN_M`), since a capture sees the whole room and a proxy covers
     the course - the room beyond the course is coverage, reported as
     such, never a gap. The hidden fraction is judged against every
-    visible gaussian, wherever it is."""
+    visible gaussian, wherever it is. With `sites` (world points where a
+    task touched), the scope is the ball of `radius_m` around them on
+    both sides instead: the gap where the task touches."""
     o3d = _open3d()
     rng = np.random.default_rng(seed)
     visible = splats.visible(VISIBLE_OPACITY)
@@ -91,8 +116,17 @@ def measure(
         raise ValueError(f"{proxy_obj}: no triangles to measure against")
     o3d.utility.random.seed(seed)
     surface = np.asarray(mesh.sample_points_uniformly(PROXY_SAMPLES).points)
-    lo, hi = _footprint(surface, FOOTPRINT_MARGIN_M)
-    inside = np.all((centres >= lo) & (centres <= hi), axis=1)
+    scope_note = ""
+    if sites is not None:
+        sites = np.asarray(sites, dtype=np.float64).reshape(-1, 3)
+        if sites.shape[0] > SITE_SAMPLES:
+            sites = sites[rng.choice(sites.shape[0], SITE_SAMPLES, replace=False)]
+        inside = _near(centres, sites, radius_m)
+        surface = surface[_near(surface, sites, radius_m)]
+        scope_note = SITE_METHOD.format(sites=sites.shape[0], radius=radius_m)
+    else:
+        lo, hi = _footprint(surface, FOOTPRINT_MARGIN_M)
+        inside = np.all((centres >= lo) & (centres <= hi), axis=1)
     covered = float(inside.mean()) if centres.shape[0] else 0.0
     footprint = centres[inside]
     if footprint.shape[0] > MAX_VISIBLE_SAMPLES:
@@ -114,7 +148,7 @@ def measure(
     to_visible = np.array(
         [tree.search_knn_vector_3d(p, 1)[2][0] ** 0.5 for p in surface]
     )
-    empty = to_proxy.size == 0
+    empty = to_proxy.size == 0 or to_visible.size == 0
     return Gap(
         chamfer_m=None
         if empty
@@ -123,13 +157,16 @@ def measure(
         beyond_tolerance_fraction=None
         if empty
         else round(float((to_proxy > tolerance_m).mean()), 5),
-        hidden_fraction=round(float((to_visible > tolerance_m).mean()), 5),
+        hidden_fraction=None
+        if empty
+        else round(float((to_visible > tolerance_m).mean()), 5),
         tolerance_m=tolerance_m,
         visible_samples=int(footprint.shape[0]),
         proxy_samples=int(surface.shape[0]),
         footprint_fraction=round(covered, 5),
-        method=METHOD.format(opacity=VISIBLE_OPACITY),
-        note="" if not empty else "no visible gaussian inside the proxy's footprint",
+        method=METHOD.format(opacity=VISIBLE_OPACITY)
+        + (f"; {scope_note}" if scope_note else ""),
+        note="" if not empty else "no visible gaussian or proxy surface in the scope",
     )
 
 

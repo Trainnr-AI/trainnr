@@ -37,6 +37,7 @@ from rq_pipeline.deploy.runtimes import (  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.kinds import CERTIFICATE_FILE, Kind, stamp_kind  # noqa: E402
 from rq_pipeline.project.locate import Project  # noqa: E402
+from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
 
 DEPLOY_FOLDER = "deploy"
 CERTIFICATES_FOLDER = "certificates"
@@ -76,6 +77,13 @@ def main() -> None:
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
     certificate = _certificate(project, manifest.raw.get(Key.CERTIFICATE))
+    scene_name = scene_name_of(manifest.raw)
+    scene_dir = project.scenes / scene_name if scene_name else None
+    if scene_dir is not None and not scene_dir.is_dir():
+        print(
+            f"[gate] scene {scene_name!r} not in this project: no splat in the picture"
+        )
+        scene_dir = None
     with stack:
         # What the stack started that the runtime must share (the DDS
         # stack's one virtual pad); a library runtime's NoStack shares nothing.
@@ -93,6 +101,7 @@ def main() -> None:
                 manifest, assets_dir=assets_dir, **shared
             ),
             narrate=True,
+            scene_dir=scene_dir,
         )
     verdict = record["verdict"]
     print(

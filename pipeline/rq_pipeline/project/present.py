@@ -56,7 +56,7 @@ from rq_pipeline.project.kinds import (
     Kind,
 )
 from rq_pipeline.project.locate import INDEX_DIR, Project
-from rq_pipeline.viz import viewer_files
+from rq_pipeline.viz import gaussians, viewer_files
 
 if TYPE_CHECKING:
     import rerun as rr
@@ -971,7 +971,6 @@ def _present_scene(
     """A captured scene: the splat as Rerun's own splat archetype beside
     the collision proxy as a translucent mesh, so the gap is a picture;
     the record's facts as a reading."""
-    import numpy as np  # noqa: PLC0415
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
@@ -990,18 +989,7 @@ def _present_scene(
         rr_.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
         rr_.log(
             f"{root}/splat",
-            rr.GaussianSplats3D(
-                centers=splats.means,
-                scales=splats.scales,
-                quaternions=splats.quats[:, [1, 2, 3, 0]],  # Rerun takes (x, y, z, w)
-                colors=np.concatenate(
-                    [
-                        (splats.colors * 255).astype(np.uint8),
-                        (splats.opacities * 255).astype(np.uint8)[:, None],
-                    ],
-                    axis=1,
-                ),
-            ),
+            gaussians(rr, splats),
             static=True,
         )
         proxy = _obj_mesh(folder / PROXY_FILE)
@@ -1059,24 +1047,15 @@ def _gap_line(g: Any) -> str:
 
 
 def _obj_mesh(path: Path) -> tuple[Any, Any] | None:
-    """A Wavefront OBJ's triangles (v and f lines; quads split), or None."""
-    import numpy as np  # noqa: PLC0415
+    """A Wavefront OBJ's triangles, or None when the file is not there."""
+    from rq_pipeline.scenes.obj import read_obj  # noqa: PLC0415
 
     if not path.is_file():
         return None
-    vertices: list[list[float]] = []
-    faces: list[list[int]] = []
-    with path.open("r", encoding="utf-8", errors="replace") as src:
-        for line in src:
-            if line.startswith("v "):
-                vertices.append([float(x) for x in line.split()[1:4]])
-            elif line.startswith("f "):
-                idx = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
-                for i in range(1, len(idx) - 1):
-                    faces.append([idx[0], idx[i], idx[i + 1]])
-    if not vertices or not faces:
+    try:
+        return read_obj(path)
+    except ValueError:  # a file with no faces draws nothing
         return None
-    return np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.uint32)
 
 
 _PRESENTERS: dict[Kind, Presenter] = {

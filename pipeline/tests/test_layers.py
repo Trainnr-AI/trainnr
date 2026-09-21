@@ -22,7 +22,10 @@ TIER = {
     "robot": 3,  # sysid fits over recordings; the census gate is placed below
     "evaluate": 2,
     "rl": 2,  # SmoothRL's pure and torch halves (docs/71); nothing above stats
-    "deploy": 2,  # the sim-to-sim gate: plain MuJoCo + ONNX, judged by evaluate's rule
+    # the sim-to-sim gate: plain MuJoCo + ONNX, judged by evaluate's rule; since
+    # E2 it walks on captured scenes (the contact-site gap, the mirror's splat and
+    # cameras), so it sits beside scenes, which stages deployments in return
+    "deploy": 3,
     "fleet": 3,  # drift: the identifier's method over a recording, judged
     "scenes": 3,  # captured scenes: numpy splats, the proxy audit; robot's code version
     "physics": 3,
