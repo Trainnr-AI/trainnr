@@ -104,8 +104,8 @@ def _raycaster(vertices: np.ndarray, faces: np.ndarray) -> Any:
         raise ImportError(NEEDS_SCENE) from why
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(
-        o3d.core.Tensor(vertices.astype(np.float32)),
-        o3d.core.Tensor(faces.astype(np.uint32)),
+        o3d.core.Tensor.from_numpy(vertices.astype(np.float32)),
+        o3d.core.Tensor.from_numpy(faces.astype(np.uint32)),
     )
     return scene
 
@@ -119,7 +119,8 @@ def _heights_at(caster: Any, xy: np.ndarray) -> np.ndarray:
     rays[:, :2] = xy
     rays[:, 2] = RAY_FROM_M
     rays[:, 5] = -1.0
-    t_hit = caster.cast_rays(o3d.core.Tensor(rays))["t_hit"].numpy().astype(np.float64)
+    t_hit = caster.cast_rays(o3d.core.Tensor.from_numpy(rays))["t_hit"].numpy()
+    t_hit = t_hit.astype(np.float64)
     heights = RAY_FROM_M - t_hit
     heights[~np.isfinite(t_hit)] = np.nan
     return heights

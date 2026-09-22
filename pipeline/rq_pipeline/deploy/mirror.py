@@ -53,6 +53,9 @@ def _rerun() -> Any | None:
 
 
 SCENE_PATH = "world/scene/splat"
+COURSE_PATH = "world/course"  # the course a staged gate walks (deploy/course.py)
+COURSE_LINE_M = 0.01
+COURSE_POINT_M = 0.05
 CAMERAS_PATH = "cameras"  # the stage cameras' pictures, one entity each
 CAMERA_HZ = 2  # pictures a second: the ray tracer on a CPU takes seconds a frame
 
@@ -206,8 +209,28 @@ class GateMirror:
         cmd = ", ".join(
             f"{a} {float(c):+.2f}" for a, c in zip(TWIST_SHORT, command, strict=True)
         )
+        self.note(f"trial {index}: {cmd}")
+
+    def note(self, text: str) -> None:
+        """A line in the trials log, at the picture's current time."""
         self._rr.set_time(TIMELINE, duration=self.seconds)
-        self._rr.log("gate/notes", self._rr.TextLog(f"trial {index}: {cmd}"))
+        self._rr.log("gate/notes", self._rr.TextLog(text))
+
+    def course(self, path: np.ndarray) -> None:
+        """The course the gate walks, once, static: the path from the
+        start through the waypoints, (n + 1, 3), and the waypoints."""
+        rr = self._rr
+        points = np.asarray(path, dtype=np.float64)
+        rr.log(COURSE_PATH, rr.LineStrips3D([points], radii=COURSE_LINE_M), static=True)
+        rr.log(
+            f"{COURSE_PATH}/waypoints",
+            rr.Points3D(
+                points[1:],
+                radii=COURSE_POINT_M,
+                labels=[str(i) for i in range(len(points) - 1)],
+            ),
+            static=True,
+        )
 
     def tick(
         self,

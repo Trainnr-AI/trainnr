@@ -547,6 +547,7 @@ class Actions:
             str(trials),
             "--seed",
             str(seed),
+            "--narrate",  # law 0: every stage's gate in the Studio
         ]
         return self.jobs.start("assay-deployment", argv, PIPELINE_DIR)
 

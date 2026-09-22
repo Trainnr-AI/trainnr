@@ -296,7 +296,7 @@ class TheMirror(unittest.TestCase):
     def test_ticks_become_frames_and_series(self) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
-        from rq_pipeline.deploy.mirror import GateMirror  # noqa: PLC0415
+        from rq_pipeline.deploy.mirror import COURSE_PATH, GateMirror  # noqa: PLC0415
 
         joints = "".join(
             f'<body name="b{i}" pos="0 0 {0.1 * i:.1f}">'
@@ -336,6 +336,12 @@ class TheMirror(unittest.TestCase):
             def TextLog(self, t):  # noqa: N802 - Rerun's own name
                 return ("text", t)
 
+            def LineStrips3D(self, strips, **k):  # noqa: N802 - Rerun's own name
+                return ("strips", [np.asarray(s).shape for s in strips])
+
+            def Points3D(self, points, **k):  # noqa: N802 - Rerun's own name
+                return ("points", np.asarray(points).shape)
+
             def disconnect(self):
                 pass
 
@@ -356,6 +362,11 @@ class TheMirror(unittest.TestCase):
         self.assertEqual(logged.count("gate/velocity/vy"), 3)
         self.assertAlmostEqual(mirror.seconds, 0.02 * mirror.every * 3)
         self.assertEqual(mirror.data.qpos[2], 0.4)
+        # a course gate draws its path once, in three dimensions
+        mirror.course(np.array([[0, 0, 0.3], [1, 0, 0.3], [2, 0.5, 0.3]]))
+        logged = [c[1] for c in rr.calls if c[0] == "log"]
+        self.assertIn(COURSE_PATH, logged)
+        self.assertIn(f"{COURSE_PATH}/waypoints", logged)
 
 
 class OnePad(unittest.TestCase):

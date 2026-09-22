@@ -34,6 +34,7 @@ import mujoco
 import numpy as np
 from numpy.typing import NDArray
 from rq_pipeline.deploy.manifest import (
+    HEADING_GAIN,
     MANIFEST_FILE,
     MANIFEST_SCHEMA,
     SOURCE_GAIT_PHASE,
@@ -348,12 +349,19 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             f"observation widths sum to {widths}, the actor takes {ex.obs_dim}"
         )
     twist = env.command_manager.get_term(COMMAND_TERM)
-    ranges = getattr(getattr(twist, "cfg", None), "ranges", None)
+    twist_cfg = getattr(twist, "cfg", None)
+    ranges = getattr(twist_cfg, "ranges", None)
     command_ranges = (
         {k: list(v) for k, v in asdict(ranges).items() if v is not None}
         if ranges
         else {}
     )
+    commands: dict[str, Any] = {"twist": command_ranges}
+    gain = getattr(twist_cfg, "heading_control_stiffness", None)
+    if getattr(twist_cfg, "heading_command", False) and gain is not None:
+        # the heading-pursuit gain the policy steered by, what a course
+        # gate steers by (rq_pipeline.deploy.course)
+        commands[HEADING_GAIN] = float(gain)
     physics_dt = float(env.cfg.sim.mujoco.timestep)
     decimation = int(env.cfg.decimation)
     terrain = env.cfg.scene.terrain.terrain_type if env.cfg.scene.terrain else None
@@ -413,7 +421,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "terrain": terrain,
             "floor": asdict(_floor_of(model)),
         },
-        Key.COMMANDS: {"twist": command_ranges},
+        Key.COMMANDS: commands,
         Key.COMMAND_BASIS: ex.command_basis,
         Key.TERMINATION: {"fell_over_deg": _fell_over_deg(env)},
     }

@@ -620,8 +620,10 @@ def gate_deployment(
     gate's own default when unset) of the evaluation it cites. `runtime`
     is one of `list_gate_runtimes()`: plain MuJoCo through our manifest,
     or Unitree's own simulator and controller over DDS (the second gate,
-    Linux only). Job handle; the runtime's record lands beside the
-    manifest and shows in the Studio."""
+    Linux only). A deployment staged on a scene (`stage_deployment`) is
+    judged along the scene's course instead - forward, steered to the
+    next waypoint, success = arrival (docs/78 §8.4). Job handle; the
+    runtime's record lands beside the manifest and shows in the Studio."""
     from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
     from rq_pipeline.deploy.runtimes import (  # noqa: PLC0415
         require_platform,

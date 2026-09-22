@@ -372,20 +372,71 @@ a scene, that protocol measures collisions more than terrain. The
 contact-site gap where it touched: chamfer 2.0 cm, 95th percentile
 6.6 cm (the Mac's smoke policy: 2.3 / 7.3).
 
-Two consequences, both open:
+Two consequences:
 
-1. **The assay needs a protocol that walks the course.** At nominal the
-   gate as it stands scores near zero, so the cliff would be recorded as
-   unmeasurable, as it was with the smoke checkpoint. A scene gate
-   should command along the course the scene's author laid out (forward,
-   heading to the next waypoint) for the course's length, or the policy
-   should first be trained on the scene (E2's smoke train).
-2. **The gate's cameras are dark on the box.** The gate runs in the
+1. **The assay needs a protocol that walks the course** — built the same
+   night, §8.4. At nominal the twist gate scores near zero, so the cliff
+   would be recorded as unmeasurable, as it was with the smoke
+   checkpoint; the course gate commands along the course the scene's
+   author laid out and judges arrival.
+2. **The gate's cameras are dark on the box** (open). The gate runs in the
    pipeline's environment, which is still mujoco 3.11 without
    mujoco_warp; the splat renderer is 3.13's. E0 moved the walk package
    only. Pictures in the gate mean the pipeline's own instrument step,
    which moves every arm and ALOHA certificate's stamp, or running a
    staged-scene gate in the walk package's environment.
+
+## 8.4 The course gate: the scene's protocol, and where the walker stops (2026-09-22, the box)
+
+A deployment staged on a scene is now judged along the scene's course
+(`pipeline/rq_pipeline/deploy/course.py`); the manifest chooses — the stage
+writes the scene's course into its scene block beside the start, and
+a gate reads the manifest alone, so the DDS runtime is judged the same
+way. Every field that differs from the plane's protocol is in the
+record's protocol block:
+
+| | the plane's gate | the scene's gate |
+|---|---|---|
+| commands | held per episode, drawn in the manifest's twist ranges | forward along the course, steered to the next waypoint |
+| steering | none | mjlab's heading pursuit, the law the policy trained under: yaw rate = clip(gain × wrap(heading to the waypoint − yaw), the manifest's yaw-rate range); forward = speed × max(cos(that error), 0), so it stands and turns when facing away |
+| the gain | — | the manifest's `heading_gain` when the export recorded it (it does now, from `heading_control_stiffness`); else the protocol's own 0.5 (mjlab's Go2 value), and the record says which |
+| speed | drawn on every axis | drawn per trial in the upper half of the forward range, seeded |
+| length | the manifest's episode | the path's length at that speed × 2 |
+| success | survived and err_ratio < 0.5 | survived and every waypoint reached within 0.3 m inside the budget; the tracking ratio is still recorded |
+
+The steering has to slow when it turns: a pure yaw-rate pursuit at
+0.5 rad/s per radian has a turn radius of 2 m at 1 m/s, and the
+kinematic walker in the tests missed a 45° corner inside its budget
+until the forward command was scaled by the cosine of the heading
+error. The Studio draws the course as a line with numbered waypoints
+under the robot, and the trials log names each trial's speed.
+
+go2-c2 on the course by the new protocol, four seeded trials at
+0.60–0.80 m/s:
+
+| trial | speed m/s | reached | of | seconds | budget | fell | err ratio |
+|---|---|---|---|---|---|---|---|
+| 0 | 0.76 | 0 | 4 | 14.0 | 14.0 | no | 0.96 |
+| 1 | 0.80 | 0 | 4 | 13.3 | 13.3 | no | 0.96 |
+| 2 | 0.73 | 0 | 4 | 14.5 | 14.5 | no | 0.96 |
+| 3 | 0.60 | 0 | 4 | 17.7 | 17.7 | no | 0.96 |
+
+0/4, and the record says exactly where: the course's first waypoint
+sits on top of the first hurdle (x 0.9–1.1 m, 29 cm tall by the
+heightfield along the course line; the next two at 2.4–2.7 and
+4.0–4.3 m, 30 cm), and every one of the 5,327 contact points above
+15 cm is at x = 0.84 m — the front feet on the hurdle's face, the
+robot pushing against it for the whole budget, tracking 4 % of what it
+was told. A policy trained to walk on a plane does not climb a 29 cm
+hurdle, and the course is a hurdle course: this is the protocol
+measuring the policy, not the collision. The contact-site gap where it
+stood: chamfer 1.0 cm, 95th percentile 5.6 cm (31,876 points).
+
+So the first cliff number is the honest one — nominal 0, unmeasurable
+— recorded by the assay (`assay.json` on the nominal stage; the
+finding `course-gate-first-walker-2026-09-22`). The number that means
+something waits for a policy that can take the hurdles: E2's train on
+the scene, or E4's reproduction on Neverwhere's own terrain.
 
 ## 9. How a scene's physics gets certified for a task
 

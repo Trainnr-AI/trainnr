@@ -76,6 +76,7 @@ TERM_KEYS = frozenset(
     {"name", "width", "source", "params", "scale", "clip", "history_length"}
 )
 TWIST_AXES = ("lin_vel_x", "lin_vel_y", "ang_vel_z")
+HEADING_GAIN = "heading_gain"  # the commands block's key, beside "twist"
 # The same axes as a door and the Studio name them (forward, left, turn).
 TWIST_SHORT = ("vx", "vy", "wz")
 # The word that hands the commands back to the task (the door, the
@@ -215,12 +216,16 @@ class Observation:
 
 @dataclass(frozen=True)
 class Commands:
-    """The twist ranges the policy trained under: what a gate draws from."""
+    """The twist ranges the policy trained under: what a gate draws from;
+    and the heading-pursuit gain it steered by when the export recorded
+    one (mjlab's `heading_control_stiffness`), what a course gate steers
+    by (`deploy.course`)."""
 
     lin_vel_x: tuple[float, float]
     lin_vel_y: tuple[float, float]
     ang_vel_z: tuple[float, float]
     heading: tuple[float, float] | None = None
+    heading_gain: float | None = None
 
     @property
     def twist(self) -> dict[str, tuple[float, float] | None]:
@@ -243,6 +248,9 @@ class Commands:
             lin_vel_y=(float(twist["lin_vel_y"][0]), float(twist["lin_vel_y"][1])),
             ang_vel_z=(float(twist["ang_vel_z"][0]), float(twist["ang_vel_z"][1])),
             heading=(float(heading[0]), float(heading[1])) if heading else None,
+            heading_gain=float(gain)
+            if (gain := raw.get(HEADING_GAIN)) is not None
+            else None,
         )
 
 

@@ -163,8 +163,8 @@ def decomposition_gap(
         scene = o3d.t.geometry.RaycastingScene()
         for v, f in meshes:
             scene.add_triangles(
-                o3d.core.Tensor(np.asarray(v, np.float32)),
-                o3d.core.Tensor(np.asarray(f, np.uint32)),
+                o3d.core.Tensor.from_numpy(np.asarray(v, np.float32)),
+                o3d.core.Tensor.from_numpy(np.asarray(f, np.uint32)),
             )
         return scene
 
@@ -180,7 +180,9 @@ def decomposition_gap(
 
     def distances(scene: Any, points: np.ndarray) -> np.ndarray:
         return (
-            scene.compute_distance(o3d.core.Tensor(points.astype(np.float32)))
+            scene.compute_distance(
+                o3d.core.Tensor.from_numpy(points.astype(np.float32))
+            )
             .numpy()
             .astype(np.float64)
         )

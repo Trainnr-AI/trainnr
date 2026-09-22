@@ -17,7 +17,8 @@ two transcriptions of it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any
 
 ERR_RATIO_BOUND = 0.5  # tracked = closes at least half the standing-still gap
 ERR_FLOOR_MPS = 0.1  # below this commanded speed the ratio's denominator floors
@@ -52,3 +53,7 @@ class TrackingOutcome:
     @property
     def success(self) -> bool:
         return self.survived and self.tracked
+
+    def row(self) -> dict[str, Any]:
+        """The record's row: the facts and what they judged."""
+        return asdict(self) | {"err_ratio": self.err_ratio, "success": self.success}

@@ -148,7 +148,7 @@ def _mesh_facts(obj: Path) -> dict[str, Any]:
     try:
         import open3d as o3d  # noqa: PLC0415
 
-        mesh = o3d.io.read_triangle_mesh(str(obj))
+        mesh = o3d.io.read_triangle_mesh(obj)
         facts["watertight"] = bool(mesh.is_watertight())
         facts["edge_manifold"] = bool(mesh.is_edge_manifold())
         v = np.asarray(mesh.vertices)

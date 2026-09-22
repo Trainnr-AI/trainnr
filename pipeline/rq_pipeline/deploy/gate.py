@@ -5,18 +5,30 @@ tracked the commanded velocity (`evaluate.tracking`) — over seeded held
 commands; the exact interval is compared with the evaluation the
 deployment cites, within a stated tolerance. Each runtime's record
 lands beside the manifest under its own name.
+
+A deployment staged on a captured scene (`scenes.stage`) is judged along
+the scene's course instead (`deploy.course`): the manifest chooses, and
+the record's protocol block names every field that differs.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from rq_pipeline.deploy.course import (
+    COMMANDS_ALONG,
+    Course,
+    Steering,
+    course_criterion_text,
+    draw_speeds,
+    run_course_trial,
+)
 from rq_pipeline.deploy.manifest import GATE_SCHEMA, Key, Manifest, load_manifest
 from rq_pipeline.deploy.mirror import GateMirror
 from rq_pipeline.deploy.runtimes import (
@@ -107,6 +119,69 @@ def draw_commands(manifest: Manifest, trials: int, seed: int) -> np.ndarray:
     return np.stack([rng.uniform(lo, hi, size=trials) for lo, hi in lo_hi], axis=1)
 
 
+def _hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
+    manifest: Manifest,
+    driver: GateRuntime,
+    protocol: dict[str, Any],
+    trials: int,
+    seed: int,
+    mirror: GateMirror | None,
+    contacts: list[np.ndarray],
+) -> list[TrackingOutcome]:
+    """The plane's protocol: seeded held twists, the evaluation's own."""
+    commands = draw_commands(manifest, trials, seed)
+    protocol["commands"] = COMMANDS_DRAWN
+    limit = driver.command_limit
+    if limit is not None:  # a gamepad's sticks stop at 1.0: say so, and clip
+        commands = np.clip(commands, -float(limit), float(limit))
+        protocol["command_limit"] = float(limit)
+        protocol["commands"] = (
+            f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
+        )
+    return [
+        run_trial(manifest, driver, c, mirror=mirror, index=i, contacts=contacts)
+        for i, c in enumerate(commands)
+    ]
+
+
+def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
+    manifest: Manifest,
+    driver: GateRuntime,
+    course: Course,
+    protocol: dict[str, Any],
+    trials: int,
+    seed: int,
+    mirror: GateMirror | None,
+    contacts: list[np.ndarray],
+) -> list[TrackingOutcome]:
+    """A staged scene's protocol: along its course (`deploy.course`),
+    judged by arrival; the record says so in every field that differs."""
+    limit = driver.command_limit
+    steering = Steering.of_manifest(manifest, limit=limit)
+    speeds = draw_speeds(manifest, trials, seed, limit=limit)
+    protocol["commands"] = COMMANDS_ALONG
+    protocol["criterion"] = course_criterion_text()
+    protocol["course"] = course.describe()
+    protocol["steer"] = steering.describe()
+    if limit is not None:
+        protocol["command_limit"] = float(limit)
+    if mirror is not None:
+        mirror.course(course.path)
+    return [
+        run_course_trial(
+            manifest,
+            driver,
+            course,
+            steering,
+            float(v),
+            mirror=mirror,
+            index=i,
+            contacts=contacts,
+        )
+        for i, v in enumerate(speeds)
+    ]
+
+
 def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     deployment_dir: Path,
     *,
@@ -142,29 +217,22 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         if narrate
         else None
     )
-    commands = draw_commands(manifest, trials, seed)
     protocol: dict[str, Any] = {
         "trials": trials,
         "seed": seed,
-        "commands": COMMANDS_DRAWN,
         "criterion": criterion_text(),
         "err_ratio_bound": ERR_RATIO_BOUND,
         "err_floor_mps": ERR_FLOOR_MPS,
         "runtime": spec.description,
         "instrument": driver.instrument,
     }
-    limit = driver.command_limit
-    if limit is not None:  # a gamepad's sticks stop at 1.0: say so, and clip
-        commands = np.clip(commands, -float(limit), float(limit))
-        protocol["command_limit"] = float(limit)
-        protocol["commands"] = (
-            f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
-        )
     contacts: list[np.ndarray] = []
-    results = [
-        run_trial(manifest, driver, c, mirror=mirror, index=i, contacts=contacts)
-        for i, c in enumerate(commands)
-    ]
+    course = Course.of_manifest(manifest)
+    results: list[TrackingOutcome] = (
+        _walk_course(manifest, driver, course, protocol, trials, seed, mirror, contacts)
+        if course is not None
+        else _hold_twists(manifest, driver, protocol, trials, seed, mirror, contacts)
+    )
     k = sum(t.success for t in results)
     lo, hi = clopper_pearson(k, trials)
     record: dict[str, Any] = {
@@ -176,10 +244,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         "successes": k,
         "trials": trials,
         "ci95": [round(lo, CI_DIGITS), round(hi, CI_DIGITS)],
-        "records": [
-            asdict(t) | {"err_ratio": t.err_ratio, "success": t.success}
-            for t in results
-        ],
+        "records": [t.row() for t in results],
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
     record["verdict"] = _verdict(k, trials, tolerance, certificate)

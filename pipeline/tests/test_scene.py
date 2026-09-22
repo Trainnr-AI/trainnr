@@ -519,6 +519,8 @@ class TheStage(unittest.TestCase):
             self.assertEqual(block["terrain_geoms"], s.terrain.geoms)
             self.assertIn("top_surface_p95_m", block["terrain_gap"])
             self.assertEqual(block["staged_from"]["deployment"], "tiny")
+            # the course, verbatim, so a course gate reads the manifest alone
+            self.assertEqual(block["course"]["waypoints"], [[0, 0, 2.3], [1, 0, 2.3]])
             self.assertTrue(m.raw[Key.STAMP_OF].endswith(" on fake"))
             self.assertTrue((staged / "policy.onnx").is_file())
             with self.assertRaises(FileExistsError):
@@ -655,7 +657,12 @@ class TheAssayAndTheContactSites(unittest.TestCase):
             gate = json.loads((root / "tiny-on-fake" / "gate.json").read_text())
             contacts = gate["contacts"]
             self.assertEqual(contacts["file"], CONTACTS_FILE.format(runtime="mujoco"))
-            self.assertEqual(contacts["points"], 2 * 50)  # two 1 s trials at 50 Hz
+            # one point per tick of the two course walks (the standing fake
+            # runs out its budget every time)
+            self.assertEqual(
+                contacts["points"], sum(r["steps"] for r in gate["records"])
+            )
+            self.assertEqual(gate["protocol"]["course"]["waypoints"], 2)
             self.assertEqual(contacts["site_gap"]["radius_m"], 0.1)
             self.assertIsNotNone(contacts["site_gap"]["chamfer_m"])
             self.assertIn("contact sites", contacts["site_gap"]["method"])

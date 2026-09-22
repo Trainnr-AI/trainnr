@@ -1,0 +1,128 @@
+{
+ "id": "course-gate-first-walker-2026-09-22",
+ "claim": "A deployment staged on a captured scene is now judged along the scene's course instead of holding random twists: forward at a seeded speed in the upper half of the trained range, steered to the next waypoint by mjlab's heading-pursuit law at the gain the policy trained under (forward scaled by the cosine of the heading error, so the walker stands to turn), the budget the path's length at that speed twice over, success = upright and every waypoint reached within 0.3 m. go2-c2 (1500 iterations, 38/40 on the plane) on Neverwhere's hurdle course by this protocol: 0/4 at nominal and 0/4 on each of the eight perturbed stages (36 trials, 0.60-0.80 m/s), reached 0 of 4 waypoints every time, never falling, tracking 4-5 % of what it was told. The record says where: the course's first waypoint sits on top of the first hurdle (x 0.9-1.1 m, 29 cm tall by the heightfield along the course line; two more at 2.4-2.7 and 4.0-4.3 m, 30 cm), and every one of the 5,327 contact points above 15 cm is at x = 0.84 m - the front feet on the hurdle's face for the whole budget. A plane-trained walker does not climb a 29 cm hurdle, and the course is a hurdle course: the protocol measures the policy, not a collision, and the cliff is recorded as unmeasurable at nominal 0 - the honest first number, which waits for a policy trained on the scene (E2) or on Neverwhere's own terrain (E4).",
+ "date": "2026-09-22",
+ "repo_commit": "cdf59a1",
+ "argv": [
+  "stage_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet') [MCP door, project go2-walk; the stage now writes the scene's course into the manifest]",
+  "gate_deployment('go2-c2-deploy-cited-on-hurdle-blue-carpet', trials=4) [MCP door -> tools/gate-deployment.py --trials 4 --seed 1000, narrated into the Studio]",
+  "assay_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet', trials=4) [MCP door -> tools/assay-deployment.py --trials 4 --seed 1000 --narrate; nine stages]",
+  "the terrain profile: mujoco.mj_ray down from z=10 along y=0, x from -0.5 to 6 m in 0.1 m steps, on the staged model; the contacts: contacts-mujoco.npy, points above z=0.15 m"
+ ],
+ "instrument": "mujoco-3.11.0 + onnxruntime (the pipeline environment), the box: WSL2 6.18.33.2, Python 3.11",
+ "protocol": "docs/78-the-scene-loop.md §8.4; rq_pipeline/deploy/course.py (COURSE_SPEED_FRACTION 0.5, COURSE_REACH_M 0.3, COURSE_SLACK 2.0, steer gain 0.5 = mjlab's heading_control_stiffness for the Go2, the protocol's own because this manifest predates the export recording it)",
+ "outcome": {
+  "nominal_gate": {
+   "successes": 0,
+   "trials": 4,
+   "ci95": [
+    0.0,
+    0.6024
+   ],
+   "speeds_mps": [
+    0.761,
+    0.802,
+    0.735,
+    0.602
+   ],
+   "reached_of_4": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "seconds": [
+    13.98,
+    13.26,
+    14.46,
+    17.68
+   ],
+   "fell": 0,
+   "err_ratio": [
+    0.957,
+    0.957,
+    0.959,
+    0.955
+   ],
+   "wall_s_narrated": 53
+  },
+  "assay": {
+   "stages": 9,
+   "trials_each": 4,
+   "successes_each": 0,
+   "reached_each": 0,
+   "falls": 0,
+   "cliff": {
+    "nominal_rate": 0.0,
+    "worst_rate": 0.0,
+    "drop": 0.0,
+    "measurable": false
+   }
+  },
+  "where_it_stopped": {
+   "hurdles_along_the_course_line_m": [
+    [
+     0.9,
+     1.1,
+     0.29
+    ],
+    [
+     2.4,
+     2.7,
+     0.3
+    ],
+    [
+     4.0,
+     4.3,
+     0.3
+    ]
+   ],
+   "first_waypoint": [
+    1.0,
+    0.0,
+    0.3136
+   ],
+   "contacts": 31876,
+   "contacts_above_15cm": 5327,
+   "contacts_above_15cm_x_p5_p95_m": [
+    0.84,
+    0.84
+   ]
+  },
+  "contact_site_gap": {
+   "chamfer_m": 0.00955,
+   "p95_m": 0.05642,
+   "beyond_tolerance_fraction": 0.19316,
+   "hidden_fraction": 0.10145,
+   "radius_m": 0.1
+  },
+  "twist_protocol_before": {
+   "successes": 0,
+   "trials": 4,
+   "err_ratio": [
+    0.72,
+    0.8,
+    0.63,
+    0.86
+   ],
+   "note": "docs/78 §8.3: the same policy, the same seed, held random twists: it wandered a 3 x 3.5 m patch"
+  }
+ },
+ "artifacts": {
+  "gate": "projects/go2-walk/deploy/go2-c2-deploy-cited-on-hurdle-blue-carpet/gate.json (the box; projects/ is not tracked)",
+  "assay": "projects/go2-walk/deploy/go2-c2-deploy-cited-on-hurdle-blue-carpet/assay.json and the eight perturbed stages beside it",
+  "recording": "projects/go2-walk/deploy/go2-c2-deploy-cited-on-hurdle-blue-carpet/.viewer/gate-mujoco.rrd (/world/course drawn, /gate/notes naming each trial's speed)",
+  "twist_protocol_record": "kept aside in the session's scratchpad (stale-stages/twist-protocol-0of4/gate.json)"
+ },
+ "sources": {
+  "steering_law": "mjlab 1.6.0 tasks/velocity/mdp/velocity_command.py: vel_command_b[:, 2] = clip(heading_control_stiffness * wrap_to_pi(heading_target - heading_w), ang_vel_z range); velocity_env_cfg.py: heading_command=True, heading_control_stiffness=0.5",
+  "course": "the scene's XML: mocap bodies waypoint-N (rq_pipeline/scenes/neverwhere.py)",
+  "before": "docs/findings/scene-cameras-and-assay-smoke-2026-09-22.json (the assay's plumbing, 0/2 with the smoke policy)"
+ },
+ "caveats": [
+  "Four trials a stage: enough to say nominal is 0 (upper bound 0.60) and to record the cliff as unmeasurable; not a rate.",
+  "The steering gain is the protocol's own 0.5 because go2-c2's manifest predates the export recording heading_gain; a re-export would carry it and the record would name the manifest as its basis. Both are mjlab's 0.5 for the Go2.",
+  "The kinematic walker in the tests reaches a 27° corner at every drawn speed and missed a 45° one at 1 m/s before the cosine scaling; a sharper course than this one would test the law harder than the hurdle course does.",
+  "One scene, one policy, one instrument (mujoco 3.11 in the pipeline environment; the gate's cameras are dark there, docs/78 §8.3)."
+ ]
+}

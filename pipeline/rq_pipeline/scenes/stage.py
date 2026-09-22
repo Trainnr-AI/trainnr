@@ -97,6 +97,9 @@ class Stage:
     cameras: tuple[str, ...]
     perturbation: Perturbation
     floor_removed: bool
+    # the scene's course, verbatim from its record: what a course gate
+    # walks (`deploy.course`); empty for a scene that lays out none
+    course: dict[str, Any]
 
     def facts(self) -> dict[str, Any]:
         """The manifest's scene block for this stage."""
@@ -116,6 +119,7 @@ class Stage:
             "cameras": list(self.cameras),
             "perturbation": asdict(self.perturbation),
             "trained_floor_removed": self.floor_removed,
+            "course": self.course,
         }
 
 
@@ -277,6 +281,7 @@ def compose(  # noqa: PLR0913 - the stage's own knobs, each named
         cameras=(HEAD_CAMERA, COURSE_CAMERA),
         perturbation=perturbation,
         floor_removed=floor is not None,
+        course=dict(record.course),
     )
 
 
