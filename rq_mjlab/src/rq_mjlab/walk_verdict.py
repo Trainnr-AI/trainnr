@@ -528,11 +528,18 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
         stamp_prev = json.loads(verdict_path.read_text())
         # Named by what it judged too: two checkpoints of one run judged
         # under the same suffix would otherwise share a backup name, and
-        # the second rotation would overwrite the first (2026-09-11).
+        # the second rotation would overwrite the first (2026-09-11) - and
+        # by how: the same checkpoint judged under another protocol or on
+        # another instrument keeps its own backup (2026-09-22, E0).
+        from rq_pipeline.bundles.hashing import fields_hash  # noqa: PLC0415
+        from rq_pipeline.project.importer import PROTOCOL_HASH_CHARS  # noqa: PLC0415
+
+        protocol_prev = stamp_prev.get("protocol") or {}
         previous = out_dir / (
             f"walk-verdict-{suffix}.{stamp_prev.get('policy', 'policy')}"
-            f".seed{stamp_prev['protocol'].get('seed')}"
-            f".n{stamp_prev['trials']}.json"
+            f".seed{protocol_prev.get('seed')}"
+            f".n{stamp_prev['trials']}"
+            f".p{fields_hash(protocol_prev)[:PROTOCOL_HASH_CHARS]}.json"
         )
         if not previous.exists():
             verdict_path.rename(previous)
@@ -621,6 +628,10 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         "dr_basis": identity["dr_basis"],
         "commands": envelope["commands"],
         "command_basis": envelope["basis"],
+        # The instrument that measured it: a judgment on another MuJoCo or
+        # mujoco_warp is another evaluation, and both stand (E0, docs/78:
+        # without this a 3.13 re-judge took the 3.11 certificate's name).
+        "instrument": instrument,
     }
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
     print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")

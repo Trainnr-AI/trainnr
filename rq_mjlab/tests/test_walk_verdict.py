@@ -85,3 +85,43 @@ class TheBlankedCamera(unittest.TestCase):
             sys, "argv", ["walk_verdict", "model.pt", "--blank-camera"]
         ):
             self.assertTrue(parse_args().blank_camera)
+
+
+class TheRotation(unittest.TestCase):
+    """A certificate is never silently replaced: the same checkpoint
+    judged three times under three protocols (here, three instruments)
+    leaves three files (E0, docs/78, 2026-09-22)."""
+
+    def test_three_instruments_three_files(self) -> None:
+        import json  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import (  # noqa: PLC0415
+            EpisodeOutcome,
+            write_certificate,
+        )
+
+        outcome = EpisodeOutcome(steps=1000, fell=False, mean_err=0.05, mean_cmd=0.8)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for version in ("3.11.0", "3.13.0", "3.14.0"):
+                instrument = f"mjlab-1.6.0+mujoco-{version}+warp-1.17.0+cuda"
+                write_certificate(
+                    out,
+                    "cuda",
+                    [outcome, outcome],
+                    source="go2-walk@test",
+                    policy_name="model_1499",
+                    instrument=instrument,
+                    protocol={"seed": 1000, "instrument": instrument},
+                    identity={},
+                    trials=2,
+                )
+            files = sorted(p.name for p in out.glob("walk-verdict-*.json"))
+            self.assertEqual(len(files), 3)
+            instruments = {
+                json.loads((out / f).read_text())["instrument"] for f in files
+            }
+            self.assertEqual(len(instruments), 3)
+            self.assertIn("walk-verdict-cuda.json", files)

@@ -38,6 +38,14 @@ viz = ["rerun-sdk==0.36.*"]
 [tool.uv.sources]
 rq-pipeline = { path = "../pipeline", editable = true }
 
+[tool.uv]
+# E0 (docs/78 §4): the instrument step. mjlab 1.6.0 - still the newest
+# release on 2026-09-22 - pins mujoco and mujoco-warp to ~=3.11; 3.13
+# brings the Gaussian-splat ray tracer the scene loop renders with. The
+# override moves both ahead of mjlab's pins; every walk certificate from
+# here names the new instrument, and the old ones keep theirs.
+override-dependencies = ["mujoco==3.13.0", "mujoco-warp==3.13.0"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

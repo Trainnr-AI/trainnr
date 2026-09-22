@@ -100,7 +100,7 @@ number).
 
 | # | experiment | gate, provable here |
 |---|---|---|
-| E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding |
+| E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
 | E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the phone-video capture waits on the operator's video |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
@@ -306,6 +306,46 @@ What the first stage taught:
 Still E2's: the smoke train with camera observations (mjlab's
 CameraSensor passing the splat arrays through, the box's GPU), the
 frame rate at N worlds, the Go2's real camera pose from the bundle.
+
+## 8.2 E0 as built (2026-09-22, the box)
+
+The walk package's pins moved by override, not by an mjlab release:
+mjlab 1.6.0 is still the newest and pins mujoco and mujoco-warp to 3.11,
+so `rq_mjlab/pyproject.toml` overrides both to 3.13.0 (warp stays at
+1.17); only those two lines of the lock moved. The walk suite passed on
+the new instrument, and go2-c2's final checkpoint certified 38/40,
+interval 0.83 to 0.99, median error ratio 0.2727 - the 3.11
+certificate's numbers to the last digit, and all 40 trials with the same
+outcome and length on both (finding `e0-instrument-step-2026-09-22`).
+
+What the step taught, in the order it was found:
+
+1. **A certificate did not know its instrument.** Its name comes from
+   the device tag, seed, trials and a hash of the protocol, and the
+   protocol left the instrument out: the 3.13 judgment would have taken
+   the 3.11 certificate's name, and the rotated verdict file's backup
+   name (policy, seed, trials) could be taken by a third judgment. The
+   verdict's protocol now names the instrument and the backup name
+   carries the protocol's hash; both certificates stand
+   (`...-pa29326` for 3.11, `...-p37d3df` for 3.13).
+2. **Both walk doors were broken for the Go2.** The trainer and the
+   verdict pass every walk the duck's `head` knob; the Go2's builder
+   never took it. It does now (refusing anything but "free"), and a test
+   checks every registered walk against the doors' keywords.
+3. **mujoco_warp 3.13 prints the line-search overflow on every step.**
+   mjlab's velocity task caps the line search at 20 and 3.13 turns every
+   overflow warning on: 149,000 lines, 25 MB, for a 20-iteration smoke
+   train, and 3.11 had hit the same cap silently. The cap is physics and
+   stays; `rq_mjlab.sim_options` extends mjlab's own warp-options hook to
+   clear that one bit, and every overflow that drops physics still
+   prints. 16 KB.
+4. **A feed with nowhere to go blocked training.** With no Studio
+   listening and no stream file (a smoke run keeps none) the recorder
+   still opened a network sink; its queue filled and the next log call
+   waited forever. The stream now opens switched off in that case and
+   says so once; a Studio closed mid-run was measured not to hang. And
+   the TERM handler's disconnect is bounded: the stuck trainer had
+   ignored TERM.
 
 ## 9. How a scene's physics gets certified for a task
 

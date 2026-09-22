@@ -11,6 +11,8 @@ the study's words onto them.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -170,6 +172,7 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     pin_scale: float | None,
     pin_axis: str = "all",
     bundle: Any = None,
+    head: str = "free",
     legacy_actor: bool = False,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
@@ -179,6 +182,11 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
         raise ValueError("the Go2 walk has no actuator bundle to swap (declared PD)")
     if isinstance(dr_span, str):  # "identified" names the bundle's interval
         raise ValueError("the Go2 walk has no identified interval (declared PD)")
+    # The head knob is the duck's; the trainer and the verdict pass it to
+    # every walk, and without it here both doors failed on the Go2
+    # (found by E0's re-certification, 2026-09-22).
+    if head != "free":
+        raise ValueError("the Go2 has no head to pin")
     return go2_walk_env_cfg(
         play=play,
         dr_span=dr_span,
@@ -209,9 +217,29 @@ def _go2_deploy() -> DeployFacts:
 DEFAULT_ROBOT = "microduck"
 
 
+def _quieted(builder: EnvFactory) -> EnvFactory:
+    """A walk's env builder whose simulation config keeps mujoco_warp's
+    line-search warning off (`rq_mjlab.sim_options`); the builder's own
+    signature stays what callers and tests inspect."""
+
+    @functools.wraps(builder)
+    def build(**kwargs: Any) -> tuple[Any, dict[str, str]]:
+        from rq_mjlab.sim_options import quiet  # noqa: PLC0415
+
+        cfg, identity = builder(**kwargs)
+        return quiet(cfg), identity
+
+    return build
+
+
 def walk_spec(robot: str = DEFAULT_ROBOT) -> WalkSpec:
     """The spec for a robot name; imports lazily so a tool's --help
     never builds an env."""
+    spec = _walk_spec(robot)
+    return dataclasses.replace(spec, env_cfg=_quieted(spec.env_cfg))
+
+
+def _walk_spec(robot: str) -> WalkSpec:
     if robot == "microduck":
         return WalkSpec(
             "microduck",

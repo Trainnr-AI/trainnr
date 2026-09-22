@@ -116,6 +116,31 @@ not this page.
   - The camera gate's 0/1 is not a verdict either: one trial, an unevaluated policy, no evaluation cited.
   - The head camera is placed by hand (38 cm ahead of the base, 6 cm up); the Go2's real camera pose is not read from the bundle yet.
 
+## e0-instrument-step-2026-09-22
+
+**The instrument step costs nothing measurable for the Go2 walk: go2-c2's final checkpoint (1500 iterations, deployable actor), judged on mjlab 1.6.0 with mujoco and mujoco_warp overridden from 3.11.0 to 3.13.0 (warp 1.17.0, CUDA), certifies 38/40 with Clopper-Pearson 95 % [0.831, 0.994] and a median tracking-error ratio of 0.2727 - the 3.11 certificate's numbers to the last digit - and all 40 seeded trials have the same outcome and the same length on both instruments, the same two (12 and 23) failing on both. Two costs were found on the way and removed: mujoco_warp 3.13 turns every overflow warning on and printed the line-search one about 149,000 times in a 20-iteration smoke train (25 MB of log; 16 KB with the line-search warning off, physics untouched), and the certificate's identity did not include the instrument, so the 3.13 judgment would have taken the 3.11 certificate's name.**
+
+- date: 2026-09-22 · commit: `5e90f8f`
+- instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda (against mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda), NVIDIA GeForce RTX 3090 Ti driver 591.86, WSL2 6.18.33.2, Python 3.12`
+- command: `rq_mjlab/pyproject.toml [tool.uv] override-dependencies = ['mujoco==3.13.0', 'mujoco-warp==3.13.0']; uv lock; uv sync --locked --extra viz evaluate_walk(checkpoint='projects/go2-walk/runs/go2-c2/model_1499.pt', trials=40, seed=1000) [MCP door -> python -m rq_mjlab.walk_verdict, project go2-walk] the per-trial comparison: runs/go2-c2/verdict/records-cuda.jsonl, 40 rows per instrument, success and steps by trial python -m rq_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 (256 worlds, 20 iterations), before and after rq_mjlab.sim_options`
+- protocol: docs/78-the-scene-loop.md §4 E0
+- outcome:
+  - certificate_3_11: {'name': 'go2-c2-model_1499-cuda-seed1000-n40-pa29326', 'successes': 38, 'trials': 40, 'ci95': [0.8308, 0.9939], 'median_err_ratio': 0.2727, 'funnel': {'survived': 40, 'tracked': 38}}
+  - certificate_3_13: {'name': 'go2-c2-model_1499-cuda-seed1000-n40-p37d3df', 'successes': 38, 'trials': 40, 'ci95': [0.8308, 0.9939], 'median_err_ratio': 0.2727, 'funnel': {'survived': 40, 'tracked': 38}}
+  - per_trial: {'same_outcome': 40, 'same_steps': 40, 'failing_on_both': [12, 23]}
+  - line_search_warning: {'smoke_lines_before': 149186, 'smoke_log_bytes_before': 25114717, 'smoke_lines_after': 0, 'smoke_log_bytes_after': 16489, 'smoke_seconds_after': 29}
+  - walk_suite: {'tests': 112, 'instrument': '3.13.0'}
+- artifacts:
+  - verdicts: projects/go2-walk/runs/go2-c2/verdict/{walk-verdict-cuda.json (3.13), walk-verdict-cuda.model_1499.seed1000.n40.pa29326.json (3.11)} (the box; projects/ is not tracked)
+  - certificates: projects/go2-walk/certificates/go2-c2-model_1499-cuda-seed1000-n40-{pa29326,p37d3df}
+- sources:
+  - mjlab_pins: mjlab 1.6.0 METADATA: mujoco~=3.11.0, mujoco-warp~=3.11.0; no newer mjlab on PyPI on 2026-09-22
+  - warn_overflow: mujoco_warp 3.13.0 _src/io.py: opt.warn_overflow = int(OverflowType.ALL) at put_model; mjlab's velocity task sets ls_iterations=20 (mjlab/tasks/velocity/velocity_env_cfg.py)
+- caveats:
+  - One policy, one protocol (the trained stage-1 envelope, law DR at the declared +-0.1 span, 40 trials, seed 1000). Identical outcomes say the two instruments agree on this policy's rollouts; a policy near a contact or solver edge could differ.
+  - The 3.13 certificate was judged with the line-search warning still on; the flag gates a print, not the solver (mujoco_warp passes it to kernels only to decide whether to print).
+  - The pipeline venv (the gate, the render stream) stays on mujoco 3.11; E0 moves the walk package, where training, the verdict and the RL view run.
+
 ## dds-gate-go2-c2-2026-09-13
 
 **A sim-to-sim gate through the vendor's own stack catches handover faults a gate through our own runtime cannot: on the Go2 policy go2-c2-model_1499, our plain-MuJoCo gate passed 20/20 while Unitree's own simulator and controller, driven from a virtual gamepad over DDS, passed 0/20 with the robot never moving. The three causes were all ours and all invisible to the MuJoCo gate: two virtual gamepad nodes (their simulator read one, our runtime moved the other), an observation their manager empties when deploy.yaml declares history_length 0, and a base orientation read off a SportModeState message their bridge fills with position and velocity only. Fixed, the same policy passes 20/20 through their stack too, tracking less tightly than through ours (error ratio 0.11-0.41 against the 0.5 bound, versus 0.08 median and 0.15 max in plain MuJoCo).**

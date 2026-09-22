@@ -54,7 +54,8 @@ class ReplayShards:
         index = len(list(self.shards()))
         path = self.root / f"episode-{index:05d}.npz"
         staging = path.with_suffix(".tmp.npz")
-        arrays = {
+        # Any: numpy's stub types **kwargs against savez's own keywords.
+        arrays: dict[str, Any] = {
             name: np.stack([np.asarray(getattr(t, name)) for t in episode])
             for name in FIELDS
         }

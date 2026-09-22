@@ -137,19 +137,16 @@ class TheSeam(unittest.TestCase):
 
     def test_no_studio_and_a_file_means_the_file_alone(self) -> None:
         """A feed toward a viewer that never answers fills a bounded queue
-        and the shutdown flush waits forever (2026-09-13); with a file to
-        save to, the server sink is left out. Without a file the server
-        sink stays, as every feed behaved before."""
+        and blocks (2026-09-13 at shutdown; 2026-09-22 mid-run, a smoke
+        train that never finished); with a file to save to, the server
+        sink is left out, and without one there is no sink at all."""
         fake = _FakeRerun()
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / "x.rrd"
             with mock.patch.dict(os.environ, {VIEWER_FILE_ENV: "1"}):
                 only = sinks(fake, file=file, listening=False)
                 self.assertEqual([type(s).__name__ for s in only], ["FileSink"])
-                self.assertEqual(
-                    [type(s).__name__ for s in sinks(fake, file=None, listening=False)],
-                    ["GrpcSink"],
-                )
+                self.assertEqual(sinks(fake, file=None, listening=False), [])
 
     def test_listening_is_a_real_socket_question(self) -> None:
         import socket  # noqa: PLC0415
@@ -181,6 +178,20 @@ class TheSeam(unittest.TestCase):
             name, chosen, _ = fake.calls[-1]
             self.assertEqual(name, "set_sinks")
             self.assertEqual(len(chosen), 2)
+
+
+class TheSilentStream(unittest.TestCase):
+    def test_no_studio_and_no_file_opens_the_recording_off(self) -> None:
+        fake = _FakeRerun()
+        with (
+            mock.patch.dict(sys.modules, {"rerun": fake}),
+            mock.patch("rq_pipeline.viz.studio_listening", return_value=False),
+            mock.patch("sys.stderr"),
+        ):
+            open_stream("app", file=None, on_term=False)
+        self.assertEqual(
+            fake.calls, [("init", ("app",), {"spawn": False, "default_enabled": False})]
+        )
 
 
 class TheReader(unittest.TestCase):

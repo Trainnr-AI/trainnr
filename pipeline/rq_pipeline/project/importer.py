@@ -147,10 +147,11 @@ def write_policy(
     return stamp_kind(Kind.POLICY, policy_dir)
 
 
-# walk_verdict rotates a replaced verdict to <name>[.<policy>].seed<n>.n<k>.json;
-# the suffix is what stands before that tail (a suffix itself may hold a
-# dot: "at-x0.7-at-fit").
-BACKUP_TAIL = re.compile(r"(\.model_\d+)?\.seed\d+\.n\d+$")
+# walk_verdict rotates a replaced verdict to
+# <name>[.<policy>].seed<n>.n<k>[.p<protocol hash>].json (the hash since
+# 2026-09-22); the suffix is what stands before that tail (a suffix
+# itself may hold a dot: "at-x0.7-at-fit").
+BACKUP_TAIL = re.compile(r"(\.model_\d+)?\.seed\d+\.n\d+(\.p[0-9a-f]+)?$")
 
 
 PROTOCOL_HASH_CHARS = 6

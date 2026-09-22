@@ -24,7 +24,44 @@ time.sleep(30)
 """
 
 
+STUCK_CHILD = """
+import sys, time
+from rq_pipeline.viz import leave_cleanly_on_term
+class Rr:
+    def disconnect(self):
+        time.sleep(60)  # a viewer that stopped answering
+leave_cleanly_on_term(Rr())
+sys.stdout.write("ready\\n"); sys.stdout.flush()
+time.sleep(60)
+"""
+
+
 class LeavingOnTerm(unittest.TestCase):
+    @unittest.skipIf(sys.platform == "win32", "SIGTERM is a POSIX signal")
+    def test_a_stream_that_never_closes_does_not_hold_term(self) -> None:
+        # A disconnect toward a viewer that stopped answering never returns;
+        # the handler gives it TERM_FLUSH_S and leaves (2026-09-22: a smoke
+        # train ignored TERM and needed KILL).
+        import time  # noqa: PLC0415
+
+        from rq_pipeline.viz import TERM_FLUSH_S  # noqa: PLC0415
+
+        child = subprocess.Popen(
+            [sys.executable, "-c", STUCK_CHILD], stdout=subprocess.PIPE, text=True
+        )
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            began = time.monotonic()
+            child.send_signal(signal.SIGTERM)
+            child.wait(timeout=TERM_FLUSH_S + 10)
+            waited = time.monotonic() - began
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.stdout.close()
+        self.assertEqual(child.returncode, TERM_EXIT_STATUS)
+        self.assertLess(waited, TERM_FLUSH_S + 5)
+
     @unittest.skipIf(sys.platform == "win32", "SIGTERM is a POSIX signal")
     def test_term_closes_the_stream_and_exits_as_term(self) -> None:
         child = subprocess.Popen(

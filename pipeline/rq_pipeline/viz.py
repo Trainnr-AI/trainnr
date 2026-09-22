@@ -45,6 +45,7 @@ def _host_port(address: str) -> tuple[str, int]:
 
 STUDIO_HOST, STUDIO_PORT = _host_port(STUDIO_ADDRESS)
 TERM_EXIT_STATUS = 128 + 15  # a process ended by SIGTERM, as a shell reports it
+TERM_FLUSH_S = 2.0  # how long a TERMed feed waits for its stream to close
 
 # The headless rule (docs/76 §10.5): a feed that narrates an artifact also
 # writes its stream into that artifact, under a hidden folder — outside
@@ -111,14 +112,16 @@ def sinks(
     `rr.save()` alone REPLACES the viewer connection and the window goes
     dark while the file fills (measured 2026-08-28). With a file and no
     Studio, the file alone — a headless run must end (see
-    `studio_listening`). With no file and no Studio the server sink stays,
-    as every feed behaved before the file existed. `wanted` overrides the
-    environment knob: a file the operator named on a command line is
-    written whatever the knob says."""
+    `studio_listening`). With neither, no sink at all: the server sink
+    that stayed there filled its queue and blocked the next log call, so
+    a smoke train started with the Studio closed never finished
+    (2026-09-22, E0 on the box); `open_stream` then opens the recording
+    switched off. `wanted` overrides the environment knob: a file the
+    operator named on a command line is written whatever the knob says."""
     saving = viewer_file_wanted() if wanted is None else wanted
     heard = studio_listening(address) if listening is None else listening
     out: list[Any] = []
-    if heard or file is None or not saving:
+    if heard:
         out.append(rr.GrpcSink(address))
     if file is not None and saving:
         path = Path(file)
@@ -148,10 +151,23 @@ def open_stream(  # noqa: PLR0913 - the stream's own knobs, each named
         import rerun  # noqa: PLC0415 - the viz extra
 
         rr = rerun
-    kwargs = {"recording_id": recording_id} if recording_id is not None else {}
-    rr.init(app_id, spawn=False, **kwargs)
+    kwargs: dict[str, Any] = (
+        {"recording_id": recording_id} if recording_id is not None else {}
+    )
     chosen = sinks(rr, address=address, file=file)
     kinds = [type(sink).__name__ for sink in chosen]
+    if not chosen:
+        # Nothing to show it and nothing to keep it: every log call a no-op,
+        # so a run with the Studio closed ends (see `sinks`).
+        rr.init(app_id, spawn=False, default_enabled=False, **kwargs)
+        print(
+            f"[{app_id}] no Studio listens at {address} and no stream file is "
+            "kept: the stream is off for this run (docs/76 §10.5)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return rr
+    rr.init(app_id, spawn=False, **kwargs)
     if kinds == ["GrpcSink"]:
         rr.connect_grpc(address)
     else:
@@ -192,7 +208,13 @@ def leave_cleanly_on_term(rr: Any) -> None:
         return
 
     def _leave(*_: object) -> None:
-        rr.disconnect()
+        # Bounded: a disconnect toward a viewer that stopped answering
+        # waits on a flush that never completes, and a process whose TERM
+        # handler waits forever ignores TERM (a smoke train needed KILL,
+        # 2026-09-22).
+        closing = threading.Thread(target=rr.disconnect, daemon=True)
+        closing.start()
+        closing.join(TERM_FLUSH_S)
         os._exit(TERM_EXIT_STATUS)
 
     signal.signal(signal.SIGTERM, _leave)

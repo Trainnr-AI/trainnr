@@ -672,6 +672,8 @@ def _render_scene(
     px = (margin + (pts[:, 0] - lo[0]) * scale).astype(int)
     py = (height - margin - (pts[:, 1] - lo[1]) * scale).astype(int)
     pixels = image.load()
+    if pixels is None:  # Pillow's stub: no pixel access for an image not loaded
+        raise RuntimeError("the top-down tile has no pixel access")
     for x, y, c in zip(px, py, cols, strict=True):
         if 0 <= x < width and 0 <= y < height:
             pixels[x, y] = (int(c[0]), int(c[1]), int(c[2]))

@@ -164,6 +164,33 @@ class TheLiveVerdict(unittest.TestCase):
         self.assertEqual(len(written), 1)
         self.assertTrue(written[0].startswith("go2-c1-model_1400-cuda-seed2000-n40-p"))
 
+    def test_a_backup_named_by_its_protocol_is_the_same_evaluation(self) -> None:
+        project, run = self._run()
+        refresh_verdicts(project)
+        primary = run / VERDICT_DIR / "walk-verdict-cuda.json"
+        backup = (
+            run / VERDICT_DIR / "walk-verdict-cuda.model_1400.seed1000.n40.pa29326.json"
+        )
+        primary.rename(backup)
+        self.assertEqual(refresh_verdicts(project), [])
+
+    def test_another_instrument_is_another_evaluation(self) -> None:
+        # E0 (docs/78): the same checkpoint, seed and trials judged on
+        # MuJoCo 3.13 must not take the 3.11 certificate's name.
+        project, run = self._run()
+        first = [w.name for w in refresh_verdicts(project)]
+        primary = run / VERDICT_DIR / "walk-verdict-cuda.json"
+        verdict = json.loads(primary.read_text())
+        verdict["protocol"]["instrument"] = "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda"
+        primary.rename(
+            run / VERDICT_DIR / "walk-verdict-cuda.model_1400.seed1000.n40.json"
+        )
+        primary.write_text(json.dumps(verdict))
+        second = [w.name for w in refresh_verdicts(project)]
+        self.assertEqual(len(second), 1)
+        self.assertNotIn(second[0], first)
+        self.assertTrue(second[0].startswith("go2-c1-model_1400-cuda-seed1000-n40-p"))
+
     def test_another_protocol_is_another_evaluation(self) -> None:
         project, run = self._run()
         refresh_verdicts(project)
