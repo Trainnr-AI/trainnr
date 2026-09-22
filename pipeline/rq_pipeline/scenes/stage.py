@@ -151,7 +151,7 @@ def _yaw_quat(yaw_deg: float) -> np.ndarray:
     return np.array([math.cos(half), 0.0, 0.0, math.sin(half)])
 
 
-def _look_quat(forward: np.ndarray, up: np.ndarray) -> np.ndarray:
+def look_quat(forward: np.ndarray, up: np.ndarray) -> np.ndarray:
     """A camera frame (MuJoCo: looks along its -z, +y up) looking along
     `forward`, as a w-x-y-z quaternion."""
     import mujoco  # noqa: PLC0415
@@ -243,7 +243,7 @@ def compose(  # noqa: PLR0913 - the stage's own knobs, each named
     base = _free_body(spec)
     head = base.add_camera(name=HEAD_CAMERA, fovy=HEAD_FOVY)
     head.pos[:] = HEAD_POS
-    head.quat[:] = _look_quat(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+    head.quat[:] = look_quat(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
     # the nominal terrain's height under the start, before any perturbation
     surface_z = _surface_z(spec.compile(), *start_xy)
     key = spec.keys[keyframe]
@@ -257,7 +257,7 @@ def compose(  # noqa: PLR0913 - the stage's own knobs, each named
     eye = np.array(start) - COURSE_BEHIND_M * heading + np.array([0, 0, COURSE_ABOVE_M])
     course = spec.worldbody.add_camera(name=COURSE_CAMERA, fovy=COURSE_FOVY)
     course.pos[:] = eye
-    course.quat[:] = _look_quat(
+    course.quat[:] = look_quat(
         np.array(start) + COURSE_AHEAD_M * heading - eye, np.array([0.0, 0.0, 1.0])
     )
     # the perturbation: the terrain turned about the start and shifted

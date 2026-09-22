@@ -189,11 +189,25 @@ class RerunRecorder(RecorderTerm):
         )
         if self._mirror is not None:
             self._log_mirror(self._mirror, watched)
-        if (
-            self._cfg.frames
-            and int(env.common_step_counter) % self._cfg.frame_every == 0
-        ):
-            self._log_frame(watched)
+        if int(env.common_step_counter) % self._cfg.frame_every == 0:
+            if self._cfg.frames:
+                self._log_frame(watched)
+            self._log_cameras(watched)
+
+    def _log_cameras(self, watched: int) -> None:
+        """What the watched world's own camera sensors see (a scene's
+        head camera, docs/78 E2): the policy's picture, not the
+        renderer's; nothing when the env has none."""
+        from mjlab.sensor.camera_sensor import CameraSensor  # noqa: PLC0415
+
+        for name, sensor in self._env.scene.sensors.items():
+            if not isinstance(sensor, CameraSensor) or sensor.data.rgb is None:
+                continue
+            frame = sensor.data.rgb[watched].cpu().numpy()
+            self._rr.log(
+                f"camera/{name}",
+                self._rr.Image(frame).compress(jpeg_quality=FRAME_JPEG_QUALITY),
+            )
 
     def _log_terms(self, watched: int) -> None:
         """Every reward term's value this step for the watched world -
@@ -307,6 +321,13 @@ class RerunRecorder(RecorderTerm):
         del env_ids
 
     def close(self) -> None:
+        # The GL renderer goes first, while EGL is still up: left to the
+        # interpreter's exit it prints an EGL_NOT_INITIALIZED traceback
+        # after every run (seen on every scene smoke, 2026-09-23).
+        if self._render is not None:
+            renderer, _data, _camera = self._render
+            self._render = None
+            renderer.close()
         self._rr.disconnect()
 
 

@@ -292,6 +292,8 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     name: str | None = None,
     seed: int | None = None,
     task: str | None = None,
+    scene: str | None = None,
+    cameras: bool = True,
 ) -> JobHandle | Refusal:
     """Train a walk policy through rq_mjlab. `task` names a declared walk
     in the project: its robot and randomization span are used and its
@@ -301,13 +303,15 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     With a project open the trainer searches its robots first, and `name`
     — the experiment's folder under the project's `runs/` — makes the run
     an artifact the index sees (`agent="g3"` only; a smoke archives
-    nothing). Minutes to hours; returns a job handle."""
+    nothing). `scene` names a captured scene in the project: the walk
+    trains on its heightfield from the course's start with the head
+    camera seeing its splat (docs/78 E2; the Go2); `cameras=False` trains
+    on the scene without the camera (the rate without pictures). Minutes
+    to hours; returns a job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
-    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
 
     root = _project_root_if_any()
-    log_dir = None
     dr_span: float | None = None
     task_stamp: str | None = None
     if task is None and robot is None:
@@ -319,14 +323,11 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
         if isinstance(declared, str):
             return refusal(declared)
         robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
-    if name is not None:
-        try:
-            plain_name(name, "experiment name")
-        except ValueError as why:
-            return refusal(str(why))
-        if root is None:
-            return refusal("an experiment name needs an open project")
-        log_dir = str(root / "runs" / name)
+    try:
+        log_dir = _run_dir(root, name)
+        scene_dir = _scene_dir(root, scene)
+    except ValueError as why:
+        return refusal(str(why))
     try:
         return Actions(JobManager(_jobs_root())).train_walk(
             agent,
@@ -338,9 +339,40 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             seed=seed,
             dr_span=dr_span,
             task_stamp=task_stamp,
+            scene=scene_dir,
+            cameras=cameras,
         )
     except ValueError as why:
         return refusal(str(why))
+
+
+def _run_dir(root: Path | None, name: str | None) -> str | None:
+    """The experiment's folder under the open project's runs; None for
+    an unnamed run; ValueError by name otherwise."""
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    if name is None:
+        return None
+    plain_name(name, "experiment name")
+    if root is None:
+        raise ValueError("an experiment name needs an open project")
+    return str(root / "runs" / name)
+
+
+def _scene_dir(root: Path | None, scene: str | None) -> str | None:
+    """A named scene's folder in the open project, for a walk that trains
+    on it; None for no scene; ValueError by name otherwise."""
+    from rq_pipeline.project.locate import SCENES_FOLDER, plain_name  # noqa: PLC0415
+    from rq_pipeline.scenes.record import SCENE_FILE  # noqa: PLC0415
+
+    if scene is None:
+        return None
+    plain_name(scene, "scene name")
+    if root is None:
+        raise ValueError("a scene needs an open project")
+    if not (root / SCENES_FOLDER / scene / SCENE_FILE).is_file():
+        raise ValueError(f"no scene {scene!r} in this project")
+    return str(root / SCENES_FOLDER / scene)
 
 
 @dataclass(frozen=True)

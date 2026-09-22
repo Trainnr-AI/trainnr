@@ -128,6 +128,8 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     dr_span: float | None = None,
     task_stamp: str | None = None,
     recorder: bool = True,
+    scene: str | None = None,
+    cameras: bool = True,
     env_file: Path | None = ENV_FILE,
 ) -> list[str]:
     """The one command line that trains a walk through rq_mjlab, for the
@@ -151,6 +153,10 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
         argv += ["--task-stamp", task_stamp]
     if not recorder:
         argv.append("--no-recorder")
+    if scene is not None:  # the walk on a captured scene (docs/78 E2)
+        argv += ["--scene", scene]
+        if not cameras:
+            argv.append("--no-cameras")
     return argv
 
 
@@ -284,6 +290,8 @@ class Actions:
         seed: int | None = None,
         dr_span: float | None = None,
         task_stamp: str | None = None,
+        scene: str | None = None,
+        cameras: bool = True,
     ) -> JobHandle:
         """Train a walk through rq_mjlab (the certified stack: stamped
         bundles, declared DR bases, the linter green by construction).
@@ -302,6 +310,8 @@ class Actions:
             log_dir=log_dir,
             dr_span=dr_span,
             task_stamp=task_stamp,
+            scene=scene,
+            cameras=cameras,
             env_file=self.env_file,
         )
         return self.jobs.start("train-walk", argv, RQ_MJLAB_DIR)

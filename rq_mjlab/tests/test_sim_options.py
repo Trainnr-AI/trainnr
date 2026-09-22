@@ -23,7 +23,11 @@ class TheQuietConfig(unittest.TestCase):
             broadphase_filter=None,
         )
         cfg.apply_wp_opt(opt)
-        cleared = int(mjwarp.OverflowType.ALL) & ~int(mjwarp.OverflowType.LS_ITERATIONS)
+        cleared = (
+            int(mjwarp.OverflowType.ALL)
+            & ~int(mjwarp.OverflowType.LS_ITERATIONS)
+            & ~int(mjwarp.OverflowType.HFIELD)
+        )
         self.assertEqual(opt.warn_overflow, cleared)
         self.assertTrue(opt.warn_overflow & int(mjwarp.OverflowType.NEFC))
         self.assertEqual(opt.contact_sensor_maxmatch, cfg.contact_sensor_maxmatch)

@@ -102,7 +102,7 @@ number).
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
 | E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the phone-video capture waits on the operator's video |
-| E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box |
+| E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
 | E5 | **The physics, measured (designed, gated on hardware).** A robot on the real floor of E1's capture: friction from interaction with an interval (the field's DROPO shape through `mujoco.sysid`'s intervals), the randomization span set from the interval, `check_drift` on a later recording of the same floor. | waits on a robot; the record's fields and the door's refusal ("declared, not measured") are built in E1 |
@@ -437,6 +437,71 @@ So the first cliff number is the honest one — nominal 0, unmeasurable
 finding `course-gate-first-walker-2026-09-22`). The number that means
 something waits for a policy that can take the hurdles: E2's train on
 the scene, or E4's reproduction on Neverwhere's own terrain.
+
+## 8.5 E2 on the box: the walk on the scene, and what the camera costs (2026-09-23)
+
+The Go2 now trains on a captured scene (`rq_mjlab/scene_stage.py`,
+`train_walk(..., scene=)`): the scene's heightfield grid — the same
+surface the staged gate collides with, sampled once by the pipeline's
+Open3D path and saved beside the scene as a hidden numpy cache the walk
+package reads — becomes an mjlab sub-terrain placed at the scene's own
+coordinates (mjlab centres its terrain grid at the origin, so the patch
+places itself relative to the corner the generator adds), every world
+spawned at the course's start on the surface; the stage's head camera
+rides on the base as an mjlab `CameraSensor`, its picture of the splat
+rendered by mujoco_warp's ray tracer for every world and flattened into
+the actor's and the critic's observations (`head_rgb`, 12,288 of the
+actor's 12,523 inputs); the scene's gaussians reach mjlab's render
+context through a thin proxy over the module its sensor context calls,
+since mjlab builds that context without the renderer's `splat_*`
+arguments (the patch offered upstream). The rough recipe's rules and
+sensors stay (the height scan sees the hurdles); the flat recipe's
+deployable actor does not apply here yet. The recorder films the
+watched world's camera sensors at the frame cadence, so the Studio's
+Live page shows the policy's own picture beside the reward terms.
+
+Three smoke trains of 20 iterations, 256 worlds, all in the Studio:
+
+| stage | camera | env-steps/s | wall for 122,880 env-steps | log |
+|---|---|---|---|---|
+| the trained plane (E0's smoke) | — | ≈4,500 | 27 s | 16 KB |
+| the scene, 5 cm grid | none | 4,054 | 30 s | 18 KB |
+| the scene, 5 cm grid | head 64×64 rgb, 393,684 gaussians | 393 | 313 s | 19 MB |
+
+The terrain costs nothing measurable; the camera costs everything: the
+difference is 283 s for 122,880 frames, 2.3 ms per 64×64 frame across
+256 worlds (434 frames/s) on the RTX 3090 Ti — the field's missing
+number, at the smallest picture a policy could plausibly use. A g3 run
+at 4,096 worlds would render sixteen times as much per step; the
+picture's cost, not the physics, sets the scene walk's scale.
+
+What the first scene smoke taught, before that table could be written:
+
+1. **mujoco_warp caps the prisms one geom collides with at MuJoCo's
+   own `mjMAXCONPAIR` (50) and drops the rest, printing a line per
+   world per step.** At the stage's 2 cm grid a calf capsule's footprint
+   alone holds 66 prisms; the first smoke printed 778,000 lines (2.3 GB
+   of log) and ran at a third of its later speed. The training grid is
+   the saved grid resampled to 5 cm (`TRAIN_CELL_M`, bilinear on the
+   same footprint; the hurdles are four cells deep at that spacing);
+   there only a trunk lying flat exceeds the cap — a fallen robot early
+   in training, 74,000 lines in the second smoke — so the print is off
+   (`sim_options.QUIET_OVERFLOWS`) and the fact is recorded here: a
+   fallen trunk's contact with the ground is truncated at 50 prisms.
+   The staged gate keeps its 2 cm grid; CPU MuJoCo has no such cap.
+2. **A derived cache must not move a scene's version.** The grid file
+   landed in the scene folder and the scene's stamp changed
+   (`3c9ee1da4ed3` → `b70638809abd`) in the first smoke's identity;
+   `bundles.hashing` skips hidden files, so the cache is hidden
+   (`.heightfield.npz`) and the stamp is what it was.
+3. **The smoke prints no rate.** rsl_rl's per-iteration table goes to a
+   log directory the smoke never has; the trainer now prints the
+   env-steps per second it measured, for every agent.
+
+Open: a policy that takes the hurdles (this was a smoke), evaluating a
+scene-trained checkpoint on the scene (the verdict door passes no scene
+yet), exporting one (the manifest would carry the scene as a stage
+does), and the g3 scale with pictures.
 
 ## 9. How a scene's physics gets certified for a task
 

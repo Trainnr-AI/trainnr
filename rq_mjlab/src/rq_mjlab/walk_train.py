@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -200,6 +201,19 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         action="store_true",
         help="headless run (a pod with no Studio listening on :9876)",
     )
+    parser.add_argument(
+        "--scene",
+        type=Path,
+        default=None,
+        help="a captured scene's folder (a project's scenes/<name>): the walk "
+        "trains on its heightfield from the course's start, the head camera "
+        "seeing its splat (docs/78 E2; the Go2 only)",
+    )
+    parser.add_argument(
+        "--no-cameras",
+        action="store_true",
+        help="on a scene, train without the head camera (the rate without pictures)",
+    )
     args = parser.parse_args()
     knobs = DEFAULTS[args.agent]
     envs = args.envs if args.envs is not None else knobs["envs"]
@@ -221,9 +235,22 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
     cfg, identity = spec.env_cfg(
-        dr_span=span or None, pin_scale=None, bundle=args.bundle, head=args.head
+        dr_span=span or None,
+        pin_scale=None,
+        bundle=args.bundle,
+        head=args.head,
+        scene=args.scene,
+        cameras=not args.no_cameras,
     )
     print(f"[train] actuator {identity['actuator']}; dr_basis: {identity['dr_basis']}")
+    if args.scene is not None and not args.no_cameras:
+        from rq_mjlab.scene_stage import render_splats  # noqa: PLC0415
+
+        # the scene's gaussians into every camera mjlab renders (docs/78 E2)
+        gaussians = render_splats(args.scene)
+        identity["cameras"] = f"{identity['cameras']} over {gaussians} splats"
+    if args.scene is not None:
+        print(f"[train] scene {identity['scene']}; cameras: {identity['cameras']}")
     log_root = args.log_root or Path(f"../runs/{args.robot}-walk")
     cfg.scene.num_envs = envs
     if args.seed is not None:
@@ -270,7 +297,16 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         log_dir=None if log_dir is None else str(log_dir),
         device=device,
     )
+    started = time.perf_counter()
     runner.learn(num_learning_iterations=iterations)
+    wall = time.perf_counter() - started
+    env_steps = envs * agent.num_steps_per_env * iterations
+    # the rate as run, in the log: what a scene's cameras cost is a
+    # measured number (docs/78 E2), never a guess
+    print(
+        f"[{tag}] {env_steps} env-steps in {wall:.0f} s = {env_steps / wall:.0f} "
+        f"steps/s ({envs} envs x {agent.num_steps_per_env} x {iterations})"
+    )
     env.close()
     print(f"[{tag}] done" + (f" - checkpoints in {log_dir}" if log_dir else ""))
 

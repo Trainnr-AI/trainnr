@@ -85,6 +85,16 @@ class WalkSpec:
     chase: CameraFraming = MICRODUCK_CHASE  # one world, followed (the press)
 
 
+def _no_scene(robot: str, scene: Path | None, cameras: bool) -> None:
+    """The scene stage is the Go2's so far (docs/78 E2); the other walks
+    take the keyword the doors pass and refuse it by name."""
+    del cameras
+    if scene is not None:
+        raise ValueError(
+            f"the {robot} walk has no scene stage yet (docs/78 E2: the Go2)"
+        )
+
+
 def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     *,
     play: bool = False,
@@ -93,11 +103,15 @@ def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     pin_axis: str = "all",
     bundle: Any = None,
     head: str = "free",
+    scene: Path | None = None,
+    cameras: bool = True,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import (  # noqa: PLC0415
         PIN_AXES,
         microduck_walk_env_cfg,
     )
+
+    _no_scene("microduck", scene, cameras)
 
     return microduck_walk_env_cfg(
         play=play,
@@ -129,9 +143,12 @@ def _go1_env(  # noqa: PLR0913 - the walk's knobs, named
     pin_axis: str = "all",
     bundle: Any = None,
     head: str = "free",
+    scene: Path | None = None,
+    cameras: bool = True,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
 
+    _no_scene("go1", scene, cameras)
     if bundle is not None:
         raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
     if isinstance(dr_span, str):  # "identified" names the bundle's interval
@@ -174,9 +191,11 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     bundle: Any = None,
     head: str = "free",
     legacy_actor: bool = False,
+    scene: Path | None = None,
+    cameras: bool = True,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
-    from rq_mjlab.go2_walk import go2_walk_env_cfg  # noqa: PLC0415
+    from rq_mjlab.go2_walk import go2_scene_env_cfg, go2_walk_env_cfg  # noqa: PLC0415
 
     if bundle is not None:
         raise ValueError("the Go2 walk has no actuator bundle to swap (declared PD)")
@@ -187,6 +206,15 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     # (found by E0's re-certification, 2026-09-22).
     if head != "free":
         raise ValueError("the Go2 has no head to pin")
+    if scene is not None:  # the walk on a captured scene (docs/78 E2)
+        return go2_scene_env_cfg(
+            scene,
+            play=play,
+            dr_span=dr_span,
+            pin_scale=pin_scale,
+            pin_only=_axis(PIN_AXES, pin_axis),
+            cameras=cameras,
+        )
     return go2_walk_env_cfg(
         play=play,
         dr_span=dr_span,

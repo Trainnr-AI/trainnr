@@ -11,6 +11,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -566,6 +567,52 @@ class TheHeightfield(unittest.TestCase):
             self.assertAlmostEqual(stage._surface_z(model, 1.0, 0.0), 2.1, places=2)
             self.assertAlmostEqual(stage._surface_z(model, 0.0, 1.0), 2.0, places=2)
             self.assertAlmostEqual(stage._surface_z(model, -1.5, -1.5), 1.85, places=2)
+
+    def test_a_grid_resamples_to_another_spacing_over_the_same_footprint(
+        self,
+    ) -> None:
+        grid = terrain.Grid(
+            heights=np.array([[0.0, 0.1, 0.2], [0.0, 0.1, 0.2]]),
+            x0=1.0,
+            y0=2.0,
+            cell=0.5,
+        )
+        coarse = grid.resampled(1.0)
+        self.assertEqual(coarse.heights.shape, (2, 2))
+        np.testing.assert_allclose(coarse.heights, [[0.0, 0.2], [0.0, 0.2]])
+        fine = grid.resampled(0.25)
+        self.assertEqual(fine.heights.shape, (3, 5))
+        np.testing.assert_allclose(fine.heights[0], [0.0, 0.05, 0.1, 0.15, 0.2])
+        self.assertEqual((fine.x0, fine.y0, fine.cell), (1.0, 2.0, 0.25))
+
+    def test_the_grid_is_saved_once_and_re_sampled_for_a_new_proxy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = _neverwhere_folder(Path(tmp))
+            _slope_obj(src / neverwhere.COLLISION_MESH)
+            neverwhere.import_scene(src, Path(tmp) / "slope", name="slope")
+            scene = Path(tmp) / "slope"
+            grid, _filled = terrain.ensure_grid(scene)
+            self.assertTrue((scene / terrain.GRID_FILE).is_file())
+            saved = terrain.read_grid(scene)
+            assert saved is not None
+            np.testing.assert_allclose(saved[0].heights, grid.heights, atol=1e-6)
+            self.assertEqual(
+                (saved[0].x0, saved[0].y0, saved[0].cell), (grid.x0, grid.y0, grid.cell)
+            )
+            self.assertEqual(saved[2], terrain.proxy_hash(scene))
+            # a saved grid is read, not re-sampled
+            with mock.patch.object(terrain, "sample_grid") as sampler:
+                terrain.ensure_grid(scene)
+                sampler.assert_not_called()
+            # a new proxy is re-sampled
+            (scene / terrain.PROXY_FILE).write_text(
+                (scene / terrain.PROXY_FILE).read_text().replace("2.0", "3.0", 1)
+            )
+            with mock.patch.object(
+                terrain, "sample_grid", return_value=(grid, 0.5)
+            ) as sampler:
+                terrain.ensure_grid(scene)
+                sampler.assert_called_once()
 
     def test_an_unknown_terrain_is_refused_by_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "no terrain 'sand'"):

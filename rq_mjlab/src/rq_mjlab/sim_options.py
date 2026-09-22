@@ -33,7 +33,12 @@ from mjlab.sim.sim import SimulationCfg
 
 # Overflows that are information, not lost physics: the line search
 # stopping at the cap the task declared.
-QUIET_OVERFLOWS: tuple[str, ...] = ("LS_ITERATIONS",)
+# HFIELD: mujoco_warp caps the prisms one geom collides with at mujoco's
+# MJ_MAXCONPAIR (50) and prints a line per world per step past it. On a
+# scene at the 5 cm training grid only a trunk lying flat exceeds the cap
+# (a fallen robot early in training: 74,000 lines in a 20-iteration smoke,
+# 2026-09-23); the contacts past 50 are dropped with or without the print.
+QUIET_OVERFLOWS: tuple[str, ...] = ("LS_ITERATIONS", "HFIELD")
 
 
 @dataclass(kw_only=True)

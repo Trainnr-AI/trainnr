@@ -42,6 +42,21 @@ def _version() -> tuple[int, ...] | None:
     return tuple(int(p) for p in text.split(".")[:2] if p.isdigit())
 
 
+def splat_arguments(visible: Splats) -> dict[str, np.ndarray]:
+    """The gaussians as mujoco_warp's render context takes them (its
+    `splat_*` keywords): one transcription, used by the gate's cameras
+    and by the walk package's training cameras."""
+    return {
+        "splat_position": np.ascontiguousarray(visible.means, dtype=np.float32),
+        "splat_rotation": np.ascontiguousarray(visible.quats, dtype=np.float32),
+        "splat_scale": np.ascontiguousarray(visible.scales, dtype=np.float32),
+        "splat_rgba": np.ascontiguousarray(
+            np.concatenate([visible.colors, visible.opacities[:, None]], axis=1),
+            dtype=np.float32,
+        ),
+    }
+
+
 def unpack(packed: np.ndarray) -> np.ndarray:
     """Packed uint32 pixels to (..., 3) uint8."""
     p = np.asarray(packed).astype(np.uint32)
@@ -100,13 +115,7 @@ def open_cameras(
         render_depth=False,
         enabled_geom_groups=list(VISUAL_GROUPS),
         cam_active=list(names),
-        splat_position=np.ascontiguousarray(visible.means, dtype=np.float32),
-        splat_rotation=np.ascontiguousarray(visible.quats, dtype=np.float32),
-        splat_scale=np.ascontiguousarray(visible.scales, dtype=np.float32),
-        splat_rgba=np.ascontiguousarray(
-            np.concatenate([visible.colors, visible.opacities[:, None]], axis=1),
-            dtype=np.float32,
-        ),
+        **splat_arguments(visible),
     )
     return SplatCameras(
         mjw=mjw,

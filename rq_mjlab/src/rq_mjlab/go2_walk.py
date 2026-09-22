@@ -380,6 +380,30 @@ def go2_flat_env_cfg(
     return cfg
 
 
+def _with_actuator_dr(
+    cfg: ManagerBasedRlEnvCfg,
+    *,
+    dr_span: float | None,
+    pin_scale: float | None,
+    pin_only: tuple[str, ...] | None,
+) -> dict[str, str]:
+    """The study's actuator randomization around the declared gains,
+    added to the config; returns the identity it gives the run."""
+    events, dr_basis = actuator_dr_events(
+        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, gains=DECLARED_GAINS
+    )
+    for name in events:
+        if name in cfg.events:
+            raise ValueError(f"the Go2 cfg already carries an event named {name!r}")
+    cfg.events.update(events)
+    lint(cfg.events, ())
+    return {
+        "robot": robot_stamp(),
+        "actuator": actuator_stamp(),
+        "dr_basis": dr_basis,
+    }
+
+
 def go2_walk_env_cfg(
     *,
     play: bool = False,
@@ -391,19 +415,55 @@ def go2_walk_env_cfg(
     """The Go2 flat walk with the study's actuator randomization around
     the declared gains, and its identity."""
     cfg = go2_flat_env_cfg(play=play, legacy_actor=legacy_actor)
-    events, dr_basis = actuator_dr_events(
-        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, gains=DECLARED_GAINS
+    identity = _with_actuator_dr(
+        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
     )
-    for name in events:
-        if name in cfg.events:
-            raise ValueError(f"the Go2 cfg already carries an event named {name!r}")
-    cfg.events.update(events)
-    lint(cfg.events, ())
-    return cfg, {
-        "robot": robot_stamp(),
-        "actuator": actuator_stamp(),
-        "dr_basis": dr_basis,
-    }
+    return cfg, identity
+
+
+def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
+    scene_dir: Path,
+    *,
+    play: bool = False,
+    dr_span: float | None = ACTUATOR_DR_SPAN,
+    pin_scale: float | None = None,
+    pin_only: tuple[str, ...] | None = None,
+    cameras: bool = True,
+) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
+    """The Go2 walk on a captured scene (docs/78 §4 E2): the rough
+    recipe's rules and sensors (the height scan sees the hurdles) on the
+    scene's heightfield at the scene's coordinates, every world at the
+    course's start; with `cameras`, the head camera's picture of the
+    splat in the actor's and the critic's observations."""
+    from rq_mjlab.scene_stage import (  # noqa: PLC0415
+        CAMERA_TERM,
+        TRAIN_CELL_M,
+        camera_term,
+        head_camera_cfg,
+        scene_stamp,
+        scene_terrain_cfg,
+    )
+
+    cfg = _rough_env_cfg(play=play)
+    cfg.scene.terrain = scene_terrain_cfg(scene_dir)
+    # one patch: no difficulty rows to climb, no other patch to move to,
+    # and the scene's footprint is not the grid mjlab centres at the origin
+    cfg.curriculum.pop("terrain_levels", None)
+    cfg.events.pop("randomize_terrain", None)
+    cfg.terminations.pop("out_of_terrain_bounds", None)
+    identity = _with_actuator_dr(
+        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
+    )
+    identity["scene"] = scene_stamp(scene_dir)
+    identity["terrain"] = f"the scene's heightfield at {TRAIN_CELL_M} m"
+    identity["cameras"] = "none"
+    if cameras:
+        head = head_camera_cfg()
+        cfg.scene.sensors = (*(cfg.scene.sensors or ()), head)
+        for group in ("actor", "critic"):
+            cfg.observations[group].terms[CAMERA_TERM] = camera_term(head.name)
+        identity["cameras"] = f"{head.name} {head.width}x{head.height} rgb"
+    return cfg, identity
 
 
 def go2_agent(iterations: int) -> Any:

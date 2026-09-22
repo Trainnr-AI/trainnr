@@ -11,7 +11,16 @@ import unittest
 from rq_mjlab.walks import ROBOTS, walk_spec
 
 # What walk_train and walk_verdict pass to `spec.env_cfg`.
-DOOR_KEYWORDS = ("play", "dr_span", "pin_scale", "pin_axis", "bundle", "head")
+DOOR_KEYWORDS = (
+    "play",
+    "dr_span",
+    "pin_scale",
+    "pin_axis",
+    "bundle",
+    "head",
+    "scene",
+    "cameras",
+)
 
 
 class EveryWalkTakesTheDoorsKeywords(unittest.TestCase):

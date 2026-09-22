@@ -255,6 +255,21 @@ class TheDoors(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "one of"):
             walk_train_argv(agent="smoke", robot="spot")
 
+    def test_a_scene_rides_on_the_walk_argv(self) -> None:
+        argv = walk_train_argv(
+            agent="smoke", robot="go2", scene="/p/scenes/hurdle", env_file=None
+        )
+        self.assertEqual(argv[-2:], ["--scene", "/p/scenes/hurdle"])
+        self.assertNotIn("--scene", walk_train_argv(agent="smoke", robot="go2"))
+        blind = walk_train_argv(
+            agent="smoke", robot="go2", scene="/p/scenes/hurdle", cameras=False
+        )
+        self.assertEqual(blind[-1], "--no-cameras")
+        # the camera switch is the scene's; a plane never carries it
+        self.assertNotIn(
+            "--no-cameras", walk_train_argv(agent="smoke", robot="go2", cameras=False)
+        )
+
     def test_the_gate_names_its_runtime_and_the_reference(self) -> None:
         with harness() as (actions, spawner):
             actions.gate_deployment("d", project="/p", trials=4, runtime="dds")

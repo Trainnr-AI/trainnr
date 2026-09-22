@@ -18,6 +18,7 @@ the door read; a new representation is a new entry, not a branch.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -39,6 +40,7 @@ HFIELD_NAME = "scene_heightfield"
 CELL_M = 0.02
 # The solid base MuJoCo puts under a heightfield, in metres.
 HFIELD_BASE_M = 0.1
+PROXY_HASH_CHARS = 12
 # Where the top-surface ray starts and how close a sample must be to the
 # hit to count as the top surface.
 RAY_FROM_M = 50.0
@@ -150,6 +152,21 @@ class Grid:
         nrow, ncol = self.heights.shape
         return (0.5 * (ncol - 1) * self.cell, 0.5 * (nrow - 1) * self.cell)
 
+    def resampled(self, cell: float) -> Grid:
+        """The same surface at a coarser (or finer) vertex spacing over the
+        same footprint, bilinear between this grid's vertices: what a
+        batched engine with a per-pair contact cap trains on
+        (mujoco_warp's MJ_MAXCONPAIR prisms under one geom)."""
+        nrow, ncol = self.heights.shape
+        width, length = (ncol - 1) * self.cell, (nrow - 1) * self.cell
+        new_ncol = max(round(width / cell) + 1, 2)
+        new_nrow = max(round(length / cell) + 1, 2)
+        xs = self.x0 + np.arange(new_ncol) * cell
+        ys = self.y0 + np.arange(new_nrow) * cell
+        gx, gy = np.meshgrid(xs, ys)
+        heights = self.at(np.column_stack([gx.ravel(), gy.ravel()]))
+        return Grid(heights.reshape(new_nrow, new_ncol), self.x0, self.y0, cell)
+
     def at(self, xy: np.ndarray) -> np.ndarray:
         """The surface's height at each (x, y): bilinear between the
         four vertices around it (MuJoCo splits a cell into two triangles;
@@ -226,6 +243,64 @@ def heightfield_gap(
     }
 
 
+# The sampled grid, saved once beside the scene: numpy alone reads it, so
+# the walk package (no Open3D) trains on the same surface the stage
+# collides with; keyed by the proxy's hash so a new proxy is re-sampled.
+# Hidden, like every derived cache: the scene's version is its content
+# (`bundles.hashing` skips dot files), and a cache must not move it.
+GRID_FILE = ".heightfield.npz"
+
+
+def proxy_hash(scene_dir: Path) -> str:
+    return hashlib.sha256((Path(scene_dir) / PROXY_FILE).read_bytes()).hexdigest()[
+        :PROXY_HASH_CHARS
+    ]
+
+
+def write_grid(scene_dir: Path, grid: Grid, filled: float, proxy: str) -> Path:
+    path = Path(scene_dir) / GRID_FILE
+    np.savez(
+        path,
+        heights=grid.heights.astype(np.float32),
+        x0=grid.x0,
+        y0=grid.y0,
+        cell=grid.cell,
+        filled=filled,
+        proxy=proxy,
+    )
+    return path
+
+
+def read_grid(scene_dir: Path) -> tuple[Grid, float, str] | None:
+    """The saved grid, its filled fraction and the proxy hash it was
+    sampled from; None when the scene has none yet."""
+    path = Path(scene_dir) / GRID_FILE
+    if not path.is_file():
+        return None
+    with np.load(path) as f:
+        grid = Grid(
+            f["heights"].astype(np.float64),
+            float(f["x0"]),
+            float(f["y0"]),
+            float(f["cell"]),
+        )
+        return grid, float(f["filled"]), str(f["proxy"])
+
+
+def ensure_grid(scene_dir: Path) -> tuple[Grid, float]:
+    """The scene's grid: read when saved from this proxy, else sampled
+    (Open3D) and saved."""
+    scene_dir = Path(scene_dir)
+    proxy = proxy_hash(scene_dir)
+    saved = read_grid(scene_dir)
+    if saved is not None and saved[2] == proxy:
+        return saved[0], saved[1]
+    vertices, faces = read_obj(scene_dir / PROXY_FILE)
+    grid, filled = sample_grid(vertices, faces)
+    write_grid(scene_dir, grid, filled, proxy)
+    return grid, filled
+
+
 def heightfield(
     spec: Any, body: Any, scene_dir: Path, friction: list[float] | None
 ) -> TerrainFacts:
@@ -233,7 +308,7 @@ def heightfield(
     import mujoco  # noqa: PLC0415
 
     vertices, faces = read_obj(Path(scene_dir) / PROXY_FILE)
-    grid, filled = sample_grid(vertices, faces)
+    grid, filled = ensure_grid(scene_dir)
     z_min, z_max = float(grid.heights.min()), float(grid.heights.max())
     z_range = max(z_max - z_min, CELL_M)  # a flat proxy still needs a height scale
     field = spec.add_hfield(name=HFIELD_NAME)
