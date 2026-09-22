@@ -138,12 +138,13 @@ class GateMirror:
         them (`scenes.cameras`), else a note saying why not."""
         from rq_pipeline.scenes.cameras import open_cameras  # noqa: PLC0415
         from rq_pipeline.scenes.record import SPLAT_FILE  # noqa: PLC0415
-        from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+        from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply  # noqa: PLC0415
 
         rr = self._rr
         splats = read_ply(Path(scene_dir) / SPLAT_FILE)
         rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
-        rr.log(SCENE_PATH, gaussians(rr, splats), static=True)
+        # the visible set, as the viewer and the audit draw it
+        rr.log(SCENE_PATH, gaussians(rr, splats.visible(VISIBLE_OPACITY)), static=True)
         names = self._camera_names()
         self._cameras, why = (
             open_cameras(self.model, splats, names=names) if names else (None, "")

@@ -247,7 +247,9 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         "records": [t.row() for t in results],
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
-    record["verdict"] = _verdict(k, trials, tolerance, certificate)
+    record["verdict"] = _verdict(
+        k, trials, tolerance, certificate, along_course=course is not None
+    )
     record["contacts"] = _contacts_record(
         deployment_dir,
         spec.name,
@@ -268,16 +270,31 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     return record
 
 
+OTHER_PROTOCOL = (
+    "the cited evaluation judged held twists on the trained plane; a course gate "
+    "on a captured scene is another protocol, so it reports its rate and judges "
+    "nothing against it"
+)
+
+
 def _verdict(
-    k: int, trials: int, tolerance: float, certificate: dict[str, Any] | None
+    k: int,
+    trials: int,
+    tolerance: float,
+    certificate: dict[str, Any] | None,
+    *,
+    along_course: bool = False,
 ) -> dict[str, Any]:
     """The tolerance rule against the cited evaluation, or a report that
-    judges nothing when none was cited."""
+    judges nothing when none was cited - or when the gate walked a
+    course the evaluation never did."""
     if not certificate:
         return {
             "passed": None,
             "rule": "no evaluation cited: the gate reports its rate and judges nothing",
         }
+    if along_course:
+        return {"passed": None, "rule": OTHER_PROTOCOL}
     ck, cn = certificate.get("successes"), certificate.get("trials")
     cert_rate = (ck / cn) if (ck is not None and cn) else None
     rate = k / trials

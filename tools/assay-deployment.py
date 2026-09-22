@@ -15,10 +15,11 @@ from _lab import bootstrap
 bootstrap()
 
 from rq_pipeline.deploy.gate import DEFAULT_SEED, DEFAULT_TRIALS  # noqa: E402
-from rq_pipeline.deploy.manifest import load_manifest  # noqa: E402
+from rq_pipeline.deploy.manifest import Key, load_manifest  # noqa: E402
 from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: E402
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
+from rq_pipeline.project.cited import cited_certificate  # noqa: E402
 from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
 from rq_pipeline.scenes.assay import assay  # noqa: E402
 from rq_pipeline.scenes.terrain import DEFAULT_TERRAIN, terrain_names  # noqa: E402
@@ -41,6 +42,7 @@ def main() -> None:
     scene = project.scenes / args.scene
     try:
         manifest = load_manifest(deployment)
+        certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
         record = assay(
             deployment,
             scene,
@@ -51,6 +53,7 @@ def main() -> None:
             seed=args.seed,
             runtime=DEFAULT_RUNTIME,
             narrate=args.narrate,
+            certificate=certificate,
             terrain=args.terrain,
         )
     except (FileNotFoundError, FileExistsError, ValueError, ImportError) as exc:

@@ -41,6 +41,7 @@ from rq_pipeline.scenes.record import (
     Physics,
     SceneRecord,
     Tool,
+    proxy_mjcf,
 )
 from rq_pipeline.scenes.splat import (
     describe,
@@ -60,7 +61,6 @@ COLLISION_TF = Path("geometry") / "collision_tf.json"
 DECLARED_SPAN = 0.2
 FRICTION_RE = re.compile(r'name="collision_mesh_geom"[^>]*friction="([^"]+)"')
 # The group MuJoCo hides by default and the mirror skips (rq_pipeline.viz).
-COLLISION_GROUP = 3
 FRICTION_CITES = (
     f"{SOURCE}: the scene XML's collision geom (sliding, torsional, rolling); "
     "the span is this project's declaration"
@@ -117,23 +117,6 @@ def _waypoints(source: Path) -> list[list[float]]:
     return []
 
 
-def _proxy_mjcf(mesh_file: str, friction: list[float] | None) -> str:
-    friction_attr = (
-        f' friction="{" ".join(f"{v:g}" for v in friction)}"' if friction else ""
-    )
-    return (
-        "<mujoco>\n"
-        "  <asset>\n"
-        f'    <mesh name="scene_proxy" file="{mesh_file}"/>\n'
-        "  </asset>\n"
-        "  <worldbody>\n"
-        f'    <geom name="scene_proxy" type="mesh" mesh="scene_proxy" '
-        f'group="{COLLISION_GROUP}"{friction_attr} rgba="0.4 0.4 0.4 0.3"/>\n'
-        "  </worldbody>\n"
-        "</mujoco>\n"
-    )
-
-
 def _mesh_facts(obj: Path) -> dict[str, Any]:
     """Vertex and face counts from the OBJ itself; watertightness from
     Open3D when the scene extra is there, else unrecorded."""
@@ -187,7 +170,7 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
     shutil.copy2(source / COLLISION_MESH, out_dir / PROXY_FILE)
     friction = _declared_friction(source)
     (out_dir / PROXY_MJCF).write_text(
-        _proxy_mjcf(PROXY_FILE, friction), encoding="utf-8"
+        proxy_mjcf(PROXY_FILE, friction), encoding="utf-8"
     )
     try:
         measured = gap_audit.measure(splats, out_dir / PROXY_FILE)

@@ -101,7 +101,7 @@ number).
 | # | experiment | gate, provable here |
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
-| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the phone-video capture waits on the operator's video |
+| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk; the operator's phone video is the first real capture |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
@@ -502,6 +502,108 @@ Open: a policy that takes the hurdles (this was a smoke), evaluating a
 scene-trained checkpoint on the scene (the verdict door passes no scene
 yet), exporting one (the manifest would carry the scene as a stage
 does), and the g3 scale with pictures.
+
+## 8.6 E1's second half: the capture chain, on the Mac (2026-09-23)
+
+`capture_scene(source, name)` (`rq_pipeline/scenes/capture.py`, a job
+through `tools/capture-scene.py`): a phone video or a folder of frames
+into a scene artifact by the chain the research chose — ffmpeg for the
+frames (two a second), COLMAP for the poses (one OPENCV camera,
+sequential matching with loop detection for a video, exhaustive for
+stills, the mapper, the model kept as text beside the binary), Brush
+for the splat (headless, one export at the end, into the Studio when
+one listens). Every tool is a subprocess named on the record with its
+version and licence; a missing one refuses by name before anything
+runs; each stage's output, when present, is kept, so a failed Brush run
+does not re-run COLMAP. Three decisions the record states rather than
+hides:
+
+- **Alignment.** COLMAP's frame is arbitrary and unscaled. The floor is
+  the largest plane through the visible centres (RANSAC), its normal
+  turned to +z with the side most of the off-floor scene lies on as
+  up, its centroid at the origin. Scale is metres per COLMAP unit when
+  the caller declares one (a length measured in the capture) and 1.0,
+  recorded as unrecorded, when not: the scene's metres are then
+  COLMAP's units and the record says so. (The first draft let the floor
+  vote on which side is up and the noise of six thousand floor points
+  outvoted the box on it; the floor abstains now.)
+- **The proxy.** No dense reconstruction runs on a laptop (COLMAP's
+  patch-match needs CUDA; the 2DGS chain of §3 waits on the box), so
+  the proxy is the visible surface itself: the visible centres' top on
+  a 2 cm grid, each cell its highest centre, a hole filled from its
+  neighbours only when at least three of the eight around it are seen
+  (so a sparse splat yields a sparse surface, not an invented one), the
+  cells seen and filled both counted on the record. Poisson was tried
+  first and aborted the interpreter from C++ on a flat room. The gap
+  then measures the proxy's fidelity to the splat it came from, not to
+  the world — the first note on every record this makes. The world's
+  number comes from the synthetic capture below.
+- **The poses.** The mapper may split a walk into several models where
+  the chain of matches breaks; the chain converts every model, records
+  each one's frame count, and trains Brush on the largest. The first
+  synthetic walk showed why: an ellipse five metres across the course
+  carried the camera through the capture's fringe, where frames hold
+  two or three features, and the mapper made two models of 19 and 20
+  frames from 72. The walk that a phone would take — inside the
+  captured volume, looking at the course — is the second run below.
+- **Physics.** Declared by the caller or absent; nothing measured.
+
+The test that does not need a phone: a synthetic walk around the
+Neverwhere hurdle course, one camera carried at head height on an
+ellipse around the course looking in, 72 frames at 640x480 rendered
+from the scene's own splat by mujoco_warp's ray tracer (13 s a frame on
+this CPU) — a capture whose ground truth is known to the millimetre.
+The captured scene is put back in the true frame by the similarity
+that maps COLMAP's camera centres onto the true ones (Umeyama), which
+also yields the scale the record left unrecorded; then the visible
+centres against the original's and the captured proxy against
+Neverwhere's collision mesh. On the loose walk (19 frames registered,
+4,000 Brush steps, two minutes for the whole chain) the poses were
+already right — the camera centres fit the truth to 0.18 cm mean after
+the similarity, the fitted floor 0.58° from level, the scale 0.435 m
+per COLMAP unit — while the splat was thin (3,065 visible centres over
+the course against the original's 357,903) and the proxy with it. The
+tight walk — 96 frames on an ellipse inside the captured volume,
+93 registered in one model with 16,477 points, 30,000 Brush steps,
+26 minutes for the whole chain on this Mac — put the poses within
+5 mm of the truth (camera centres 0.51 cm mean, 1.35 cm max after the
+similarity; the fitted floor 0.12° from level; scale 0.770 m per COLMAP
+unit) and the surface within centimetres where it was seen: the
+captured visible centres lie a median 1.7 cm from the original's (95th
+percentile 8.0 cm), the original's a median 3.6 cm from the captured
+(13.1 cm), chamfer 4.0 cm; the first hurdle's top reads 30.1 cm against
+the collision mesh's 29.1. What the chain does not give from 96 frames
+at 640x480 is density: 34,785 visible gaussians against the original's
+393,684, so the top-surface proxy has holes — 25,017 cells seen, 40,199
+filled from neighbours, and along the course line only 4 of 29 samples
+find a captured surface at all; the record's own gap (chamfer 7.8 cm,
+93 % of the proxy unseen) says so without needing the truth. A phone
+video at 1080p over a minute gives three times the pixels and frames;
+the proxy's coverage is the number to watch on the first real capture
+(finding `capture-chain-synthetic-2026-09-23`).
+
+Gotchas met on the way, each recorded: the ray tracer faults on a
+model with nothing to draw (a camera rig alone), so `scenes.cameras`
+refuses such a model by name; a gate on a staged scene cited the
+plane's evaluation and would have judged its course rate against it,
+so the verdict now says the protocols differ and judges nothing
+(`OTHER_PROTOCOL`), and the assay carries the cited evaluation through
+as the gate does (the cited record's one home: `project.cited`);
+COLMAP 4.2 renamed its GPU flags (`FeatureExtraction.use_gpu`) and
+defaults them on even in Homebrew's CPU-only build, so the chain asks
+each command's help before passing one; Open3D's Poisson aborted the
+whole test process from C++ on a flat room, which is why the proxy is
+a grid; and the Studio's launch door never saw a heartbeat when the
+project was named by a relative path, because the Studio is spawned
+with the checkout as its working directory — the override resolves
+now. Reviewed in the Studio by its own doors (launch, show,
+screenshot): a capture's card led with a scratch path as its source
+(now the folder's name, the path in the notes) and its gap read like
+a measurement against the world (the card now says "proxy from the
+splat"); the viewer drew every gaussian and Brush's metres-wide faint
+ones hid the room (it draws the visible set, the audit's, and says how
+many of how many); a staged deployment's lineage named no environment
+(it cites its scene now, and its card leads with scene and terrain).
 
 ## 9. How a scene's physics gets certified for a task
 

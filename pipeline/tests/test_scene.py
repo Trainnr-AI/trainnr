@@ -21,6 +21,7 @@ from rq_pipeline.project.kinds import Kind
 from rq_pipeline.scenes import neverwhere, proxy, stage, terrain
 from rq_pipeline.scenes.obj import read_obj, write_obj
 from rq_pipeline.scenes.record import (
+    COLLISION_GROUP,
     DECLARED,
     MEASURED,
     PROXY_FILE,
@@ -449,7 +450,7 @@ class TheStage(unittest.TestCase):
             )  # the XML rounds
             geom = model.geom(terrain.PART_MESH.format(index=0))
             np.testing.assert_allclose(geom.friction, [1.25, 0.3, 0.3])
-            self.assertEqual(int(geom.group), neverwhere.COLLISION_GROUP)
+            self.assertEqual(int(geom.group), COLLISION_GROUP)
 
     def test_a_perturbation_moves_the_terrain_not_the_robot(self) -> None:
         import mujoco  # noqa: PLC0415

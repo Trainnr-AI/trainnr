@@ -27,6 +27,10 @@ NO_RENDERER = (
     "no mujoco_warp: the splat renderer needs mujoco_warp >= 3.13 (docs/78 E0)"
 )
 OLD_RENDERER = "mujoco_warp {found} has no splat renderer; 3.13 does (docs/78 E0)"
+NO_GEOMS = (
+    "the model has no geom in the drawn groups; the ray tracer needs at least one "
+    "(it faults on an empty scene)"
+)
 DEFAULT_RESOLUTION = (160, 120)
 # The groups the renderer draws: the robot's visual meshes, never the
 # collision parts (group 3) the stage hides from the picture too.
@@ -106,6 +110,11 @@ def open_cameras(
     import mujoco_warp as mjw  # noqa: PLC0415
     import warp as wp  # noqa: PLC0415
 
+    drawn = [g for g in range(mjm.ngeom) if int(mjm.geom_group[g]) in VISUAL_GROUPS]
+    if not drawn:
+        # measured 2026-09-23: a render context over a model with no geom in
+        # the drawn groups builds an empty BVH and the kernel faults
+        return None, NO_GEOMS
     visible = splats.visible(VISIBLE_OPACITY)
     context = mjw.create_render_context(
         mjm,

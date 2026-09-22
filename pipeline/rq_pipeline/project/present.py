@@ -995,16 +995,19 @@ def _present_scene(
         SPLAT_FILE,
         load_scene_record,
     )
-    from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+    from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply  # noqa: PLC0415
 
     folder = project.root / artifact.path
     s = load_scene_record(folder / SCENE_FILE)
     splats = read_ply(folder / SPLAT_FILE)
+    # the visible set (the audit's), so a capture's faint giant gaussians
+    # (Brush leaves metres-wide ones at opacity 0.05) do not hide the scene
+    drawn = splats.visible(VISIBLE_OPACITY)
     with _AsDefault(rr_):
         rr_.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
         rr_.log(
             f"{root}/splat",
-            gaussians(rr, splats),
+            gaussians(rr, drawn),
             static=True,
         )
         proxy = _obj_mesh(folder / PROXY_FILE)
@@ -1023,7 +1026,8 @@ def _present_scene(
         lines = [
             f"# {artifact.stamp}",
             "",
-            f"source `{s.source}` · {s.splat.get('count')} gaussians · "
+            f"source `{s.source}` · {s.splat.get('count')} gaussians, "
+            f"{drawn.means.shape[0]} drawn (opacity ≥ {VISIBLE_OPACITY:g}) · "
             f"proxy {s.proxy.get('faces')} faces",
             "",
             "**the gap** (visible surface against the collision proxy): "

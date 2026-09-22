@@ -527,6 +527,47 @@ class Actions:
         argv += ["--runtime", runtime, "--reference", str(unitree_reference())]
         return self.jobs.start("gate-deployment", argv, PIPELINE_DIR)
 
+    def capture_scene(  # noqa: PLR0913 - the capture's knobs, each named
+        self,
+        source: str,
+        name: str,
+        *,
+        project: str,
+        fps: float = 2.0,
+        steps: int = 30_000,
+        scale: float | None = None,
+        floor_friction: list[float] | None = None,
+        brush: str | None = None,
+    ) -> JobHandle:
+        """A phone video (or a folder of frames) into a scene artifact
+        through ffmpeg, COLMAP and Brush (docs/78 §3): a job of minutes
+        to an hour on a laptop; the record lands under the project's
+        scenes when the chain completes, the log beside it meanwhile."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "scene name")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "viz", "scene"),
+            str(TOOLS_DIR / "capture-scene.py"),
+            "--project",
+            project,
+            "--source",
+            source,
+            "--name",
+            name,
+            "--fps",
+            str(fps),
+            "--steps",
+            str(steps),
+        ]
+        if scale is not None:
+            argv += ["--scale", str(scale)]
+        if floor_friction is not None:
+            argv += ["--floor-friction", *(str(v) for v in floor_friction)]
+        if brush is not None:
+            argv += ["--brush", brush]
+        return self.jobs.start("capture-scene", argv, PIPELINE_DIR)
+
     def assay_deployment(
         self,
         name: str,

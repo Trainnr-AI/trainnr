@@ -1730,6 +1730,61 @@ def import_scene(source: str, name: str) -> dict[str, Any] | Refusal:
     }
 
 
+def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
+    source: str,
+    name: str,
+    fps: float = 2.0,
+    steps: int = 30_000,
+    scale: float | None = None,
+    floor_friction: list[float] | None = None,
+    brush: str | None = None,
+) -> JobHandle | Refusal:
+    """Capture a scene from a phone video (or a folder of still frames):
+    frames by ffmpeg, poses by COLMAP (one camera, sequential matching
+    with loop detection), the splat by Brush (Apache; Metal on a Mac,
+    CUDA elsewhere), aligned so the fitted floor is z=0 with +z up,
+    scaled by `scale` metres per COLMAP unit when you measured a length
+    in the capture (unrecorded otherwise: the scene's metres are then
+    COLMAP's units), the proxy as the visible surface itself (Poisson
+    over the gaussian centres; no dense reconstruction on a laptop), the
+    gap measured, `floor_friction` recorded as declared. A job of
+    minutes to an hour; streams into the Studio when one is open. The
+    scene appears under the project's scenes when the chain completes.
+    Refused by name: a missing tool (colmap, ffmpeg, Brush's binary by
+    path or on PATH as brush_app), a bad name, a source that is neither
+    a file nor a folder."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.scenes.capture import MissingToolError, Tools  # noqa: PLC0415
+    from rq_pipeline.scenes.record import SCENE_FILE  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(name, "scene name")
+        where = Path(source).expanduser().resolve()
+        if not where.exists():
+            raise FileNotFoundError(f"no video file or frames folder at {where}")
+        Tools.find(
+            brush=Path(brush).expanduser() if brush else None, video=where.is_file()
+        )
+    except (MissingToolError, FileNotFoundError, ValueError) as why:
+        return refusal(_reason(why))
+    if (project.scenes / name / SCENE_FILE).is_file():
+        return refusal(f"scene {name!r} already exists in this project")
+    return Actions(JobManager(_jobs_root())).capture_scene(
+        str(where),
+        name,
+        project=str(project.root),
+        fps=fps,
+        steps=steps,
+        scale=scale,
+        floor_friction=floor_friction,
+        brush=brush,
+    )
+
+
 def describe_scene(scene: str) -> dict[str, Any] | Refusal:
     """A captured scene's record (by version): its source and capture,
     the chain that made it with every licence, the splat's and proxy's
@@ -1987,6 +2042,12 @@ def build_server() -> Any:  # noqa: PLR0915
         "visible-surface-to-proxy gap measured, the floor's declared friction with its "
         "span. Refuses a folder that is not a scene."
     )(import_scene)
+    server.tool(
+        description="Capture a scene from a phone video or a folder of frames: ffmpeg, "
+        "COLMAP (poses), Brush (the splat), the floor fitted to z=0, the proxy as "
+        "the visible surface, the gap measured, friction recorded as declared. A "
+        "job of minutes to an hour; refuses a missing tool by name."
+    )(capture_scene)
     server.tool(
         description="A captured scene's record: source, capture, the tool chain with "
         "licences, the splat and proxy facts, the alignment, the gap's four numbers, "

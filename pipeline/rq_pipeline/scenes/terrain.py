@@ -26,10 +26,9 @@ from typing import Any
 
 import numpy as np
 
-from rq_pipeline.scenes.neverwhere import COLLISION_GROUP
 from rq_pipeline.scenes.obj import read_obj
 from rq_pipeline.scenes.proxy import ensure_parts
-from rq_pipeline.scenes.record import PROXY_FILE
+from rq_pipeline.scenes.record import COLLISION_GROUP, PROXY_FILE
 
 HEIGHTFIELD = "heightfield"
 HULLS = "hulls"

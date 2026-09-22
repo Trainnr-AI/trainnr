@@ -183,7 +183,15 @@ def current_project() -> Project:
     """`$TRAINNR_PROJECT`, else `projects/default`; refused by name when
     the directory has no manifest."""
     override = os.environ.get(PROJECT_ENV, "").strip()
-    root = Path(override).expanduser() if override else projects_dir() / DEFAULT_PROJECT
+    # absolute: the Studio is spawned with the checkout as its working
+    # directory, so a relative override would point it somewhere else
+    # (measured 2026-09-23: a launch with `../projects/x` never heartbeat);
+    # links are kept as typed (macOS's /var is one) so paths compare as given
+    root = (
+        Path(override).expanduser().absolute()
+        if override
+        else projects_dir() / DEFAULT_PROJECT
+    )
     project = Project(root)
     if not project.manifest_path.is_file():
         raise FileNotFoundError(

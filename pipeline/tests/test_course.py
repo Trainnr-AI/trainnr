@@ -366,3 +366,17 @@ class TheCommandsBlock(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheCourseVerdict(unittest.TestCase):
+    def test_a_course_gate_reports_and_never_judges_against_a_plane_evaluation(
+        self,
+    ) -> None:
+        from rq_pipeline.deploy.gate import OTHER_PROTOCOL, _verdict  # noqa: PLC0415
+
+        cert = {"successes": 38, "trials": 40}
+        plane = _verdict(3, 4, 0.1, cert)
+        self.assertIsNotNone(plane["passed"])
+        course = _verdict(0, 4, 0.1, cert, along_course=True)
+        self.assertIsNone(course["passed"])
+        self.assertEqual(course["rule"], OTHER_PROTOCOL)

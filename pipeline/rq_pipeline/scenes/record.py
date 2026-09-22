@@ -160,3 +160,26 @@ def load_scene_record(path: Path) -> SceneRecord:
     raw["notes"] = tuple(raw.get("notes", ()))
     known = set(SceneRecord.__dataclass_fields__)
     return SceneRecord(**{k: v for k, v in raw.items() if k in known})
+
+
+COLLISION_GROUP = 3  # the group the stage and the viewer treat as colliders
+PROXY_RGBA = "0.4 0.4 0.4 0.3"
+
+
+def proxy_mjcf(mesh_file: str, friction: list[float] | None) -> str:
+    """The proxy as one mesh geom in the collision group: what every
+    importer writes beside the OBJ, so a plain MuJoCo load sees it."""
+    friction_attr = (
+        f' friction="{" ".join(f"{v:g}" for v in friction)}"' if friction else ""
+    )
+    return (
+        "<mujoco>\n"
+        "  <asset>\n"
+        f'    <mesh name="scene_proxy" file="{mesh_file}"/>\n'
+        "  </asset>\n"
+        "  <worldbody>\n"
+        f'    <geom name="scene_proxy" type="mesh" mesh="scene_proxy" '
+        f'group="{COLLISION_GROUP}"{friction_attr} rgba="{PROXY_RGBA}"/>\n'
+        "  </worldbody>\n"
+        "</mujoco>\n"
+    )

@@ -72,6 +72,21 @@ class Locating(unittest.TestCase):
             with mock.patch.dict(os.environ, {PROJECT_ENV: str(project.root)}):
                 self.assertEqual(current_project().root, project.root)
 
+    def test_a_relative_override_resolves_against_the_cwd(self) -> None:
+        # the Studio is spawned with the checkout as its cwd, so the root
+        # handed to it must be absolute whatever the caller typed
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            before = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with mock.patch.dict(os.environ, {PROJECT_ENV: project.root.name}):
+                    found = current_project().root
+                    self.assertTrue(found.is_absolute())
+                    self.assertEqual(found.resolve(), project.root.resolve())
+            finally:
+                os.chdir(before)
+
     def test_a_missing_project_names_the_variable(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,

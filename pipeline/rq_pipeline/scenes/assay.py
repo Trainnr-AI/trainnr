@@ -53,6 +53,7 @@ def assay(  # noqa: PLR0913 - the assay's own knobs, each named
     open: Opener | None = None,
     narrate: bool = False,
     terrain: str | None = None,
+    certificate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Stage and gate every perturbation, the nominal first; returns
     the record written to the nominal stage. A stage that exists is
@@ -81,6 +82,7 @@ def assay(  # noqa: PLR0913 - the assay's own knobs, each named
             open=open,
             narrate=narrate,
             scene_dir=scene_dir,
+            certificate=certificate,
         )
         rows.append(
             {

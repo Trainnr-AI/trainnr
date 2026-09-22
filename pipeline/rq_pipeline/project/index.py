@@ -55,7 +55,7 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
-from rq_pipeline.scenes.stage import scene_name_of
+from rq_pipeline.scenes.stage import SCENE_TERRAIN_WORD, scene_name_of
 
 # The one word for a fact an artifact never recorded - never a guess.
 UNRECORDED = "unrecorded"
@@ -302,6 +302,17 @@ def _pick(raw: dict[str, Any], keys: tuple[str, ...]) -> dict[str, str]:
     return {key: _stamp_or_unrecorded(raw.get(key)) for key in keys if key in raw}
 
 
+def _cites_deploy(raw: dict[str, Any]) -> dict[str, str]:
+    """A deployment's lineage; a staged one (docs/78 §8.1) also cites the
+    scene it stands on, by the version its terrain word carries."""
+    cites = _pick(raw, ("policy", "run", "robot", "task", "certificate"))
+    terrain = str((raw.get("scene") or {}).get("terrain") or "")
+    word, _, rest = terrain.partition(" ")
+    if word == SCENE_TERRAIN_WORD and rest:
+        cites["scene"] = rest
+    return cites
+
+
 def _cites_dataset(path: Path) -> dict[str, str]:
     raw = _read(path / PROVENANCE_FILE)
     return {
@@ -348,9 +359,7 @@ _CITE_READERS: dict[Kind, CiteReader] = {
     Kind.CERTIFICATE: lambda p: _pick(
         _read(p / CERTIFICATE_FILE), ("robot", "task", "policy", "run")
     ),
-    Kind.DEPLOY: lambda p: _pick(
-        _read(p / DEPLOY_FILE), ("policy", "run", "robot", "task", "certificate")
-    ),
+    Kind.DEPLOY: lambda p: _cites_deploy(_read(p / DEPLOY_FILE)),
     # A check cites the robot (its version carries the fit records it was
     # judged against; the drawer names them) and the recording it judged.
     Kind.DRIFT: lambda p: _pick(_read(p / DRIFT_FILE), ("robot", "recording")),
@@ -568,12 +577,12 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     }
     if "dds" in gates:
         out["gate (DDS)"] = gate_word(gates["dds"])
-    out["checkpoint"] = m.get("checkpoint", UNRECORDED)
-    out["control"] = _hz((m.get("control") or {}).get("control_hz"))
     scene = scene_name_of(m)
-    if scene:  # a staged deployment: the card says what it stands on
+    if scene:  # a staged deployment: what it stands on, before the rest
         out["scene"] = scene
         out["terrain"] = (m.get("scene") or {}).get("terrain_kind", UNRECORDED)
+    out["checkpoint"] = m.get("checkpoint", UNRECORDED)
+    out["control"] = _hz((m.get("control") or {}).get("control_hz"))
     return out
 
 
@@ -607,8 +616,11 @@ def _summary_scene(path: Path) -> dict[str, Any]:
         return {}
     gap = s.get("gap") or {}
     p95 = gap.get("p95_m")
+    # a proxy built from the splat itself makes the gap self-referential;
+    # the card says so beside the number (docs/78 §8.6)
+    own = "the visible gaussian" in str((s.get("proxy") or {}).get("from", ""))
     out: dict[str, Any] = {
-        "gap p95": f"{p95 * 100:.1f} cm"
+        "gap p95": (f"{p95 * 100:.1f} cm" + (" (proxy from the splat)" if own else ""))
         if isinstance(p95, (int, float))
         else UNRECORDED,
         "splats": (s.get("splat") or {}).get("count", UNRECORDED),

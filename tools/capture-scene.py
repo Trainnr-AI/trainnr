@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Capture a scene from a phone video or a folder of frames: ffmpeg,
+COLMAP, Brush, the alignment, the proxy, the gap, the record (docs/78
+§3). Spawned by the MCP door `capture_scene`; the log lands beside the
+scene as it runs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from _lab import bootstrap
+
+bootstrap()
+
+from rq_pipeline.project import index_project, write_index  # noqa: E402
+from rq_pipeline.project.locate import Project  # noqa: E402
+from rq_pipeline.scenes.capture import (  # noqa: E402
+    BRUSH_STEPS,
+    FRAMES_PER_SECOND,
+    MissingToolError,
+    Tools,
+    capture_scene,
+)
+from rq_pipeline.scenes.record import load_scene_record  # noqa: E402
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--project", type=Path, required=True)
+    parser.add_argument(
+        "--source", type=Path, required=True, help="a video or a folder"
+    )
+    parser.add_argument("--name", required=True, help="the scene's folder name")
+    parser.add_argument("--fps", type=float, default=FRAMES_PER_SECOND)
+    parser.add_argument("--steps", type=int, default=BRUSH_STEPS)
+    parser.add_argument(
+        "--scale", type=float, default=None, help="metres per COLMAP unit"
+    )
+    parser.add_argument("--floor-friction", type=float, nargs=3, default=None)
+    parser.add_argument("--brush", type=Path, default=None, help="Brush's binary")
+    parser.add_argument("--device", default="unrecorded")
+    parser.add_argument("--lighting", default="unrecorded")
+    args = parser.parse_args()
+    project = Project(args.project.resolve()).use()
+    try:
+        tools = Tools.find(brush=args.brush, video=args.source.is_file())
+        record_path = capture_scene(
+            args.source,
+            project.scenes / args.name,
+            name=args.name,
+            tools=tools,
+            fps=args.fps,
+            steps=args.steps,
+            scale=args.scale,
+            floor_friction=args.floor_friction,
+            device=args.device,
+            lighting=args.lighting,
+        )
+    except (MissingToolError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        raise SystemExit(str(exc)) from exc
+    record = load_scene_record(record_path)
+    g = record.gap
+    print(
+        f"[capture] {record.name}: {record.splat.get('count')} gaussians, "
+        f"proxy {record.proxy.get('faces')} faces, gap chamfer {g.chamfer_m} "
+        f"p95 {g.p95_m} (m)",
+        flush=True,
+    )
+    write_index(project, index_project(project))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

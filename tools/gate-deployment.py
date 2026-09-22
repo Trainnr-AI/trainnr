@@ -12,10 +12,8 @@ the manifest, reindexes the project. Exits 1 when the gate fails.
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
-from typing import Any
 
 from _lab import bootstrap
 
@@ -35,7 +33,7 @@ from rq_pipeline.deploy.runtimes import (  # noqa: E402
     runtime_spec,
 )
 from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.kinds import CERTIFICATE_FILE, Kind, stamp_kind  # noqa: E402
+from rq_pipeline.project.cited import cited_certificate  # noqa: E402
 from rq_pipeline.project.locate import Project  # noqa: E402
 from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
 
@@ -76,7 +74,10 @@ def main() -> None:
         stack = spec.stack_for(manifest, reference=args.reference)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
-    certificate = _certificate(project, manifest.raw.get(Key.CERTIFICATE))
+    try:
+        certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
     scene_name = scene_name_of(manifest.raw)
     scene_dir = project.scenes / scene_name if scene_name else None
     if scene_dir is not None and not scene_dir.is_dir():
@@ -111,24 +112,6 @@ def main() -> None:
     )
     write_index(project, index_project(project))
     sys.exit(0 if verdict.get("passed") in (True, None) else 1)
-
-
-def _certificate(project: Project, stamp: str | None) -> dict[str, Any] | None:
-    """The cited evaluation's record, found by its version's hash among
-    the project's evaluations; None when the manifest cites none."""
-    if not stamp or "@" not in stamp:
-        return None
-    wanted = stamp.split("@", 1)[1]
-    for folder in sorted(project.folder(CERTIFICATES_FOLDER).iterdir()):
-        path = folder / CERTIFICATE_FILE
-        if not path.is_file():
-            continue
-        if stamp_kind(Kind.CERTIFICATE, folder).split("@", 1)[1] == wanted:
-            return json.loads(path.read_text(encoding="utf-8"))
-    raise SystemExit(
-        f"the manifest cites evaluation {stamp!r}, which is not in "
-        f"{project.folder(CERTIFICATES_FOLDER)}"
-    )
 
 
 if __name__ == "__main__":
