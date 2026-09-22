@@ -299,6 +299,63 @@ class TheGateChoosesByTheManifest(unittest.TestCase):
             self.assertIn("command", record["records"][0])
 
 
+class TheStudioPage(unittest.TestCase):
+    """The deployment's detail page shows a gate in its protocol's own
+    shape (`project.details.gate_trials`): a course gate's rows say how
+    far and how fast; a twist gate's what was held."""
+
+    def _course_record(self) -> dict[str, Any]:
+        m = _manifest()
+        course = Course.of_manifest(m)
+        assert course is not None
+        trial = run_course_trial(m, _Walker(0.02), course, Steering.of_manifest(m), 0.8)
+        return {
+            "protocol": {
+                "commands": COMMANDS_ALONG,
+                "criterion": course_criterion_text(),
+                "course": course.describe(),
+            },
+            "records": [trial.row()],
+        }
+
+    def test_a_course_gate_tabulates_arrival(self) -> None:
+        from rq_pipeline.project.details import (  # noqa: PLC0415
+            COURSE_COLUMNS,
+            gate_trials,
+        )
+
+        section = gate_trials(self._course_record(), "plain MuJoCo")
+        self.assertEqual(section["columns"][:3], [label for label, _ in COURSE_COLUMNS])
+        (row,) = section["rows"]
+        self.assertEqual(row[0], 0.8)
+        self.assertEqual(row[1], "2 / 2")
+        self.assertEqual(row[-1], "success")
+        self.assertIn(course_criterion_text(), section["note"])
+        # every key the page reads is one the trial's row writes
+        keys = set(CourseTrial.__dataclass_fields__) | {"finished", "success"}
+        self.assertTrue({key for _, key in COURSE_COLUMNS} <= keys)
+
+    def test_a_twist_gate_tabulates_the_held_command(self) -> None:
+        from rq_pipeline.project.details import gate_trials  # noqa: PLC0415
+
+        record = {
+            "protocol": {"commands": COMMANDS_DRAWN},
+            "records": [
+                {
+                    "command": [0.5, 0.0, 0.1],
+                    "steps": 50,
+                    "fell": False,
+                    "err_ratio": 0.2,
+                    "success": True,
+                }
+            ],
+        }
+        section = gate_trials(record, "plain MuJoCo")
+        self.assertEqual(section["rows"][0][0], "0.50, 0.00, 0.10")
+        self.assertEqual(section["rows"][0][1], 50)
+        self.assertIsNone(section["note"])
+
+
 class TheCommandsBlock(unittest.TestCase):
     def test_the_heading_gain_is_optional_and_read(self) -> None:
         self.assertIsNone(_manifest().commands.heading_gain)

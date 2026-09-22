@@ -15,7 +15,7 @@ use crate::widgets::card;
 
 /// The detail file's schema, as `rq_pipeline/project/details.py` writes
 /// it (`SCHEMA`). Same rule as the index: the family must match.
-pub const DETAIL_SCHEMA: &str = "trainnr-detail/5";
+pub const DETAIL_SCHEMA: &str = "trainnr-detail/6";
 
 /// A row taller than this many rendered lines in one cell is clipped;
 /// long values (a datasheet, a command line) get their own block instead.

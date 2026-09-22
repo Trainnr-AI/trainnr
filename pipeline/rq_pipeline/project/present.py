@@ -871,11 +871,26 @@ def _present_deploy(
                     if unrated[runtime]
                     else ""
                 )
+                + (
+                    ", reached the course's end in "
+                    f"{sum(1 for t in g.get('records', []) if t.get('finished'))}"
+                    if (g.get("protocol") or {}).get("course")
+                    else ""
+                )
             )
         if gates:
+            # the judgment as each record states it: the plane's tracking
+            # rule, or a staged scene's arrival (deploy/course.py)
+            criteria = sorted(
+                {
+                    str((g.get("protocol") or {}).get("criterion", UNRECORDED))
+                    for g in gates.values()
+                }
+            )
             lines.append(
-                f"bars: mean velocity error over the commanded speed per trial; "
-                f"a trial tracks below {ERR_RATIO_BOUND}"
+                "bars: mean velocity error over the commanded speed per trial "
+                f"(tracking bound {ERR_RATIO_BOUND}); judged by: "
+                + " / ".join(criteria)
             )
         else:
             lines.append("sim-to-sim gate not run yet")

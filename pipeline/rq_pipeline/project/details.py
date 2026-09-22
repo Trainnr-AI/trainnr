@@ -72,9 +72,10 @@ if TYPE_CHECKING:
     from rq_pipeline.tasks.task import Task
 
 DETAILS_DIR = "details"
-# /5 (2026-09-12): one gate section per runtime; /4 (2026-09-10): a walk's
-# gate and episode; /3 (2026-09-09): fit records read as written.
-SCHEMA = "trainnr-detail/5"
+# /6 (2026-09-22): a gate's trials in its protocol's shape (a course gate's
+# arrival); /5 (2026-09-12): one gate section per runtime; /4 (2026-09-10):
+# a walk's gate and episode; /3 (2026-09-09): fit records read as written.
+SCHEMA = "trainnr-detail/6"
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
@@ -993,6 +994,59 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
 # -- deployment (A6) -------------------------------------------------------------------
 
 
+# A course trial's row (`deploy.course.CourseTrial`), label by record key;
+# a held-twist trial's row is the command and what it measured.
+COURSE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("speed (m/s)", "speed"),
+    ("reached", "reached"),
+    ("seconds / budget", "seconds"),
+)
+
+
+def gate_trials(g: dict[str, Any], instrument: str) -> Section:
+    """The gate's trials as a table in the protocol's own shape: a course
+    gate's rows say how far and how fast, a twist gate's what was held."""
+    protocol = g.get("protocol") or {}
+    records = g.get("records", [])
+    tail = ["fell", "error ratio", "success"]
+
+    def judged(r: dict[str, Any]) -> list[Any]:
+        return [
+            "yes" if r.get("fell") else "no",
+            _f(r.get("err_ratio")),
+            "success" if r.get("success") else "failure",
+        ]
+
+    if protocol.get("course"):
+        rows = [
+            [
+                _f(r.get("speed"), 2),
+                f"{r.get('reached')} / {r.get('of')}",
+                f"{_f(r.get('seconds'), 1)} / {_f(r.get('budget_s'), 1)}",
+                *judged(r),
+            ]
+            for r in records
+        ]
+        return _table(
+            f"Gate trials: {instrument}",
+            [label for label, _ in COURSE_COLUMNS] + tail,
+            rows,
+            note=f"{protocol.get('commands')}; {protocol.get('criterion')}",
+        )
+    return _table(
+        f"Gate trials: {instrument}",
+        [TWIST_LABEL, "steps", *tail],
+        [
+            [
+                ", ".join(f"{c:.2f}" for c in r.get("command", [])),
+                r.get("steps"),
+                *judged(r),
+            ]
+            for r in records
+        ],
+    )
+
+
 def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     """A deployment: what the manifest says a runtime needs, the joints
     and observations as tables, and the sim-to-sim gate's verdict."""
@@ -1077,30 +1131,22 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                         _site_gap_line(site),
                     )
                 )
+        protocol = g.get("protocol") or {}
+        rows.append(("commands", protocol.get("commands", UNRECORDED)))
+        steer = protocol.get("steer") or {}
+        if steer:
+            rows.append(
+                ("steering", f"gain {steer.get('gain')} ({steer.get('basis')})")
+            )
         sections.append(
             _kv(
                 f"Sim-to-sim gate: {instrument}",
                 rows,
                 note="The exported policy driven through its manifest alone, judged "
-                "the evaluation's way: survived and tracked the held command.",
+                f"by: {protocol.get('criterion', UNRECORDED)}.",
             )
         )
-        sections.append(
-            _table(
-                f"Gate trials: {instrument}",
-                [TWIST_LABEL, "steps", "fell", "error ratio", "success"],
-                [
-                    [
-                        ", ".join(f"{c:.2f}" for c in r.get("command", [])),
-                        r.get("steps"),
-                        "yes" if r.get("fell") else "no",
-                        _f(r.get("err_ratio")),
-                        "success" if r.get("success") else "failure",
-                    ]
-                    for r in g.get("records", [])
-                ],
-            )
-        )
+        sections.append(gate_trials(g, instrument))
     assay = read_assay(root)
     if assay:
         cliff = assay.get("cliff") or {}
