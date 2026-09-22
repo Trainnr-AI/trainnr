@@ -347,6 +347,46 @@ What the step taught, in the order it was found:
    the TERM handler's disconnect is bounded: the stuck trainer had
    ignored TERM.
 
+## 8.3 E2 on the box: the first walker on the course (2026-09-22)
+
+The scene came to the box as it came to the Mac: Neverwhere's
+`hurdle_226_blue_carpet_v3.zip` from their Hugging Face dataset (MIT,
+198,253,978 bytes, sha256 `b36604d74cf4b733...`, the same file), imported
+through `import_scene` into `go2-walk`; the gap reproduced to the last
+digit (chamfer 4.6 cm, 95th percentile 18.5 cm), and so did the staged
+heightfield's (median 0.09 mm). go2-c2's cited deployment staged on it
+by `stage_deployment`, gated with four trials, watched in the Studio
+over the splat:
+
+| same four seeded commands | successes | tracking error ratio | fell |
+|---|---|---|---|
+| the trained plane | 3/4 | 0.06-0.18 (and 0.72 on the near-standstill command) | 0 |
+| the captured course | 0/4 | 0.63-0.86 | 0 |
+
+The policy never falls on the course; it cannot go where it is told.
+12 % of its feet's contacts are 22-30 cm up, on the hurdles' tops, and
+it stays inside a 3 x 3.5 m patch where the plane would have carried it
+ten metres. The gate holds a random twist for twenty seconds, which on a
+course drives a flat-ground policy into its hurdles, desks and walls: on
+a scene, that protocol measures collisions more than terrain. The
+contact-site gap where it touched: chamfer 2.0 cm, 95th percentile
+6.6 cm (the Mac's smoke policy: 2.3 / 7.3).
+
+Two consequences, both open:
+
+1. **The assay needs a protocol that walks the course.** At nominal the
+   gate as it stands scores near zero, so the cliff would be recorded as
+   unmeasurable, as it was with the smoke checkpoint. A scene gate
+   should command along the course the scene's author laid out (forward,
+   heading to the next waypoint) for the course's length, or the policy
+   should first be trained on the scene (E2's smoke train).
+2. **The gate's cameras are dark on the box.** The gate runs in the
+   pipeline's environment, which is still mujoco 3.11 without
+   mujoco_warp; the splat renderer is 3.13's. E0 moved the walk package
+   only. Pictures in the gate mean the pipeline's own instrument step,
+   which moves every arm and ALOHA certificate's stamp, or running a
+   staged-scene gate in the walk package's environment.
+
 ## 9. How a scene's physics gets certified for a task
 
 Assembled from what exists (docs/e2e-research/76 §7), every step but
