@@ -1182,7 +1182,9 @@ impl StudioShell {
         let name = query.as_ref().and_then(|q| q.timeline());
         let typ = name.and_then(|n| db.timelines().get(&n).map(|t| t.typ()));
         let at = query.as_ref().map(|q| q.at().as_i64());
+        let tip = name.and_then(|n| db.time_range_for(&n)).map(|r| r.max().as_i64());
         control::Live {
+            at_tip: at.is_some() && at == tip,
             recording: Some(db.application_id().to_string()),
             timeline: name.map(|n| n.to_string()),
             seconds: match (typ, at) {

@@ -29,6 +29,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -133,6 +134,10 @@ def state(project: Project) -> dict[str, Any]:
     alive = pid > 0 and pid_alive(pid) and age < STALE_S
     raw["alive"] = alive
     raw["heartbeat_age_s"] = round(age, 3)
+    if alive:
+        rebuilt = binary_rebuilt_since(pid)
+        if rebuilt is not None:
+            raw["stale_binary"] = rebuilt
     if not alive:
         raw["reason"] = (
             f"pid {pid} is gone"
@@ -288,6 +293,29 @@ def wait_presented(
     }
 
 
+def binary_rebuilt_since(pid: int) -> str | None:
+    """The word when the Studio's binary is newer than the running Studio
+    (a rebuild after launch: the window runs the old code and refuses
+    the new kinds by name, 2026-09-23); None when it is current."""
+    binary = studio_binary()
+    if binary is None:
+        return None
+    import psutil  # noqa: PLC0415 - the `mcp` extra
+
+    try:
+        started = psutil.Process(pid).create_time()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return None
+    built = binary.stat().st_mtime
+    if built <= started:
+        return None
+    when = datetime.fromtimestamp(built, tz=timezone.utc).replace(microsecond=0)
+    return (
+        f"the Studio binary was rebuilt at {when.isoformat()} after this Studio "
+        "launched; quit_studio then launch_studio to run it"
+    )
+
+
 def studio_binary() -> Path | None:
     """The built Studio: `$TRAINNR_STUDIO`, else the repo's release build."""
     named = os.environ.get(STUDIO_ENV)
@@ -337,10 +365,11 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     seen 2026-09-09)."""
     current = state(project)
     if current.get("alive"):
+        stale = current.get("stale_binary")
         return {
             "status": "refused",
             "reason": f"a Studio (pid {current.get('pid')}) already runs "
-            f"on {project.root}",
+            f"on {project.root}" + (f"; {stale}" if stale else ""),
             "pid": current.get("pid"),
         }
     binary = binary or studio_binary()

@@ -21,6 +21,7 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 | `verify.sh` | Everything, one command: Rust fmt/clippy/tests, doc and unsafe gates, the Python pipeline (ruff + unit suite), every firmware variant, wire replays, the emulator HIL. `--serial <port>` adds real silicon |
 | `check-docs.py` | No doc names code that no longer exists |
 | `install-brush.py` | Brush's release binary for this machine (macOS arm64, Linux x86_64, Windows x86_64) into a user bin directory, its SHA-256 checked, no root: the splat trainer the capture chain runs |
+| `install-gsplat.py` | gsplat, the capture chain's CUDA splat trainer, into the train environment with CUDA's compiler wheels pinned to torch's build, its kernels built once; Linux and Windows, no system toolkit (a Mac uses Brush) |
 | `check-unsafe-gates.py` | `unsafe` stays forbidden in every crate |
 | `coverage.sh` | Rust line coverage |
 | `loc-report.py` | Line counts by area |

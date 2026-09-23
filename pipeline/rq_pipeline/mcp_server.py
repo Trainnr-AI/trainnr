@@ -1752,6 +1752,7 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
     scale: float | None = None,
     floor_friction: list[float] | None = None,
     brush: str | None = None,
+    splatter: str = "auto",
 ) -> JobHandle | Refusal:
     """Capture a scene from a phone video (or a folder of still frames):
     frames by ffmpeg, poses by COLMAP (one camera, sequential matching
@@ -1761,8 +1762,10 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
     in the capture (unrecorded otherwise: the scene's metres are then
     COLMAP's units), the proxy as the visible surface itself (Poisson
     over the gaussian centres; no dense reconstruction on a laptop), the
-    gap measured, `floor_friction` recorded as declared. A job of
-    minutes to an hour; streams into the Studio when one is open. The
+    gap measured, `floor_friction` recorded as declared. `splatter` names
+    the trainer: gsplat (CUDA, the train environment) or brush (a binary,
+    any OS); auto takes gsplat where it answers. A job of minutes to an
+    hour; streams into the Studio when one is open. The
     scene appears under the project's scenes when the chain completes.
     Refused by name: a missing tool (colmap, ffmpeg, Brush's binary by
     path or on PATH as brush_app), a bad name, a source that is neither
@@ -1781,7 +1784,9 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
         if not where.exists():
             raise FileNotFoundError(f"no video file or frames folder at {where}")
         Tools.find(
-            brush=Path(brush).expanduser() if brush else None, video=where.is_file()
+            brush=Path(brush).expanduser() if brush else None,
+            video=where.is_file(),
+            splatter=splatter,
         )
     except (MissingToolError, FileNotFoundError, ValueError) as why:
         return refusal(_reason(why))
@@ -1796,6 +1801,7 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
         scale=scale,
         floor_friction=floor_friction,
         brush=brush,
+        splatter=splatter,
     )
 
 

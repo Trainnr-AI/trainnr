@@ -18,7 +18,6 @@ bootstrap()
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.locate import Project  # noqa: E402
 from rq_pipeline.scenes.capture import (  # noqa: E402
-    BRUSH_STEPS,
     FRAMES_PER_SECOND,
     MissingToolError,
     Tools,
@@ -27,6 +26,12 @@ from rq_pipeline.scenes.capture import (  # noqa: E402
 from rq_pipeline.scenes.record import (  # noqa: E402
     UNRECORDED,
     load_scene_record,
+)
+from rq_pipeline.scenes.splatters import (  # noqa: E402
+    AUTO,
+    DEFAULT_SPLATTER,
+    DEFAULT_STEPS,
+    SPLATTERS,
 )
 
 
@@ -38,18 +43,26 @@ def main() -> None:
     )
     parser.add_argument("--name", required=True, help="the scene's folder name")
     parser.add_argument("--fps", type=float, default=FRAMES_PER_SECOND)
-    parser.add_argument("--steps", type=int, default=BRUSH_STEPS)
+    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument(
         "--scale", type=float, default=None, help="metres per COLMAP unit"
     )
     parser.add_argument("--floor-friction", type=float, nargs=3, default=None)
     parser.add_argument("--brush", type=Path, default=None, help="Brush's binary")
+    parser.add_argument(
+        "--splatter",
+        default=DEFAULT_SPLATTER,
+        choices=(AUTO, *SPLATTERS),
+        help="the splat trainer; auto takes gsplat where CUDA answers, else Brush",
+    )
     parser.add_argument("--device", default=UNRECORDED)
     parser.add_argument("--lighting", default=UNRECORDED)
     args = parser.parse_args()
     project = Project(args.project.resolve()).use()
     try:
-        tools = Tools.find(brush=args.brush, video=args.source.is_file())
+        tools = Tools.find(
+            brush=args.brush, video=args.source.is_file(), splatter=args.splatter
+        )
         record_path = capture_scene(
             args.source,
             project.scenes / args.name,

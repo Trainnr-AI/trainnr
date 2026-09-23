@@ -216,6 +216,24 @@ class Indexing(unittest.TestCase):
             self.assertEqual(index.artifacts, [])
             self.assertEqual(index.refused[0]["path"], "runs/odd")
 
+    def test_a_capture_in_progress_is_listed_as_work_not_refused(self) -> None:
+        from rq_pipeline.scenes.record import CAPTURE_LOG_FILE  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            scene = project.folder("scenes") / "garden"
+            scene.mkdir()
+            (scene / CAPTURE_LOG_FILE).write_text(
+                "[capture] 185 frames\n\n$ /usr/bin/colmap mapper --database_path x\n"
+                "Registering image #3\n"
+            )
+            index = index_project(project)
+            self.assertEqual(index.artifacts, [])
+            self.assertEqual(index.refused, [])
+            self.assertEqual(
+                index.in_progress, [{"path": "scenes/garden", "stage": "colmap mapper"}]
+            )
+
     def test_the_index_is_written_atomically_and_ignored_by_git(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = make_project(Path(tmp))

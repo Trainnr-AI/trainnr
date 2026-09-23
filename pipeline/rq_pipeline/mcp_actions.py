@@ -544,6 +544,7 @@ class Actions:
         scale: float | None = None,
         floor_friction: list[float] | None = None,
         brush: str | None = None,
+        splatter: str | None = None,
     ) -> JobHandle:
         """A phone video (or a folder of frames) into a scene artifact
         through ffmpeg, COLMAP and Brush (docs/78 §3): a job of minutes
@@ -572,6 +573,8 @@ class Actions:
             argv += ["--floor-friction", *(str(v) for v in floor_friction)]
         if brush is not None:
             argv += ["--brush", brush]
+        if splatter is not None:
+            argv += ["--splatter", splatter]
         return self.jobs.start("capture-scene", argv, PIPELINE_DIR)
 
     def assay_deployment(

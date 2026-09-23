@@ -510,9 +510,10 @@ through `tools/capture-scene.py`): a phone video or a folder of frames
 into a scene artifact by the chain the research chose — ffmpeg for the
 frames (two a second), COLMAP for the poses (one OPENCV camera,
 sequential matching with loop detection for a video, exhaustive for
-stills, the mapper, the model kept as text beside the binary), Brush
-for the splat (headless, one export at the end, into the Studio when
-one listens). Every tool is a subprocess named on the record with its
+stills, the mapper, the model kept as text beside the binary), a splat
+trainer (Brush here; the registry with gsplat beside it is §8.8) for the
+splat (headless, one export at the end, into the Studio when one
+listens). Every tool is a subprocess named on the record with its
 version and licence; a missing one refuses by name before anything
 runs; each stage's output, when present, is kept, so a failed Brush run
 does not re-run COLMAP. Three decisions the record states rather than
@@ -689,6 +690,67 @@ scene does not have), and a reference for the jump the velocity reward
 alone has not found (mocap and retargeting are the data engine's D5
 lane, designed, not built). None fits the box's one-hour rule; the
 cloud is empty; the operator's call.
+
+## 8.8 A second splat trainer: gsplat on CUDA, chosen by the registry (2026-09-23, the box)
+
+The first public-data capture on the box (Mip-NeRF 360's garden, 185
+frames at 1297x840 from `nvs-bench/mipnerf360` on Hugging Face; the
+INRIA host gave 30 KB/s) found the Mac-tuned chain's weak leg here:
+Brush reaches the GPU through wgpu, and under WSL the only Vulkan is
+Mesa's D3D12 layer, which runs on the CPU. Measured: 1,500 % CPU
+(fifteen cores) for 30-40 % of the RTX and 1.1 iterations a second -
+the default 30,000 steps would have taken 7.5 hours, and the operator's
+machine overheated and restarted. COLMAP itself (apt 3.7, CPU) took
+nine minutes for the 185 frames: extraction, exhaustive matching (a
+folder of stills is unordered), the mapper, all 185 registered in one
+model.
+
+The trainer is a registry now (`rq_pipeline/scenes/splatters.py`):
+`brush` (a release binary, any OS) and `gsplat` (nerfstudio-project's
+CUDA rasterizer, Apache-2.0, in the train environment), both reading
+the same COLMAP dataset folder and both leaving the same file - a 3DGS
+PLY in COLMAP's frame - so everything after the splat is one code
+path. `auto`, the door's default, takes gsplat where it is installed
+and CUDA answers, Brush otherwise; the record names the one that ran
+with its version and licence, and the scene's work folder is named for
+it (`gsplat/` or `brush/`). A Mac never gets gsplat and its refusal
+says so, naming Brush.
+
+The gsplat trainer (`rq_pipeline/scenes/gsplat_train.py`, a subprocess
+under the train environment's interpreter) is gsplat's own reference
+recipe transcribed, not a fork of its example script: the sparse points
+as the first gaussians, each scaled by its three nearest neighbours,
+Adam per parameter at the reference rates with the means' rate decayed
+to a hundredth, the default densification strategy over the first half,
+L1 with a fifth of D-SSIM, a harmonic degree more every thousand steps,
+distortion undone once on the frames with OpenCV (a fisheye capture is
+refused by name). The COLMAP text model is read by one numpy module
+(`scenes/colmap_model.py`) both the chain and the trainer use. Into the
+Studio under `--rerun`: the loss, the splat count, the means' rate, the
+camera ring and the cloud itself on an `iterations` timeline, Brush's
+entity names, so the same blueprint reads either trainer.
+
+Installing it needs no system CUDA toolkit: `tools/install-gsplat.py`
+puts gsplat, ninja and CUDA 13's compiler wheels into the train
+environment - nvcc, its frontend nvvm, the runtime headers and the CCCL
+headers, every one pinned to the minor torch was built for - and runs
+the trainer's `--build`, which names pip's one CUDA tree
+(`nvidia/cu13`) to the compiler and links the unversioned library names
+the linker wants. Three pins were each a failed build first: an nvvm a
+minor newer than nvcc emitted PTX the assembler refused; runtime headers
+newer than nvcc lacked its launch stub; the wheels ship
+`libcudart.so.13` without `libcudart.so`. The kernels build in 109 s
+on the box.
+
+Measured on the garden, same poses, same GPU: gsplat 33 iterations a
+second at the start and 26 with 266k splats after densification began,
+the RTX at 96 % and the trainer at one core (113 % CPU) - thirty times
+Brush's rate here, at a fourteenth of its CPU. A 200-step smoke exported
+128,768 gaussians the chain's own reader took back at harmonic degree 3.
+The full 30,000-step capture through the door, with the Studio showing
+the job, the stage (`⏳ scenes/mipnerf-garden — gsplat_train` on the
+Compute card, from the index's new `in_progress` list) and the live
+stream, is the run docs/07 reports.
 
 ## 9. How a scene's physics gets certified for a task
 

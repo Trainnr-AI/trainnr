@@ -1172,6 +1172,14 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
                 format!("{running} job(s) running")
             },
         );
+        // What a running chain is filling in, with its stage (the index's
+        // `in_progress`): the folder is work, not a warning, until the
+        // record lands and it becomes a card.
+        if let Some(index) = model.index() {
+            for p in &index.in_progress {
+                weak_body(ui, format!("⏳ {} — {}", p.path, p.stage));
+            }
+        }
         ui.add_space(6.0);
         weak_body(ui, cloud_line());
     });

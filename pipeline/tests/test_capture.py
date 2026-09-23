@@ -15,6 +15,7 @@ import numpy as np
 from rq_pipeline.scenes import capture
 from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record
 from rq_pipeline.scenes.splat import Splats, euler_xyz_matrix, write_ply
+from rq_pipeline.scenes.splatters import SPLATTERS
 from tests._extras import needs_scene
 
 
@@ -105,7 +106,7 @@ class TheTools(unittest.TestCase):
             mock.patch("shutil.which", return_value=None),
             self.assertRaises(capture.MissingToolError) as caught,
         ):
-            capture.Tools.find(video=True)
+            capture.Tools.find(video=True, splatter="brush")
         why = str(caught.exception)
         for name in ("ffmpeg", "ffprobe", "colmap", "brush_app"):
             self.assertIn(name, why)
@@ -113,7 +114,7 @@ class TheTools(unittest.TestCase):
             mock.patch("shutil.which", return_value=None),
             self.assertRaises(capture.MissingToolError) as caught,
         ):
-            capture.Tools.find(video=False)
+            capture.Tools.find(video=False, splatter="brush")
         self.assertNotIn("ffmpeg", str(caught.exception))
 
     def test_the_refusal_names_this_machines_install_line(self) -> None:
@@ -218,7 +219,8 @@ class TheChain(unittest.TestCase):
                 ffmpeg=None,
                 ffprobe=None,
                 colmap=Path("/fake/colmap"),
-                brush=Path("/fake/brush_app"),
+                splatter=SPLATTERS["brush"],
+                trainer=Path("/fake/brush_app"),
             )
             fake = _FakeChain(splats)
             with mock.patch.object(capture, "tool_version", return_value="9.9"):
@@ -246,7 +248,7 @@ class TheChain(unittest.TestCase):
             self.assertEqual(record.splat["poses"]["registered"], 4)
             self.assertEqual(record.splat["poses"]["models"], [2, 4])
             self.assertEqual(record.splat["poses"]["chosen"], "1")
-            brush_dataset = Path(brush[brush.index(str(tools.brush)) + 1])
+            brush_dataset = Path(brush[brush.index(str(tools.trainer)) + 1])
             self.assertEqual((brush_dataset / "sparse" / "0").resolve().name, "1")
             self.assertEqual(
                 [t.name for t in record.tools],
@@ -278,7 +280,11 @@ class TheChain(unittest.TestCase):
             frames.mkdir()
             (frames / "a.png").write_bytes(b"\x89PNG")
             tools = capture.Tools(
-                ffmpeg=None, ffprobe=None, colmap=Path("/c"), brush=Path("/b")
+                ffmpeg=None,
+                ffprobe=None,
+                colmap=Path("/c"),
+                splatter=SPLATTERS["brush"],
+                trainer=Path("/b"),
             )
             with self.assertRaisesRegex(ValueError, "at least 3"):
                 capture.capture_scene(

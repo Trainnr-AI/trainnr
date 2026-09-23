@@ -195,6 +195,11 @@ pub struct Live {
     pub seconds: Option<f64>,
     /// The cursor on a sequence timeline (a step, a frame, an episode).
     pub sequence: Option<i64>,
+    /// The cursor sits at the recording's newest time: a live stream
+    /// carrying it forward, not a hand on the timeline. Never written to
+    /// the state file; `watch_live` reads it.
+    #[serde(skip)]
+    pub at_tip: bool,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -591,6 +596,12 @@ impl Control {
         if self.commanded_until.is_some_and(|until| now < until) {
             return None;
         }
+        // A stream that paused between its bursts rested the cursor at its
+        // tip; that is the stream's doing, not the human's (a Brush run
+        // logged "you moved the time cursor" eight times a minute, 2026-09-23).
+        if live.at_tip {
+            return None;
+        }
         (live.seconds.is_some() || live.sequence.is_some()).then(|| live.clone())
     }
 }
@@ -759,6 +770,7 @@ mod tests {
             timeline: Some("time".into()),
             seconds: Some(1.5),
             sequence: None,
+            at_tip: false,
         };
         control.event(Event::time(BY_USER).at(&rested));
         let text = std::fs::read_to_string(root.join(EVENTS_RELATIVE)).unwrap();
@@ -807,6 +819,7 @@ mod tests {
             timeline: Some("time".into()),
             seconds: Some(s),
             sequence: None,
+            at_tip: false,
         };
         assert!(control.watch_live(&at(0.0)).is_none(), "first sight");
         assert!(control.watch_live(&at(1.0)).is_none(), "still moving");
@@ -823,6 +836,17 @@ mod tests {
         assert!(
             control.watch_live(&at(2.0)).is_none(),
             "ours, not the human's"
+        );
+        // A live stream rests the cursor at its own tip between bursts.
+        let tip = Live {
+            at_tip: true,
+            ..at(3.0)
+        };
+        control.watch_live(&tip);
+        control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
+        assert!(
+            control.watch_live(&tip).is_none(),
+            "the stream's, not the human's"
         );
         let _ = std::fs::remove_dir_all(root);
     }

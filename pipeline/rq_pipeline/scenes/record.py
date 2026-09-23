@@ -178,6 +178,43 @@ def proxy_from_splat(record: dict[str, Any]) -> bool:
     return origin.startswith(PROXY_FROM_SPLAT.split("{", 1)[0])
 
 
+# The capture chain's log, written stage by stage into the scene's folder
+# before the record exists (`scenes.capture`); its presence without the
+# record is a scene in progress, and its last lines say which stage.
+CAPTURE_LOG_FILE = "capture.log"
+CAPTURE_STAGE_PREFIX = "[capture] "  # the chain's own lines
+CAPTURE_COMMAND_PREFIX = "$ "  # a tool's command line
+
+
+def capture_in_progress(folder: Path) -> bool:
+    """A scene folder the chain is still working in: its log without its record."""
+    return (folder / CAPTURE_LOG_FILE).is_file() and not (folder / SCENE_FILE).is_file()
+
+
+def capture_stage(folder: Path) -> str:
+    """The chain's latest word from its log: the tool it last started,
+    or its own last note; `starting` before either."""
+    try:
+        lines = (folder / CAPTURE_LOG_FILE).read_text(
+            encoding="utf-8", errors="replace"
+        )
+    except OSError:
+        return "starting"
+    for line in reversed(lines.splitlines()):
+        if line.startswith(CAPTURE_COMMAND_PREFIX):
+            argv = line[len(CAPTURE_COMMAND_PREFIX) :].split()
+            tool = Path(argv[0]).name if argv else "a tool"
+            after = argv[1] if len(argv) > 1 else ""
+            if after == "-m" and argv[2:]:  # an interpreter running a module
+                return argv[2].rsplit(".", 1)[-1]
+            # COLMAP's subcommand is a bare word; Brush's first argument is a path
+            verb = after if after.isidentifier() else ""
+            return f"{tool} {verb}".strip()
+        if line.startswith(CAPTURE_STAGE_PREFIX):
+            return line[len(CAPTURE_STAGE_PREFIX) :].strip()
+    return "starting"
+
+
 # The record's declared physics, by name (docs/78 §3): the floor's friction
 # as a scene's author or importer declares it, with this project's span.
 FLOOR_FRICTION = "floor_friction"

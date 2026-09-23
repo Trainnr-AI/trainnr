@@ -31,7 +31,6 @@ does not re-run COLMAP.
 from __future__ import annotations
 
 import json
-import platform
 import re
 import shutil
 import subprocess
@@ -49,6 +48,9 @@ from rq_pipeline.scenes.gap import DEFAULT_TOLERANCE_M
 from rq_pipeline.scenes.obj import write_obj
 from rq_pipeline.scenes.proxy import PARTS_FILE, ensure_parts
 from rq_pipeline.scenes.record import (
+    CAPTURE_COMMAND_PREFIX,
+    CAPTURE_LOG_FILE,
+    CAPTURE_STAGE_PREFIX,
     DECLARED,
     DECLARED_FRICTION_SPAN,
     FLOOR_FRICTION,
@@ -73,22 +75,32 @@ from rq_pipeline.scenes.splat import (
     read_ply,
     write_ply,
 )
+from rq_pipeline.scenes.splatters import (
+    DEFAULT_SPLATTER,
+    DEFAULT_STEPS,
+    SPLAT_EXPORT,
+    Splatter,
+    choose_splatter,
+)
+from rq_pipeline.scenes.tooling import (
+    INSTALL_HINTS,  # noqa: F401 - the chain's tool table, reached through here
+    MissingToolError,
+    install_hint,
+    linux_installer,  # noqa: F401
+    tool_version,
+)
 from rq_pipeline.viz import STUDIO_ADDRESS, studio_listening
 
 # The work folders inside the scene, kept: the capture's provenance.
 FRAMES_DIR = "frames"
 COLMAP_DIR = "colmap"
 SPARSE_DIR = "sparse/0"
-DATASET_DIR = "dataset"  # Brush's view: images/ and sparse/0/ as links
+DATASET_DIR = "dataset"  # the trainer's view: images/ and sparse/0/ as links
 DATABASE = "database.db"
-BRUSH_DIR = "brush"
-BRUSH_EXPORT = "splat-colmap-frame.ply"  # Brush's output, before alignment
-LOG_FILE = "capture.log"
+LOG_FILE = CAPTURE_LOG_FILE
 CAPTURE_SOURCE = "capture"  # the record's source word: capture/<video or folder name>
 FRAMES_PER_SECOND = 2.0
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png")
-BRUSH_STEPS = 30_000
-BRUSH_MAX_RESOLUTION = 1920
 COLMAP_CAMERA = "OPENCV"  # one phone, one lens: a single camera with distortion
 SEQUENTIAL_OVERLAP = 20
 LOOP_DETECTION_PERIOD = 10
@@ -119,76 +131,8 @@ CAPTURE_NOTES = (
     "measures its fidelity to the splat, not to the world",
     "no dense reconstruction: COLMAP's patch-match needs CUDA and the 2DGS chain "
     "waits on the box (docs/78 §3)",
-    "the colour is the zeroth harmonic; Brush's higher harmonics stay in the file",
+    "the colour is the zeroth harmonic; the higher harmonics stay in the file",
 )
-
-
-BRUSH_BINARY = "brush_app"
-BRUSH_LICENSE = "Apache-2.0 OR MIT"  # ArthurBrussee/brush: dual, the user's choice
-# How each tool is installed, by platform: the refusal names the line for
-# the machine it runs on, never another machine's package manager.
-# `{pkg}` is the Linux package manager's install line (`linux_installer`).
-INSTALL_HINTS: dict[str, dict[str, str]] = {
-    "ffmpeg": {
-        "Darwin": "brew install ffmpeg",
-        "Linux": "{pkg} ffmpeg",
-        "Windows": "winget install Gyan.FFmpeg",
-    },
-    "colmap": {
-        "Darwin": "brew install colmap",
-        "Linux": "{pkg} colmap",
-        "Windows": "a release from https://github.com/colmap/colmap/releases on PATH",
-    },
-    "brush": {
-        "*": "{python} tools/install-brush.py fetches the release binary for this "
-        "machine into a user bin directory; or pass its path",
-    },
-}
-INSTALL_HINTS["ffprobe"] = INSTALL_HINTS["ffmpeg"]
-# The Linux package managers by the distro family /etc/os-release names.
-LINUX_INSTALLERS: dict[str, str] = {
-    "debian": "sudo apt install",
-    "ubuntu": "sudo apt install",
-    "fedora": "sudo dnf install",
-    "rhel": "sudo dnf install",
-    "arch": "sudo pacman -S",
-    "suse": "sudo zypper install",
-}
-OS_RELEASE = Path("/etc/os-release")
-
-
-def linux_installer(os_release: Path = OS_RELEASE) -> str:
-    """This Linux's package manager's install line, from its os-release
-    (ID and ID_LIKE); a distro the table does not know gets a neutral
-    line rather than another distro's."""
-    try:
-        text = os_release.read_text(encoding="utf-8")
-    except OSError:
-        return "your distribution's package manager: install"
-    ids: list[str] = []
-    for line in text.splitlines():
-        key, _, value = line.partition("=")
-        if key in ("ID", "ID_LIKE"):
-            ids += value.strip().strip('"').split()
-    for family in ids:
-        if family in LINUX_INSTALLERS:
-            return LINUX_INSTALLERS[family]
-    return "your distribution's package manager: install"
-
-
-def install_hint(tool: str, system: str | None = None) -> str:
-    """The install line for `tool` on `system` (this machine's by default)."""
-    hints = INSTALL_HINTS[tool]
-    system = system or platform.system()
-    line = hints.get(system) or hints.get("*") or "see the tool's own site"
-    return line.format(
-        pkg=linux_installer() if system == "Linux" else "",
-        python="python" if system == "Windows" else "python3",
-    )
-
-
-class MissingToolError(FileNotFoundError):
-    """A tool the chain needs is not on this machine; named."""
 
 
 Runner = Callable[[Sequence[str | Path], Path, Path], None]
@@ -197,8 +141,12 @@ Runner = Callable[[Sequence[str | Path], Path, Path], None]
 def run_logged(argv: Sequence[str | Path], cwd: Path, log: Path) -> None:
     """The default runner: a subprocess, its output appended to the log,
     its failure raised with the command's name and exit status."""
+    line = f"{CAPTURE_COMMAND_PREFIX}{' '.join(str(a) for a in argv)}"
+    print(
+        line, flush=True
+    )  # the job's log sees the stages; the tools' floods stay here
     with log.open("a", encoding="utf-8") as out:
-        out.write(f"\n$ {' '.join(str(a) for a in argv)}\n")
+        out.write(f"\n{line}\n")
         out.flush()
         done = subprocess.run(
             [str(a) for a in argv],
@@ -215,15 +163,23 @@ def run_logged(argv: Sequence[str | Path], cwd: Path, log: Path) -> None:
 
 @dataclass(frozen=True)
 class Tools:
-    """The chain's binaries, each found by name or the door refuses."""
+    """The chain's binaries, each found by name or the door refuses; the
+    splat trainer by the registry (`splatters`), `auto` taking the best
+    one this machine has."""
 
     ffmpeg: Path | None
     ffprobe: Path | None
     colmap: Path
-    brush: Path
+    splatter: Splatter
+    trainer: Path  # what the splatter runs from: its binary, or an interpreter
 
     @staticmethod
-    def find(*, brush: Path | None = None, video: bool = True) -> Tools:
+    def find(
+        *,
+        brush: Path | None = None,
+        video: bool = True,
+        splatter: str = DEFAULT_SPLATTER,
+    ) -> Tools:
         missing = []
         found = {n: shutil.which(n) for n in ("ffmpeg", "ffprobe", "colmap")}
         if video:
@@ -234,34 +190,21 @@ class Tools:
             ]
         if found["colmap"] is None:
             missing.append(f"colmap ({install_hint('colmap')})")
-        brush_path = brush or (Path(b) if (b := shutil.which(BRUSH_BINARY)) else None)
-        if brush_path is None or not brush_path.is_file():
-            missing.append(f"{BRUSH_BINARY} ({install_hint('brush')})")
-        if missing:
+        spec: Splatter | None = None
+        trainer: Path | None = None
+        try:
+            spec, trainer = choose_splatter(splatter, brush)
+        except MissingToolError as why:
+            missing.append(str(why))
+        if missing or spec is None or trainer is None:
             raise MissingToolError("the capture chain needs " + ", ".join(missing))
         return Tools(
             ffmpeg=Path(found["ffmpeg"]) if found["ffmpeg"] else None,
             ffprobe=Path(found["ffprobe"]) if found["ffprobe"] else None,
             colmap=Path(found["colmap"]),  # type: ignore[arg-type]
-            brush=brush_path,  # type: ignore[arg-type]
+            splatter=spec,
+            trainer=trainer,
         )
-
-
-def tool_version(binary: Path, *flag: str) -> str:
-    """The first line a binary prints for its version flag; unrecorded
-    when it prints nothing usable."""
-    try:
-        out = subprocess.run(
-            [str(binary), *flag],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return UNRECORDED
-    text = (out.stdout or out.stderr).strip().splitlines()
-    return text[0].strip() if text else UNRECORDED
 
 
 def colmap_option(binary: Path, command: str, option: str) -> list[str]:
@@ -449,9 +392,9 @@ def _link_or_copy(link: Path, target: Path) -> None:
         shutil.copytree(target, link)
 
 
-def dataset_for_brush(work: Path, frames: Path, chosen: str) -> Path:
-    """Brush's layout - `images/` beside `sparse/0/` - as links to the
-    frames and the chosen model (the mapper's folder name), under
+def dataset_for_trainer(work: Path, frames: Path, chosen: str) -> Path:
+    """The trainers' layout - `images/` beside `sparse/0/` - as links to
+    the frames and the chosen model (the mapper's folder name), under
     `DATASET_DIR`."""
     dataset = work / DATASET_DIR
     (dataset / "sparse").mkdir(parents=True, exist_ok=True)
@@ -586,34 +529,19 @@ def train_splat(  # noqa: PLR0913 - the stage's own knobs, each named
     log: Path,
     narrate: bool,
 ) -> Path:
-    """Brush on the COLMAP dataset (`images/` beside `sparse/0/`),
+    """The trainer on the COLMAP dataset (`images/` beside `sparse/0/`),
     headless, exporting once at the end; into the Studio when one is
     listening (law 0). Skipped when the export is present."""
-    export = out / BRUSH_EXPORT
+    export = out / SPLAT_EXPORT
     if export.is_file():
         return export
     out.mkdir(parents=True, exist_ok=True)
-    argv: list[str | Path] = [
-        tools.brush,
-        dataset,
-        "--total-steps",
-        str(steps),
-        "--export-every",
-        str(steps),
-        "--export-path",
-        out,
-        "--export-name",
-        BRUSH_EXPORT,
-        "--max-resolution",
-        str(BRUSH_MAX_RESOLUTION),
-        "--eval-every",
-        str(steps + 1),  # no held-out split: every frame trains
-    ]
-    if narrate:
-        argv.append("--rerun-enabled")
+    argv = tools.splatter.argv(
+        tools.trainer, dataset, out, steps=steps, narrate=narrate
+    )
     run(argv, out, log)
     if not export.is_file():
-        raise RuntimeError(f"Brush exported nothing: no {export}")
+        raise RuntimeError(f"{tools.splatter.title} exported nothing: no {export}")
     return export
 
 
@@ -820,8 +748,12 @@ def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
 
 
 def _log_line(log: Path, text: str) -> None:
+    """The chain's own note: into the scene's log, and to stdout for the
+    job's log (`mcp_jobs`), which saw nothing of a capture before."""
+    line = f"{CAPTURE_STAGE_PREFIX}{text}"
+    print(line, flush=True)
     with log.open("a", encoding="utf-8") as out:
-        out.write(f"[capture] {text}\n")
+        out.write(f"{line}\n")
 
 
 def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
@@ -832,7 +764,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
     tools: Tools | None = None,
     run: Runner = run_logged,
     fps: float = FRAMES_PER_SECOND,
-    steps: int = BRUSH_STEPS,
+    steps: int = DEFAULT_STEPS,
     scale: float | None = None,
     floor_friction: Sequence[float] | None = None,
     friction_span: float = DECLARED_FRICTION_SPAN,
@@ -893,10 +825,16 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
             f"COLMAP registered {poses.images_registered} of {poses.images_given} "
             "frames: too few for a scene"
         )
-    dataset = dataset_for_brush(colmap_dir, frames_dir, poses.chosen)
-    brush_dir = out_dir / BRUSH_DIR
+    dataset = dataset_for_trainer(colmap_dir, frames_dir, poses.chosen)
+    _log_line(log, f"splat by {tools.splatter.title}, {steps} steps")
     export = train_splat(
-        tools, dataset, brush_dir, steps=steps, run=run, log=log, narrate=narrate
+        tools,
+        dataset,
+        out_dir / tools.splatter.folder,
+        steps=steps,
+        run=run,
+        log=log,
+        narrate=narrate,
     )
     raw = read_ply(export)
     aligned, alignment, floor = align(raw, scale=scale)
@@ -921,7 +859,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         ),
         splat={
             "file": SPLAT_FILE,
-            "from": f"{BRUSH_DIR}/{BRUSH_EXPORT}",
+            "from": f"{tools.splatter.folder}/{SPLAT_EXPORT}",
             "poses": {
                 "registered": poses.images_registered,
                 "given": poses.images_given,
@@ -1012,9 +950,9 @@ def _tools_used(
             role=f"poses: one {COLMAP_CAMERA} camera, {matching}, the mapper",
         ),
         Tool(
-            name="Brush",
-            version=tool_version(tools.brush, "--version"),
-            license=BRUSH_LICENSE,
+            name=tools.splatter.title,
+            version=tools.splatter.version(tools.trainer),
+            license=tools.splatter.license,
             role=f"the splat: {steps} steps, {minutes} min for the whole chain",
         ),
         Tool(

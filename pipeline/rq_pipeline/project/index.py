@@ -56,7 +56,11 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
-from rq_pipeline.scenes.record import proxy_from_splat
+from rq_pipeline.scenes.record import (
+    capture_in_progress,
+    capture_stage,
+    proxy_from_splat,
+)
 from rq_pipeline.scenes.stage import SCENE_TERRAIN_WORD, scene_name_of
 
 # The one word for a fact an artifact never recorded - never a guess.
@@ -150,6 +154,9 @@ class ProjectIndex:
     states: list[State]
     next_move: str | None
     refused: list[dict[str, str]]  # paths that carried no or two markers
+    # Folders a chain is still filling (a scene being captured): the path
+    # and the chain's latest stage - shown as work, not warned about.
+    in_progress: list[dict[str, str]] = field(default_factory=list)
 
     def by_kind(self, kind: Kind) -> list[Artifact]:
         return [a for a in self.artifacts if a.kind == kind.value]
@@ -162,8 +169,17 @@ def index_project(project: Project) -> ProjectIndex:
     manifest = project.manifest()
     artifacts: list[Artifact] = []
     refused: list[dict[str, str]] = []
+    in_progress: list[dict[str, str]] = []
     for folder in FOLDERS:
         for path in _candidates(project.root / folder):
+            if capture_in_progress(path):
+                in_progress.append(
+                    {
+                        "path": path.relative_to(project.root).as_posix(),
+                        "stage": capture_stage(path),
+                    }
+                )
+                continue
             try:
                 kind = detect(path)
                 # An RL arm keeps its identity under <arm>/train; the ARM is
@@ -216,6 +232,7 @@ def index_project(project: Project) -> ProjectIndex:
         states=states,
         next_move=NEXT_MOVE[missing[0]] if missing else None,
         refused=refused,
+        in_progress=in_progress,
     )
 
 

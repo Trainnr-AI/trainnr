@@ -78,6 +78,10 @@ pub struct Index {
     pub next_move: Option<String>,
     #[serde(default)]
     pub refused: Vec<Refused>,
+    /// Folders a chain is still filling (a scene being captured), with
+    /// the chain's latest stage (`rq_pipeline/project/index.py`).
+    #[serde(default)]
+    pub in_progress: Vec<InProgress>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -161,6 +165,13 @@ fn yes() -> bool {
 pub struct Refused {
     pub path: String,
     pub reason: String,
+}
+
+/// A folder the pipeline is still writing: its path and the stage it is at.
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct InProgress {
+    pub path: String,
+    pub stage: String,
 }
 
 /// `JobRecord`, as `rq_pipeline.mcp_jobs` writes it, plus the exit code

@@ -218,6 +218,36 @@ def _neverwhere_folder(
     return src
 
 
+class TheCaptureInProgress(unittest.TestCase):
+    def test_the_stage_is_the_last_tool_or_note(self) -> None:
+        from rq_pipeline.scenes.record import (  # noqa: PLC0415
+            CAPTURE_LOG_FILE,
+            SCENE_FILE,
+            capture_in_progress,
+            capture_stage,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            self.assertFalse(capture_in_progress(folder))
+            log = folder / CAPTURE_LOG_FILE
+            log.write_text("[capture] 185 frames\n")
+            self.assertTrue(capture_in_progress(folder))
+            self.assertEqual(capture_stage(folder), "185 frames")
+            log.write_text(
+                "[capture] 185 frames\n\n"
+                "$ /home/x/.local/bin/brush_app /d --total-steps 9\n"
+                "WARNING: dzn\n"
+            )
+            self.assertEqual(capture_stage(folder), "brush_app")
+            log.write_text(
+                "$ /v/bin/python -m rq_pipeline.scenes.gsplat_train /d --out /o\n"
+            )
+            self.assertEqual(capture_stage(folder), "gsplat_train")
+            (folder / SCENE_FILE).write_text("{}")
+            self.assertFalse(capture_in_progress(folder))
+
+
 class TheImport(unittest.TestCase):
     def test_a_folder_that_is_not_a_scene_is_refused_by_name(self) -> None:
         with (
