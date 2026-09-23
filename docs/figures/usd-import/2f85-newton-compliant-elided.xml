@@ -1,0 +1,102 @@
+<mujoco model="MuJoCo Model">
+  <compiler angle="radian"/>
+
+  <option ls_tolerance="0.01" ccd_tolerance="1e-06" sleep_tolerance="0.001" gravity="0 0 -9.81" integrator="implicitfast">
+    <flag multiccd="disable"/>
+  </option>
+
+  <asset>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/base_link/visuals/Defeatured_2F_85_PAD_OPEN_basestep_01/Defeatured_2F_85_PAD_OPEN_basestep_0" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/left_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_1" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/left_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_2" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/left_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_4" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/left_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_3" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/left_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_9" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/right_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_5" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/right_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_6" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/right_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_8" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/right_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_7" vertex="(inline, elided)" face="(inline, elided)"/>
+    <mesh name="/Robotiq_2F_85/Robotiq_2F_85/right_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_10" vertex="(inline, elided)" face="(inline, elided)"/>
+  </asset>
+
+  <worldbody>
+    <geom name="ground_plane_22" size="5 5 5" type="plane" contype="137" conaffinity="886" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" gap="0.1" rgba="0 0.3 0.6 1"/>
+    <body name="_Robotiq_2F_85_Robotiq_2F_85_base_link" mocap="true">
+      <inertial pos="0 0 0.035508" mass="0.77744" diaginertia="0.001 0.001 0.001"/>
+      <geom name="/Robotiq_2F_85/Robotiq_2F_85/base_link/visuals/Defeatured_2F_85_PAD_OPEN_basestep_01/Defeatured_2F_85_PAD_OPEN_basestep_0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="695" group="2" priority="1" friction="1 0.005 0.0001" solref="0.004 2" solimp="0.95 0.99 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/base_link/visuals/Defeatured_2F_85_PAD_OPEN_basestep_01/Defeatured_2F_85_PAD_OPEN_basestep_0"/>
+      <body name="_Robotiq_2F_85_Robotiq_2F_85_left_outer_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 -0.048356 0.056017" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+        <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_finger_joint" pos="0 -0.0306011 0.054944" axis="-1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="0 0.8" actuatorfrclimited="true" actuatorfrcrange="-15 15" armature="0.3" damping="0.1"/>
+        <geom name="/Robotiq_2F_85/Robotiq_2F_85/left_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_1" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="879" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/left_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_1"/>
+        <body name="_Robotiq_2F_85_Robotiq_2F_85_left_outer_finger">
+          <inertial pos="0 -0.065113 0.074061" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_left_coupler_joint" pos="0 -0.0621011 0.050844" axis="-1 0 0" solreflimit="0.00707 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="-1.57 0" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="/Robotiq_2F_85/Robotiq_2F_85/left_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_2" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="144" conaffinity="839" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/left_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_2"/>
+        </body>
+      </body>
+      <body name="_Robotiq_2F_85_Robotiq_2F_85_left_inner_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 -0.031362 0.082206" mass="0.02216" diaginertia="0.001 0.001 0.001"/>
+        <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_left_spring_link_joint" pos="0 -0.0132 0.06094" axis="-1 0 0" springref="2.62" solreflimit="0.02 2" solimplimit="0.9 0.95 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" stiffness="2" limited="true" range="-0.296706 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="/Robotiq_2F_85/Robotiq_2F_85/left_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_4" quat="0.5 0.5 0.5 0.5" type="mesh" contype="72" conaffinity="791" group="2" priority="1" friction="1 0.005 0.0001" solref="0.004 2" solimp="0.95 0.99 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/left_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_4"/>
+        <body name="_Robotiq_2F_85_Robotiq_2F_85_left_inner_finger">
+          <inertial pos="0 -0.057154 0.110919" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_left_follower_joint" pos="0 -0.0502 0.10494" axis="-1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="-0.872664 0.872664" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="/Robotiq_2F_85/Robotiq_2F_85/left_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_3" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="168" conaffinity="773" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/left_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_3"/>
+          <body name="_Robotiq_2F_85_Robotiq_2F_85_left_fingertip">
+            <inertial pos="0 -0.0506345 0.126163" quat="0.70314 0.70314 0.0747982 -0.0747982" mass="0.0259817" diaginertia="3.72988e-06 3.30538e-06 1.39064e-06"/>
+            <geom name="/Robotiq_2F_85/Robotiq_2F_85/left_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_9" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="138" conaffinity="853" group="3" priority="1" friction="0.7 0.005 0.0001" solref="0.004 2" solimp="0.95 0.99 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/left_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_9"/>
+          </body>
+        </body>
+      </body>
+      <body name="_Robotiq_2F_85_Robotiq_2F_85_right_outer_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 0.048356 0.056017" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+        <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_right_driver_joint" pos="0 0.0306011 0.054944" axis="1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="0 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="/Robotiq_2F_85/Robotiq_2F_85/right_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_5" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="264" conaffinity="119" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/right_outer_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_Finger1step_01/Defeatured_2F_85_PAD_OPEN_Finger1step_5"/>
+        <body name="_Robotiq_2F_85_Robotiq_2F_85_right_outer_finger">
+          <inertial pos="0 0.065113 0.074061" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_right_coupler_joint" pos="0 0.0621011 0.050844" axis="1 0 0" solreflimit="0.00707 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="-1.57 0" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="/Robotiq_2F_85/Robotiq_2F_85/right_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_6" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="648" conaffinity="119" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/right_outer_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger2step_01/Defeatured_2F_85_PAD_OPEN_finger2step_6"/>
+        </body>
+      </body>
+      <body name="_Robotiq_2F_85_Robotiq_2F_85_right_inner_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 0.031362 0.082206" mass="0.02216" diaginertia="0.001 0.001 0.001"/>
+        <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_right_spring_link_joint" pos="0 0.0132 0.06094" axis="1 0 0" springref="2.62" solreflimit="0.02 2" solimplimit="0.9 0.95 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" stiffness="2" limited="true" range="-0.296706 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="/Robotiq_2F_85/Robotiq_2F_85/right_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_8" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="8" conaffinity="887" group="2" priority="1" friction="1 0.005 0.0001" solref="0.004 2" solimp="0.95 0.99 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/right_inner_knuckle/visuals/Defeatured_2F_85_PAD_OPEN_finger3step_01/Defeatured_2F_85_PAD_OPEN_finger3step_8"/>
+        <body name="_Robotiq_2F_85_Robotiq_2F_85_right_inner_finger">
+          <inertial pos="0 0.057154 0.110919" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="_Robotiq_2F_85_Robotiq_2F_85_Joints_right_follower_joint" pos="0 0.0502 0.10494" axis="1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99 0.001" solreffriction="0.02" solimpfriction="0.9 0.95 0.001" limited="true" range="-0.872664 0.872664" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="/Robotiq_2F_85/Robotiq_2F_85/right_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_7" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="136" conaffinity="371" group="2" friction="1 0.005 0.0001" solref="0.02" solimp="0.9 0.95 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/right_inner_finger/visuals/Defeatured_2F_85_PAD_OPEN_finger4step_01/Defeatured_2F_85_PAD_OPEN_finger4step_7"/>
+          <body name="_Robotiq_2F_85_Robotiq_2F_85_right_fingertip">
+            <inertial pos="0 0.0506345 0.126163" quat="0.70314 0.70314 -0.0747982 0.0747982" mass="0.0259817" diaginertia="3.72988e-06 3.30538e-06 1.39064e-06"/>
+            <geom name="/Robotiq_2F_85/Robotiq_2F_85/right_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_10" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="140" conaffinity="883" group="3" priority="1" friction="0.7 0.005 0.0001" solref="0.004 2" solimp="0.95 0.99 0.001" mesh="/Robotiq_2F_85/Robotiq_2F_85/right_fingertip/visuals/tip_standard/Defeatured_2F_85_PAD_OPEN_fingertipsstep_10"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_base_link" body2="_Robotiq_2F_85_Robotiq_2F_85_left_outer_knuckle"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_base_link" body2="_Robotiq_2F_85_Robotiq_2F_85_left_inner_knuckle"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_base_link" body2="_Robotiq_2F_85_Robotiq_2F_85_right_outer_knuckle"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_base_link" body2="_Robotiq_2F_85_Robotiq_2F_85_right_inner_knuckle"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_left_outer_knuckle" body2="_Robotiq_2F_85_Robotiq_2F_85_left_outer_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_left_outer_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_left_inner_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_left_inner_knuckle" body2="_Robotiq_2F_85_Robotiq_2F_85_left_inner_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_left_inner_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_left_fingertip"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_right_outer_knuckle" body2="_Robotiq_2F_85_Robotiq_2F_85_right_outer_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_right_outer_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_right_inner_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_right_inner_knuckle" body2="_Robotiq_2F_85_Robotiq_2F_85_right_inner_finger"/>
+    <exclude body1="_Robotiq_2F_85_Robotiq_2F_85_right_inner_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_right_fingertip"/>
+  </contact>
+
+  <equality>
+    <connect body1="_Robotiq_2F_85_Robotiq_2F_85_right_inner_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_right_outer_finger" anchor="0 0.0682 0.09844" solref="0.005" solimp="0.95 0.99 0.001"/>
+    <connect body1="_Robotiq_2F_85_Robotiq_2F_85_left_inner_finger" body2="_Robotiq_2F_85_Robotiq_2F_85_left_outer_finger" anchor="0 -0.0682 0.09844" solref="0.005" solimp="0.95 0.99 0.001"/>
+    <joint joint1="_Robotiq_2F_85_Robotiq_2F_85_Joints_right_driver_joint" joint2="_Robotiq_2F_85_Robotiq_2F_85_Joints_finger_joint" polycoef="0 1 0 0 0"/>
+  </equality>
+
+  <actuator>
+    <general joint="_Robotiq_2F_85_Robotiq_2F_85_Joints_finger_joint" biastype="affine" gainprm="1432" biasprm="0 -1432 -158"/>
+  </actuator>
+</mujoco>
