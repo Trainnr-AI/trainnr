@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rq_pipeline.scenes.colmap_model import Camera, TextModel, read_text_model
+from rq_pipeline.scenes.splatters import RENDERS_DIR
 
 if TYPE_CHECKING:
     import torch
@@ -62,7 +63,11 @@ REFINE_STOP_FRACTION = 0.5  # densify over the first half (the reference: 15k of
 REFINE_EVERY = 100
 RESET_EVERY = 3000
 LOG_EVERY = 100
-SPLATS_LOG_POINTS = 200_000  # the cloud shown, subsampled past this
+RENDER_EVERY = 1000  # the watched view re-rendered into the stream
+RENDER_STILLS = 8  # views rendered at the end, evenly spaced through the capture
+STILL_FILE = "view-{index:02d}.png"
+STREAM_GAUSSIANS = 500_000  # the splat shown live, the most opaque past this
+FRUSTUM_FRACTION = 0.05  # a camera's drawn image plane, as a fraction of the scene
 SCENE_SCALE_MARGIN = 1.1
 FISHEYE_MODELS = ("OPENCV_FISHEYE",)
 
@@ -297,8 +302,29 @@ class Narrator:
         rr.init(APP_ID, spawn=False)
         rr.connect_grpc(STUDIO_ADDRESS)
         self.rr = rr
+        self.layout()
 
-    def cameras(self, views: list[View]) -> None:
+    def layout(self) -> None:
+        """The run's own layout: the world with its cameras and splat, the
+        watched view beside its truth, the loss and the count. Sent once,
+        so the viewer does not guess (its guess put the images in the 3D
+        view and flagged it)."""
+        if self.rr is None:
+            return
+        import rerun.blueprint as rrb  # noqa: PLC0415
+
+        self.rr.send_blueprint(
+            rrb.Grid(
+                rrb.Spatial3DView(origin="world", name="world"),
+                rrb.Spatial2DView(origin="render/view", name="watched view"),
+                rrb.Spatial2DView(origin="render/truth", name="its frame"),
+                rrb.TimeSeriesView(origin="losses", name="loss"),
+                rrb.TimeSeriesView(origin="splats", name="gaussians"),
+                grid_columns=3,
+            )
+        )
+
+    def cameras(self, views: list[View], scale: float) -> None:
         if self.rr is None:
             return
         self.rr.set_time(TIMELINE, sequence=0)
@@ -311,8 +337,24 @@ class Narrator:
             )
             self.rr.log(
                 f"world/cameras/{i:04d}",
-                self.rr.Pinhole(image_from_camera=v.intrinsics, width=w, height=h),
+                self.rr.Pinhole(
+                    image_from_camera=v.intrinsics,
+                    width=w,
+                    height=h,
+                    image_plane_distance=scale * FRUSTUM_FRACTION,
+                ),
             )
+
+    def truth(self, image: np.ndarray) -> None:
+        if self.rr is None:
+            return
+        self.rr.log("render/truth", self.rr.Image(image), static=True)
+
+    def render(self, step: int, image: np.ndarray, name: str = "view") -> None:
+        if self.rr is None:
+            return
+        self.rr.set_time(TIMELINE, sequence=step)
+        self.rr.log(f"render/{name}", self.rr.Image(image))
 
     def step(self, step: int, *, loss: float, count: int, lr_means: float) -> None:
         if self.rr is None:
@@ -322,17 +364,160 @@ class Narrator:
         self.rr.log("splats/num_splats", self.rr.Scalars(count))
         self.rr.log("lr/means", self.rr.Scalars(lr_means))
 
-    def splats(self, step: int, means: np.ndarray, sh0: np.ndarray) -> None:
+    def splats(self, step: int, gaussians: dict[str, np.ndarray]) -> None:
+        """The splat itself, Rerun's own archetype (the viewer renders
+        gaussians, not dots): the most opaque `STREAM_GAUSSIANS` of them."""
         if self.rr is None:
             return
-        if means.shape[0] > SPLATS_LOG_POINTS:
-            keep = np.random.default_rng(0).choice(
-                means.shape[0], SPLATS_LOG_POINTS, False
-            )
-            means, sh0 = means[keep], sh0[keep]
-        colours = np.clip(sh0 * SH_C0 + 0.5, 0, 1)
+        from rq_pipeline.scenes.splat import Splats  # noqa: PLC0415
+        from rq_pipeline.viz import gaussians as archetype  # noqa: PLC0415
+
+        opacities = gaussians["opacities"]
+        keep = np.argsort(opacities)[::-1][:STREAM_GAUSSIANS]
+        shown = Splats(
+            means=gaussians["means"][keep].astype(np.float32),
+            quats=gaussians["quats"][keep].astype(np.float32),
+            scales=gaussians["scales"][keep].astype(np.float32),
+            opacities=opacities[keep].astype(np.float32),
+            colors=np.clip(gaussians["sh0"][keep] * SH_C0 + 0.5, 0, 1).astype(
+                np.float32
+            ),
+        )
         self.rr.set_time(TIMELINE, sequence=step)
-        self.rr.log("world/splats", self.rr.Points3D(means, colors=colours))
+        self.rr.log("world/splats", archetype(self.rr, shown))
+
+
+# -- rendering ----------------------------------------------------------------------
+
+
+def activated(params: torch.nn.ParameterDict) -> dict[str, torch.Tensor]:
+    """The gaussians as the rasterizer takes them: scales and opacities
+    through their activations, the harmonics joined."""
+    import torch  # noqa: PLC0415
+
+    return {
+        "means": params["means"],
+        "quats": params["quats"],
+        "scales": torch.exp(params["scales"]),
+        "opacities": torch.sigmoid(params["opacities"]),
+        "colors": torch.cat([params["sh0"], params["shN"]], 1),
+    }
+
+
+def render_image(
+    gaussians: dict[str, torch.Tensor],
+    view: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    *,
+    sh_degree: int,
+) -> np.ndarray:
+    """One view of the gaussians as an 8-bit RGB image (no gradient)."""
+    import torch  # noqa: PLC0415
+    from gsplat import rasterization  # noqa: PLC0415
+
+    image, intrinsics, w2c = view
+    h, w = image.shape[:2]
+    with torch.no_grad():
+        renders, _, _ = rasterization(
+            means=gaussians["means"],
+            quats=gaussians["quats"],
+            scales=gaussians["scales"],
+            opacities=gaussians["opacities"],
+            colors=gaussians["colors"],
+            viewmats=w2c[None],
+            Ks=intrinsics[None],
+            width=w,
+            height=h,
+            sh_degree=sh_degree,
+            packed=False,
+        )
+    return (renders[0, ..., :3].clamp(0, 1) * 255).to(torch.uint8).cpu().numpy()
+
+
+def still_views(count: int, of: int) -> list[int]:
+    """`count` view indices spread evenly through the capture."""
+    if of <= count:
+        return list(range(of))
+    return [round(i * (of - 1) / (count - 1)) for i in range(count)]
+
+
+def render_stills(  # noqa: PLR0913 - the stills' knobs, each named
+    gaussians: dict[str, torch.Tensor],
+    tensors: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
+    out: Path,
+    *,
+    sh_degree: int,
+    narrator: Narrator | None = None,
+    step: int = 0,
+) -> list[Path]:
+    """`RENDER_STILLS` views of the splat as PNGs under `out`, the
+    scene's own renders (the card's picture, the drawer's strip)."""
+    from PIL import Image as PilImage  # noqa: PLC0415
+
+    out.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for index, view_index in enumerate(still_views(RENDER_STILLS, len(tensors))):
+        image = render_image(gaussians, tensors[view_index], sh_degree=sh_degree)
+        path = out / STILL_FILE.format(index=index)
+        PilImage.fromarray(image).save(path)
+        written.append(path)
+        if narrator is not None:
+            narrator.render(step, image, name=f"still-{index:02d}")
+    return written
+
+
+def gaussians_from_ply(path: Path, device: str) -> tuple[dict[str, torch.Tensor], int]:
+    """A trained splat back as the rasterizer's tensors, with its degree."""
+    import torch  # noqa: PLC0415
+
+    from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
+
+    splats = read_ply(path)
+    sh0 = ((splats.colors - 0.5) / SH_C0)[:, None, :]
+    rest = splats.sh_rest if splats.sh_rest.size else np.zeros((splats.count, 0, 3))
+    colors = np.concatenate([sh0, rest], 1).astype(np.float32)
+
+    def t(a: np.ndarray) -> torch.Tensor:
+        return torch.as_tensor(
+            np.ascontiguousarray(a), dtype=torch.float32, device=device
+        )
+
+    return {
+        "means": t(splats.means),
+        "quats": t(splats.quats),
+        "scales": t(splats.scales),
+        "opacities": t(splats.opacities),
+        "colors": t(colors),
+    }, splats.sh_degree
+
+
+def render_ply(
+    dataset: Path, ply: Path, out: Path, *, max_resolution: int
+) -> list[Path]:
+    """The stills of an exported splat from the capture's own views (the
+    `--render` mode: a scene captured before the stills existed)."""
+    ensure_cuda_home()
+    import torch  # noqa: PLC0415
+
+    views, _ = load_views(dataset, max_resolution=max_resolution)
+    tensors = view_tensors(views, "cuda")
+    gaussians, degree = gaussians_from_ply(ply, "cuda")
+    torch.cuda.synchronize()
+    return render_stills(gaussians, tensors, out, sh_degree=degree)
+
+
+def view_tensors(
+    views: list[View], device: str
+) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    import torch  # noqa: PLC0415
+
+    return [
+        (
+            torch.as_tensor(v.image, device=device).float() / 255.0,
+            torch.as_tensor(v.intrinsics, dtype=torch.float32, device=device),
+            torch.as_tensor(v.world_to_camera, dtype=torch.float32, device=device),
+        )
+        for v in views
+    ]
 
 
 # -- the run ---------------------------------------------------------------------
@@ -382,16 +567,11 @@ def train(  # noqa: PLR0913, PLR0915 - the loop, its knobs named
     strategy.check_sanity(params, optimizers)
     state = strategy.initialize_state(scene_scale=scale)
     window = _gaussian_window(SSIM_WINDOW, SSIM_SIGMA, device)
-    tensors = [
-        (
-            torch.as_tensor(v.image, device=device).float() / 255.0,
-            torch.as_tensor(v.intrinsics, dtype=torch.float32, device=device),
-            torch.as_tensor(v.world_to_camera, dtype=torch.float32, device=device),
-        )
-        for v in views
-    ]
+    tensors = view_tensors(views, device)
     narrator = Narrator(narrate)
-    narrator.cameras(views)
+    narrator.cameras(views, scale)
+    watched = len(views) // 2  # one view re-rendered as the run goes, its truth beside
+    narrator.truth(views[watched].image)
     splats_every = max(steps // 10, 500)
     tick = time.time()
     for step in range(steps):
@@ -442,11 +622,24 @@ def train(  # noqa: PLR0913, PLR0915 - the loop, its knobs named
                 count=count,
                 lr_means=optimizers["means"].param_groups[0]["lr"],
             )
+        if (step + 1) % RENDER_EVERY == 0 or step + 1 == steps:
+            narrator.render(
+                step + 1,
+                render_image(activated(params), tensors[watched], sh_degree=degree),
+            )
         if (step + 1) % splats_every == 0 or step + 1 == steps:
             narrator.splats(
                 step + 1,
-                params["means"].detach().cpu().numpy(),
-                params["sh0"].detach()[:, 0].cpu().numpy(),
+                {
+                    "means": params["means"].detach().cpu().numpy(),
+                    "quats": params["quats"].detach().cpu().numpy(),
+                    "scales": torch.exp(params["scales"]).detach().cpu().numpy(),
+                    "opacities": torch.sigmoid(params["opacities"])
+                    .detach()
+                    .cpu()
+                    .numpy(),
+                    "sh0": params["sh0"].detach()[:, 0].cpu().numpy(),
+                },
             )
     out.mkdir(parents=True, exist_ok=True)
     export = out / export_name
@@ -461,10 +654,18 @@ def train(  # noqa: PLR0913, PLR0915 - the loop, its knobs named
             format="ply",
             save_to=str(export),
         )
+    stills = render_stills(
+        activated(params),
+        tensors,
+        out / RENDERS_DIR,
+        sh_degree=sh_degree,
+        narrator=narrator,
+        step=steps,
+    )
     minutes = (time.time() - began) / 60
     print(
-        f"[gsplat] exported {params['means'].shape[0]} gaussians to {export} "
-        f"in {minutes:.1f} min",
+        f"[gsplat] exported {params['means'].shape[0]} gaussians to {export} and "
+        f"{len(stills)} stills to {out / RENDERS_DIR} in {minutes:.1f} min",
         flush=True,
     )
     return export
@@ -514,9 +715,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--build", action="store_true", help="compile the kernels and exit"
     )
+    parser.add_argument(
+        "--render",
+        type=Path,
+        default=None,
+        help="render this exported splat's stills from the dataset's views, and exit",
+    )
     args = parser.parse_args(argv)
     if args.build:
         build_kernels()
+        return 0
+    if args.render is not None:
+        if args.dataset is None or args.out is None:
+            parser.error("a dataset and --out are needed to render")
+        stills = render_ply(
+            args.dataset, args.render, args.out, max_resolution=args.max_resolution
+        )
+        print(f"[gsplat] rendered {len(stills)} stills to {args.out}", flush=True)
         return 0
     if args.dataset is None or args.out is None:
         parser.error("a dataset and --out are needed to train")

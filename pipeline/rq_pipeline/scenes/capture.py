@@ -78,6 +78,7 @@ from rq_pipeline.scenes.splat import (
 from rq_pipeline.scenes.splatters import (
     DEFAULT_SPLATTER,
     DEFAULT_STEPS,
+    RENDERS_DIR,
     SPLAT_EXPORT,
     Splatter,
     choose_splatter,
@@ -836,6 +837,11 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         log=log,
         narrate=narrate,
     )
+    # the trainer's own renders of its splat, when it makes them (gsplat does)
+    renders = [
+        p.relative_to(out_dir).as_posix()
+        for p in sorted((export.parent / RENDERS_DIR).glob("*.png"))
+    ]
     raw = read_ply(export)
     aligned, alignment, floor = align(raw, scale=scale)
     write_ply(aligned, out_dir / SPLAT_FILE)
@@ -860,6 +866,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         splat={
             "file": SPLAT_FILE,
             "from": f"{tools.splatter.folder}/{SPLAT_EXPORT}",
+            "renders": renders,
             "poses": {
                 "registered": poses.images_registered,
                 "given": poses.images_given,

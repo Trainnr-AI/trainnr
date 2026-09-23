@@ -26,6 +26,7 @@ from rq_pipeline.scenes.record import UNRECORDED
 from rq_pipeline.scenes.tooling import MissingToolError, install_hint, tool_version
 
 SPLAT_EXPORT = "splat-colmap-frame.ply"  # the trainer's output, before alignment
+RENDERS_DIR = "renders"  # a trainer's own renders of its splat, beside the export
 MAX_RESOLUTION = 1920  # the longest image side a trainer sees
 DEFAULT_STEPS = 30_000
 AUTO = "auto"

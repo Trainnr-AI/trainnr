@@ -629,6 +629,13 @@ def _extent_pair(extent: Any) -> tuple[list[float], list[float]] | None:
     return None
 
 
+def _scene_still(source: Path, renders: list[str]) -> Path | None:
+    """The trainer's own render of the splat, when it left any: the scene
+    as a picture, the middle view of the capture."""
+    present = [source / r for r in renders if (source / r).is_file()]
+    return present[len(present) // 2] if present else None
+
+
 def _render_scene(
     _project: Project, source: Path, out: Path, _summary: dict[str, Any]
 ) -> bool:
@@ -647,6 +654,12 @@ def _render_scene(
 
     try:
         s = load_scene_record(source / SCENE_FILE)
+    except (OSError, ValueError, TypeError):
+        return False
+    still = _scene_still(source, s.splat.get("renders") or [])
+    if still is not None:
+        return _copy_scaled(still, out)
+    try:
         splats = read_ply(source / SPLAT_FILE).visible()
     except (OSError, ValueError, TypeError):
         return False

@@ -1042,13 +1042,32 @@ def _present_scene(
         ]
         lines.append(_lineage(artifact))
         rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
+        # the trainer's own renders of the splat, the capture's views
+        renders = [folder / r for r in s.splat.get("renders") or []]
+        renders = [r for r in renders if r.is_file()]
+        for i, still in enumerate(renders):
+            rr_.log(f"{root}/renders/{i:02d}", rr.EncodedImage(path=still), static=True)
+    side: list[Any] = [rrb.TextDocumentView(origin=f"{root}/reading", name="scene")]
+    if renders:
+        side.append(
+            rrb.Grid(
+                *[
+                    rrb.Spatial2DView(
+                        origin=f"{root}/renders/{i:02d}", name=f"view {i}"
+                    )
+                    for i in range(len(renders))
+                ],
+                name="renders",
+            )
+        )
     return {
-        "paths": [f"{root}/splat", f"{root}/proxy", f"{root}/reading"],
-        "view": "splat + proxy + reading",
+        "paths": [f"{root}/splat", f"{root}/proxy", f"{root}/reading"]
+        + [f"{root}/renders/{i:02d}" for i in range(len(renders))],
+        "view": "splat + proxy + reading" + (" + renders" if renders else ""),
         "layout": rrb.Horizontal(
             rrb.Spatial3DView(origin="/", name=artifact.stamp),
-            rrb.TextDocumentView(origin=f"{root}/reading", name="scene"),
-            column_shares=[3, 1],
+            rrb.Vertical(*side, row_shares=[1, 2] if renders else [1]),
+            column_shares=[3, 2] if renders else [3, 1],
         ),
     }
 
