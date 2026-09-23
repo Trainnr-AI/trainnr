@@ -51,6 +51,31 @@ class TheTextModel(unittest.TestCase):
         self.assertEqual(model.points.shape, (2, 3))
         self.assertEqual(model.colors.tolist(), [[255, 128, 0], [0, 0, 255]])
 
+    def test_an_image_with_no_points_does_not_shift_the_next(self) -> None:
+        """COLMAP leaves the 2D-point line EMPTY for an image with none;
+        the image after it must still be read as a pose (skipping blank
+        lines shifted every later image by a line, 2026-09-24)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sparse = Path(tmp)
+            (sparse / "cameras.txt").write_text("1 PINHOLE 4 4 1 1 2 2\n")
+            (sparse / "images.txt").write_text(
+                "# images\n1 1 0 0 0 0 0 0 1 a.jpg\n\n2 1 0 0 0 5 0 0 1 b.jpg\n1 2 -1\n"
+            )
+            (sparse / "points3D.txt").write_text("")
+            model = read_text_model(sparse)
+        self.assertEqual([i.name for i in model.images], ["a.jpg", "b.jpg"])
+        self.assertEqual(model.images[1].translation.tolist(), [5.0, 0.0, 0.0])
+
+    def test_a_camera_row_short_of_its_model_is_refused_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sparse = Path(tmp)
+            (sparse / "cameras.txt").write_text("1 OPENCV 4 4 1 1 2\n")
+            (sparse / "images.txt").write_text("")
+            (sparse / "points3D.txt").write_text("")
+            with self.assertRaises(ValueError) as caught:
+                read_text_model(sparse)
+        self.assertIn("OPENCV", str(caught.exception))
+
     def test_an_unknown_camera_model_is_refused_by_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             sparse = Path(tmp)

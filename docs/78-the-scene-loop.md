@@ -13,8 +13,9 @@ Six things, each with its evidence in docs/e2e-research/75:
 
 1. Capture to scene is minutes on one consumer GPU, and the chain can
    be Apache end to end: poses from a commercially licensed
-   feed-forward model, gsplat, CoACD, mujoco_warp's own splat ray
-   tracer, Rerun's splat archetype. The phone apps are the only
+   feed-forward model (the built chain takes COLMAP's, BSD, §8.6; the
+   feed-forward model stays the faster option), gsplat, CoACD,
+   mujoco_warp's own splat ray tracer, Rerun's splat archetype. The phone apps are the only
    non-permissive piece, and they are avoidable: a video is enough.
 2. The splat-to-physics pairing is nobody's shipped product; the
    vendor claim did not survive a read of the model card. It is ours
@@ -101,7 +102,7 @@ number).
 | # | experiment | gate, provable here |
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
-| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk; the operator's phone video is the first real capture |
+| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk — **met 2026-09-23 (§8.8-8.10):** a public capture (Mip-NeRF 360's garden, 185 stills) through the chain on the box, gsplat beside Brush, the scene staged and walked; the operator's own phone video is still to come |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene — **built 2026-09-23 (§8.7), the batch empty by the referee:** the press stands on the scene, films the head camera inside the env and names the scene, its gap and its floor on every manifest; the first scene-trained walker survives 38/40 and tracks 0/40 on its own scene, so no episode passes the criterion and the record says so |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
@@ -818,7 +819,11 @@ thing (specks under 64 voxels dropped, 7,064 of the garden's 7,142
 components), each thing decomposed into convex parts by CoACD on its
 own. The two are joined as the proxy the audit and the viewer see; a
 stage on `overhangs` carries the ground as a heightfield under the
-parts as mesh geoms. A table then has a top at 74 cm, legs, and air
+parts as mesh geoms. The record's schema stays `trainnr-scene/1`: the
+new facts (`proxy.ground`, `proxy.overhang`, `splat.renders`, the
+operator's `course`) are keys inside dictionaries every reader takes
+with a default, and a scene captured before them stages on the
+heightfield as before and is refused by name on `overhangs`. A table then has a top at 74 cm, legs, and air
 between: rays down under the top reach the ground, a ray along the
 course at 35 cm travels five metres.
 

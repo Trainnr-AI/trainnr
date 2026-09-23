@@ -24,13 +24,13 @@ import sys
 from pathlib import Path
 
 GSPLAT_VERSION = "1.5.3"
-REPO = Path(__file__).resolve().parents[1]
-DEFAULT_PYTHON = (
-    REPO
-    / "pipeline"
-    / ".venv-train"
-    / ("Scripts/python.exe" if sys.platform.startswith("win") else "bin/python")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _lab import bootstrap  # noqa: E402
+
+bootstrap()
+
+from rq_pipeline.paths import train_python  # noqa: E402
+
 TRAINER = "rq_pipeline.scenes.gsplat_train"
 # The compiler's wheels for CUDA 13, which pip lays out as one tree
 # (`nvidia/cu13`: bin, include, lib, nvvm) the trainer names as CUDA_HOME.
@@ -39,44 +39,70 @@ TRAINER = "rq_pipeline.scenes.gsplat_train"
 COMPILER_WHEELS = {
     "13": ("nvidia-cuda-nvcc", "nvidia-nvvm", "nvidia-cuda-crt", "nvidia-cuda-cccl"),
 }
-SPLIT_LAYOUT = (
-    "torch was built for CUDA {cuda}, whose pip wheels lay CUDA out in pieces; "
-    "install a system CUDA toolkit of that version, set CUDA_HOME, and run "
-    "`{python} -m {trainer} --build`"
+OTHER_CUDA = (
+    "torch was built for CUDA {cuda}; this tool knows the pip wheels of CUDA 13 "
+    "only (its `nvidia-*` wheels lay CUDA out as one tree). For {cuda}: install "
+    "that CUDA toolkit, set CUDA_HOME, and run `{python} -m {trainer} --build`"
+)
+NO_TORCH = "{python} cannot import torch: build the train environment first"
+NO_INSTALLER = (
+    "neither `uv` on PATH nor pip in {python}: install uv (astral.sh/uv) or run "
+    "`{python} -m ensurepip`"
+)
+NO_MSVC = (
+    "cl.exe is not on PATH: gsplat's kernels need MSVC on Windows; run this from "
+    "an x64 Native Tools Command Prompt for Visual Studio"
 )
 
 
 def torch_cuda(python: Path) -> str:
-    out = subprocess.run(
-        [str(python), "-c", "import torch; print(torch.version.cuda or '')"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    """The CUDA version torch was built for, or a refusal naming the fix."""
+    try:
+        out = subprocess.run(
+            [str(python), "-c", "import torch; print(torch.version.cuda or '')"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as why:
+        raise SystemExit(NO_TORCH.format(python=python)) from why
     version = out.stdout.strip()
     if not version:
         raise SystemExit(f"{python}'s torch is not a CUDA build; gsplat needs one")
     return version
 
 
-def pip_install(python: Path, packages: list[str]) -> None:
+def installer(python: Path) -> list[str]:
+    """`uv pip install --python <python>` when uv is here, else that
+    interpreter's own pip when it has one; refused by name otherwise (a
+    uv-made environment carries no pip)."""
     uv = shutil.which("uv")
-    argv = (
-        [uv, "pip", "install", "--python", str(python), *packages]
-        if uv
-        else [str(python), "-m", "pip", "install", *packages]
+    if uv:
+        return [uv, "pip", "install", "--python", str(python)]
+    has_pip = subprocess.run(
+        [str(python), "-m", "pip", "--version"], capture_output=True, check=False
     )
+    if has_pip.returncode == 0:
+        return [str(python), "-m", "pip", "install"]
+    raise SystemExit(NO_INSTALLER.format(python=python))
+
+
+def pip_install(python: Path, packages: list[str]) -> None:
+    argv = [*installer(python), *packages]
     print("$", " ".join(argv), flush=True)
     subprocess.run(argv, check=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--python", type=Path, default=DEFAULT_PYTHON)
+    parser.add_argument("--python", type=Path, default=train_python())
     parser.add_argument("--version", default=GSPLAT_VERSION)
     args = parser.parse_args()
-    if platform.system() == "Darwin":
+    system = platform.system()
+    if system == "Darwin":
         raise SystemExit("gsplat needs CUDA; on a Mac the chain's trainer is Brush")
+    if system == "Windows" and shutil.which("cl") is None:
+        raise SystemExit(NO_MSVC)
     if not args.python.is_file():
         raise SystemExit(
             f"no interpreter at {args.python}: build the train environment first"
@@ -86,7 +112,7 @@ def main() -> None:
     wheels = COMPILER_WHEELS.get(major)
     if wheels is None:
         raise SystemExit(
-            SPLIT_LAYOUT.format(cuda=cuda, python=args.python, trainer=TRAINER)
+            OTHER_CUDA.format(cuda=cuda, python=args.python, trainer=TRAINER)
         )
     pip_install(
         args.python,

@@ -38,6 +38,7 @@ from rq_pipeline.scenes.proxy import OVERHANG_PARTS, load_decomposition
 from rq_pipeline.scenes.record import (
     COLLISION_GROUP,
     GROUND_FILE,
+    OVERHANG_FILE,
     PROXY_FILE,
     PROXY_RGBA,
     friction_triple,
@@ -405,6 +406,12 @@ def overhangs(
         )
     ground = heightfield(spec, body, scene_dir, friction, source=GROUND_FILE)
     parts = load_decomposition(scene_dir, OVERHANG_PARTS)
+    if parts is None and (scene_dir / OVERHANG_FILE).is_file():
+        # the volume is there but was never cut (CoACD absent, or it died):
+        # staging it as "nothing above the clearance" would be a lie
+        raise FileNotFoundError(
+            NO_PARTS.format(name=scene_dir.name, default=DEFAULT_TERRAIN)
+        )
     count = 0
     if parts is not None:
         for i, (vertices, _faces) in enumerate(parts.meshes(scene_dir)):

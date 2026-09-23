@@ -57,6 +57,7 @@ from rq_pipeline.project.kinds import (
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
 from rq_pipeline.scenes.record import (
+    capture_failed,
     capture_in_progress,
     capture_stage,
     proxy_from_splat,
@@ -173,12 +174,14 @@ def index_project(project: Project) -> ProjectIndex:
     for folder in FOLDERS:
         for path in _candidates(project.root / folder):
             if capture_in_progress(path):
-                in_progress.append(
-                    {
-                        "path": path.relative_to(project.root).as_posix(),
-                        "stage": capture_stage(path),
-                    }
-                )
+                relative = path.relative_to(project.root).as_posix()
+                failed = capture_failed(path)
+                if failed is not None:  # a dead chain is a refusal, not work
+                    reason = f"capture failed: {failed}"
+                    refused.append({"path": relative, "reason": reason})
+                else:
+                    stage = capture_stage(path)
+                    in_progress.append({"path": relative, "stage": stage})
                 continue
             try:
                 kind = detect(path)

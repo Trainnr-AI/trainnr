@@ -45,6 +45,8 @@ class Splatter:
     name: str
     title: str  # the record's name for it
     license: str
+    missing: str  # what a refusal names: the binary, or the environment
+    takes_binary: bool  # whether a caller's path (`--brush`) means this trainer
     # `platform.system()` names it runs on; None for any.
     platforms: tuple[str, ...] | None
     argv: Callable[..., list[str | Path]]  # (tool, dataset, out, steps, narrate)
@@ -58,19 +60,10 @@ class Splatter:
             raise MissingToolError(
                 f"{self.name} does not run on {system}: {install_hint(self.name)}"
             )
-        tool = LOCATORS[self.name](binary)
+        tool = LOCATORS[self.name](binary if self.takes_binary else None)
         if tool is None:
             raise MissingToolError(f"{self.missing} ({install_hint(self.name)})")
         return tool
-
-    @property
-    def missing(self) -> str:
-        """What the refusal names: Brush's binary, gsplat's environment."""
-        return (
-            BRUSH_BINARY
-            if self.name == "brush"
-            else f"{self.name} in the train environment"
-        )
 
 
 # -- Brush --------------------------------------------------------------------
@@ -181,6 +174,8 @@ SPLATTERS: dict[str, Splatter] = {
         name="brush",
         title="Brush",
         license=BRUSH_LICENSE,
+        missing=BRUSH_BINARY,
+        takes_binary=True,
         platforms=None,
         argv=_brush_argv,
         version=lambda tool: tool_version(tool, "--version"),
@@ -190,6 +185,8 @@ SPLATTERS: dict[str, Splatter] = {
         name="gsplat",
         title="gsplat",
         license=GSPLAT_LICENSE,
+        missing="gsplat in the train environment",
+        takes_binary=False,
         platforms=("Linux", "Windows"),
         argv=_gsplat_argv,
         version=_gsplat_version,
@@ -219,7 +216,7 @@ def choose_splatter(
     for candidate in AUTO_ORDER:
         spec = SPLATTERS[candidate]
         try:
-            return spec, spec.find(binary if candidate == "brush" else None)
+            return spec, spec.find(binary)
         except MissingToolError as why:
             reasons.append(str(why))
     raise MissingToolError("no splat trainer here: " + "; ".join(reasons))

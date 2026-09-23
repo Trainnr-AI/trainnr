@@ -294,26 +294,43 @@ def wait_presented(
 
 
 def binary_rebuilt_since(pid: int) -> str | None:
-    """The word when the Studio's binary is newer than the running Studio
-    (a rebuild after launch: the window runs the old code and refuses
-    the new kinds by name, 2026-09-23); None when it is current."""
-    binary = studio_binary()
-    if binary is None:
-        return None
-    import psutil  # noqa: PLC0415 - the `mcp` extra
-
+    """The word when the file the running Studio was started from is newer
+    than the process (a rebuild after launch: the window runs the old code
+    and refuses the new kinds by name, 2026-09-23); None when it is
+    current, when the process cannot be read, or when the file is gone
+    (cargo replacing it between two looks). The process's own executable,
+    not the path a launch would take now, so a Studio started from another
+    build is judged against its own file. Same host, so no clock skew;
+    the start time's second is the only ambiguity, and harmless."""
+    psutil = _psutil()
     try:
-        started = psutil.Process(pid).create_time()
+        process = psutil.Process(pid)
+        started = process.create_time()
+        exe = Path(process.exe())
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return None
-    built = binary.stat().st_mtime
+    try:
+        built = exe.stat().st_mtime
+    except OSError:
+        return None
     if built <= started:
         return None
     when = datetime.fromtimestamp(built, tz=timezone.utc).replace(microsecond=0)
     return (
-        f"the Studio binary was rebuilt at {when.isoformat()} after this Studio "
-        "launched; quit_studio then launch_studio to run it"
+        f"the Studio binary was rebuilt at {when.isoformat()} (UTC) after this "
+        "Studio launched; quit_studio then launch_studio to run it"
     )
+
+
+def _psutil() -> Any:
+    """psutil, or the one refusal naming the extra that carries it."""
+    try:
+        import psutil  # noqa: PLC0415 - the `mcp` extra
+    except ImportError as why:
+        raise ImportError(
+            "psutil is needed to check a Studio's process: install the `mcp` extra"
+        ) from why
+    return psutil
 
 
 def studio_binary() -> Path | None:
@@ -445,10 +462,10 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
             return {"status": "done", "pid": pid, "answer": answer.get("status")}
         time.sleep(0.1)
     try:
-        os.kill(pid, signal.SIGTERM)
+        note = terminate_group(pid)
     except OSError as why:
         return {"status": "failed", "reason": f"terminate {pid}: {why}", "pid": pid}
-    return {"status": "done", "pid": pid, "reason": "terminated after the timeout"}
+    return {"status": "done", "pid": pid, "reason": f"after the timeout: {note}"}
 
 
 # -- helpers -------------------------------------------------------------------
@@ -465,12 +482,7 @@ def pid_alive(pid: int) -> bool:
     if child is not None and child.poll() is not None:
         del _LAUNCHED[pid]
         return False
-    try:
-        import psutil  # noqa: PLC0415 - the `mcp` extra
-    except ImportError as why:
-        raise ImportError(
-            "psutil is needed to check a Studio's process: install the `mcp` extra"
-        ) from why
+    psutil = _psutil()
     try:
         return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
@@ -499,8 +511,7 @@ def terminate_group(pid: int) -> str:
         except ProcessLookupError:
             return "already gone"
         return "SIGTERM sent to the process group"
-    import psutil  # noqa: PLC0415 - the `mcp` extra
-
+    psutil = _psutil()
     try:
         root = psutil.Process(pid)
     except psutil.NoSuchProcess:

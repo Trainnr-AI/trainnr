@@ -33,7 +33,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rq_pipeline.scenes.colmap_model import Camera, TextModel, read_text_model
-from rq_pipeline.scenes.splatters import RENDERS_DIR
+from rq_pipeline.scenes.splatters import (
+    DEFAULT_STEPS,
+    MAX_RESOLUTION,
+    RENDERS_DIR,
+    SPLAT_EXPORT,
+)
 
 if TYPE_CHECKING:
     import torch
@@ -64,6 +69,8 @@ REFINE_EVERY = 100
 RESET_EVERY = 3000
 LOG_EVERY = 100
 RENDER_EVERY = 1000  # the watched view re-rendered into the stream
+SPLATS_LOG_FRACTION = 10  # the cloud shown this many times over a run...
+SPLATS_LOG_MIN_EVERY = 500  # ...but never more often than this
 RENDER_STILLS = 8  # views rendered at the end, evenly spaced through the capture
 STILL_FILE = "view-{index:02d}.png"
 STREAM_GAUSSIANS = 500_000  # the splat shown live, the most opaque past this
@@ -437,6 +444,8 @@ def still_views(count: int, of: int) -> list[int]:
     """`count` view indices spread evenly through the capture."""
     if of <= count:
         return list(range(of))
+    if count <= 1:
+        return [of // 2]  # one still: the middle of the capture
     return [round(i * (of - 1) / (count - 1)) for i in range(count)]
 
 
@@ -572,7 +581,7 @@ def train(  # noqa: PLR0913, PLR0915 - the loop, its knobs named
     narrator.cameras(views, scale)
     watched = len(views) // 2  # one view re-rendered as the run goes, its truth beside
     narrator.truth(views[watched].image)
-    splats_every = max(steps // 10, 500)
+    splats_every = max(steps // SPLATS_LOG_FRACTION, SPLATS_LOG_MIN_EVERY)
     tick = time.time()
     for step in range(steps):
         image, intrinsics, w2c = tensors[int(rng.integers(len(tensors)))]
@@ -706,9 +715,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("dataset", type=Path, nargs="?")
     parser.add_argument("--out", type=Path)
-    parser.add_argument("--steps", type=int, default=30_000)
-    parser.add_argument("--export-name", default="splat-colmap-frame.ply")
-    parser.add_argument("--max-resolution", type=int, default=1920)
+    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
+    parser.add_argument("--export-name", default=SPLAT_EXPORT)
+    parser.add_argument("--max-resolution", type=int, default=MAX_RESOLUTION)
     parser.add_argument("--sh-degree", type=int, default=SH_DEGREE)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--rerun", action="store_true", help="stream into the Studio")

@@ -270,6 +270,17 @@ class ProjectContracts(unittest.TestCase):
             control.SCREENSHOT_WIDTH,
         )
 
+    def test_the_in_progress_entry_has_the_fields_the_index_writes(self) -> None:
+        block = MODEL_RS.split("pub struct InProgress {", 1)[1].split("}", 1)[0]
+        fields = set(re.findall(r"pub (\w+):", block))
+        self.assertEqual(fields, {"path", "stage"})
+        index_py = (
+            REPO / "pipeline" / "rq_pipeline" / "project" / "index.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'in_progress.append({"path": relative, "stage": stage})', index_py
+        )
+
     def test_the_pages_and_the_verbs_agree(self) -> None:
         """Every page the rail shows is a name the door accepts, and every
         verb the door writes is one the shell's command enum parses."""

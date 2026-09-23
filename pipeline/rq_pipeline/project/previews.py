@@ -570,7 +570,7 @@ def _render_drift(
 
     try:
         d = load_drift_record(source / DRIFT_FILE)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, KeyError):
         return False
     width, height = PREVIEW_SIZE
     image = Image.new("RGB", (width, height), GROUND)
@@ -654,14 +654,14 @@ def _render_scene(
 
     try:
         s = load_scene_record(source / SCENE_FILE)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, KeyError):
         return False
     still = _scene_still(source, s.splat.get("renders") or [])
     if still is not None:
         return _copy_scaled(still, out)
     try:
         splats = read_ply(source / SPLAT_FILE).visible()
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, KeyError):
         return False
     width, height = PREVIEW_SIZE
     image = Image.new("RGB", (width, height), GROUND)

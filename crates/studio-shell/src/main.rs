@@ -787,6 +787,23 @@ impl StudioShell {
                     }
                     None => None,
                 };
+                if let Some(n) = step {
+                    if !(1..=MAX_SIM_STEPS).contains(&n) {
+                        return Err(format!("step must be within 1..={MAX_SIM_STEPS}"));
+                    }
+                }
+                // A field that only means something with another is refused
+                // with it, not silently ignored (the flash named nothing).
+                if kind.is_some() && group.is_none() {
+                    return Err("kind needs group".into());
+                }
+                if on.is_some() && flag.is_none() && group.is_none() {
+                    return Err("on needs flag or group".into());
+                }
+                if value.is_some() && actuator.is_none() && joint.is_none() && command.is_none()
+                {
+                    return Err("value needs actuator, joint or command".into());
+                }
                 if let Some(factor) = speed {
                     if !viewport::SPEED_RANGE.contains(&factor) {
                         return Err(format!(
@@ -824,7 +841,7 @@ impl StudioShell {
                 };
                 let follow_choice = match follow.as_ref() {
                     Some(rule) => {
-                        let nworld = model.as_ref().map_or(0, |m| m.nworld);
+                        let nworld = described()?.nworld;
                         if nworld <= 1 {
                             return Err("follow needs a many-worlds scene (walk); this scene \
                                         has one world"
@@ -951,7 +968,7 @@ impl StudioShell {
                     self.viewport.send_run(run);
                 }
                 if let Some(n) = step {
-                    self.viewport.send_step(n.clamp(1, MAX_SIM_STEPS));
+                    self.viewport.send_step(n);
                 }
                 if let Some(key) = key {
                     self.viewport.send_reset(Some(key));
@@ -1185,6 +1202,7 @@ impl StudioShell {
         let tip = name.and_then(|n| db.time_range_for(&n)).map(|r| r.max().as_i64());
         control::Live {
             at_tip: at.is_some() && at == tip,
+            tip,
             recording: Some(db.application_id().to_string()),
             timeline: name.map(|n| n.to_string()),
             seconds: match (typ, at) {

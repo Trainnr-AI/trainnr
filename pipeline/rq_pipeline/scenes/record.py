@@ -9,6 +9,7 @@ Nothing here is invented: a field the capture did not record reads
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -189,11 +190,22 @@ def proxy_from_splat(record: dict[str, Any]) -> bool:
 CAPTURE_LOG_FILE = "capture.log"
 CAPTURE_STAGE_PREFIX = "[capture] "  # the chain's own lines
 CAPTURE_COMMAND_PREFIX = "$ "  # a tool's command line
+CAPTURE_FAILED_WORD = "failed: "  # after the stage prefix: the chain's last word
 
 
 def capture_in_progress(folder: Path) -> bool:
     """A scene folder the chain is still working in: its log without its record."""
     return (folder / CAPTURE_LOG_FILE).is_file() and not (folder / SCENE_FILE).is_file()
+
+
+def capture_failed(folder: Path) -> str | None:
+    """Why a capture in this folder died, when its log's last note says
+    so; None while it runs or when it never wrote one (then it is in
+    progress until the job's own record says otherwise)."""
+    stage = capture_stage(folder)
+    if not stage.startswith(CAPTURE_FAILED_WORD):
+        return None
+    return stage[len(CAPTURE_FAILED_WORD) :]
 
 
 def capture_stage(folder: Path) -> str:
@@ -208,7 +220,9 @@ def capture_stage(folder: Path) -> str:
     for line in reversed(lines.splitlines()):
         if line.startswith(CAPTURE_COMMAND_PREFIX):
             argv = line[len(CAPTURE_COMMAND_PREFIX) :].split()
-            tool = Path(argv[0]).name if argv else "a tool"
+            # the tool's bare name whichever OS wrote the line: either
+            # separator, and `.exe` off
+            tool = Path(re.split(r"[\\/]", argv[0])[-1]).stem if argv else "a tool"
             after = argv[1] if len(argv) > 1 else ""
             if after == "-m" and argv[2:]:  # an interpreter running a module
                 return argv[2].rsplit(".", 1)[-1]

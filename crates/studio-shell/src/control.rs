@@ -195,11 +195,16 @@ pub struct Live {
     pub seconds: Option<f64>,
     /// The cursor on a sequence timeline (a step, a frame, an episode).
     pub sequence: Option<i64>,
-    /// The cursor sits at the recording's newest time: a live stream
-    /// carrying it forward, not a hand on the timeline. Never written to
-    /// the state file; `watch_live` reads it.
+    /// The cursor sits at the recording's newest time. Never written to
+    /// the state file; `watch_live` reads it with `tip`.
     #[serde(skip)]
     pub at_tip: bool,
+    /// The recording's newest time on the cursor's timeline: when it
+    /// advances while the cursor rides it, a live stream is carrying
+    /// the cursor, not a hand; a hand that reaches a tip that did not
+    /// move is a scrub like any other. Never written to the state file.
+    #[serde(skip)]
+    pub tip: Option<i64>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -390,6 +395,9 @@ pub struct Control {
     observed_live: Option<Live>,
     live_moved_at: Option<Instant>,
     commanded_until: Option<Instant>,
+    /// The tip last seen, and whether the cursor's last move rode it.
+    observed_tip: Option<i64>,
+    following: bool,
 }
 
 impl Control {
@@ -403,6 +411,8 @@ impl Control {
             observed_live: None,
             live_moved_at: None,
             commanded_until: None,
+            observed_tip: None,
+            following: false,
         };
         control.forget_answered();
         control
@@ -585,6 +595,9 @@ impl Control {
         let now = Instant::now();
         let moved = self.observed_live.as_ref() != Some(live);
         if moved {
+            // riding the tip: at it, and the tip itself moved since last seen
+            self.following = live.at_tip && live.tip != self.observed_tip;
+            self.observed_tip = live.tip;
             self.observed_live = Some(live.clone());
             self.live_moved_at = Some(now);
             return None;
@@ -596,10 +609,12 @@ impl Control {
         if self.commanded_until.is_some_and(|until| now < until) {
             return None;
         }
-        // A stream that paused between its bursts rested the cursor at its
-        // tip; that is the stream's doing, not the human's (a Brush run
-        // logged "you moved the time cursor" eight times a minute, 2026-09-23).
-        if live.at_tip {
+        // A stream that paused between its bursts rested the cursor at a
+        // tip it had just carried forward; that is the stream's doing, not
+        // the human's (a Brush run logged "you moved the time cursor" eight
+        // times a minute, 2026-09-23). A hand that dragged the cursor to a
+        // tip that stood still is a scrub and stays one.
+        if self.following {
             return None;
         }
         (live.seconds.is_some() || live.sequence.is_some()).then(|| live.clone())
@@ -771,6 +786,7 @@ mod tests {
             seconds: Some(1.5),
             sequence: None,
             at_tip: false,
+            tip: None,
         };
         control.event(Event::time(BY_USER).at(&rested));
         let text = std::fs::read_to_string(root.join(EVENTS_RELATIVE)).unwrap();
@@ -820,6 +836,7 @@ mod tests {
             seconds: Some(s),
             sequence: None,
             at_tip: false,
+            tip: None,
         };
         assert!(control.watch_live(&at(0.0)).is_none(), "first sight");
         assert!(control.watch_live(&at(1.0)).is_none(), "still moving");
@@ -837,16 +854,36 @@ mod tests {
             control.watch_live(&at(2.0)).is_none(),
             "ours, not the human's"
         );
-        // A live stream rests the cursor at its own tip between bursts.
-        let tip = Live {
+        // A live stream rests the cursor at a tip it just carried forward.
+        let riding = Live {
             at_tip: true,
+            tip: Some(3_000_000_000),
             ..at(3.0)
         };
-        control.watch_live(&tip);
+        control.watch_live(&riding);
         control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
         assert!(
-            control.watch_live(&tip).is_none(),
+            control.watch_live(&riding).is_none(),
             "the stream's, not the human's"
+        );
+        // The stream stopped; the human drags the cursor back, then to the
+        // tip that did not move: both are scrubs (our own command's window
+        // from above is over by then).
+        control.commanded_until = None;
+        let back = Live {
+            at_tip: false,
+            tip: Some(3_000_000_000),
+            ..at(1.0)
+        };
+        control.watch_live(&back);
+        control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
+        assert_eq!(control.watch_live(&back), Some(back.clone()), "a scrub back");
+        control.watch_live(&riding);
+        control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
+        assert_eq!(
+            control.watch_live(&riding),
+            Some(riding.clone()),
+            "to a tip that stood still: the human's"
         );
         let _ = std::fs::remove_dir_all(root);
     }

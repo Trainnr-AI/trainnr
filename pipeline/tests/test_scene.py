@@ -223,6 +223,7 @@ class TheCaptureInProgress(unittest.TestCase):
         from rq_pipeline.scenes.record import (  # noqa: PLC0415
             CAPTURE_LOG_FILE,
             SCENE_FILE,
+            capture_failed,
             capture_in_progress,
             capture_stage,
         )
@@ -244,6 +245,11 @@ class TheCaptureInProgress(unittest.TestCase):
                 "$ /v/bin/python -m rq_pipeline.scenes.gsplat_train /d --out /o\n"
             )
             self.assertEqual(capture_stage(folder), "gsplat_train")
+            log.write_text("$ C:\\tools\\colmap.exe mapper --database_path x\n")
+            self.assertEqual(capture_stage(folder), "colmap mapper")
+            log.write_text("[capture] 185 frames\n[capture] failed: Brush exited 1\n")
+            self.assertEqual(capture_failed(folder), "Brush exited 1")
+            self.assertIsNone(capture_failed(Path(tmp) / "nowhere"))
             (folder / SCENE_FILE).write_text("{}")
             self.assertFalse(capture_in_progress(folder))
 

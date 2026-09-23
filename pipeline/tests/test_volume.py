@@ -77,6 +77,22 @@ class TheVolume(unittest.TestCase):
         ground, above = volume.split_by_clearance(flat)
         self.assertEqual((len(ground), len(above)), (500, 0))
 
+    def test_a_far_wall_past_the_margin_is_left_out_and_a_speck_dropped(self) -> None:
+        rng = np.random.default_rng(2)
+        centres = _table(rng)
+        wall = np.column_stack(
+            [np.full(2000, 5.0), rng.uniform(-1, 1, 2000), rng.uniform(0.3, 2.0, 2000)]
+        )
+        speck = np.array([[0.8, 0.8, 1.5]] * volume.MIN_CENTRES)
+        meshes, facts = volume.overhang_components(
+            np.concatenate([centres, wall, speck])
+        )
+        self.assertEqual(
+            facts["components"], 1
+        )  # the table; the wall is past the margin
+        self.assertGreaterEqual(facts["specks_dropped"], 1)
+        self.assertLess(max(v[:, 0].max() for v, _ in meshes), 2.0)
+
     def test_a_floater_alone_in_its_voxel_is_not_a_thing(self) -> None:
         one = np.array([[0.0, 0.0, 1.0]])
         grid, _ = volume.occupancy(one)
@@ -87,6 +103,29 @@ class TheVolume(unittest.TestCase):
 
 @needs_scene
 class TheOverhangsTerrain(unittest.TestCase):
+    def test_a_volume_never_cut_is_refused_not_called_empty(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.scenes import capture, terrain  # noqa: PLC0415
+        from rq_pipeline.scenes.obj import write_obj  # noqa: PLC0415
+        from rq_pipeline.scenes.record import (  # noqa: PLC0415
+            GROUND_FILE,
+            OVERHANG_FILE,
+        )
+
+        centres = _table(np.random.default_rng(3))
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = Path(tmp)
+            ground, _ = volume.split_by_clearance(centres)
+            gv, gf, _ = capture.top_surface_mesh(ground)
+            write_obj(scene / GROUND_FILE, gv, gf)
+            ov, of, _ = volume.overhang_mesh(centres)
+            write_obj(scene / OVERHANG_FILE, ov, of)  # the volume, no parts
+            spec = mujoco.MjSpec()
+            with self.assertRaises(FileNotFoundError) as caught:
+                terrain.overhangs(spec, spec.worldbody, scene, None)
+        self.assertIn("parts", str(caught.exception))
+
     def test_the_stage_carries_the_ground_under_the_parts(self) -> None:
         import mujoco  # noqa: PLC0415
 

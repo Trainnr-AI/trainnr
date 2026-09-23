@@ -44,6 +44,7 @@ import numpy as np
 
 from rq_pipeline.robot.fit_record import code_version
 from rq_pipeline.scenes import gap as gap_audit
+from rq_pipeline.scenes.colmap_model import read_text_model
 from rq_pipeline.scenes.gap import DEFAULT_TOLERANCE_M
 from rq_pipeline.scenes.obj import write_obj
 from rq_pipeline.scenes.proxy import (
@@ -87,21 +88,16 @@ from rq_pipeline.scenes.splatters import (
     DEFAULT_STEPS,
     RENDERS_DIR,
     SPLAT_EXPORT,
+    SPLATTERS,
     Splatter,
     choose_splatter,
 )
-from rq_pipeline.scenes.tooling import (
-    INSTALL_HINTS,  # noqa: F401 - the chain's tool table, reached through here
-    MissingToolError,
-    install_hint,
-    linux_installer,  # noqa: F401
-    tool_version,
-)
+from rq_pipeline.scenes.tooling import MissingToolError, install_hint, tool_version
 from rq_pipeline.scenes.volume import (
     OVERHANG_CLEARANCE_M,
     VOXEL_M,
+    joined,
     overhang_components,
-    overhang_mesh,
     split_by_clearance,
 )
 from rq_pipeline.viz import STUDIO_ADDRESS, studio_listening
@@ -368,31 +364,12 @@ class Poses:
 def read_sparse(sparse: Path) -> Poses:
     """Counts from a COLMAP text model (images.txt, points3D.txt,
     cameras.txt): registered images, sparse points, the camera model."""
-    images = sparse / "images.txt"
-    points = sparse / "points3D.txt"
-    cameras = sparse / "cameras.txt"
-    # two lines per image, the second (its 2D points) empty for an image
-    # with none: count every non-comment line, blank ones included
-    registered = sum(
-        1
-        for line in images.read_text(encoding="utf-8").splitlines()
-        if not line.startswith("#")
-    )
-    n_points = sum(
-        1
-        for line in points.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
-    )
-    model = UNRECORDED
-    for line in cameras.read_text(encoding="utf-8").splitlines():
-        if line.strip() and not line.startswith("#"):
-            model = line.split()[1]
-            break
+    model = read_text_model(sparse)
     return Poses(
-        images_registered=registered // 2,  # two lines per image
+        images_registered=len(model.images),
         images_given=0,
-        points=n_points,
-        camera_model=model,
+        points=int(model.points.shape[0]),
+        camera_model=model.camera_model or UNRECORDED,
     )
 
 
@@ -564,8 +541,12 @@ def train_splat(  # noqa: PLR0913 - the stage's own knobs, each named
     headless, exporting once at the end; into the Studio when one is
     listening (law 0). Skipped when the export is present."""
     export = out / SPLAT_EXPORT
-    if export.is_file():
-        return export
+    # a resume takes the export whichever trainer left it (a scene first
+    # trained by Brush, resumed under `auto` once gsplat is installed)
+    for spec in SPLATTERS.values():
+        earlier = out.parent / spec.folder / SPLAT_EXPORT
+        if earlier.is_file():
+            return earlier
     out.mkdir(parents=True, exist_ok=True)
     argv = tools.splatter.argv(
         tools.trainer, dataset, out, steps=steps, narrate=narrate
@@ -799,29 +780,45 @@ def despike(height: np.ndarray, window: int, tolerance: float) -> int:
     return int(spikes.sum())
 
 
-def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
+def build_proxy(
+    splats: Splats, out_obj: Path
+) -> tuple[dict[str, Any], list[tuple[np.ndarray, np.ndarray]]]:
     """The proxy to an OBJ, in two halves beside it: the ground (the
     visible centres below the clearance, their top on a grid) and the
-    overhangs (the centres above it as an occupancy volume); the proxy
-    is their union. The mesh's facts with the method."""
+    overhangs (the centres above it as an occupancy volume, one mesh per
+    thing, returned for their decomposition); the proxy is their union.
+    The mesh's facts with the method. A centre that is not finite (a
+    diverged gaussian) is dropped and counted; a splat with no ground is
+    refused by name."""
     visible = splats.visible(VISIBLE_OPACITY)
     centres = visible.means.astype(np.float64)
+    finite = np.isfinite(centres).all(axis=1)
+    centres = centres[finite]
     ground, _ = split_by_clearance(centres)
+    if ground.shape[0] == 0:
+        raise ValueError(
+            f"no visible centre below {OVERHANG_CLEARANCE_M} m: the splat has no "
+            "ground to stand on (is the scene aligned?)"
+        )
     g_vertices, g_faces, facts = top_surface_mesh(ground)
-    o_vertices, o_faces, overhang = overhang_mesh(centres)
+    components, overhang = overhang_components(centres)
+    o_vertices, o_faces = joined(components)
     folder = out_obj.parent
     write_obj(folder / GROUND_FILE, g_vertices, g_faces)
     if o_faces.shape[0]:
         write_obj(folder / OVERHANG_FILE, o_vertices, o_faces)
+    else:  # a resume must not keep an earlier run's overhangs
+        (folder / OVERHANG_FILE).unlink(missing_ok=True)
     vertices = np.concatenate([g_vertices, o_vertices], 0)
     faces = np.concatenate([g_faces, o_faces + g_vertices.shape[0]], 0)
     write_obj(out_obj, vertices, faces)
-    return {
+    facts_out = {
         "file": out_obj.name,
         "vertices": int(vertices.shape[0]),
         "faces": int(faces.shape[0]),
         "watertight": False,
         "edge_manifold": True,
+        "centres_not_finite": int((~finite).sum()),
         "ground": {"file": GROUND_FILE, "clearance_m": OVERHANG_CLEARANCE_M},
         "overhang": {"file": OVERHANG_FILE if o_faces.shape[0] else None, **overhang},
         "method": PROXY_METHOD.format(
@@ -834,6 +831,7 @@ def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
         "from": PROXY_FROM_SPLAT.format(opacity=VISIBLE_OPACITY),
         **facts,
     }
+    return facts_out, components
 
 
 # What the record says a proxy came from when no dense reconstruction ran
@@ -960,7 +958,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         ),
         splat={
             "file": SPLAT_FILE,
-            "from": f"{tools.splatter.folder}/{SPLAT_EXPORT}",
+            "from": export.relative_to(out_dir).as_posix(),
             "renders": renders,
             "poses": {
                 "registered": poses.images_registered,
@@ -996,7 +994,7 @@ def _proxy_stage(
     top surface, what stands above it as an occupancy volume, the two
     joined as the proxy the audit and the viewer see - its MJCF, the gap,
     the parts of each, the declared physics."""
-    proxy_facts = proxy_from_splat(aligned, out_dir / PROXY_FILE)
+    proxy_facts, components = build_proxy(aligned, out_dir / PROXY_FILE)
     (out_dir / PROXY_MJCF).write_text(
         proxy_mjcf(PROXY_FILE, friction), encoding="utf-8"
     )
@@ -1004,21 +1002,26 @@ def _proxy_stage(
         measured = gap_audit.measure(aligned, out_dir / PROXY_FILE)
     except ImportError as missing:
         measured = gap_audit.unmeasured(str(missing))
+    # A decomposition that cannot run (no CoACD) or dies (a worker gone,
+    # a mesh CoACD rejects) is recorded, not fatal: the splat, the proxy
+    # and the gap above are the scene; the parts are a stage's need.
     try:
         parts = ensure_parts(out_dir)
         proxy_facts["parts"] = parts.parts
         proxy_facts["parts_file"] = PARTS_FILE
-        if proxy_facts["overhang"]["faces"]:
-            visible = aligned.visible(VISIBLE_OPACITY).means.astype(np.float64)
-            components, _ = overhang_components(visible)
+    except (ImportError, RuntimeError, OSError) as why:
+        proxy_facts["parts"] = UNRECORDED
+        proxy_facts["parts_note"] = str(why)
+    if components:
+        try:
             above = ensure_parts(
                 out_dir, params=OVERHANG_PARAMS, files=OVERHANG_PARTS, meshes=components
             )
             proxy_facts["overhang"]["parts"] = above.parts
             proxy_facts["overhang"]["parts_file"] = OVERHANG_PARTS.record
-    except ImportError as missing:
-        proxy_facts["parts"] = UNRECORDED
-        proxy_facts["parts_note"] = str(missing)
+        except (ImportError, RuntimeError, OSError) as why:
+            proxy_facts["overhang"]["parts"] = UNRECORDED
+            proxy_facts["overhang"]["parts_note"] = str(why)
     physics: list[Physics] = []
     if friction is not None:
         physics.append(

@@ -118,20 +118,38 @@ def read_cameras(path: Path) -> dict[int, Camera]:
         names = CAMERA_MODELS.get(model)
         if names is None:
             raise ValueError(f"camera model {model!r} is not one this reader knows")
+        if len(values) < len(names):
+            raise ValueError(
+                f"camera {cam_id} ({model}) carries {len(values)} parameters, "
+                f"the model has {len(names)}"
+            )
         cameras[int(cam_id)] = Camera(
             id=int(cam_id),
             model=model,
             width=int(width),
             height=int(height),
-            params=dict(zip(names, (float(v) for v in values), strict=False)),
+            params=dict(
+                zip(names, (float(v) for v in values[: len(names)]), strict=True)
+            ),
         )
     return cameras
 
 
 def read_images(path: Path) -> tuple[Image, ...]:
-    """Every other row: the pose line (the 2D-point line between is skipped)."""
+    """Two lines per image, the pose line then its 2D points - a line COLMAP
+    leaves EMPTY for an image with none, so the pairs are taken from the
+    raw lines (comments dropped, blanks kept); skipping blank lines shifted
+    every image after the first empty one by a line (2026-09-24)."""
+    lines = [
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("#")
+    ]
     out: list[Image] = []
-    for row in _rows(path)[::2]:
+    for pose in lines[::2]:
+        row = pose.split()
+        if not row:
+            continue
         image_id, qw, qx, qy, qz, tx, ty, tz, cam_id, name = row[:10]
         out.append(
             Image(

@@ -24,6 +24,9 @@ from rq_pipeline.scenes.capture import (  # noqa: E402
     capture_scene,
 )
 from rq_pipeline.scenes.record import (  # noqa: E402
+    CAPTURE_FAILED_WORD,
+    CAPTURE_LOG_FILE,
+    CAPTURE_STAGE_PREFIX,
     UNRECORDED,
     load_scene_record,
 )
@@ -76,6 +79,12 @@ def main() -> None:
             lighting=args.lighting,
         )
     except (MissingToolError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        # the scene's own log carries the last word, so the index shows a
+        # dead capture as failed and not as work in progress
+        log = project.scenes / args.name / CAPTURE_LOG_FILE
+        if log.parent.is_dir():
+            with log.open("a", encoding="utf-8") as out:
+                out.write(f"{CAPTURE_STAGE_PREFIX}{CAPTURE_FAILED_WORD}{exc}\n")
         raise SystemExit(str(exc)) from exc
     record = load_scene_record(record_path)
     g = record.gap

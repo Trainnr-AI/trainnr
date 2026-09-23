@@ -12,7 +12,7 @@ from unittest import mock
 
 import numpy as np
 
-from rq_pipeline.scenes import capture
+from rq_pipeline.scenes import capture, tooling
 from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record
 from rq_pipeline.scenes.splat import Splats, euler_xyz_matrix, write_ply
 from rq_pipeline.scenes.splatters import SPLATTERS
@@ -137,24 +137,24 @@ class TheTools(unittest.TestCase):
     def test_the_refusal_names_this_machines_install_line(self) -> None:
         # never another machine's package manager (docs/78 §8.6)
         self.assertEqual(
-            capture.install_hint("colmap", "Darwin"), "brew install colmap"
+            tooling.install_hint("colmap", "Darwin"), "brew install colmap"
         )
         self.assertEqual(
-            capture.install_hint("colmap", "Linux"), "sudo apt install colmap"
+            tooling.install_hint("colmap", "Linux"), "sudo apt install colmap"
         )
-        self.assertIn("tools/install-brush.py", capture.install_hint("brush", "Linux"))
+        self.assertIn("tools/install-brush.py", tooling.install_hint("brush", "Linux"))
         self.assertIn(
-            "tools/install-brush.py", capture.install_hint("brush", "Windows")
+            "tools/install-brush.py", tooling.install_hint("brush", "Windows")
         )
         self.assertEqual(
-            capture.install_hint("ffprobe", "Linux"), "sudo apt install ffmpeg"
+            tooling.install_hint("ffprobe", "Linux"), "sudo apt install ffmpeg"
         )
         with (
             mock.patch("shutil.which", return_value=None),
             mock.patch("platform.system", return_value="Linux"),
             self.assertRaises(capture.MissingToolError) as caught,
         ):
-            capture.Tools.find(video=True)
+            capture.Tools.find(video=True, splatter="brush")
         self.assertIn("colmap (sudo apt install colmap)", str(caught.exception))
         self.assertNotIn("brew", str(caught.exception))
 
@@ -181,7 +181,7 @@ class TheAlignment(unittest.TestCase):
         splats, _, _ = _tilted_room()
         aligned, _, _ = capture.align(splats, scale=None)
         with tempfile.TemporaryDirectory() as tmp:
-            facts = capture.proxy_from_splat(aligned, Path(tmp) / "proxy.obj")
+            facts, _ = capture.build_proxy(aligned, Path(tmp) / "proxy.obj")
             self.assertGreater(facts["faces"], 100)
             self.assertIn("top surface", facts["method"])
             self.assertGreater(facts["cells_seen"], 1000)

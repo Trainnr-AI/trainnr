@@ -201,10 +201,16 @@ def decompose_meshes(
     knobs = asdict(params)
     if len(meshes) <= 1:
         return [h for mesh in meshes for h in _hulls_of(mesh, knobs)]
+    import multiprocessing  # noqa: PLC0415
     from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
 
-    count = workers or max(1, (os.cpu_count() or 2) // 2)
-    with ProcessPoolExecutor(max_workers=count) as pool:
+    # spawned, not forked: the parent holds Rerun's and Open3D's threads
+    # by now, and a fork of a threaded parent is the deadlock Python 3.12
+    # warns about (docs/32 chose spawn for its workers too)
+    count = min(len(meshes), workers or max(1, (os.cpu_count() or 2) // 2))
+    with ProcessPoolExecutor(
+        max_workers=count, mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
         results = list(pool.map(_hulls_of, meshes, [knobs] * len(meshes)))
     return [h for hulls in results for h in hulls]
 

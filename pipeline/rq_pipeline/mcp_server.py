@@ -55,6 +55,7 @@ from rq_pipeline.robot.actuator_library import (
     list_models,
     load_actuator,
 )
+from rq_pipeline.scenes.splatters import DEFAULT_SPLATTER
 from rq_pipeline.scenes.terrain import DEFAULT_TERRAIN
 from rq_pipeline.tasks.registry import resolve, tasks
 
@@ -1754,7 +1755,7 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
     scale: float | None = None,
     floor_friction: list[float] | None = None,
     brush: str | None = None,
-    splatter: str = "auto",
+    splatter: str = DEFAULT_SPLATTER,
 ) -> JobHandle | Refusal:
     """Capture a scene from a phone video (or a folder of still frames):
     frames by ffmpeg, poses by COLMAP (one camera, sequential matching

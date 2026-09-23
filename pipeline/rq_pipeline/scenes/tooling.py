@@ -46,6 +46,8 @@ LINUX_INSTALLERS: dict[str, str] = {
     "suse": "sudo zypper install",
 }
 OS_RELEASE = Path("/etc/os-release")
+# The line for a distro the table does not know: neutral, not another distro's.
+NEUTRAL_INSTALLER = "your distribution's package manager: install"
 
 
 def linux_installer(os_release: Path = OS_RELEASE) -> str:
@@ -55,7 +57,7 @@ def linux_installer(os_release: Path = OS_RELEASE) -> str:
     try:
         text = os_release.read_text(encoding="utf-8")
     except OSError:
-        return "your distribution's package manager: install"
+        return NEUTRAL_INSTALLER
     ids: list[str] = []
     for line in text.splitlines():
         key, _, value = line.partition("=")
@@ -64,7 +66,7 @@ def linux_installer(os_release: Path = OS_RELEASE) -> str:
     for name in ids:
         if name in LINUX_INSTALLERS:
             return LINUX_INSTALLERS[name]
-    return "your distribution's package manager: install"
+    return NEUTRAL_INSTALLER
 
 
 def install_hint(tool: str, system: str | None = None) -> str:

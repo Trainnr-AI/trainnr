@@ -397,8 +397,9 @@ The scripted experts live in `rq_pipeline/tasks/experts.py`; a family
 without one is refused by name, since acceptance is the expert's
 verdict.
 
-**Environment capture stays designed, not built, and the reason is
-recorded.** This repo re-checked the field on 2026-08-25 and amended its
+**Environment capture was designed before it was built, and the reason is
+recorded** (built 2026-09-22 onward: docs/78, the scene loop; the paragraph
+below is the verdict that shaped it). This repo re-checked the field on 2026-08-25 and amended its
 own verdict: Gaussian splats still do not carry contact, every shipped
 system keeps a mesh or particle proxy as the physics carrier, and one
 2026 result measured 65 to 80 percent geometric degradation when
@@ -411,8 +412,10 @@ and refuses to pretend the capture is solved.
 
 ## 8. Deploy, and the gate that needs no robot
 
-Nothing in this repo currently makes a policy runnable on a robot. The
-shape to build is well established by prior art (docs/e2e-research/65):
+Written before the deployment stage existed (built 2026-09-11, A6 in §2.1;
+the MuJoCo gate 20/20 and Unitree's DDS gate 20/20 by 2026-09-13, docs/33).
+The shape it named is the shape that was built, from prior art
+(docs/e2e-research/65):
 a manifest that travels *with* the policy carrying the joint-order map,
 the gains, the action scale and offset, and the ordered observation list
 whose order in the file is the concatenation order — with normalization

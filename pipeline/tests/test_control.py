@@ -12,6 +12,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from rq_pipeline.project import create_project
 from rq_pipeline.project.control import (
@@ -126,6 +127,39 @@ class State(unittest.TestCase):
             self.assertTrue(current["alive"])
             self.assertEqual(current["section"], "robots")
             self.assertLess(current["heartbeat_age_s"], 1.0)
+
+    def test_a_rebuilt_binary_is_named_and_a_current_or_vanished_one_is_not(
+        self,
+    ) -> None:
+        from rq_pipeline.project.control import binary_rebuilt_since  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "studio-shell"
+            exe.write_bytes(b"")
+            started = exe.stat().st_mtime + 10.0  # launched after the build
+
+            class Proc:
+                def __init__(self, _pid: int) -> None:
+                    pass
+
+                def create_time(self) -> float:
+                    return started
+
+                def exe(self) -> str:
+                    return str(exe)
+
+            fake = mock.MagicMock(
+                Process=Proc, NoSuchProcess=KeyError, AccessDenied=KeyError
+            )
+            with mock.patch("rq_pipeline.project.control._psutil", return_value=fake):
+                self.assertIsNone(binary_rebuilt_since(1))
+                os.utime(exe, (started + 5, started + 5))  # rebuilt after launch
+                word = binary_rebuilt_since(1)
+                self.assertIsNotNone(word)
+                self.assertIn("rebuilt", word or "")
+                self.assertIn("launch_studio", word or "")
+                exe.unlink()
+                self.assertIsNone(binary_rebuilt_since(1))
 
     def test_events_read_after_a_time_newest_last(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
