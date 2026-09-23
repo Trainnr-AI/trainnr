@@ -711,9 +711,11 @@ def stage_deployment(  # noqa: PLR0913, PLR0917 - the stage's own knobs, each na
     §4 E2): the trained scene's plane floor is replaced by the scene's
     collision proxy as `terrain` - `heightfield` (the proxy's top
     surface on a 2 cm grid, the field's own representation for legged
-    terrain; undersides absent) or `hulls` (CoACD convex parts; MuJoCo
+    terrain; undersides absent), `hulls` (CoACD convex parts; MuJoCo
     collides a mesh as its hull, so a course as one mesh would be a box)
-    - each with its gap against the proxy measured and recorded, with the
+    or `overhangs` (the ground below the clearance as a heightfield, what
+    stands above it as convex parts of its occupancy volume: a table the
+    robot walks under) - each with its gap measured and recorded, with the
     scene's declared friction; the robot starts one metre before the
     scene's first waypoint along its course unless a start is given; a
     head camera and a course camera are added for the splat renderer.

@@ -1,5 +1,7 @@
-"""The volume door's accounting, pure: prefixes, sizes, the delete
-plan, and the credentials reader that reads ONLY what it is told."""
+"""What stands above the ground as an occupancy volume: closed around
+every occupied component, a table top with air beneath it, joined with
+the ground's top surface into the proxy, and staged as a heightfield
+under convex parts so a walker goes under the table."""
 
 from __future__ import annotations
 
@@ -7,68 +9,148 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rq_pipeline.cloud.volume import (
-    CREDENTIAL_NAMES,
-    Entry,
-    Usage,
-    human,
-    load_credentials,
-    prefix_of,
-    read_env_file,
-    total,
-    under,
-    usage_by_prefix,
-)
+import numpy as np
 
-ENTRIES = [
-    Entry("robotiq/runs/campaign-1/demos/episode_0000/frames/000000.jpg", 30_000),
-    Entry("robotiq/runs/campaign-1/dataset/data/chunk-000/file.parquet", 800_000),
-    Entry("robotiq/runs/paired-study/checkpoints/model.safetensors", 600_000),
-    Entry("robotiq/pipeline/.venv-train/lib/torch.so", 5_000_000),
-    Entry("robotiq/campaign2.log", 700),
-]
+from rq_pipeline.scenes import volume
+from tests._extras import needs_scene
+
+FACES_PER_EDGE = 2  # a closed surface: every edge borders two triangles
+BESIDE_LEG_X = (0.1, 0.4)  # under the table top, clear of its leg
+BESIDE_LEG_Y = 0.3
 
 
-class TheAccounting(unittest.TestCase):
-    def test_prefixes_by_depth(self) -> None:
-        self.assertEqual(prefix_of("robotiq/runs/x/y", 1), "robotiq/")
-        self.assertEqual(prefix_of("robotiq/runs/x/y", 2), "robotiq/runs/")
-        self.assertEqual(prefix_of("robotiq/campaign2.log", 2), "robotiq/campaign2.log")
+def _table(rng: np.random.Generator, n: int = 30000) -> np.ndarray:
+    """Centres of a floor, a table top 0.7 m up, and one leg under it."""
+    floor = np.column_stack(
+        [rng.uniform(-1, 1, n), rng.uniform(-1, 1, n), rng.normal(0, 0.004, n)]
+    )
+    k = n // 3
+    top = np.column_stack(
+        [
+            rng.uniform(-0.5, 0.5, k),
+            rng.uniform(-0.5, 0.5, k),
+            rng.uniform(0.70, 0.74, k),
+        ]
+    )
+    m = n // 10
+    leg = np.column_stack(
+        [
+            rng.uniform(-0.03, 0.03, m),
+            rng.uniform(-0.03, 0.03, m),
+            rng.uniform(0.0, 0.70, m),
+        ]
+    )
+    return np.concatenate([floor, top, leg])
 
-    def test_usage_groups_largest_first(self) -> None:
-        by_top = usage_by_prefix(ENTRIES, 3)
-        self.assertEqual(next(iter(by_top)), "robotiq/pipeline/.venv-train/")
-        self.assertEqual(by_top["robotiq/runs/campaign-1/"], Usage(830_000, 2))
-        self.assertEqual(total(ENTRIES), Usage(6_430_700, 5))
 
-    def test_a_delete_takes_the_prefix_and_nothing_wider(self) -> None:
-        doomed = under(ENTRIES, "robotiq/runs/campaign-1/demos/")
-        self.assertEqual([e.key for e in doomed], [ENTRIES[0].key])
-        self.assertEqual(under(ENTRIES, "robotiq/runs/campaign-1"), ENTRIES[:2])
+class TheVolume(unittest.TestCase):
+    def test_the_voxel_surface_is_closed_and_leaves_the_air_under_the_table(
+        self,
+    ) -> None:
+        centres = _table(np.random.default_rng(0))
+        vertices, faces, facts = volume.overhang_mesh(centres)
+        self.assertGreater(facts["voxels"], 100)
+        # closed: every edge shared by exactly two triangles
+        edges = np.sort(
+            np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]),
+            axis=1,
+        )
+        _, counts = np.unique(edges, axis=0, return_counts=True)
+        self.assertTrue((counts == FACES_PER_EDGE).all())
+        # the leg reaches down to the clearance, the top spans its slab
+        self.assertAlmostEqual(
+            vertices[:, 2].min(), volume.OVERHANG_CLEARANCE_M, delta=volume.VOXEL_M
+        )
+        self.assertGreater(vertices[:, 2].max(), 0.7)
+        # and beside the leg, under the top, there is air: no vertex below the top
+        beside = vertices[
+            (np.abs(vertices[:, 0]) > BESIDE_LEG_X[0])
+            & (np.abs(vertices[:, 0]) < BESIDE_LEG_X[1])
+            & (np.abs(vertices[:, 1]) < BESIDE_LEG_Y)
+        ]
+        self.assertGreater(beside[:, 2].min(), 0.6)
 
-    def test_human_sizes(self) -> None:
-        self.assertEqual(human(512), "512 B")
-        self.assertEqual(human(1536), "1.5 KB")
-        self.assertEqual(human(35 * 1024**3), "35.0 GB")
+    def test_nothing_above_the_ground_is_a_fact_not_a_failure(self) -> None:
+        flat = np.column_stack([np.linspace(0, 1, 500), np.zeros(500), np.zeros(500)])
+        _, faces, facts = volume.overhang_mesh(flat)
+        self.assertEqual((facts["voxels"], facts["faces"], faces.shape[0]), (0, 0, 0))
+        ground, above = volume.split_by_clearance(flat)
+        self.assertEqual((len(ground), len(above)), (500, 0))
+
+    def test_a_floater_alone_in_its_voxel_is_not_a_thing(self) -> None:
+        one = np.array([[0.0, 0.0, 1.0]])
+        grid, _ = volume.occupancy(one)
+        self.assertFalse(grid.any())
+        grid, _ = volume.occupancy(np.repeat(one, volume.MIN_CENTRES, 0))
+        self.assertTrue(grid.any())
 
 
-class TheCredentialsReader(unittest.TestCase):
-    def test_reads_only_the_named_keys(self) -> None:
+@needs_scene
+class TheOverhangsTerrain(unittest.TestCase):
+    def test_the_stage_carries_the_ground_under_the_parts(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.scenes import capture, terrain  # noqa: PLC0415
+        from rq_pipeline.scenes.obj import write_obj  # noqa: PLC0415
+        from rq_pipeline.scenes.proxy import (  # noqa: PLC0415
+            OVERHANG_PARTS,
+            ensure_parts,
+        )
+        from rq_pipeline.scenes.record import (  # noqa: PLC0415
+            GROUND_FILE,
+            OVERHANG_FILE,
+            PROXY_FILE,
+        )
+
+        centres = _table(np.random.default_rng(1))
         with tempfile.TemporaryDirectory() as tmp:
-            env = Path(tmp) / ".env"
-            env.write_text(
-                "# comment\nRUNPOD_API_KEY=never-me\nexport AWS_ACCESS_KEY_ID='ak'\n"
-                'AWS_SECRET_ACCESS_KEY="sk"\nMALFORMED\n'
+            scene = Path(tmp)
+            ground, _ = volume.split_by_clearance(centres)
+            gv, gf, _ = capture.top_surface_mesh(ground)
+            write_obj(scene / GROUND_FILE, gv, gf)
+            ov, of, _ = volume.overhang_mesh(centres)
+            write_obj(scene / OVERHANG_FILE, ov, of)
+            write_obj(
+                scene / PROXY_FILE,
+                np.concatenate([gv, ov]),
+                np.concatenate([gf, of + len(gv)]),
             )
-            self.assertEqual(
-                read_env_file(env, CREDENTIAL_NAMES),
-                {"AWS_ACCESS_KEY_ID": "ak", "AWS_SECRET_ACCESS_KEY": "sk"},
+            parts = ensure_parts(scene, files=OVERHANG_PARTS)
+            self.assertGreater(parts.parts, 0)
+            spec = mujoco.MjSpec()
+            facts = terrain.overhangs(spec, spec.worldbody, scene, None)
+            model = spec.compile()
+            self.assertEqual(facts.kind, terrain.OVERHANGS)
+            self.assertEqual(facts.geoms, 1 + parts.parts)
+            data = mujoco.MjData(model)
+            mujoco.mj_forward(model, data)
+            group = np.ones(6, dtype=np.uint8)
+            gid = np.zeros(1, dtype=np.int32)
+            # under the table a ray down from the clearance reaches the floor
+            d = mujoco.mj_ray(
+                model,
+                data,
+                np.array([0.3, 0.0, 0.2]),
+                np.array([0, 0, -1.0]),
+                group,
+                1,
+                -1,
+                gid,
             )
-            target: dict[str, str] = {"AWS_ACCESS_KEY_ID": "already"}
-            load_credentials(env, target)
-            self.assertEqual(target["AWS_ACCESS_KEY_ID"], "already")  # never overrides
-            self.assertEqual(target["AWS_SECRET_ACCESS_KEY"], "sk")
-            self.assertNotIn("RUNPOD_API_KEY", target)
+            self.assertLess(abs(0.2 - d), 0.06)
+            # and from above, the table top comes first
+            d = mujoco.mj_ray(
+                model,
+                data,
+                np.array([0.3, 0.0, 2.0]),
+                np.array([0, 0, -1.0]),
+                group,
+                1,
+                -1,
+                gid,
+            )
+            self.assertGreater(2.0 - d, 0.6)
+            self.assertTrue((scene / terrain.grid_file(GROUND_FILE)).is_file())
 
 
 if __name__ == "__main__":

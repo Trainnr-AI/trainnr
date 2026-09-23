@@ -22,6 +22,11 @@ SCENE_FILE = "scene.json"
 SCENE_SCHEMA = "trainnr-scene/1"
 SPLAT_FILE = "splat.ply"  # the scene in the world frame, 3DGS PLY
 PROXY_FILE = "proxy.obj"  # the collision proxy in the world frame
+# The proxy's two halves (`scenes.volume`): the ground the walker stands
+# on (a top surface below the clearance) and what stands above it (an
+# occupancy volume: a table top with air beneath, a wall, a bush).
+GROUND_FILE = "ground.obj"
+OVERHANG_FILE = "overhang.obj"
 PROXY_MJCF = "proxy.xml"  # the proxy as MuJoCo assets and geoms, included by a task
 UNRECORDED = "unrecorded"
 

@@ -658,7 +658,7 @@ class TheHeightfield(unittest.TestCase):
     def test_an_unknown_terrain_is_refused_by_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "no terrain 'sand'"):
             terrain.terrain_builder("sand")
-        self.assertEqual(terrain.terrain_names(), ("heightfield", "hulls"))
+        self.assertEqual(terrain.terrain_names(), ("heightfield", "hulls", "overhangs"))
 
 
 class _StandingRuntime:

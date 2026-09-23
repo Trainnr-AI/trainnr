@@ -46,7 +46,12 @@ from rq_pipeline.robot.fit_record import code_version
 from rq_pipeline.scenes import gap as gap_audit
 from rq_pipeline.scenes.gap import DEFAULT_TOLERANCE_M
 from rq_pipeline.scenes.obj import write_obj
-from rq_pipeline.scenes.proxy import PARTS_FILE, ensure_parts
+from rq_pipeline.scenes.proxy import (
+    OVERHANG_PARAMS,
+    OVERHANG_PARTS,
+    PARTS_FILE,
+    ensure_parts,
+)
 from rq_pipeline.scenes.record import (
     CAPTURE_COMMAND_PREFIX,
     CAPTURE_LOG_FILE,
@@ -54,6 +59,8 @@ from rq_pipeline.scenes.record import (
     DECLARED,
     DECLARED_FRICTION_SPAN,
     FLOOR_FRICTION,
+    GROUND_FILE,
+    OVERHANG_FILE,
     PROXY_FILE,
     PROXY_FROM_SPLAT,
     PROXY_MJCF,
@@ -89,6 +96,13 @@ from rq_pipeline.scenes.tooling import (
     install_hint,
     linux_installer,  # noqa: F401
     tool_version,
+)
+from rq_pipeline.scenes.volume import (
+    OVERHANG_CLEARANCE_M,
+    VOXEL_M,
+    overhang_components,
+    overhang_mesh,
+    split_by_clearance,
 )
 from rq_pipeline.viz import STUDIO_ADDRESS, studio_listening
 
@@ -135,15 +149,17 @@ ALIGNMENT_SOURCE = (
     "normal to +z, most of the scene above it, its centroid at the origin"
 )
 PROXY_METHOD = (
-    "the visible gaussian centres' top surface on a {cell} m grid (each cell the "
-    "{percentile:g}th percentile of its centres, then the median of its "
-    "{window}x{window} neighbours, small holes filled from their neighbours); "
-    "the surface the splat itself implies from "
-    "above, not a dense reconstruction: undersides absent"
+    "below {clearance} m, the visible gaussian centres' top surface on a {cell} m "
+    "grid (each cell the {percentile:g}th percentile of its centres, then the "
+    "median of its {window}x{window} neighbours, small holes filled from their "
+    "neighbours): the ground; at or above it, the centres as an occupancy volume "
+    "on {voxel} m voxels, the exposed faces of the occupied ones: what stands, "
+    "with air beneath a table top; not a dense reconstruction"
 )
 CAPTURE_NOTES = (
-    "the proxy is the visible surface itself (its top on a grid): the gap "
-    "measures its fidelity to the splat, not to the world",
+    "the proxy is the visible surface itself (the ground's top on a grid, what "
+    "stands above it as voxels): the gap measures its fidelity to the splat, "
+    "not to the world",
     "no dense reconstruction: COLMAP's patch-match needs CUDA and the 2DGS chain "
     "waits on the box (docs/78 §3)",
     "the colour is the zeroth harmonic; the higher harmonics stay in the file",
@@ -784,10 +800,21 @@ def despike(height: np.ndarray, window: int, tolerance: float) -> int:
 
 
 def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
-    """The visible surface's top on a grid, to an OBJ; the mesh's facts
-    with the method."""
+    """The proxy to an OBJ, in two halves beside it: the ground (the
+    visible centres below the clearance, their top on a grid) and the
+    overhangs (the centres above it as an occupancy volume); the proxy
+    is their union. The mesh's facts with the method."""
     visible = splats.visible(VISIBLE_OPACITY)
-    vertices, faces, facts = top_surface_mesh(visible.means.astype(np.float64))
+    centres = visible.means.astype(np.float64)
+    ground, _ = split_by_clearance(centres)
+    g_vertices, g_faces, facts = top_surface_mesh(ground)
+    o_vertices, o_faces, overhang = overhang_mesh(centres)
+    folder = out_obj.parent
+    write_obj(folder / GROUND_FILE, g_vertices, g_faces)
+    if o_faces.shape[0]:
+        write_obj(folder / OVERHANG_FILE, o_vertices, o_faces)
+    vertices = np.concatenate([g_vertices, o_vertices], 0)
+    faces = np.concatenate([g_faces, o_faces + g_vertices.shape[0]], 0)
     write_obj(out_obj, vertices, faces)
     return {
         "file": out_obj.name,
@@ -795,11 +822,14 @@ def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
         "faces": int(faces.shape[0]),
         "watertight": False,
         "edge_manifold": True,
+        "ground": {"file": GROUND_FILE, "clearance_m": OVERHANG_CLEARANCE_M},
+        "overhang": {"file": OVERHANG_FILE if o_faces.shape[0] else None, **overhang},
         "method": PROXY_METHOD.format(
+            clearance=OVERHANG_CLEARANCE_M,
             cell=PROXY_CELL_M,
             percentile=PROXY_CELL_PERCENTILE,
-            spike=PROXY_SPIKE_M,
             window=PROXY_SPIKE_WINDOW,
+            voxel=VOXEL_M,
         ),
         "from": PROXY_FROM_SPLAT.format(opacity=VISIBLE_OPACITY),
         **facts,
@@ -962,8 +992,10 @@ def _proxy_stage(
     friction: list[float] | None,
     friction_span: float,
 ) -> tuple[dict[str, Any], gap_audit.Gap, list[Physics]]:
-    """The proxy from the splat, its MJCF, the gap, the parts, the
-    declared physics."""
+    """The proxy from the splat - the ground below the clearance as a
+    top surface, what stands above it as an occupancy volume, the two
+    joined as the proxy the audit and the viewer see - its MJCF, the gap,
+    the parts of each, the declared physics."""
     proxy_facts = proxy_from_splat(aligned, out_dir / PROXY_FILE)
     (out_dir / PROXY_MJCF).write_text(
         proxy_mjcf(PROXY_FILE, friction), encoding="utf-8"
@@ -976,6 +1008,14 @@ def _proxy_stage(
         parts = ensure_parts(out_dir)
         proxy_facts["parts"] = parts.parts
         proxy_facts["parts_file"] = PARTS_FILE
+        if proxy_facts["overhang"]["faces"]:
+            visible = aligned.visible(VISIBLE_OPACITY).means.astype(np.float64)
+            components, _ = overhang_components(visible)
+            above = ensure_parts(
+                out_dir, params=OVERHANG_PARAMS, files=OVERHANG_PARTS, meshes=components
+            )
+            proxy_facts["overhang"]["parts"] = above.parts
+            proxy_facts["overhang"]["parts_file"] = OVERHANG_PARTS.record
     except ImportError as missing:
         proxy_facts["parts"] = UNRECORDED
         proxy_facts["parts_note"] = str(missing)

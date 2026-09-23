@@ -805,6 +805,50 @@ into whatever stands near its start, and its error ratio says
 recording for the deployment, so a second gate under the same runtime
 no longer streams unseen behind the first.
 
+## 8.10 Under the table: the proxy splits at a clearance, and where the blind walker stops (2026-09-23, the box)
+
+"Is it possible for the robot to understand the gap beneath the table
+top and walk from within it?" The top-surface proxy roofed the table.
+The proxy is two things now (`scenes/volume.py`, `terrain.OVERHANGS`):
+below a clearance of 0.25 m the ground the walker stands on, the
+top-surface on its grid as before; at or above it, what stands - an
+occupancy volume of the visible centres on 5 cm voxels, meshed as the
+exposed faces of the occupied voxels, one closed surface per connected
+thing (specks under 64 voxels dropped, 7,064 of the garden's 7,142
+components), each thing decomposed into convex parts by CoACD on its
+own. The two are joined as the proxy the audit and the viewer see; a
+stage on `overhangs` carries the ground as a heightfield under the
+parts as mesh geoms. A table then has a top at 74 cm, legs, and air
+between: rays down under the top reach the ground, a ray along the
+course at 35 cm travels five metres.
+
+Three things were learned on the way, each by a measurement:
+
+- **One mesh, one sample budget.** Decomposed as one mesh, the whole
+  garden's overhangs left CoACD's two thousand samples too sparse to
+  see the space under the table; it merged top, legs and centrepiece
+  into one hull from 16 cm up (the ray probe: a hull 1.8 m by 1.8 m by
+  1.3 m at the table's footprint). Per component, the table alone gets
+  the budget and its underside stays open (hulls to proxy p95 from 30
+  cm to 11.5 cm).
+- **A component a minute.** CoACD holds one core; 78 components in
+  series were an hour. They run across a process pool now (twelve
+  workers on the box's 24 cores): eight minutes.
+- **Where the walker stops.** With the top open and a course down the
+  line farthest from every leg, `go2-c2-under-between-legs` reaches the
+  table's mouth in four of four trials and gets no farther: the base's
+  cross of beams, 5 to 10 cm in the ground surface (the photo's), and
+  in the last trial it falls trying. The plane-trained walker has no
+  step-over in it; a course closer to a leg caught its shoulder first.
+  The proxy is right; the policy is the limit.
+
+What the second part takes, in order: a walker that lifts its feet -
+the rough-terrain actor with its height scan (`ACTOR_ROUGH`) trained on
+stepping terrain, which needs the raycast observation source in the
+plain runtime so the gate can judge it; then a walker that sees the
+table - the head camera in the actor (E2) trained on scenes with things
+to go under and a reward for the passage. Neither is a proxy change.
+
 ## 9. How a scene's physics gets certified for a task
 
 Assembled from what exists (docs/e2e-research/76 §7), every step but

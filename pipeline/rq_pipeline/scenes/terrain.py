@@ -34,9 +34,10 @@ from rq_pipeline.scenes.gap import (
     open3d,
 )
 from rq_pipeline.scenes.obj import read_obj
-from rq_pipeline.scenes.proxy import load_decomposition
+from rq_pipeline.scenes.proxy import OVERHANG_PARTS, load_decomposition
 from rq_pipeline.scenes.record import (
     COLLISION_GROUP,
+    GROUND_FILE,
     PROXY_FILE,
     PROXY_RGBA,
     friction_triple,
@@ -44,6 +45,7 @@ from rq_pipeline.scenes.record import (
 
 HEIGHTFIELD = "heightfield"
 HULLS = "hulls"
+OVERHANGS = "overhangs"
 DEFAULT_TERRAIN = HEIGHTFIELD
 PART_MESH = "scene_part_{index:03d}"
 HFIELD_NAME = "scene_heightfield"
@@ -55,6 +57,11 @@ HFIELD_BASE_M = 0.1
 # sample must be to the hit to count as the top surface.
 RAY_FROM_M = 50.0
 TOP_TOLERANCE_M = 0.001
+OVERHANG_MESH = "overhang-{index:03d}"
+NO_GROUND = (
+    "scene {name} carries no ground surface: it was captured before the proxy "
+    "split at the clearance (re-capture, or stage it on the {default} terrain)"
+)
 NO_PARTS = (
     "scene {name} carries no convex parts: import it where CoACD is installed, "
     "or stage it on the {default} terrain"
@@ -263,14 +270,24 @@ def heightfield_gap(
 GRID_FILE = ".heightfield.npz"
 
 
-def proxy_hash(scene_dir: Path) -> str:
-    return hashlib.sha256((Path(scene_dir) / PROXY_FILE).read_bytes()).hexdigest()[
+def proxy_hash(scene_dir: Path, source: str = PROXY_FILE) -> str:
+    return hashlib.sha256((Path(scene_dir) / source).read_bytes()).hexdigest()[
         :STAMP_LENGTH
     ]
 
 
-def write_grid(scene_dir: Path, grid: Grid, filled: float, proxy: str) -> Path:
-    path = Path(scene_dir) / GRID_FILE
+def grid_file(source: str = PROXY_FILE) -> str:
+    """The cache's name for the surface it samples: the proxy's is the
+    one the training stage reads (`GRID_FILE`), the ground's beside it."""
+    return (
+        GRID_FILE if source == PROXY_FILE else f".heightfield-{Path(source).stem}.npz"
+    )
+
+
+def write_grid(
+    scene_dir: Path, grid: Grid, filled: float, proxy: str, source: str = PROXY_FILE
+) -> Path:
+    path = Path(scene_dir) / grid_file(source)
     np.savez(
         path,
         heights=grid.heights.astype(np.float32),
@@ -283,10 +300,12 @@ def write_grid(scene_dir: Path, grid: Grid, filled: float, proxy: str) -> Path:
     return path
 
 
-def read_grid(scene_dir: Path) -> tuple[Grid, float, str] | None:
+def read_grid(
+    scene_dir: Path, source: str = PROXY_FILE
+) -> tuple[Grid, float, str] | None:
     """The saved grid, its filled fraction and the proxy hash it was
     sampled from; None when the scene has none yet."""
-    path = Path(scene_dir) / GRID_FILE
+    path = Path(scene_dir) / grid_file(source)
     if not path.is_file():
         return None
     with np.load(path) as f:
@@ -299,17 +318,17 @@ def read_grid(scene_dir: Path) -> tuple[Grid, float, str] | None:
         return grid, float(f["filled"]), str(f["proxy"])
 
 
-def ensure_grid(scene_dir: Path) -> tuple[Grid, float]:
-    """The scene's grid: read when saved from this proxy, else sampled
-    (Open3D) and saved."""
+def ensure_grid(scene_dir: Path, source: str = PROXY_FILE) -> tuple[Grid, float]:
+    """The scene's grid of `source` (the proxy, or the ground half of
+    it): read when saved from this mesh, else sampled (Open3D) and saved."""
     scene_dir = Path(scene_dir)
-    proxy = proxy_hash(scene_dir)
-    saved = read_grid(scene_dir)
+    proxy = proxy_hash(scene_dir, source)
+    saved = read_grid(scene_dir, source)
     if saved is not None and saved[2] == proxy:
         return saved[0], saved[1]
-    vertices, faces = read_obj(scene_dir / PROXY_FILE)
+    vertices, faces = read_obj(scene_dir / source)
     grid, filled = sample_grid(vertices, faces)
-    write_grid(scene_dir, grid, filled, proxy)
+    write_grid(scene_dir, grid, filled, proxy, source)
     return grid, filled
 
 
@@ -346,12 +365,16 @@ def add_heightfield(
 
 
 def heightfield(
-    spec: Any, body: Any, scene_dir: Path, friction: list[float] | None
+    spec: Any,
+    body: Any,
+    scene_dir: Path,
+    friction: list[float] | None,
+    source: str = PROXY_FILE,
 ) -> TerrainFacts:
-    """The proxy's top surface as one `hfield` geom, data inline."""
+    """The top surface of `source` (the proxy) as one `hfield` geom, data inline."""
 
-    vertices, faces = read_obj(Path(scene_dir) / PROXY_FILE)
-    grid, filled = ensure_grid(scene_dir)
+    vertices, faces = read_obj(Path(scene_dir) / source)
+    grid, filled = ensure_grid(scene_dir, source)
     add_heightfield(spec, body, grid, friction=friction)
     gap = heightfield_gap(vertices, faces, grid) | {
         "holes_filled_fraction": round(filled, GAP_DIGITS)
@@ -365,7 +388,51 @@ def heightfield(
     )
 
 
-TERRAINS: dict[str, TerrainBuilder] = {HEIGHTFIELD: heightfield, HULLS: hulls}
+def overhangs(
+    spec: Any, body: Any, scene_dir: Path, friction: list[float] | None
+) -> TerrainFacts:
+    """The ground as a heightfield (the proxy's half below the clearance,
+    `GROUND_FILE`) and what stands above it as convex parts of the
+    occupancy volume (`OVERHANG_FILE`'s parts): a table top the walker
+    goes under, a wall it goes around. A scene captured before the split
+    (no ground file) is refused by name."""
+    import mujoco  # noqa: PLC0415
+
+    scene_dir = Path(scene_dir)
+    if not (scene_dir / GROUND_FILE).is_file():
+        raise FileNotFoundError(
+            NO_GROUND.format(name=scene_dir.name, default=DEFAULT_TERRAIN)
+        )
+    ground = heightfield(spec, body, scene_dir, friction, source=GROUND_FILE)
+    parts = load_decomposition(scene_dir, OVERHANG_PARTS)
+    count = 0
+    if parts is not None:
+        for i, (vertices, _faces) in enumerate(parts.meshes(scene_dir)):
+            name = OVERHANG_MESH.format(index=i)
+            mesh = spec.add_mesh(name=name)
+            mesh.uservert = np.asarray(vertices, dtype=np.float64).reshape(-1)
+            geom = body.add_geom(
+                name=name,
+                type=mujoco.mjtGeom.mjGEOM_MESH,
+                meshname=name,
+                group=COLLISION_GROUP,
+            )
+            _friction(geom, friction)
+            count += 1
+    return TerrainFacts(
+        kind=OVERHANGS,
+        geoms=1 + count,
+        gap={"ground": ground.gap, "overhang": dict(parts.gap) if parts else {}},
+        note=f"ground: {ground.note}; overhangs: {count} convex parts"
+        + (f" ({parts.tool})" if parts else " (none above the clearance)"),
+    )
+
+
+TERRAINS: dict[str, TerrainBuilder] = {
+    HEIGHTFIELD: heightfield,
+    HULLS: hulls,
+    OVERHANGS: overhangs,
+}
 
 
 def terrain_names() -> tuple[str, ...]:

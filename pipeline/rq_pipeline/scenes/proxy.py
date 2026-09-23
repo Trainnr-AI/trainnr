@@ -30,10 +30,12 @@ import numpy as np
 
 from rq_pipeline.scenes.gap import GAP_DIGITS, SURFACE_SAMPLES
 from rq_pipeline.scenes.obj import read_obj, write_obj
-from rq_pipeline.scenes.record import PROXY_FILE, UNRECORDED
+from rq_pipeline.scenes.record import OVERHANG_FILE, PROXY_FILE, UNRECORDED
 
 PARTS_DIR = "proxy-parts"
 PARTS_FILE = "proxy-parts.json"
+OVERHANG_PARTS_DIR = "overhang-parts"
+OVERHANG_PARTS_FILE = "overhang-parts.json"
 PARTS_SCHEMA = "trainnr-proxy-parts/1"
 PART_NAME = "part-{index:03d}.obj"
 NEEDS_COACD = "the scene extra (CoACD): uv sync --extra scene"
@@ -60,6 +62,25 @@ class DecompositionParams:
 
 
 DEFAULT_PARAMS = DecompositionParams()
+# The overhangs of a whole scene are many things (a table, bushes, walls);
+# capped at the proxy's 64 parts CoACD would merge them and a merged hull
+# fills the air under a table. Threshold and the rest as the proxy's.
+OVERHANG_PARAMS = DecompositionParams(max_convex_hull=512)
+
+
+@dataclass(frozen=True)
+class PartsFiles:
+    """Which mesh is decomposed and where its parts and record land."""
+
+    source: str
+    directory: str
+    record: str
+
+
+PROXY_PARTS = PartsFiles(source=PROXY_FILE, directory=PARTS_DIR, record=PARTS_FILE)
+OVERHANG_PARTS = PartsFiles(
+    source=OVERHANG_FILE, directory=OVERHANG_PARTS_DIR, record=OVERHANG_PARTS_FILE
+)
 
 
 @dataclass(frozen=True)
@@ -78,9 +99,10 @@ class Decomposition:
     source: str = PROXY_FILE
     schema: str = PARTS_SCHEMA
     notes: tuple[str, ...] = field(default_factory=tuple)
+    directory: str = PARTS_DIR
 
     def part_paths(self, scene_dir: Path) -> list[Path]:
-        return [Path(scene_dir) / PARTS_DIR / f for f in self.files]
+        return [Path(scene_dir) / self.directory / f for f in self.files]
 
     def meshes(self, scene_dir: Path) -> list[tuple[np.ndarray, np.ndarray]]:
         return [read_obj(p) for p in self.part_paths(scene_dir)]
@@ -102,7 +124,11 @@ def _tool_version() -> str:
 
 
 def decompose(
-    scene_dir: Path, *, params: DecompositionParams = DEFAULT_PARAMS
+    scene_dir: Path,
+    *,
+    params: DecompositionParams = DEFAULT_PARAMS,
+    files: PartsFiles = PROXY_PARTS,
+    meshes: list[tuple[np.ndarray, np.ndarray]] | None = None,
 ) -> Decomposition:
     """The scene's proxy into convex parts under its `PARTS_DIR`, with the
     record beside them; written once (an artifact's parts never change),
@@ -111,20 +137,26 @@ def decompose(
     later call would mistake for parts."""
     coacd = _coacd()
     scene_dir = Path(scene_dir)
-    out_dir = scene_dir / PARTS_DIR
+    out_dir = scene_dir / files.directory
     if out_dir.exists():
         raise FileExistsError(f"{out_dir} exists; parts are written once")
-    vertices, faces = read_obj(scene_dir / PROXY_FILE)
+    vertices, faces = read_obj(scene_dir / files.source)
     started = time.perf_counter()
-    hulls = coacd.run_coacd(coacd.Mesh(vertices, faces), **asdict(params))
+    # `meshes`: the source as separate things (the overhangs' components),
+    # each decomposed on its own so CoACD's samples resolve each one, in
+    # parallel (one component a minute on one core was an hour for a
+    # garden, 2026-09-23); the gap is still measured against the whole source.
+    hulls = decompose_meshes(
+        meshes if meshes is not None else [(vertices, faces)], params, coacd=coacd
+    )
     seconds = time.perf_counter() - started
-    staging = scene_dir / f".{PARTS_DIR}.{os.getpid()}.tmp"
+    staging = scene_dir / f".{files.directory}.{os.getpid()}.tmp"
     staging.mkdir(parents=True)
-    files = []
+    names = []
     for i, (hv, hf) in enumerate(hulls):
         name = PART_NAME.format(index=i)
         write_obj(staging / name, np.asarray(hv), np.asarray(hf))
-        files.append(name)
+        names.append(name)
     staging.rename(out_dir)
     parts = [(np.asarray(hv, dtype=np.float64), np.asarray(hf)) for hv, hf in hulls]
     record = Decomposition(
@@ -135,12 +167,46 @@ def decompose(
         tool=_tool_version(),
         params=asdict(params),
         gap=decomposition_gap(vertices, faces, parts, seed=params.seed),
-        files=tuple(files),
+        files=tuple(names),
+        source=files.source,
+        directory=files.directory,
     )
-    (scene_dir / PARTS_FILE).write_text(
+    (scene_dir / files.record).write_text(
         json.dumps(asdict(record), indent=1) + "\n", encoding="utf-8"
     )
     return record
+
+
+def _hulls_of(
+    mesh: tuple[np.ndarray, np.ndarray], params: dict[str, Any]
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """One mesh's convex parts (a worker: imports CoACD itself)."""
+    coacd = _coacd()
+    vertices, faces = mesh
+    return [
+        (np.asarray(v, dtype=np.float64), np.asarray(f))
+        for v, f in coacd.run_coacd(coacd.Mesh(vertices, faces), **params)
+    ]
+
+
+def decompose_meshes(
+    meshes: list[tuple[np.ndarray, np.ndarray]],
+    params: DecompositionParams,
+    *,
+    coacd: Any = None,
+    workers: int | None = None,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Every mesh's convex parts, in order; several meshes across a
+    process pool (CoACD holds one core), one mesh inline."""
+    knobs = asdict(params)
+    if len(meshes) <= 1:
+        return [h for mesh in meshes for h in _hulls_of(mesh, knobs)]
+    from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
+
+    count = workers or max(1, (os.cpu_count() or 2) // 2)
+    with ProcessPoolExecutor(max_workers=count) as pool:
+        results = list(pool.map(_hulls_of, meshes, [knobs] * len(meshes)))
+    return [h for hulls in results for h in hulls]
 
 
 def decomposition_gap(
@@ -213,9 +279,11 @@ def decomposition_gap(
     }
 
 
-def load_decomposition(scene_dir: Path) -> Decomposition | None:
+def load_decomposition(
+    scene_dir: Path, files: PartsFiles = PROXY_PARTS
+) -> Decomposition | None:
     """The record back from a scene folder, or None when never written."""
-    path = Path(scene_dir) / PARTS_FILE
+    path = Path(scene_dir) / files.record
     if not path.is_file():
         return None
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -227,10 +295,14 @@ def load_decomposition(scene_dir: Path) -> Decomposition | None:
 
 
 def ensure_parts(
-    scene_dir: Path, *, params: DecompositionParams = DEFAULT_PARAMS
+    scene_dir: Path,
+    *,
+    params: DecompositionParams = DEFAULT_PARAMS,
+    files: PartsFiles = PROXY_PARTS,
+    meshes: list[tuple[np.ndarray, np.ndarray]] | None = None,
 ) -> Decomposition:
     """The scene's parts, decomposed on first call and read back after."""
-    existing = load_decomposition(scene_dir)
+    existing = load_decomposition(scene_dir, files)
     if existing is not None:
         return existing
-    return decompose(scene_dir, params=params)
+    return decompose(scene_dir, params=params, files=files, meshes=meshes)
