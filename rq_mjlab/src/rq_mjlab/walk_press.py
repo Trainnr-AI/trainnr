@@ -38,17 +38,23 @@ from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
 from rq_pipeline.collect.provenance import dagger_stamp
 from rq_pipeline.evaluate.tracking import criterion_text
+from rq_pipeline.tasks.walks import DEFAULT_EPISODE_S
 
 from rq_mjlab.walk_verdict import (
     WorldEpisode,
     instrument_for,
     rollout_episodes,
 )
+from rq_mjlab.walks import DEFAULT_ROBOT, use_project
 
 REPO = Path(__file__).resolve().parents[3]
 CAMERA_KEY = "chase"
 FAILURES_FILE = "failures.jsonl"
-BUNDLE = "microduck"
+BUNDLE = DEFAULT_ROBOT
+# On a captured scene the frames are the head camera's picture of the
+# splat (docs/78 E3), rendered inside the batched env for every world.
+SCENE_FRAME_SIZE = (160, 120)
+CHASE_FRAME_SIZE = (320, 240)  # the chase camera's replay, off a scene
 INSTRUCTION = "walk at the commanded planar twist"
 STATE_SEMANTICS = (
     "the actor's observation vector (rsl-rl): base angular velocity, "
@@ -56,6 +62,45 @@ STATE_SEMANTICS = (
     "actions, commanded twist - the state-based teacher's own input"
 )
 ACTION_SEMANTICS = "joint position targets (the rsl-rl actor's output, ctrl order)"
+
+
+def episode_ticks(episode_s: float, step_dt: float) -> int:
+    """How many control ticks the training episode is at this rate."""
+    return round(episode_s / step_dt)
+
+
+def walk_source(robot: str, identity: dict[str, str]) -> str:
+    """The batch's task stamp: the walk family and its built identity
+    (the robot's bundle, the actuator basis, the scene when on one)."""
+    return f"{robot}-walk@{fields_hash(identity)}"
+
+
+def scene_visuals(scene_dir: Path) -> tuple[str, str]:
+    """What a scene batch's manifests say about their pictures and their
+    ground: the visual basis (the scene's version, its renderer, its gap,
+    no draws) and the floor's physics basis as the scene declares it."""
+    from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record  # noqa: PLC0415
+    from rq_pipeline.scenes.stage import FLOOR_FRICTION  # noqa: PLC0415
+
+    from rq_mjlab.scene_stage import scene_stamp  # noqa: PLC0415
+
+    scene_dir = Path(scene_dir)
+    record = load_scene_record(scene_dir / SCENE_FILE)
+    gap = record.gap
+    visual = (
+        f"the captured scene {scene_stamp(scene_dir)}: its splat rendered by "
+        "mujoco_warp's ray tracer with the scene's own baked lighting; gap "
+        f"chamfer {gap.chamfer_m} m, p95 {gap.p95_m} m; no visual draws"
+    )
+    floor = next((p for p in record.physics if p.name == FLOOR_FRICTION), None)
+    physics = (
+        f"floor friction {floor.value} {floor.basis}"
+        + (f" ±{floor.span}" if floor.span is not None else "")
+        + (f" ({floor.cites})" if floor.cites else "")
+        if floor is not None
+        else "floor friction: the scene declares none"
+    )
+    return visual, physics
 
 
 def checkpoint_stamp(checkpoint: Path) -> str:
@@ -142,6 +187,19 @@ class ChaseCamera:
         self.renderer.close()
 
 
+def frames_of(
+    episode: WorldEpisode, camera: ChaseCamera | None, key: str, every: int
+) -> list[tuple[int, Any]]:
+    """The episode's dataset frames every `every` ticks: the pictures its
+    own camera sensor took, or the chase camera's replay when it has none."""
+    if camera is not None:
+        return camera.frames(episode.qpos, every)
+    pictures = episode.frames.get(key)
+    if pictures is None:
+        raise ValueError(f"episode carries no frames from camera {key!r}")
+    return [(tick, pictures[tick]) for tick in range(0, len(pictures), every)]
+
+
 def relabel(episode: WorldEpisode, teacher: Any) -> WorldEpisode:
     """DAgger's one move: the STUDENT drove (its observations, its
     states), the TEACHER labels — every captured observation gets the
@@ -207,9 +265,19 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     say: Any = print,
     driver: Any = None,
     driver_name: str = "",
+    robot: str = BUNDLE,
+    scene: Path | None = None,
+    episode_s: float = DEFAULT_EPISODE_S,
 ) -> DemoBatch:
     """Press `episodes` kept walk demonstrations from `checkpoint` under
-    `out`; the batched rollouts run `worlds` at a time.
+    `out`; the batched rollouts run `worlds` at a time. On a captured
+    `scene` (docs/78 E3) the rollouts stand on it, the frames are the
+    head camera's picture of its splat at `frame_size`, and every
+    manifest names the scene, its gap and its floor's basis. An episode
+    ends at `episode_s` - the training episode - or at a fall: the env
+    is the play one, whose own episodes never end (the Go2's run 1e9 s),
+    and a policy that never falls would otherwise roll out forever (the
+    first scene press, 2026-09-23, fifty minutes in its first batch).
 
     `driver` is who ROLLS OUT; the checkpoint's teacher always LABELS.
     With no driver the teacher drives itself (the D2 press). With a
@@ -220,17 +288,23 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     weak (docs/66 §6; Ross et al. 2011)."""
     import numpy as np  # noqa: PLC0415
 
-    from rq_mjlab.microduck_walk import microduck_walk_env_cfg  # noqa: PLC0415
-    from rq_mjlab.walk_view import load_policy  # noqa: PLC0415
+    from rq_mjlab.walk_view import load_walk  # noqa: PLC0415
 
-    _, identity = microduck_walk_env_cfg()
-    env, policy = load_policy(checkpoint, worlds, device)
+    walk = load_walk(
+        checkpoint,
+        worlds,
+        device,
+        robot,
+        scene=scene,
+        camera_size=frame_size if scene is not None else None,
+    )
+    env, policy, identity = walk.env, walk.policy, walk.identity
     teacher = teacher_labeler(policy, device)
     if driver is not None and hasattr(driver, "bind"):
         driver.bind(env)
     rolling = policy if driver is None else driver
     unwrapped = env.unwrapped
-    source = f"microduck-walk@{fields_hash(identity)}"
+    source = walk_source(robot, identity)
     expert = checkpoint_stamp(checkpoint)
     if driver is not None:
         # The dataset's expert is still the teacher (its labels); the
@@ -239,30 +313,44 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         expert = dagger_stamp(expert, driver_name or "student")
     instrument = instrument_for(device)
     control_hz = round(1.0 / float(unwrapped.step_dt))
+    max_ticks = episode_ticks(episode_s, float(unwrapped.step_dt))
     basis = (
         f"{identity['dr_basis']}; per-world draws live inside the batched env "
         "and are not exported per episode (D2 v1)"
     )
+    visual_basis = ""
+    notes = {
+        "teacher": expert,
+        "criterion": criterion_text(),
+        "episode_s": f"{episode_s:g} (the training episode; a fall ends one sooner)",
+    }
+    camera_key = CAMERA_KEY
+    if scene is not None:
+        from rq_pipeline.scenes.stage import HEAD_CAMERA  # noqa: PLC0415
+
+        visual_basis, floor_basis = scene_visuals(scene)
+        basis = f"{basis}; {floor_basis}"
+        notes |= {"scene": identity["scene"], "visual_basis": visual_basis}
+        camera_key = HEAD_CAMERA
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     ExportSpec(
         state_width=len(state_names(unwrapped.observation_manager)),
         state_names=state_names(unwrapped.observation_manager),
-        cameras=[CAMERA_KEY],
+        cameras=[camera_key],
         instruction=INSTRUCTION,
-        bundle=BUNDLE,
+        bundle=robot,
         state_semantics=STATE_SEMANTICS,
         action_semantics=ACTION_SEMANTICS,
         action_names=[
             f"joint_pos_target[{i}]"
             for i in range(unwrapped.action_manager.total_action_dim)
         ],
-        notes={
-            "teacher": expert,
-            "criterion": criterion_text(),
-        },
+        notes=notes,
     ).write_to(out)
-    camera = ChaseCamera(*frame_size)
+    # Off a scene the frames are a chase camera replaying qpos through a
+    # CPU mirror; on one they were rendered inside the env as it rolled.
+    camera = ChaseCamera(*frame_size, robot=robot) if scene is None else None
     queue: deque[tuple[int, int, WorldEpisode]] = deque()
     failures = out / FAILURES_FILE
 
@@ -270,7 +358,14 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         batch_seed = int(rng.integers(2**31 - 1))
         unwrapped.seed(batch_seed)
         env.reset()
-        rolled = rollout_episodes(env, rolling, worlds, capture=True)
+        rolled = rollout_episodes(
+            env,
+            rolling,
+            worlds,
+            capture=True,
+            max_ticks=max_ticks,
+            capture_cameras=(camera_key,) if scene is not None else (),
+        )
         if driver is not None:
             rolled = [relabel(ep, teacher) for ep in rolled]
         queue.extend((batch_seed, world, ep) for world, ep in enumerate(rolled))
@@ -304,7 +399,9 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             episode.qpos,
             episode.observations,
             episode.actions,
-            camera_frames={CAMERA_KEY: camera.frames(episode.qpos, frame_every)},
+            camera_frames={
+                camera_key: frames_of(episode, camera, camera_key, frame_every)
+            },
         )
 
     def manifest_fn(result: PressResult, attempt: int) -> EpisodeManifest:
@@ -322,6 +419,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             dynamics_basis=basis,
             action_semantics=ACTION_SEMANTICS,
             verdict=f"success ({criterion_text()})",
+            visual_basis=visual_basis,
         )
 
     try:
@@ -340,7 +438,8 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             say=say,
         )
     finally:
-        camera.close()
+        if camera is not None:
+            camera.close()
         if driver is not None and hasattr(driver, "close"):
             driver.close()
         env.close()
@@ -362,8 +461,27 @@ def main() -> None:
         "For this gait it must be 1: the TEACHER, actions held 5 ticks, falls "
         "in 20-23 ticks; held 2, 38/40 survive (measured 2026-09-02)",
     )
-    parser.add_argument("--width", type=int, default=320)
-    parser.add_argument("--height", type=int, default=240)
+    parser.add_argument("--width", type=int, default=None)
+    parser.add_argument("--height", type=int, default=None)
+    parser.add_argument(
+        "--robot",
+        default=BUNDLE,
+        help="which walk (rq_mjlab.walks) the checkpoint is; the microduck by default",
+    )
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="a project root: its robots are searched first (the Go2 lives there)",
+    )
+    parser.add_argument(
+        "--scene",
+        type=Path,
+        default=None,
+        help="a captured scene's folder: the rollouts stand on it and the frames "
+        f"are its head camera's picture at {SCENE_FRAME_SIZE[0]}x{SCENE_FRAME_SIZE[1]} "
+        "unless --width/--height say otherwise (docs/78 E3; the Go2)",
+    )
     parser.add_argument("--device", default=None)
     parser.add_argument("--no-studio", action="store_true")
     parser.add_argument(
@@ -384,7 +502,13 @@ def main() -> None:
 
     from rq_mjlab.walk_view import latest_checkpoint  # noqa: PLC0415
 
+    use_project(args.project)
     checkpoint = args.checkpoint if args.checkpoint else latest_checkpoint()
+    default_size = SCENE_FRAME_SIZE if args.scene is not None else CHASE_FRAME_SIZE
+    frame_size = (
+        args.width if args.width is not None else default_size[0],
+        args.height if args.height is not None else default_size[1],
+    )
 
     import warp as wp  # noqa: PLC0415
 
@@ -422,7 +546,7 @@ def main() -> None:
                     python=args.student_python,
                     horizon=args.horizon,
                     stride=args.stride,
-                    frame_size=(args.width, args.height),
+                    frame_size=frame_size,
                     device="cuda" if device.startswith("cuda") else "cpu",
                 )
 
@@ -443,11 +567,13 @@ def main() -> None:
         worlds=args.worlds,
         seed=args.seed,
         frame_every=args.frame_every,
-        frame_size=(args.width, args.height),
+        frame_size=frame_size,
         device=device,
         feed=feed,
         driver=driver,
         driver_name=driver_name,
+        robot=args.robot,
+        scene=args.scene,
     )
     print(f"[walk-press] kept {batch.kept}/{batch.attempts} attempts -> {batch.out}")
     if not batch.complete:

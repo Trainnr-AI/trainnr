@@ -166,6 +166,57 @@ class TheSubTerrain(unittest.TestCase):
         np.testing.assert_allclose(patch.corner, [-0.75, -0.5, 0.0])
 
 
+class TheSceneBounds(unittest.TestCase):
+    """A world that leaves the scene's footprint is truncated: past the
+    heightfield there is no ground (NaN at iteration 1017, 2026-09-23)."""
+
+    def test_the_footprint_is_the_grids_and_the_margin_is_inside_it(self) -> None:
+        from rq_mjlab.scene_stage import (  # noqa: PLC0415
+            BOUNDS_MARGIN_M,
+            out_of_scene_bounds,
+            scene_footprint,
+        )
+
+        patch = SceneHeightfieldCfg.of(GRID, (0.5, 0.0), None)
+        generator = SimpleNamespace(sub_terrains={"scene": patch})
+        xy = torch.tensor([[1.5, -0.5], [1.05, -0.5], [2.45, 0.45], [1.5, 0.9]])
+        env: Any = SimpleNamespace(
+            num_envs=4,
+            device="cpu",
+            scene=_SceneWithTerrain(generator, xy),
+        )
+        self.assertEqual(scene_footprint(env), (1.0, 2.5, -1.0, 0.0))
+        out = out_of_scene_bounds(env)
+        # inside; inside but within the margin of the x edge; past the y
+        # edge (and within the margin of the x edge); past the y edge
+        self.assertEqual(out.tolist(), [False, True, True, True])
+        self.assertEqual(
+            out_of_scene_bounds(env, margin=0.0).tolist(), [False, False, True, True]
+        )
+        self.assertEqual(BOUNDS_MARGIN_M, 0.3)
+
+    def test_off_a_scene_nothing_is_out_of_bounds(self) -> None:
+        from rq_mjlab.scene_stage import out_of_scene_bounds  # noqa: PLC0415
+
+        env: Any = SimpleNamespace(
+            num_envs=2, device="cpu", scene=SimpleNamespace(terrain=None)
+        )
+        self.assertEqual(out_of_scene_bounds(env).tolist(), [False, False])
+
+
+class _SceneWithTerrain:
+    def __init__(self, generator: Any, xy: torch.Tensor) -> None:
+        self.terrain = SimpleNamespace(cfg=SimpleNamespace(terrain_generator=generator))
+        self._robot = SimpleNamespace(
+            data=SimpleNamespace(
+                root_link_pos_w=torch.cat([xy, torch.zeros(len(xy), 1)], 1)
+            )
+        )
+
+    def __getitem__(self, name: str) -> Any:
+        return self._robot
+
+
 class TheHeadCamera(unittest.TestCase):
     def test_the_camera_rides_on_the_base_looking_forward(self) -> None:
         head = head_camera_cfg()

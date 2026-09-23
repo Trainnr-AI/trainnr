@@ -35,7 +35,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from rq_pipeline.project.kinds import TASK_FILE
 from rq_pipeline.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
@@ -292,9 +294,42 @@ def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
     return world_of, device_of
 
 
-def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = None):
+@dataclass(frozen=True)
+class LoadedWalk:
+    """A checkpoint's policy in the env its identity names."""
+
+    env: Any
+    policy: Any
+    identity: dict[str, str]
+    trained: dict[str, Any]
+
+
+# The identity keys a checkpoint and the env it runs in must agree on.
+IDENTITY_GATE = ("robot", "actuator", "scene")
+NO_CAMERAS = "none"
+
+
+def trained_with_cameras(trained: dict[str, Any]) -> bool:
+    """Whether the checkpoint's actor saw a camera (its identity says):
+    the env it runs in must show it the same picture, or none."""
+    return str(trained.get("cameras", NO_CAMERAS)) != NO_CAMERAS
+
+
+def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
+    checkpoint: Path,
+    envs: int,
+    device: str,
+    robot: str | None = None,
+    *,
+    scene: Path | None = None,
+    camera_size: tuple[int, int] | None = None,
+) -> LoadedWalk:
     """The env built from the checkpoint's identity, and its inference
-    policy, identity-gated (the same door walk_play and walk_verdict use)."""
+    policy, identity-gated (the same door walk_play, walk_verdict and
+    the walk press use). With `scene`, the env stands on that captured
+    scene (docs/78 E2); the head camera is in the actor exactly when the
+    checkpoint trained with it (its identity says), and renders frames
+    for a press either way when `camera_size` asks for them."""
     from dataclasses import asdict  # noqa: PLC0415
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
@@ -306,14 +341,27 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = No
     # The walk in play mode at the nominal point, as walk_play rolls it:
     # a view, not a judgment, so the trained DR basis is not rebuilt
     # (the Go2's declared-constants basis has no span to parse, and this
-    # gate refused it, 2026-09-12). Robot and actuator must still match.
+    # gate refused it, 2026-09-12). Robot, actuator and scene must match.
     from rq_mjlab.walk_export import (  # noqa: PLC0415
         ACTOR_OBS_GROUP,
         trained_actor_width,
     )
 
-    cfg, identity = spec.env_cfg(play=True, dr_span=None, pin_scale=None)
-    for key in ("robot", "actuator"):
+    stage: dict[str, Any] = {}
+    if scene is not None:
+        seen = trained_with_cameras(trained)
+        stage = {
+            "scene": scene,
+            "cameras": seen or camera_size is not None,
+            "camera_in_actor": seen,
+            "camera_size": camera_size,
+        }
+
+    def build(**more: Any) -> tuple[Any, dict[str, str]]:
+        return spec.env_cfg(play=True, dr_span=None, pin_scale=None, **stage, **more)
+
+    cfg, identity = build()
+    for key in IDENTITY_GATE:
         if trained.get(key) not in (None, identity.get(key)):
             raise SystemExit(
                 f"identity mismatch on {key}: this env is {identity}, trained {trained}"
@@ -331,9 +379,7 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = No
     if trained_width is not None and trained_width != built_width:
         env.close()
         try:
-            cfg, _ = spec.env_cfg(
-                play=True, dr_span=None, pin_scale=None, legacy_actor=True
-            )
+            cfg, _ = build(legacy_actor=True)
         except TypeError as error:
             raise SystemExit(
                 f"{checkpoint.name}: actor observes {trained_width} terms, this "
@@ -353,7 +399,15 @@ def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = No
     runner.load(
         str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
     )
-    return env, runner.get_inference_policy(device=device)
+    return LoadedWalk(
+        env, runner.get_inference_policy(device=device), identity, trained
+    )
+
+
+def load_policy(checkpoint: Path, envs: int, device: str, robot: str | None = None):
+    """`load_walk`'s env and policy, for the callers that want only those."""
+    walk = load_walk(checkpoint, envs, device, robot)
+    return walk.env, walk.policy
 
 
 class Overview:

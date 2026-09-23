@@ -429,28 +429,38 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     pin_scale: float | None = None,
     pin_only: tuple[str, ...] | None = None,
     cameras: bool = True,
+    camera_in_actor: bool = True,
+    camera_size: tuple[int, int] | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The Go2 walk on a captured scene (docs/78 §4 E2): the rough
     recipe's rules and sensors (the height scan sees the hurdles) on the
     scene's heightfield at the scene's coordinates, every world at the
-    course's start; with `cameras`, the head camera's picture of the
-    splat in the actor's and the critic's observations."""
+    course's start; with `cameras`, the head camera renders the splat
+    for every world - into the actor's and the critic's observations
+    when `camera_in_actor` (training), as frames alone when not (a press
+    pressing a policy that never saw it); `camera_size` overrides the
+    training picture's width and height."""
     from rq_mjlab.scene_stage import (  # noqa: PLC0415
         CAMERA_TERM,
         TRAIN_CELL_M,
         camera_term,
         head_camera_cfg,
+        out_of_scene_bounds,
         scene_stamp,
         scene_terrain_cfg,
     )
 
     cfg = _rough_env_cfg(play=play)
     cfg.scene.terrain = scene_terrain_cfg(scene_dir)
-    # one patch: no difficulty rows to climb, no other patch to move to,
-    # and the scene's footprint is not the grid mjlab centres at the origin
+    # one patch: no difficulty rows to climb, no other patch to move to;
+    # the bounds are the scene's footprint, not the grid mjlab centres at
+    # the origin (a world off the heightfield falls forever: NaN, 2026-09-23)
     cfg.curriculum.pop("terrain_levels", None)
     cfg.events.pop("randomize_terrain", None)
     cfg.terminations.pop("out_of_terrain_bounds", None)
+    cfg.terminations["out_of_scene_bounds"] = TerminationTermCfg(
+        func=out_of_scene_bounds, time_out=True
+    )
     identity = _with_actuator_dr(
         cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
     )
@@ -458,11 +468,16 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     identity["terrain"] = f"the scene's heightfield at {TRAIN_CELL_M} m"
     identity["cameras"] = "none"
     if cameras:
-        head = head_camera_cfg()
+        head = (
+            head_camera_cfg(width=camera_size[0], height=camera_size[1])
+            if camera_size is not None
+            else head_camera_cfg()
+        )
         cfg.scene.sensors = (*(cfg.scene.sensors or ()), head)
-        for group in ("actor", "critic"):
-            cfg.observations[group].terms[CAMERA_TERM] = camera_term(head.name)
-        identity["cameras"] = f"{head.name} {head.width}x{head.height} rgb"
+        if camera_in_actor:
+            for group in ("actor", "critic"):
+                cfg.observations[group].terms[CAMERA_TERM] = camera_term(head.name)
+            identity["cameras"] = f"{head.name} {head.width}x{head.height} rgb"
     return cfg, identity
 
 

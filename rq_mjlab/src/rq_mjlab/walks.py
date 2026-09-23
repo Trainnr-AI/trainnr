@@ -193,6 +193,8 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     legacy_actor: bool = False,
     scene: Path | None = None,
     cameras: bool = True,
+    camera_in_actor: bool = True,
+    camera_size: tuple[int, int] | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
     from rq_mjlab.go2_walk import go2_scene_env_cfg, go2_walk_env_cfg  # noqa: PLC0415
@@ -214,6 +216,8 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
             pin_scale=pin_scale,
             pin_only=_axis(PIN_AXES, pin_axis),
             cameras=cameras,
+            camera_in_actor=camera_in_actor,
+            camera_size=camera_size,
         )
     return go2_walk_env_cfg(
         play=play,

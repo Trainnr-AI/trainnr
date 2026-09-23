@@ -32,7 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +45,7 @@ from rq_pipeline.evaluate.tracking import (
 from rq_pipeline.viz import viewer_file
 
 from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
+from rq_mjlab.walk_view import trained_with_cameras
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 # The judgment's rule lives in `rq_pipeline.evaluate.tracking`, shared
@@ -79,6 +80,8 @@ class WorldEpisode:
     observations: Any = None  # (T, obs) float32
     actions: Any = None  # (T, nu) float32
     qpos: Any = None  # (T, nq) float32
+    # what the world's own camera sensors saw, by name: (T, H, W, 3) uint8
+    frames: dict[str, Any] = field(default_factory=dict)
 
 
 def instrument_for(device: str) -> str:
@@ -94,8 +97,27 @@ def instrument_for(device: str) -> str:
     )
 
 
-def rollout_episodes(
-    env, policy, trials: int, *, capture: bool = False, max_ticks: int | None = None
+def _snap_cameras(
+    unwrapped: Any, seen: dict[str, list[list[Any]]], worlds: Any
+) -> None:
+    """Each named camera sensor's picture, appended to the open worlds'."""
+    for name, per_world in seen.items():
+        rgb = unwrapped.scene.sensors[name].data.rgb
+        if rgb is None:
+            raise ValueError(f"camera sensor {name!r} renders no rgb")
+        pictures = rgb.detach().cpu().numpy()
+        for world in worlds:
+            per_world[world].append(pictures[world])
+
+
+def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging and its capture
+    env,
+    policy,
+    trials: int,
+    *,
+    capture: bool = False,
+    max_ticks: int | None = None,
+    capture_cameras: tuple[str, ...] = (),
 ) -> list[WorldEpisode]:
     """One completed episode per world, judged from the live managers:
     the commanded twist from the command manager, the base-frame
@@ -103,9 +125,11 @@ def rollout_episodes(
     manager. Worlds that finish early keep stepping (the env auto-
     resets) but only each world's FIRST episode is recorded. With
     `capture`, the per-tick observation/action/qpos of that first
-    episode ride along (the rollout->dataset writer's raw material).
-    With `max_ticks`, a world still open at that tick is closed as
-    survived so far (the stills tool wants one frame, not a verdict)."""
+    episode ride along (the rollout->dataset writer's raw material),
+    and with `capture_cameras` the named camera sensors' pictures too
+    (a scene's head camera, docs/78 E3). With `max_ticks`, a world still
+    open at that tick is closed as survived so far (the stills tool
+    wants one frame, not a verdict)."""
     import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
 
@@ -121,6 +145,9 @@ def rollout_episodes(
     recorded_steps = torch.zeros(trials, dtype=torch.long, device=device)
     device_qpos = as_torch(unwrapped.sim.data.qpos) if capture else None
     trace: list[list[tuple[Any, Any, Any]]] = [[] for _ in range(trials)]
+    seen: dict[str, list[list[Any]]] = {
+        name: [[] for _ in range(trials)] for name in capture_cameras
+    }
 
     from rq_pipeline.evaluate.smoothness import SmoothnessMeter  # noqa: PLC0415
 
@@ -138,6 +165,7 @@ def rollout_episodes(
             still_open = open_worlds.cpu().numpy()
             for world in np.flatnonzero(still_open):
                 trace[world].append((actor[world], act[world], pose[world]))
+            _snap_cameras(unwrapped, seen, np.flatnonzero(still_open))
         obs, _, dones, _ = env.step(actions)
         command = unwrapped.command_manager.get_command("twist")
         velocity = unwrapped.scene["robot"].data.root_link_lin_vel_b
@@ -171,10 +199,29 @@ def rollout_episodes(
                 "actions": np.stack(acts).astype(np.float32),
                 "qpos": np.stack(poses).astype(np.float32),
             }
+            arrays["frames"] = {
+                name: np.stack(per_world[i]) for name, per_world in seen.items()
+            }
         episodes.append(
             WorldEpisode(outcome, [float(v) for v in first_command[i]], **arrays)
         )
     return episodes
+
+
+SCENE_MISMATCH = (
+    "the checkpoint trained on {trained}, this evaluation stands on {built}: "
+    "pass --scene with the scene it trained on (or none for the plane)"
+)
+
+
+def require_same_scene(trained: dict[str, Any], built: dict[str, str]) -> None:
+    """A checkpoint trained on a captured scene is judged on that scene
+    and one trained on the plane on the plane: the identity names it,
+    and the other is refused by name."""
+    plane = "the plane"
+    have, want = trained.get("scene") or plane, built.get("scene") or plane
+    if have != want:
+        raise SystemExit(SCENE_MISMATCH.format(trained=have, built=want))
 
 
 def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
@@ -385,6 +432,13 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_ROBOT,
         help="which walk (rq_mjlab.walks) the checkpoint belongs to",
     )
+    parser.add_argument(
+        "--scene",
+        type=Path,
+        default=None,
+        help="the captured scene the checkpoint trained on (a project's "
+        "scenes/<name>): judged on it, the protocol naming it (docs/78 E2)",
+    )
     parser.add_argument("--trials", type=int, default=40)
     parser.add_argument("--device", default=None, help="cuda:0 or cpu")
     parser.add_argument("--seed", type=int, default=1000)
@@ -588,7 +642,12 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         # A policy trained with its head pinned is judged with it pinned:
         # the action space is part of what the run's identity records.
         head=str(trained_identity.get("head", "free")),
+        scene=args.scene,
+        # the actor sees a camera exactly when it trained with one (the
+        # scene walk's picture: 12,288 inputs a plain actor never had)
+        cameras=trained_with_cameras(trained_identity),
     )
+    require_same_scene(trained_identity, identity)
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
     if trained_identity:
@@ -633,6 +692,11 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         # without this a 3.13 re-judge took the 3.11 certificate's name).
         "instrument": instrument,
     }
+    if identity.get("scene"):
+        # judged on the captured scene it trained on: another protocol,
+        # another certificate name (the hash below), never the plane's
+        protocol["scene"] = identity["scene"]
+        protocol["terrain"] = identity.get("terrain", "the scene's heightfield")
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
     print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")
 

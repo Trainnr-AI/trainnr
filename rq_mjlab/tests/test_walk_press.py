@@ -141,3 +141,80 @@ class DaggerRelabel(unittest.TestCase):
         obs = np.arange(12, dtype=np.float32).reshape(3, 4)
         np.testing.assert_array_equal(label(obs), obs[:, :2] * 10)
         self.assertEqual(seen["batch"], (3,))
+
+
+class TheSceneProvenance(unittest.TestCase):
+    """A scene batch names where its pictures and its ground came from
+    (docs/78 E3): the task stamp carries the built identity, the visual
+    basis the scene's version and gap, the physics basis the floor as
+    the scene declares it."""
+
+    def test_the_source_is_the_walk_and_its_identity(self) -> None:
+        from rq_mjlab.walk_press import walk_source  # noqa: PLC0415
+
+        a = walk_source("go2", {"robot": "go2@1", "scene": "fake@2"})
+        b = walk_source("go2", {"robot": "go2@1"})
+        self.assertTrue(a.startswith("go2-walk@"))
+        self.assertNotEqual(a, b)  # the scene is part of the identity
+
+    def test_the_scene_visuals_name_the_stamp_the_gap_and_the_floor(self) -> None:
+        from rq_mjlab.scene_stage import scene_stamp  # noqa: PLC0415
+        from rq_mjlab.walk_press import scene_visuals  # noqa: PLC0415
+        from tests.test_scene_stage import _scene  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scene = _scene(Path(tmp))
+            visual, physics = scene_visuals(scene)
+            self.assertIn(scene_stamp(scene), visual)
+            self.assertIn("no visual draws", visual)
+            self.assertIn("gap chamfer None m", visual)  # the fake's gap is unmeasured
+            self.assertIn("floor friction [1.25, 0.3, 0.3] declared ±0.2", physics)
+
+
+class TheEpisodeCap(unittest.TestCase):
+    """The press caps every rollout at the training episode: the play
+    env's own episodes never end (the Go2's run 1e9 s), and a walker
+    that never falls would roll out forever."""
+
+    def test_the_cap_is_the_training_episode_at_the_control_rate(self) -> None:
+        from rq_pipeline.tasks.walks import DEFAULT_EPISODE_S  # noqa: PLC0415
+
+        from rq_mjlab.walk_press import episode_ticks  # noqa: PLC0415
+
+        self.assertEqual(episode_ticks(DEFAULT_EPISODE_S, 0.02), 1000)
+        self.assertEqual(episode_ticks(2.0, 0.02), 100)
+
+
+class TheEpisodesFrames(unittest.TestCase):
+    """On a scene the frames are the pictures the episode's own camera
+    took; off one, the chase camera's replay; a missing camera refuses."""
+
+    def test_the_episodes_own_pictures_every_n_ticks(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_mjlab.walk_press import frames_of  # noqa: PLC0415
+
+        pictures = np.arange(5)[:, None, None, None] * np.ones((5, 2, 2, 3), np.uint8)
+        episode = WorldEpisode(
+            EpisodeOutcome(steps=5, fell=False, mean_err=0.1, mean_cmd=0.3),
+            command=[0.3, 0.0, 0.0],
+            frames={"head": pictures},
+        )
+        frames = frames_of(episode, None, "head", 2)
+        self.assertEqual([tick for tick, _ in frames], [0, 2, 4])
+        self.assertEqual(int(frames[1][1][0, 0, 0]), 2)
+        with self.assertRaisesRegex(ValueError, "no frames from camera 'course'"):
+            frames_of(episode, None, "course", 1)
+
+    def test_the_chase_camera_replays_when_given(self) -> None:
+        from rq_mjlab.walk_press import frames_of  # noqa: PLC0415
+
+        class _Chase:
+            def frames(self, qpos: Any, every: int) -> list[tuple[int, Any]]:
+                return [(0, "chase")]
+
+        episode = WorldEpisode(
+            EpisodeOutcome(steps=1, fell=False, mean_err=0.1, mean_cmd=0.3),
+            command=[0.3, 0.0, 0.0],
+        )
+        self.assertEqual(frames_of(episode, _Chase(), "chase", 1), [(0, "chase")])  # type: ignore[arg-type]

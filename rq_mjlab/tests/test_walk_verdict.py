@@ -125,3 +125,25 @@ class TheRotation(unittest.TestCase):
             }
             self.assertEqual(len(instruments), 3)
             self.assertIn("walk-verdict-cuda.json", files)
+
+
+class TheSceneGate(unittest.TestCase):
+    """A scene-trained checkpoint is judged on its scene, a plane one on
+    the plane; the identity says which, and the other is refused."""
+
+    def test_the_scene_must_match_the_identity(self) -> None:
+        from rq_mjlab.walk_verdict import require_same_scene  # noqa: PLC0415
+
+        require_same_scene({}, {"robot": "go2@1"})  # the plane, both
+        require_same_scene({"scene": "fake@1"}, {"scene": "fake@1"})
+        with self.assertRaisesRegex(SystemExit, "trained on fake@1.*the plane"):
+            require_same_scene({"scene": "fake@1"}, {"robot": "go2@1"})
+        with self.assertRaisesRegex(SystemExit, "trained on the plane.*fake@1"):
+            require_same_scene({}, {"scene": "fake@1"})
+
+    def test_the_actor_sees_a_camera_only_if_it_trained_with_one(self) -> None:
+        from rq_mjlab.walk_view import trained_with_cameras  # noqa: PLC0415
+
+        self.assertFalse(trained_with_cameras({}))
+        self.assertFalse(trained_with_cameras({"cameras": "none"}))
+        self.assertTrue(trained_with_cameras({"cameras": "head 64x64 rgb"}))

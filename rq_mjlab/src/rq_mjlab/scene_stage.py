@@ -225,6 +225,43 @@ def camera_term(sensor_name: str = HEAD_CAMERA) -> ObservationTermCfg:
     return ObservationTermCfg(func=camera_rgb, params={"sensor_name": sensor_name})
 
 
+# Past the scene's footprint there is no ground: a world that walks off
+# the heightfield falls forever and its observations become NaN (the
+# first g3 scene run died at iteration 1017 of 1500, 2026-09-23). mjlab's
+# own bounds termination judges its origin-centred grid; the scene's
+# footprint is the grid's, at the scene's coordinates.
+BOUNDS_MARGIN_M = 0.3
+
+
+def scene_footprint(env: Any) -> tuple[float, float, float, float] | None:
+    """(x_min, x_max, y_min, y_max) of the scene's heightfield; None off
+    a scene."""
+    terrain = env.scene.terrain
+    generator = None if terrain is None else terrain.cfg.terrain_generator
+    patch = None if generator is None else generator.sub_terrains.get(SUB_TERRAIN)
+    if not isinstance(patch, SceneHeightfieldCfg):
+        return None
+    grid = patch.grid
+    half_x, half_y = grid.half
+    return (grid.x0, grid.x0 + 2 * half_x, grid.y0, grid.y0 + 2 * half_y)
+
+
+def out_of_scene_bounds(env: Any, margin: float = BOUNDS_MARGIN_M) -> torch.Tensor:
+    """Truncate a world whose base left the scene's footprint (less the
+    margin); all-false off a scene."""
+    footprint = scene_footprint(env)
+    if footprint is None:
+        return torch.zeros((env.num_envs,), device=env.device, dtype=torch.bool)
+    x_min, x_max, y_min, y_max = footprint
+    xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+    return (
+        (xy[:, 0] < x_min + margin)
+        | (xy[:, 0] > x_max - margin)
+        | (xy[:, 1] < y_min + margin)
+        | (xy[:, 1] > y_max - margin)
+    )
+
+
 class RendersSplats:
     """mujoco_warp as mjlab's sensor context sees it, with the scene's
     gaussians added to every render context it creates; everything

@@ -327,6 +327,7 @@ class Actions:
         horizon: int = 20,
         robot: str | None,
         project: str | None = None,
+        scene: str | None = None,
     ) -> JobHandle:
         """The locomotion evaluation (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
@@ -352,6 +353,8 @@ class Actions:
             argv += ["--device", device]
         if student is not None:
             argv += ["--student", student, "--horizon", str(horizon)]
+        if scene is not None:  # judged on the captured scene it trained on (docs/78 E2)
+            argv += ["--scene", scene]
         return self.jobs.start("evaluate-walk", argv, RQ_MJLAB_DIR)
 
     def play_walk(
@@ -414,23 +417,38 @@ class Actions:
             argv += ["--out", out]
         return self.jobs.start("preview-rewards", argv, RQ_MJLAB_DIR)
 
-    def generate_walk_demos(
+    def generate_walk_demos(  # noqa: PLR0913 - the press's knobs, each named
         self,
         checkpoint: str | None = None,
         episodes: int = 12,
         worlds: int = 9,
         seed: int = 1000,
         out: str = "../runs/walk-demos",
+        *,
+        robot: str | None = None,
+        scene: str | None = None,
+        project: str | None = None,
+        frame_size: tuple[int, int] | None = None,
     ) -> JobHandle:
         """The RL teacher generates demonstrations (docs/66 D2): the walk
         checkpoint (newest by default) rolls out in the batched env,
         each episode judged by the evaluation's criterion; keepers
         become a stamped DemoLayout batch with chase-camera frames,
-        discards a failures.jsonl. Export with export_batch."""
+        discards a failures.jsonl. On a captured `scene` (docs/78 E3)
+        the rollouts stand on it and the frames are the head camera's
+        picture of its splat. Export with export_batch."""
         argv = [*self._uv(RQ_MJLAB_DIR), "-m", "rq_mjlab.walk_press"]
         argv += [checkpoint] if checkpoint else ["--latest"]
         argv += ["--out", out, "--episodes", str(episodes)]
         argv += ["--worlds", str(worlds), "--seed", str(seed)]
+        if robot is not None:
+            argv += ["--robot", require_walk_robot(robot)]
+        if project is not None:
+            argv += ["--project", project]
+        if scene is not None:
+            argv += ["--scene", scene]
+        if frame_size is not None:
+            argv += ["--width", str(frame_size[0]), "--height", str(frame_size[1])]
         return self.jobs.start("generate-walk-demos", argv, RQ_MJLAB_DIR)
 
     # -- the Studio ----------------------------------------------------

@@ -1,0 +1,86 @@
+{
+ "id": "scene-walk-first-certificate-2026-09-23",
+ "claim": "The first walk trained on a captured scene, certified on that scene: go2-scene-c1 (mjlab's rough recipe - the height scan, no camera - on Neverwhere's hurdle course at the scene's own coordinates, 4,096 worlds, 51,600 env-steps/s) reached iteration 1,017 of 1,500 and died with NaN in the actor's observations; its last checkpoint, model_1000, judged on the scene by the verdict door with the scene in its protocol: survived 38/40, tracked 0/40, Clopper-Pearson 95 % [0, 0.088], error ratios 0.79-1.19 - and the training reward said the same, track_linear_velocity 0.67 of 2.0 against the plane run's 1.69. The scene walker learned to stay up on the course and not to go where it is told; every world starts at the course's start facing the first hurdle, commanded up to 1 m/s in any direction. The press on the scene (E3's plumbing: frames from the head camera inside the env, manifests naming the scene, its gap and its floor's basis) therefore kept nothing: 40 attempts, 38 survived, 0 tracked. The NaN's consistent cause: mjlab's terrain-bounds termination judges an origin-centred grid the scene patch is not, and had been dropped, so a world that walked off the heightfield's edge fell forever; the scene's own bounds termination is in. Also found: the Go2's play config runs 1e9-second episodes, so a press rollout ended only at a fall (fifty minutes in one batch) - capped at the training episode now.",
+ "date": "2026-09-23",
+ "repo_commit": "83669e1",
+ "argv": [
+  "train_walk(agent='g3', iterations=1500, task='go2-flat', scene='hurdle-blue-carpet', cameras=False, name='go2-scene-c1') [MCP door; job train-walk-013deb9e; runs/go2-scene-c1]",
+  "evaluate_walk('runs/go2-scene-c1/model_1000.pt', trials=40, robot='go2', scene='hurdle-blue-carpet') [MCP door -> python -m rq_mjlab.walk_verdict ... --scene; job evaluate-walk-9f6eea83]",
+  "Actions.generate_walk_demos(checkpoint='runs/go2-scene-c1/model_1000.pt', episodes=2, worlds=4, robot='go2', scene=<scenes/hurdle-blue-carpet>) [job generate-walk-demos-2a915223: 40 attempts, kept 0]",
+  "the plane's numbers: runs/go2-c2/training.json (final) and certificate go2-c2-model_1499-cuda-seed1000-n40-p37d3df"
+ ],
+ "instrument": "mjlab 1.6.0 + mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cuda, NVIDIA GeForce RTX 3090 Ti, WSL2, Python 3.12; the scene's heightfield at 0.05 m (rq_mjlab.scene_stage.TRAIN_CELL_M)",
+ "protocol": "docs/78-the-scene-loop.md §8.7; the verdict's: 40 seeded trials, held twists in the trained stage-1 envelope, survived and err_ratio < 0.5, law DR at the declared ±0.1 span, on the scene from the course's start",
+ "outcome": {
+  "training": {
+   "iterations_logged": 1019,
+   "of": 1500,
+   "envs": 4096,
+   "wall_s": 3086,
+   "steps_per_s": 51575,
+   "died": "NaN in the actor observation group at iteration 1017 (rsl_rl check_nan)",
+   "final": {
+    "track_linear_velocity": 0.671,
+    "track_angular_velocity": 1.165,
+    "episode_length": 887.88,
+    "termination_time_out": 3.917,
+    "termination_illegal_contact": 0.667
+   }
+  },
+  "plane_for_comparison": {
+   "run": "go2-c2",
+   "iterations": 1500,
+   "wall_s": 2470,
+   "final_track_linear_velocity": 1.69,
+   "certificate": "38/40 [0.8308, 0.9939]"
+  },
+  "scene_certificate": {
+   "name": "go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16",
+   "successes": 0,
+   "trials": 40,
+   "ci95": [
+    0.0,
+    0.0881
+   ],
+   "funnel": {
+    "survived": 38,
+    "tracked": 0
+   },
+   "err_ratio_range": [
+    0.79,
+    1.19
+   ],
+   "scene": "hurdle-blue-carpet@3c9ee1da4ed3"
+  },
+  "press_on_the_scene": {
+   "attempts": 40,
+   "kept": 0,
+   "survived": 38,
+   "tracked": 0,
+   "frames": "head camera 160x120 from the env's camera sensor, per tick",
+   "artifacts": "export.json, failures.jsonl; no datasheet (none kept)"
+  },
+  "fixes": [
+   "scene_stage.out_of_scene_bounds: a world past the grid's extent less 0.3 m is truncated (time_out)",
+   "walk_press: rollouts capped at the training episode (rq_pipeline.tasks.walks.DEFAULT_EPISODE_S)",
+   "walk_verdict --scene with require_same_scene and the identity's camera rule (walk_view.trained_with_cameras)"
+  ]
+ },
+ "artifacts": {
+  "run": "projects/go2-walk/runs/go2-scene-c1 (the box; projects/ is not tracked): model_0..model_1000.pt, train.log, training.json, identity.json",
+  "certificate": "projects/go2-walk/certificates/go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16; runs/go2-scene-c1/verdict/{walk-verdict-cuda.json, records-cuda.jsonl}",
+  "press": "projects/go2-walk/runs/go2-scene-demos-smoke/{export.json, failures.jsonl}",
+  "studio": "the verdict's feed: /verdict/err_ratio, /verdict/survived, /verdict/log per trial; projects/go2-walk/.index/screenshots/1790163592618083414-screenshot.png"
+ },
+ "sources": {
+  "bounds": "mjlab 1.6.0 tasks/velocity/mdp/terminations.py out_of_terrain_bounds: half the grid's size about the origin, less the margin; velocity_env_cfg.py registers it time_out=True",
+  "play_episode": "rq_mjlab/go2_walk.py _rough_env_cfg(play=True): episode_length_s = int(1e9)",
+  "tracking_reward": "mjlab velocity_env_cfg.py track_linear_velocity: weight 2.0, std sqrt(0.25)"
+ },
+ "caveats": [
+  "The NaN's cause is consistent with the terminations recorded (no bounds term; worlds walk 10 m in an episode), not reproduced: the bounds termination is in for the next run, and that run will say.",
+  "One run, one seed, 1,000 of 1,500 iterations: the scene walker's number is a first, not a bound on what the recipe can do here; the plane's recipe took 1,500 iterations to 38/40.",
+  "The press's criterion is the certificate's (survived and tracked); a survived-only batch would be data of a robot standing on a course, and was not pressed.",
+  "The certificate's commands are held twists from the course's start, the plane's protocol on the scene's ground; the course protocol (deploy/course.py) judges the exported form in the gate, which the rough actor's height scan cannot reach yet (docs/78 §8.7)."
+ ]
+}

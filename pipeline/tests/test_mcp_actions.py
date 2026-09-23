@@ -255,6 +255,14 @@ class TheDoors(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "one of"):
             walk_train_argv(agent="smoke", robot="spot")
 
+    def test_a_scene_rides_on_the_evaluation_argv(self) -> None:
+        with harness() as (actions, spawner):
+            actions.evaluate_walk(
+                "runs/c/model_9.pt", robot="go2", scene="/p/scenes/hurdle"
+            )
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[-2:], ["--scene", "/p/scenes/hurdle"])
+
     def test_a_scene_rides_on_the_walk_argv(self) -> None:
         argv = walk_train_argv(
             agent="smoke", robot="go2", scene="/p/scenes/hurdle", env_file=None
@@ -314,6 +322,31 @@ class TheStudentEvaluation(unittest.TestCase):
 
 
 class TheWalkDemosDoor(unittest.TestCase):
+    def test_generate_walk_demos_on_a_scene_names_the_robot_and_the_scene(self) -> None:
+        with harness() as (actions, spawner):
+            actions.generate_walk_demos(
+                checkpoint="runs/c/model_9.pt",
+                episodes=2,
+                worlds=4,
+                out="runs/w",
+                robot="go2",
+                scene="/p/scenes/hurdle",
+                project="/p",
+                frame_size=(160, 120),
+            )
+            [(argv, _cwd)] = spawner.calls
+            press = argv[argv.index("rq_mjlab.walk_press") :]  # after uv's own flags
+            self.assertEqual(press[1], "runs/c/model_9.pt")
+            self.assertEqual(press[press.index("--robot") + 1], "go2")
+            self.assertEqual(press[press.index("--scene") + 1], "/p/scenes/hurdle")
+            self.assertEqual(press[press.index("--project") + 1], "/p")
+            self.assertEqual(
+                press[press.index("--width") + 1 : press.index("--width") + 4],
+                ["160", "--height", "120"],
+            )
+            with self.assertRaisesRegex(ValueError, "one of"):
+                actions.generate_walk_demos(robot="spot")
+
     def test_generate_walk_demos_rolls_the_newest_checkpoint_by_default(self) -> None:
         with harness() as (actions, spawner):
             actions.generate_walk_demos(episodes=4, worlds=3, seed=9, out="runs/w")

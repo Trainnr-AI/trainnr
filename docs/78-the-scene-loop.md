@@ -103,7 +103,7 @@ number).
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
 | E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk; the operator's phone video is the first real capture |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
-| E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene |
+| E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene — **built 2026-09-23 (§8.7), the batch empty by the referee:** the press stands on the scene, films the head camera inside the env and names the scene, its gap and its floor on every manifest; the first scene-trained walker survives 38/40 and tracks 0/40 on its own scene, so no episode passes the criterion and the record says so |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
 | E5 | **The physics, measured (designed, gated on hardware).** A robot on the real floor of E1's capture: friction from interaction with an interval (the field's DROPO shape through `mujoco.sysid`'s intervals), the randomization span set from the interval, `check_drift` on a later recording of the same floor. | waits on a robot; the record's fields and the door's refusal ("declared, not measured") are built in E1 |
 
@@ -618,6 +618,77 @@ with the install line for the machine the chain runs on — never
 another machine's package manager (the first draft said `brew` on a
 Linux box, 2026-09-23). COLMAP's CPU build suffices: the chain runs
 the sparse mapper only.
+
+## 8.7 E3 built, and the first scene walker judged: a press that stands on the scene, a certificate that names it, an empty batch (2026-09-23, the box)
+
+**The press on a scene.** `generate_walk_demos(checkpoint, robot=, scene=)`
+(`rq_mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
+the microduck, now presses any registered walk, and on a captured scene
+the rollouts stand on its heightfield from the course's start; the
+frames are the head camera's picture of the splat, rendered inside the
+batched env by mujoco_warp's ray tracer and captured per tick from the
+camera sensor (`walk_verdict.rollout_episodes(capture_cameras=)`) —
+no CPU replay; every episode manifest carries a visual basis naming
+the scene's version, its renderer and its gap ("no visual draws"), and
+a dynamics basis naming the floor's friction as the scene declares it;
+the export descriptor's notes carry the scene; the datasheet prints a
+visual basis even when nothing was drawn (a splat is a basis nothing
+is drawn from). The loader (`walk_view.load_walk`) gates robot,
+actuator and scene between checkpoint and env, and shows the actor a
+camera exactly when its identity says it trained with one.
+
+**The certificate on a scene.** `evaluate_walk(checkpoint, robot=,
+scene=)`: the verdict judges a scene-trained checkpoint on its scene,
+refuses the plane for it and it for the plane by name
+(`require_same_scene`), and its protocol names the scene and the
+terrain, so the certificate's name (the protocol hash) never collides
+with a plane's.
+
+**The first scene walker.** `go2-scene-c1`: the g3 recipe on the
+hurdle scene — 4,096 worlds, the height scan, no camera, 51,600
+env-steps/s at scale (the plane's 60,000). It died at iteration 1,017
+of 1,500 with NaN in the actor's observations. The consistent cause:
+mjlab's bounds termination judges its origin-centred grid, which the
+scene patch is not, and it had been dropped; a world that walks off
+the heightfield's edge (10 m along the course at up to 1 m/s inside a
+20 s episode) falls forever, and its numbers stop being numbers. The
+scene stage now truncates a world that leaves the scene's footprint
+(`scene_stage.out_of_scene_bounds`, the grid's extent less 0.3 m, a
+time-out like mjlab's own). The last checkpoint, `model_1000`, judged
+on its scene by the new door:
+
+| | plane (go2-c2, 1500 it) | scene (go2-scene-c1, 1000 it) |
+|---|---|---|
+| tracking reward at the end (of 2.0) | 1.69 | 0.67 |
+| certificate on its own ground | 38/40 [0.831, 0.994] | **0/40** [0, 0.088], survived 38/40, error ratios 0.79–1.19 |
+| certificate name | `go2-c2-model_1499-cuda-seed1000-n40-p37d3df` | `go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16` |
+
+The certificate and the training reward agree: the scene walker learned
+to stay upright on the hurdle course and not to go where it is told.
+Every world starts at the course's start facing the first hurdle and is
+commanded up to 1 m/s in any direction; a thousand iterations of that
+is not a walker. So the press pressed nothing: 40 attempts, 38
+survived, 0 tracked, `failures.jsonl` names each one with its command
+and error, `export.json` stands, no datasheet (the press writes one
+for kept episodes). E3's plumbing and provenance are built and pinned;
+its batch waits for a policy that walks its scene — the honest empty
+result, recorded (finding `scene-walk-first-certificate-2026-09-23`).
+
+Two more things fixed on the way: the press rolled out forever on the
+Go2 (its play config's episode is 10⁹ s and only a fall ends one; the
+first scene press sat fifty minutes in its first batch) — every rollout
+is capped at the training episode now, said so in the batch's notes;
+and the verdict showed a scene walker a camera it never trained with
+(12,523 inputs against 235) — the loader's rule is the verdict's too.
+
+What a walker for this scene needs, for the record: a run long enough
+(the plane took 1,500 iterations to 38/40; this is harder), commands
+that do not send it into the hurdles from the first tick (the course
+protocol's own, or mjlab's terrain curriculum over difficulty rows the
+scene does not have), and a reference for the jump the velocity reward
+alone has not found (mocap and retargeting are the data engine's D5
+lane, designed, not built). None fits the box's one-hour rule; the
+cloud is empty; the operator's call.
 
 ## 9. How a scene's physics gets certified for a task
 

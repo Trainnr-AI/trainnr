@@ -448,11 +448,14 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     student: str | None = None,
     horizon: int = 20,
     robot: str | None = None,
+    scene: str | None = None,
 ) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
     the run's versions on every row; `robot` names the walk the checkpoint
     belongs to, else the project's one declared walk. With a project open
-    its robots are searched first. Job handle."""
+    its robots are searched first. `scene` names the captured scene the
+    checkpoint trained on (its identity says): the certificate is judged
+    on it, and its protocol names it. Job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -474,6 +477,7 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
             horizon=horizon,
             robot=robot,
             project=str(root) if root else None,
+            scene=_scene_dir(root, scene),
         )
     except ValueError as why:
         return refusal(str(why))

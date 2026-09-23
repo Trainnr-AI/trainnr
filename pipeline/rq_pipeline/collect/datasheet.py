@@ -139,7 +139,9 @@ def _fold_visuals(
                     visual_draws.setdefault(f"{key}[{i}]", []).append(float(component))
             else:
                 visual_draws.setdefault(key, []).append(float(value))
-    bases = tuple(sorted({e["visual_basis"] for e in normalized if e["visuals"]}))
+    # the basis is named with or without draws: a captured scene's splat
+    # is a visual basis nothing was drawn from (docs/78 E3)
+    bases = tuple(sorted({e["visual_basis"] for e in normalized if e["visual_basis"]}))
     return visual_draws, bases
 
 
@@ -292,6 +294,8 @@ def render(summary: DatasheetSummary) -> str:
         f"| {param} | {s.low:.4g} | {s.mean:.4g} | {s.high:.4g} |"
         for param, s in sorted(summary.dynamics.items())
     ]
+    if summary.visual_bases and not summary.visuals:
+        lines += ["", "## Visuals", "", f"Basis: {', '.join(summary.visual_bases)}"]
     if summary.visuals:
         lines += [
             "",

@@ -153,6 +153,23 @@ class Rendering(unittest.TestCase):
             self.assertEqual(path.name, "datasheet.md")
             self.assertEqual(path.read_text(), page)
 
+    def test_a_visual_basis_is_named_even_when_nothing_was_drawn(self) -> None:
+        # a captured scene's splat is a visual basis with no draws (docs/78 E3)
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = press_manifest(1, 1.0) | {
+                "visual_basis": "the captured scene fake@1: no visual draws"
+            }
+            write_manifest(root, 0, raw)
+            summary = summarize(root)
+            self.assertEqual(
+                summary.visual_bases, ("the captured scene fake@1: no visual draws",)
+            )
+            page = render(summary)
+            self.assertIn("## Visuals", page)
+            self.assertIn("Basis: the captured scene fake@1", page)
+            self.assertNotIn("## Visual draws", page)
+
 
 if __name__ == "__main__":
     unittest.main()
