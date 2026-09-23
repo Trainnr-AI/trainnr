@@ -72,8 +72,10 @@ step "mypy (pipeline)"         "(cd pipeline && uv run --extra sim --extra mcp -
 step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
+# sim-run spawns the Rerun viewer by name: the pipeline venv's, whatever
+# the shell's PATH holds (a fresh session had none, 2026-09-23).
 step "simulator solves the U-trap" \
-     "cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
+     "PATH=\"\$PWD/pipeline/.venv/bin:\$PATH\" cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
 
 # The two crates that must compile for the chip as well as the laptop.
 # `cargo test` proves neither: it builds the std shape only, so an

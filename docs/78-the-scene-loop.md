@@ -605,6 +605,20 @@ ones hid the room (it draws the visible set, the audit's, and says how
 many of how many); a staged deployment's lineage named no environment
 (it cites its scene now, and its card leads with scene and terrain).
 
+
+**Installing the chain, on any machine.** It runs three tools as
+subprocesses, found on PATH: `ffmpeg`/`ffprobe` (`brew install
+ffmpeg`, `sudo apt install ffmpeg`, `winget install Gyan.FFmpeg`),
+`colmap` (`brew install colmap`, `sudo apt install colmap`, a release
+from colmap's GitHub on Windows) and Brush's `brush_app`
+(`python3 tools/install-brush.py` fetches the release binary for the
+running platform into a user bin directory with its SHA-256 checked,
+no root; or pass the binary's path). A missing tool is refused by name
+with the install line for the machine the chain runs on — never
+another machine's package manager (the first draft said `brew` on a
+Linux box, 2026-09-23). COLMAP's CPU build suffices: the chain runs
+the sparse mapper only.
+
 ## 9. How a scene's physics gets certified for a task
 
 Assembled from what exists (docs/e2e-research/76 §7), every step but

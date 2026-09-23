@@ -116,6 +116,30 @@ class TheTools(unittest.TestCase):
             capture.Tools.find(video=False)
         self.assertNotIn("ffmpeg", str(caught.exception))
 
+    def test_the_refusal_names_this_machines_install_line(self) -> None:
+        # never another machine's package manager (docs/78 §8.6)
+        self.assertEqual(
+            capture.install_hint("colmap", "Darwin"), "brew install colmap"
+        )
+        self.assertEqual(
+            capture.install_hint("colmap", "Linux"), "sudo apt install colmap"
+        )
+        self.assertIn("tools/install-brush.py", capture.install_hint("brush", "Linux"))
+        self.assertIn(
+            "tools/install-brush.py", capture.install_hint("brush", "Windows")
+        )
+        self.assertEqual(
+            capture.install_hint("ffprobe", "Linux"), "sudo apt install ffmpeg"
+        )
+        with (
+            mock.patch("shutil.which", return_value=None),
+            mock.patch("platform.system", return_value="Linux"),
+            self.assertRaises(capture.MissingToolError) as caught,
+        ):
+            capture.Tools.find(video=True)
+        self.assertIn("colmap (sudo apt install colmap)", str(caught.exception))
+        self.assertNotIn("brew", str(caught.exception))
+
 
 @needs_scene
 class TheAlignment(unittest.TestCase):

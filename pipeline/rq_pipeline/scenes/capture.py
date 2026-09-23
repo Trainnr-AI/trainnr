@@ -31,6 +31,7 @@ does not re-run COLMAP.
 from __future__ import annotations
 
 import json
+import platform
 import re
 import shutil
 import subprocess
@@ -117,6 +118,35 @@ CAPTURE_NOTES = (
 )
 
 
+BRUSH_BINARY = "brush_app"
+# How each tool is installed, by platform: the refusal names the line for
+# the machine it runs on, never another machine's package manager.
+INSTALL_HINTS: dict[str, dict[str, str]] = {
+    "ffmpeg": {
+        "Darwin": "brew install ffmpeg",
+        "Linux": "sudo apt install ffmpeg",
+        "Windows": "winget install Gyan.FFmpeg",
+    },
+    "colmap": {
+        "Darwin": "brew install colmap",
+        "Linux": "sudo apt install colmap",
+        "Windows": "a release from https://github.com/colmap/colmap/releases on PATH",
+    },
+    "brush": {
+        "*": "python3 tools/install-brush.py fetches the release binary for this "
+        "machine into a user bin directory; or pass its path",
+    },
+}
+INSTALL_HINTS["ffprobe"] = INSTALL_HINTS["ffmpeg"]
+
+
+def install_hint(tool: str, system: str | None = None) -> str:
+    """The install line for `tool` on `system` (this machine's by default)."""
+    hints = INSTALL_HINTS[tool]
+    system = system or platform.system()
+    return hints.get(system) or hints.get("*") or "see the tool's own site"
+
+
 class MissingToolError(FileNotFoundError):
     """A tool the chain needs is not on this machine; named."""
 
@@ -157,12 +187,16 @@ class Tools:
         missing = []
         found = {n: shutil.which(n) for n in ("ffmpeg", "ffprobe", "colmap")}
         if video:
-            missing += [n for n in ("ffmpeg", "ffprobe") if found[n] is None]
+            missing += [
+                f"{n} ({install_hint(n)})"
+                for n in ("ffmpeg", "ffprobe")
+                if found[n] is None
+            ]
         if found["colmap"] is None:
-            missing.append("colmap (brew install colmap)")
-        brush_path = brush or (Path(b) if (b := shutil.which("brush_app")) else None)
+            missing.append(f"colmap ({install_hint('colmap')})")
+        brush_path = brush or (Path(b) if (b := shutil.which(BRUSH_BINARY)) else None)
         if brush_path is None or not brush_path.is_file():
-            missing.append("brush_app (Brush's binary; pass its path)")
+            missing.append(f"{BRUSH_BINARY} ({install_hint('brush')})")
         if missing:
             raise MissingToolError("the capture chain needs " + ", ".join(missing))
         return Tools(
