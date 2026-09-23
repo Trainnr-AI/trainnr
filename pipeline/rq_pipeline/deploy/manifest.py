@@ -26,8 +26,6 @@ GATE_SCHEMA = "trainnr-gate/1"
 # and the instrument each stands for — one table, `deploy.runtimes`.
 GATE_RECORDS = {name: spec.record_file for name, spec in RUNTIMES.items()}
 GATE_INSTRUMENTS = {name: spec.instrument for name, spec in RUNTIMES.items()}
-GATE_FILE = GATE_RECORDS["mujoco"]
-DDS_GATE_FILE = GATE_RECORDS["dds"]
 
 
 class Key:

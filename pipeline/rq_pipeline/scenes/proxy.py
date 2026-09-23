@@ -9,14 +9,17 @@ sees is the scene's gap (docs/78 §3) plus this one (the audit's caveat,
 finding `scene-gap-neverwhere-hurdle-2026-09-22`).
 
 CoACD (MIT; Wei et al. 2022) does the decomposition, behind the `scene`
-extra; without it `ensure_parts` refuses by name and the stage cannot be
-composed. Parts land in `proxy-parts/` beside the proxy with a record,
-written once: a second call reads the record back.
+extra, when the scene is imported or captured; without it the record
+says the parts are unrecorded and a stage asking for the hulls terrain
+refuses by name (a stage never writes into a scene: its version is its
+bytes). Parts land in `proxy-parts/` beside the proxy with a record,
+written once and whole: a second call reads the record back.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from importlib.metadata import PackageNotFoundError, version
@@ -25,6 +28,7 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.scenes.gap import GAP_DIGITS, SURFACE_SAMPLES
 from rq_pipeline.scenes.obj import read_obj, write_obj
 from rq_pipeline.scenes.record import PROXY_FILE, UNRECORDED
 
@@ -35,8 +39,6 @@ PART_NAME = "part-{index:03d}.obj"
 NEEDS_COACD = "the scene extra (CoACD): uv sync --extra scene"
 TOOL = "CoACD"
 # The samples the decomposition's gap is judged on, each way.
-GAP_SAMPLES = 50_000
-GAP_DIGITS = 5
 
 
 @dataclass(frozen=True)
@@ -100,24 +102,30 @@ def _tool_version() -> str:
 
 
 def decompose(
-    proxy_obj: Path, out_dir: Path, *, params: DecompositionParams = DEFAULT_PARAMS
+    scene_dir: Path, *, params: DecompositionParams = DEFAULT_PARAMS
 ) -> Decomposition:
-    """The proxy into convex parts under `out_dir`, with the record;
-    `out_dir` must not exist (an artifact's parts are written once)."""
+    """The scene's proxy into convex parts under its `PARTS_DIR`, with the
+    record beside them; written once (an artifact's parts never change),
+    and whole: the parts land in a staging folder renamed into place
+    before the record is written, so a crash midway leaves nothing a
+    later call would mistake for parts."""
     coacd = _coacd()
-    out_dir = Path(out_dir)
+    scene_dir = Path(scene_dir)
+    out_dir = scene_dir / PARTS_DIR
     if out_dir.exists():
         raise FileExistsError(f"{out_dir} exists; parts are written once")
-    vertices, faces = read_obj(proxy_obj)
+    vertices, faces = read_obj(scene_dir / PROXY_FILE)
     started = time.perf_counter()
     hulls = coacd.run_coacd(coacd.Mesh(vertices, faces), **asdict(params))
     seconds = time.perf_counter() - started
-    out_dir.mkdir(parents=True)
+    staging = scene_dir / f".{PARTS_DIR}.{os.getpid()}.tmp"
+    staging.mkdir(parents=True)
     files = []
     for i, (hv, hf) in enumerate(hulls):
         name = PART_NAME.format(index=i)
-        write_obj(out_dir / name, np.asarray(hv), np.asarray(hf))
+        write_obj(staging / name, np.asarray(hv), np.asarray(hf))
         files.append(name)
+    staging.rename(out_dir)
     parts = [(np.asarray(hv, dtype=np.float64), np.asarray(hf)) for hv, hf in hulls]
     record = Decomposition(
         parts=len(parts),
@@ -129,7 +137,7 @@ def decompose(
         gap=decomposition_gap(vertices, faces, parts, seed=params.seed),
         files=tuple(files),
     )
-    (out_dir.parent / PARTS_FILE).write_text(
+    (scene_dir / PARTS_FILE).write_text(
         json.dumps(asdict(record), indent=1) + "\n", encoding="utf-8"
     )
     return record
@@ -176,7 +184,7 @@ def decomposition_gap(
                 o3d.utility.Vector3iVector(np.asarray(f, np.int32)),
             )
         o3d.utility.random.seed(seed)
-        return np.asarray(merged.sample_points_uniformly(GAP_SAMPLES).points)
+        return np.asarray(merged.sample_points_uniformly(SURFACE_SAMPLES).points)
 
     def distances(scene: Any, points: np.ndarray) -> np.ndarray:
         return (
@@ -199,7 +207,7 @@ def decomposition_gap(
         "proxy_to_hulls_p95_m": round(
             float(np.percentile(proxy_to_hulls, 95)), GAP_DIGITS
         ),
-        "samples": GAP_SAMPLES,
+        "samples": SURFACE_SAMPLES,
         "method": "uniform surface samples of each side to the other by Open3D "
         "ray casting",
     }
@@ -225,5 +233,4 @@ def ensure_parts(
     existing = load_decomposition(scene_dir)
     if existing is not None:
         return existing
-    scene_dir = Path(scene_dir)
-    return decompose(scene_dir / PROXY_FILE, scene_dir / PARTS_DIR, params=params)
+    return decompose(scene_dir, params=params)

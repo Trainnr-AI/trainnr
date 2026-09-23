@@ -105,7 +105,7 @@ def write_previews(project: Project, index: ProjectIndex) -> dict[str, str]:
                 ok = False
             if not ok:
                 continue
-        written[artifact.stamp] = str(out.relative_to(project.root))
+        written[artifact.stamp] = out.relative_to(project.root).as_posix()
     return written
 
 

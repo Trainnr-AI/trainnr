@@ -28,9 +28,12 @@ import numpy as np
 
 from rq_pipeline.robot.fit_record import code_version
 from rq_pipeline.scenes import gap as gap_audit
+from rq_pipeline.scenes.obj import FACE, VERTEX
 from rq_pipeline.scenes.proxy import PARTS_FILE, ensure_parts
 from rq_pipeline.scenes.record import (
     DECLARED,
+    DECLARED_FRICTION_SPAN,
+    FLOOR_FRICTION,
     PROXY_FILE,
     PROXY_MJCF,
     SCENE_FILE,
@@ -57,10 +60,8 @@ CHECKPOINT = Path("3dgs") / "model.pt"
 COLLISION_MESH = Path("geometry") / "collision_mesh.obj"
 COLLISION_TF = Path("geometry") / "collision_tf.json"
 # Their XML declares the floor's friction on the collision geom; the
-# span around it is THIS project's declaration, not theirs.
-DECLARED_SPAN = 0.2
+# span around it is THIS project's declaration (`record.DECLARED_FRICTION_SPAN`).
 FRICTION_RE = re.compile(r'name="collision_mesh_geom"[^>]*friction="([^"]+)"')
-# The group MuJoCo hides by default and the mirror skips (rq_pipeline.viz).
 FRICTION_CITES = (
     f"{SOURCE}: the scene XML's collision geom (sliding, torsional, rolling); "
     "the span is this project's declaration"
@@ -123,9 +124,9 @@ def _mesh_facts(obj: Path) -> dict[str, Any]:
     vertices = faces = 0
     with Path(obj).open("r", encoding="utf-8", errors="replace") as src:
         for line in src:
-            if line.startswith("v "):
+            if line.startswith(VERTEX):
                 vertices += 1
-            elif line.startswith("f "):
+            elif line.startswith(FACE):
                 faces += 1
     facts: dict[str, Any] = {"file": PROXY_FILE, "vertices": vertices, "faces": faces}
     try:
@@ -188,10 +189,10 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
     if friction is not None:
         physics.append(
             Physics(
-                name="floor_friction",
+                name=FLOOR_FRICTION,
                 value=friction,
                 basis=DECLARED,
-                span=DECLARED_SPAN,
+                span=DECLARED_FRICTION_SPAN,
                 cites=FRICTION_CITES,
                 unit="MuJoCo friction triple",
             )
@@ -222,7 +223,7 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
             Tool(
                 name="OpenMVS + their mesh tools",
                 version=UNRECORDED,
-                license="MIT",
+                license="AGPL-3.0 (OpenMVS); their own tools unrecorded",
                 role="their collision mesh (docs/e2e-research/75 §2)",
             ),
             Tool(

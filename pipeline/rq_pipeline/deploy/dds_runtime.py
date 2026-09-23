@@ -76,6 +76,7 @@ class SdkBus:
 
     def __init__(self, network: str = NETWORK, domain_id: int = DOMAIN_ID) -> None:
         require_platform(RUNTIMES["dds"])
+        self.network = network
         from unitree_sdk2py.core.channel import (  # noqa: PLC0415
             ChannelFactoryInitialize,
             ChannelSubscriber,
@@ -99,11 +100,11 @@ class SdkBus:
         began = time.monotonic()
         state = self._state.Read(timeout_ms)
         if state is None:
-            raise TimeoutError(_silent(TOPIC_STATE, timeout_ms))
+            raise TimeoutError(_silent(TOPIC_STATE, timeout_ms, self.network))
         spent_ms = int((time.monotonic() - began) * 1000)
         low = self._low.Read(max(1, timeout_ms - spent_ms))
         if low is None:
-            raise TimeoutError(_silent(TOPIC_LOW, timeout_ms))
+            raise TimeoutError(_silent(TOPIC_LOW, timeout_ms, self.network))
         # Every motor slot their message carries; the runtime picks the
         # policy's joints out by the manifest's SDK order.
         self._pose = (
@@ -121,12 +122,13 @@ class SdkBus:
         return self._pose
 
 
-def _silent(topic: str, budget_ms: int) -> str:
-    return f"no {topic} within {budget_ms} ms: is their simulator up on {NETWORK}?"
+def _silent(topic: str, budget_ms: int, network: str) -> str:
+    return f"no {topic} within {budget_ms} ms: is their simulator up on {network}?"
 
 
 class DdsRuntime:
-    """The seven calls the gate makes, answered by their stack."""
+    """The gate's runtime protocol (`deploy.runtimes.GateRuntime`),
+    answered by their stack over the bus and the virtual pad."""
 
     command_limit: float | None = COMMAND_LIMIT
 
@@ -176,7 +178,11 @@ class DdsRuntime:
         latest = self.bus.latest(STATE_TIMEOUT_MS)
         if latest is None:  # a bus that cannot say which topic was silent
             raise TimeoutError(
-                _silent(f"{TOPIC_STATE} and {TOPIC_LOW}", STATE_TIMEOUT_MS)
+                _silent(
+                    f"{TOPIC_STATE} and {TOPIC_LOW}",
+                    STATE_TIMEOUT_MS,
+                    getattr(self.bus, "network", NETWORK),
+                )
             )
         self._quat, self._velocity_w = latest
 

@@ -44,7 +44,9 @@ from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+from rq_pipeline.project.kinds import IDENTITY_FILE
+
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, Identity, use_project, walk_spec
 
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
@@ -144,8 +146,9 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         "--robot",
         choices=ROBOTS,
         default=DEFAULT_ROBOT,
-        help="which walk (rq_mjlab.walks): the microduck on its certified bundle, "
-        "or mjlab's own Go1 flat task around its derived gains",
+        help="which registered walk (rq_mjlab.walks.WALKS): the microduck on its "
+        "certified bundle, mjlab's Go1 around its derived gains, the Go2 on its "
+        "declared gains",
     )
     parser.add_argument(
         "--head",
@@ -242,22 +245,22 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         scene=args.scene,
         cameras=not args.no_cameras,
     )
-    print(f"[train] actuator {identity['actuator']}; dr_basis: {identity['dr_basis']}")
-    if args.scene is not None and not args.no_cameras:
-        from rq_mjlab.scene_stage import render_splats  # noqa: PLC0415
-
-        # the scene's gaussians into every camera mjlab renders (docs/78 E2)
-        gaussians = render_splats(args.scene)
-        identity["cameras"] = f"{identity['cameras']} over {gaussians} splats"
+    print(
+        f"[train] actuator {identity[Identity.ACTUATOR]}; "
+        f"dr_basis: {identity[Identity.DR_BASIS]}"
+    )
     if args.scene is not None:
-        print(f"[train] scene {identity['scene']}; cameras: {identity['cameras']}")
+        print(
+            f"[train] scene {identity[Identity.SCENE]}; "
+            f"cameras: {identity[Identity.CAMERAS]}"
+        )
     log_root = args.log_root or Path(f"../runs/{args.robot}-walk")
     cfg.scene.num_envs = envs
     if args.seed is not None:
         cfg.seed = args.seed
-    identity = {**identity, "seed": cfg.seed}
+    identity = {**identity, Identity.SEED: cfg.seed}
     if args.task_stamp:
-        identity["task"] = args.task_stamp
+        identity[Identity.TASK] = args.task_stamp
     # The smoke gate archives nothing; g3 archives itself with identity,
     # and its saved stream lands inside that folder (docs/76 §10.5).
     log_dir = None
@@ -279,7 +282,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
 
     agent = smoke_agent(iterations) if args.agent == "smoke" else spec.agent(iterations)
     if log_dir is not None:
-        (log_dir / "identity.json").write_text(json.dumps(identity, indent=1))
+        (log_dir / IDENTITY_FILE).write_text(json.dumps(identity, indent=1))
         # The console also lands in the run folder as train.log: the
         # project's live view reads it while the run trains (docs/77).
         sys.stdout = Tee(sys.stdout, log_dir / "train.log")

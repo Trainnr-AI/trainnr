@@ -139,7 +139,7 @@ const MJ_DEFAULT_GROUPS_ON: usize = 3;
 const FLAG_CELL_INSET: f32 = 10.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-enum Tab {
+pub enum Tab {
     #[default]
     Control,
     Joints,
@@ -213,13 +213,18 @@ fn held_twist(viewport: &ViewportFeed, status: &SimStatus) -> Option<(i32, [f64;
         .or_else(|| status.twist.as_ref().map(|t| (t.world as i32, t.value)))
 }
 
-/// The door's `command`: one axis by name with a value, or `own`.
-pub fn command_from_door(
+/// The door's `command`, one axis by name with a value, or `own`: the
+/// twist it asks for, checked and not yet sent: `None` hands the
+/// worlds back to their policy (`own`), else the world and the held
+/// twist with one axis replaced. Checked apart from the sending so a
+/// refusal changes nothing (`Command::Simulator` applies every field
+/// only once all of them passed).
+pub fn twist_from_door(
     ctx: &egui::Context,
-    viewport: &mut ViewportFeed,
+    viewport: &ViewportFeed,
     axis: &str,
     value: Option<f32>,
-) -> Result<(), String> {
+) -> Result<Option<(i32, [f32; 3])>, String> {
     let (status, model) = viewport.report();
     let (Some(status), Some(model)) = (status, model) else {
         return Err("the scene is not described yet".into());
@@ -228,8 +233,7 @@ pub fn command_from_door(
         return Err("commands need a walk scene; this scene has none".into());
     }
     if axis == "own" {
-        viewport.send_twist(-1, [0.0; 3]);
-        return Ok(());
+        return Ok(None);
     }
     let index = TWIST_AXES
         .iter()
@@ -240,23 +244,42 @@ pub fn command_from_door(
         held_twist(viewport, &status).unwrap_or_else(|| (command_world(ctx, &status), [0.0; 3]));
     let mut twist = held.map(|v| v as f32);
     twist[index] = value;
-    viewport.send_twist(world, twist);
-    set_drawer(ctx, true, Tab::Commands);
-    Ok(())
+    Ok(Some((world, twist)))
 }
 
-/// Open the drawer on a tab by name, or close it — the agent's door.
-pub fn inspect(ctx: &egui::Context, what: &str) -> Result<(), String> {
-    let (_, tab) = drawer_state(ctx);
+/// Send what `twist_from_door` checked.
+pub fn apply_twist_from_door(
+    ctx: &egui::Context,
+    viewport: &mut ViewportFeed,
+    twist: Option<(i32, [f32; 3])>,
+) {
+    match twist {
+        None => viewport.send_twist(-1, [0.0; 3]),
+        Some((world, twist)) => {
+            viewport.send_twist(world, twist);
+            set_drawer(ctx, true, Tab::Commands);
+        }
+    }
+}
+
+/// The drawer state `inspect` asks for, checked and not yet applied:
+/// `None` closes it, `Some(tab)` opens it there.
+pub fn inspect_tab(what: &str) -> Result<Option<Tab>, String> {
     if what.is_empty() || what == Tab::CLOSE {
-        set_drawer(ctx, false, tab);
-        return Ok(());
+        return Ok(None);
     }
-    match Tab::by_slug(what) {
+    Tab::by_slug(what)
+        .map(Some)
+        .ok_or_else(|| format!("inspect {what:?}: one of {}", Tab::words()))
+}
+
+/// Apply what `inspect_tab` checked.
+pub fn apply_inspect(ctx: &egui::Context, tab: Option<Tab>) {
+    let (_, current) = drawer_state(ctx);
+    match tab {
+        None => set_drawer(ctx, false, current),
         Some(wanted) => set_drawer(ctx, true, wanted),
-        None => return Err(format!("inspect {what:?}: one of {}", Tab::words())),
     }
-    Ok(())
 }
 
 /// The drawer's open state and tab live in egui's memory, keyed here.

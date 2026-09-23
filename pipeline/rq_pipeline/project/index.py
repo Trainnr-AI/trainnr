@@ -30,6 +30,7 @@ from typing import Any
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.manifest import gate_word, read_gates
+from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
 from rq_pipeline.evaluate.commands import describe_twist
@@ -55,6 +56,7 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
+from rq_pipeline.scenes.record import proxy_from_splat
 from rq_pipeline.scenes.stage import SCENE_TERRAIN_WORD, scene_name_of
 
 # The one word for a fact an artifact never recorded - never a guess.
@@ -174,8 +176,12 @@ def index_project(project: Project) -> ProjectIndex:
                 if kind is Kind.TASK:
                     identity = _task_identity(path, identity)
             except UnknownKindError as why:
+                relative = path.relative_to(project.root).as_posix()
                 refused.append(
-                    {"path": str(path.relative_to(project.root)), "reason": str(why)}
+                    {
+                        "path": relative,
+                        "reason": str(why),
+                    }
                 )
                 continue
             created, updated = _times(kind, path)
@@ -183,7 +189,7 @@ def index_project(project: Project) -> ProjectIndex:
                 Artifact(
                     kind=kind.value,
                     stamp=identity,
-                    path=str(path.relative_to(project.root)),
+                    path=path.relative_to(project.root).as_posix(),
                     cites=_cites(kind, path),
                     summary=_summary(kind, path),
                     created=created,
@@ -573,10 +579,13 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     m = _read(path / DEPLOY_FILE)
     gates = read_gates(path)
     out: dict[str, Any] = {
-        "gate": gate_word(gates["mujoco"]) if "mujoco" in gates else "not run",
+        "gate": gate_word(gates[DEFAULT_RUNTIME])
+        if DEFAULT_RUNTIME in gates
+        else "not run",
     }
-    if "dds" in gates:
-        out["gate (DDS)"] = gate_word(gates["dds"])
+    for runtime in RUNTIMES:
+        if runtime != DEFAULT_RUNTIME and runtime in gates:
+            out[f"gate ({runtime.upper()})"] = gate_word(gates[runtime])
     scene = scene_name_of(m)
     if scene:  # a staged deployment: what it stands on, before the rest
         out["scene"] = scene
@@ -618,7 +627,7 @@ def _summary_scene(path: Path) -> dict[str, Any]:
     p95 = gap.get("p95_m")
     # a proxy built from the splat itself makes the gap self-referential;
     # the card says so beside the number (docs/78 §8.6)
-    own = "the visible gaussian" in str((s.get("proxy") or {}).get("from", ""))
+    own = proxy_from_splat(s)
     out: dict[str, Any] = {
         "gap p95": (f"{p95 * 100:.1f} cm" + (" (proxy from the splat)" if own else ""))
         if isinstance(p95, (int, float))

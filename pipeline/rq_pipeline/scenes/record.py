@@ -8,9 +8,13 @@ Nothing here is invented: a field the capture did not record reads
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from rq_pipeline.bundles.json_record import JsonRecord
 
@@ -133,8 +137,6 @@ class SceneRecord(JsonRecord):
 
 def load_scene_record(path: Path) -> SceneRecord:
     """A record back from disk, its parts typed; refuses another schema."""
-    import json  # noqa: PLC0415
-
     raw: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
     schema = raw.get("schema")
     if schema != SCENE_SCHEMA:
@@ -163,15 +165,54 @@ def load_scene_record(path: Path) -> SceneRecord:
 
 
 COLLISION_GROUP = 3  # the group the stage and the viewer treat as colliders
-PROXY_RGBA = "0.4 0.4 0.4 0.3"
+PROXY_RGBA = (0.4, 0.4, 0.4, 0.3)  # the proxy's look in any viewer: grey, faint
+# What a proxy built from the splat itself says about its origin (the
+# capture writes it; the card reads it: the gap is then self-referential,
+# docs/78 §8.6).
+PROXY_FROM_SPLAT = "the visible gaussian centres (opacity >= {opacity})"
+
+
+def proxy_from_splat(record: dict[str, Any]) -> bool:
+    """Whether a scene record's proxy came from its own splat."""
+    origin = str((record.get("proxy") or {}).get("from", ""))
+    return origin.startswith(PROXY_FROM_SPLAT.split("{", 1)[0])
+
+
+# The record's declared physics, by name (docs/78 §3): the floor's friction
+# as a scene's author or importer declares it, with this project's span.
+FLOOR_FRICTION = "floor_friction"
+DECLARED_FRICTION_SPAN = 0.2
+# MuJoCo's own geom friction (sliding, torsional, rolling): what a
+# declaration shorter than three numbers is padded with, so the proxy's
+# MJCF and a stage's terrain give the solver the same triple.
+MUJOCO_FRICTION = (1.0, 0.005, 0.0001)
+
+
+def friction_triple(friction: Sequence[float]) -> tuple[float, float, float]:
+    """A declared friction as the solver takes it: the numbers given,
+    the rest MuJoCo's defaults."""
+    values = [float(v) for v in friction][:3]
+    return tuple(values + list(MUJOCO_FRICTION[len(values) :]))  # type: ignore[return-value]
+
+
+def floor_friction(record: SceneRecord) -> list[float] | None:
+    """The floor's declared friction from a record, as a list; None when
+    the scene declares none."""
+    declared = next((p for p in record.physics if p.name == FLOOR_FRICTION), None)
+    if declared is None:
+        return None
+    return [float(v) for v in np.atleast_1d(declared.value)]
 
 
 def proxy_mjcf(mesh_file: str, friction: list[float] | None) -> str:
     """The proxy as one mesh geom in the collision group: what every
     importer writes beside the OBJ, so a plain MuJoCo load sees it."""
     friction_attr = (
-        f' friction="{" ".join(f"{v:g}" for v in friction)}"' if friction else ""
+        f' friction="{" ".join(f"{v:g}" for v in friction_triple(friction))}"'
+        if friction
+        else ""
     )
+    rgba = " ".join(f"{v:g}" for v in PROXY_RGBA)
     return (
         "<mujoco>\n"
         "  <asset>\n"
@@ -179,7 +220,7 @@ def proxy_mjcf(mesh_file: str, friction: list[float] | None) -> str:
         "  </asset>\n"
         "  <worldbody>\n"
         f'    <geom name="scene_proxy" type="mesh" mesh="scene_proxy" '
-        f'group="{COLLISION_GROUP}"{friction_attr} rgba="{PROXY_RGBA}"/>\n'
+        f'group="{COLLISION_GROUP}"{friction_attr} rgba="{rgba}"/>\n'
         "  </worldbody>\n"
         "</mujoco>\n"
     )

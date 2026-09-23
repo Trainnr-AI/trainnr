@@ -132,14 +132,20 @@ fn own_process_group(command: &mut Command) {
     }
 }
 
-/// MuJoCo's offscreen GL: EGL on Linux (macOS must not get it), and
-/// under WSL the D3D12 driver with its library directory PREPENDED to
-/// whatever the caller's loader path already holds — a cloud box's CUDA
-/// paths stay. Harmless on native Linux, where the WSL block is skipped.
+/// MuJoCo's offscreen GL: EGL on Linux (macOS must not get it) unless
+/// the caller's environment already chose one (a headless box on
+/// osmesa, `pipeline/wsl.env`); under WSL the D3D12 driver with its
+/// library directory PREPENDED to whatever the caller's loader path
+/// already holds — a cloud box's CUDA paths stay. Harmless on native
+/// Linux, where the WSL block is skipped.
 fn mujoco_environment(command: &mut Command) {
     #[cfg(target_os = "linux")]
     {
-        command.env("MUJOCO_GL", "egl").env("OMP_NUM_THREADS", "1");
+        for (name, default) in [("MUJOCO_GL", "egl"), ("OMP_NUM_THREADS", "1")] {
+            if std::env::var_os(name).is_none_or(|v| v.is_empty()) {
+                command.env(name, default);
+            }
+        }
         if on_wsl() {
             let lib_path = match std::env::var_os("LD_LIBRARY_PATH") {
                 Some(existing) if !existing.is_empty() => {
@@ -209,15 +215,25 @@ pub fn kill_tree(child: &mut Child) {
 /// it), and the grace, the KILL and the reap run on their own thread.
 /// The 1.5 s grace on the UI thread froze the window on every scene
 /// change and doubled at quit (2026-09-13).
-pub fn end_tree(mut child: Child) {
+pub fn end_tree(child: Child) {
     #[cfg(unix)]
     signal_group(&child, "TERM");
+    // The child sits in a slot both sides can reach: the thread takes it
+    // to reap, and if no thread can be had this thread takes it back and
+    // reaps the blocking way, rather than dropping it unreaped.
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(child)));
+    let theirs = std::sync::Arc::clone(&slot);
     let reap = std::thread::Builder::new()
         .name("end-tree".to_owned())
-        .spawn(move || kill_tree(&mut child));
-    if let Err(child_back) = reap {
-        // No thread to be had: the blocking way, rather than a leak.
-        drop(child_back);
+        .spawn(move || {
+            if let Some(mut child) = theirs.lock().ok().and_then(|mut s| s.take()) {
+                kill_tree(&mut child);
+            }
+        });
+    if reap.is_err() {
+        if let Some(mut child) = slot.lock().ok().and_then(|mut s| s.take()) {
+            kill_tree(&mut child);
+        }
     }
 }
 

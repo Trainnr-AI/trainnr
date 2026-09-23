@@ -21,6 +21,7 @@ from _lab import bootstrap
 bootstrap()
 
 from rq_pipeline.project import PROJECT_ENV, current_project  # noqa: E402
+from rq_pipeline.project.control import pid_alive  # noqa: E402
 from rq_pipeline.project.present import serve  # noqa: E402
 
 
@@ -32,12 +33,8 @@ def watch_parent(pid: int) -> None:
     def watch() -> None:
         while True:
             time.sleep(1.0)
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
+            if not pid_alive(pid):
                 os._exit(0)
-            except PermissionError:
-                continue
 
     threading.Thread(target=watch, daemon=True).start()
 

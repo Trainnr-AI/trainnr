@@ -37,6 +37,7 @@ from rq_pipeline.deploy.runtimes import (
     Opener,
     runtime_spec,
 )
+from rq_pipeline.deploy.ticks import Ticks
 from rq_pipeline.evaluate.tracking import (
     ERR_FLOOR_MPS,
     ERR_RATIO_BOUND,
@@ -79,35 +80,13 @@ def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     with a `mirror`, every tick's pose goes to the Studio; with a
     `contacts` list, every tick's contact points are appended to it."""
     runtime.reset()
-    runtime.command = command.astype(np.float32)
-    err_sum = cmd_sum = 0.0
-    fell = False
-    steps = 0
+    meter = Ticks(manifest.control.step_dt, mirror=mirror, contacts=contacts)
     if mirror is not None:
         mirror.trial(index, command)
     for _ in range(manifest.control.episode_ticks):
-        obs = runtime.observe()
-        runtime.apply(runtime.act(obs))
-        v = runtime.base_velocity_b()
-        if mirror is not None:
-            mirror.tick(manifest.control.step_dt, runtime.pose(), command, v)
-        if contacts is not None:
-            touched = runtime.contact_points()
-            if touched is not None and len(touched):
-                contacts.append(touched)
-        err_sum += float(np.linalg.norm(v[:2] - command[:2]))
-        cmd_sum += float(np.linalg.norm(command[:2]))
-        steps += 1
-        if runtime.fell_over():
-            fell = True
+        if meter.tick(runtime, command):
             break
-    return Trial(
-        command=[float(c) for c in command],
-        steps=steps,
-        fell=fell,
-        mean_err=err_sum / max(steps, 1),
-        mean_cmd=cmd_sum / max(steps, 1),
-    )
+    return Trial(command=[float(c) for c in command], **meter.outcome())
 
 
 def draw_commands(manifest: Manifest, trials: int, seed: int) -> np.ndarray:
@@ -206,68 +185,78 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     manifest = load_manifest(deployment_dir)
     opener = open if open is not None else spec.open()
     driver = opener(manifest, assets_dir=assets_dir)
-    mirror = (
-        GateMirror.open(
-            manifest,
-            spec.name,
-            # The gate's picture, saved inside the deployment (docs/76 §10.5).
-            file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
-            scene_dir=scene_dir,
+    try:
+        mirror = (
+            GateMirror.open(
+                manifest,
+                spec.name,
+                # The gate's picture, saved inside the deployment (docs/76 §10.5).
+                file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
+                scene_dir=scene_dir,
+            )
+            if narrate
+            else None
         )
-        if narrate
-        else None
-    )
-    protocol: dict[str, Any] = {
-        "trials": trials,
-        "seed": seed,
-        "criterion": criterion_text(),
-        "err_ratio_bound": ERR_RATIO_BOUND,
-        "err_floor_mps": ERR_FLOOR_MPS,
-        "runtime": spec.description,
-        "instrument": driver.instrument,
-    }
-    contacts: list[np.ndarray] = []
-    course = Course.of_manifest(manifest)
-    results: list[TrackingOutcome] = (
-        _walk_course(manifest, driver, course, protocol, trials, seed, mirror, contacts)
-        if course is not None
-        else _hold_twists(manifest, driver, protocol, trials, seed, mirror, contacts)
-    )
-    k = sum(t.success for t in results)
-    lo, hi = clopper_pearson(k, trials)
-    record: dict[str, Any] = {
-        "schema": GATE_SCHEMA,
-        "runtime": spec.name,
-        "deployment": manifest.raw.get(Key.STAMP_OF),
-        "policy": manifest.raw.get(Key.POLICY),
-        "protocol": protocol,
-        "successes": k,
-        "trials": trials,
-        "ci95": [round(lo, CI_DIGITS), round(hi, CI_DIGITS)],
-        "records": [t.row() for t in results],
-        "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    }
-    record["verdict"] = _verdict(
-        k, trials, tolerance, certificate, along_course=course is not None
-    )
-    record["contacts"] = _contacts_record(
-        deployment_dir,
-        spec.name,
-        contacts,
-        scene_dir,
-        seen=driver.contact_points() is not None,
-    )
-    if certificate:
-        record["certificate"] = {
-            "stamp": manifest.raw.get(Key.CERTIFICATE),
-            "successes": certificate.get("successes"),
-            "trials": certificate.get("trials"),
-            "ci95": certificate.get("ci95"),
+        protocol: dict[str, Any] = {
+            "trials": trials,
+            "seed": seed,
+            "criterion": criterion_text(),
+            "err_ratio_bound": ERR_RATIO_BOUND,
+            "err_floor_mps": ERR_FLOOR_MPS,
+            "runtime": spec.description,
+            "instrument": driver.instrument,
         }
-    staging = Path(deployment_dir) / (spec.record_file + ".tmp")
-    staging.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
-    staging.replace(Path(deployment_dir) / spec.record_file)
-    return record
+        contacts: list[np.ndarray] = []
+        course = Course.of_manifest(manifest)
+        results: list[TrackingOutcome] = (
+            _walk_course(
+                manifest, driver, course, protocol, trials, seed, mirror, contacts
+            )
+            if course is not None
+            else _hold_twists(
+                manifest, driver, protocol, trials, seed, mirror, contacts
+            )
+        )
+        k = sum(t.success for t in results)
+        lo, hi = clopper_pearson(k, trials)
+        record: dict[str, Any] = {
+            "schema": GATE_SCHEMA,
+            "runtime": spec.name,
+            "deployment": manifest.raw.get(Key.STAMP_OF),
+            "policy": manifest.raw.get(Key.POLICY),
+            "protocol": protocol,
+            "successes": k,
+            "trials": trials,
+            "ci95": [round(lo, CI_DIGITS), round(hi, CI_DIGITS)],
+            "records": [t.row() for t in results],
+            "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        }
+        record["verdict"] = _verdict(
+            k, trials, tolerance, certificate, along_course=course is not None
+        )
+        record["contacts"] = _contacts_record(
+            deployment_dir,
+            spec.name,
+            contacts,
+            scene_dir,
+            seen=driver.contact_points() is not None,
+        )
+        if certificate:
+            record["certificate"] = {
+                "stamp": manifest.raw.get(Key.CERTIFICATE),
+                "successes": certificate.get("successes"),
+                "trials": certificate.get("trials"),
+                "ci95": certificate.get("ci95"),
+            }
+        staging = Path(deployment_dir) / (spec.record_file + ".tmp")
+        staging.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+        staging.replace(Path(deployment_dir) / spec.record_file)
+        return record
+    finally:
+        # a runtime that holds a pad or a bus lets go (the DDS one recentres its sticks)
+        close = getattr(driver, "close", None)
+        if close is not None:
+            close()
 
 
 OTHER_PROTOCOL = (

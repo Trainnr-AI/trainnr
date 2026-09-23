@@ -245,7 +245,7 @@ class TheChain(unittest.TestCase):
             self.assertEqual(record.capture.frames, 4)
             self.assertEqual(record.splat["poses"]["registered"], 4)
             self.assertEqual(record.splat["poses"]["models"], [2, 4])
-            self.assertEqual(record.splat["poses"]["chosen"], 1)
+            self.assertEqual(record.splat["poses"]["chosen"], "1")
             brush_dataset = Path(brush[brush.index(str(tools.brush)) + 1])
             self.assertEqual((brush_dataset / "sparse" / "0").resolve().name, "1")
             self.assertEqual(

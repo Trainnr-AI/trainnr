@@ -85,14 +85,24 @@ class WalkSpec:
     chase: CameraFraming = MICRODUCK_CHASE  # one world, followed (the press)
 
 
-def _no_scene(robot: str, scene: Path | None, cameras: bool) -> None:
-    """The scene stage is the Go2's so far (docs/78 E2); the other walks
-    take the keyword the doors pass and refuse it by name."""
-    del cameras
+def _no_scene(  # noqa: PLR0913, PLR0917 - the door keywords every walk takes, refused by name
+    robot: str,
+    scene: Path | None,
+    cameras: bool,
+    legacy_actor: bool,
+    camera_in_actor: bool,
+    camera_size: tuple[int, int] | None,
+) -> None:
+    """The scene stage and its camera are the Go2's so far (docs/78 E2),
+    and only the Go2 has an earlier actor recipe; the other walks take
+    every keyword the doors pass and refuse what they lack by name."""
+    del cameras, camera_in_actor, camera_size
     if scene is not None:
         raise ValueError(
             f"the {robot} walk has no scene stage yet (docs/78 E2: the Go2)"
         )
+    if legacy_actor:
+        raise TypeError(f"the {robot} walk has no earlier actor recipe")
 
 
 def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
@@ -105,13 +115,16 @@ def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     head: str = "free",
     scene: Path | None = None,
     cameras: bool = True,
+    legacy_actor: bool = False,
+    camera_in_actor: bool = True,
+    camera_size: tuple[int, int] | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import (  # noqa: PLC0415
         PIN_AXES,
         microduck_walk_env_cfg,
     )
 
-    _no_scene("microduck", scene, cameras)
+    _no_scene("microduck", scene, cameras, legacy_actor, camera_in_actor, camera_size)
 
     return microduck_walk_env_cfg(
         play=play,
@@ -145,10 +158,13 @@ def _go1_env(  # noqa: PLR0913 - the walk's knobs, named
     head: str = "free",
     scene: Path | None = None,
     cameras: bool = True,
+    legacy_actor: bool = False,
+    camera_in_actor: bool = True,
+    camera_size: tuple[int, int] | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
 
-    _no_scene("go1", scene, cameras)
+    _no_scene("go1", scene, cameras, legacy_actor, camera_in_actor, camera_size)
     if bundle is not None:
         raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
     if isinstance(dr_span, str):  # "identified" names the bundle's interval
@@ -209,6 +225,8 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     if head != "free":
         raise ValueError("the Go2 has no head to pin")
     if scene is not None:  # the walk on a captured scene (docs/78 E2)
+        if legacy_actor:
+            raise TypeError("the scene walk has no earlier actor recipe")
         return go2_scene_env_cfg(
             scene,
             play=play,
@@ -247,6 +265,39 @@ def _go2_deploy() -> DeployFacts:
 
 
 DEFAULT_ROBOT = "microduck"
+# mjlab's name for the walking entity in every walk's scene: what the
+# sensors, the cameras and the export address bodies through.
+ROBOT_ENTITY = "robot"
+
+
+class Identity:
+    """The keys of a run's identity (the trainer writes it beside the
+    checkpoints; the doors read it): one spelling each."""
+
+    ROBOT = "robot"
+    ACTUATOR = "actuator"
+    DR_BASIS = "dr_basis"
+    SCENE = "scene"
+    TERRAIN = "terrain"
+    CAMERAS = "cameras"
+    ACTOR = "actor"
+    HEAD = "head"
+    SEED = "seed"
+    TASK = "task"
+
+
+NO_CAMERAS = "none"  # the identity's word for an actor that saw no camera
+# The actor recipes a run's identity names.
+ACTOR_DEPLOYABLE = "deployable"  # the flat recipe's 48 terms (docs/77)
+ACTOR_LEGACY = "legacy"  # the recipe before 2026-09-11, 47 terms
+ACTOR_ROUGH = "rough"  # mjlab's rough recipe: the height scan sees the terrain
+
+
+def training_episode_s(spec: WalkSpec) -> float:
+    """The training episode's length, from the walk's own config (a play
+    config runs forever): what a press caps its rollouts at."""
+    cfg, _ = spec.env_cfg(play=False, dr_span=None, pin_scale=None)
+    return float(cfg.episode_length_s)
 
 
 def _quieted(builder: EnvFactory) -> EnvFactory:
@@ -271,40 +322,67 @@ def walk_spec(robot: str = DEFAULT_ROBOT) -> WalkSpec:
     return dataclasses.replace(spec, env_cfg=_quieted(spec.env_cfg))
 
 
+def _microduck_spec() -> WalkSpec:
+    return WalkSpec(
+        "microduck",
+        _microduck_env,
+        _microduck_agent,
+        _microduck_span(),
+        "microduck-walk",
+    )
+
+
+def _go1_spec() -> WalkSpec:
+    return WalkSpec(
+        "go1",
+        _go1_env,
+        _go1_agent,
+        _go1_span(),
+        "go1-walk",
+        view=QUADRUPED_VIEW,
+        chase=QUADRUPED_CHASE,
+    )
+
+
+def _go2_spec() -> WalkSpec:
+    return WalkSpec(
+        "go2",
+        _go2_env,
+        _go2_agent,
+        _go2_span(),
+        "go2-walk",
+        _go2_deploy(),
+        view=QUADRUPED_VIEW,
+        chase=QUADRUPED_CHASE,
+    )
+
+
+# The registry: a walk by its robot's name. A third party's walk lands
+# here through `register_walk`, never by editing a chain.
+WALKS: dict[str, Callable[[], WalkSpec]] = {
+    "microduck": _microduck_spec,
+    "go1": _go1_spec,
+    "go2": _go2_spec,
+}
+
+
+def register_walk(robot: str, spec: Callable[[], WalkSpec]) -> None:
+    if robot in WALKS:
+        raise ValueError(f"a walk for {robot!r} is already registered")
+    WALKS[robot] = spec
+
+
 def _walk_spec(robot: str) -> WalkSpec:
-    if robot == "microduck":
-        return WalkSpec(
-            "microduck",
-            _microduck_env,
-            _microduck_agent,
-            _microduck_span(),
-            "microduck-walk",
-        )
-    if robot == "go1":
-        return WalkSpec(
-            "go1",
-            _go1_env,
-            _go1_agent,
-            _go1_span(),
-            "go1-walk",
-            view=QUADRUPED_VIEW,
-            chase=QUADRUPED_CHASE,
-        )
-    if robot == "go2":
-        return WalkSpec(
-            "go2",
-            _go2_env,
-            _go2_agent,
-            _go2_span(),
-            "go2-walk",
-            _go2_deploy(),
-            view=QUADRUPED_VIEW,
-            chase=QUADRUPED_CHASE,
-        )
-    raise KeyError(f"no walk for robot {robot!r}; known: {sorted(ROBOTS)}")
+    try:
+        return WALKS[robot]()
+    except KeyError as unknown:
+        raise KeyError(
+            f"no walk for robot {robot!r}; known: {sorted(WALKS)}"
+        ) from unknown
 
 
-ROBOTS = ("microduck", "go1", "go2")
+# The registered walks' names (the doors' choices); read, never written.
+ROBOTS = tuple(WALKS)
 
 
 def use_project(root: Path | None) -> None:

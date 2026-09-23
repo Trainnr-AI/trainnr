@@ -20,10 +20,11 @@ license = { text = "FSL-1.1-ALv2" }
 dependencies = [
     # The exact minor: the port's whole reason is owning this pin.
     "mjlab==1.6.0",
-    # The certified-bundle store's reader and verifier (A1) — a path
-    # dependency; the pipeline's BASE install carries no heavy extras.
+    # The export's graph and its check (A6).
     "onnx>=1.22.0",
     "onnxruntime>=1.30.0",
+    # The certified-bundle store's reader and verifier (A1) — a path
+    # dependency; the pipeline's BASE install carries no heavy extras.
     "rq-pipeline",
 ]
 

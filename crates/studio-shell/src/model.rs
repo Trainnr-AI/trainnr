@@ -187,9 +187,10 @@ impl Job {
     }
 }
 
-/// Whether a process id is alive. Linux answers through `/proc`; other
-/// platforms have no dependency-free check here and answer "alive", so
-/// there the exit file alone decides (the runner writes it).
+/// Whether a process id is alive. Linux answers through `/proc`; any
+/// other unix (macOS) through `kill -0`, the same binary `spawn.rs`
+/// signals with; Windows has no dependency-free check here and answers
+/// "alive", so there the exit file alone decides (the runner writes it).
 fn pid_alive(pid: u32) -> bool {
     if pid == 0 {
         return false;
@@ -197,7 +198,20 @@ fn pid_alive(pid: u32) -> bool {
     if cfg!(target_os = "linux") {
         return std::path::Path::new(&format!("/proc/{pid}")).exists();
     }
-    true
+    #[cfg(unix)]
+    {
+        std::process::Command::new("kill")
+            .args(["-0", "--", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(true)
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 impl Index {

@@ -44,9 +44,16 @@ from rq_pipeline.evaluate.tracking import (
 )
 from rq_pipeline.viz import viewer_file
 
-from rq_mjlab.envelope import checkpoint_iteration, pin_command_envelope
-from rq_mjlab.walk_view import trained_with_cameras
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+from rq_mjlab.envelope import COMMAND_TERM, checkpoint_iteration, pin_command_envelope
+from rq_mjlab.walk_export import ACTOR_OBS_GROUP
+from rq_mjlab.walk_view import (
+    require_same_identity,
+    trained_with_cameras,
+)
+from rq_mjlab.walk_view import (
+    trained_identity as read_trained_identity,
+)
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, Identity, use_project, walk_spec
 
 # The judgment's rule lives in `rq_pipeline.evaluate.tracking`, shared
 # with the deployment gate; these names stay for the callers here.
@@ -55,7 +62,6 @@ ERR_FLOOR = ERR_FLOOR_MPS
 # The observation group the actor reads and the capture records: what a
 # captured (T, obs) row IS, and the key a labeler must hand back to the
 # actor — rsl-rl actors index a TensorDict of groups, never a bare tensor.
-ACTOR_OBS_GROUP = "actor"
 
 
 @dataclass(frozen=True)
@@ -118,6 +124,7 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
     capture: bool = False,
     max_ticks: int | None = None,
     capture_cameras: tuple[str, ...] = (),
+    camera_every: int = 1,
 ) -> list[WorldEpisode]:
     """One completed episode per world, judged from the live managers:
     the commanded twist from the command manager, the base-frame
@@ -126,8 +133,10 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
     resets) but only each world's FIRST episode is recorded. With
     `capture`, the per-tick observation/action/qpos of that first
     episode ride along (the rollout->dataset writer's raw material),
-    and with `capture_cameras` the named camera sensors' pictures too
-    (a scene's head camera, docs/78 E3). With `max_ticks`, a world still
+    and with `capture_cameras` the named camera sensors' pictures too,
+    one every `camera_every` ticks (a scene's head camera, docs/78 E3:
+    the dataset keeps one frame in `frame_every`, so the rollout copies
+    no more). With `max_ticks`, a world still
     open at that tick is closed as survived so far (the stills tool
     wants one frame, not a verdict)."""
     import numpy as np  # noqa: PLC0415
@@ -148,26 +157,30 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
     seen: dict[str, list[list[Any]]] = {
         name: [[] for _ in range(trials)] for name in capture_cameras
     }
+    tick = 0
 
     from rq_pipeline.evaluate.smoothness import SmoothnessMeter  # noqa: PLC0415
 
     meter = SmoothnessMeter(trials, dt=float(unwrapped.step_dt))
     obs = env.get_observations()  # a TensorDict, not the (obs, extras) pair
-    first_command = unwrapped.command_manager.get_command("twist").clone()
+    first_command = unwrapped.command_manager.get_command(COMMAND_TERM).clone()
     while open_worlds.any():
         with torch.inference_mode():
             actions = policy(obs)
-        meter.observe(actions.detach().cpu().numpy(), active=open_worlds.cpu().numpy())
+        act = actions.detach().cpu().numpy()  # one copy per tick, reused below
+        still_open = open_worlds.cpu().numpy()
+        meter.observe(act, active=still_open)
         if capture and device_qpos is not None:
             actor = obs[ACTOR_OBS_GROUP].detach().cpu().numpy()
-            act = actions.detach().cpu().numpy()
             pose = device_qpos.detach().cpu().numpy()
-            still_open = open_worlds.cpu().numpy()
-            for world in np.flatnonzero(still_open):
+            open_ids = np.flatnonzero(still_open)
+            for world in open_ids:
                 trace[world].append((actor[world], act[world], pose[world]))
-            _snap_cameras(unwrapped, seen, np.flatnonzero(still_open))
+            if seen and tick % camera_every == 0:
+                _snap_cameras(unwrapped, seen, open_ids)
+        tick += 1
         obs, _, dones, _ = env.step(actions)
-        command = unwrapped.command_manager.get_command("twist")
+        command = unwrapped.command_manager.get_command(COMMAND_TERM)
         velocity = unwrapped.scene["robot"].data.root_link_lin_vel_b
         err = torch.linalg.norm(velocity[:, :2] - command[:, :2], dim=1)
         cmd = torch.linalg.norm(command[:, :2], dim=1)
@@ -206,22 +219,6 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
             WorldEpisode(outcome, [float(v) for v in first_command[i]], **arrays)
         )
     return episodes
-
-
-SCENE_MISMATCH = (
-    "the checkpoint trained on {trained}, this evaluation stands on {built}: "
-    "pass --scene with the scene it trained on (or none for the plane)"
-)
-
-
-def require_same_scene(trained: dict[str, Any], built: dict[str, str]) -> None:
-    """A checkpoint trained on a captured scene is judged on that scene
-    and one trained on the plane on the plane: the identity names it,
-    and the other is refused by name."""
-    plane = "the plane"
-    have, want = trained.get("scene") or plane, built.get("scene") or plane
-    if have != want:
-        raise SystemExit(SCENE_MISMATCH.format(trained=have, built=want))
 
 
 def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
@@ -396,7 +393,7 @@ class StudentPolicy:
         if self._held is not None and self._ticks % self._stride:
             self._ticks += 1
             return self._held
-        state = obs["actor"].detach().cpu().numpy()
+        state = obs[ACTOR_OBS_GROUP].detach().cpu().numpy()
         if self._blank_state:
             state = blanked(state)
         qpos = self._qpos.detach().cpu().numpy()
@@ -632,8 +629,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     judge_span = default_span if args.judge_span is None else args.judge_span
     if args.judge_param != "all" and args.judge_at_scale is None:
         raise SystemExit("--judge-param needs --judge-at-scale")
-    trained = args.checkpoint.parent / "identity.json"
-    trained_identity: Any = json.loads(trained.read_text()) if trained.is_file() else {}
+    trained_identity: Any = read_trained_identity(args.checkpoint)
     cfg, identity = spec.env_cfg(
         dr_span=None if args.judge_at_fit else judge_span,
         pin_scale=args.judge_at_scale,
@@ -641,22 +637,19 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         bundle=args.bundle,
         # A policy trained with its head pinned is judged with it pinned:
         # the action space is part of what the run's identity records.
-        head=str(trained_identity.get("head", "free")),
+        head=str(trained_identity.get(Identity.HEAD, "free")),
         scene=args.scene,
         # the actor sees a camera exactly when it trained with one (the
         # scene walk's picture: 12,288 inputs a plain actor never had)
         cameras=trained_with_cameras(trained_identity),
     )
-    require_same_scene(trained_identity, identity)
+    # The one gate (walk_view): robot, actuator and ground must match; the
+    # DR basis may differ on purpose (a policy trained under one span is
+    # judged at the fit), and the certificate records both.
+    require_same_identity(trained_identity, identity)
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
     if trained_identity:
-        # Robot and actuator must match; the DR basis may differ on
-        # purpose (a policy trained under one span is judged at the fit),
-        # and the certificate records both.
-        for key in ("robot", "actuator"):
-            if trained_identity.get(key) != identity.get(key):
-                raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
         identity = {
             **identity,
             "task": trained_identity.get("task"),
@@ -692,11 +685,13 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         # without this a 3.13 re-judge took the 3.11 certificate's name).
         "instrument": instrument,
     }
-    if identity.get("scene"):
+    if identity.get(Identity.SCENE):
         # judged on the captured scene it trained on: another protocol,
         # another certificate name (the hash below), never the plane's
-        protocol["scene"] = identity["scene"]
-        protocol["terrain"] = identity.get("terrain", "the scene's heightfield")
+        protocol[Identity.SCENE] = identity[Identity.SCENE]
+        protocol[Identity.TERRAIN] = identity.get(
+            Identity.TERRAIN, "the scene's heightfield"
+        )
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
     print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")
 

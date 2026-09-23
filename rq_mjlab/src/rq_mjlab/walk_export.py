@@ -41,8 +41,11 @@ from rq_pipeline.deploy.manifest import (
     Key,
 )
 from rq_pipeline.project.kinds import IDENTITY_FILE, stamp_run
+from rq_pipeline.scenes.stage import FLOOR_GEOM
 
-from rq_mjlab.walks import DeployFacts
+from rq_mjlab.envelope import COMMAND_TERM
+from rq_mjlab.walk_view import require_same_identity
+from rq_mjlab.walks import ROBOT_ENTITY, DeployFacts
 
 POLICY_FILE = "policy.onnx"
 SCENE_FILE = "scene.xml"
@@ -52,15 +55,13 @@ DEPLOY_FOLDER = "deploy"
 FLOAT_DIGITS = 6
 DEGREES_DIGITS = 3
 ACTOR_OBS_GROUP = "actor"
-ROBOT_ENTITY = "robot"
 ACTION_TERM = "joint_pos"
-COMMAND_TERM = "twist"
 FALL_TERM = "fell_over"
 # How closely the ONNX must follow the torch actor on random inputs.
 EXPORT_TOLERANCE = 1e-4
 EXPORT_CHECK_SAMPLES = 64
 PROBE_SEED = 0
-FLOOR_NAME = "floor"
+FLOOR_NAME = FLOOR_GEOM  # the plane the stage deletes, by the same name
 UNRECORDED = "unrecorded"
 # mjlab's term functions, as `_source_of` names their sources.
 BUILTIN_SENSOR = "builtin_sensor"
@@ -157,12 +158,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         else {}
     )
     cfg, identity = spec.env_cfg(dr_span=None, pin_scale=None, bundle=None)
-    for key in (Key.ROBOT, Key.ACTUATOR):
-        if trained.get(key) not in (None, identity.get(key)):
-            raise SystemExit(
-                f"identity mismatch on {key}: the run was trained on "
-                f"{trained.get(key)}, this project's is {identity.get(key)}"
-            )
+    require_same_identity(trained, identity)  # the one gate (walk_view)
     cfg.scene.num_envs = 1
     device = "cpu"
     agent = spec.agent(1)

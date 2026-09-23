@@ -113,6 +113,9 @@ fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
     }));
 }
 
+/// A simulator command that needs the model before the stream described it.
+const NOT_DESCRIBED: &str = "the model is not described yet";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_thread_token = re_viewer::MainThreadToken::i_promise_i_am_on_the_main_thread();
@@ -768,11 +771,158 @@ impl StudioShell {
                 if !self.viewport.is_active() {
                     return Err("no scene runs in the simulator; simulate a task first".into());
                 }
+                let (_, model) = self.viewport.report();
+                let described = || model.as_deref().ok_or(NOT_DESCRIBED);
+                // Every field is checked before any is applied: a `run`
+                // sent and then a bad `keyframe` refused left the scene
+                // running with the agent told only "refused" (2026-09-23).
+                let key = match keyframe.as_ref() {
+                    Some(name) => {
+                        let m = described()?;
+                        Some(
+                            m.keyframes.iter().position(|k| k == name).ok_or_else(|| {
+                                format!("no keyframe {name:?}; one of {:?}", m.keyframes)
+                            })? as u32,
+                        )
+                    }
+                    None => None,
+                };
+                if let Some(factor) = speed {
+                    if !viewport::SPEED_RANGE.contains(&factor) {
+                        return Err(format!(
+                            "speed must be within {}..={}",
+                            viewport::SPEED_RANGE.start(),
+                            viewport::SPEED_RANGE.end()
+                        ));
+                    }
+                }
+                let mut sliders: Vec<(viewport::SliderKind, usize, f32)> = Vec::new();
+                if actuator.is_some() || joint.is_some() {
+                    let value = value.ok_or("an actuator or joint needs a `value`")?;
+                    let m = described()?;
+                    if let Some(name) = actuator.as_ref() {
+                        let index = m
+                            .actuators
+                            .iter()
+                            .position(|a| a.name == *name)
+                            .ok_or_else(|| format!("no actuator {name:?}"))?;
+                        sliders.push((viewport::SliderKind::Actuator, index, value));
+                    }
+                    if let Some(name) = joint.as_ref() {
+                        let j = m.joints.iter().find(|j| j.name == *name).ok_or_else(|| {
+                            format!(
+                                "no scalar joint {name:?} (hinge or slide; free and ball \
+                                 joints have no scalar)"
+                            )
+                        })?;
+                        sliders.push((viewport::SliderKind::Joint, j.qpos, value));
+                    }
+                }
+                let inspect_tab = match inspect.as_ref() {
+                    Some(what) => Some(simulator::inspect_tab(what)?),
+                    None => None,
+                };
+                let follow_choice = match follow.as_ref() {
+                    Some(rule) => {
+                        let nworld = model.as_ref().map_or(0, |m| m.nworld);
+                        if nworld <= 1 {
+                            return Err("follow needs a many-worlds scene (walk); this scene \
+                                        has one world"
+                                .into());
+                        }
+                        Some(match rule.trim() {
+                            "none" | "" => simulator::Follow::None,
+                            "worst" => simulator::Follow::Worst,
+                            "failing" => simulator::Follow::Failing,
+                            "cycle" => simulator::Follow::Cycle,
+                            n => {
+                                let world: u32 =
+                                    n.trim_start_matches('w').parse().map_err(|_| {
+                                        format!(
+                                            "follow {rule:?}: none, worst, failing, cycle or a \
+                                             world index"
+                                        )
+                                    })?;
+                                if world >= nworld {
+                                    return Err(format!(
+                                        "follow {rule:?}: this scene has worlds 0 to {}",
+                                        nworld - 1
+                                    ));
+                                }
+                                simulator::Follow::World(world)
+                            }
+                        })
+                    }
+                    None => None,
+                };
+                let view_preset = match view.as_ref() {
+                    Some(name) => Some(viewport::view_preset(name).ok_or_else(|| {
+                        format!(
+                            "view {name:?}: one of {}",
+                            viewport::view_preset_names().join(", ")
+                        )
+                    })?),
+                    None => None,
+                };
+                // (visualization?, index, on): a flag lives in one of two tables
+                let flag_send = match flag.as_ref() {
+                    Some(name) => {
+                        let on = on.ok_or("a flag needs `on`")?;
+                        let m = described()?;
+                        if let Some(i) = m.vis_flags.iter().position(|f| f == name) {
+                            Some((true, i as u32, on))
+                        } else if let Some(i) = m.rnd_flags.iter().position(|f| f == name) {
+                            Some((false, i as u32, on))
+                        } else {
+                            return Err(format!(
+                                "no flag {name:?}; visualization {:?}, rendering {:?}",
+                                m.vis_flags, m.rnd_flags
+                            ));
+                        }
+                    }
+                    None => None,
+                };
+                let twist = match command.as_ref() {
+                    Some(axis) => Some(simulator::twist_from_door(
+                        ui.ctx(),
+                        &self.viewport,
+                        axis,
+                        value,
+                    )?),
+                    None => None,
+                };
+                let group_send = match group {
+                    Some(group) => {
+                        let on = on.ok_or("a group needs `on`")?;
+                        let m = described()?;
+                        if m.groups.is_empty() || m.ngroup == 0 {
+                            return Err("this scene reports no group kinds".into());
+                        }
+                        // No kind named: the stream's first (geom, as it orders them).
+                        let index = match kind.as_ref() {
+                            Some(kind) => m.groups.iter().position(|k| k == kind).ok_or_else(
+                                || format!("no group kind {kind:?}; one of {:?}", m.groups),
+                            )?,
+                            None => 0,
+                        };
+                        let last = m.ngroup.saturating_sub(1);
+                        if group > last {
+                            return Err(format!("group {group}: 0 to {last}"));
+                        }
+                        let kind_byte = u8::try_from(index)
+                            .map_err(|_| format!("group kind {index} is past the wire's byte"))?;
+                        let group_byte = u8::try_from(group)
+                            .map_err(|_| format!("group {group} is past the wire's byte"))?;
+                        Some((kind_byte, group_byte, on))
+                    }
+                    None => None,
+                };
+
+                // Everything passed: apply, in the order the fields are named.
                 if let Some(full) = fullscreen {
                     self.viewport_full = full;
                     self.shell.section = Section::Live;
                 }
-                let (_, model) = self.viewport.report();
                 let pressed = [
                     run.map(|r| if r { "run" } else { "pause" }),
                     step.map(|_| "step"),
@@ -803,140 +953,45 @@ impl StudioShell {
                 if let Some(n) = step {
                     self.viewport.send_step(n.clamp(1, MAX_SIM_STEPS));
                 }
-                if let Some(name) = keyframe {
-                    let model = model.as_ref().ok_or("the model is not described yet")?;
-                    let key = model
-                        .keyframes
-                        .iter()
-                        .position(|k| *k == name)
-                        .ok_or_else(|| {
-                            format!("no keyframe {name:?}; one of {:?}", model.keyframes)
-                        })?;
-                    self.viewport.send_reset(Some(key as u32));
+                if let Some(key) = key {
+                    self.viewport.send_reset(Some(key));
                 } else if reset == Some(true) {
                     self.viewport.send_reset(None);
                 }
                 if let Some(factor) = speed {
-                    if !viewport::SPEED_RANGE.contains(&factor) {
-                        return Err(format!(
-                            "speed must be within {}..={}",
-                            viewport::SPEED_RANGE.start(),
-                            viewport::SPEED_RANGE.end()
-                        ));
-                    }
                     self.viewport.send_speed(factor);
                 }
                 if let Some(on) = manual {
                     self.viewport.send_manual(on);
                 }
-                if actuator.is_some() || joint.is_some() {
-                    let value = value.ok_or("an actuator or joint needs a `value`")?;
-                    let model = model.as_ref().ok_or("the model is not described yet")?;
-                    if let Some(name) = actuator {
-                        let index = model
-                            .actuators
-                            .iter()
-                            .position(|a| a.name == name)
-                            .ok_or_else(|| format!("no actuator {name:?}"))?;
-                        self.viewport.send_ctrl(index as u32, value);
-                        self.viewport
-                            .stop_editing(viewport::SliderKind::Actuator, index);
+                for (slider, index, value) in sliders {
+                    match slider {
+                        viewport::SliderKind::Actuator => self.viewport.send_ctrl(index as u32, value),
+                        viewport::SliderKind::Joint => self.viewport.send_qpos(index as u32, value),
+                        viewport::SliderKind::Twist => {} // never queued here: `command` sends twists
                     }
-                    if let Some(name) = joint {
-                        let j = model
-                            .joints
-                            .iter()
-                            .find(|j| j.name == name)
-                            .ok_or_else(|| {
-                                format!(
-                                    "no scalar joint {name:?} (hinge or slide; free and ball \
-                                     joints have no scalar)"
-                                )
-                            })?;
-                        self.viewport.send_qpos(j.qpos as u32, value);
-                        self.viewport
-                            .stop_editing(viewport::SliderKind::Joint, j.qpos);
-                    }
+                    self.viewport.stop_editing(slider, index);
                 }
-                if let Some(what) = inspect {
-                    simulator::inspect(ui.ctx(), &what)?;
+                if let Some(tab) = inspect_tab {
+                    simulator::apply_inspect(ui.ctx(), tab);
                 }
-                if let Some(rule) = follow {
-                    let many = model.as_ref().is_some_and(|m| m.nworld > 1);
-                    if !many {
-                        return Err(
-                            "follow needs a many-worlds scene (walk); this scene has one world"
-                                .into(),
-                        );
-                    }
-                    let choice = match rule.trim() {
-                        "none" | "" => simulator::Follow::None,
-                        "worst" => simulator::Follow::Worst,
-                        "failing" => simulator::Follow::Failing,
-                        "cycle" => simulator::Follow::Cycle,
-                        n => simulator::Follow::World(n.trim_start_matches('w').parse().map_err(
-                            |_| {
-                                format!(
-                                    "follow {rule:?}: none, worst, failing, cycle or a world index"
-                                )
-                            },
-                        )?),
-                    };
+                if let Some(choice) = follow_choice {
                     simulator::set_follow(ui.ctx(), choice);
                 }
-                if let Some(name) = view {
-                    let preset = viewport::view_preset(&name).ok_or_else(|| {
-                        format!(
-                            "view {name:?}: one of {}",
-                            viewport::view_preset_names().join(", ")
-                        )
-                    })?;
+                if let Some(preset) = view_preset {
                     self.viewport.send_view(preset);
                 }
-                if let Some(name) = flag {
-                    let on = on.ok_or("a flag needs `on`")?;
-                    let model = model.as_ref().ok_or("the model is not described yet")?;
-                    if let Some(i) = model.vis_flags.iter().position(|f| *f == name) {
-                        self.viewport.send_vis(i as u32, on);
-                    } else if let Some(i) = model.rnd_flags.iter().position(|f| *f == name) {
-                        self.viewport.send_rnd(i as u32, on);
+                if let Some((visualization, i, on)) = flag_send {
+                    if visualization {
+                        self.viewport.send_vis(i, on);
                     } else {
-                        return Err(format!(
-                            "no flag {name:?}; visualization {:?}, rendering {:?}",
-                            model.vis_flags, model.rnd_flags
-                        ));
+                        self.viewport.send_rnd(i, on);
                     }
                 }
-                if let Some(axis) = command {
-                    simulator::command_from_door(ui.ctx(), &mut self.viewport, &axis, value)?;
+                if let Some(twist) = twist {
+                    simulator::apply_twist_from_door(ui.ctx(), &mut self.viewport, twist);
                 }
-                if let Some(group) = group {
-                    let on = on.ok_or("a group needs `on`")?;
-                    let model = model.as_ref().ok_or("the model is not described yet")?;
-                    // No kind named: the stream's first (geom, as it orders them).
-                    let index = match kind {
-                        Some(kind) => {
-                            model
-                                .groups
-                                .iter()
-                                .position(|k| *k == kind)
-                                .ok_or_else(|| {
-                                    format!("no group kind {kind:?}; one of {:?}", model.groups)
-                                })?
-                        }
-                        None => 0,
-                    };
-                    if model.groups.is_empty() || model.ngroup == 0 {
-                        return Err("this scene reports no group kinds".into());
-                    }
-                    let last = model.ngroup.saturating_sub(1);
-                    if group > last {
-                        return Err(format!("group {group}: 0 to {last}"));
-                    }
-                    let kind_byte = u8::try_from(index)
-                        .map_err(|_| format!("group kind {index} is past the wire's byte"))?;
-                    let group_byte = u8::try_from(group)
-                        .map_err(|_| format!("group {group} is past the wire's byte"))?;
+                if let Some((kind_byte, group_byte, on)) = group_send {
                     self.viewport.send_group(kind_byte, group_byte, on);
                 }
                 Ok(())

@@ -710,7 +710,15 @@ def _read_control_messages(  # noqa: PLR0912 - one branch per wire tag
         tag = tag_raw[0]
         size = TAG_PAYLOAD_BYTES.get(tag)
         if size is None:
-            return  # protocol desync: better a frozen camera than garbage
+            # protocol desync: better a frozen camera than garbage, and
+            # said on stderr (the Studio's) rather than nowhere
+            print(
+                f"render stream: unknown tag {tag}: the input pipe is out of step; "
+                "camera frozen",
+                file=sys.stderr,
+                flush=True,
+            )
+            return
         payload = stdin.read(size) if size else b""
         if len(payload) < size:
             return

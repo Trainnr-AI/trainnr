@@ -1,8 +1,9 @@
 """Cameras that see the splat (docs/78 §4 E2): mujoco_warp's ray tracer
 renders the model's cameras with the scene's gaussians composited in,
-the robot occluding the scene and the scene the robot, depth from both
-(docs/e2e-research/76 §2). Static splats, world frame, unlit, one BVH
-built at open.
+the robot occluding the scene and the scene the robot (docs/e2e-research/76
+§2); colour only - the renderer can give depth from both, and nothing
+here asks for it yet. Static splats, world frame, unlit, one BVH built
+at open.
 
 An instrument matter: the renderer arrived in mujoco_warp 3.13.0
 (2026-08-19); the walk package is pinned at 3.11 until E0. So `open`

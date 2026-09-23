@@ -45,9 +45,18 @@ from rq_pipeline.deploy.manifest import UnitreeFacts
 from rq_pipeline.deploy.runtime import STANDING_COMMAND
 from rq_pipeline.deploy.unitree_yaml import deployable_actor_terms
 
+from rq_mjlab.envelope import COMMAND_TERM
 from rq_mjlab.go1_walk import GainsBasis, actuator_dr_events
 from rq_mjlab.linter import lint
-from rq_mjlab.walks import DeployFacts
+from rq_mjlab.scene_stage import TERRAIN_BODY
+from rq_mjlab.walks import (
+    ACTOR_DEPLOYABLE,
+    ACTOR_LEGACY,
+    ACTOR_ROUGH,
+    NO_CAMERAS,
+    DeployFacts,
+    Identity,
+)
 
 ROBOT = "unitree-go2"
 BUNDLE = "go2"
@@ -65,7 +74,7 @@ TRUNK_GEOMS = ("base1_collision", "base2_collision", "base3_collision")
 # a per-joint rule); declared, like the gains.
 ACTION_SCALE = 0.25
 FELL_OVER_DEG = 70.0
-COMMAND_TERM = "twist"
+FAMILY = "go2"  # the robot family the head registry and the bundle name
 
 # The reference's constants, verbatim: what the identity hashes.
 DECLARED: dict[str, Any] = {
@@ -214,7 +223,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     feet_ground = ContactSensorCfg(
         name="feet_ground_contact",
         primary=ContactMatch(mode="geom", pattern=FOOT_GEOMS, entity="robot"),
-        secondary=ContactMatch(mode="body", pattern="terrain"),
+        secondary=ContactMatch(mode="body", pattern=TERRAIN_BODY),
         fields=("found", "force"),
         reduce="netforce",
         num_slots=1,
@@ -223,7 +232,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     thigh_ground = ContactSensorCfg(
         name="thigh_ground_touch",
         primary=ContactMatch(mode="geom", entity="robot", pattern=THIGH_GEOMS),
-        secondary=ContactMatch(mode="body", pattern="terrain"),
+        secondary=ContactMatch(mode="body", pattern=TERRAIN_BODY),
         fields=("found", "force"),
         reduce="none",
         num_slots=1,
@@ -232,7 +241,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     shank_ground = ContactSensorCfg(
         name="shank_ground_touch",
         primary=ContactMatch(mode="geom", entity="robot", pattern=CALF_GEOMS),
-        secondary=ContactMatch(mode="body", pattern="terrain"),
+        secondary=ContactMatch(mode="body", pattern=TERRAIN_BODY),
         fields=("found", "force"),
         reduce="none",
         num_slots=1,
@@ -241,7 +250,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     trunk_ground = ContactSensorCfg(
         name="trunk_ground_touch",
         primary=ContactMatch(mode="geom", entity="robot", pattern=TRUNK_GEOMS),
-        secondary=ContactMatch(mode="body", pattern="terrain"),
+        secondary=ContactMatch(mode="body", pattern=TERRAIN_BODY),
         fields=("found", "force"),
         reduce="none",
         num_slots=1,
@@ -398,9 +407,9 @@ def _with_actuator_dr(
     cfg.events.update(events)
     lint(cfg.events, ())
     return {
-        "robot": robot_stamp(),
-        "actuator": actuator_stamp(),
-        "dr_basis": dr_basis,
+        Identity.ROBOT: robot_stamp(),
+        Identity.ACTUATOR: actuator_stamp(),
+        Identity.DR_BASIS: dr_basis,
     }
 
 
@@ -414,10 +423,14 @@ def go2_walk_env_cfg(
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The Go2 flat walk with the study's actuator randomization around
     the declared gains, and its identity."""
+    from rq_mjlab.scene_stage import unrender_splats  # noqa: PLC0415
+
     cfg = go2_flat_env_cfg(play=play, legacy_actor=legacy_actor)
+    unrender_splats()  # a plane after a scene in one process sees no splats
     identity = _with_actuator_dr(
         cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
     )
+    identity[Identity.ACTOR] = ACTOR_LEGACY if legacy_actor else ACTOR_DEPLOYABLE
     return cfg, identity
 
 
@@ -446,6 +459,7 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
         camera_term,
         head_camera_cfg,
         out_of_scene_bounds,
+        render_splats,
         scene_stamp,
         scene_terrain_cfg,
     )
@@ -464,20 +478,26 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     identity = _with_actuator_dr(
         cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
     )
-    identity["scene"] = scene_stamp(scene_dir)
-    identity["terrain"] = f"the scene's heightfield at {TRAIN_CELL_M} m"
-    identity["cameras"] = "none"
+    identity[Identity.SCENE] = scene_stamp(scene_dir)
+    identity[Identity.TERRAIN] = f"the scene's heightfield at {TRAIN_CELL_M} m"
+    identity[Identity.ACTOR] = ACTOR_ROUGH
+    identity[Identity.CAMERAS] = NO_CAMERAS
     if cameras:
         head = (
-            head_camera_cfg(width=camera_size[0], height=camera_size[1])
+            head_camera_cfg(FAMILY, width=camera_size[0], height=camera_size[1])
             if camera_size is not None
-            else head_camera_cfg()
+            else head_camera_cfg(FAMILY)
         )
         cfg.scene.sensors = (*(cfg.scene.sensors or ()), head)
+        # the scene's gaussians into every camera this env renders: the
+        # one place, so a trainer, a verdict and a press all see the splat
+        gaussians = render_splats(scene_dir)
         if camera_in_actor:
             for group in ("actor", "critic"):
                 cfg.observations[group].terms[CAMERA_TERM] = camera_term(head.name)
-            identity["cameras"] = f"{head.name} {head.width}x{head.height} rgb"
+            identity[Identity.CAMERAS] = (
+                f"{head.name} {head.width}x{head.height} rgb over {gaussians} splats"
+            )
     return cfg, identity
 
 

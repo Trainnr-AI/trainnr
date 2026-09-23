@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -39,11 +38,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.project.kinds import TASK_FILE
+from rq_pipeline.project.kinds import IDENTITY_FILE, TASK_FILE
 from rq_pipeline.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
 from rq_pipeline.viz import SIM_TIMELINE
 
-from rq_mjlab.walks import DEFAULT_ROBOT, walk_spec
+from rq_mjlab.walks import (
+    DEFAULT_ROBOT,
+    NO_CAMERAS,
+    Identity,
+    walk_spec,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 OVERVIEW_HZ = 10.0  # the per-world markers into the Studio's viewer
@@ -232,48 +236,6 @@ def project_walk_robot(project: Path) -> str:
     return found[0][1]
 
 
-def dr_span_of(identity: dict) -> float:
-    """The DR span the checkpoint was trained under, from its identity's
-    basis string: none (a point fit), or a caller-declared ±span. An
-    identified-set basis needs the bootstrap replicates and is refused."""
-    basis = str(identity.get("dr_basis", ""))
-    if basis.startswith("none"):
-        return 0.0
-    match = re.search(r"span ±([0-9.]+)", basis)
-    if match:
-        return float(match.group(1))
-    raise SystemExit(
-        f"this view cannot rebuild the env for basis {basis!r}; "
-        "run a point or caller-declared-span checkpoint"
-    )
-
-
-def same_identity(trained: dict, env: dict) -> bool:
-    """The gate: robot and actuator bundle byte-for-byte; the DR basis by
-    what it MEANS (the same span, or both a point fit), since the basis
-    string's wording changed on 2026-09-06 ("(bundle is point estimates)"
-    became "around the bundle's point") and a checkpoint trained before
-    that is the same physics. A wording difference is said on stderr."""
-    for key in ("robot", "actuator"):
-        if trained.get(key) != env.get(key):
-            return False
-    a, b = str(trained.get("dr_basis", "")), str(env.get("dr_basis", ""))
-    if a != b:
-        try:
-            same = dr_span_of({"dr_basis": a}) == dr_span_of({"dr_basis": b})
-        except SystemExit:
-            return False
-        if same:
-            print(
-                f"[walk-view] basis wording differs, same span: "
-                f"trained {a!r}, env {b!r}",
-                file=sys.stderr,
-                flush=True,
-            )
-        return same
-    return True
-
-
 def body_maps(mirror, env_model) -> tuple[dict[int, int], dict[int, int]]:
     """Mirror body id -> (world, device body id): the shove's routing.
     Mirror bodies are named `wNN/<name>`; the device model carries the
@@ -305,14 +267,44 @@ class LoadedWalk:
 
 
 # The identity keys a checkpoint and the env it runs in must agree on.
-IDENTITY_GATE = ("robot", "actuator", "scene")
-NO_CAMERAS = "none"
+IDENTITY_GATE = (Identity.ROBOT, Identity.ACTUATOR, Identity.SCENE)
+PLANE = "the plane"  # the identity's ground when it names no scene
+
+
+def require_same_identity(trained: dict[str, Any], built: dict[str, str]) -> None:
+    """The one gate every door passes a checkpoint through: the env it
+    runs in must be the robot, actuator and ground it trained on; a
+    checkpoint whose identity predates a key is not held to it; the
+    other is refused by name (walk_play, walk_verdict, walk_export and
+    the walk press all stand behind this line)."""
+    for key in IDENTITY_GATE:
+        have, want = trained.get(key), built.get(key)
+        if key == Identity.SCENE:
+            have, want = have or PLANE, want or PLANE
+            if have != want:
+                raise SystemExit(
+                    f"the checkpoint trained on {have}, this environment stands on "
+                    f"{want}: pass --scene with the scene it trained on (or none "
+                    "for the plane)"
+                )
+        elif have not in (None, want):
+            raise SystemExit(
+                f"identity mismatch on {key}: the checkpoint trained on {have}, "
+                f"this environment is {want}"
+            )
+
+
+def trained_identity(checkpoint: Path) -> dict[str, Any]:
+    """What the run wrote beside its checkpoints (`IDENTITY_FILE`); empty
+    for a run that predates the record."""
+    file = checkpoint.parent / IDENTITY_FILE
+    return json.loads(file.read_text(encoding="utf-8")) if file.is_file() else {}
 
 
 def trained_with_cameras(trained: dict[str, Any]) -> bool:
     """Whether the checkpoint's actor saw a camera (its identity says):
     the env it runs in must show it the same picture, or none."""
-    return str(trained.get("cameras", NO_CAMERAS)) != NO_CAMERAS
+    return str(trained.get(Identity.CAMERAS, NO_CAMERAS)) != NO_CAMERAS
 
 
 def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
@@ -325,8 +317,8 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
     camera_size: tuple[int, int] | None = None,
 ) -> LoadedWalk:
     """The env built from the checkpoint's identity, and its inference
-    policy, identity-gated (the same door walk_play, walk_verdict and
-    the walk press use). With `scene`, the env stands on that captured
+    policy, identity-gated (the same gate walk_play, walk_verdict and
+    the walk press stand behind). With `scene`, the env stands on that captured
     scene (docs/78 E2); the head camera is in the actor exactly when the
     checkpoint trained with it (its identity says), and renders frames
     for a press either way when `camera_size` asks for them."""
@@ -335,8 +327,7 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
-    trained_file = checkpoint.parent / "identity.json"
-    trained = json.loads(trained_file.read_text()) if trained_file.is_file() else {}
+    trained = trained_identity(checkpoint)
     spec = walk_spec(robot or DEFAULT_ROBOT)
     # The walk in play mode at the nominal point, as walk_play rolls it:
     # a view, not a judgment, so the trained DR basis is not rebuilt
@@ -361,11 +352,7 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
         return spec.env_cfg(play=True, dr_span=None, pin_scale=None, **stage, **more)
 
     cfg, identity = build()
-    for key in IDENTITY_GATE:
-        if trained.get(key) not in (None, identity.get(key)):
-            raise SystemExit(
-                f"identity mismatch on {key}: this env is {identity}, trained {trained}"
-            )
+    require_same_identity(trained, identity)
     cfg.scene.num_envs = envs
     agent = spec.agent(1)
     env = RslRlVecEnvWrapper(

@@ -53,6 +53,9 @@ def _rerun() -> Any | None:
 
 
 SCENE_PATH = "world/scene/splat"
+NOTES_PATH = "gate/notes"  # the trials log
+COMMAND_PATH = "gate/command"  # the command's axes as series
+VELOCITY_PATH = "gate/velocity"  # the measured planar velocity as series
 COURSE_PATH = "world/course"  # the course a staged gate walks (deploy/course.py)
 COURSE_LINE_M = 0.01
 COURSE_POINT_M = 0.05
@@ -150,12 +153,10 @@ class GateMirror:
             open_cameras(self.model, splats, names=names) if names else (None, "")
         )
         if self._cameras is None:
-            rr.log(
-                "gate/notes", rr.TextLog(f"no camera pictures: {why or 'no cameras'}")
-            )
+            rr.log(NOTES_PATH, rr.TextLog(f"no camera pictures: {why or 'no cameras'}"))
         else:
             rr.log(
-                "gate/notes",
+                NOTES_PATH,
                 rr.TextLog(
                     f"cameras {', '.join(names)} at {CAMERA_HZ} Hz from "
                     f"{self._cameras.splats} splats on {self._cameras.instrument}"
@@ -194,9 +195,9 @@ class GateMirror:
                                     for name in self._camera_names()
                                 )
                             ),
-                            rrb.TimeSeriesView(origin="gate/command", name="command"),
-                            rrb.TimeSeriesView(origin="gate/velocity", name="measured"),
-                            rrb.TextLogView(origin="gate/notes", name="trials"),
+                            rrb.TimeSeriesView(origin=COMMAND_PATH, name="command"),
+                            rrb.TimeSeriesView(origin=VELOCITY_PATH, name="measured"),
+                            rrb.TextLogView(origin=NOTES_PATH, name="trials"),
                         ),
                         column_shares=[3, 2],
                     ),
@@ -204,7 +205,7 @@ class GateMirror:
                 )
             )
         except Exception as error:  # the layout is decoration
-            rr.log("gate/notes", rr.TextLog(f"layout not sent: {error}"))
+            rr.log(NOTES_PATH, rr.TextLog(f"layout not sent: {error}"))
 
     def trial(self, index: int, command: np.ndarray) -> None:
         cmd = ", ".join(
@@ -215,7 +216,7 @@ class GateMirror:
     def note(self, text: str) -> None:
         """A line in the trials log, at the picture's current time."""
         self._rr.set_time(TIMELINE, duration=self.seconds)
-        self._rr.log("gate/notes", self._rr.TextLog(text))
+        self._rr.log(NOTES_PATH, self._rr.TextLog(text))
 
     def course(self, path: np.ndarray) -> None:
         """The course the gate walks, once, static: the path from the
@@ -261,6 +262,6 @@ class GateMirror:
         self.frames += 1
         self._pictures()
         for axis, value in zip(TWIST_SHORT, command, strict=True):
-            rr.log(f"gate/command/{axis}", rr.Scalars(float(value)))
+            rr.log(f"{COMMAND_PATH}/{axis}", rr.Scalars(float(value)))
         for axis, value in zip(TWIST_SHORT[:2], velocity_b[:2], strict=True):
-            rr.log(f"gate/velocity/{axis}", rr.Scalars(float(value)))
+            rr.log(f"{VELOCITY_PATH}/{axis}", rr.Scalars(float(value)))

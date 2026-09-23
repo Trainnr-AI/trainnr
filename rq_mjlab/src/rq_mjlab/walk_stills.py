@@ -26,14 +26,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, CameraFraming, use_project, walk_spec
 
 STILLS_DIR = "stills"
 STILLS_FILE = "stills.json"
 SHEET_FILE = "sheet.png"
 CHECKPOINT = re.compile(r"model_(\d+)\.pt$")
 WIDTH, HEIGHT = 480, 360
-CAMERA = {"distance": 1.25, "elevation": -16.0, "azimuth": 135.0}
 SHEET_COLUMNS = 8
 SHEET_THUMB = (240, 180)
 SHEET_LABEL_H = 22
@@ -90,7 +89,9 @@ def write_sheet(rows: list[dict[str, Any]], stills_dir: Path) -> Path:
     return out
 
 
-def scene_renderer(scene_xml: Path) -> tuple[Any, Any, Any, Any]:
+def scene_renderer(scene_xml: Path, chase: CameraFraming) -> tuple[Any, Any, Any, Any]:
+    """The robot's scene and a renderer framing it the way the walk's own
+    chase camera does (`walks.CameraFraming`, declared by the walk)."""
     import mujoco  # noqa: PLC0415
 
     spec = mujoco.MjSpec.from_file(str(scene_xml))
@@ -100,9 +101,9 @@ def scene_renderer(scene_xml: Path) -> tuple[Any, Any, Any, Any]:
     data = mujoco.MjData(model)
     camera = mujoco.MjvCamera()
     mujoco.mjv_defaultCamera(camera)
-    camera.distance = CAMERA["distance"]
-    camera.elevation = CAMERA["elevation"]
-    camera.azimuth = CAMERA["azimuth"]
+    camera.distance = chase.distance
+    camera.elevation = chase.elevation
+    camera.azimuth = chase.azimuth
     return model, data, mujoco.Renderer(model, height=HEIGHT, width=WIDTH), camera
 
 
@@ -181,7 +182,7 @@ def write_stills(  # noqa: PLR0913 - the tool's knobs, each named
     todo = [(n, f) for n, f in selected if n not in done]
     if todo:
         env, load = _policy_loader(walk_spec(robot), device)
-        scene = scene_renderer(_scene_file(robot))
+        scene = scene_renderer(_scene_file(robot), walk_spec(robot).chase)
         for n, checkpoint in todo:
             torch.manual_seed(seed)
             env.unwrapped.seed(seed)
@@ -193,7 +194,7 @@ def write_stills(  # noqa: PLR0913 - the tool's knobs, each named
             render_pose(
                 scene, walk.qpos[min(tick, len(walk.qpos)) - 1], stills_dir / file
             )
-            err_ratio = o.mean_err / max(o.mean_cmd, 1e-6)
+            err_ratio = o.err_ratio  # the certificate's own rule (evaluate.tracking)
             rows.append(
                 {
                     "iteration": n,
@@ -201,7 +202,7 @@ def write_stills(  # noqa: PLR0913 - the tool's knobs, each named
                     "file": file,
                     "tick": min(tick, o.steps),
                     "fell": o.fell,
-                    "tracked": (not o.fell) and err_ratio < err_ratio_bound,
+                    "tracked": o.success,
                     "err_ratio": round(err_ratio, 4),
                     "seed": seed,
                 }
@@ -227,16 +228,22 @@ def main() -> int:
         "--tick", type=int, default=100, help="control ticks rolled out (50 Hz)"
     )
     parser.add_argument("--seed", type=int, default=1000)
-    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--device", default=None, help="cuda:0 or cpu; found when unset"
+    )
     args = parser.parse_args()
     use_project(args.project)
+    import warp as wp  # noqa: PLC0415
+
+    wp.init()
+    device = args.device or ("cuda:0" if wp.is_cuda_available() else "cpu")
     rows = write_stills(
         args.run_dir.resolve(),
         robot=args.robot,
         every=args.every,
         tick=args.tick,
         seed=args.seed,
-        device=args.device,
+        device=device,
         err_ratio_bound=ERR_RATIO_BOUND,
     )
     up = sum(1 for r in rows if not r["fell"])

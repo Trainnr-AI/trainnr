@@ -23,6 +23,7 @@ from _lab import bootstrap
 
 bootstrap()
 from rq_pipeline.robot.fit_record import (  # noqa: E402
+    MIN_FITS_FOR_SPREAD,
     load_fit_records,
     spread_summary,
     write_spread_record,
@@ -30,8 +31,6 @@ from rq_pipeline.robot.fit_record import (  # noqa: E402
 
 # The foil, cited (docs/e2e-research/30 §3.3-3.4): the SO-101 constants
 # shipped by the field, byte-identical across two companies' repos.
-MIN_FITS_FOR_SPREAD = 2  # a spread needs two fits to disagree
-
 
 FOIL = (
     "The field's counterpart:  kp=17.8, damping=0.60 — one guess for six\n"

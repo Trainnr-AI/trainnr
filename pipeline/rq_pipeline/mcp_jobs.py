@@ -16,14 +16,14 @@ recorder. A job whose pid is gone but whose exit file never appeared
 (the runner itself killed) reports "ended (exit unrecorded)" rather
 than guessing.
 
-Stdlib only: the job table is JSON files under `runs/mcp-jobs/`, one
-per job, readable by a human when the tooling is not around.
+The job table is JSON files under `runs/mcp-jobs/`, one per job,
+readable by a human when the tooling is not around; liveness and the
+stop are the Studio's (`project/control`), one probe for every process.
 """
 
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 import sys
 import threading
@@ -41,6 +41,7 @@ else:
     from typing_extensions import TypedDict
 
 from rq_pipeline.bundles.json_record import JsonRecord
+from rq_pipeline.project.control import pid_alive, terminate_group
 
 JOBS_DIR_NAME = "mcp-jobs"
 
@@ -201,7 +202,7 @@ class JobManager:
         if exit_path.exists():
             code = int(exit_path.read_text())
             state = "done" if code == 0 else f"failed (exit {code})"
-        elif _pid_alive(record.pid):
+        elif pid_alive(record.pid):
             state = "running"
         else:
             state = "ended (exit unrecorded — the watching server restarted)"
@@ -224,12 +225,7 @@ class JobManager:
         """SIGTERM the job's whole process group (its own session — the
         same gesture as the Studio's stop button)."""
         record = self._record(job_id)
-        try:
-            os.killpg(record.pid, signal.SIGTERM)
-            note = "SIGTERM sent to the process group"
-        except ProcessLookupError:
-            note = "already gone"
-        return {"job_id": job_id, "cancelled": note}
+        return {"job_id": job_id, "cancelled": terminate_group(record.pid)}
 
     def list(self) -> list[JobStatus]:
         """Every job on record, newest first, with its current state."""
@@ -251,16 +247,6 @@ class JobManager:
             known = sorted(p.stem for p in self.jobs_dir.glob("*.json"))
             raise KeyError(f"no job {job_id!r}; known: {known}")
         return JobRecord.read(path)
-
-
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True  # alive, someone else's — cannot signal, can report
-    return True
 
 
 def main(args: Sequence[str] | None = None) -> int:

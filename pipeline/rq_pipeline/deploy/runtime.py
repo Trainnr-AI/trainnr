@@ -16,6 +16,7 @@ reference's gait clock.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -128,22 +129,14 @@ class Runtime:
         if source.startswith(SENSOR_PREFIX):
             adr, dim = self.sensors[source[len(SENSOR_PREFIX) :].split("/", 1)[-1]]
             value = self.data.sensordata[adr : adr + dim].copy()
-        elif source == SOURCE_PROJECTED_GRAVITY:
-            value = rotate_inverse(self.quat, GRAVITY_DOWN)
-        elif source == SOURCE_JOINT_POS_REL:
-            value = self.data.qpos[self.joint_qpos] - self.default_pos
-        elif source == SOURCE_JOINT_VEL_REL:
-            value = self.data.qvel[self.joint_qvel]
-        elif source == SOURCE_LAST_ACTION:
-            value = self.last_action.astype(np.float64)
-        elif source == SOURCE_COMMAND_TWIST:
-            value = self.command.astype(np.float64)
-        elif source == SOURCE_GAIT_PHASE:
-            value = gait_phase(
-                self.ticks, self.step_dt, float(term.params["period"]), self.command
-            )
-        else:  # pragma: no cover - the manifest loader refuses unknown sources
-            raise ValueError(f"cannot compute observation source {source!r}")
+        else:
+            try:
+                compute = SOURCES[source]
+            except KeyError as unknown:  # the manifest loader refuses these first
+                raise ValueError(
+                    f"cannot compute observation source {source!r}"
+                ) from unknown
+            value = compute(self, term)
         value = np.asarray(value, dtype=np.float64) * np.asarray(
             term.scale, dtype=np.float64
         )
@@ -181,18 +174,46 @@ class Runtime:
         """The active contacts between the robot's bodies and the rest
         of the world, as positions; the robot is the floating base's
         kinematic tree."""
-        root = int(self.model.body_rootid[self.model.jnt_bodyid[0]])
-        roots = self.model.body_rootid
-        points = [
-            self.data.contact[i].pos.copy()
-            for i in range(self.data.ncon)
-            if (roots[self.model.geom_bodyid[self.data.contact[i].geom1]] == root)
-            != (roots[self.model.geom_bodyid[self.data.contact[i].geom2]] == root)
-        ]
-        return np.array(points, dtype=np.float64).reshape(-1, 3)
+        model, data = self.model, self.data
+        # the robot's tree is the free joint's, wherever the spec put it
+        free = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
+        if free.size == 0:
+            raise ValueError("the scene has no floating base (no free joint)")
+        root = int(model.body_rootid[model.jnt_bodyid[free[0]]])
+        n = data.ncon
+        roots = model.body_rootid[model.geom_bodyid]
+        one = roots[data.contact.geom1[:n]] == root
+        two = roots[data.contact.geom2[:n]] == root
+        return np.asarray(data.contact.pos[:n], dtype=np.float64)[one != two].reshape(
+            -1, 3
+        )
 
     def fell_over(self) -> bool:
         return fell_over(self.quat, self.manifest.termination.fell_over_deg)
+
+
+# How the runtime computes each named observation source: one table the
+# manifest's loader mirrors (`manifest.KNOWN_SOURCES`, pinned by a test),
+# extended by registration, never by a longer chain.
+Source = Callable[[Runtime, Observation], np.ndarray]
+SOURCES: dict[str, Source] = {
+    SOURCE_PROJECTED_GRAVITY: lambda rt, _t: rotate_inverse(rt.quat, GRAVITY_DOWN),
+    SOURCE_JOINT_POS_REL: lambda rt, _t: rt.data.qpos[rt.joint_qpos] - rt.default_pos,
+    SOURCE_JOINT_VEL_REL: lambda rt, _t: rt.data.qvel[rt.joint_qvel],
+    SOURCE_LAST_ACTION: lambda rt, _t: rt.last_action.astype(np.float64),
+    SOURCE_COMMAND_TWIST: lambda rt, _t: rt.command.astype(np.float64),
+    SOURCE_GAIT_PHASE: lambda rt, t: gait_phase(
+        rt.ticks, rt.step_dt, float(t.params["period"]), rt.command
+    ),
+}
+
+
+def register_source(name: str, compute: Source) -> None:
+    """A third party's observation source, once; the manifest loader must
+    know the name too (`manifest.KNOWN_SOURCES`)."""
+    if name in SOURCES:
+        raise ValueError(f"observation source {name!r} is already registered")
+    SOURCES[name] = compute
 
 
 def gait_phase(

@@ -11,11 +11,16 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest import mock
 
 import numpy as np
 import torch
+from rq_pipeline.scenes.heads import HEAD_CAMERA, head_mount
+from rq_pipeline.scenes.obj import write_obj
 from rq_pipeline.scenes.record import (
     DECLARED,
+    FLOOR_FRICTION,
+    PROXY_FILE,
     SCENE_FILE,
     SPLAT_FILE,
     Alignment,
@@ -26,15 +31,12 @@ from rq_pipeline.scenes.record import (
     Tool,
 )
 from rq_pipeline.scenes.splat import Splats, write_ply
-from rq_pipeline.scenes.stage import FLOOR_FRICTION, HEAD_CAMERA, HEAD_POS
-from rq_pipeline.scenes.terrain import Grid, write_grid
+from rq_pipeline.scenes.terrain import HFIELD_NAME, Grid, proxy_hash, write_grid
 
 from rq_mjlab.scene_stage import (
     CAMERA_HEIGHT,
     CAMERA_TERM,
     CAMERA_WIDTH,
-    HFIELD_NAME,
-    ROBOT_BASE,
     TRAIN_CELL_M,
     RendersSplats,
     SceneHeightfieldCfg,
@@ -93,8 +95,17 @@ def _scene(tmp: Path, *, grid: bool = True, splats: bool = False) -> Path:
         code="test",
         course={"waypoints": WAYPOINTS, "source": "the test"},
     ).write(scene / SCENE_FILE)
+    # a proxy the grid's stamp names: the loader refuses a grid sampled from
+    # another proxy, so the fixture's grid must be this proxy's
+    write_obj(
+        scene / PROXY_FILE,
+        np.array(
+            [[1.0, -1.0, 2.0], [2.5, -1.0, 2.3], [2.5, 0.0, 2.3], [1.0, 0.0, 2.0]]
+        ),
+        np.array([[0, 1, 2], [0, 2, 3]]),
+    )
     if grid:
-        write_grid(scene, GRID, 0.0, "abc")
+        write_grid(scene, GRID, 0.0, proxy_hash(scene))
     if splats:
         n = 5
         write_ply(
@@ -219,9 +230,15 @@ class _SceneWithTerrain:
 
 class TheHeadCamera(unittest.TestCase):
     def test_the_camera_rides_on_the_base_looking_forward(self) -> None:
-        head = head_camera_cfg()
-        self.assertEqual((head.name, head.parent_body), (HEAD_CAMERA, ROBOT_BASE))
-        self.assertEqual(head.pos, HEAD_POS)
+        head = head_camera_cfg("go2")
+        self.assertEqual(
+            (head.name, head.parent_body), (HEAD_CAMERA, "robot/base_link")
+        )
+        self.assertEqual(head.pos, head_mount("go2").pos)
+        with self.assertRaisesRegex(
+            KeyError, "no head mount registered for robot 'spot'"
+        ):
+            head_camera_cfg("spot@1")
         self.assertEqual((head.width, head.height), (CAMERA_WIDTH, CAMERA_HEIGHT))
         self.assertEqual(head.data_types, ("rgb",))
         self.assertAlmostEqual(sum(q * q for q in head.quat), 1.0, places=6)
@@ -278,6 +295,30 @@ class TheSplatsInTheContext(unittest.TestCase):
         self.assertIs(context_module.mjwarp, module)
 
 
+class TheSplatsLeaveWithTheScene(unittest.TestCase):
+    """A plane env built after a scene env in one process renders no
+    splats: the plane builder unrenders them (a scene's gaussians in a
+    plane's camera would be a picture of nowhere)."""
+
+    def test_the_plane_builder_unrenders(self) -> None:
+        from mjlab.sensor import sensor_context  # noqa: PLC0415
+
+        from rq_mjlab.go2_walk import go2_walk_env_cfg  # noqa: PLC0415
+
+        module = SimpleNamespace(create_render_context=lambda *a, **k: k)
+        context_module = SimpleNamespace(mjwarp=module)
+        with tempfile.TemporaryDirectory() as tmp:
+            render_splats(_scene(Path(tmp), splats=True), context_module=context_module)
+        self.assertIsInstance(context_module.mjwarp, RendersSplats)
+        with mock.patch.object(sensor_context, "mjwarp", context_module.mjwarp):
+            try:
+                go2_walk_env_cfg(dr_span=None)
+            except (FileNotFoundError, KeyError, SystemExit):
+                # no Go2 bundle on this machine: the unrender runs first anyway
+                pass
+            self.assertNotIsInstance(sensor_context.mjwarp, RendersSplats)
+
+
 class TheWalksTakeAScene(unittest.TestCase):
     def test_the_other_walks_refuse_a_scene_by_name(self) -> None:
         for robot in ("microduck", "go1"):
@@ -286,6 +327,19 @@ class TheWalksTakeAScene(unittest.TestCase):
                     walk_spec(robot).env_cfg(
                         dr_span=None, pin_scale=None, scene=Path("/nowhere")
                     )
+                with self.assertRaisesRegex(TypeError, "no earlier actor recipe"):
+                    walk_spec(robot).env_cfg(
+                        dr_span=None, pin_scale=None, legacy_actor=True
+                    )
+
+    def test_the_walks_are_a_registry(self) -> None:
+        from rq_mjlab.walks import ROBOTS, WALKS, register_walk  # noqa: PLC0415
+
+        self.assertEqual(ROBOTS, tuple(WALKS))
+        with self.assertRaisesRegex(ValueError, "already registered"):
+            register_walk("go2", WALKS["go2"])
+        with self.assertRaisesRegex(KeyError, "no walk for robot 'spot'"):
+            walk_spec("spot")
 
 
 @unittest.skipUnless(
@@ -295,7 +349,8 @@ class TheGo2OnAScene(unittest.TestCase):
     def test_the_config_stands_on_the_scene_and_sees_it(self) -> None:
         use_project(PROJECT)
         with tempfile.TemporaryDirectory() as tmp:
-            scene = _scene(Path(tmp))
+            scene = _scene(Path(tmp), splats=True)  # the camera renders the splat
+            self.addCleanup(unrender_splats)
             cfg, identity = walk_spec("go2").env_cfg(
                 dr_span=0.1, pin_scale=None, scene=scene
             )
@@ -311,6 +366,8 @@ class TheGo2OnAScene(unittest.TestCase):
                 self.assertIn(CAMERA_TERM, cfg.observations[group].terms)
             self.assertTrue(identity["scene"].startswith("fake@"))
             self.assertIn("64x64", identity["cameras"])
+            self.assertIn("over 3 splats", identity["cameras"])  # the visible ones
+            self.assertEqual(identity["actor"], "rough")
             without, identity = walk_spec("go2").env_cfg(
                 dr_span=0.1, pin_scale=None, scene=scene, cameras=False
             )

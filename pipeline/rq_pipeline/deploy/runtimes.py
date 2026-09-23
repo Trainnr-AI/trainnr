@@ -29,10 +29,13 @@ LINUX = "linux"
 
 
 class GateRuntime(Protocol):
-    """What the gate's trial loop asks of a runtime (`deploy.gate.run_trial`):
-    the seven calls, the held command it reads, the instrument string
+    """What a gate trial asks of a runtime (`deploy.gate.run_trial` for
+    held twists, `deploy.course.run_course_trial` along a course): the
+    calls below, the command it reads each tick, the instrument string
     the record names, and the command envelope it can reach (None when
-    the manifest's ranges are the only bound)."""
+    the manifest's ranges are the only bound). A runtime that holds
+    something open (a pad, a bus) also answers `close()`, called once
+    when the gate is done."""
 
     command: np.ndarray
 

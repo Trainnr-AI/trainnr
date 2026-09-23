@@ -26,28 +26,39 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.bundles.hashing import STAMP_LENGTH
+from rq_pipeline.scenes.gap import (
+    DEFAULT_TOLERANCE_M,
+    GAP_DIGITS,
+    SURFACE_SAMPLES,
+    open3d,
+)
 from rq_pipeline.scenes.obj import read_obj
-from rq_pipeline.scenes.proxy import ensure_parts
-from rq_pipeline.scenes.record import COLLISION_GROUP, PROXY_FILE
+from rq_pipeline.scenes.proxy import load_decomposition
+from rq_pipeline.scenes.record import (
+    COLLISION_GROUP,
+    PROXY_FILE,
+    PROXY_RGBA,
+    friction_triple,
+)
 
 HEIGHTFIELD = "heightfield"
 HULLS = "hulls"
 DEFAULT_TERRAIN = HEIGHTFIELD
 PART_MESH = "scene_part_{index:03d}"
 HFIELD_NAME = "scene_heightfield"
-# The grid cell: the audit's tolerance (docs/78 §3, a paw's width).
-CELL_M = 0.02
+# The grid cell: the audit's tolerance (docs/78 §3), the one number.
+CELL_M = DEFAULT_TOLERANCE_M
 # The solid base MuJoCo puts under a heightfield, in metres.
 HFIELD_BASE_M = 0.1
-PROXY_HASH_CHARS = 12
-# Where the top-surface ray starts and how close a sample must be to the
-# hit to count as the top surface.
+# Where the top-surface ray starts (above any room) and how close a
+# sample must be to the hit to count as the top surface.
 RAY_FROM_M = 50.0
 TOP_TOLERANCE_M = 0.001
-GAP_SAMPLES = 50_000
-GAP_DIGITS = 5
-TERRAIN_RGBA = (0.4, 0.4, 0.4, 0.3)
-NEEDS_SCENE = "the scene extra (Open3D): uv sync --extra scene"
+NO_PARTS = (
+    "scene {name} carries no convex parts: import it where CoACD is installed, "
+    "or stage it on the {default} terrain"
+)
 
 
 @dataclass(frozen=True)
@@ -67,9 +78,9 @@ TerrainBuilder = Callable[[Any, Any, Path, list[float] | None], TerrainFacts]
 
 
 def _friction(geom: Any, friction: list[float] | None) -> None:
-    geom.rgba[:] = TERRAIN_RGBA
+    geom.rgba[:] = PROXY_RGBA
     if friction is not None:
-        geom.friction[:] = [*friction, 0.0, 0.0][:3]
+        geom.friction[:] = friction_triple(friction)
 
 
 def hulls(
@@ -78,7 +89,13 @@ def hulls(
     """Every convex part as a mesh geom with its vertices embedded."""
     import mujoco  # noqa: PLC0415
 
-    parts = ensure_parts(scene_dir)
+    # the parts are the scene's content, written when it was imported: a
+    # stage never writes into a scene (its version is its bytes)
+    parts = load_decomposition(scene_dir)
+    if parts is None:
+        raise FileNotFoundError(
+            NO_PARTS.format(name=Path(scene_dir).name, default=DEFAULT_TERRAIN)
+        )
     for i, (vertices, _faces) in enumerate(parts.meshes(scene_dir)):
         name = PART_MESH.format(index=i)
         mesh = spec.add_mesh(name=name)
@@ -99,10 +116,7 @@ def hulls(
 
 
 def _raycaster(vertices: np.ndarray, faces: np.ndarray) -> Any:
-    try:
-        import open3d as o3d  # noqa: PLC0415
-    except ImportError as why:
-        raise ImportError(NEEDS_SCENE) from why
+    o3d = open3d()
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(
         o3d.core.Tensor.from_numpy(vertices.astype(np.float32)),
@@ -212,14 +226,13 @@ def heightfield_gap(
     the topmost at their (x, y) against the grid's height there; the
     fraction that are not topmost - vertical faces and undersides - is
     what the heightfield carries only as cliffs between vertices."""
-    import open3d as o3d  # noqa: PLC0415
-
+    o3d = open3d()
     mesh = o3d.geometry.TriangleMesh(
         o3d.utility.Vector3dVector(vertices.astype(np.float64)),
         o3d.utility.Vector3iVector(faces.astype(np.int32)),
     )
     o3d.utility.random.seed(seed)
-    samples = np.asarray(mesh.sample_points_uniformly(GAP_SAMPLES).points)
+    samples = np.asarray(mesh.sample_points_uniformly(SURFACE_SAMPLES).points)
     top = _heights_at(_raycaster(vertices, faces), samples[:, :2])
     topmost = np.abs(top - samples[:, 2]) < TOP_TOLERANCE_M
     error = np.abs(samples[topmost, 2] - grid.at(samples[topmost, :2]))
@@ -252,7 +265,7 @@ GRID_FILE = ".heightfield.npz"
 
 def proxy_hash(scene_dir: Path) -> str:
     return hashlib.sha256((Path(scene_dir) / PROXY_FILE).read_bytes()).hexdigest()[
-        :PROXY_HASH_CHARS
+        :STAMP_LENGTH
     ]
 
 
@@ -300,14 +313,21 @@ def ensure_grid(scene_dir: Path) -> tuple[Grid, float]:
     return grid, filled
 
 
-def heightfield(
-    spec: Any, body: Any, scene_dir: Path, friction: list[float] | None
-) -> TerrainFacts:
-    """The proxy's top surface as one `hfield` geom, data inline."""
+def add_heightfield(
+    spec: Any,
+    body: Any,
+    grid: Grid,
+    *,
+    friction: list[float] | None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> tuple[Any, Any]:
+    """The grid as one `hfield` asset and one geom on `body`, data inline,
+    in the collision group (a picture never draws it: the splat is what
+    is seen), at the grid's own place plus `shift` (mjlab's terrain
+    generator adds a patch corner of its own). One home for the walk
+    package's training terrain and the stage's; returns (field, geom)."""
     import mujoco  # noqa: PLC0415
 
-    vertices, faces = read_obj(Path(scene_dir) / PROXY_FILE)
-    grid, filled = ensure_grid(scene_dir)
     z_min, z_max = float(grid.heights.min()), float(grid.heights.max())
     z_range = max(z_max - z_min, CELL_M)  # a flat proxy still needs a height scale
     field = spec.add_hfield(name=HFIELD_NAME)
@@ -320,8 +340,19 @@ def heightfield(
         hfieldname=HFIELD_NAME,
         group=COLLISION_GROUP,
     )
-    geom.pos[:] = [*grid.centre, z_min]
+    geom.pos[:] = np.array([*grid.centre, z_min]) + np.asarray(shift, dtype=np.float64)
     _friction(geom, friction)
+    return field, geom
+
+
+def heightfield(
+    spec: Any, body: Any, scene_dir: Path, friction: list[float] | None
+) -> TerrainFacts:
+    """The proxy's top surface as one `hfield` geom, data inline."""
+
+    vertices, faces = read_obj(Path(scene_dir) / PROXY_FILE)
+    grid, filled = ensure_grid(scene_dir)
+    add_heightfield(spec, body, grid, friction=friction)
     gap = heightfield_gap(vertices, faces, grid) | {
         "holes_filled_fraction": round(filled, GAP_DIGITS)
     }

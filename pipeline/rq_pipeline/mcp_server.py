@@ -40,6 +40,12 @@ from rq_pipeline.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.mcp_jobs import DONE, JobHandle, Refusal, refusal
 from rq_pipeline.physics.registry import engines
+from rq_pipeline.project.locate import (
+    DEPLOY_FOLDER,
+    ROBOTS_FOLDER,
+    RUNS_FOLDER,
+    SCENES_FOLDER,
+)
 
 # BUNDLE_STORE has ONE home (the bundle module itself); it was spelled
 # three ways once — review 2026-09-01.
@@ -262,7 +268,7 @@ def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any] | Refusal:
 
     into: Path | None = None
     with contextlib.suppress(FileNotFoundError):
-        into = current_project().folder("robots")
+        into = current_project().folder(ROBOTS_FOLDER)
     actions = Actions(JobManager(_jobs_root()))
     try:
         out = actions.onboard_robot(mjcf_path, name, into=str(into) if into else None)
@@ -514,15 +520,19 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
         plain_name(name, "deployment name")
     except ValueError as why:
         return refusal(str(why))
-    run_dir = project.folder("runs") / run
+    run_dir = project.folder(RUNS_FOLDER) / run
     path = run_dir / checkpoint
     if not path.is_file():
         return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
-    if (project.folder("deploy") / name).exists():
+    if (project.folder(DEPLOY_FOLDER) / name).exists():
         return refusal(f"deployment {name!r} already exists")
     index = index_project(project)
     run_art = next(
-        (a for a in index.artifacts if a.kind == "run" and a.path == f"runs/{run}"),
+        (
+            a
+            for a in index.artifacts
+            if a.kind == "run" and a.path == project.relative(RUNS_FOLDER, run)
+        ),
         None,
     )
     if run_art is None:
@@ -676,7 +686,7 @@ def gate_deployment(
         require_platform(runtime_spec(runtime))  # unknown, or not for this OS
     except (ValueError, RuntimeError) as why:
         return refusal(str(why))
-    if not (project.folder("deploy") / name / MANIFEST_FILE).is_file():
+    if not (project.folder(DEPLOY_FOLDER) / name / MANIFEST_FILE).is_file():
         return refusal(f"no deployment {name!r} in this project")
     return Actions(JobManager(_jobs_root())).gate_deployment(
         name,
@@ -727,7 +737,7 @@ def stage_deployment(  # noqa: PLR0913, PLR0917 - the stage's own knobs, each na
         plain_name(deployment, "deployment name")
         plain_name(scene, "scene name")
         plain_name(name, "deployment name")
-        source = project.folder("deploy") / deployment
+        source = project.folder(DEPLOY_FOLDER) / deployment
         if not (source / MANIFEST_FILE).is_file():
             raise FileNotFoundError(f"no deployment {deployment!r} in this project")
         scene_dir = project.scenes / scene
@@ -741,7 +751,7 @@ def stage_deployment(  # noqa: PLR0913, PLR0917 - the stage's own knobs, each na
         staged = staging.stage_deployment(
             source,
             scene_dir,
-            project.folder("deploy") / name,
+            project.folder(DEPLOY_FOLDER) / name,
             assets_dir=assets_dir_of(load_manifest(source)),
             start_xy=start_xy,
             heading_deg=heading_deg,
@@ -793,7 +803,7 @@ def assay_deployment(
         plain_name(scene, "scene name")
     except ValueError as why:
         return refusal(str(why))
-    if not (project.folder("deploy") / deployment / MANIFEST_FILE).is_file():
+    if not (project.folder(DEPLOY_FOLDER) / deployment / MANIFEST_FILE).is_file():
         return refusal(f"no deployment {deployment!r} in this project")
     if not (project.scenes / scene / SCENE_FILE).is_file():
         return refusal(f"no scene {scene!r} in this project")
@@ -833,7 +843,7 @@ def play_walk(
     project = current_project()
     try:
         plain_name(run, "run name")
-        run_dir = project.folder("runs") / run
+        run_dir = project.folder(RUNS_FOLDER) / run
         path = run_dir / checkpoint
         if not path.is_file():
             return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
@@ -1708,7 +1718,7 @@ def import_scene(source: str, name: str) -> dict[str, Any] | Refusal:
         (
             a.stamp
             for a in index.artifacts
-            if a.kind == "scene" and a.path == f"scenes/{name}"
+            if a.kind == "scene" and a.path == project.relative(SCENES_FOLDER, name)
         ),
         UNRECORDED,
     )
@@ -2210,6 +2220,16 @@ def build_server() -> Any:  # noqa: PLR0915
         "intervals, versions on every row; robot names the walk, else the "
         "project's one declared walk. Job handle."
     )(evaluate_walk)
+    server.tool(
+        description="Open a checkpoint of an experiment in mjlab's own viewer "
+        "(viser in the browser, or native), the same rollout streamed into the "
+        "Studio's Live view. Job handle; the viewer lives until closed."
+    )(play_walk)
+    server.tool(
+        description="See the reward before training: roll the declared walk for "
+        "a few seconds untrained or standing, every reward term streamed into the "
+        "Studio, a per-term summary written beside the task. Job handle."
+    )(preview_rewards)
     server.tool(
         description="The RL teacher generates demonstrations (docs/66 D2): the walk "
         "checkpoint rolls out, keepers become a stamped batch with chase-camera "

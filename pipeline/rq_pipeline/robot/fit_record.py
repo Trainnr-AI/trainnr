@@ -259,17 +259,19 @@ def spread_summary(records: tuple[FitRecord, ...]) -> str:
     return "\n".join(lines)
 
 
+MIN_FITS_FOR_SPREAD = 2  # a spread of one run is not a spread
+
+
 def write_spread_record(bundle_dir: Path) -> Path:
     """Persist the cross-run verdict — the number the house calls the truth.
 
     `fits/SPREAD.json`: per-parameter spread beside mean interval width
     with the exceeds/agrees verdict, bound to the records it summarizes.
     """
-    minimum_records = 2  # a spread of one run is not a spread
     records = load_fit_records(bundle_dir)
-    if len(records) < minimum_records:
+    if len(records) < MIN_FITS_FOR_SPREAD:
         raise ValueError(
-            f"cross-run spread needs at least {minimum_records} fit records, "
+            f"cross-run spread needs at least {MIN_FITS_FOR_SPREAD} fit records, "
             f"got {len(records)}"
         )
     payload = {

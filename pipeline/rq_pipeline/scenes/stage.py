@@ -1,10 +1,11 @@
 """A scene as a task's stage (docs/78 §4 E2): the deployment's trained
-scene with its plane floor replaced by the scene's proxy parts, the
-robot started on the course the scene's author laid out, and the two
-cameras the splat is rendered for. Composed with MjSpec; the hulls'
-vertices are embedded in the XML, so a stage is one self-contained file
-with no paths in it and a staged deployment moves between machines like
-any artifact.
+scene with its plane floor replaced by the scene's terrain - its top
+surface as a heightfield by default, its convex parts when asked
+(`scenes.terrain`) - the robot started on the course the scene's author
+laid out, and the two cameras the splat is rendered for. Composed with
+MjSpec; the terrain's data is embedded in the XML, so a stage is one
+self-contained file with no paths in it and a staged deployment moves
+between machines like any artifact.
 
 The perturbation assay (docs/78 §4.1) is the same composition with the
 terrain moved: a whole-terrain offset in metres and a yaw about the
@@ -15,6 +16,7 @@ perturbation it is.
 
 from __future__ import annotations
 
+import json
 import math
 import shutil
 from dataclasses import asdict, dataclass
@@ -25,36 +27,36 @@ import numpy as np
 
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.deploy.manifest import MANIFEST_FILE, Key, load_manifest
-from rq_pipeline.scenes.record import SCENE_FILE, SceneRecord, load_scene_record
+from rq_pipeline.scenes.heads import HEAD_CAMERA, HeadMount, head_mount, look_quat
+from rq_pipeline.scenes.record import (
+    SCENE_FILE,
+    SceneRecord,
+    floor_friction,
+    load_scene_record,
+)
 from rq_pipeline.scenes.terrain import (
     DEFAULT_TERRAIN,
+    RAY_FROM_M,
     TerrainFacts,
     terrain_builder,
 )
 
 STAGE_FILE = "stage.xml"
-TERRAIN_BODY = "scene_terrain"
-FLOOR_GEOM = "floor"
-FLOOR_FRICTION = "floor_friction"  # the scene record's declared physics, by name
+STAGE_TERRAIN_BODY = "scene_terrain"  # the stage's own body for the terrain
+FLOOR_GEOM = "floor"  # the trained scene's plane, as the walk export names it
 # The robot starts this far before the first waypoint, along the course.
 START_BEHIND_M = 1.0
-# The ray that finds the terrain's height under the start, cast down from here.
-RAY_FROM_M = 10.0
-# Cameras: a head camera on the floating base looking along the body's x,
-# and a course camera behind and above the start looking along the course.
-HEAD_CAMERA = "head"
-HEAD_POS = (
-    0.38,
-    0.0,
-    0.06,
-)  # ahead of the Go2's head mesh (the first render looked at it from inside)
-HEAD_FOVY = 90.0
+# Cameras: the robot's head camera (`scenes.heads`, by robot family) and a
+# course camera behind and above the start looking along the course.
 COURSE_CAMERA = "course"
 COURSE_BEHIND_M = 2.5
 COURSE_ABOVE_M = 1.5
 COURSE_AHEAD_M = 3.0  # what the course camera looks at, along the heading
 COURSE_FOVY = 60.0
 SCENE_TERRAIN_WORD = "scene"  # the manifest's terrain word for a stage
+# The head a stage puts on a scene with no registered robot (a test's
+# tiny robot): a metre-free look along the base's x, on the floating base.
+FREE_BASE_HEAD = HeadMount(pos=(0.0, 0.0, 0.0), fovy=90.0)
 
 
 @dataclass(frozen=True)
@@ -69,17 +71,27 @@ class Perturbation:
 NOMINAL = Perturbation("nominal")
 SHIFT_M = 0.02
 TURN_DEG = 5.0
+
+
+def _shift_label(axis: str, sign: str) -> str:
+    return f"{axis}{sign}{SHIFT_M * 1000:g}mm"
+
+
+def _turn_label(sign: str) -> str:
+    return f"yaw{sign}{TURN_DEG:g}deg"
+
+
 # The assay's set: the field's ±20 mm on each axis and ±5° of yaw.
 ASSAY = (
     NOMINAL,
-    Perturbation("x+20mm", (SHIFT_M, 0.0, 0.0)),
-    Perturbation("x-20mm", (-SHIFT_M, 0.0, 0.0)),
-    Perturbation("y+20mm", (0.0, SHIFT_M, 0.0)),
-    Perturbation("y-20mm", (0.0, -SHIFT_M, 0.0)),
-    Perturbation("z+20mm", (0.0, 0.0, SHIFT_M)),
-    Perturbation("z-20mm", (0.0, 0.0, -SHIFT_M)),
-    Perturbation("yaw+5deg", yaw_deg=TURN_DEG),
-    Perturbation("yaw-5deg", yaw_deg=-TURN_DEG),
+    Perturbation(_shift_label("x", "+"), (SHIFT_M, 0.0, 0.0)),
+    Perturbation(_shift_label("x", "-"), (-SHIFT_M, 0.0, 0.0)),
+    Perturbation(_shift_label("y", "+"), (0.0, SHIFT_M, 0.0)),
+    Perturbation(_shift_label("y", "-"), (0.0, -SHIFT_M, 0.0)),
+    Perturbation(_shift_label("z", "+"), (0.0, 0.0, SHIFT_M)),
+    Perturbation(_shift_label("z", "-"), (0.0, 0.0, -SHIFT_M)),
+    Perturbation(_turn_label("+"), yaw_deg=TURN_DEG),
+    Perturbation(_turn_label("-"), yaw_deg=-TURN_DEG),
 )
 
 
@@ -151,20 +163,6 @@ def _yaw_quat(yaw_deg: float) -> np.ndarray:
     return np.array([math.cos(half), 0.0, 0.0, math.sin(half)])
 
 
-def look_quat(forward: np.ndarray, up: np.ndarray) -> np.ndarray:
-    """A camera frame (MuJoCo: looks along its -z, +y up) looking along
-    `forward`, as a w-x-y-z quaternion."""
-    import mujoco  # noqa: PLC0415
-
-    z = -forward / np.linalg.norm(forward)
-    x = np.cross(up, z)
-    x /= np.linalg.norm(x)
-    y = np.cross(z, x)
-    quat = np.zeros(4)
-    mujoco.mju_mat2Quat(quat, np.column_stack([x, y, z]).reshape(-1))
-    return quat
-
-
 def _free_body(spec: Any) -> Any:
     import mujoco  # noqa: PLC0415
 
@@ -182,7 +180,7 @@ def _surface_z(model: Any, x: float, y: float) -> float:
 
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
-    terrain = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, TERRAIN_BODY)
+    terrain = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, STAGE_TERRAIN_BODY)
     origin = np.array([x, y, RAY_FROM_M])
     down = np.array([0.0, 0.0, -1.0])
     rays = {
@@ -212,11 +210,14 @@ def compose(  # noqa: PLR0913 - the stage's own knobs, each named
     terrain: str = DEFAULT_TERRAIN,
     floor_geom: str = FLOOR_GEOM,
     keyframe: int = 0,
+    mount: HeadMount = FREE_BASE_HEAD,
 ) -> Stage:
     """The trained scene on the captured one. `scene_xml` and `assets`
     are the deployment's (`deploy.runtime.load_scene` reads the same);
     the start comes from the scene's course unless given; `terrain` is
-    one of `scenes.terrain.TERRAINS`."""
+    one of `scenes.terrain.TERRAINS`; `mount` is where the robot's head
+    camera rides (`scenes.heads`; the default sits it on the floating
+    base a test scene has)."""
     import mujoco  # noqa: PLC0415
 
     scene_dir = Path(scene_dir)
@@ -226,24 +227,17 @@ def compose(  # noqa: PLR0913 - the stage's own knobs, each named
         course_xy, course_heading = course_start(record)
         start_xy = start_xy if start_xy is not None else course_xy
         heading_deg = heading_deg if heading_deg is not None else course_heading
-    friction = next(
-        (
-            [float(v) for v in np.atleast_1d(p.value)]
-            for p in record.physics
-            if p.name == FLOOR_FRICTION
-        ),
-        None,
-    )
+    friction = floor_friction(record)
     spec = mujoco.MjSpec.from_string(scene_xml, assets=assets)
     floor = next((g for g in spec.geoms if g.name == floor_geom), None)
     if floor is not None:
         spec.delete(floor)
-    ground = spec.worldbody.add_body(name=TERRAIN_BODY)
+    ground = spec.worldbody.add_body(name=STAGE_TERRAIN_BODY)
     facts = build(spec, ground, scene_dir, friction)
-    base = _free_body(spec)
-    head = base.add_camera(name=HEAD_CAMERA, fovy=HEAD_FOVY)
-    head.pos[:] = HEAD_POS
-    head.quat[:] = look_quat(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+    base = spec.body(mount.body) if mount.body else _free_body(spec)
+    head = base.add_camera(name=HEAD_CAMERA, fovy=mount.fovy)
+    head.pos[:] = mount.pos
+    head.quat[:] = mount.quat
     # the nominal terrain's height under the start, before any perturbation
     surface_z = _surface_z(spec.compile(), *start_xy)
     key = spec.keys[keyframe]
@@ -313,6 +307,7 @@ def stage_deployment(  # noqa: PLR0913 - the staging's own knobs, each named
         assets,
         scene_dir,
         scene_stamp=stamp(scene_dir.name, scene_dir),
+        mount=head_mount(str(manifest.raw[Key.ROBOT])),
         start_xy=start_xy,
         heading_deg=heading_deg,
         perturbation=perturbation,
@@ -330,8 +325,6 @@ def stage_deployment(  # noqa: PLR0913 - the staging's own knobs, each named
         }
     }
     raw[Key.STAMP_OF] = f"{manifest.raw.get(Key.STAMP_OF)} on {scene_dir.name}"
-    import json  # noqa: PLC0415
-
     (out_dir / MANIFEST_FILE).write_text(
         json.dumps(raw, indent=1) + "\n", encoding="utf-8"
     )

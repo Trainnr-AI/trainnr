@@ -22,6 +22,11 @@ VIZ = (REPO / "pipeline" / "rq_pipeline" / "viz.py").read_text(encoding="utf-8")
 SIMULATOR_RS = (REPO / "crates" / "studio-shell" / "src" / "simulator.rs").read_text(
     encoding="utf-8"
 )
+SHELL_SRC = REPO / "crates" / "studio-shell" / "src"
+MODEL_RS = (SHELL_SRC / "model.rs").read_text(encoding="utf-8")
+CONTROL_RS = (SHELL_SRC / "control.rs").read_text(encoding="utf-8")
+DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
+PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 
 
 def constant(source: str, pattern: str) -> str:
@@ -209,3 +214,71 @@ class WireConstants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectContracts(unittest.TestCase):
+    """What the Studio reads off a project on disk - schemas, file names,
+    the environment variable - spelled once in `rq_pipeline.project` and
+    once in the shell, compared here."""
+
+    def test_the_schemas_agree(self) -> None:
+        from rq_pipeline.project import control, details, index  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(MODEL_RS, r'pub const INDEX_SCHEMA: &str = "([^"]+)";'),
+            index.INDEX_SCHEMA,
+        )
+        self.assertEqual(
+            constant(DETAIL_RS, r'pub const DETAIL_SCHEMA: &str = "([^"]+)";'),
+            details.SCHEMA,
+        )
+        self.assertEqual(
+            constant(CONTROL_RS, r'pub const STATE_SCHEMA: &str = "([^"]+)";'),
+            control.STATE_SCHEMA,
+        )
+
+    def test_the_files_and_the_environment_agree(self) -> None:
+        from rq_pipeline.project import control, locate, present  # noqa: PLC0415
+
+        index_dir = locate.INDEX_DIR
+        self.assertEqual(
+            constant(MODEL_RS, r'pub const PROJECT_ENV: &str = "([^"]+)";'),
+            locate.PROJECT_ENV,
+        )
+        self.assertEqual(
+            constant(MODEL_RS, r'const INTENT_RELATIVE: &str = "([^"]+)";'),
+            f"{index_dir}/{present.INTENT_FILE}",
+        )
+        self.assertEqual(
+            constant(MODEL_RS, r'const PRESENT_STATUS_RELATIVE: &str = "([^"]+)";'),
+            f"{index_dir}/{control.PRESENT_STATUS_FILE}",
+        )
+        self.assertEqual(
+            constant(CONTROL_RS, r'pub const STATE_RELATIVE: &str = "([^"]+)";'),
+            f"{index_dir}/{control.STATE_FILE}",
+        )
+        self.assertEqual(
+            constant(CONTROL_RS, r'pub const COMMANDS_RELATIVE: &str = "([^"]+)";'),
+            f"{index_dir}/{control.COMMANDS_DIR}",
+        )
+        self.assertEqual(
+            constant(CONTROL_RS, r'pub const EVENTS_RELATIVE: &str = "([^"]+)";'),
+            f"{index_dir}/{control.EVENTS_FILE}",
+        )
+        self.assertEqual(
+            int(constant(CONTROL_RS, r"pub const SCREENSHOT_WIDTH: u32 = (\d+);")),
+            control.SCREENSHOT_WIDTH,
+        )
+
+    def test_the_pages_and_the_verbs_agree(self) -> None:
+        """Every page the rail shows is a name the door accepts, and every
+        verb the door writes is one the shell's command enum parses."""
+        from rq_pipeline.project import control  # noqa: PLC0415
+
+        titles = re.findall(r"^\s+Self::\w+ => \"([A-Z][a-z]+)\",$", PAGES_RS, re.M)
+        self.assertGreater(len(titles), 10)
+        slugs = {t.lower().replace(" ", "-") for t in titles}
+        self.assertEqual(slugs - set(control.SECTIONS), set())
+        enum = CONTROL_RS.split("pub enum Command {", 1)[1].split("\n}\n", 1)[0]
+        variants = {v.lower() for v in re.findall(r"^    ([A-Z]\w+)", enum, re.M)}
+        self.assertEqual(set(control.VERBS), variants)

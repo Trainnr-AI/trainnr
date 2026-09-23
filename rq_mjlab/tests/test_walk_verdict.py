@@ -35,10 +35,6 @@ class TheCriterion(unittest.TestCase):
         self.assertFalse(wobbly.tracked)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheBlankedCamera(unittest.TestCase):
     """The campaign 3 control (docs/07 2026-09-03): the student judged
     with its image zeroed, the row and the file saying so."""
@@ -132,14 +128,18 @@ class TheSceneGate(unittest.TestCase):
     the plane; the identity says which, and the other is refused."""
 
     def test_the_scene_must_match_the_identity(self) -> None:
-        from rq_mjlab.walk_verdict import require_same_scene  # noqa: PLC0415
+        from rq_mjlab.walk_view import require_same_identity  # noqa: PLC0415
 
-        require_same_scene({}, {"robot": "go2@1"})  # the plane, both
-        require_same_scene({"scene": "fake@1"}, {"scene": "fake@1"})
+        require_same_identity({}, {"robot": "go2@1"})  # the plane, both
+        require_same_identity({"scene": "fake@1"}, {"scene": "fake@1"})
         with self.assertRaisesRegex(SystemExit, "trained on fake@1.*the plane"):
-            require_same_scene({"scene": "fake@1"}, {"robot": "go2@1"})
+            require_same_identity({"scene": "fake@1"}, {"robot": "go2@1"})
         with self.assertRaisesRegex(SystemExit, "trained on the plane.*fake@1"):
-            require_same_scene({}, {"scene": "fake@1"})
+            require_same_identity({}, {"scene": "fake@1"})
+        # the robot and the actuator too; a key the run never wrote is not held
+        require_same_identity({"robot": "go2@1"}, {"robot": "go2@1", "actuator": "a@1"})
+        with self.assertRaisesRegex(SystemExit, "mismatch on robot"):
+            require_same_identity({"robot": "go2@1"}, {"robot": "go1@1"})
 
     def test_the_actor_sees_a_camera_only_if_it_trained_with_one(self) -> None:
         from rq_mjlab.walk_view import trained_with_cameras  # noqa: PLC0415
@@ -147,3 +147,7 @@ class TheSceneGate(unittest.TestCase):
         self.assertFalse(trained_with_cameras({}))
         self.assertFalse(trained_with_cameras({"cameras": "none"}))
         self.assertTrue(trained_with_cameras({"cameras": "head 64x64 rgb"}))
+
+
+if __name__ == "__main__":
+    unittest.main()

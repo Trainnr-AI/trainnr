@@ -32,6 +32,7 @@ from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
 from rq_pipeline.mcp_jobs import Cancelled, JobHandle, JobManager, JobStatus
+from rq_pipeline.paths import train_python
 
 # The checkout this package runs from (rq_pipeline/ -> pipeline/ -> the
 # repo). Not the robot library's parent: `RQ_ROBOTS_DIR` moves the
@@ -43,22 +44,9 @@ STUDIO_DIR = REPO_ROOT / "crates" / "studio-shell"
 TOOLS_DIR = REPO_ROOT / "tools"
 
 
-def venv_bin(venv: Path, name: str) -> Path:
-    """An executable inside a virtual environment, by the platform's own
-    layout (`bin/` on POSIX, `Scripts/` with `.exe` on Windows) — the one
-    resolver every tool that names a venv interpreter goes through."""
-    if sys.platform.startswith("win"):
-        return venv / "Scripts" / f"{name}.exe"
-    return venv / "bin" / name
-
-
-def venv_python(venv: Path) -> Path:
-    return venv_bin(venv, "python")
-
-
 # The T5 chain's documented interpreter (its own docstring: the train
 # venv, python 3.12 + lerobot) — NOT the pipeline's default venv.
-TRAIN_PYTHON = venv_python(PIPELINE_DIR / ".venv-train")
+TRAIN_PYTHON = train_python()
 
 # The reference checkout Unitree's simulator and controller are built in,
 # for the DDS gate runtime (docs/77 §7): named here, handed to the gate

@@ -11,6 +11,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -18,7 +19,7 @@ import numpy as np
 from rq_pipeline.deploy.manifest import Key, load_manifest
 from rq_pipeline.project import PROJECT_ENV, create_project, index_project
 from rq_pipeline.project.kinds import Kind
-from rq_pipeline.scenes import neverwhere, proxy, stage, terrain
+from rq_pipeline.scenes import heads, neverwhere, proxy, stage, terrain
 from rq_pipeline.scenes.obj import read_obj, write_obj
 from rq_pipeline.scenes.record import (
     COLLISION_GROUP,
@@ -43,7 +44,20 @@ from rq_pipeline.scenes.splat import (
     write_ply,
 )
 from tests._extras import SCENE, needs_scene, needs_sim
-from tests.test_deploy import _manifest
+from tests.test_deploy import _manifest as _deploy_manifest
+
+TINY_FAMILY = "tiny"  # the tests' robot: one box on a free joint, a head on it
+
+
+def _manifest(tmp: Path, **overrides: Any) -> Path:
+    """The deploy fixture's manifest naming the tiny robot, whose head
+    mount the tests register once (a robot the registry does not know is
+    refused by name, never given another robot's head)."""
+    if TINY_FAMILY not in heads.HEAD_MOUNTS:
+        heads.register_head_mount(
+            TINY_FAMILY, heads.HeadMount(pos=(0.0, 0.0, 0.1), fovy=90.0)
+        )
+    return _deploy_manifest(tmp, robot=f"{TINY_FAMILY}@abc", **overrides)
 
 
 def _splats(n: int = 50, seed: int = 0, sh: int = 0) -> Splats:
@@ -317,10 +331,6 @@ class TheProjectAndTheDoor(unittest.TestCase):
                 os.environ.pop(PROJECT_ENV, None)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _l_shape_obj(path: Path) -> Path:
     """A non-convex step: a 2 m floor slab with a 0.3 m block on one half -
     one convex hull would roof the whole slab at the block's height."""
@@ -374,7 +384,7 @@ class TheProxyParts(unittest.TestCase):
             again = proxy.ensure_parts(scene)
             self.assertEqual(again, first, "a second call reads the record")
             with self.assertRaises(FileExistsError):
-                proxy.decompose(scene / "proxy.obj", scene / proxy.PARTS_DIR)
+                proxy.decompose(scene)
 
 
 TINY_ROBOT = """<mujoco>
@@ -661,8 +671,8 @@ class _StandingRuntime:
 @needs_sim
 class TheAssayAndTheContactSites(unittest.TestCase):
     def test_the_assay_stages_every_perturbation_and_reads_the_cliff(self) -> None:
+        from rq_pipeline.deploy import assay  # noqa: PLC0415
         from rq_pipeline.deploy.gate import CONTACTS_FILE  # noqa: PLC0415
-        from rq_pipeline.scenes import assay  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             # dense enough that a 10 cm ball around a contact holds gaussians
@@ -745,5 +755,13 @@ class TheAssayAndTheContactSites(unittest.TestCase):
         opened, why = cameras.open_cameras(None, _splats(), names=("head",))
         self.assertIsNone(opened)
         self.assertIn("3.13", why)
+
+    def test_packed_pixels_unpack_to_rgb(self) -> None:
+        from rq_pipeline.scenes import cameras  # noqa: PLC0415
+
         pixel = np.array([0x0A0B0C], np.uint32)
         self.assertEqual(cameras.unpack(pixel).tolist(), [[10, 11, 12]])
+
+
+if __name__ == "__main__":
+    unittest.main()

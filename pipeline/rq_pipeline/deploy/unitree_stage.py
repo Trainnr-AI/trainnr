@@ -89,15 +89,24 @@ def facts_of(manifest: Manifest) -> UnitreeFacts:
     return facts
 
 
+BUILD_DIR = "build"  # where their CMake puts a binary, in every folder of theirs
+
+
+def robot_dir(reference: Path, facts: UnitreeFacts) -> Path:
+    """Their checkout's folder for this robot: the controller's source,
+    build and config."""
+    return Path(reference) / "deploy" / "robots" / facts.robot
+
+
 def controller_binary(reference: Path, facts: UnitreeFacts) -> Path:
-    path = reference / "deploy" / "robots" / facts.robot / "build" / facts.controller
+    path = robot_dir(reference, facts) / BUILD_DIR / facts.controller
     if not path.is_file():
         raise FileNotFoundError(f"{path}: build their controller first (docs/77 §7)")
     return path
 
 
 def sim_binary(reference: Path) -> Path:
-    path = reference / SIM_DIR / "build" / SIM_BINARY
+    path = reference / SIM_DIR / BUILD_DIR / SIM_BINARY
     if not path.is_file():
         raise FileNotFoundError(f"{path}: build their simulator first (docs/77 §7)")
     return path
@@ -108,15 +117,14 @@ def stage(manifest: Manifest, reference: Path) -> Path:
     reference = Path(reference)
     facts = facts_of(manifest)
     proj = manifest.root / STAGE_DIR
-    build = proj / "build"
+    build = proj / BUILD_DIR
     build.mkdir(parents=True, exist_ok=True)
     binary = controller_binary(reference, facts)
     shutil.copy2(binary, build / binary.name)
     config = proj / "config"
     config.mkdir(exist_ok=True)
     shutil.copy2(
-        reference / "deploy" / "robots" / facts.robot / "config" / CTRL_CONFIG,
-        config / CTRL_CONFIG,
+        robot_dir(reference, facts) / "config" / CTRL_CONFIG, config / CTRL_CONFIG
     )
     version = config / "policy" / "velocity" / POLICY_VERSION
     write_unitree_deploy(manifest, version / "params" / UNITREE_DEPLOY_FILE)
@@ -131,7 +139,7 @@ def stage_simulator(manifest: Manifest, reference: Path, *, device: Path) -> Pat
     reference = Path(reference)
     facts = facts_of(manifest)
     sim = manifest.root / STAGE_DIR / SIM_DIR
-    build = sim / "build"
+    build = sim / BUILD_DIR
     build.mkdir(parents=True, exist_ok=True)
     binary = sim_binary(reference)
     shutil.copy2(binary, build / binary.name)
@@ -177,6 +185,19 @@ class UnitreeStack:
         self._files: list[IO[bytes]] = []
 
     def __enter__(self) -> UnitreeStack:
+        # Whatever fails on the way up - a missing binary, an exited
+        # process, a Ctrl-C in the warm-up sleeps - the pad and the
+        # processes already started come down: `__exit__` never runs when
+        # `__enter__` raises. The children are killed as a group by the
+        # job runner's TERM; a bare `kill <pid>` of the gate alone leaves
+        # them (docs/77 §7): signal the group.
+        try:
+            return self._start()
+        except BaseException:
+            self.close()
+            raise
+
+    def _start(self) -> UnitreeStack:
         env = dict(os.environ)
         env["LD_LIBRARY_PATH"] = ":".join(
             p for p in (env.get("LD_LIBRARY_PATH", ""), *SDK_LIB_DIRS) if p
@@ -196,13 +217,16 @@ class UnitreeStack:
         logs = proj / LOG_DIR
         logs.mkdir(exist_ok=True)
         self.sim = self._spawn(
-            [str(sim / "build" / SIM_BINARY)], sim / "build", env, logs / "simulate.log"
+            [str(sim / BUILD_DIR / SIM_BINARY)],
+            sim / BUILD_DIR,
+            env,
+            logs / "simulate.log",
         )
         time.sleep(SIM_WARMUP_S)
         controller = facts_of(self.manifest).controller
         self.ctrl = self._spawn(
-            [str(proj / "build" / controller), f"--network={NETWORK}"],
-            proj / "build",
+            [str(proj / BUILD_DIR / controller), f"--network={NETWORK}"],
+            proj / BUILD_DIR,
             env,
             logs / "controller.log",
         )

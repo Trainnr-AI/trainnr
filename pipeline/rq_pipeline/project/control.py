@@ -22,6 +22,7 @@ through a command and, past the timeout, terminates by pid.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -38,6 +39,9 @@ from rq_pipeline.viz import STUDIO_ADDRESS
 
 COMMANDS_DIR = "commands"
 STATE_FILE = "studio-state.json"
+# The state file's schema (control.rs `STATE_SCHEMA`); the family before
+# the `/` is what a reader checks.
+STATE_SCHEMA = "trainnr-studio-state/1"
 EVENTS_FILE = "events.jsonl"
 STUDIO_LOG = "studio.log"
 STUDIO_ENV = "TRAINNR_STUDIO"  # a built Studio binary, when not in the repo
@@ -78,7 +82,8 @@ SECTIONS = (
     "findings",
     "deployments",
     "monitoring",
-    "live",
+    "simulator",
+    "live",  # the Simulator page's name until 2026-09-09; the Studio still parses it
 )
 PANEL_ACTIONS = ("expand", "toggle")
 # The built Studio, relative to the checkout.
@@ -116,15 +121,22 @@ def state(project: Project) -> dict[str, Any]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as why:
         return {"alive": False, "reason": f"unreadable state file: {why}"}
+    family = str(raw.get("schema", "")).split("/", 1)[0]
+    if family != STATE_SCHEMA.split("/", 1)[0]:
+        schema = raw.get("schema")
+        return {
+            "alive": False,
+            "reason": f"state file schema {schema!r} is not {STATE_SCHEMA!r}",
+        }
     pid = int(raw.get("pid") or 0)
     age = time.time() - float(raw.get("heartbeat") or 0.0)
-    alive = pid > 0 and _pid_alive(pid) and age < STALE_S
+    alive = pid > 0 and pid_alive(pid) and age < STALE_S
     raw["alive"] = alive
     raw["heartbeat_age_s"] = round(age, 3)
     if not alive:
         raw["reason"] = (
             f"pid {pid} is gone"
-            if not _pid_alive(pid)
+            if not pid_alive(pid)
             else f"heartbeat is {age:.1f} s old (stale past {STALE_S:g} s)"
         )
     return raw
@@ -400,7 +412,7 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
     answer = command(project, "quit")
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if not _pid_alive(pid):
+        if not pid_alive(pid):
             return {"status": "done", "pid": pid, "answer": answer.get("status")}
         time.sleep(0.1)
     try:
@@ -413,7 +425,7 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
 # -- helpers -------------------------------------------------------------------
 
 
-def _pid_alive(pid: int) -> bool:
+def pid_alive(pid: int) -> bool:
     """Whether a process with this id is running. psutil's probe, because
     `os.kill(pid, 0)` is a liveness check on POSIX and a TERMINATE on
     Windows - it would have killed the Studio it asked after. A child of
@@ -443,3 +455,28 @@ def _prune(folder: Path, keep: int = KEEP_COMMANDS) -> None:
     for old in files[:-keep] if len(files) > keep else []:
         old.unlink(missing_ok=True)
         old.with_name(old.name[: -len(".json")] + ".ack.json").unlink(missing_ok=True)
+
+
+def terminate_group(pid: int) -> str:
+    """Ask a process started in its own session (`start_new_session=True`)
+    and everything under it to stop: SIGTERM to the process group where
+    the OS has one, psutil's walk of the tree where it has not (Windows).
+    Returns the note a caller reports."""
+    if pid <= 0:
+        return "no process"
+    if hasattr(os, "killpg"):
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return "already gone"
+        return "SIGTERM sent to the process group"
+    import psutil  # noqa: PLC0415 - the `mcp` extra
+
+    try:
+        root = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return "already gone"
+    for proc in [*root.children(recursive=True), root]:
+        with contextlib.suppress(psutil.NoSuchProcess):
+            proc.terminate()
+    return "terminate sent to the process tree"

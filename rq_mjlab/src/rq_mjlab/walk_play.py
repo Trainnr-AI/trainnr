@@ -19,10 +19,10 @@ can never be rolled on a rig it was not trained for.
 from __future__ import annotations
 
 import argparse
-import json
 from dataclasses import asdict
 from pathlib import Path
 
+from rq_mjlab.walk_view import require_same_identity, trained_identity
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 
@@ -76,13 +76,10 @@ def main() -> None:
 
     # The identity beside the run's own: a checkpoint rolled on a rig it
     # was not trained for is a wrong answer with a straight face.
-    trained = args.checkpoint.parent / "identity.json"
-    if trained.is_file():
-        recorded = json.loads(trained.read_text())
+    recorded = trained_identity(args.checkpoint)
+    if recorded:
         print(f"[play] run identity:  {recorded}")
-        for key in ("robot", "actuator"):
-            if recorded.get(key) not in (None, identity.get(key)):
-                raise SystemExit(f"identity mismatch on {key}: this env is {identity}")
+    require_same_identity(recorded, identity)  # the one gate (walk_view)
     print(f"[play] env identity:  {identity}")
     print(f"[play] {args.envs} envs on {device}; checkpoint {args.checkpoint.name}")
 

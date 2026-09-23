@@ -32,6 +32,7 @@ import numpy as np
 
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.deploy.assay import read_assay
 from rq_pipeline.envs.lerobot_train_log import (
     CHAIN_LOG_FILE,
     RUN_MANIFEST_FILE,
@@ -65,7 +66,6 @@ from rq_pipeline.project.kinds import (
     UNREVIEWED,
 )
 from rq_pipeline.project.locate import INDEX_DIR, Project
-from rq_pipeline.scenes.assay import read_assay
 from rq_pipeline.tasks.overlay import jsonable as _plain_jsonable
 
 if TYPE_CHECKING:
@@ -76,6 +76,7 @@ DETAILS_DIR = "details"
 # arrival); /5 (2026-09-12): one gate section per runtime; /4 (2026-09-10):
 # a walk's gate and episode; /3 (2026-09-09): fit records read as written.
 SCHEMA = "trainnr-detail/6"
+UNAVAILABLE_KEY = "unavailable"  # the writer failed; the Studio ignores the key
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
 SMALL = 1e-3  # below this, print in scientific notation
@@ -126,6 +127,12 @@ def _schema_of(path: Path) -> str:
     return str(read_json(path, missing_ok=True).get("schema", ""))
 
 
+def _unavailable(path: Path) -> bool:
+    """A detail the writer could not build last time: written so the
+    Studio has something to show, never counted as fresh."""
+    return bool(read_json(path, missing_ok=True).get(UNAVAILABLE_KEY))
+
+
 def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
     """Write a detail file for every artifact whose kind has a writer and
     that has none yet — or one written by an older schema, or one older
@@ -135,25 +142,30 @@ def write_details(project: Project, index: ProjectIndex) -> dict[str, str]:
     written: dict[str, str] = {}
     for artifact in index.artifacts:
         out = details_path(project, artifact.stamp)
-        if not out.is_file() or _schema_of(out) != SCHEMA or _stale(out, artifact):
+        if (
+            not out.is_file()
+            or _schema_of(out) != SCHEMA
+            or _unavailable(out)
+            or _stale(out, artifact)
+        ):
             writer = _WRITERS.get(artifact.kind)
             if writer is None:
                 continue
+            body: dict[str, Any] = {"schema": SCHEMA, "version": artifact.stamp}
             try:
-                sections = writer(project, project.root / artifact.path, artifact)
+                body["sections"] = writer(
+                    project, project.root / artifact.path, artifact
+                )
             except Exception as why:  # a detail is a view; the index is not
-                sections = [
+                body["sections"] = [
                     _kv(
                         "Detail unavailable",
                         [("reason", str(why)), ("path", artifact.path)],
                     )
                 ]
-            write_json(
-                out,
-                {"schema": SCHEMA, "version": artifact.stamp, "sections": sections},
-                default=jsonable,
-            )
-        written[artifact.stamp] = str(out.relative_to(project.root))
+                body[UNAVAILABLE_KEY] = True  # retried on the next index
+            write_json(out, body, default=jsonable)
+        written[artifact.stamp] = out.relative_to(project.root).as_posix()
     return written
 
 
@@ -393,6 +405,7 @@ def _fit_table(fits: Path) -> dict[str, Any]:
     two or more records exist. (Until 2026-09-09 this guessed a dict shape
     the records never had and showed only the SPREAD line.)"""
     from rq_pipeline.robot.fit_record import (  # noqa: PLC0415
+        MIN_FITS_FOR_SPREAD,
         load_fit_records,
         spread_verdicts,
     )
@@ -431,7 +444,7 @@ def _fit_table(fits: Path) -> dict[str, Any]:
                     units.get(parameter.name, ""),
                 ]
             )
-    if len(records) >= 2:  # noqa: PLR2004 - a spread needs two fits to disagree
+    if len(records) >= MIN_FITS_FOR_SPREAD:
         for name, verdict in spread_verdicts(records).items():
             rows.append(
                 [
@@ -994,12 +1007,18 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
 # -- deployment (A6) -------------------------------------------------------------------
 
 
-# A course trial's row (`deploy.course.CourseTrial`), label by record key;
-# a held-twist trial's row is the command and what it measured.
-COURSE_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("speed (m/s)", "speed"),
-    ("reached", "reached"),
-    ("seconds / budget", "seconds"),
+# A course trial's columns (`deploy.course.CourseTrial`): the label, the
+# trial-row keys the cell reads (pinned by the tests to what a trial
+# writes), and the cell; a held-twist trial's row is the command and
+# what it measured.
+COURSE_COLUMNS: tuple[tuple[str, tuple[str, ...], Callable[..., Any]], ...] = (
+    ("speed (m/s)", ("speed",), lambda speed: _f(speed, 2)),
+    ("reached", ("reached", "of"), lambda reached, of: f"{reached} / {of}"),
+    (
+        "seconds / budget",
+        ("seconds", "budget_s"),
+        lambda seconds, budget: f"{_f(seconds, 1)} / {_f(budget, 1)}",
+    ),
 )
 
 
@@ -1020,16 +1039,14 @@ def gate_trials(g: dict[str, Any], instrument: str) -> Section:
     if protocol.get("course"):
         rows = [
             [
-                _f(r.get("speed"), 2),
-                f"{r.get('reached')} / {r.get('of')}",
-                f"{_f(r.get('seconds'), 1)} / {_f(r.get('budget_s'), 1)}",
+                *(cell(*(r.get(k) for k in keys)) for _, keys, cell in COURSE_COLUMNS),
                 *judged(r),
             ]
             for r in records
         ]
         return _table(
             f"Gate trials: {instrument}",
-            [label for label, _ in COURSE_COLUMNS] + tail,
+            [label for label, _, _ in COURSE_COLUMNS] + tail,
             rows,
             note=f"{protocol.get('commands')}; {protocol.get('criterion')}",
         )

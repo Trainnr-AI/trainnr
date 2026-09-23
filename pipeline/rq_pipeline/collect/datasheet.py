@@ -162,7 +162,9 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
         for ep in episode_dirs(demos_dir)
         if (ep / DemoLayout.MANIFEST_FILE).exists()
     ]
-    normalized = [_normalize(json.loads(path.read_text())) for path in manifests]
+    normalized = [
+        _normalize(json.loads(path.read_text(encoding="utf-8"))) for path in manifests
+    ]
     draws: dict[str, list[float]] = {}
     for episode in normalized:
         for param, value in episode["dynamics"].items():
@@ -318,5 +320,5 @@ def render(summary: DatasheetSummary) -> str:
 
 def write_datasheet(demos_dir: str | Path) -> Path:
     path = Path(demos_dir) / DATASHEET_FILE
-    path.write_text(render(summarize(demos_dir)))
+    path.write_text(render(summarize(demos_dir)), encoding="utf-8")
     return path

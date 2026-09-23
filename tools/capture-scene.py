@@ -24,7 +24,10 @@ from rq_pipeline.scenes.capture import (  # noqa: E402
     Tools,
     capture_scene,
 )
-from rq_pipeline.scenes.record import load_scene_record  # noqa: E402
+from rq_pipeline.scenes.record import (  # noqa: E402
+    UNRECORDED,
+    load_scene_record,
+)
 
 
 def main() -> None:
@@ -41,8 +44,8 @@ def main() -> None:
     )
     parser.add_argument("--floor-friction", type=float, nargs=3, default=None)
     parser.add_argument("--brush", type=Path, default=None, help="Brush's binary")
-    parser.add_argument("--device", default="unrecorded")
-    parser.add_argument("--lighting", default="unrecorded")
+    parser.add_argument("--device", default=UNRECORDED)
+    parser.add_argument("--lighting", default=UNRECORDED)
     args = parser.parse_args()
     project = Project(args.project.resolve()).use()
     try:

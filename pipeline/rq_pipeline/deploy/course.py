@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from rq_pipeline.deploy.manifest import Key, Manifest
+from rq_pipeline.deploy.ticks import Ticks
 from rq_pipeline.evaluate.tracking import TrackingOutcome
 
 if TYPE_CHECKING:
@@ -106,6 +107,15 @@ class Course:
 
     def budget_s(self, speed: float) -> float:
         return self.length_m / speed * COURSE_SLACK
+
+    def reached_by(self, position: np.ndarray, reached: int) -> int:
+        """How many waypoints are reached with the robot at `position`,
+        having reached `reached` already: every next one within reach."""
+        while reached < len(self.waypoints) and (
+            np.linalg.norm(self.waypoints[reached, :2] - position[:2]) < self.reach_m
+        ):
+            reached += 1
+        return reached
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -208,47 +218,26 @@ def run_course_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     dt = manifest.control.step_dt
     budget_s = course.budget_s(speed)
     runtime.reset()
-    err_sum = cmd_sum = 0.0
-    fell = False
-    steps = reached = 0
+    meter = Ticks(dt, mirror=mirror, contacts=contacts)
+    reached = 0
     if mirror is not None:
         mirror.note(f"trial {index}: along the course at {speed:.2f} m/s")
     for _ in range(round(budget_s / dt)):
         position, quat, _joints = runtime.pose()
-        while reached < len(course.waypoints) and (
-            np.linalg.norm(course.waypoints[reached, :2] - position[:2])
-            < course.reach_m
-        ):
-            reached += 1
+        reached = course.reached_by(position, reached)
         if reached == len(course.waypoints):
             break
         ahead = course.waypoints[reached, :2] - position[:2]
         error = wrap_to_pi(math.atan2(ahead[1], ahead[0]) - yaw_of(quat))
-        command = steering.command(speed, error)
-        runtime.command = command
-        obs = runtime.observe()
-        runtime.apply(runtime.act(obs))
-        v = runtime.base_velocity_b()
-        if mirror is not None:
-            mirror.tick(dt, runtime.pose(), command, v)
-        if contacts is not None:
-            touched = runtime.contact_points()
-            if touched is not None and len(touched):
-                contacts.append(touched)
-        err_sum += float(np.linalg.norm(v[:2] - command[:2]))
-        cmd_sum += float(np.linalg.norm(command[:2]))
-        steps += 1
-        if runtime.fell_over():
-            fell = True
+        if meter.tick(runtime, steering.command(speed, error)):
             break
+    else:  # the budget ran out: the last tick may have arrived
+        reached = course.reached_by(runtime.pose()[0], reached)
     return CourseTrial(
-        steps=steps,
-        fell=fell,
-        mean_err=err_sum / max(steps, 1),
-        mean_cmd=cmd_sum / max(steps, 1),
+        **meter.outcome(),
         speed=float(speed),
         reached=reached,
         of=int(course.waypoints.shape[0]),
-        seconds=steps * dt,
+        seconds=meter.steps * dt,
         budget_s=budget_s,
     )

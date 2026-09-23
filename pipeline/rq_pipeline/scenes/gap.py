@@ -39,18 +39,25 @@ import numpy as np
 from rq_pipeline.scenes.record import Gap
 from rq_pipeline.scenes.splat import VISIBLE_OPACITY, Splats
 
-DEFAULT_TOLERANCE_M = 0.02  # a paw's width: two centimetres
+# The audit's tolerance: a foot's width, two centimetres (docs/78 §3). The
+# proxy's grid cell and the heightfield's are this same number, imported.
+DEFAULT_TOLERANCE_M = 0.02
 MAX_VISIBLE_SAMPLES = 200_000
 PROXY_SAMPLES = 100_000
+# A proxy's own surface sampled for a gap (the parts', the heightfield's).
+SURFACE_SAMPLES = 50_000
+GAP_DIGITS = 5
 NEEDS_SCENE = "the scene extra (Open3D): uv sync --extra scene"
 METHOD = (
     "visible gaussian centres (opacity >= {opacity}) inside the proxy's extent grown "
-    "by 0.5 m, to the proxy surface by Open3D ray casting; proxy surface "
+    "by {margin:g} m, to the proxy surface by Open3D ray casting; proxy surface "
     "samples to the nearest visible centre anywhere by k-d tree; distances in metres"
 )
 
 
-def _open3d() -> Any:
+def open3d() -> Any:
+    """Open3D, or the refusal that names the extra that brings it: the
+    one guard every scene module uses."""
     try:
         import open3d as o3d  # noqa: PLC0415
     except ImportError as why:
@@ -72,7 +79,9 @@ def _footprint(surface: np.ndarray, margin: float) -> tuple[np.ndarray, np.ndarr
 # Contact sites: at most this many are kept (drawn with the seed), and
 # the audit's scope is the ball of `radius_m` around each.
 SITE_SAMPLES = 2000
-NEAR_CHUNK = 20_000
+# Points per distance block: (chunk, sites, 3) float64 is 100 MB at these
+# sizes; the first draft's 20,000 made two 1 GB temporaries.
+NEAR_CHUNK = 2_000
 SITE_METHOD = (
     "scoped to the {sites} contact sites' {radius:g} m surroundings instead of the "
     "proxy's footprint (docs/78 §4.1: the gap where the task touches)"
@@ -107,7 +116,7 @@ def measure(  # noqa: PLR0913 - the audit's own knobs, each named
     visible gaussian, wherever it is. With `sites` (world points where a
     task touched), the scope is the ball of `radius_m` around them on
     both sides instead: the gap where the task touches."""
-    o3d = _open3d()
+    o3d = open3d()
     rng = np.random.default_rng(seed)
     visible = splats.visible(VISIBLE_OPACITY)
     centres = visible.means.astype(np.float32)
@@ -136,18 +145,24 @@ def measure(  # noqa: PLR0913 - the audit's own knobs, each named
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
     to_proxy = (
-        scene.compute_distance(o3d.core.Tensor(footprint, dtype=o3d.core.Dtype.Float32))
+        scene.compute_distance(o3d.core.Tensor.from_numpy(footprint.astype(np.float32)))
         .numpy()
         .astype(np.float64)
         if footprint.shape[0]
         else np.zeros(0)
     )
-    tree = o3d.geometry.KDTreeFlann(
-        o3d.geometry.PointCloud(o3d.utility.Vector3dVector(centres.astype(np.float64)))
-    )
-    to_visible = np.array(
-        [tree.search_knn_vector_3d(p, 1)[2][0] ** 0.5 for p in surface]
-    )
+    if centres.shape[0] and surface.shape[0]:
+        # Open3D's own nearest-neighbour distance, one call for the cloud
+        # (the first draft looped 100,000 k-d tree queries from Python)
+        cloud = o3d.geometry.PointCloud(
+            o3d.utility.Vector3dVector(surface.astype(np.float64))
+        )
+        visible_cloud = o3d.geometry.PointCloud(
+            o3d.utility.Vector3dVector(centres.astype(np.float64))
+        )
+        to_visible = np.asarray(cloud.compute_point_cloud_distance(visible_cloud))
+    else:  # nothing visible, or no surface: the note below says so
+        to_visible = np.zeros(0)
     empty = to_proxy.size == 0 or to_visible.size == 0
     return Gap(
         chamfer_m=None
@@ -164,7 +179,7 @@ def measure(  # noqa: PLR0913 - the audit's own knobs, each named
         visible_samples=int(footprint.shape[0]),
         proxy_samples=int(surface.shape[0]),
         footprint_fraction=round(covered, 5),
-        method=METHOD.format(opacity=VISIBLE_OPACITY)
+        method=METHOD.format(opacity=VISIBLE_OPACITY, margin=FOOTPRINT_MARGIN_M)
         + (f"; {scope_note}" if scope_note else ""),
         note="" if not empty else "no visible gaussian or proxy surface in the scope",
     )

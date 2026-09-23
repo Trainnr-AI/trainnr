@@ -12,9 +12,14 @@ the solver's line search at 20 iterations, the cap is reached, and a
 docs/78, 2026-09-22; the certificate on both instruments identical to the
 last digit, so the physics is the same). Raising the cap would change the
 physics every walk trained under; the warning is information. So the
-LINE-SEARCH warning alone is switched off; every other overflow (too many
-constraints or contacts, a broadphase or collision buffer) still prints,
-because those drop physics.
+line-search warning is switched off. One more is, knowingly: the
+HEIGHTFIELD overflow - mujoco_warp caps the prisms one geom collides
+with at MuJoCo's MJ_MAXCONPAIR (50) and drops the rest, printing a line
+per world per step past it; on a scene at the 5 cm training grid only a
+trunk lying flat exceeds the cap, so a fallen robot's ground contact is
+truncated whether or not it prints (docs/78 §8.5, 2026-09-23). Every
+other overflow (too many constraints or contacts, a broadphase or
+collision buffer) still prints, because those drop physics unseen.
 
 mjlab 1.6.0 predates the flag and has no knob for it. It does apply
 warp-only options through one method, `SimulationCfg.apply_wp_opt`,
@@ -31,13 +36,10 @@ from typing import Any
 
 from mjlab.sim.sim import SimulationCfg
 
-# Overflows that are information, not lost physics: the line search
-# stopping at the cap the task declared.
-# HFIELD: mujoco_warp caps the prisms one geom collides with at mujoco's
-# MJ_MAXCONPAIR (50) and prints a line per world per step past it. On a
-# scene at the 5 cm training grid only a trunk lying flat exceeds the cap
-# (a fallen robot early in training: 74,000 lines in a 20-iteration smoke,
-# 2026-09-23); the contacts past 50 are dropped with or without the print.
+# The overflow warnings switched off, each for the reason the module
+# docstring gives: the line search stopping at the cap the task declared
+# (information), and the heightfield prism cap (lost contacts for a
+# fallen trunk only, at the training grid - known and recorded).
 QUIET_OVERFLOWS: tuple[str, ...] = ("LS_ITERATIONS", "HFIELD")
 
 

@@ -89,10 +89,6 @@ class TheExportDescriptor(unittest.TestCase):
             self.assertIn(DemoLayout.EXPORT_FILE, str(ctx.exception))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class DaggerRelabel(unittest.TestCase):
     """DAgger's one move, pinned without a GPU: the student's episode
     keeps its judgment, command and states; only the actions become the
@@ -194,7 +190,8 @@ class TheEpisodesFrames(unittest.TestCase):
 
         from rq_mjlab.walk_press import frames_of  # noqa: PLC0415
 
-        pictures = np.arange(5)[:, None, None, None] * np.ones((5, 2, 2, 3), np.uint8)
+        # the rollout snapped one picture every 2 ticks: three for five ticks
+        pictures = np.arange(3)[:, None, None, None] * np.ones((3, 2, 2, 3), np.uint8)
         episode = WorldEpisode(
             EpisodeOutcome(steps=5, fell=False, mean_err=0.1, mean_cmd=0.3),
             command=[0.3, 0.0, 0.0],
@@ -202,7 +199,7 @@ class TheEpisodesFrames(unittest.TestCase):
         )
         frames = frames_of(episode, None, "head", 2)
         self.assertEqual([tick for tick, _ in frames], [0, 2, 4])
-        self.assertEqual(int(frames[1][1][0, 0, 0]), 2)
+        self.assertEqual(int(frames[1][1][0, 0, 0]), 1)
         with self.assertRaisesRegex(ValueError, "no frames from camera 'course'"):
             frames_of(episode, None, "course", 1)
 
@@ -218,3 +215,7 @@ class TheEpisodesFrames(unittest.TestCase):
             command=[0.3, 0.0, 0.0],
         )
         self.assertEqual(frames_of(episode, _Chase(), "chase", 1), [(0, "chase")])  # type: ignore[arg-type]
+
+
+if __name__ == "__main__":
+    unittest.main()

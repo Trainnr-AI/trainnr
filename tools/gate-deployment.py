@@ -34,11 +34,8 @@ from rq_pipeline.deploy.runtimes import (  # noqa: E402
 )
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.cited import cited_certificate  # noqa: E402
-from rq_pipeline.project.locate import Project  # noqa: E402
+from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
 from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
-
-DEPLOY_FOLDER = "deploy"
-CERTIFICATES_FOLDER = "certificates"
 
 
 def main() -> None:

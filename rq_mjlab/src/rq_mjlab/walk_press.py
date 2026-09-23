@@ -38,28 +38,30 @@ from rq_pipeline.collect.demo_export import ExportSpec
 from rq_pipeline.collect.press import DemoBatch, EpisodeManifest, PressResult, press
 from rq_pipeline.collect.provenance import dagger_stamp
 from rq_pipeline.evaluate.tracking import criterion_text
-from rq_pipeline.tasks.walks import DEFAULT_EPISODE_S
+from rq_pipeline.paths import train_python
+from rq_pipeline.scenes.cameras import DEFAULT_RESOLUTION
 
 from rq_mjlab.walk_verdict import (
     WorldEpisode,
     instrument_for,
     rollout_episodes,
 )
-from rq_mjlab.walks import DEFAULT_ROBOT, use_project
+from rq_mjlab.walks import DEFAULT_ROBOT, training_episode_s, use_project, walk_spec
 
-REPO = Path(__file__).resolve().parents[3]
+TRAIN_PYTHON = train_python()  # the student's interpreter (rq_pipeline.paths)
 CAMERA_KEY = "chase"
 FAILURES_FILE = "failures.jsonl"
 BUNDLE = DEFAULT_ROBOT
 # On a captured scene the frames are the head camera's picture of the
-# splat (docs/78 E3), rendered inside the batched env for every world.
-SCENE_FRAME_SIZE = (160, 120)
+# splat (docs/78 E3), rendered inside the batched env for every world, at
+# the gate's own film-strip size unless the actor trained with a camera
+# (then at the actor's, the picture it acts on).
+SCENE_FRAME_SIZE = DEFAULT_RESOLUTION
 CHASE_FRAME_SIZE = (320, 240)  # the chase camera's replay, off a scene
 INSTRUCTION = "walk at the commanded planar twist"
 STATE_SEMANTICS = (
-    "the actor's observation vector (rsl-rl): base angular velocity, "
-    "projected gravity, joint positions, joint velocities, previous "
-    "actions, commanded twist - the state-based teacher's own input"
+    "the actor's observation vector (rsl-rl), in term order: {terms} - "
+    "the state-based teacher's own input"
 )
 ACTION_SEMANTICS = "joint position targets (the rsl-rl actor's output, ctrl order)"
 
@@ -79,8 +81,12 @@ def scene_visuals(scene_dir: Path) -> tuple[str, str]:
     """What a scene batch's manifests say about their pictures and their
     ground: the visual basis (the scene's version, its renderer, its gap,
     no draws) and the floor's physics basis as the scene declares it."""
-    from rq_pipeline.scenes.record import SCENE_FILE, load_scene_record  # noqa: PLC0415
-    from rq_pipeline.scenes.stage import FLOOR_FRICTION  # noqa: PLC0415
+    from rq_pipeline.scenes.record import (  # noqa: PLC0415
+        FLOOR_FRICTION,
+        SCENE_FILE,
+        floor_friction,
+        load_scene_record,
+    )
 
     from rq_mjlab.scene_stage import scene_stamp  # noqa: PLC0415
 
@@ -94,7 +100,7 @@ def scene_visuals(scene_dir: Path) -> tuple[str, str]:
     )
     floor = next((p for p in record.physics if p.name == FLOOR_FRICTION), None)
     physics = (
-        f"floor friction {floor.value} {floor.basis}"
+        f"floor friction {floor_friction(record)} {floor.basis}"
         + (f" ±{floor.span}" if floor.span is not None else "")
         + (f" ({floor.cites})" if floor.cites else "")
         if floor is not None
@@ -197,7 +203,8 @@ def frames_of(
     pictures = episode.frames.get(key)
     if pictures is None:
         raise ValueError(f"episode carries no frames from camera {key!r}")
-    return [(tick, pictures[tick]) for tick in range(0, len(pictures), every)]
+    # the rollout snapped one picture every `every` ticks already
+    return [(i * every, picture) for i, picture in enumerate(pictures)]
 
 
 def relabel(episode: WorldEpisode, teacher: Any) -> WorldEpisode:
@@ -267,17 +274,19 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     driver_name: str = "",
     robot: str = BUNDLE,
     scene: Path | None = None,
-    episode_s: float = DEFAULT_EPISODE_S,
+    episode_s: float | None = None,
 ) -> DemoBatch:
     """Press `episodes` kept walk demonstrations from `checkpoint` under
     `out`; the batched rollouts run `worlds` at a time. On a captured
     `scene` (docs/78 E3) the rollouts stand on it, the frames are the
     head camera's picture of its splat at `frame_size`, and every
     manifest names the scene, its gap and its floor's basis. An episode
-    ends at `episode_s` - the training episode - or at a fall: the env
-    is the play one, whose own episodes never end (the Go2's run 1e9 s),
-    and a policy that never falls would otherwise roll out forever (the
-    first scene press, 2026-09-23, fifty minutes in its first batch).
+    ends at `episode_s` - the walk's own training episode unless given -
+    or at a fall: the env is the play one, whose own episodes never end
+    (the Go2's run 1e9 s), and a policy that never falls would otherwise
+    roll out forever (the first scene press, 2026-09-23, fifty minutes in
+    its first batch). A checkpoint that trained with a camera is pressed
+    at that camera's size (the picture it acts on), whatever `frame_size`.
 
     `driver` is who ROLLS OUT; the checkpoint's teacher always LABELS.
     With no driver the teacher drives itself (the D2 press). With a
@@ -299,6 +308,8 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
         camera_size=frame_size if scene is not None else None,
     )
     env, policy, identity = walk.env, walk.policy, walk.identity
+    if episode_s is None:
+        episode_s = training_episode_s(walk_spec(robot))
     teacher = teacher_labeler(policy, device)
     if driver is not None and hasattr(driver, "bind"):
         driver.bind(env)
@@ -314,6 +325,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     instrument = instrument_for(device)
     control_hz = round(1.0 / float(unwrapped.step_dt))
     max_ticks = episode_ticks(episode_s, float(unwrapped.step_dt))
+    names = state_names(unwrapped.observation_manager)
     basis = (
         f"{identity['dr_basis']}; per-world draws live inside the batched env "
         "and are not exported per episode (D2 v1)"
@@ -335,12 +347,14 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     ExportSpec(
-        state_width=len(state_names(unwrapped.observation_manager)),
-        state_names=state_names(unwrapped.observation_manager),
+        state_width=len(names),
+        state_names=names,
         cameras=[camera_key],
         instruction=INSTRUCTION,
         bundle=robot,
-        state_semantics=STATE_SEMANTICS,
+        state_semantics=STATE_SEMANTICS.format(
+            terms=", ".join(dict.fromkeys(n.rsplit("[", 1)[0] for n in names))
+        ),
         action_semantics=ACTION_SEMANTICS,
         action_names=[
             f"joint_pos_target[{i}]"
@@ -365,6 +379,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
             capture=True,
             max_ticks=max_ticks,
             capture_cameras=(camera_key,) if scene is not None else (),
+            camera_every=frame_every,
         )
         if driver is not None:
             rolled = [relabel(ep, teacher) for ep in rolled]
@@ -496,7 +511,8 @@ def main() -> None:
     parser.add_argument(
         "--student-python",
         type=Path,
-        default=REPO / "pipeline" / ".venv-train" / "bin" / "python",
+        default=TRAIN_PYTHON,
+        help="the interpreter of the pipeline's train environment (the student's)",
     )
     args = parser.parse_args()
 
@@ -527,7 +543,6 @@ def main() -> None:
         from rq_pipeline.bundles.hashing import stamp as stamp_of  # noqa: PLC0415
 
         from rq_mjlab.walk_verdict import StudentPolicy  # noqa: PLC0415
-        from rq_mjlab.walk_view import load_policy  # noqa: PLC0415
 
         # The student needs the env it will drive; press_walk builds its
         # own, so the driver is built lazily on that env below.
@@ -558,7 +573,6 @@ def main() -> None:
                     self._inner.close()
 
         driver = _LazyStudent()
-        del load_policy
 
     batch = press_walk(
         checkpoint,

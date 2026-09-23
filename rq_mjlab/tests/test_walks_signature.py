@@ -10,7 +10,8 @@ import unittest
 
 from rq_mjlab.walks import ROBOTS, walk_spec
 
-# What walk_train and walk_verdict pass to `spec.env_cfg`.
+# What the trainer, the verdict, the loader (play, press, stills) pass to
+# `spec.env_cfg`; a walk refuses what it lacks by name, never by TypeError.
 DOOR_KEYWORDS = (
     "play",
     "dr_span",
@@ -18,8 +19,11 @@ DOOR_KEYWORDS = (
     "pin_axis",
     "bundle",
     "head",
+    "legacy_actor",
     "scene",
     "cameras",
+    "camera_in_actor",
+    "camera_size",
 )
 
 

@@ -125,6 +125,11 @@ class Project:
             raise KeyError(f"no folder {kind_folder!r} in a project; one of {FOLDERS}")
         return self.root / kind_folder
 
+    def relative(self, kind_folder: str, name: str) -> str:
+        """The path the index records for `<kind_folder>/<name>`: POSIX
+        on every OS (`Artifact.path`, the Studio reads it as such)."""
+        return (self.folder(kind_folder) / name).relative_to(self.root).as_posix()
+
     @property
     def robots(self) -> Path:
         return self.folder(ROBOTS_FOLDER)

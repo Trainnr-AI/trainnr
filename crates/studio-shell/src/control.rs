@@ -490,7 +490,9 @@ impl Control {
             into.extend(extra);
         }
         let path = dir.join(format!("{id}.ack.json"));
-        let _ = write_atomic(&path, &body.to_string());
+        if let Err(e) = write_atomic(&path, &body.to_string()) {
+            eprintln!("studio: cannot answer command {id}: {e}");
+        }
     }
 
     /// Write a captured frame as a PNG under the project, scaled to
@@ -536,10 +538,12 @@ impl Control {
             return;
         }
         state.heartbeat = now_epoch();
-        let _ = write_atomic(
+        if let Err(e) = write_atomic(
             &self.root.join(STATE_RELATIVE),
             &serde_json::to_string(&state).unwrap_or_default(),
-        );
+        ) {
+            eprintln!("studio: cannot write {STATE_RELATIVE}: {e}");
+        }
         self.last_state = Some(state);
         self.last_written = Some(now);
     }

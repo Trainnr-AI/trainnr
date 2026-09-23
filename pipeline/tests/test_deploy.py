@@ -16,8 +16,6 @@ import numpy as np
 import rq_pipeline.mcp_server as server
 from rq_pipeline.deploy.gate import ERR_RATIO_BOUND, Trial, draw_commands
 from rq_pipeline.deploy.manifest import (
-    DDS_GATE_FILE,
-    GATE_FILE,
     GATE_SCHEMA,
     KNOWN_SOURCES,
     MANIFEST_FILE,
@@ -27,6 +25,7 @@ from rq_pipeline.deploy.manifest import (
     read_gates,
 )
 from rq_pipeline.deploy.runtime import gait_phase, open_runtime, rotate_inverse
+from rq_pipeline.deploy.runtimes import runtime_spec
 from rq_pipeline.mcp_server import _task_id_in_project
 from rq_pipeline.project import PROJECT_ENV, create_project
 from rq_pipeline.project.index import _summary_deploy
@@ -162,38 +161,26 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(
                 export_argv[export_argv.index("-m") + 1], "rq_mjlab.walk_export"
             )
-            self.assertEqual(
-                export_argv[-8:],
-                [
-                    "--project",
-                    "/p",
-                    "--robot",
-                    "go2",
-                    "--name",
-                    "final",
-                    "--certificate",
-                    "c@1",
-                ][:0]
-                + export_argv[-8:],
-            )
+            export = export_argv[export_argv.index("rq_mjlab.walk_export") :]
+            for flag, value in (
+                ("--project", "/p"),
+                ("--robot", "go2"),
+                ("--name", "final"),
+                ("--certificate", "c@1"),
+            ):
+                self.assertEqual(export[export.index(flag) + 1], value)
             self.assertIn("--policy-stamp", export_argv)
             self.assertEqual(export_cwd, RQ_MJLAB_DIR)
-            self.assertEqual(
-                gate_argv[-8:],
-                [
-                    "--project",
-                    "/p",
-                    "--name",
-                    "final",
-                    "--trials",
-                    "8",
-                    "--seed",
-                    "5",
-                ][:0]
-                + gate_argv[-8:],
-            )
+            gate = gate_argv[gate_argv.index(str(TOOLS_DIR / "gate-deployment.py")) :]
+            for flag, value in (
+                ("--project", "/p"),
+                ("--name", "final"),
+                ("--trials", "8"),
+                ("--seed", "5"),
+                ("--tolerance", "0.2"),
+            ):
+                self.assertEqual(gate[gate.index(flag) + 1], value)
             self.assertIn(str(TOOLS_DIR / "gate-deployment.py"), gate_argv)
-            self.assertIn("--tolerance", gate_argv)
             self.assertEqual(gate_cwd, PIPELINE_DIR)
             with self.assertRaises(ValueError):
                 actions.export_deployment("x.pt", name="a/b", robot="go2", project="/p")
@@ -278,7 +265,7 @@ class BothGateRecords(unittest.TestCase):
     def test_each_runtime_keeps_its_own_record_and_word(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             folder = _manifest(Path(tmp))
-            (folder / GATE_FILE).write_text(
+            (folder / runtime_spec("mujoco").record_file).write_text(
                 json.dumps(
                     {
                         "schema": GATE_SCHEMA,
@@ -291,7 +278,7 @@ class BothGateRecords(unittest.TestCase):
             self.assertEqual(list(read_gates(folder)), ["mujoco"])
             self.assertEqual(_summary_deploy(folder)["gate"], "passed")
             self.assertNotIn("gate (DDS)", _summary_deploy(folder))
-            (folder / DDS_GATE_FILE).write_text(
+            (folder / runtime_spec("dds").record_file).write_text(
                 json.dumps(
                     {
                         "schema": GATE_SCHEMA,
@@ -306,3 +293,22 @@ class BothGateRecords(unittest.TestCase):
             self.assertEqual(summary["gate"], "passed")
             self.assertEqual(summary["gate (DDS)"], "reported, not judged")
             self.assertEqual(gate_word({"verdict": {"passed": False}}), "failed")
+
+
+class TheSourcesAreOneTable(unittest.TestCase):
+    """The manifest loader's known sources and the runtime's computable
+    ones are one set: a source the loader admits, the runtime computes;
+    the sensor-prefixed ones are read off the model by name."""
+
+    def test_every_known_source_is_computable(self) -> None:
+        from rq_pipeline.deploy.manifest import KNOWN_SOURCES  # noqa: PLC0415
+        from rq_pipeline.deploy.runtime import (  # noqa: PLC0415
+            SENSOR_PREFIX,
+            SOURCES,
+            register_source,
+        )
+
+        named = {s for s in KNOWN_SOURCES if not s.startswith(SENSOR_PREFIX)}
+        self.assertEqual(named, set(SOURCES))
+        with self.assertRaisesRegex(ValueError, "already registered"):
+            register_source(next(iter(SOURCES)), lambda rt, t: rt.command)

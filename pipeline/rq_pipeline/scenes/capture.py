@@ -45,11 +45,15 @@ import numpy as np
 
 from rq_pipeline.robot.fit_record import code_version
 from rq_pipeline.scenes import gap as gap_audit
+from rq_pipeline.scenes.gap import DEFAULT_TOLERANCE_M
 from rq_pipeline.scenes.obj import write_obj
 from rq_pipeline.scenes.proxy import PARTS_FILE, ensure_parts
 from rq_pipeline.scenes.record import (
     DECLARED,
+    DECLARED_FRICTION_SPAN,
+    FLOOR_FRICTION,
     PROXY_FILE,
+    PROXY_FROM_SPLAT,
     PROXY_MJCF,
     SCENE_FILE,
     SPLAT_FILE,
@@ -65,6 +69,7 @@ from rq_pipeline.scenes.splat import (
     VISIBLE_OPACITY,
     Splats,
     describe,
+    euler_xyz_matrix,
     read_ply,
     write_ply,
 )
@@ -87,7 +92,7 @@ BRUSH_MAX_RESOLUTION = 1920
 COLMAP_CAMERA = "OPENCV"  # one phone, one lens: a single camera with distortion
 SEQUENTIAL_OVERLAP = 20
 LOOP_DETECTION_PERIOD = 10
-PROXY_CELL_M = 0.02  # the audit's tolerance: a paw's width
+PROXY_CELL_M = DEFAULT_TOLERANCE_M  # the proxy's grid: the audit's tolerance
 PROXY_HOLE_CELLS = 3  # holes up to this many cells across are filled
 PROXY_FILL_NEIGHBOURS = (
     3  # of the ring of 8: fewer and the cell is a fringe, not a hole
@@ -119,32 +124,67 @@ CAPTURE_NOTES = (
 
 
 BRUSH_BINARY = "brush_app"
+BRUSH_LICENSE = "Apache-2.0 OR MIT"  # ArthurBrussee/brush: dual, the user's choice
 # How each tool is installed, by platform: the refusal names the line for
 # the machine it runs on, never another machine's package manager.
+# `{pkg}` is the Linux package manager's install line (`linux_installer`).
 INSTALL_HINTS: dict[str, dict[str, str]] = {
     "ffmpeg": {
         "Darwin": "brew install ffmpeg",
-        "Linux": "sudo apt install ffmpeg",
+        "Linux": "{pkg} ffmpeg",
         "Windows": "winget install Gyan.FFmpeg",
     },
     "colmap": {
         "Darwin": "brew install colmap",
-        "Linux": "sudo apt install colmap",
+        "Linux": "{pkg} colmap",
         "Windows": "a release from https://github.com/colmap/colmap/releases on PATH",
     },
     "brush": {
-        "*": "python3 tools/install-brush.py fetches the release binary for this "
+        "*": "{python} tools/install-brush.py fetches the release binary for this "
         "machine into a user bin directory; or pass its path",
     },
 }
 INSTALL_HINTS["ffprobe"] = INSTALL_HINTS["ffmpeg"]
+# The Linux package managers by the distro family /etc/os-release names.
+LINUX_INSTALLERS: dict[str, str] = {
+    "debian": "sudo apt install",
+    "ubuntu": "sudo apt install",
+    "fedora": "sudo dnf install",
+    "rhel": "sudo dnf install",
+    "arch": "sudo pacman -S",
+    "suse": "sudo zypper install",
+}
+OS_RELEASE = Path("/etc/os-release")
+
+
+def linux_installer(os_release: Path = OS_RELEASE) -> str:
+    """This Linux's package manager's install line, from its os-release
+    (ID and ID_LIKE); a distro the table does not know gets a neutral
+    line rather than another distro's."""
+    try:
+        text = os_release.read_text(encoding="utf-8")
+    except OSError:
+        return "your distribution's package manager: install"
+    ids: list[str] = []
+    for line in text.splitlines():
+        key, _, value = line.partition("=")
+        if key in ("ID", "ID_LIKE"):
+            ids += value.strip().strip('"').split()
+    for family in ids:
+        if family in LINUX_INSTALLERS:
+            return LINUX_INSTALLERS[family]
+    return "your distribution's package manager: install"
 
 
 def install_hint(tool: str, system: str | None = None) -> str:
     """The install line for `tool` on `system` (this machine's by default)."""
     hints = INSTALL_HINTS[tool]
     system = system or platform.system()
-    return hints.get(system) or hints.get("*") or "see the tool's own site"
+    line = hints.get(system) or hints.get("*") or "see the tool's own site"
+    return line.format(
+        pkg=linux_installer() if system == "Linux" else "",
+        python="python" if system == "Windows" else "python3",
+    )
 
 
 class MissingToolError(FileNotFoundError):
@@ -315,8 +355,13 @@ def extract_frames(  # noqa: PLR0913 - the stage's own knobs, each named
 
 def copy_frames(folder: Path, out: Path) -> list[Path]:
     """A folder of images becomes the scene's frames, renamed in order."""
-    if out.is_dir() and any(out.glob("frame_*.png")):
-        return sorted(out.glob("frame_*.png"))
+    kept_before = (
+        sorted(p for p in out.glob("frame_*") if p.suffix.lower() in IMAGE_SUFFIXES)
+        if out.is_dir()
+        else []
+    )
+    if kept_before:
+        return kept_before
     images = sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
     if not images:
         raise ValueError(f"{folder}: no {', '.join(IMAGE_SUFFIXES)} images")
@@ -343,7 +388,7 @@ class Poses:
     # the mapper may split a walk into several models where the chain of
     # matches breaks; every model's frame count, and which one was used
     models: tuple[int, ...] = ()
-    chosen: int = 0
+    chosen: str = "0"  # the mapper's folder name of the model Brush trains on
 
 
 def read_sparse(sparse: Path) -> Poses:
@@ -391,23 +436,31 @@ def choose_model(work: Path) -> Poses:
         points=chosen.points,
         camera_model=chosen.camera_model,
         models=sizes,
-        chosen=int(models[best].name) if models[best].name.isdigit() else best,
+        chosen=models[best].name,
     )
 
 
-def dataset_for_brush(work: Path, frames: Path, chosen: int) -> Path:
+def _link_or_copy(link: Path, target: Path) -> None:
+    """A directory link, or a copy where links need rights the user may
+    lack (Windows without Developer Mode: WinError 1314)."""
+    try:
+        link.symlink_to(target.resolve(), target_is_directory=True)
+    except OSError:
+        shutil.copytree(target, link)
+
+
+def dataset_for_brush(work: Path, frames: Path, chosen: str) -> Path:
     """Brush's layout - `images/` beside `sparse/0/` - as links to the
-    frames and the chosen model, under `DATASET_DIR`."""
+    frames and the chosen model (the mapper's folder name), under
+    `DATASET_DIR`."""
     dataset = work / DATASET_DIR
     (dataset / "sparse").mkdir(parents=True, exist_ok=True)
     images = dataset / "images"
     if not images.exists():
-        images.symlink_to(frames.resolve(), target_is_directory=True)
+        _link_or_copy(images, frames)
     model = dataset / "sparse" / "0"
     if not model.exists():
-        model.symlink_to(
-            (work / "sparse" / str(chosen)).resolve(), target_is_directory=True
-        )
+        _link_or_copy(model, work / "sparse" / chosen)
     return dataset
 
 
@@ -637,8 +690,6 @@ def align(
 ) -> tuple[Splats, Alignment, Floor]:
     """The splat into the world frame: floor to z=0 and +z up, centroid
     at the origin, scaled by `scale` metres per unit when declared."""
-    from rq_pipeline.scenes.splat import euler_xyz_matrix  # noqa: PLC0415
-
     visible = splats.visible(VISIBLE_OPACITY)
     floor = find_floor(visible.means.astype(np.float64), seed=seed)
     rotation = rotation_to_z(floor.normal)
@@ -756,9 +807,13 @@ def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
         "watertight": False,
         "edge_manifold": True,
         "method": PROXY_METHOD.format(cell=PROXY_CELL_M),
-        "from": "the visible gaussian centres (opacity >= 0.5)",
+        "from": PROXY_FROM_SPLAT.format(opacity=VISIBLE_OPACITY),
         **facts,
     }
+
+
+# What the record says a proxy came from when no dense reconstruction ran
+# (the card reads the flag, not this prose).
 
 
 # -- the chain ------------------------------------------------------------
@@ -780,7 +835,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
     steps: int = BRUSH_STEPS,
     scale: float | None = None,
     floor_friction: Sequence[float] | None = None,
-    friction_span: float = 0.2,
+    friction_span: float = DECLARED_FRICTION_SPAN,
     device: str = UNRECORDED,
     lighting: str = UNRECORDED,
     narrate: bool | None = None,
@@ -918,7 +973,7 @@ def _proxy_stage(
     if friction is not None:
         physics.append(
             Physics(
-                name="floor_friction",
+                name=FLOOR_FRICTION,
                 value=friction,
                 basis=DECLARED,
                 span=friction_span,
@@ -959,7 +1014,7 @@ def _tools_used(
         Tool(
             name="Brush",
             version=tool_version(tools.brush, "--version"),
-            license="Apache-2.0",
+            license=BRUSH_LICENSE,
             role=f"the splat: {steps} steps, {minutes} min for the whole chain",
         ),
         Tool(

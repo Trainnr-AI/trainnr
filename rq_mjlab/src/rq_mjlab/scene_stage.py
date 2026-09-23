@@ -38,31 +38,30 @@ from mjlab.terrains.terrain_generator import (
 )
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.scenes.cameras import VISUAL_GROUPS, splat_arguments
-from rq_pipeline.scenes.record import SCENE_FILE, SPLAT_FILE, load_scene_record
-from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply
-from rq_pipeline.scenes.stage import (
-    FLOOR_FRICTION,
-    HEAD_CAMERA,
-    HEAD_FOVY,
-    HEAD_POS,
-    course_start,
-    look_quat,
+from rq_pipeline.scenes.heads import HEAD_CAMERA, head_mount
+from rq_pipeline.scenes.record import (
+    SCENE_FILE,
+    SPLAT_FILE,
+    floor_friction,
+    load_scene_record,
 )
+from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply
+from rq_pipeline.scenes.stage import course_start
 from rq_pipeline.scenes.terrain import (
-    CELL_M,
     GRID_FILE,
-    HFIELD_BASE_M,
     Grid,
+    add_heightfield,
+    proxy_hash,
     read_grid,
 )
+
+from rq_mjlab.walks import ROBOT_ENTITY
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
 
 SUB_TERRAIN = "scene"
 TERRAIN_BODY = "terrain"  # mjlab's generator names it; the contact sensors match it
-HFIELD_NAME = "scene_heightfield"
-ROBOT_BASE = "robot/base_link"  # the Go2's trunk, as the scene prefixes it
 # The training picture: small, so 256 worlds render every step; the gate's
 # 160x120 is the film strip a human watches (scenes.cameras).
 CAMERA_WIDTH = 64
@@ -78,6 +77,10 @@ NO_GRID = (
     "scene {name} has no {file}: the grid is sampled when the scene is staged "
     "(stage_deployment) or by scenes.terrain.ensure_grid, in the pipeline's "
     "environment (Open3D)"
+)
+STALE_GRID = (
+    "scene {name}'s {file} was sampled from another proxy: re-sample it "
+    "(scenes.terrain.ensure_grid) before training on this one"
 )
 
 
@@ -113,24 +116,16 @@ class SceneHeightfieldCfg(SubTerrainCfg):
     ) -> TerrainOutput:
         del difficulty, rng  # the scene is what it is
         grid = self.grid
-        body = spec.body(TERRAIN_BODY)
-        z_min, z_max = float(grid.heights.min()), float(grid.heights.max())
-        z_range = max(z_max - z_min, CELL_M)
-        field = spec.add_hfield(
-            name=HFIELD_NAME,
-            nrow=grid.heights.shape[0],
-            ncol=grid.heights.shape[1],
-            size=[*grid.half, z_range, HFIELD_BASE_M],
-            userdata=((grid.heights - z_min) / z_range).ravel().astype(np.float32),
+        # the same asset, geom, group and friction the staged gate collides
+        # with (scenes.terrain.add_heightfield), placed against the corner
+        # mjlab's generator will add
+        field, geom = add_heightfield(
+            spec,
+            spec.body(TERRAIN_BODY),
+            grid,
+            friction=self.friction,
+            shift=tuple(-self.corner),
         )
-        geom = body.add_geom(
-            name=HFIELD_NAME,
-            type=mujoco.mjtGeom.mjGEOM_HFIELD,
-            hfieldname=HFIELD_NAME,
-            pos=np.array([*grid.centre, z_min]) - self.corner,
-        )
-        if self.friction is not None:
-            geom.friction[:] = [*self.friction, 0.0, 0.0][:3]
         start = np.array(self.start_xy, dtype=np.float64)
         surface_z = float(grid.at(start[None, :])[0])
         origin = np.array([start[0], start[1], surface_z]) - self.corner
@@ -147,7 +142,9 @@ def scene_grid(scene_dir: Path, *, cell: float = TRAIN_CELL_M) -> Grid:
         raise FileNotFoundError(
             NO_GRID.format(name=Path(scene_dir).name, file=GRID_FILE)
         )
-    grid = saved[0]
+    grid, _filled, proxy = saved
+    if proxy != proxy_hash(scene_dir):  # the gate would re-sample; say so
+        raise ValueError(STALE_GRID.format(name=Path(scene_dir).name, file=GRID_FILE))
     return grid if grid.cell == cell else grid.resampled(cell)
 
 
@@ -160,15 +157,9 @@ def scene_terrain_cfg(
     scene_dir = Path(scene_dir)
     record = load_scene_record(scene_dir / SCENE_FILE)
     start_xy, _heading = course_start(record)
-    friction = next(
-        (
-            [float(v) for v in np.atleast_1d(p.value)]
-            for p in record.physics
-            if p.name == FLOOR_FRICTION
-        ),
-        None,
+    patch = SceneHeightfieldCfg.of(
+        scene_grid(scene_dir, cell=cell), start_xy, floor_friction(record)
     )
-    patch = SceneHeightfieldCfg.of(scene_grid(scene_dir, cell=cell), start_xy, friction)
     return TerrainEntityCfg(
         terrain_type="generator",
         terrain_generator=TerrainGeneratorCfg(
@@ -192,17 +183,20 @@ def scene_stamp(scene_dir: Path) -> str:
 
 
 def head_camera_cfg(
-    *, width: int = CAMERA_WIDTH, height: int = CAMERA_HEIGHT
+    robot: str, *, width: int = CAMERA_WIDTH, height: int = CAMERA_HEIGHT
 ) -> CameraSensorCfg:
-    """The head camera the stage puts on the base (`scenes.stage`), as
-    an mjlab sensor rendered for every world."""
-    quat = look_quat(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+    """The robot's head camera as the stage mounts it (`scenes.heads`, by
+    robot family), as an mjlab sensor rendered for every world."""
+    mount = head_mount(robot)
+    if mount.body is None:
+        raise ValueError(f"robot {robot!r}'s head mount names no base body")
+    quat = mount.quat
     return CameraSensorCfg(
         name=HEAD_CAMERA,
-        parent_body=ROBOT_BASE,
-        pos=HEAD_POS,
+        parent_body=f"{ROBOT_ENTITY}/{mount.body}",
+        pos=mount.pos,
         quat=(float(quat[0]), float(quat[1]), float(quat[2]), float(quat[3])),
-        fovy=HEAD_FOVY,
+        fovy=mount.fovy,
         width=width,
         height=height,
         data_types=("rgb",),

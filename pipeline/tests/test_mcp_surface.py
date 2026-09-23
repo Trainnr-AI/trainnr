@@ -286,6 +286,28 @@ class ServerFraming(unittest.TestCase):
         server = build_server()
         self.assertEqual(server._lowlevel_server.name, "robotiq")
 
+    @needs_mcp
+    def test_every_door_is_registered(self) -> None:
+        """A door is a module-level function that can answer with a
+        refusal; one written and not registered (play_walk, 2026-09-23)
+        answers nobody."""
+        import inspect  # noqa: PLC0415
+
+        from rq_pipeline import mcp_server  # noqa: PLC0415
+
+        doors = {
+            name
+            for name, f in vars(mcp_server).items()
+            if inspect.isfunction(f)
+            and f.__module__ == mcp_server.__name__
+            and not name.startswith("_")
+            and "Refusal" in str(f.__annotations__.get("return", ""))
+        }
+        registered = {  # by the function, not the tool's name (create_project)
+            t.fn.__name__ for t in mcp_server.build_server()._tool_manager.list_tools()
+        }
+        self.assertEqual(doors - registered, set())
+
 
 class StudioDoors(unittest.TestCase):
     def test_every_studio_door_answers_without_a_studio(self) -> None:

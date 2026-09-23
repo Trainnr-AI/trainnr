@@ -15,6 +15,7 @@ callers refuse by name when the file they want is not there.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 CHECKOUT_ENV = "TRAINNR_REPO"
@@ -34,3 +35,26 @@ def checkout() -> Path:
         if (ancestor / CHECKOUT_MARKER).is_file():
             return ancestor
     return _PACKAGE.parents[1]
+
+
+def venv_bin(venv: Path, name: str) -> Path:
+    """An executable inside a virtual environment, by the platform's own
+    layout (`bin/` on POSIX, `Scripts/` with `.exe` on Windows) — the one
+    resolver every tool that names a venv interpreter goes through."""
+    if sys.platform.startswith("win"):
+        return Path(venv) / "Scripts" / f"{name}.exe"
+    return Path(venv) / "bin" / name
+
+
+def venv_python(venv: Path) -> Path:
+    return venv_bin(venv, "python")
+
+
+# The pipeline's second environment: the trainer's (LeRobot, torch), beside
+# the base one; every tool that drives a student through it names it here.
+TRAIN_VENV = Path("pipeline") / ".venv-train"
+
+
+def train_python() -> Path:
+    """The train environment's interpreter in this checkout."""
+    return venv_python(checkout() / TRAIN_VENV)

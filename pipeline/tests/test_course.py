@@ -325,7 +325,9 @@ class TheStudioPage(unittest.TestCase):
         )
 
         section = gate_trials(self._course_record(), "plain MuJoCo")
-        self.assertEqual(section["columns"][:3], [label for label, _ in COURSE_COLUMNS])
+        self.assertEqual(
+            section["columns"][:3], [label for label, _, _ in COURSE_COLUMNS]
+        )
         (row,) = section["rows"]
         self.assertEqual(row[0], 0.8)
         self.assertEqual(row[1], "2 / 2")
@@ -333,7 +335,8 @@ class TheStudioPage(unittest.TestCase):
         self.assertIn(course_criterion_text(), section["note"])
         # every key the page reads is one the trial's row writes
         keys = set(CourseTrial.__dataclass_fields__) | {"finished", "success"}
-        self.assertTrue({key for _, key in COURSE_COLUMNS} <= keys)
+        read = {key for _, keys, _ in COURSE_COLUMNS for key in keys}
+        self.assertTrue(read <= keys, read - keys)
 
     def test_a_twist_gate_tabulates_the_held_command(self) -> None:
         from rq_pipeline.project.details import gate_trials  # noqa: PLC0415
@@ -364,10 +367,6 @@ class TheCommandsBlock(unittest.TestCase):
         self.assertEqual(named.raw[Key.COMMANDS]["heading_gain"], 0.5)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheCourseVerdict(unittest.TestCase):
     def test_a_course_gate_reports_and_never_judges_against_a_plane_evaluation(
         self,
@@ -380,3 +379,7 @@ class TheCourseVerdict(unittest.TestCase):
         course = _verdict(0, 4, 0.1, cert, along_course=True)
         self.assertIsNone(course["passed"])
         self.assertEqual(course["rule"], OTHER_PROTOCOL)
+
+
+if __name__ == "__main__":
+    unittest.main()
