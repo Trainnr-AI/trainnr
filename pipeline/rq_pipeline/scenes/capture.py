@@ -107,6 +107,18 @@ SEQUENTIAL_OVERLAP = 20
 LOOP_DETECTION_PERIOD = 10
 PROXY_CELL_M = DEFAULT_TOLERANCE_M  # the proxy's grid: the audit's tolerance
 PROXY_HOLE_CELLS = 3  # holes up to this many cells across are filled
+# A cell's height is this percentile of its centres, not their maximum: the
+# top few percent of a real capture's centres are floaters (grass tips,
+# specks), and the maximum picked every one (a lawn as a bed of spikes
+# the Go2 hung on, 2026-09-23).
+PROXY_CELL_PERCENTILE = 90.0
+# Every cell then takes the median of its window: a splat's centres scatter
+# a few centimetres about a flat surface, and at a 2 cm pitch that scatter
+# is a sawtooth of 40° walls to a foot the size of a cell (the paving's
+# neighbour steps p90 1.7 cm raw, 0.35 cm after the median, 2026-09-23). A
+# median keeps edges: a step's two levels stay, only its rim can move.
+PROXY_SPIKE_WINDOW = 5  # cells, the neighbourhood whose median a cell takes
+PROXY_SPIKE_M = 0.05  # a cell moved farther than this by the median counts as a spike
 PROXY_FILL_NEIGHBOURS = (
     3  # of the ring of 8: fewer and the cell is a fringe, not a hole
 )
@@ -123,9 +135,11 @@ ALIGNMENT_SOURCE = (
     "normal to +z, most of the scene above it, its centroid at the origin"
 )
 PROXY_METHOD = (
-    "the visible gaussian centres' top surface on a {cell} m grid (each cell its "
-    "highest centre, small holes filled from their neighbours); the surface the "
-    "splat itself implies from above, not a dense reconstruction: undersides absent"
+    "the visible gaussian centres' top surface on a {cell} m grid (each cell the "
+    "{percentile:g}th percentile of its centres, then the median of its "
+    "{window}x{window} neighbours, small holes filled from their neighbours); "
+    "the surface the splat itself implies from "
+    "above, not a dense reconstruction: undersides absent"
 )
 CAPTURE_NOTES = (
     "the proxy is the visible surface itself (its top on a grid): the gap "
@@ -657,21 +671,28 @@ def top_surface_mesh(
     centres: np.ndarray, *, cell: float = PROXY_CELL_M
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     """The visible centres' top surface on a grid as a triangle mesh:
-    each cell's height is its highest centre; a cell with none but at
-    least `PROXY_FILL_NEIGHBOURS` seen cells around it takes the lowest
-    of them (a hole in the capture, counted), up to `PROXY_HOLE_CELLS`
-    deep; the rest are left out, so a sparse splat yields a sparse
-    surface rather than an invented one. Deterministic, never fails on a
-    plane - the surface the stage's heightfield would sample anyway."""
+    each cell's height is the `PROXY_CELL_PERCENTILE`th percentile of its
+    centres (the maximum picked every floater), then the median of its
+    `PROXY_SPIKE_WINDOW`-cell neighbourhood (the centres' scatter at the
+    cell pitch is a sawtooth a foot cannot cross; a speck above the lawn
+    or a centre below it is struck by the same median, counted when it
+    moved a cell by more than `PROXY_SPIKE_M`); a cell with no centre but at least
+    `PROXY_FILL_NEIGHBOURS` seen cells around it takes the lowest of them
+    (a hole in the capture, counted), up to `PROXY_HOLE_CELLS` deep; the
+    rest are left out, so a sparse splat yields a sparse surface rather
+    than an invented one. Deterministic, never fails on a plane - the
+    surface the stage's heightfield would sample anyway."""
     lo = centres[:, :2].min(0)
     hi = centres[:, :2].max(0)
     ncol = max(int(np.ceil((hi[0] - lo[0]) / cell)) + 1, 2)
     nrow = max(int(np.ceil((hi[1] - lo[1]) / cell)) + 1, 2)
     col = np.clip(((centres[:, 0] - lo[0]) / cell).astype(int), 0, ncol - 1)
     row = np.clip(((centres[:, 1] - lo[1]) / cell).astype(int), 0, nrow - 1)
-    height = np.full((nrow, ncol), -np.inf)
-    np.maximum.at(height, (row, col), centres[:, 2])
+    height = cell_percentiles(
+        row * ncol + col, centres[:, 2], nrow * ncol, PROXY_CELL_PERCENTILE
+    ).reshape(nrow, ncol)
     seen = np.isfinite(height)
+    despiked = despike(height, PROXY_SPIKE_WINDOW, PROXY_SPIKE_M)
     filled = 0
     # holes: the lowest neighbour within the ring, a few passes
     for _ in range(PROXY_HOLE_CELLS):
@@ -719,8 +740,47 @@ def top_surface_mesh(
         "cells": int(keep.sum()),
         "cells_seen": int(seen.sum()),
         "cells_filled": filled,
+        "cells_despiked": despiked,
     }
     return vertices, np.asarray(faces, dtype=np.int64), facts
+
+
+def cell_percentiles(
+    cells: np.ndarray, values: np.ndarray, count: int, percentile: float
+) -> np.ndarray:
+    """Per cell, the given percentile of the values that fell in it
+    (nearest rank); -inf for a cell with none. One sort, no Python loop."""
+    order = np.lexsort((values, cells))
+    cells, values = cells[order], values[order]
+    counts = np.bincount(cells, minlength=count)
+    starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
+    rank = np.floor(percentile / 100.0 * np.maximum(counts - 1, 0)).astype(np.int64)
+    out = np.full(count, -np.inf)
+    has = counts > 0
+    out[has] = values[starts[has] + rank[has]]
+    return out
+
+
+def despike(height: np.ndarray, window: int, tolerance: float) -> int:
+    """Every seen cell takes the median of its `window`x`window`
+    neighbourhood (unseen cells lending their nearest seen height for the
+    median's sake), in place; returns how many moved by more than
+    `tolerance`, the spikes. A step keeps its two levels: the median at
+    its edge is one of them, and only cells within half a window of the
+    edge can move."""
+    from scipy import ndimage  # noqa: PLC0415
+
+    seen = np.isfinite(height)
+    if not seen.any():
+        return 0
+    nearest = ndimage.distance_transform_edt(
+        ~seen, return_distances=False, return_indices=True
+    )
+    filled = height[nearest[0], nearest[1]]
+    median = ndimage.median_filter(filled, size=window, mode="nearest")
+    spikes = seen & (np.abs(height - median) > tolerance)
+    height[seen] = median[seen]
+    return int(spikes.sum())
 
 
 def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
@@ -735,7 +795,12 @@ def proxy_from_splat(splats: Splats, out_obj: Path) -> dict[str, Any]:
         "faces": int(faces.shape[0]),
         "watertight": False,
         "edge_manifold": True,
-        "method": PROXY_METHOD.format(cell=PROXY_CELL_M),
+        "method": PROXY_METHOD.format(
+            cell=PROXY_CELL_M,
+            percentile=PROXY_CELL_PERCENTILE,
+            spike=PROXY_SPIKE_M,
+            window=PROXY_SPIKE_WINDOW,
+        ),
         "from": PROXY_FROM_SPLAT.format(opacity=VISIBLE_OPACITY),
         **facts,
     }

@@ -193,6 +193,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
                 # The gate's picture, saved inside the deployment (docs/76 §10.5).
                 file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
                 scene_dir=scene_dir,
+                name=deployment_dir.name,
             )
             if narrate
             else None

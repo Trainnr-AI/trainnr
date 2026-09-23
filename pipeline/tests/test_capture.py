@@ -68,6 +68,23 @@ class TheTopSurface(unittest.TestCase):
         self.assertLess(left.max(), 0.01)
         self.assertGreater(right.min(), step_z - 0.01)
 
+    def test_floaters_above_and_below_a_lawn_are_struck(self) -> None:
+        """A real capture's lawn: a few percent of centres well above the
+        ground (grass tips, specks) and a few below it; the surface must
+        be the lawn, not the specks (the Go2 hung on them, 2026-09-23)."""
+        rng = np.random.default_rng(1)
+        n = 20000
+        pts = np.column_stack(
+            [rng.uniform(0, 1, n), rng.uniform(0, 1, n), rng.normal(0, 0.005, n)]
+        )
+        floaters = rng.choice(n, 400, replace=False)
+        pts[floaters[:200], 2] += 0.3
+        pts[floaters[200:], 2] -= 0.3
+        v, _, facts = capture.top_surface_mesh(pts, cell=0.02)
+        # the percentile drops most floaters before the median sees them
+        self.assertGreater(facts["cells_despiked"], 0)
+        self.assertLess(np.abs(v[:, 2]).max(), 0.03)
+
 
 class TheFrameMath(unittest.TestCase):
     def test_rotation_to_z_and_eulers_round_trip(self) -> None:

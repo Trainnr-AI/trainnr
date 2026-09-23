@@ -752,6 +752,59 @@ the job, the stage (`⏳ scenes/mipnerf-garden — gsplat_train` on the
 Compute card, from the index's new `in_progress` list) and the live
 stream, is the run docs/07 reports.
 
+## 8.9 The Go2 in the garden: a captured scene walked under full physics (2026-09-23, the box)
+
+"Can we use this environment to move a dog here with full environment
+physics and robot interaction and dynamics?" Yes, by the doors that
+already exist - `stage_deployment` puts the certified go2-c2 walker on
+the scene's collision proxy as a heightfield, `gate_deployment` drives
+the exported policy through plain MuJoCo on it with the Studio mirror
+showing the dog over the splat - and three things had to be true first,
+each found by a screenshot and a measurement:
+
+- **A scale.** The capture recorded COLMAP's units. The table top sits
+  1.32 units above the floor and a garden table is 0.74 m tall, so the
+  scene was re-aligned at 0.56 m per unit (the chain reuses poses,
+  splat and stills; alignment, proxy and gap rerun in minutes). The
+  record says the scale is declared, and on what.
+- **A surface, not the specks.** The proxy took each cell's highest
+  gaussian centre. On a real capture that is every floating speck: the
+  lawn's heightfield swung ±37 cm within a metre, the dog hung on the
+  spikes and looked as if it floated (the operator's word). Two
+  changes: each cell takes the 90th percentile of its centres, then
+  the median of its 5x5 neighbours - a median keeps a step's two
+  levels and strikes what stands alone. The paving's cell-to-cell
+  steps went from 1.7 cm (p90) to 0.35 cm; 121k of 696k cells moved.
+  The lawn is walkable now (its std under 3 cm on the map below).
+- **A start and a course.** A staged deployment without a course runs
+  the held-twist gate from its start, and the garden's start faced the
+  table one metre ahead: the dog walked into it at half a metre a
+  second, stalled with its belly on the edge, and the gate read 0/8
+  "tracked" while the physics was right all along (the probe: rays
+  down onto the compiled heightfield hit exactly the grid's and the
+  proxy's heights at six points; the same actor through the same
+  runtime tracks 0.46 of 0.5 m/s on the plane). The walkability map
+  from the proxy at 0.2 m cells (obstacle above 20 cm, flat under 3 cm
+  of scatter) showed a flat ring around the table; a six-waypoint loop
+  on it went into the record as the scene's course, laid out by the
+  operator and said so.
+
+The result, `go2-c2-garden-loop`: six of six trials walk the full loop
+around the table at 0.60-0.80 m/s, every waypoint reached within
+budget, no fall, exact 95 % interval [0.54, 1.00]. The same
+plane-trained walker, no scene training, on a garden captured from 185
+public frames this afternoon.
+
+Two limits, recorded: the head and course camera panes stay black on
+the box because the splat renderer the pictures need is mujoco_warp
+3.13's and the box has 3.12 (`scenes.cameras.OLD_RENDERER`); and the
+earlier gates on the hurdle scene that read "survived, 0/40 tracked"
+deserve the same look - a twist gate on a staged scene runs the dog
+into whatever stands near its start, and its error ratio says
+"stuck", not "cannot walk here". The gate's mirror now names its
+recording for the deployment, so a second gate under the same runtime
+no longer streams unseen behind the first.
+
 ## 9. How a scene's physics gets certified for a task
 
 Assembled from what exists (docs/e2e-research/76 §7), every step but

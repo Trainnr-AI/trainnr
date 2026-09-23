@@ -76,6 +76,7 @@ class GateMirror:
         rr: Any,
         file: Path | None = None,
         scene_dir: Path | None = None,
+        name: str | None = None,
     ) -> None:
         import mujoco  # noqa: PLC0415 - the sim extra
 
@@ -95,15 +96,17 @@ class GateMirror:
         self.seconds = 0.0
         self.manifest = manifest
         self._cameras: Any = None
-        open_stream(
-            f"{APP_ID}-{runtime_name}", address=STUDIO_ADDRESS, file=file, rr=rr
-        )
+        # One recording name per deployment: the viewer stays on the
+        # recording it shows, so a second gate under the same name streamed
+        # unseen behind the first (2026-09-23).
+        app_id = f"{APP_ID}-{runtime_name}" + (f"-{name}" if name else "")
+        open_stream(app_id, address=STUDIO_ADDRESS, file=file, rr=rr)
         self._layout()
         if scene_dir is not None:
             self._scene(scene_dir)
 
     @classmethod
-    def open(
+    def open(  # noqa: PLR0913 - the picture's own knobs, each named
         cls,
         manifest: Manifest,
         runtime_name: str,
@@ -111,6 +114,7 @@ class GateMirror:
         log: TextIO = sys.stderr,
         file: Path | None = None,
         scene_dir: Path | None = None,
+        name: str | None = None,
     ) -> GateMirror | None:
         """The mirror, or None with a note when it cannot be one; with a
         `scene_dir` (a staged deployment) the scene's splat is the
@@ -127,7 +131,13 @@ class GateMirror:
         try:
             model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
             return cls(
-                manifest, model, runtime_name, rr=rr, file=file, scene_dir=scene_dir
+                manifest,
+                model,
+                runtime_name,
+                rr=rr,
+                file=file,
+                scene_dir=scene_dir,
+                name=name,
             )
         except (FileNotFoundError, ValueError, KeyError) as why:
             # an unloadable scene, or a joint the manifest names and the
