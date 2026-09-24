@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import importlib.util
+import math
 import platform
 import tempfile
 import warnings
@@ -34,6 +35,29 @@ from typing import Any
 from rq_pipeline.bundles.bundle import source_locator, write_bundle_record
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.robot.asset_fetch import read_marker
+from rq_pipeline.robot.import_audit import (
+    ANY,
+    BALL,
+    COUNT,
+    EQUALITIES,
+    HINGE,
+    JOINT_MISSING,
+    JOINT_ORDER,
+    KEYFRAMES,
+    MESHES,
+    MIMICS,
+    SENSORS,
+    SLIDE,
+    UNIT,
+    BodyFacts,
+    Explanation,
+    JointFacts,
+    Snapshot,
+    SourceRead,
+    quat_to_matrix,
+    source_reader,
+    tensor_in_frame,
+)
 from rq_pipeline.robot.onboarding import USD_SOURCE, model_source
 from rq_pipeline.scenes.record import UNRECORDED
 
@@ -768,3 +792,166 @@ def onboard_usd(
     """The onboarding door's USD source: the options become settings
     (a wrong value is refused by name), then the bundle is written."""
     return write_usd_bundle(source_path, name, destination, ImportSettings(**options))
+
+
+# -- the audit reader (docs/e2e-research/78 §1 item 2) ---------------------
+
+USD_JOINT_KINDS = {  # the prim type names UsdPhysics gives its joints
+    "PhysicsRevoluteJoint": HINGE,
+    "PhysicsPrismaticJoint": SLIDE,
+    "PhysicsSphericalJoint": BALL,
+}
+MJC_JOINT_ATTRIBUTES = {
+    "armature": "mjc:armature",
+    "damping": "mjc:damping",
+    "frictionloss": "mjc:frictionloss",
+    "stiffness": "mjc:stiffness",
+}
+# A joint that follows another: Newton's, PhysX's or MuJoCo's mimic
+# schema applied (a multiple-apply schema carries an instance suffix).
+MIMIC_SCHEMAS = ("NewtonMimicAPI", "PhysxMimicJointAPI", "MjcPhysicsEqualityJointAPI")
+LOOP_ATTRIBUTE = "physics:excludeFromArticulation"
+DRIVE_STIFFNESS = "drive:angular:physics:stiffness"
+DRIVE_MAX_FORCE = "drive:angular:physics:maxForce"
+COM_ATTRIBUTE = "physics:centerOfMass"
+DIAGONAL_INERTIA = "physics:diagonalInertia"
+PRINCIPAL_AXES = "physics:principalAxes"
+USD_EXPLANATIONS = (
+    Explanation(UNIT, "angle", "USD states joint limits in degrees; MJCF in radians"),
+    Explanation(
+        COUNT, SENSORS, "jointpos and jointvel sensors added by the bundle writer"
+    ),
+    Explanation(COUNT, KEYFRAMES, "the home keyframe added by the bundle writer"),
+    Explanation(
+        COUNT, MESHES, "a convex hull for collision written beside each visual mesh"
+    ),
+    Explanation(
+        JOINT_ORDER,
+        ANY,
+        "Newton orders joints by the kinematic tree, depth first; the USD "
+        "authors them under a scope in its own order",
+    ),
+)
+
+
+def _attr(prim: Any, name: str, default: Any = None) -> Any:
+    attribute = prim.GetAttribute(name)
+    if attribute and attribute.HasAuthoredValue():
+        value = attribute.Get()
+        return default if value is None else value
+    return default
+
+
+def _usd_body(prim: Any) -> BodyFacts:
+    from pxr import UsdPhysics  # noqa: PLC0415
+
+    mass = (
+        float(_attr(prim, "physics:mass", 0.0))
+        if prim.HasAPI(UsdPhysics.MassAPI)
+        else 0.0
+    )
+    com = _attr(prim, COM_ATTRIBUTE)
+    diagonal = _attr(prim, DIAGONAL_INERTIA)
+    axes = _attr(prim, PRINCIPAL_AXES)
+    inertia = None
+    if diagonal is not None:
+        quat = (1.0, 0.0, 0.0, 0.0)
+        if axes is not None:
+            imaginary = axes.GetImaginary()
+            quat = (axes.GetReal(), imaginary[0], imaginary[1], imaginary[2])
+        inertia = tensor_in_frame(tuple(diagonal), quat_to_matrix(quat))
+    return BodyFacts(
+        mass=mass,
+        com=tuple(float(v) for v in com) if com is not None else None,
+        inertia=inertia,
+    )
+
+
+def _usd_joint(prim: Any, kind: str) -> JointFacts:
+    lower = float(_attr(prim, "physics:lowerLimit", -math.inf))
+    upper = float(_attr(prim, "physics:upperLimit", math.inf))
+    limited = math.isfinite(lower) and math.isfinite(upper) and lower <= upper
+    if kind == HINGE:
+        lower, upper = math.radians(lower), math.radians(upper)
+    max_force = float(_attr(prim, DRIVE_MAX_FORCE, 0.0))
+    params = {
+        field_: float(_attr(prim, attribute, 0.0))
+        for field_, attribute in MJC_JOINT_ATTRIBUTES.items()
+    }
+    return JointFacts(
+        kind=kind,
+        axis=None,  # the USD axis lives in the joint frame; the bundle's in the body's
+        limited=limited,
+        range=(lower, upper) if limited else (0.0, 0.0),
+        force_range=(-max_force, max_force) if max_force > 0 else None,
+        **params,
+    )
+
+
+def _is_mimic(prim: Any) -> bool:
+    return any(name.startswith(MIMIC_SCHEMAS) for name in prim.GetAppliedSchemas())
+
+
+def snapshot_stage(stage: Any) -> tuple[Snapshot, dict[str, str], tuple[str, ...]]:
+    """The composed stage as the audit reads it: every rigid body, every
+    joint prim in traversal order (loop closures included, so their
+    absence from the bundle is a change the reader explains), the mimic
+    and drive counts. Returns the snapshot, the prim-leaf name map, and
+    the loop closures' names."""
+    from pxr import Usd, UsdPhysics  # noqa: PLC0415
+
+    bodies: dict[str, BodyFacts] = {}
+    joints: dict[str, JointFacts] = {}
+    names: dict[str, str] = {}
+    taken_bodies: set[str] = set()
+    taken_joints: set[str] = set()
+    loops: list[str] = []
+    mimics = drives = meshes = 0
+    for prim in Usd.PrimRange(stage.GetPseudoRoot(), Usd.TraverseInstanceProxies()):
+        path = prim.GetPath().pathString
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            name = unique(leaf(path), taken_bodies)
+            names[path] = name
+            bodies[path] = _usd_body(prim)
+        kind = USD_JOINT_KINDS.get(prim.GetTypeName())
+        if kind is not None:
+            name = unique(leaf(path), taken_joints)
+            names[path] = name
+            joints[path] = _usd_joint(prim, kind)
+            if _attr(prim, LOOP_ATTRIBUTE, False):
+                loops.append(path)
+            if _is_mimic(prim):
+                mimics += 1
+            if float(_attr(prim, DRIVE_STIFFNESS, 0.0)) > 0:
+                drives += 1
+        if prim.GetTypeName() == "Mesh":
+            meshes += 1
+    counts = {MIMICS: mimics, EQUALITIES: mimics + len(loops), MESHES: meshes}
+    counts.update({SENSORS: 0, KEYFRAMES: 0})
+    if drives:
+        counts["actuators"] = drives
+    snapshot = Snapshot(bodies, joints, counts, {"angle": "degree", "length": "meter"})
+    return snapshot, names, tuple(loops)
+
+
+@source_reader(USD_SOURCE, USD_SUFFIXES)
+def audit_usd(path: Path, options: Mapping[str, Any]) -> SourceRead:
+    """The stage as authored, with the bundle writer's conversions and
+    Newton's loop-closure rewrite as the explanations."""
+    settings = ImportSettings(**options)
+    stage, selected = open_stage(Path(path), settings.variants)
+    snapshot, names, loops = snapshot_stage(stage)
+    explanations = list(USD_EXPLANATIONS) + [
+        Explanation(
+            JOINT_MISSING,
+            loop,
+            "a loop closure (excludeFromArticulation) written as a connect equality",
+        )
+        for loop in loops
+    ]
+    return SourceRead(
+        snapshot,
+        names=names,
+        explanations=tuple(explanations),
+        provenance={"variants": selected, "versions": versions()},
+    )

@@ -262,19 +262,27 @@ def onboard_robot(
     name: str,
     variants: dict[str, str] | None = None,
     root: str | None = None,
+    accept_changes: bool = False,
 ) -> dict[str, Any] | Refusal:
     """A robot enters as a hash-stamped bundle, by its file's format: an
     MJCF's directory copied whole (meshes and includes ride along) and
-    compiled once as the honesty check; a USD asset (.usd/.usda/.usdc/
-    .usdz) read by Newton's importer and written as a bundle with leaf
-    names, mesh files, sensors and a home key — `variants` selects its
-    variant sets (e.g. {"Physics": "Newton_compliant"}) and `root` is
-    "fixed" (default) or "free". Into the current project's `robots/`
-    when a project is open, else the library. Never overwrites; refuses
-    by name, including an option the format does not take."""
+    compiled once as the honesty check; a URDF through MuJoCo's own
+    loader; a USD asset (.usd/.usda/.usdc/.usdz) read by Newton's
+    importer and written as a bundle with leaf names, mesh files, sensors
+    and a home key — `variants` selects its variant sets (e.g.
+    {"Physics": "Newton_compliant"}) and `root` is "fixed" (default) or
+    "free". Every door then AUDITS what the importer changed against the
+    source as authored (masses, inertias, joint limits and parameters,
+    dropped elements); an unexplained change is refused by name and the
+    bundle removed unless `accept_changes` is true, and the record then
+    says so. The reply carries the audit's one line. Into the current
+    project's `robots/` when a project is open, else the library. Never
+    overwrites; refuses by name, including an option the format does
+    not take."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.robot.onboarding import ACCEPT_CHANGES  # noqa: PLC0415
 
     into: Path | None = None
     with contextlib.suppress(FileNotFoundError):
@@ -285,6 +293,8 @@ def onboard_robot(
         options["variants"] = variants
     if root is not None:
         options["root"] = root
+    if accept_changes:
+        options[ACCEPT_CHANGES] = True
     try:
         out = actions.onboard_robot(
             model_path, name, into=str(into) if into else None, options=options

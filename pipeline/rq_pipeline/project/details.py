@@ -258,6 +258,65 @@ def _interval(record: dict[str, Any]) -> str:
 # -- robot (Asset) ---------------------------------------------------------------
 
 
+NOT_AUDITED = (
+    "not audited: onboarded before the importer audit existed (2026-09-24); "
+    "`tools/audit-bundle.py <bundle> <source>` audits it against its source"
+)
+AUDIT_NOTE = (
+    "The bundle's compiled model against the description it came from "
+    "(robot/import_audit): a change the format's reader explains is a documented "
+    "conversion or a loader loss at that mujoco build; UNEXPLAINED means the "
+    "operator accepted it at onboarding."
+)
+AUDIT_TITLE = "What the importer changed"
+
+
+def _importer_audit(root: Path) -> Section:
+    """What the importer changed, as the bundle record carries it: the
+    facts as key/values when nothing changed, the changes as a table."""
+    from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
+        AUDIT_KEY,
+        read_bundle_record,
+    )
+    from rq_pipeline.robot.import_audit import Audit  # noqa: PLC0415
+
+    record = read_bundle_record(root).get(AUDIT_KEY)
+    if not record:
+        return _kv(AUDIT_TITLE, [("audit", NOT_AUDITED)])
+    audit = Audit.from_record(record)
+    head: list[tuple[str, Any]] = [
+        ("format", audit.format),
+        ("source", audit.source),
+        ("mujoco", audit.mujoco),
+        ("changed", audit.summary()),
+    ]
+    if record.get("accepted"):
+        head.append(("accepted", "yes: onboarded despite unexplained changes"))
+    if not audit.changes and not audit.advisories:
+        return _kv(AUDIT_TITLE, head, AUDIT_NOTE)
+    rows = [
+        [
+            c.kind,
+            c.element,
+            _fact(c.source),
+            _fact(c.bundle),
+            c.explanation or "UNEXPLAINED",
+        ]
+        for c in audit.changes
+    ]
+    rows += [["advisory", "", "", "", a] for a in audit.advisories]
+    note = "; ".join(f"{k} {v}" for k, v in head) + ". " + AUDIT_NOTE
+    return _table(
+        AUDIT_TITLE, ["what", "element", "source", "bundle", "why"], rows, note
+    )
+
+
+def _fact(value: Any) -> Any:
+    if isinstance(value, (list, tuple)):
+        return [_f(v) for v in value]
+    return _f(value) if isinstance(value, (int, float)) else value
+
+
 def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     import mujoco  # noqa: PLC0415
 
@@ -268,6 +327,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
         raise ValueError("no MJCF at the asset's root")
     m = mujoco.MjModel.from_xml_path(str(model_file))
     name = lambda kind, i: mujoco.mj_id2name(m, kind, i) or f"#{i}"  # noqa: E731
+    audit = _importer_audit(root)
     obj_joint = mujoco.mjtObj.mjOBJ_JOINT
     obj_actuator = mujoco.mjtObj.mjOBJ_ACTUATOR
     obj_body = mujoco.mjtObj.mjOBJ_BODY
@@ -385,6 +445,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     files = sorted(p.name for p in root.iterdir() if not p.name.startswith("."))
     sections = [
         overview,
+        audit,
         joints,
         actuators,
         bodies,

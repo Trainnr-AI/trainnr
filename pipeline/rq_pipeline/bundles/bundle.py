@@ -17,7 +17,10 @@ from pathlib import Path
 from typing import Any
 
 BUNDLE_FILE = "bundle.json"
-BUNDLE_SCHEMA = "trainnr-robot/1"
+# /2 (2026-09-24): the importer audit under AUDIT_KEY (robot/import_audit);
+# a /1 record has none and the drawer says "not audited".
+BUNDLE_SCHEMA = "trainnr-robot/2"
+AUDIT_KEY = "audit"
 
 
 SOURCE_PARTS = 3  # <package>/<xmls>/<file>: what a reader needs to find it again
@@ -67,6 +70,21 @@ def write_bundle_record(  # noqa: PLR0913 - the record's fields, each named
     if provenance:
         record["provenance"] = dict(provenance)
     out = Path(bundle_dir) / BUNDLE_FILE
+    out.write_text(
+        json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return out
+
+
+def amend_bundle_record(bundle_dir: Path, key: str, value: Any) -> Path:
+    """One more field on a record just written (the door's audit, after
+    the source wrote); the file is rewritten whole, sorted, so two
+    onboardings still give one stamp."""
+    out = Path(bundle_dir) / BUNDLE_FILE
+    record = read_bundle_record(bundle_dir)
+    if not record:
+        raise FileNotFoundError(f"no {BUNDLE_FILE} under {bundle_dir}")
+    record[key] = value
     out.write_text(
         json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )

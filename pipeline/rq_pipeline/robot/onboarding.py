@@ -3,11 +3,20 @@
 One door (`onboard`), a registry of model sources keyed by file suffix
 (`@model_source`), the way engines, tasks and telemetry adapters
 register: MJCF is copied whole and compiled once as the honesty check;
+URDF goes through MuJoCo's own loader (`rq_pipeline.robot.urdf_import`);
 USD goes through Newton's importer and the bundle writer
 (`rq_pipeline.robot.usd_import`); a third format enters through the
 `rq_pipeline.model_sources` entry-point group. Every source refuses an
 option it does not take, by name, so a caller cannot pass a variant to
 an MJCF and have it ignored.
+
+After the source has written, the door AUDITS what the importer
+changed (`rq_pipeline.robot.import_audit`): the bundle's compiled model
+against the description as authored. A change the format's reader
+explains goes on the record; one it does not is refused by name and
+the half-written bundle removed — unless the caller passes
+`accept_changes`, the one option every format takes, and then the
+record says the changes were accepted.
 """
 
 from __future__ import annotations
@@ -18,15 +27,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.bundle import write_bundle_record
+from rq_pipeline.bundles.bundle import (
+    AUDIT_KEY,
+    amend_bundle_record,
+    model_file_of,
+    write_bundle_record,
+)
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.plugins import load_group
+from rq_pipeline.robot.import_audit import Audit, audit_bundle, require_explained
 
 ENTRY_POINT_GROUP = "rq_pipeline.model_sources"
-BUILTIN_MODULES = ("rq_pipeline.robot.usd_import",)
+BUILTIN_MODULES = ("rq_pipeline.robot.urdf_import", "rq_pipeline.robot.usd_import")
 MJCF_SUFFIXES = (".xml",)
 MJCF_SOURCE = "mjcf"
 USD_SOURCE = "usd"
+ACCEPT_CHANGES = "accept_changes"  # the door's own option, every format
+DOOR_OPTIONS = (ACCEPT_CHANGES,)
+ACCEPTED_WORD = "accepted"
 
 Onboarder = Callable[[Path, str, Path, Mapping[str, Any]], dict[str, Any]]
 
@@ -120,8 +138,42 @@ def onboard(
         )
     source = source_for(source_path)
     options = dict(options or {})
+    accept = bool(options.pop(ACCEPT_CHANGES, False))
     source.check_options(options)
-    return source.onboard(source_path, name, destination, options)
+    out = source.onboard(source_path, name, destination, options)
+    audit = audit_written(source_path, destination, options, accept=accept)
+    out["stamp"] = stamp(name, destination)  # the record changed under it
+    out[AUDIT_KEY] = audit.summary()
+    if audit.unexplained:
+        out[f"{AUDIT_KEY}_unexplained"] = [c.line() for c in audit.unexplained]
+    return out
+
+
+def audit_written(
+    source_path: Path,
+    destination: Path,
+    options: Mapping[str, Any],
+    *,
+    accept: bool = False,
+) -> Audit:
+    """The audit of a bundle the door just wrote, put on its record; an
+    unexplained change removes the bundle and refuses, unless accepted,
+    and then the record says so."""
+    model_file = model_file_of(destination)
+    if model_file is None:
+        raise FileNotFoundError(f"{destination} holds no MJCF to audit")
+    try:
+        audit = audit_bundle(source_path, model_file, options)
+        if not accept:
+            require_explained(audit)
+    except Exception:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    record = audit.to_record()
+    if accept and audit.unexplained:
+        record[ACCEPTED_WORD] = True
+    amend_bundle_record(destination, AUDIT_KEY, record)
+    return audit
 
 
 @model_source(
