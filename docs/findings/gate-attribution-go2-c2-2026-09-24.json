@@ -1,0 +1,49 @@
+{
+ "id": "gate-attribution-go2-c2-2026-09-24",
+ "claim": "A passing sim-to-sim gate can say which parameter would break the policy first: go2-c2-model_1499's plane gate (20/20 in plain MuJoCo, certificate 38/40, lower bound 0.8308) re-run with one dynamics knob turned at a time up a ladder of the field's deployment deviations falls at 2 control ticks of action latency (40 ms: 20/20 at 1 tick, 0/20 at 2), at servo damping x4 (20/20 at x2, 0/20 at x4) and at servo stiffness x0.6 (20/20 at x0.8, 2/20 at x0.6), while friction down to x0.3, 4 kg of payload, 0.05 rad of joint-position noise, a 5 deg slope and 1.5 m/s pushes leave it at 20/20; ranked, the answer to 'it walked in simulation and fell on the robot' for this policy is latency, then the servo gains, and the whole sweep took three minutes on eight cores.",
+ "date": "2026-09-24",
+ "repo_commit": "1c06fea",
+ "argv": [
+  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --workers 8 (the MCP door attribute_deployment spawns the same tool)"
+ ],
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL box (Ubuntu under WSL2, x86_64); every rung 20 seeded held twists at seed 1000, the gate's own protocol",
+ "outcome": {
+  "baseline": {"successes": 20, "trials": 20, "ci95": [0.8316, 1.0]},
+  "certificate_lower_bound": 0.8308,
+  "cliffs": {
+   "latency": {"ladder": "ticks 1,2,3,4", "rungs": {"1": "20/20", "2": "0/20 [0.0, 0.1684]"}, "cliff": "2 ticks (40 ms)"},
+   "kd": {"ladder": "x2,4,8,16", "rungs": {"2": "20/20", "4": "0/20 [0.0, 0.1684]"}, "cliff": "x4"},
+   "kp": {"ladder": "x0.8,0.6,0.4,0.3", "rungs": {"0.8": "20/20", "0.6": "2/20 [0.0123, 0.317]"}, "cliff": "x0.6"},
+   "tilt": {"ladder": "deg 3,5,8,12,15", "rungs": {"3": "20/20", "5": "20/20", "8": "13/20 [0.4078, 0.8461]"}, "cliff": "8 deg"},
+   "push": {"ladder": "m/s 0.5,1,1.5,2 every 4 s", "rungs": {"0.5": "20/20", "1": "20/20", "1.5": "20/20", "2": "12/20 [0.3605, 0.8088]"}, "cliff": "2 m/s"},
+   "payload": {"ladder": "kg 1,2,4,6,8", "rungs": {"1": "20/20", "2": "20/20", "4": "20/20", "6": "19/20 [0.7513, 0.9987]"}, "cliff": "6 kg (one trial lost; within the gate's own 0.10 tolerance)"},
+   "joint_pos_noise": {"ladder": "rad 0.01,0.02,0.05,0.1", "rungs": {"0.01": "20/20", "0.02": "20/20", "0.05": "20/20", "0.1": "19/20 [0.7513, 0.9987]"}, "cliff": "0.1 rad (one trial lost; within the gate's tolerance)"},
+   "friction": {"ladder": "x0.8,0.6,0.4,0.3,0.2", "rungs": {"0.8": "20/20", "0.6": "20/20", "0.4": "20/20", "0.3": "20/20", "0.2": "19/20 [0.7513, 0.9987]"}, "cliff": "x0.2 (one trial lost; within the gate's tolerance)"}
+  },
+  "ranking": ["latency", "kd", "kp", "tilt", "push", "payload", "joint_pos_noise", "friction"],
+  "sensitivity": "most sensitive to latency 2 ticks, then kd 4 x",
+  "still": "the fall at latency 2 ticks, trial 13, tick 109 (docs/figures/attribution/go2-c2-latency-2-ticks.png)",
+  "wall_time": "about 3 minutes, 8 knobs climbed in 8 spawned processes, 5 s per rung of 20 trials"
+ },
+ "inputs": {
+  "deployment": "go2-c2-deploy-cited@0a54b3db7282 (policy go2-c2-model_1499@99b1655e2cec, robot go2@5003bf617b5f, task go2-walk@0e7e123a7de7)",
+  "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f, 38/40 [0.8308, 0.9939]",
+  "base_gate": "gate.json of 2026-09-12: 20/20 [0.8316, 1.0], passed within tolerance 0.10"
+ },
+ "artifacts": {
+  "record": "projects/go2-walk/deploy/go2-c2-deploy-cited/attribution.json (the WSL box; projects/ is not tracked); a copy at docs/figures/attribution/go2-c2-deploy-cited-attribution.json",
+  "still": "docs/figures/attribution/go2-c2-latency-2-ticks.png",
+  "stream": "projects/go2-walk/deploy/go2-c2-deploy-cited/.viewer/attribution.rrd"
+ },
+ "sources": {
+  "ladders": "the reference's DR tables (friction, base mass, pushes), the hand-written deploy configs that went wrong in the field's trackers (gains), the walk's own latency budget finding (walk-latency-budget-2026-09-05), the training noise (joint position), the terrains a plane policy meets (tilt)"
+ },
+ "protocol": "docs/77-the-unitree-loop.md §9",
+ "caveats": [
+  "Sim only: the knobs turn plain MuJoCo's model; no hardware behaviour is claimed. The DDS runtime is another process's model and was not swept.",
+  "The cliff rule is the exact lower bound against the certificate's, at 20 trials per rung: one lost trial (19/20, lower bound 0.7513) is a cliff by that rule while the gate's own 0.10 tolerance would pass it; the record carries both, and friction, payload and joint noise fell only by that one trial.",
+  "Latency here is the whole action applied late over the runtime's loop (the policy still sees its own last action); the latency-budget finding of 2026-09-05 delayed a student's observations one tick in the evaluation scheduler, a different mechanism, so the two numbers are not the same measurement.",
+  "Ladders are the field's plausible deviations, smallest first, chosen by us; the ranking compares rung indices across knobs whose units differ, which is a design choice the record states, not a physical equivalence.",
+  "Tilt pitches gravity rather than the floor: the policy sees the slope through projected gravity, the feet meet a flat plane; a real slope adds foothold geometry this knob does not."
+ ]
+}
