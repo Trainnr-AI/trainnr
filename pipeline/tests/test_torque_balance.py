@@ -177,3 +177,72 @@ class Verdicts(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "fewer than two bootstrap blocks"):
             fit_terms(model, samples)
+
+
+TORSO_XML = """<mujoco model="torso-leg">
+  <option gravity="0 0 -3.71"/>
+  <worldbody>
+    <body name="torso" pos="0 0 1">
+      <freejoint name="root"/>
+      <geom type="box" size="0.2 0.1 0.05" mass="6"/>
+      <body name="FL_hip" pos="0.2 0.1 0">
+        <joint name="FL_hip_joint" type="hinge" axis="1 0 0" range="-0.8 0.8"/>
+        <geom type="capsule" fromto="0 0 0 0 0.08 0" size="0.03" mass="0.6"/>
+        <body name="FL_thigh" pos="0 0.08 0">
+          <joint name="FL_thigh_joint" type="hinge" axis="0 1 0" range="-1.5 3.4"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.025" mass="1.0"/>
+          <body name="FL_calf" pos="0 0 -0.2">
+            <joint name="FL_calf_joint" type="hinge" axis="0 1 0" range="-2.7 -0.9"/>
+            <geom type="capsule" fromto="0 0 0 0.1 0 -0.2" size="0.02" mass="0.3"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+# The base held against gravity may bob a few centimetres under the leg's
+# chirp; the old code pushed it 48 m (the wrong body, 9.81 on Mars).
+MAX_BASE_DRIFT_M = 0.2
+
+
+@needs_sim
+class TheShakenBase(unittest.TestCase):
+    """The floating base is the free joint's body and gravity is the
+    model's: a model whose root is `torso` under 3.71 m/s^2 is held in the
+    air, not launched (review 2026-09-24: a `base_link` lookup returned -1
+    and the weight was 9.81 whatever the model said)."""
+
+    def test_a_torso_on_mars_is_held_where_it_starts(self) -> None:
+        import dataclasses  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.robot.quadruped_synth import (  # noqa: PLC0415
+            SHAKEN,
+            BaseShake,
+            Chirp,
+            free_joint_of,
+            simulate,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "torso.xml"
+            path.write_text(TORSO_XML)
+            model = mujoco.MjModel.from_xml_path(str(path))
+            free = free_joint_of(model)
+            body = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_BODY, model.jnt_bodyid[free]
+            )
+            self.assertEqual(body, "torso")
+            recording, _ = simulate(
+                path,
+                posture=SHAKEN,
+                corruption=None,
+                shake=BaseShake(force_n=0.0, torque_nm=0.0),
+                chirp=dataclasses.replace(Chirp(), seconds=4.0),
+            )
+        heights = recording.channels["base.pose"].values[:, 2]
+        self.assertLess(float(np.ptp(heights)), MAX_BASE_DRIFT_M)

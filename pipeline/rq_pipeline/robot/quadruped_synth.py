@@ -111,6 +111,23 @@ class BaseShake:
     hz: float = 0.7
 
 
+FREE_QPOS = 7  # a free joint's position: xyz and a unit quaternion
+FREE_DOF = 6  # its velocity: linear and angular
+
+
+def free_joint_of(model: Any) -> int | None:
+    """The model's one free joint (the floating base), or None for a fixed
+    base; more than one is refused by name."""
+    import mujoco  # noqa: PLC0415
+
+    free = [
+        j for j in range(model.njnt) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
+    ]
+    if len(free) > 1:
+        raise ValueError(f"{len(free)} free joints; a quadruped has one floating base")
+    return free[0] if free else None
+
+
 def joint_class(name: str) -> str:
     for word in ("hip", "thigh", "calf"):
         if word in name:
@@ -222,13 +239,16 @@ def simulate(  # noqa: PLR0913, PLR0915 - the study's axes, each a dataclass; on
         ]
         home[k] = 0.0 if joint_class(name) == "hip" else 0.5 * (lo + hi)
     data.qpos[qpos_adr] = home
-    base_free = model.jnt_type[0] == mujoco.mjtJoint.mjJNT_FREE
-    body = (
-        mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
-        if base_free
-        else -1
-    )
-    mass = float(np.sum(model.body_mass))
+    # The floating base is the body the free joint moves, wherever the
+    # joint sits and whatever the body is called (a name lookup returned -1
+    # on a model whose root is not `base_link`, and the shake landed on the
+    # last body; review 2026-09-24).
+    free = free_joint_of(model)
+    base_free = free is not None
+    body = int(model.jnt_bodyid[free]) if base_free else -1
+    base_q = int(model.jnt_qposadr[free]) if base_free else 0
+    base_v = int(model.jnt_dofadr[free]) if base_free else 0
+    weight = float(np.sum(model.body_mass)) * float(-model.opt.gravity[2])
     mujoco.mj_forward(model, data)
 
     steps_per_control = round(servo.physics_hz / servo.control_hz)
@@ -261,7 +281,7 @@ def simulate(  # noqa: PLR0913, PLR0915 - the study's axes, each a dataclass; on
             data.xfrc_applied[body, :3] = [
                 shake.force_n * np.sin(w),
                 shake.force_n * np.cos(1.3 * w),
-                mass * 9.81 + shake.force_n * np.sin(0.7 * w),
+                weight + shake.force_n * np.sin(0.7 * w),
             ]
             data.xfrc_applied[body, 3:] = shake.torque_nm * np.array(
                 [np.sin(1.1 * w), np.cos(0.9 * w), np.sin(0.5 * w)]
@@ -272,9 +292,9 @@ def simulate(  # noqa: PLR0913, PLR0915 - the study's axes, each a dataclass; on
         torque[i] = data.actuator_force
         acceleration[i] = data.qacc[dof_adr]
         if base_free:
-            base_pose[i] = data.qpos[:7]
-            base_vel[i] = data.qvel[:6]
-            base_acc[i] = data.qacc[:6]
+            base_pose[i] = data.qpos[base_q : base_q + FREE_QPOS]
+            base_vel[i] = data.qvel[base_v : base_v + FREE_DOF]
+            base_acc[i] = data.qacc[base_v : base_v + FREE_DOF]
         for _ in range(steps_per_control):
             mujoco.mj_step(model, data)
 
