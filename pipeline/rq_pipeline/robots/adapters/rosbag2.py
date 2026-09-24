@@ -235,10 +235,20 @@ class Rosbag2Adapter:
     name = NAME
 
     def accepts(self, source: Path) -> bool:
+        """A rosbag2 store that carries a message type this adapter has a
+        layout for. Content, not suffix: another adapter reads the same
+        container for other robots' topics (`robot/rosbag_sqlite.py`),
+        and two adapters claiming every `.db3` would refuse them all."""
         source = Path(source)
         if source.is_dir():
-            return (source / METADATA_FILE).is_file() and any(source.glob(f"*{SUFFIX}"))
-        return source.is_file() and source.suffix == SUFFIX
+            if not (source / METADATA_FILE).is_file():
+                return False
+            files = sorted(source.glob(f"*{SUFFIX}"))
+        elif source.is_file() and source.suffix == SUFFIX:
+            files = [source]
+        else:
+            return False
+        return bool(files) and any(kind in LAYOUTS for kind in _topic_types(files))
 
     def read(self, source: Path) -> Recording:
         source = Path(source)
@@ -280,6 +290,21 @@ class Rosbag2Adapter:
 
 
 # -- the container: sqlite3 ----------------------------------------------------
+
+
+def _topic_types(files: list[Path]) -> set[str]:
+    """The message types the bag's `topics` table declares (a glance for
+    `accepts`, never the messages themselves); empty for a file that is
+    not a rosbag2 store."""
+    kinds: set[str] = set()
+    for path in files:
+        uri = f"file:{path.as_posix()}?mode=ro"
+        try:
+            with sqlite3.connect(uri, uri=True) as db:
+                kinds.update(kind for (kind,) in db.execute("SELECT type FROM topics"))
+        except sqlite3.DatabaseError:
+            return set()
+    return kinds
 
 
 def _read_files(

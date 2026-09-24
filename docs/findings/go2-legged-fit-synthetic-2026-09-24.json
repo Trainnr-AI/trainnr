@@ -1,0 +1,80 @@
+{
+ "id": "go2-legged-fit-synthetic-2026-09-24",
+ "claim": "The legged-joints method recovers what it is given: on the Go2 model with a per-joint truth table of armature, damping and Coulomb friction, a 20 s chirp under a motor-side PD law at 250 Hz through a 2^14-count encoder and 0.05 N*m torque noise, the torque-balance fit returns every one of the 36 terms within 3 % of the truth with the base fixed in the air (36/36) and 33/36 with the base floating and shaken by an external wrench through the recorded base state; the estimator choices that made it so are measured on the way: a centred difference at the tick reads armature 10 % high (forward difference over the tick with mid-tick states: within 1 %), an unsmoothed encoder velocity reads armature 20 % low (40 ms Savitzky-Golay: within 1 %), a hard sign column under a low-pass reads friction 16-23 % low (tanh(dq/0.45): within 1 %), a 6 Hz balance bandwidth reads armature 9 % high (15 Hz: within 3 %), and a 0.1 rad/s velocity gate reads friction 13 % high (1 rad/s: within 3 %).",
+ "date": "2026-09-24",
+ "repo_commit": "8600ac9-dirty",
+ "argv": [
+  "python -m unittest tests.test_torque_balance (SyntheticRecovery, both postures)",
+  "scratch synth_scan.py over cutoff {0, 15, 6} Hz x window {40, 80} ms x gate {0.1, 1.0} rad/s"
+ ],
+ "instrument": "mujoco-3.11.0+numpy-2.2.6+scipy-1.18.0+x86_64 (WSL2, the box), Python 3.12",
+ "outcome": {
+  "fixed_base": {
+   "within_3pct": 36,
+   "of": 36
+  },
+  "shaken_base": {
+   "within_3pct": 33,
+   "of": 36
+  },
+  "scan": {
+   "cutoff_0_win_0.04_gate_1.0": {
+    "armature_pct": -0.8,
+    "damping_pct": -0.2,
+    "frictionloss_pct": 1.2,
+    "within_3pct": "36/36"
+   },
+   "cutoff_15_win_0.04_gate_1.0": {
+    "armature_pct": 1.4,
+    "damping_pct": -0.1,
+    "frictionloss_pct": 0.7,
+    "within_3pct": "36/36"
+   },
+   "cutoff_6_win_0.04_gate_1.0": {
+    "armature_pct": 9.2,
+    "damping_pct": -0.8,
+    "frictionloss_pct": 3.9,
+    "within_3pct": "15/36"
+   },
+   "cutoff_0_win_0.04_gate_0.1": {
+    "armature_pct": 5.6,
+    "damping_pct": -3.0,
+    "frictionloss_pct": 12.7,
+    "within_3pct": "5/36"
+   }
+  },
+  "truth_by_class": {
+   "hip": [
+    0.008,
+    0.4,
+    0.3
+   ],
+   "thigh": [
+    0.012,
+    0.8,
+    0.5
+   ],
+   "calf": [
+    0.02,
+    1.2,
+    0.8
+   ],
+   "leg_spread": [
+    1.0,
+    1.1,
+    0.9,
+    1.05
+   ]
+  }
+ },
+ "inputs": {
+  "model": "unitree_rl_mjlab unitree_go2/xmls/go2.xml (the go2-walk bundle's source, stamp go2@5003bf617b5f)"
+ },
+ "artifacts": {},
+ "sources": {},
+ "protocol": "docs/e2e-research/26 (the synthetic identifiability rule), pipeline/rq_pipeline/robot/quadruped_synth.py",
+ "caveats": [
+  "the truth is MuJoCo's own passive terms under RK4; a real actuator's friction has a knee the smooth sign only models",
+  "the bootstrap intervals on clean data are narrower than the 0.5-1 % estimator bias, so 'cover the truth' is not the test; 'within 3 %' is"
+ ]
+}

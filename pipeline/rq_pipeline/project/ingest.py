@@ -20,18 +20,24 @@ from rq_pipeline.robots.capture import status as capture_state
 from rq_pipeline.robots.ingest import ingest as ingest_into
 
 
-def ingest(
+def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, whose robot, why
     project: Project,
     source: Path,
     *,
     name: str | None = None,
     adapter: str | None = None,
     provenance: Mapping[str, Any] | None = None,
+    basis: str | None = None,
 ) -> dict[str, Any]:
     """A source into the project's recordings, stamped; the record
     carries `stamp` and the recording's `path` relative to the project."""
     record = ingest_into(
-        project.recordings, source, name=name, adapter=adapter, provenance=provenance
+        project.recordings,
+        source,
+        name=name,
+        adapter=adapter,
+        provenance=provenance,
+        basis=basis,
     )
     out = Path(record["path"])
     return {

@@ -24,7 +24,7 @@ use crate::control::{
 };
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
-    summary_line, Artifact, Index, Job, Model, ORIGIN_PUBLIC_LOG, UNRECORDED,
+    summary_line, Artifact, Index, Job, Model, STATE_BASES, UNRECORDED,
 };
 use crate::widgets::{
     card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
@@ -831,9 +831,12 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         tokens.native_frame_stroke.color.linear_multiply(0.5),
                         ui.visuals().weak_text_color().linear_multiply(0.6),
                     )
-                } else if state.present && state.origin.as_deref() == Some(ORIGIN_PUBLIC_LOG) {
-                    // Proved by someone else's robot (a public log): outlined
-                    // in the accent, never the success fill — real, not ours.
+                } else if state.present
+                    && state.basis.as_deref().is_some_and(|b| b != STATE_BASES[0])
+                {
+                    // Proved on a basis that is not the operator's own robot (a
+                    // public log, a simulation): outlined in the accent, never
+                    // the success fill.
                     (
                         egui::Color32::TRANSPARENT,
                         tokens.highlight_color,
@@ -861,9 +864,9 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 // A frame never wraps itself in a wrapped row (only a label
                 // does), so the chip is measured first and the row broken
                 // when it would not fit — else it runs past the card.
-                let label = match state.origin.as_deref() {
-                    Some(origin @ ORIGIN_PUBLIC_LOG) if state.present => {
-                        format!("{} · {origin}", stage_label(&state.name))
+                let label = match state.basis.as_deref() {
+                    Some(basis) if state.present && basis != STATE_BASES[0] => {
+                        format!("{} · {basis}", stage_label(&state.name))
                     }
                     _ => stage_label(&state.name).to_owned(),
                 };
@@ -902,14 +905,24 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                                     .strong()
                                     .color(text_color),
                             );
+                            // A proof that is not the operator's own robot says so
+                            // on the chip, not only on hover: "public log", "simulation".
+                            if let Some(basis) = state.basis.as_deref() {
+                                if basis != crate::model::STATE_BASES[0] {
+                                    ui.label(
+                                        egui::RichText::new(basis)
+                                            .small()
+                                            .color(ui.visuals().weak_text_color()),
+                                    );
+                                }
+                            }
                         });
                     })
                     .response;
                 let mut hover = state.name.clone();
-                if let Some(origin) = &state.origin {
-                    hover.push_str("\nproved by a ");
-                    hover.push_str(origin);
-                    hover.push_str(": a real robot, not this project's own");
+                if let Some(basis) = &state.basis {
+                    hover.push_str("\nbasis: ");
+                    hover.push_str(basis);
                 }
                 if let Some(note) = &state.note {
                     hover.push_str("\nnot needed: ");

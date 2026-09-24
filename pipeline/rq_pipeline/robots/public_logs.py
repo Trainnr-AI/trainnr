@@ -9,7 +9,7 @@ state, and it is written down rather than guessed. Fetching lands under
 the cache (`runs/public-logs/<name>/`, or `$RQ_PUBLIC_LOGS_DIR`), never
 in the repository; a test that needs one skips by name when it is
 absent. Ingesting one stamps the recording with a provenance block whose
-origin is ORIGIN_PUBLIC_LOG, so the loop's telemetry stage says
+basis is BASIS_PUBLIC, so the loop's telemetry stage says
 "public log" and never "met": it is a real Go2, and not ours.
 
 The one entry today is the 12-minute Go2 walk YibinWu/leg-odometry
@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.paths import checkout
-from rq_pipeline.robots.recording import ORIGIN_PUBLIC_LOG, PROVENANCE_ORIGIN
+from rq_pipeline.robots.recording import BASIS_PUBLIC
 
 CACHE_ENV = "RQ_PUBLIC_LOGS_DIR"
 CACHE_RELATIVE = ("runs", "public-logs")
@@ -58,9 +58,11 @@ class PublicLog:
     licence: str  # the data's licence STATE, as found
     notes: tuple[str, ...] = ()
 
+    # Whose robot: every entry here is someone else's real robot.
+    basis: str = BASIS_PUBLIC
+
     def provenance(self) -> dict[str, Any]:
         return {
-            PROVENANCE_ORIGIN: ORIGIN_PUBLIC_LOG,
             "name": self.name,
             "robot": self.robot,
             "source": self.source,

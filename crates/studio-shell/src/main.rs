@@ -779,11 +779,9 @@ impl StudioShell {
                 let key = match keyframe.as_ref() {
                     Some(name) => {
                         let m = described()?;
-                        Some(
-                            m.keyframes.iter().position(|k| k == name).ok_or_else(|| {
-                                format!("no keyframe {name:?}; one of {:?}", m.keyframes)
-                            })? as u32,
-                        )
+                        Some(m.keyframes.iter().position(|k| k == name).ok_or_else(|| {
+                            format!("no keyframe {name:?}; one of {:?}", m.keyframes)
+                        })? as u32)
                     }
                     None => None,
                 };
@@ -800,8 +798,7 @@ impl StudioShell {
                 if on.is_some() && flag.is_none() && group.is_none() {
                     return Err("on needs flag or group".into());
                 }
-                if value.is_some() && actuator.is_none() && joint.is_none() && command.is_none()
-                {
+                if value.is_some() && actuator.is_none() && joint.is_none() && command.is_none() {
                     return Err("value needs actuator, joint or command".into());
                 }
                 if let Some(factor) = speed {
@@ -917,9 +914,11 @@ impl StudioShell {
                         }
                         // No kind named: the stream's first (geom, as it orders them).
                         let index = match kind.as_ref() {
-                            Some(kind) => m.groups.iter().position(|k| k == kind).ok_or_else(
-                                || format!("no group kind {kind:?}; one of {:?}", m.groups),
-                            )?,
+                            Some(kind) => {
+                                m.groups.iter().position(|k| k == kind).ok_or_else(|| {
+                                    format!("no group kind {kind:?}; one of {:?}", m.groups)
+                                })?
+                            }
                             None => 0,
                         };
                         let last = m.ngroup.saturating_sub(1);
@@ -983,7 +982,9 @@ impl StudioShell {
                 }
                 for (slider, index, value) in sliders {
                     match slider {
-                        viewport::SliderKind::Actuator => self.viewport.send_ctrl(index as u32, value),
+                        viewport::SliderKind::Actuator => {
+                            self.viewport.send_ctrl(index as u32, value)
+                        }
                         viewport::SliderKind::Joint => self.viewport.send_qpos(index as u32, value),
                         viewport::SliderKind::Twist => {} // never queued here: `command` sends twists
                     }
@@ -1199,7 +1200,9 @@ impl StudioShell {
         let name = query.as_ref().and_then(|q| q.timeline());
         let typ = name.and_then(|n| db.timelines().get(&n).map(|t| t.typ()));
         let at = query.as_ref().map(|q| q.at().as_i64());
-        let tip = name.and_then(|n| db.time_range_for(&n)).map(|r| r.max().as_i64());
+        let tip = name
+            .and_then(|n| db.time_range_for(&n))
+            .map(|r| r.max().as_i64());
         control::Live {
             at_tip: at.is_some() && at == tip,
             tip,

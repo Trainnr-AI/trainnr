@@ -22,34 +22,39 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.robots.adapter import detect, resolve
-from rq_pipeline.robots.recording import Recording, origin_of
+from rq_pipeline.robots.recording import BASES, Recording
 
 RAW_DIR = "raw"  # the source file as received, inside the recording
 NAME_FORBIDDEN = "@/"
 
 
-def ingest(
+def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, whose robot, why
     recordings: Path,
     source: Path,
     *,
     name: str | None = None,
     adapter: str | None = None,
     provenance: Mapping[str, Any] | None = None,
+    basis: str | None = None,
 ) -> dict[str, Any]:
     """Read `source` (with `adapter`, or the one that accepts it) and
-    write it under `recordings`. `provenance` names whose robot it was
-    when not the operator's own (a public log: its origin, source, url,
-    licence, robot); refused by name when its origin is not a known
-    word. Refuses to overwrite an existing recording of the same name —
-    re-ingest under another name or remove it first. Returns the record
-    with the recording's directory under `path`."""
+    write it under `recordings`. `basis` says whose robot it was (one of
+    `BASES`: the operator's own, a public log, a simulation) and
+    overrides the adapter's default; `provenance` carries the facts
+    behind it (a public log's source, url, licence, robot). Refused by
+    name when the basis is not a known word. Refuses to overwrite an
+    existing recording of the same name — re-ingest under another name
+    or remove it first. Returns the record with the recording's
+    directory under `path`."""
     source = Path(source)
     if not source.exists():
         raise FileNotFoundError(f"no source at {source}")
-    if provenance:
-        origin_of(provenance)
+    if basis is not None and basis not in BASES:
+        raise ValueError(f"recording basis {basis!r}; known: {BASES}")
     entry = resolve(adapter) if adapter else detect(source)
     recording: Recording = entry.build().read(source)
+    if basis is not None:
+        recording = replace(recording, basis=basis)
     if provenance:
         recording = replace(recording, provenance=dict(provenance))
     label = name or source.stem
@@ -78,5 +83,6 @@ def ingest(
         "channels": [asdict(c) for c in manifest.channels],
         "census": manifest.census,
         "notes": manifest.notes,
+        "basis": manifest.basis,
         "provenance": manifest.provenance,
     }

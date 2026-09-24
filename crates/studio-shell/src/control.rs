@@ -877,7 +877,11 @@ mod tests {
         };
         control.watch_live(&back);
         control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
-        assert_eq!(control.watch_live(&back), Some(back.clone()), "a scrub back");
+        assert_eq!(
+            control.watch_live(&back),
+            Some(back.clone()),
+            "a scrub back"
+        );
         control.watch_live(&riding);
         control.live_moved_at = Some(Instant::now() - SCRUB_SETTLE * 2);
         assert_eq!(

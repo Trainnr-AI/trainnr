@@ -27,7 +27,9 @@ import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
+from rq_pipeline.bundles.basis import BASES
 from rq_pipeline.bundles.hashing import require_stamp, stamp
 from rq_pipeline.robot.identify import (
     DEFAULT_PINNED_FRACTION,
@@ -82,6 +84,12 @@ class FitRecord:
     code: str | None = None
     units: dict[str, str] | None = None
     pinned_criterion: str | None = None
+    # 2026-09-24, the legged fit on public logs: whose robot the data was
+    # (`robots.recording.BASES`), where it came from, and how well each
+    # part fitted. None on records written before.
+    basis: str | None = None
+    provenance: dict[str, Any] | None = None
+    metrics: dict[str, Any] | None = None
 
     def to_json(self) -> str:
         # Strict JSON: `Infinity` is not RFC 8259 and broke JSON.parse
@@ -102,6 +110,9 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
     recording: str,
     anchor: str,
     units: dict[str, str],
+    basis: str | None = None,
+    provenance: dict[str, Any] | None = None,
+    metrics: dict[str, Any] | None = None,
 ) -> Path:
     """Record a fit into the bundle. One file per recording; refitting the
     same recording overwrites (git history keeps the old fit)."""
@@ -125,6 +136,8 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
             f"every parameter needs a units entry; missing {missing_units} — "
             "a bare float is not a measurement"
         )
+    if basis is not None and basis not in BASES:
+        raise ValueError(f"basis must be one of {BASES}, got {basis!r}")
     bundle = Path(bundle_dir)
     profile_path = bundle / "profile.json"
     model_files = sorted(bundle.glob("*.xml"))
@@ -145,6 +158,9 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
             f"half_width <= {DEFAULT_PINNED_FRACTION} * allowed_range "
             "(range-relative; a pinned interval can still span zero)"
         ),
+        basis=basis,
+        provenance=dict(provenance) if provenance is not None else None,
+        metrics=dict(metrics) if metrics is not None else None,
     )
     fits = Path(bundle_dir) / FITS_DIRECTORY
     fits.mkdir(parents=True, exist_ok=True)

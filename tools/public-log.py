@@ -52,6 +52,7 @@ def main() -> int:
         name=args.recording or entry.name,
         adapter=entry.adapter,
         provenance=entry.provenance(),
+        basis=entry.basis,
     )
     print(json.dumps({k: v for k, v in out.items() if k != "channels"}, indent=1))
     return 0

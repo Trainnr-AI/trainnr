@@ -238,6 +238,14 @@ class ProjectContracts(unittest.TestCase):
             control.STATE_SCHEMA,
         )
 
+    def test_the_state_bases_agree(self) -> None:
+        from rq_pipeline.bundles.basis import BASES  # noqa: PLC0415
+
+        listed = constant(
+            MODEL_RS, r"pub const STATE_BASES: \[&str; \d+\] = \[([^\]]+)\];"
+        )
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed)), BASES)
+
     def test_the_files_and_the_environment_agree(self) -> None:
         from rq_pipeline.project import control, locate, present  # noqa: PLC0415
 
@@ -271,16 +279,11 @@ class ProjectContracts(unittest.TestCase):
             control.SCREENSHOT_WIDTH,
         )
 
-    def test_the_origin_word_and_the_state_fields_agree(self) -> None:
-        """The strip's "public log" is the recording's own word, and the
-        Rust State reads every field the index writes."""
+    def test_the_state_fields_agree(self) -> None:
+        """The Rust State reads every field the index writes (the basis
+        word's vocabulary is pinned by `test_the_state_bases_agree`)."""
         from rq_pipeline.project import index  # noqa: PLC0415
-        from rq_pipeline.robots import recording  # noqa: PLC0415
 
-        self.assertEqual(
-            constant(MODEL_RS, r'pub const ORIGIN_PUBLIC_LOG: &str = "([^"]+)";'),
-            recording.ORIGIN_PUBLIC_LOG,
-        )
         block = MODEL_RS.split("pub struct State {", 1)[1].split("\n}\n", 1)[0]
         rust = set(re.findall(r"pub (\w+):", block))
         python = {f.name for f in dataclasses.fields(index.State)}

@@ -30,11 +30,12 @@ from rq_pipeline.robots.adapters import rosbag2
 from rq_pipeline.robots.cdr import Reader, Writer, parse_msg
 from rq_pipeline.robots.ingest import ingest
 from rq_pipeline.robots.recording import (
+    BASIS_OWN,
+    BASIS_PUBLIC,
     IMU_ORIENTATION,
     JOINT_EFFORT,
     JOINT_POSITION,
     JOINT_VELOCITY,
-    ORIGIN_PUBLIC_LOG,
     Recording,
 )
 
@@ -282,36 +283,72 @@ class TheProvenance(unittest.TestCase):
             bag = make_bag(Path(tmp) / "bag", seconds=0.2)
             project = create_project(Path(tmp) / "p", "p", "test")
             out = ingest_into_project(
-                project, bag, name="public", provenance=entry.provenance()
+                project,
+                bag,
+                name="public",
+                provenance=entry.provenance(),
+                basis=entry.basis,
             )
-            self.assertEqual(out["provenance"]["origin"], ORIGIN_PUBLIC_LOG)
+            self.assertEqual(out["basis"], BASIS_PUBLIC)
             rec = Recording.read(project.root / out["path"])
             self.assertEqual(rec.provenance["robot"], "go2")
             self.assertIn("unlabelled", rec.provenance["licence"])
             index = index_project(project)
         telemetry = next(s for s in index.states if s.name == "telemetry recorded")
         self.assertTrue(telemetry.present)
-        self.assertEqual(telemetry.origin, ORIGIN_PUBLIC_LOG)
+        self.assertEqual(telemetry.basis, BASIS_PUBLIC)
         recording = index.by_kind(Kind.RECORDING)[0]
-        self.assertEqual(recording.summary["origin"], ORIGIN_PUBLIC_LOG)
+        self.assertEqual(recording.summary["basis"], BASIS_PUBLIC)
         self.assertEqual(recording.summary["robot"], "go2")
         self.assertAlmostEqual(recording.summary["rate_hz"], RATE_HZ, delta=1)
 
-    def test_the_operators_own_recording_has_no_origin_word(self) -> None:
+    def test_the_operators_own_recording_wears_no_word_on_the_chip(self) -> None:
+        """A bag says nothing about whose robot it was; the operator who
+        ingests their own says so, and the strip shows the stage plain."""
         with tempfile.TemporaryDirectory() as tmp:
             bag = make_bag(Path(tmp) / "bag", seconds=0.2)
             project = create_project(Path(tmp) / "p", "p", "test")
-            ingest_into_project(project, bag, name="own")
+            ingest_into_project(project, bag, name="own", basis=BASIS_OWN)
             index = index_project(project)
         telemetry = next(s for s in index.states if s.name == "telemetry recorded")
         self.assertTrue(telemetry.present)
-        self.assertIsNone(telemetry.origin)
+        self.assertEqual(telemetry.basis, BASIS_OWN)
+        self.assertNotIn("basis", index.by_kind(Kind.RECORDING)[0].summary)
 
-    def test_an_unknown_origin_is_refused_by_name(self) -> None:
+    def test_an_unknown_basis_is_refused_by_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bag = make_bag(Path(tmp) / "bag", seconds=0.1)
             with self.assertRaisesRegex(ValueError, "borrowed"):
-                ingest(Path(tmp) / "r", bag, provenance={"origin": "borrowed"})
+                ingest(Path(tmp) / "r", bag, basis="borrowed")
+
+
+class TwoReadersOneContainer(unittest.TestCase):
+    """Two adapters read rosbag2's sqlite store — this one for Unitree's
+    message types, `robot/rosbag_sqlite.py` for other robots' profiles —
+    and they split a bag by its CONTENT, so `detect` names exactly one
+    (a suffix claim by both refused every bag, found at the merge of
+    2026-09-24)."""
+
+    def test_a_unitree_bag_detects_as_this_adapter_and_not_the_other(self) -> None:
+        from rq_pipeline.robot.rosbag_sqlite import Rosbag2Sqlite  # noqa: PLC0415
+        from rq_pipeline.robots.adapter import detect  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bag = make_bag(Path(tmp) / "bag", seconds=0.1)
+            self.assertEqual(detect(bag).name, "rosbag2")
+            db3 = next(bag.glob("*.db3"))
+            self.assertEqual(detect(db3).name, "rosbag2")
+            self.assertFalse(Rosbag2Sqlite().accepts(db3))
+
+    def test_a_file_that_is_no_bag_is_claimed_by_neither(self) -> None:
+        from rq_pipeline.robot.rosbag_sqlite import Rosbag2Sqlite  # noqa: PLC0415
+        from rq_pipeline.robots.adapters.rosbag2 import Rosbag2Adapter  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            junk = Path(tmp) / "x.db3"
+            junk.write_bytes(b"not a database")
+            self.assertFalse(Rosbag2Adapter().accepts(junk))
+            self.assertFalse(Rosbag2Sqlite().accepts(junk))
 
 
 class TheRegistry(unittest.TestCase):
@@ -320,7 +357,7 @@ class TheRegistry(unittest.TestCase):
             self.assertGreater(entry.bytes, 0)
             self.assertEqual(len(entry.sha256), 64)
             self.assertTrue(entry.licence and entry.robot and entry.recorded)
-            self.assertEqual(entry.provenance()["origin"], ORIGIN_PUBLIC_LOG)
+            self.assertEqual(entry.basis, BASIS_PUBLIC)
         self.assertIn("go2-leg-odometry", [r["name"] for r in public_logs.listing()])
 
     def test_a_download_of_the_wrong_size_is_refused_and_deleted(self) -> None:

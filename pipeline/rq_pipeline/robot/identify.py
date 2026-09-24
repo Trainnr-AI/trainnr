@@ -88,6 +88,12 @@ class IdentifiedParameter:
     half_width: float
     allowed_range: float
     pinned: bool
+    # The estimate sits on its declared search bound (2026-09-24): the
+    # data pushed it there and could not go further. The bootstrap of
+    # docs/e2e-research/72 §7 found the actuator bundles' check knew only
+    # the observed rails and missed an exponent at its floor; a method
+    # that declares its bounds says so here, per parameter.
+    at_bound: bool = False
 
     @property
     def lower(self) -> float:
@@ -120,6 +126,8 @@ class IdentificationResult:
         ]
         for parameter in self.parameters:
             verdict = "pinned" if parameter.pinned else "NOT PINNED"
+            if parameter.at_bound:
+                verdict += ", AT BOUND"
             lines.append(
                 f"  {parameter.name}: {parameter.estimate:.6g} "
                 f"± {parameter.half_width:.3g} [{verdict}]"

@@ -155,15 +155,16 @@ pub struct State {
     pub needed: bool,
     #[serde(default)]
     pub note: Option<String>,
-    /// Whose robot proved the stage when not the operator's own: the
-    /// index's `ORIGIN_PUBLIC_LOG` word. Shown on the chip instead of
-    /// "met" — a public log is a real robot, and not ours.
+    /// Whose robot the proof rests on: one of `STATE_BASES`, None when
+    /// the stage has no basis. A fit of a public log lights Sys ID and
+    /// the chip says so (2026-09-24).
     #[serde(default)]
-    pub origin: Option<String>,
+    pub basis: Option<String>,
 }
 
-/// The one origin word the strip knows (`robots/recording.py::ORIGIN_PUBLIC_LOG`).
-pub const ORIGIN_PUBLIC_LOG: &str = "public log";
+/// Mirrors `rq_pipeline.robots.recording.BASES`, strongest first; pinned
+/// by `tests/test_studio_mirrors.py`.
+pub const STATE_BASES: [&str; 4] = ["own robot", "public log", "simulation", "unknown"];
 
 fn yes() -> bool {
     true

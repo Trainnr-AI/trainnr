@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.basis import BASES, BASIS_OWN, BASIS_UNKNOWN
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.attribution import read_attribution
@@ -43,6 +44,7 @@ from rq_pipeline.project.kinds import (
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
+    FITS_DIR,
     IDENTITY_FILE,
     POLICY_FILE,
     RECORDING_FILE,
@@ -57,11 +59,8 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
-from rq_pipeline.robots.recording import (
-    JOINT_POSITION,
-    ORIGIN_OWN,
-    PROVENANCE_ORIGIN,
-)
+from rq_pipeline.robot.fit_record import SPREAD_FILENAME as SPREAD_FILE
+from rq_pipeline.robots.recording import JOINT_POSITION
 from rq_pipeline.scenes.record import (
     capture_failed,
     capture_in_progress,
@@ -150,14 +149,11 @@ class State:
     # reinforcement-learning loop has no dataset); `note` says why.
     needed: bool = True
     note: str | None = None
-    # Whose robot proved the stage when not the operator's own: ORIGIN_PUBLIC_LOG
-    # when every proof is a public log. The Studio shows the word instead of
-    # "met"; None for the operator's own.
-    origin: str | None = None
-    # Whose robot proved the stage when not the operator's own: ORIGIN_PUBLIC_LOG
-    # when every proof is a public log. The Studio shows the word instead of
-    # "met"; None for the operator's own.
-    origin: str | None = None
+    # Whose robot the proof rests on (`robots.recording.BASES`, the
+    # strongest among the proving records): "own robot", "public log",
+    # "simulation". None for a stage that has no basis (2026-09-24: a fit
+    # of a public Go2 log lights Sys ID and must say so).
+    basis: str | None = None
 
 
 @dataclass(frozen=True)
@@ -450,12 +446,11 @@ def _summary_recording(path: Path) -> dict[str, Any]:
     out = _take(raw, ("adapter", "source", "duration_s", "collection"))
     if "channels" in raw:
         out["channels"] = len(raw["channels"])
-    provenance = raw.get("provenance") or {}
-    origin = str(provenance.get(PROVENANCE_ORIGIN, ORIGIN_OWN))
-    if origin != ORIGIN_OWN:
+    basis = raw.get("basis") or BASIS_UNKNOWN
+    if basis != BASIS_OWN:
         # Whose robot: a public log names it; the operator's own says nothing.
-        out["origin"] = origin
-        out.update(_take(provenance, ("robot", "licence")))
+        out["basis"] = basis
+        out.update(_take(raw.get("provenance") or {}, ("robot", "licence")))
     rate = _measured_rate(raw)
     if rate is not None:
         out["rate_hz"] = rate
@@ -707,7 +702,8 @@ def _summary_robot(p: Path) -> dict[str, Any]:
     )
 
     out: dict[str, Any] = {
-        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
+        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith(".")),
+        "fit_bases": fit_bases(p / FITS_DIR),
     }
     audit = read_bundle_record(p).get(AUDIT_KEY)
     if audit and audit.get("summary"):
@@ -751,21 +747,61 @@ def _loop_of(artifacts: list[Artifact]) -> str:
     return ""
 
 
+def fit_bases(fits: Path) -> list[str]:
+    """The `basis` words of the fit records under `fits`, distinct, in
+    BASES order; a record written before the field counts as unknown."""
+    import json  # noqa: PLC0415
+
+    if not fits.is_dir():
+        return []
+    found = set()
+    for path in sorted(fits.glob("*.json")):
+        if path.name == SPREAD_FILE:
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        found.add(raw.get("basis") or BASIS_UNKNOWN)
+    return [basis for basis in BASES if basis in found]
+
+
+def strongest_basis(bases: list[str]) -> str | None:
+    """The first of BASES present: an own-robot fit outranks a public
+    log, which outranks a simulation."""
+    return next((basis for basis in BASES if basis in bases), None)
+
+
 def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
     by_kind: dict[str, list[str]] = {}
     for a in artifacts:
         by_kind.setdefault(a.kind, []).append(a.stamp)
     skipped = NOT_NEEDED.get(loop, {})
-    # A robot bundle that carries fit records proves identification too.
+    # A robot bundle that carries fit records proves identification too,
+    # and its records say whose robot they measured.
     states: list[State] = []
     for name, kind in STATES:
         proof = list(by_kind.get(kind.value, []))
-        if kind is Kind.FIT and not proof:
-            proof = [
-                a.stamp
+        basis = None
+        if kind is Kind.FIT:
+            carriers = [
+                a
                 for a in artifacts
                 if a.kind == Kind.ROBOT.value and "fits" in a.summary.get("files", [])
             ]
+            if not proof:
+                proof = [a.stamp for a in carriers]
+            found = [b for a in carriers for b in a.summary.get("fit_bases", [])]
+            basis = strongest_basis(found) if proof else None
+        elif proof:
+            # A recording (or any proving artifact) says whose robot it was;
+            # one that says nothing is the operator's own.
+            found = [
+                str(a.summary.get("basis", BASIS_OWN))
+                for a in artifacts
+                if a.kind == kind.value and a.stamp in proof
+            ]
+            basis = strongest_basis(found)
         states.append(
             State(
                 name=name,
@@ -773,20 +809,7 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
                 present=bool(proof),
                 needed=name not in skipped,
                 note=skipped.get(name),
-                origin=_origin(artifacts, kind, proof),
+                basis=basis,
             )
         )
     return states
-
-
-def _origin(artifacts: list[Artifact], kind: Kind, proof: list[str]) -> str | None:
-    """The one origin every proving artifact shares, when it is not the
-    operator's own; None otherwise (own, mixed, or nothing proved)."""
-    origins = {
-        a.summary.get("origin", ORIGIN_OWN)
-        for a in artifacts
-        if a.kind == kind.value and a.stamp in proof
-    }
-    if len(origins) == 1 and ORIGIN_OWN not in origins:
-        return str(next(iter(origins)))
-    return None
