@@ -980,3 +980,19 @@ reference's rated PD is the declared point; an identified interval
 around it is what a check would judge against), then `check_drift` on
 every fresh recording. The strip's Sys ID and Telemetry flags are the
 same gap seen from the other end.
+
+**2026-09-24, the method exists and has run on real Go2s — not ours.**
+`legged-joints` (`pipeline/rq_pipeline/robot/legged_fit.py`) fits
+every hinge's armature, damping and Coulomb friction from a log of
+joint position, velocity and torque against the bundle's own MJCF, with
+bootstrap intervals, pinned verdicts and bound flags; proved on the
+Go2 model with a known truth (36/36 within 3 %,
+`go2-legged-fit-synthetic-2026-09-24`), then run through the doors on
+IIT's in-air chirp (31/36 pinned, 91-99 % explained) and DFKI's field
+bag (13/36, 0-51 %: a walking log under someone else's controller is
+not a chirp, and the record says so per joint;
+`go2-legged-fit-public-logs-2026-09-24`). The stage lights with the
+word "public log" beside it (`robots/recording.BASES`, the Studio's
+chip), and keeps that word until a recording of this robot exists. A
+drift check on the Go2 now has a method to run and still no telemetry
+of its own to run on.
