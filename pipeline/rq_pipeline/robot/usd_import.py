@@ -1,0 +1,770 @@
+"""A robot authored in USD (Isaac Sim, Omniverse) into a bundle.
+
+Newton reads the stage (every UsdPhysics joint, mass and collider, the
+`mjc:`, `newton:` and PhysX vendor schemas, mimics and loop closures)
+and its MuJoCo solver bridges the model to an MjSpec; measured on the
+Robotiq 2F-85 the bridge keeps every joint range and mass of the USD
+layer (docs/e2e-research/77 §4). This module is what the bridge does
+not do: it refuses a stage a missing or empty layer would refuse from
+deep inside the library, selects the variants the caller names, renames
+the prim paths Newton writes into leaf names, moves the inline convex
+hulls into files and puts the USD's own visual meshes beside them, adds
+the sensors the harness observes by contract and a `home` keyframe,
+gives every position servo the range of its joint, and records where
+all of it came from. The written MJCF is compiled from its file — the
+file is the bundle's truth, never the spec in memory.
+
+Optional extra: `usd` (Newton's importer) beside `gpu` (mujoco_warp,
+which Newton's solver module imports even when it steps on the CPU);
+a machine without them is refused with the install line.
+"""
+
+from __future__ import annotations
+
+import importlib.metadata
+import importlib.util
+import platform
+import tempfile
+import warnings
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from rq_pipeline.bundles.bundle import source_locator, write_bundle_record
+from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.robot.asset_fetch import read_marker
+from rq_pipeline.robot.onboarding import USD_SOURCE, model_source
+from rq_pipeline.scenes.record import UNRECORDED
+
+USD_SUFFIXES = (".usd", ".usda", ".usdc", ".usdz")
+USD_EXTRA = "usd"
+# The modules the reader needs and the extra that installs each; the
+# refusal names the missing one and its line.
+REQUIRED_MODULES: dict[str, str] = {
+    "pxr": "uv sync --extra usd",
+    "newton": "uv sync --extra usd",
+    "newton_usd_schemas": "uv sync --extra usd",
+    "mujoco_warp": "uv sync --extra gpu (Newton's solver module imports it)",
+}
+DARWIN_LINE = (
+    "the gpu extra excludes macOS; import on a Linux or Windows machine "
+    "and pull the bundle it writes — the bundle runs everywhere"
+)
+
+NEWTON_VERSION_WARNING = "MuJoCo dependency version mismatch"
+
+ROOT_FIXED = (
+    "fixed"  # welded to the world: a gripper on a bench, or attached under an arm
+)
+ROOT_FREE = "free"  # a free joint at the root: a body that falls
+ROOT_KINDS = (ROOT_FIXED, ROOT_FREE)
+
+ASSETS_DIR = "assets"
+HOME_KEY = "home"
+HULL_WORD = "hull"
+VISUAL_WORD = "visual"
+DRIVE_WORD = "drive"
+LICENSE_FILE = "LICENSE"
+# Menagerie's group convention: 2 visual, 3 collision.
+VISUAL_GROUP = 2
+COLLISION_GROUP = 3
+VISUAL_RGBA = (0.55, 0.55, 0.6, 1.0)
+# The licence a text declares, by the phrase its first lines carry.
+LICENSE_PHRASES: dict[str, str] = {
+    "Attribution 4.0 International": "CC-BY-4.0",
+    "Apache License": "Apache-2.0",
+    "BSD 3-Clause": "BSD-3-Clause",
+    "BSD 2-Clause": "BSD-2-Clause",
+    "MIT License": "MIT",
+}
+LICENSE_CANDIDATES = (
+    "PACKAGE-LICENSES/LICENSE",
+    "LICENSE",
+    "LICENSE.txt",
+    "LICENSE.md",
+)
+# The option fields Newton's bridge sets from ITS defaults, not from the
+# stage (a stage without a physics scene declares none): reset to
+# MuJoCo's, so the bundle states only what the asset and the caller said.
+NEWTON_OPTION_FIELDS = (
+    "integrator",
+    "enableflags",
+    "disableflags",
+    "ls_tolerance",
+    "ccd_tolerance",
+    "sleep_tolerance",
+)
+# The USD attribute that carries a joint's authored position (degrees for
+# a revolute joint), when the asset states one.
+JOINT_STATE_ATTRIBUTE = "state:angular:physics:position"
+
+
+@dataclass(frozen=True)
+class GripOptions:
+    """What Menagerie's 2F-85 and Robotiq's own MuJoCo scripts declare at
+    runtime and the USD does not carry: an elliptic cone with a high
+    impedance ratio, for grip without slip. Declared into the bundle
+    only when the caller asks."""
+
+    impratio: float = 10.0
+    cone: str = "elliptic"
+
+
+GRIP_OPTIONS = GripOptions()
+
+
+@dataclass(frozen=True)
+class ImportSettings:
+    """What the caller decides about an import; everything else comes
+    from the stage."""
+
+    variants: Mapping[str, str] = field(default_factory=dict)
+    root: str = ROOT_FIXED
+    mesh_maxhullvert: int = 64  # Newton's default, named so the record carries it
+    grip_options: bool = False
+
+    def __post_init__(self) -> None:
+        if self.root not in ROOT_KINDS:
+            raise ValueError(f"root is one of {ROOT_KINDS}, got {self.root!r}")
+
+
+@dataclass(frozen=True)
+class UsdRead:
+    """What Newton read and wrote: the bridge's MJCF text and the prim
+    paths behind each element."""
+
+    xml: str
+    bodies: Mapping[str, int]
+    joints: Mapping[str, int]
+    shapes: Mapping[str, int]
+    shape_scale: Mapping[str, tuple[float, float, float]]
+    census: Mapping[str, int]
+    versions: Mapping[str, str]
+    variants: Mapping[str, str]
+
+
+class UsdLayerError(FileNotFoundError):
+    """A layer the stage composes is missing or empty; named."""
+
+
+def missing_line(system: str | None = None) -> str | None:
+    """The refusal when this interpreter cannot read USD: the first
+    missing module and its install line, else None."""
+    system = system or platform.system()
+    for module, line in REQUIRED_MODULES.items():
+        if importlib.util.find_spec(module) is None:
+            darwin = module == "mujoco_warp" and system == "Darwin"
+            return f"USD import needs {module}: {DARWIN_LINE if darwin else line}"
+    return None
+
+
+def versions() -> dict[str, str]:
+    """The reader's own versions, for the record."""
+    out = {}
+    for package in ("newton", "usd-core", "newton-usd-schemas", "warp-lang", "mujoco"):
+        try:
+            out[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            out[package] = UNRECORDED
+    return out
+
+
+# -- the stage ----------------------------------------------------------
+
+SCHEMA_PACKAGE = "newton_usd_schemas"
+
+
+SCHEMA_WITNESS = "NewtonMimicAPI"  # a Newton API type pxr knows only through the plugin
+POISONED_LINE = (
+    "pxr's schema registry was built in this process before Newton's USD "
+    f"schemas were registered ({SCHEMA_WITNESS} is unknown to it): a stage "
+    "opened through pxr directly, earlier, did that. pxr builds the registry "
+    "once, so import in a fresh process (tools/import-usd.py, or the Studio's "
+    "door) — an import here would read every mimic as nothing"
+)
+
+
+def register_schemas() -> None:
+    """Newton's USD schema plugin (`mjc:`, `newton:` API schemas) into
+    pxr's plugin registry BEFORE any stage is opened in this process,
+    and a refusal when it is too late. pxr builds its schema registry
+    once, on first use: a stage opened earlier — a plain look at the
+    file, a refused variant — left the registry without
+    `NewtonMimicAPI`, and every later import in that process read the
+    asset's mimic as nothing, silently (2026-09-24, found by the test
+    order). Every pxr entry point here calls this first; a process
+    already poisoned is refused by name rather than read wrong."""
+    if importlib.util.find_spec(SCHEMA_PACKAGE) is None:
+        return  # `missing_line` names the install line
+    importlib.import_module(SCHEMA_PACKAGE)  # its import registers the plugin
+    from pxr import Tf, Usd  # noqa: PLC0415
+
+    known = Usd.SchemaRegistry().GetTypeFromSchemaTypeName(SCHEMA_WITNESS)
+    if not known or known == Tf.Type.Unknown:
+        raise RuntimeError(POISONED_LINE)
+
+
+def check_layers(root: Path) -> list[Path]:
+    """Every layer the root composes (sublayers, references, payloads,
+    recursively), each present and non-empty; refuses the first that is
+    not, by name, before the stage opens — an empty sublayer is a
+    composition error that refuses everything (2026-09-24)."""
+    register_schemas()
+    from pxr import Sdf  # noqa: PLC0415
+
+    seen: list[Path] = []
+    pending = [Path(root)]
+    while pending:
+        path = pending.pop()
+        if path in seen:
+            continue
+        if not path.is_file():
+            raise UsdLayerError(f"layer {path} is missing (composed by {root.name})")
+        if path.stat().st_size == 0:
+            raise UsdLayerError(
+                f"layer {path} is empty (0 bytes; composed by {root.name})"
+            )
+        seen.append(path)
+        if path.suffix == ".usdz":
+            continue  # a package: checked as one file
+        layer = Sdf.Layer.FindOrOpen(str(path))
+        if layer is None:
+            raise UsdLayerError(f"layer {path} does not open as USD")
+        for dependency in layer.GetCompositionAssetDependencies():
+            if dependency:  # an empty asset path is a reference within the layer
+                pending.append(Path(layer.ComputeAbsolutePath(dependency)))
+    return seen
+
+
+def select_variants(stage: Any, variants: Mapping[str, str]) -> dict[str, str]:
+    """Apply the caller's variant selections on the default prim, in the
+    stage's SESSION layer: the asset's own layer stays as read, so two
+    stages over one file in one process never see each other's choice
+    (authored into the shared root layer, a PhysX selection outlived
+    its stage and the next Newton import lost its mimic, 2026-09-24).
+    Refuses an unknown set or choice naming what exists. Returns every
+    set's selection after the choice (the record carries them all)."""
+    from pxr import Usd  # noqa: PLC0415
+
+    prim = stage.GetDefaultPrim()
+    if not prim:
+        raise ValueError("the stage has no default prim to select variants on")
+    sets = prim.GetVariantSets()
+    names = list(sets.GetNames())
+    with Usd.EditContext(stage, stage.GetSessionLayer()):
+        for name, choice in variants.items():
+            if name not in names:
+                raise ValueError(f"no variant set {name!r}; the stage has {names}")
+            one = sets.GetVariantSet(name)
+            choices = list(one.GetVariantNames())
+            if choice not in choices:
+                raise ValueError(f"variant set {name!r} has {choices}, not {choice!r}")
+            one.SetVariantSelection(choice)
+    return {name: sets.GetVariantSet(name).GetVariantSelection() for name in names}
+
+
+def open_stage(path: Path, variants: Mapping[str, str]) -> tuple[Any, dict[str, str]]:
+    """The composed stage with the variants applied, and the selections."""
+    register_schemas()
+    from pxr import Usd  # noqa: PLC0415
+
+    check_layers(path)
+    stage = Usd.Stage.Open(str(path))
+    return stage, select_variants(stage, variants)
+
+
+# -- Newton -------------------------------------------------------------
+
+
+def read_usd(path: Path, settings: ImportSettings) -> UsdRead:
+    """The stage through Newton's importer and its MuJoCo bridge: the
+    MJCF text Newton writes, with the prim path behind every element."""
+    line = missing_line()
+    if line:
+        raise ImportError(line)
+    import newton  # noqa: PLC0415
+    from newton.solvers import SolverMuJoCo  # noqa: PLC0415
+    from newton.usd import (  # noqa: PLC0415
+        SchemaResolverMjc,
+        SchemaResolverNewton,
+        SchemaResolverPhysx,
+    )
+
+    path = Path(path)
+    stage, selected = open_stage(path, settings.variants)
+    builder = newton.ModelBuilder()
+    SolverMuJoCo.register_custom_attributes(builder)
+    result = builder.add_usd(
+        stage,
+        schema_resolvers=[
+            SchemaResolverMjc(),
+            SchemaResolverPhysx(),
+            SchemaResolverNewton(),
+        ],
+        collapse_fixed_joints=False,
+        mesh_maxhullvert=settings.mesh_maxhullvert,
+    )
+    if builder.joint_count == 0:
+        raise ValueError(
+            f"{path.name} with variants {selected} has no joints "
+            "(Newton's bridge needs one); pick a physics variant"
+        )
+    census = {
+        "bodies": int(builder.body_count),
+        "joints": int(builder.joint_count),
+        "shapes": int(builder.shape_count),
+        "dofs": int(builder.joint_dof_count),
+    }
+    model = builder.finalize(device="cpu")
+    with tempfile.TemporaryDirectory() as tmp, warnings.catch_warnings():
+        # Newton 1.6 declares mujoco 3.12 and warns at every bridge on our
+        # locked 3.11.0; the bridge measured equal to the USD layer on
+        # 3.11.0 (docs/77 §4) and the versions are in the record, so the
+        # warning says nothing the bundle does not.
+        warnings.filterwarnings("ignore", message=NEWTON_VERSION_WARNING)
+        out = Path(tmp) / "newton.xml"
+        SolverMuJoCo(model, save_to_mjcf=str(out), use_mujoco_cpu=True)
+        xml = out.read_text(encoding="utf-8")
+    return UsdRead(
+        xml=xml,
+        bodies=dict(result["path_body_map"]),
+        joints=dict(result["path_joint_map"]),
+        shapes=dict(result["path_shape_map"]),
+        shape_scale={
+            k: tuple(v) for k, v in result.get("path_shape_scale", {}).items()
+        },
+        census=census,
+        versions=versions(),
+        variants=selected,
+    )
+
+
+# -- the writer ---------------------------------------------------------
+
+
+def leaf(prim_path: str) -> str:
+    return prim_path.rstrip("/").rsplit("/", 1)[-1]
+
+
+def unique(name: str, taken: set[str]) -> str:
+    """`name`, or `name_2`, `name_3`… when a leaf repeats."""
+    candidate, n = name, 1
+    while candidate in taken:
+        n += 1
+        candidate = f"{name}_{n}"
+    taken.add(candidate)
+    return candidate
+
+
+def _newton_name(prim_path: str) -> str:
+    return prim_path.replace("/", "_")
+
+
+def rename_elements(spec: Any, read: UsdRead) -> dict[str, str]:
+    """Bodies and joints from Newton's `_path_with_underscores` to their
+    leaf names, and every reference to them (excludes, equalities,
+    actuator targets) re-pointed. Returns old → new."""
+    renamed: dict[str, str] = {}
+    taken: set[str] = set()
+    by_newton = {_newton_name(p): p for p in read.bodies}
+    for body in spec.bodies:
+        if body.name in by_newton:
+            renamed[body.name] = body.name = unique(leaf(by_newton[body.name]), taken)
+    taken = set()
+    joint_paths = {_newton_name(p): p for p in read.joints}
+    for joint in spec.joints:
+        if joint.name in joint_paths:
+            renamed[joint.name] = joint.name = unique(
+                leaf(joint_paths[joint.name]), taken
+            )
+    for exclude in spec.excludes:
+        exclude.bodyname1 = renamed.get(exclude.bodyname1, exclude.bodyname1)
+        exclude.bodyname2 = renamed.get(exclude.bodyname2, exclude.bodyname2)
+    for equality in spec.equalities:
+        equality.name1 = renamed.get(equality.name1, equality.name1)
+        equality.name2 = renamed.get(equality.name2, equality.name2)
+    for actuator in spec.actuators:
+        actuator.target = renamed.get(actuator.target, actuator.target)
+    return renamed
+
+
+def geom_prim_paths(read: UsdRead) -> dict[str, str]:
+    """Newton names a mesh geom `<shape prim path>_<shape index>`; the
+    prim path behind each such name."""
+    return {f"{path}_{index}": path for path, index in read.shapes.items()}
+
+
+def _triangles(counts: Any, indices: Any) -> list[tuple[int, int, int]]:
+    """Polygons fanned into triangles."""
+    out: list[tuple[int, int, int]] = []
+    at = 0
+    for count in counts:
+        polygon = indices[at : at + count]
+        at += count
+        out.extend(
+            (polygon[0], polygon[i], polygon[i + 1]) for i in range(1, count - 1)
+        )
+    return out
+
+
+def write_obj(path: Path, vertices: Any, faces: Any) -> None:
+    """A Wavefront OBJ, triangles only, one-based indices."""
+    lines = [f"v {x:.6g} {y:.6g} {z:.6g}" for x, y, z in vertices]
+    lines += [f"f {a + 1} {b + 1} {c + 1}" for a, b, c in faces]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _visual_mesh(
+    stage: Any, prim_path: str, scale: tuple[float, ...]
+) -> tuple[Any, Any] | None:
+    """The USD mesh at a shape's path (points scaled as Newton scaled
+    the hull), or None when the shape is not a mesh prim."""
+    from pxr import UsdGeom  # noqa: PLC0415
+
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim or not prim.IsA(UsdGeom.Mesh):
+        return None
+    mesh = UsdGeom.Mesh(prim)
+    points = mesh.GetPointsAttr().Get() or []
+    counts = mesh.GetFaceVertexCountsAttr().Get() or []
+    indices = mesh.GetFaceVertexIndicesAttr().Get() or []
+    if not points or not counts:
+        return None
+    sx, sy, sz = (*scale, 1.0, 1.0, 1.0)[:3]
+    vertices = [(p[0] * sx, p[1] * sy, p[2] * sz) for p in points]
+    return vertices, _triangles(list(counts), list(indices))
+
+
+def meshes_to_files(
+    spec: Any, stage: Any, read: UsdRead, assets: Path
+) -> dict[str, str]:
+    """Newton's inline hulls become `<body>_hull.obj` (collision group),
+    and the USD's own mesh at the same prim `<body>_visual.obj` (visual
+    group, no contact) beside it. Returns the visual's word per body:
+    the file, or `hull` when the prim carries no mesh."""
+    import mujoco  # noqa: PLC0415
+
+    assets.mkdir(parents=True, exist_ok=True)
+    spec.meshdir = ASSETS_DIR
+    shape_paths = geom_prim_paths(read)
+    visuals: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    stale = []
+    for geom in list(spec.geoms):
+        if geom.type != mujoco.mjtGeom.mjGEOM_MESH:
+            continue
+        body = geom.parent.name
+        counts[body] = counts.get(body, 0) + 1
+        suffix = "" if counts[body] == 1 else f"_{counts[body]}"
+        hull_name = f"{body}_{HULL_WORD}{suffix}"
+        old = spec.mesh(geom.meshname)
+        flat_vertices, flat_faces = list(old.uservert), list(old.userface)
+        vertices = [
+            tuple(flat_vertices[i : i + 3]) for i in range(0, len(flat_vertices), 3)
+        ]
+        faces = [tuple(flat_faces[i : i + 3]) for i in range(0, len(flat_faces), 3)]
+        write_obj(assets / f"{hull_name}.obj", vertices, faces)
+        spec.add_mesh(
+            name=hull_name, file=f"{hull_name}.obj", maxhullvert=old.maxhullvert
+        )
+        stale.append(old)
+        prim_path = shape_paths.get(geom.name, geom.name)
+        geom.meshname = hull_name
+        geom.name = hull_name
+        geom.group = COLLISION_GROUP
+        visual = _visual_mesh(
+            stage, prim_path, read.shape_scale.get(prim_path, (1.0, 1.0, 1.0))
+        )
+        if visual is None:
+            visuals[body] = HULL_WORD
+            continue
+        visual_name = f"{body}_{VISUAL_WORD}{suffix}"
+        write_obj(assets / f"{visual_name}.obj", *visual)
+        spec.add_mesh(name=visual_name, file=f"{visual_name}.obj")
+        geom.parent.add_geom(
+            name=visual_name,
+            type=mujoco.mjtGeom.mjGEOM_MESH,
+            meshname=visual_name,
+            pos=geom.pos,
+            quat=geom.quat,
+            group=VISUAL_GROUP,
+            contype=0,
+            conaffinity=0,
+            rgba=VISUAL_RGBA,
+        )
+        visuals[body] = f"{visual_name}.obj"
+    for old in stale:
+        spec.delete(old)
+    return visuals
+
+
+def name_actuators(spec: Any) -> None:
+    """Position servos get their joint's range as `ctrlrange` and a name
+    after the joint; Newton leaves both blank."""
+    import mujoco  # noqa: PLC0415
+
+    ranges = {j.name: tuple(j.range) for j in spec.joints}
+    for actuator in spec.actuators:
+        if actuator.trntype != mujoco.mjtTrn.mjTRN_JOINT:
+            continue
+        if not actuator.name:
+            actuator.name = f"{actuator.target}_{DRIVE_WORD}"
+        if (
+            actuator.biastype == mujoco.mjtBias.mjBIAS_AFFINE
+            and actuator.target in ranges
+        ):
+            actuator.ctrlrange = ranges[actuator.target]
+            actuator.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
+
+
+def add_sensors(spec: Any) -> int:
+    """jointpos and jointvel per hinge and slide joint — what the
+    harness's policies observe by contract."""
+    import mujoco  # noqa: PLC0415
+
+    kinds = (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE)
+    added = 0
+    for joint in spec.joints:
+        if joint.type not in kinds:
+            continue
+        for word, kind in (
+            ("pos", mujoco.mjtSensor.mjSENS_JOINTPOS),
+            ("vel", mujoco.mjtSensor.mjSENS_JOINTVEL),
+        ):
+            spec.add_sensor(
+                name=f"{joint.name}_{word}",
+                type=kind,
+                objtype=mujoco.mjtObj.mjOBJ_JOINT,
+                objname=joint.name,
+            )
+            added += 1
+    return added
+
+
+def name_equalities(spec: Any) -> None:
+    import mujoco  # noqa: PLC0415
+
+    words = {
+        mujoco.mjtEq.mjEQ_CONNECT: "connect",
+        mujoco.mjtEq.mjEQ_WELD: "weld",
+        mujoco.mjtEq.mjEQ_JOINT: "mimic",
+    }
+    taken: set[str] = set()
+    for equality in spec.equalities:
+        if not equality.name:
+            word = words.get(equality.type, "equality")
+            equality.name = unique(f"{word}_{equality.name1}_{equality.name2}", taken)
+
+
+def set_root(spec: Any, kind: str) -> str:
+    """The root body Newton wrote as mocap becomes a plain welded body
+    (`fixed`) or gets a free joint (`free`). Returns the root's name."""
+    roots = list(spec.worldbody.bodies)  # the world's own parent is not readable
+    if not roots:
+        raise ValueError("the bridge wrote no body under the world")
+    root = roots[0]
+    root.mocap = False
+    if kind == ROOT_FREE:
+        root.add_freejoint()
+    return root.name
+
+
+def reset_newton_options(spec: Any) -> None:
+    import mujoco  # noqa: PLC0415
+
+    defaults = mujoco.MjSpec().option
+    for name in NEWTON_OPTION_FIELDS:
+        setattr(spec.option, name, getattr(defaults, name))
+
+
+CONES = {"pyramidal": 0, "elliptic": 1}  # mjtCone, by the XML's words
+
+
+def declare_grip_options(spec: Any, options: GripOptions = GRIP_OPTIONS) -> None:
+    spec.option.impratio = options.impratio
+    spec.option.cone = CONES[options.cone]
+
+
+def home_keyframe(spec: Any, stage: Any, read: UsdRead) -> None:
+    """`home`: every joint at the position the USD states (radians;
+    zero when it states none), every position servo holding it."""
+    import math  # noqa: PLC0415
+
+    import mujoco  # noqa: PLC0415
+
+    by_leaf = {leaf(p): p for p in read.joints}
+    model = spec.compile()
+    qpos = model.qpos0.copy()
+    for i in range(model.njnt):
+        if model.jnt_type[i] not in (
+            mujoco.mjtJoint.mjJNT_HINGE,
+            mujoco.mjtJoint.mjJNT_SLIDE,
+        ):
+            continue
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, i)
+        prim = stage.GetPrimAtPath(by_leaf[name]) if name in by_leaf else None
+        attribute = prim.GetAttribute(JOINT_STATE_ATTRIBUTE) if prim else None
+        value = attribute.Get() if attribute and attribute.HasValue() else None
+        if value is not None:
+            radians = (
+                math.radians(value)
+                if model.jnt_type[i] == mujoco.mjtJoint.mjJNT_HINGE
+                else value
+            )
+            qpos[model.jnt_qposadr[i]] = radians
+    ctrl = [0.0] * model.nu
+    for a in range(model.nu):
+        if model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT:
+            ctrl[a] = float(qpos[model.jnt_qposadr[model.actuator_trnid[a][0]]])
+    spec.add_key(name=HOME_KEY, qpos=qpos.tolist(), ctrl=ctrl)
+
+
+def find_license(source: Path) -> tuple[Path | None, str]:
+    """The licence file beside the asset (or above it, up to three
+    folders) and the licence it declares."""
+    for folder in (source.parent, *source.parents[1:4]):
+        for candidate in LICENSE_CANDIDATES:
+            path = folder / candidate
+            if path.is_file():
+                return path, license_of(path)
+    return None, UNRECORDED
+
+
+def license_of(path: Path) -> str:
+    head = path.read_text(encoding="utf-8", errors="replace")[:2000]
+    for phrase, spdx in LICENSE_PHRASES.items():
+        if phrase in head:
+            return spdx
+    return UNRECORDED
+
+
+def provenance(
+    source: Path, read: UsdRead, settings: ImportSettings, spdx: str
+) -> dict[str, Any]:
+    marker = read_marker(source.parent) or {}
+    return {
+        "format": "usd",
+        "repository": marker.get("repository", UNRECORDED),
+        "commit": marker.get("commit", UNRECORDED),
+        "file": source.name,
+        "variants": dict(read.variants),
+        "root": settings.root,
+        "mesh_maxhullvert": settings.mesh_maxhullvert,
+        "grip_options": settings.grip_options,
+        "license": spdx,
+        "newton_census": dict(read.census),
+        "versions": dict(read.versions),
+    }
+
+
+def readme_text(
+    name: str, source: Path, prov: Mapping[str, Any], visuals: Mapping[str, str]
+) -> str:
+    variants = ", ".join(f"{k}={v}" for k, v in prov["variants"].items()) or "none"
+    hull_only = [b for b, v in visuals.items() if v == HULL_WORD]
+    versions = prov["versions"]
+    commit = str(prov["commit"])[:7]
+    lines = [
+        f"# {name} — imported from USD",
+        "",
+        f"Source: `{source.name}` ({prov['repository']} @ {commit}), "
+        f"variants {variants}, licence {prov['license']} "
+        f"(the upstream text is `{LICENSE_FILE}`).",
+        "",
+        "Read by Newton's USD importer and bridged to MuJoCo by its solver "
+        f"(newton {versions.get('newton')}, usd-core {versions.get('usd-core')}); "
+        "the bundle writer renamed prim paths to leaf names, moved the inline "
+        f"convex hulls ({prov['mesh_maxhullvert']} vertices at most) into "
+        f"`{ASSETS_DIR}/*_{HULL_WORD}.obj` beside the USD's own visual meshes "
+        f"(`{ASSETS_DIR}/*_{VISUAL_WORD}.obj`), added jointpos and jointvel "
+        f"sensors, a `{HOME_KEY}` keyframe, and each position servo's joint "
+        "range as its control range. docs/e2e-research/77 §6 names every rule. "
+        "Contact type and affinity masks on the hulls are Newton's encoding of "
+        "the USD's collision filters, kept as written.",
+        "",
+        f"Root: {prov['root']}. Runtime grip options declared: {prov['grip_options']}.",
+        "",
+        "What the USD carries that the bundle does NOT: the mimic joint's compliance "
+        "(natural frequency, damping ratio) — Newton writes a rigid joint equality; "
+        "PhysX-only attributes. Newton's own solver defaults were reset to MuJoCo's.",
+    ]
+    if hull_only:
+        lines += [
+            "",
+            f"Bodies whose visual is the hull (no mesh prim): {', '.join(hull_only)}.",
+        ]
+    return "\n".join(lines) + "\n"
+
+
+def write_usd_bundle(
+    source: Path, name: str, destination: Path, settings: ImportSettings | None = None
+) -> dict[str, Any]:
+    """The whole path: read, rewrite, write the files, compile the
+    written MJCF, record, stamp. Never overwrites."""
+    import mujoco  # noqa: PLC0415
+
+    settings = settings or ImportSettings()
+    source = Path(source).expanduser()
+    destination = Path(destination)
+    if destination.exists():
+        raise FileExistsError(f"{destination} already exists")
+    read = read_usd(source, settings)
+    stage, _ = open_stage(source, settings.variants)
+    spec = mujoco.MjSpec.from_string(read.xml)
+    spec.modelname = name
+    rename_elements(spec, read)
+    destination.mkdir(parents=True)
+    visuals = meshes_to_files(spec, stage, read, destination / ASSETS_DIR)
+    spec.modelfiledir = str(destination)  # the in-memory compile finds the files
+    name_actuators(spec)
+    name_equalities(spec)
+    root = set_root(spec, settings.root)
+    reset_newton_options(spec)
+    if settings.grip_options:
+        declare_grip_options(spec)
+    sensors = add_sensors(spec)
+    home_keyframe(spec, stage, read)
+    model_file = f"{name}.xml"
+    (destination / model_file).write_text(spec.to_xml(), encoding="utf-8")
+    model = mujoco.MjModel.from_xml_path(
+        str(destination / model_file)
+    )  # the file is the truth
+    license_path, spdx = find_license(source)
+    if license_path is not None:
+        (destination / LICENSE_FILE).write_bytes(license_path.read_bytes())
+    prov = provenance(source, read, settings, spdx)
+    (destination / "README.md").write_text(
+        readme_text(name, source, prov, visuals), encoding="utf-8"
+    )
+    write_bundle_record(
+        destination, name, model_file, model, source=source, provenance=prov
+    )
+    return {
+        "stamp": stamp(name, destination),
+        "path": str(destination),
+        "model_file": model_file,
+        "bodies": int(model.nbody),
+        "joints": int(model.njnt),
+        "actuators": int(model.nu),
+        "equalities": int(model.neq),
+        "sensors": sensors,
+        "root": root,
+        "source": source_locator(source),
+        "provenance": prov,
+    }
+
+
+@model_source(
+    USD_SOURCE,
+    USD_SUFFIXES,
+    options=("variants", "root", "mesh_maxhullvert", "grip_options"),
+    doc="a USD asset read by Newton's importer and written as a bundle: "
+    "variants select its variant sets, root is fixed or free",
+)
+def onboard_usd(
+    source_path: Path, name: str, destination: Path, options: Mapping[str, Any]
+) -> dict[str, Any]:
+    """The onboarding door's USD source: the options become settings
+    (a wrong value is refused by name), then the bundle is written."""
+    return write_usd_bundle(source_path, name, destination, ImportSettings(**options))

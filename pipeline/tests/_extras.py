@@ -55,3 +55,8 @@ needs_train_sim = unittest.skipUnless(TRAIN and SIM, TRAIN_LINE)
 needs_remote = unittest.skipUnless(REMOTE, "needs the remote and sim extras")
 MCP = installed("mcp")
 needs_mcp = unittest.skipUnless(MCP, "mcp extra not installed (uv sync --extra mcp)")
+# The USD reader: Newton's importer (usd extra) and mujoco_warp, which
+# Newton's solver module imports even when it steps on the CPU (gpu extra).
+USD = installed("pxr", "newton", "mujoco_warp", "mujoco")
+USD_LINE = "usd import needs the usd and gpu extras (uv sync --extra usd --extra gpu)"
+needs_usd = unittest.skipUnless(USD, USD_LINE)

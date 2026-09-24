@@ -257,12 +257,21 @@ def create_task(
     return {"status": DONE, **out, "next": f"accept_task({name!r})"}
 
 
-def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any] | Refusal:
-    """A robot enters as a hash-stamped bundle: the MJCF's directory
-    copied whole (meshes and includes ride along), compiled once as the
-    honesty check, its model file recorded in `bundle.json`. Into the
-    current project's `robots/` when a project is open, else the library.
-    Never overwrites; refuses by name."""
+def onboard_robot(
+    model_path: str,
+    name: str,
+    variants: dict[str, str] | None = None,
+    root: str | None = None,
+) -> dict[str, Any] | Refusal:
+    """A robot enters as a hash-stamped bundle, by its file's format: an
+    MJCF's directory copied whole (meshes and includes ride along) and
+    compiled once as the honesty check; a USD asset (.usd/.usda/.usdc/
+    .usdz) read by Newton's importer and written as a bundle with leaf
+    names, mesh files, sensors and a home key — `variants` selects its
+    variant sets (e.g. {"Physics": "Newton_compliant"}) and `root` is
+    "fixed" (default) or "free". Into the current project's `robots/`
+    when a project is open, else the library. Never overwrites; refuses
+    by name, including an option the format does not take."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
@@ -271,9 +280,16 @@ def onboard_robot(mjcf_path: str, name: str) -> dict[str, Any] | Refusal:
     with contextlib.suppress(FileNotFoundError):
         into = current_project().folder(ROBOTS_FOLDER)
     actions = Actions(JobManager(_jobs_root()))
+    options: dict[str, Any] = {}
+    if variants is not None:
+        options["variants"] = variants
+    if root is not None:
+        options["root"] = root
     try:
-        out = actions.onboard_robot(mjcf_path, name, into=str(into) if into else None)
-    except (FileNotFoundError, FileExistsError, ValueError) as why:
+        out = actions.onboard_robot(
+            model_path, name, into=str(into) if into else None, options=options
+        )
+    except (FileNotFoundError, FileExistsError, ValueError, ImportError) as why:
         return refusal(str(why))
     if into is not None:
         from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
@@ -2372,8 +2388,9 @@ def build_server() -> Any:  # noqa: PLR0915
         "Rerun SDK streams into it on :9876."
     )(actions.open_studio)
     server.tool(
-        description="Onboard a robot: its MJCF directory becomes a hash-stamped "
-        "bundle under robots/, compiled once as the honesty check."
+        description="Onboard a robot: an MJCF directory, or a USD asset read by "
+        "Newton, becomes a hash-stamped bundle under robots/, compiled once as "
+        "the honesty check."
     )(onboard_robot)
     server.tool(description="A job's state and log tail")(actions.job_status)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)

@@ -12,6 +12,7 @@ two onboardings of the same directory must be the same version.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -29,11 +30,20 @@ def source_locator(source: Path) -> str:
     return "/".join(parts)
 
 
-def write_bundle_record(
-    bundle_dir: Path, name: str, model_file: str, model: Any, *, source: Path
+def write_bundle_record(  # noqa: PLR0913 - the record's fields, each named
+    bundle_dir: Path,
+    name: str,
+    model_file: str,
+    model: Any,
+    *,
+    source: Path,
+    provenance: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Record the bundle's model file, source and census."""
-    record = {
+    """Record the bundle's model file, source and census — and, for a
+    bundle a converter wrote (a USD asset through Newton, docs/77), the
+    provenance block the converter states: repository, commit, variants,
+    licence, the reader's versions."""
+    record: dict[str, Any] = {
         "schema": BUNDLE_SCHEMA,
         "name": name,
         "model_file": model_file,
@@ -54,6 +64,8 @@ def write_bundle_record(
             "keyframes": int(model.nkey),
         },
     }
+    if provenance:
+        record["provenance"] = dict(provenance)
     out = Path(bundle_dir) / BUNDLE_FILE
     out.write_text(
         json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
