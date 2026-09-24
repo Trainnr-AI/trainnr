@@ -411,6 +411,37 @@ class TheProvenance(unittest.TestCase):
                 ingest(Path(tmp) / "r", bag, basis="borrowed")
 
 
+class SplitBags(unittest.TestCase):
+    def test_a_bag_split_past_ten_files_keeps_every_sample(self) -> None:
+        """rosbag2 names splits `_0 ... _10`; read as text `_10` came before
+        `_2` and every sample of `_2` was dropped as out of order (review
+        2026-09-24). Split one bag into `_2` and `_10`: nothing is lost."""
+        import shutil  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bag = make_bag(Path(tmp) / "bag", seconds=0.2)
+            whole = rosbag2.Rosbag2Adapter().read(bag)
+            n = len(whole.channels[JOINT_POSITION].times)
+            one = bag / "bag_0.db3"
+            with sqlite3.connect(one) as con:
+                (mid,) = con.execute(
+                    "SELECT timestamp FROM messages WHERE topic_id=1 "
+                    "ORDER BY timestamp LIMIT 1 OFFSET ?",
+                    (n // 2,),
+                ).fetchone()
+            for name, keep in (("bag_2.db3", "<"), ("bag_10.db3", ">=")):
+                shutil.copy(one, bag / name)
+                with sqlite3.connect(bag / name) as con:
+                    con.execute(
+                        f"DELETE FROM messages WHERE NOT (timestamp {keep} ?)", (mid,)
+                    )
+            one.unlink()
+            split = rosbag2.Rosbag2Adapter().read(bag)
+        self.assertEqual(split.census["files"], ["bag_2.db3", "bag_10.db3"])
+        self.assertEqual(len(split.channels[JOINT_POSITION].times), n)
+        self.assertEqual(split.census["topics"]["/lowstate"]["dropped"], 0)
+
+
 class OneAdapterManyProfiles(unittest.TestCase):
     """One adapter reads rosbag2's sqlite store; which robot's bag it is
     comes from the PROFILE its message types anchor (2026-09-24: two

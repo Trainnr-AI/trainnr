@@ -553,12 +553,27 @@ class Rosbag2Adapter:
                     f"{source}: {kind} on {len(carrying)} topics {carrying}; the "
                     f"profile {profile.name!r} reads one — which is the robot's?"
                 )
-            if not carrying or topics[carrying[0]][1] != CDR_FORMAT:
+            if not carrying:
                 continue
-            msgs = messages.get(carrying[0], [])
+            topic = carrying[0]
+            if topics[topic][1] != CDR_FORMAT:
+                notes.append(
+                    SKIPPED_NOTE.format(
+                        topic=topic, why=f"serialized as {topics[topic][1]!r}, not CDR"
+                    )
+                )
+                continue
+            msgs = messages.get(topic, [])
             if not msgs:
+                notes.append(
+                    SKIPPED_NOTE.format(topic=topic, why="it holds no message")
+                )
                 continue
-            channels.update(_channels(kind, carrying[0], msgs))
+            decoded, dropped = _channels(kind, topic, msgs)
+            channels.update(decoded)
+            census_topics[topic]["dropped"] = dropped
+            if dropped:
+                notes.append(DROPPED_NOTE.format(topic=topic, n=dropped))
             notes.extend(n for n in NOTES.get(kind, ()) if n not in notes)
         if not channels:
             raise ValueError(
@@ -669,10 +684,20 @@ def _files(source: Path) -> list[Path]:
     if source.is_dir():
         if not (source / METADATA_FILE).is_file():
             return []
-        return sorted(source.glob(f"*{SUFFIX}"))
+        return sorted(source.glob(f"*{SUFFIX}"), key=_split_order)
     if source.is_file() and source.suffix == SUFFIX:
         return [source]
     return []
+
+
+def _split_order(path: Path) -> tuple[int, str]:
+    """rosbag2 splits a bag as `<name>_0.db3`, `<name>_1.db3`, ...: order by
+    that number, not the text (`_10` sorts before `_2` as text, and a
+    reader that appended files in that order dropped every sample of
+    `_2` to `_9` as out of order; review 2026-09-24)."""
+    stem = path.stem
+    head, _, index = stem.rpartition("_")
+    return (int(index), head) if head and index.isdigit() else (-1, stem)
 
 
 def _topic_types(files: list[Path]) -> set[str]:
@@ -708,6 +733,10 @@ def _read_files(
                 "SELECT topic_id, timestamp, data FROM messages ORDER BY timestamp"
             ):
                 messages.setdefault(by_id[tid], []).append((int(stamp), bytes(data)))
+    # One clock across the files: a topic's rows sorted by time over every
+    # file, so the order the files are read in can never drop a sample.
+    for rows in messages.values():
+        rows.sort(key=lambda row: row[0])
     return topics, messages
 
 
@@ -733,9 +762,18 @@ def _recorded_at(source: Path) -> str | None:
 # -- messages to channels -----------------------------------------------------
 
 
+SKIPPED_NOTE = "{topic} was not read: {why}"
+DROPPED_NOTE = (
+    "{n} samples of {topic} dropped: a receive time equal to or earlier than "
+    "the one before (duplicates), never re-invented"
+)
+
+
 def _channels(
     kind: str, topic: str, msgs: list[tuple[int, bytes]]
-) -> dict[str, Channel]:
+) -> tuple[dict[str, Channel], int]:
+    """The channels a topic's messages decode to, and how many samples the
+    clock dropped (duplicate or non-increasing receive times)."""
     layout = LAYOUTS[kind]
     extracts = CHANNELS[kind]
     times: list[float] = []
@@ -756,4 +794,4 @@ def _channels(
             unit=extract.unit,
             components=extract.components,
         )
-    return out
+    return out, int(len(times) - int(keep.sum()))
