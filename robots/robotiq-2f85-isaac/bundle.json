@@ -1,0 +1,43 @@
+{
+ "census": {
+  "actuators": 1,
+  "bodies": 12,
+  "dofs": 8,
+  "geoms": 22,
+  "joints": 8,
+  "keyframes": 1,
+  "meshes": 22,
+  "sensors": 16
+ },
+ "model_file": "robotiq-2f85-isaac.xml",
+ "name": "robotiq-2f85-isaac",
+ "provenance": {
+  "commit": "6d992b664428",
+  "file": "Robotiq_2F_85.usda",
+  "format": "usd",
+  "grip_options": true,
+  "license": "CC-BY-4.0",
+  "mesh_maxhullvert": 64,
+  "newton_census": {
+   "bodies": 11,
+   "dofs": 14,
+   "joints": 13,
+   "shapes": 22
+  },
+  "repository": "robotiq/isaacsim_assets",
+  "root": "fixed",
+  "variants": {
+   "Fingertip": "Standard",
+   "Physics": "Newton_compliant"
+  },
+  "versions": {
+   "mujoco": "3.11.0",
+   "newton": "1.6.0",
+   "newton-usd-schemas": "0.5.0",
+   "usd-core": "26.3",
+   "warp-lang": "1.17.0"
+  }
+ },
+ "schema": "trainnr-robot/1",
+ "source": "grippers/Robotiq_2F_85/Robotiq_2F_85.usda"
+}

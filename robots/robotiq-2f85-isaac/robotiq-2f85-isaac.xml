@@ -1,0 +1,146 @@
+<mujoco model="robotiq-2f85-isaac">
+  <compiler angle="radian" meshdir="assets/"/>
+
+  <option impratio="10" cone="elliptic"/>
+
+  <size nkey="1"/>
+
+  <asset>
+    <mesh name="base_link_hull" file="base_link_hull.obj"/>
+    <mesh name="base_link_visual" file="base_link_visual.obj"/>
+    <mesh name="left_outer_knuckle_hull" file="left_outer_knuckle_hull.obj"/>
+    <mesh name="left_outer_knuckle_visual" file="left_outer_knuckle_visual.obj"/>
+    <mesh name="left_outer_finger_hull" file="left_outer_finger_hull.obj"/>
+    <mesh name="left_outer_finger_visual" file="left_outer_finger_visual.obj"/>
+    <mesh name="left_inner_knuckle_hull" file="left_inner_knuckle_hull.obj"/>
+    <mesh name="left_inner_knuckle_visual" file="left_inner_knuckle_visual.obj"/>
+    <mesh name="left_inner_finger_hull" file="left_inner_finger_hull.obj"/>
+    <mesh name="left_inner_finger_visual" file="left_inner_finger_visual.obj"/>
+    <mesh name="left_fingertip_hull" file="left_fingertip_hull.obj"/>
+    <mesh name="left_fingertip_visual" file="left_fingertip_visual.obj"/>
+    <mesh name="right_outer_knuckle_hull" file="right_outer_knuckle_hull.obj"/>
+    <mesh name="right_outer_knuckle_visual" file="right_outer_knuckle_visual.obj"/>
+    <mesh name="right_outer_finger_hull" file="right_outer_finger_hull.obj"/>
+    <mesh name="right_outer_finger_visual" file="right_outer_finger_visual.obj"/>
+    <mesh name="right_inner_knuckle_hull" file="right_inner_knuckle_hull.obj"/>
+    <mesh name="right_inner_knuckle_visual" file="right_inner_knuckle_visual.obj"/>
+    <mesh name="right_inner_finger_hull" file="right_inner_finger_hull.obj"/>
+    <mesh name="right_inner_finger_visual" file="right_inner_finger_visual.obj"/>
+    <mesh name="right_fingertip_hull" file="right_fingertip_hull.obj"/>
+    <mesh name="right_fingertip_visual" file="right_fingertip_visual.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="base_link">
+      <inertial pos="0 0 0.035508" mass="0.77744" diaginertia="0.001 0.001 0.001"/>
+      <geom name="base_link_hull" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="347" group="3" priority="1" solref="0.004 2" solimp="0.95 0.99" mesh="base_link_hull"/>
+      <geom name="base_link_visual" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="base_link_visual"/>
+      <body name="left_outer_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 -0.048356 0.056017" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+        <joint name="finger_joint" pos="0 -0.0306011 0.054944" axis="-1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99" limited="true" range="0 0.8" actuatorfrclimited="true" actuatorfrcrange="-15 15" armature="0.3" damping="0.1"/>
+        <geom name="left_outer_knuckle_hull" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="439" group="3" mesh="left_outer_knuckle_hull"/>
+        <geom name="left_outer_knuckle_visual" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="left_outer_knuckle_visual"/>
+        <body name="left_outer_finger">
+          <inertial pos="0 -0.065113 0.074061" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="left_coupler_joint" pos="0 -0.0621011 0.050844" axis="-1 0 0" solreflimit="0.00707 2" solimplimit="0.95 0.99" limited="true" range="-1.57 0" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="left_outer_finger_hull" quat="0.5 0.5 0.5 0.5" type="mesh" contype="72" conaffinity="419" group="3" mesh="left_outer_finger_hull"/>
+          <geom name="left_outer_finger_visual" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="left_outer_finger_visual"/>
+        </body>
+      </body>
+      <body name="left_inner_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 -0.031362 0.082206" mass="0.02216" diaginertia="0.001 0.001 0.001"/>
+        <joint name="left_spring_link_joint" pos="0 -0.0132 0.06094" axis="-1 0 0" springref="2.62" solreflimit="0.02 2" stiffness="2" limited="true" range="-0.296706 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="left_inner_knuckle_hull" quat="0.5 0.5 0.5 0.5" type="mesh" contype="36" conaffinity="395" group="3" priority="1" solref="0.004 2" solimp="0.95 0.99" mesh="left_inner_knuckle_hull"/>
+        <geom name="left_inner_knuckle_visual" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="left_inner_knuckle_visual"/>
+        <body name="left_inner_finger">
+          <inertial pos="0 -0.057154 0.110919" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="left_follower_joint" pos="0 -0.0502 0.10494" axis="-1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99" limited="true" range="-0.872664 0.872664" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="left_inner_finger_hull" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="84" conaffinity="386" group="3" mesh="left_inner_finger_hull"/>
+          <geom name="left_inner_finger_visual" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="left_inner_finger_visual"/>
+          <body name="left_fingertip">
+            <inertial pos="0 -0.0506345 0.126163" quat="0.70314 0.70314 0.0747982 -0.0747982" mass="0.0259817" diaginertia="3.72988e-06 3.30538e-06 1.39064e-06"/>
+            <geom name="left_fingertip_hull" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="69" conaffinity="426" group="3" priority="1" friction="0.7" solref="0.004 2" solimp="0.95 0.99" mesh="left_fingertip_hull"/>
+            <geom name="left_fingertip_visual" pos="0 0 0" quat="0.5 0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="left_fingertip_visual"/>
+          </body>
+        </body>
+      </body>
+      <body name="right_outer_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 0.048356 0.056017" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+        <joint name="right_driver_joint" pos="0 0.0306011 0.054944" axis="1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99" limited="true" range="0 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="right_outer_knuckle_hull" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="132" conaffinity="59" group="3" mesh="right_outer_knuckle_hull"/>
+        <geom name="right_outer_knuckle_visual" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="right_outer_knuckle_visual"/>
+        <body name="right_outer_finger">
+          <inertial pos="0 0.065113 0.074061" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="right_coupler_joint" pos="0 0.0621011 0.050844" axis="1 0 0" solreflimit="0.00707 2" solimplimit="0.95 0.99" limited="true" range="-1.57 0" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="right_outer_finger_hull" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="324" conaffinity="59" group="3" mesh="right_outer_finger_hull"/>
+          <geom name="right_outer_finger_visual" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="right_outer_finger_visual"/>
+        </body>
+      </body>
+      <body name="right_inner_knuckle" pos="0 0 -3.72529e-09">
+        <inertial pos="0 0.031362 0.082206" mass="0.02216" diaginertia="0.001 0.001 0.001"/>
+        <joint name="right_spring_link_joint" pos="0 0.0132 0.06094" axis="1 0 0" springref="2.62" solreflimit="0.02 2" stiffness="2" limited="true" range="-0.296706 0.8" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+        <geom name="right_inner_knuckle_hull" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="4" conaffinity="443" group="3" priority="1" solref="0.004 2" solimp="0.95 0.99" mesh="right_inner_knuckle_hull"/>
+        <geom name="right_inner_knuckle_visual" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="right_inner_knuckle_visual"/>
+        <body name="right_inner_finger">
+          <inertial pos="0 0.057154 0.110919" mass="0.02" diaginertia="0.001 0.001 0.001"/>
+          <joint name="right_follower_joint" pos="0 0.0502 0.10494" axis="1 0 0" solreflimit="0.02 2" solimplimit="0.95 0.99" limited="true" range="-0.872664 0.872664" actuatorfrclimited="true" actuatorfrcrange="-1000000 1000000" damping="0.5"/>
+          <geom name="right_inner_finger_hull" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="68" conaffinity="185" group="3" mesh="right_inner_finger_hull"/>
+          <geom name="right_inner_finger_visual" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="right_inner_finger_visual"/>
+          <body name="right_fingertip">
+            <inertial pos="0 0.0506345 0.126163" quat="0.70314 0.70314 -0.0747982 0.0747982" mass="0.0259817" diaginertia="3.72988e-06 3.30538e-06 1.39064e-06"/>
+            <geom name="right_fingertip_hull" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="70" conaffinity="441" group="3" priority="1" friction="0.7" solref="0.004 2" solimp="0.95 0.99" mesh="right_fingertip_hull"/>
+            <geom name="right_fingertip_visual" pos="0 0 0" quat="-0.5 -0.5 0.5 0.5" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.55 0.55 0.6 1" mesh="right_fingertip_visual"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="base_link" body2="left_outer_knuckle"/>
+    <exclude body1="base_link" body2="left_inner_knuckle"/>
+    <exclude body1="base_link" body2="right_outer_knuckle"/>
+    <exclude body1="base_link" body2="right_inner_knuckle"/>
+    <exclude body1="left_outer_knuckle" body2="left_outer_finger"/>
+    <exclude body1="left_outer_finger" body2="left_inner_finger"/>
+    <exclude body1="left_inner_knuckle" body2="left_inner_finger"/>
+    <exclude body1="left_inner_finger" body2="left_fingertip"/>
+    <exclude body1="right_outer_knuckle" body2="right_outer_finger"/>
+    <exclude body1="right_outer_finger" body2="right_inner_finger"/>
+    <exclude body1="right_inner_knuckle" body2="right_inner_finger"/>
+    <exclude body1="right_inner_finger" body2="right_fingertip"/>
+  </contact>
+
+  <equality>
+    <connect name="connect_right_inner_finger_right_outer_finger" body1="right_inner_finger" body2="right_outer_finger" anchor="0 0.0682 0.09844" solref="0.005" solimp="0.95 0.99"/>
+    <connect name="connect_left_inner_finger_left_outer_finger" body1="left_inner_finger" body2="left_outer_finger" anchor="0 -0.0682 0.09844" solref="0.005" solimp="0.95 0.99"/>
+    <joint name="mimic_right_driver_joint_finger_joint" joint1="right_driver_joint" joint2="finger_joint" polycoef="0 1 0 0 0"/>
+  </equality>
+
+  <actuator>
+    <general name="finger_joint_drive" joint="finger_joint" ctrllimited="true" ctrlrange="0 0.8" biastype="affine" gainprm="1432" biasprm="0 -1432 -158"/>
+  </actuator>
+
+  <sensor>
+    <jointpos joint="finger_joint" name="finger_joint_pos"/>
+    <jointvel joint="finger_joint" name="finger_joint_vel"/>
+    <jointpos joint="left_coupler_joint" name="left_coupler_joint_pos"/>
+    <jointvel joint="left_coupler_joint" name="left_coupler_joint_vel"/>
+    <jointpos joint="left_spring_link_joint" name="left_spring_link_joint_pos"/>
+    <jointvel joint="left_spring_link_joint" name="left_spring_link_joint_vel"/>
+    <jointpos joint="left_follower_joint" name="left_follower_joint_pos"/>
+    <jointvel joint="left_follower_joint" name="left_follower_joint_vel"/>
+    <jointpos joint="right_driver_joint" name="right_driver_joint_pos"/>
+    <jointvel joint="right_driver_joint" name="right_driver_joint_vel"/>
+    <jointpos joint="right_coupler_joint" name="right_coupler_joint_pos"/>
+    <jointvel joint="right_coupler_joint" name="right_coupler_joint_vel"/>
+    <jointpos joint="right_spring_link_joint" name="right_spring_link_joint_pos"/>
+    <jointvel joint="right_spring_link_joint" name="right_spring_link_joint_vel"/>
+    <jointpos joint="right_follower_joint" name="right_follower_joint_pos"/>
+    <jointvel joint="right_follower_joint" name="right_follower_joint_vel"/>
+  </sensor>
+
+  <keyframe>
+    <key name="home"/>
+  </keyframe>
+</mujoco>
