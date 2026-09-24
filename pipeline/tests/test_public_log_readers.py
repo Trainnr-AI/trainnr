@@ -252,3 +252,62 @@ class RecordingBasis(unittest.TestCase):
                 Path(tmp) / "r"
             )
             self.assertEqual(Recording.read(Path(tmp) / "r").basis, BASIS_PUBLIC)
+
+
+def _cached(name: str) -> Path | None:
+    from rq_pipeline.robots import public_logs  # noqa: PLC0415
+
+    return public_logs.locate(name)
+
+
+DFKI = _cached("dfki-go2-field201")
+IIT = _cached("iit-go2-chirp")
+
+
+@unittest.skipUnless(
+    DFKI is not None,
+    "DFKI's field201 bag is not in the cache: `python3 tools/public-log.py fetch "
+    "dfki-go2-field201` (47.7 MB by range out of a 3.5 GB archive)",
+)
+class TheRealDfkiBag(unittest.TestCase):
+    """DFKI's field201 bag through the one adapter, measured 2026-09-24."""
+
+    def test_the_bag_reads_through_the_dfki_profile_with_its_numbers(self) -> None:
+        from rq_pipeline.robots import quality  # noqa: PLC0415
+        from rq_pipeline.robots.adapters.rosbag2 import Rosbag2Adapter  # noqa: PLC0415
+        from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
+
+        assert DFKI is not None
+        rec = Rosbag2Adapter().read(DFKI)
+        self.assertEqual(rec.census["profile"], "dfki-go2")
+        self.assertEqual(rec.basis, BASIS_PUBLIC)
+        clock = rec.census[quality.QUALITY_KEY]["clock"]["joint.position"]
+        self.assertEqual(clock["samples"], 39_676)
+        self.assertAlmostEqual(clock["rate_hz"], 985, delta=10)
+        self.assertEqual(rec.census["recorded"][:10], "2024-06-16")
+        for name in ("joint.kp", "joint.kd", "base.pose", "foot.contact"):
+            self.assertIn(name, rec.channels)
+        self.assertEqual(rec.channels["joint.position"].components[0], "FL_hip_joint")
+
+
+@unittest.skipUnless(
+    IIT is not None,
+    "IIT's chirp is not in the cache: `python3 tools/public-log.py fetch "
+    "iit-go2-chirp` (0.9 MB)",
+)
+class TheRealIitChirp(unittest.TestCase):
+    def test_the_chirp_reads_at_200_hz_with_its_gains(self) -> None:
+        from rq_pipeline.robots import quality  # noqa: PLC0415
+        from rq_pipeline.robots.adapters.pt_dict import PtDict  # noqa: PLC0415
+
+        assert IIT is not None
+        rec = PtDict().read(IIT)
+        clock = rec.census[quality.QUALITY_KEY]["clock"]["joint.position"]
+        self.assertEqual(clock["samples"], 4_779)
+        self.assertAlmostEqual(clock["rate_hz"], 200, delta=1)
+        self.assertEqual(float(rec.channels["joint.kp"].values[0, 0]), 20.0)
+        self.assertEqual(float(rec.channels["joint.kd"].values[0, 0]), 1.5)
+
+
+if __name__ == "__main__":
+    unittest.main()

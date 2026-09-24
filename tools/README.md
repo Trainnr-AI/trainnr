@@ -71,7 +71,7 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 | `show-legged-fit.py <bundle> <recording> [--stills DIR]` | A `legged-joints` fit in both viewers: measured, rigid and modelled torque per joint, residuals and bootstrap histograms into the Studio and `.viewer/fit-legged.rrd` beside the recording; MuJoCo stills of the bundle under the fitted terms |
 | `actuator-bundle.py` | Wrap vendored BAM fits into certified bundles; verify anyone's (stamps, rail/floor checks, honesty advisories) |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
-| `public-log.py` | Public recordings of real robots: `list` the registry, `fetch` one (byte count and digest checked, cached under `runs/public-logs/`), `ingest` one into a project with its provenance so the telemetry stage reads "public log" |
+| `public-log.py` | Public recordings of real robots: `list` the registry (the readable ones and the ROS 1 ones refused, each with its licence state), `fetch` one (every piece's byte count and digest checked; a whole archive, members of a remote zip by byte range, or one file; cached under `runs/public-logs/`), `ingest` one into a project with its basis and provenance so the stages read "public log" |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
 | `sync-bam-actuators.py` | Vendor new/changed servos from a BAM checkout or repomix pack into `robots/actuators/` — refuses a changed file with no `--version` |
 | `train-watch.py`, `rl-watch.py` | Watch a training run / RL policy roll out live in Rerun |

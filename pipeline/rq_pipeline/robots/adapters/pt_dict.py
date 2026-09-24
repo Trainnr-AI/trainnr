@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.robots import quality
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.joint_orders import GO2_MENAGERIE_JOINTS
 from rq_pipeline.robots.recording import (
@@ -122,7 +123,7 @@ def read_pt(path: Path) -> Recording:
         "keys": sorted(saved),
         "base": "fixed in the air",
     }
-    return Recording(
+    recording = Recording(
         source=Path(path).name,
         adapter=NAME,
         channels=channels,
@@ -131,6 +132,9 @@ def read_pt(path: Path) -> Recording:
         collection=COLLECTION_SCRIPTED,
         basis=layout.basis,
     )
+    # Measured like every adapter's: the clock, the joint range, the motion.
+    recording.census[quality.QUALITY_KEY] = quality.describe(recording)
+    return recording
 
 
 @adapter(
