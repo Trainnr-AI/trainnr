@@ -22,12 +22,10 @@ Environment shapes (each the wrapped tool's own documented launch):
 from __future__ import annotations
 
 import os
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
@@ -626,45 +624,24 @@ class Actions:
     # -- onboarding ----------------------------------------------------
 
     def onboard_robot(
-        self, mjcf_path: str, name: str, into: str | None = None
+        self,
+        model_path: str,
+        name: str,
+        into: str | None = None,
+        options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """A new robot enters as a hash-stamped bundle: the MJCF's whole
-        directory copied under `<into or the library>/<name>/`, compiled
-        once as the honesty check, its model file and census recorded in
-        `bundle.json`, stamped. Synchronous — seconds, and the caller
-        wants the stamp in the reply."""
-        from rq_pipeline.bundles.bundle import write_bundle_record  # noqa: PLC0415
+        """A new robot enters as a hash-stamped bundle under `<into or the
+        library>/<name>/`, by its file's format (`robot.onboarding`: an
+        MJCF copied whole and compiled once, a USD read by Newton and
+        written as a bundle); `options` are the format's own (a USD's
+        variant selections and root), refused by name otherwise.
+        Synchronous — seconds, and the caller wants the stamp in the reply."""
         from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+        from rq_pipeline.robot.onboarding import onboard  # noqa: PLC0415
 
         plain_name(name, "robot name")
-        source = Path(mjcf_path).expanduser()
-        if not source.is_file():
-            raise FileNotFoundError(f"no MJCF at {source}")
         destination = (Path(into) if into else robots_dir()) / name
-        if destination.exists():
-            raise FileExistsError(
-                f"robots/{name} already exists (stamp: {stamp(name, destination)}) "
-                "— onboarding never overwrites a bundle; pick another name or "
-                "remove it deliberately"
-            )
-        # Compile FIRST — a model that does not compile is refused
-        # before a single byte lands in robots/.
-        import mujoco  # noqa: PLC0415 - sim extra
-
-        model = mujoco.MjModel.from_xml_path(str(source))
-        # The whole directory rides along: meshes and includes resolve
-        # relative to the MJCF, and a bundle must be self-contained.
-        shutil.copytree(source.parent, destination)
-        write_bundle_record(destination, name, source.name, model, source=source)
-        bundle_stamp = stamp(name, destination)
-        return {
-            "stamp": bundle_stamp,
-            "path": str(destination),
-            "model_file": source.name,
-            "bodies": int(model.nbody),
-            "joints": int(model.njnt),
-            "actuators": int(model.nu),
-        }
+        return onboard(Path(model_path), name, destination, options)
 
     # -- jobs ----------------------------------------------------------
 
