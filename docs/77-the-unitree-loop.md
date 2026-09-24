@@ -952,6 +952,13 @@ What the loop still lacks on this robot: telemetry from a real Go2
 (sys-id, an identified interval, monitoring). Both independent gates
 are in.
 
+**2026-09-24: the runtime now stands the robot, hands over and stops as
+three steps** (`DdsRuntime.stand`, `handover`, `stop`: their FixStand
+chord, their Velocity chord, their Passive chord), so a pre-flight reads
+the robot's state from their LowState in the fixed stand, BEFORE the
+policy has it (§10). The pad refuses by name when `/dev/uinput` is
+root-only again after a reboot, with the line that fixes it.
+
 ## 8a. The window follows the run (2026-09-13)
 
 From today every feed on this branch saves its stream inside the
@@ -1070,3 +1077,99 @@ word "public log" beside it (`robots/recording.BASES`, the Studio's
 chip), and keeps that word until a recording of this robot exists. A
 drift check on the Go2 now has a method to run and still no telemetry
 of its own to run on.
+
+## 10. Pre-flight: before the first tick on a robot (2026-09-24)
+
+The hardware is not here yet; this stage makes sure that the day it is,
+the first tick is protected. The field's crash reports say what goes
+wrong on that day (docs/e2e-research/78 §1): an observation of the wrong
+width found only on the robot (unitree_rl_mjlab #25, 160 against 154),
+gains hand-copied into a deploy YAML (#32), a policy switch that shuts
+the robot down (mjlab #729), a Passive transition that "blindly sets
+values to zero" (unitree_rl_lab #147). Unitree's SDK ships protective
+checks (`terminations.hpp`: tilt 1.0 rad, joint speed 10 rad/s, gyro 6
+rad/s, winding 120 degC, casing 85 degC, battery 20 %, link 1000 ms) as
+examples that print; no deploy repo wires them.
+
+**The method** (`pipeline/rq_pipeline/deploy/preflight.py`). Three parts,
+each in the runtime.
+
+1. *Seven checks before the first tick*, a table (`CHECKS`), each a
+   refusal by name with its number: the ONNX graph's own input and
+   output widths against the manifest; every action landing on the
+   actuator of its own joint; the trained gains against the scene's
+   actuators AND the YAML Unitree's controller reads; a dry rollout of
+   the gate's own held twists (four), its commanded targets against the
+   joints' ranges (0.35 rad past at most) and the torque its PD targets
+   demand against the force ranges (2x peak, 25 % of ticks at the range
+   at most); the observe-and-infer compute per tick against half the
+   period; the robot's reported state against the SDK's watchdogs and
+   at rest (every joint under 0.5 rad/s). A check that drives the policy
+   is not run once a structural one refused. Every margin is a field of
+   `Margins`, written into every record.
+2. *The ramp-in*: from damping, the commanded target blended from the
+   pose measured at handover to the policy's over `ramp_in_s` (1 s
+   default, a manifest field).
+3. *The soft stop*: on a watchdog or the operator's stop (a STOP file
+   beside the manifest, door `stop_deployment`; Ctrl-C and their Passive
+   chord on the DDS runtime), the gains blended to damping (kp 0, kd 3:
+   their Passive) over `soft_stop_s`, the pose at the stop held.
+
+The record `preflight.json` beside the manifest; the card reads
+"pre-flight passed 7/7 in simulation" (or "on a simulation stand-in"
+when the state came from their simulator); the drawer shows the checks
+and the measurements; `.viewer/preflight.rrd` holds the ramp and the
+stops as per-tick series; `preflight-handover.png` is the robot at the
+end of the ramp. Door `preflight_deployment` (a job),
+`tools/preflight-deployment.py`.
+
+**Measured on go2-c2** (plain MuJoCo 3.11.0, the box):
+
+| check | measured | limit |
+|---|---|---|
+| policy widths | takes 47, gives 12 | the manifest's 47 and 12 joints |
+| joint order | 12/12 actions on their joint | every one |
+| gains | 0 disagreements (scene and their YAML) | equal within 1e-6 |
+| targets | 0.000 rad past any range over 4000 ticks | 0.35 rad |
+| torques | peak 0.45x the force range (RL calf), 0 % at the range | 2x, 25 % |
+| control rate | observe + infer p99 0.5-1.4 ms | 10 ms (half of 20) |
+| robot state | tilt 0, joints 0, gyro 0 | the watchdogs, at rest |
+
+Each refusal provoked on the same policy (`tests/test_preflight.py`): a
+term left out of the observation list (the policy takes 47, the manifest
+sums less) refuses at "policy widths" and the three rollout checks are
+not run; the action scale x8 (a hand-copy error) refuses at the targets;
+the stiffness x2 refuses at the gains naming the joint and the trained
+value; a body tilted 1.2 rad refuses at the robot state, naming the tilt
+watchdog.
+
+| handover from lying, in damping | first-tick target step | largest torque step | stood |
+|---|---|---|---|
+| with the 1 s ramp | 0.020 rad | 1.8 N·m | yes |
+| without | 1.011 rad | 27.6 N·m | yes |
+
+| stop, walking at 0.5 m/s | to damping | body falls at most | joints spin at most | ends at |
+|---|---|---|---|---|
+| soft (1 s blend, pose held) | 1.0 s | 0.33 m/s | 1.9 rad/s | 0.105 m |
+| damping at once | 0.02 s | 0.31 m/s | 2.1 rad/s | 0.083 m |
+| zeroed (kp and kd 0) | 0.02 s | 1.58 m/s | 20.6 rad/s | 0.082 m |
+
+Read plainly: the ramp takes the slam out of the first tick (a 15x
+smaller torque step); on flat ground, damping at once is about as
+gentle as the blend, and what hurts is zeroing, which spins a joint to
+twice the SDK's own speed limit and drops the body five times faster.
+The soft stop's value is that it never zeroes and holds the pose while
+the gains fade.
+
+**Honest edges.** Plain MuJoCo is a simulation: no temperatures, no
+battery, no link, so those watchdogs are named "not reported there" on
+the card's check. The DDS run (the state read from their simulator in
+their fixed stand, their Passive stop measured beside ours) is built and
+tested against fakes of their bus and pad, and NOT yet run on their
+stack on 2026-09-24: `/dev/uinput` went back to root-only after the
+box's reboot, and `sudo modprobe joydev && sudo chmod 666 /dev/uinput`
+is the operator's line; the tool refuses with it. On the DDS runtime
+their controller owns the gains, so our blend cannot be applied there:
+their stop is their Passive in one press, measured, not changed. The
+compute check measures this machine; the robot's computer is measured on
+the day. The margins are our stated choices, not a standard.
