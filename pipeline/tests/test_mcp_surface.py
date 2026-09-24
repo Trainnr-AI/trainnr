@@ -229,6 +229,84 @@ class Runs(unittest.TestCase):
         self.assertEqual(describe_runs(Path("/nonexistent/runs")), [])
 
 
+class TheCaptureDoors(unittest.TestCase):
+    """The live-capture doors (built 2026-09-09, registered 2026-09-24:
+    the module existed and no agent could call it)."""
+
+    def _free_port(self) -> int:
+        import socket  # noqa: PLC0415
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def test_start_status_stop_round_trip_and_the_refusals(self) -> None:
+        import os  # noqa: PLC0415
+        import socket  # noqa: PLC0415
+        import time  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            capture_status,
+            start_capture,
+            stop_capture,
+        )
+        from rq_pipeline.robots.capture import FAILED, IDLE, LISTENING  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
+                self.assertEqual(capture_status()["state"], IDLE)
+                self.assertEqual(stop_capture()["status"], "refused")
+                port = self._free_port()
+                started = start_capture("session-1", port=port, window_s=30.0)
+                self.assertEqual(started["status"], "done", started)
+                self.assertEqual(started["capture"]["state"], LISTENING)
+                self.assertEqual(capture_status()["state"], LISTENING)
+                # a second listener for the same project is refused by name
+                again = start_capture("session-2", port=self._free_port())
+                self.assertEqual(again["status"], "refused")
+                self.assertIn("session-1", again["reason"])
+                sent = 12
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    for i in range(sent):
+                        s.sendto(
+                            f"n={i} t={i * 20} v=0.0".encode(), ("127.0.0.1", port)
+                        )
+                        time.sleep(0.002)
+                deadline = time.time() + 5.0
+                while capture_status()["datagrams"] < sent and time.time() < deadline:
+                    time.sleep(0.05)
+                stopped = stop_capture()
+                self.assertEqual(stopped["status"], "done", stopped)
+                # a dozen unparseable lines: the ingest fails by name, the
+                # state says so, and nothing is left behind
+                self.assertIn(stopped["capture"]["state"], (FAILED, "ingested"))
+                self.assertEqual(capture_status()["state"], stopped["capture"]["state"])
+                self.assertEqual(stop_capture()["status"], "refused")
+                self.assertFalse(
+                    list((Path(made["root"]) / "recordings").glob(".capture-*"))
+                )
+
+    def test_without_a_project_every_capture_door_refuses(self) -> None:
+        import os  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import (  # noqa: PLC0415
+            capture_status,
+            start_capture,
+            stop_capture,
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(os.environ, {PROJECT_ENV: str(Path(tmp) / "nowhere")}),
+        ):
+            for door in (capture_status, stop_capture):
+                self.assertEqual(door()["status"], "refused")
+            self.assertEqual(start_capture("x")["status"], "refused")
+
+
 class TheProjectDoors(unittest.TestCase):
     def test_create_then_describe_names_every_state_missing(self) -> None:
         import os  # noqa: PLC0415

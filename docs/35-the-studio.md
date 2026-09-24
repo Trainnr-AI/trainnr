@@ -170,9 +170,9 @@ surface (docs/64 §3) and the loop it walks (docs/76). The app's jobs:
 
 - **Launched by a tool.** `open_studio` starts it; anything speaking the
   Rerun SDK then streams in.
-- **Pointed at an artifact.** This does not exist yet: a tool to open a
-  named recording or run in the window is designed but unbuilt, and it is
-  the app's next piece of work.
+- **Pointed at an artifact.** `open_in_studio` and `show_in_studio`
+  (since 2026-09-09) open a page or a named artifact and replay its
+  saved stream; this line said "does not exist yet" until 2026-09-24.
 - **The human's live view.** Headless runs report the same facts
   without it — the datasheet, the evaluation, the findings record — and
   since 2026-09-13 keep the same picture: every feed that narrates an

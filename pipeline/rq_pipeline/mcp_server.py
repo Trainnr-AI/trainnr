@@ -1126,6 +1126,104 @@ def ingest_recording(
     return ingest(current_project(), Path(source), name=name, adapter=adapter)
 
 
+# -- live capture (docs/76 §5.1): the rig's UDP stream into a recording -----------
+
+# One listener per project, held by the server process that started it
+# (the state on disk is what every other process reads). Keyed by the
+# project's root so two projects can listen on two ports.
+_CAPTURES: dict[str, Any] = {}
+
+
+def start_capture(
+    name: str, port: int | None = None, window_s: float | None = None
+) -> dict[str, Any] | Refusal:
+    """Listen for the rig's telemetry on its UDP port and append every
+    datagram to a raw file inside the current project; `stop_capture`
+    ingests it as a stamped recording. The state on disk
+    (`<project>/.index/capture.json`) is what `capture_status` and the
+    Studio read, so a listener started here is visible everywhere.
+    Refused by name: no project open, a capture already listening for
+    this project, a recording of that name already present, a port
+    another process holds. `window_s` caps the listen (default ten
+    minutes); the listener also stops itself when the window passes."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.ingest import capture as live_capture  # noqa: PLC0415
+    from rq_pipeline.robots.capture import (  # noqa: PLC0415
+        DEFAULT_WINDOW_S,
+        LISTENING,
+        WIRE_UDP_PORT,
+    )
+
+    try:
+        project = current_project()
+    except FileNotFoundError as why:
+        return refusal(str(why))
+    key = str(project.root)
+    held = _CAPTURES.get(key)
+    if held is not None and held.state.state == LISTENING:
+        return refusal(
+            f"a capture named {held.name!r} is already listening on UDP "
+            f"{held.port} for this project; stop_capture first"
+        )
+    listener = live_capture(
+        project, name, port=WIRE_UDP_PORT if port is None else int(port)
+    )
+    try:
+        state = listener.start(
+            DEFAULT_WINDOW_S if window_s is None else float(window_s)
+        )
+    except (FileExistsError, OSError) as why:
+        return refusal(str(why))
+    _CAPTURES[key] = listener
+    return {"status": DONE, **_capture_state(state)}
+
+
+def stop_capture() -> dict[str, Any] | Refusal:
+    """Stop the project's listener and ingest what it captured: the raw
+    file becomes a stamped recording through the same ingest as
+    `ingest_recording` (adapter `wire`), the index is rewritten so the
+    loop's telemetry stage is proved by it. A session with no datagrams
+    fails by name and leaves nothing. Refused when nothing is listening
+    for the current project in this server."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    try:
+        project = current_project()
+    except FileNotFoundError as why:
+        return refusal(str(why))
+    listener = _CAPTURES.pop(str(project.root), None)
+    if listener is None:
+        return refusal(
+            "no capture is listening for this project in this server; "
+            "capture_status reads the state any process wrote"
+        )
+    state = listener.stop()
+    from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
+
+    write_index(project, index_project(project))
+    return {"status": DONE, **_capture_state(state)}
+
+
+def capture_status() -> dict[str, Any] | Refusal:
+    """The current project's capture state as written on disk: idle,
+    listening (datagrams so far, last one when), ingested (the
+    recording's stamp), or failed (why). Readable from any process."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project import ingest as ingest_doors  # noqa: PLC0415
+
+    try:
+        project = current_project()
+    except FileNotFoundError as why:
+        return refusal(str(why))
+    return {"status": DONE, **ingest_doors.capture_status(project)}
+
+
+def _capture_state(state: Any) -> dict[str, Any]:
+    from dataclasses import asdict  # noqa: PLC0415
+
+    return {"capture": asdict(state)}
+
+
 # -- the Studio's control surface (docs/76 §10.1) ----------------------------------
 
 
@@ -1949,12 +2047,19 @@ def build_server() -> Any:  # noqa: PLR0915
 
     server = MCPServer(
         name="robotiq",
+        # The name is bound by clients' .mcp.json entries; it changes with
+        # the S3 rename (docs/70 §1), not here.
         instructions=(
-            "Read-only window into the robotiq instrument: robot bundles "
-            "(hash-stamped, with fit records and their honesty verdicts), "
-            "the provenance-gated actuator library, the task and physics-"
-            "engine registries, and training-run manifests. Every answer "
-            "comes through the same code paths the pipeline itself uses."
+            "The instrument's doors: describe (robot bundles hash-stamped "
+            "with fit records and their honesty verdicts, the provenance-"
+            "gated actuator library, the task and physics-engine registries, "
+            "runs, evaluations, projects), act (onboard a robot, ingest or "
+            "capture telemetry, identify, create and accept a task, press "
+            "demonstrations, train, evaluate, export, gate, check drift, "
+            "capture a scene — long work returns a job handle), and drive "
+            "the Studio (open, show, compare, time, simulate, screenshot). "
+            "Every answer comes through the same code paths the pipeline "
+            "itself uses; a refusal names its reason."
         ),
     )
     server.tool(description="Every robot bundle: name@hash, file census")(
@@ -2036,6 +2141,18 @@ def build_server() -> Any:  # noqa: PLR0915
         description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap) "
         "into the project as a stamped recording with channels, units, census."
     )(ingest_recording)
+    server.tool(
+        description="Listen on the rig's UDP port and record its telemetry into the "
+        "project; stop_capture ingests it. Refuses a held port or a taken name."
+    )(start_capture)
+    server.tool(
+        description="Stop the project's listener and ingest the capture as a stamped "
+        "recording; a session with no datagrams fails by name."
+    )(stop_capture)
+    server.tool(
+        description="The project's capture state on disk: idle, listening, ingested, "
+        "failed — readable from any process."
+    )(capture_status)
     server.tool(
         description="Bring a trained rq_mjlab experiment into the project: run, policy "
         "and one evaluation per verdict, each citing the others by version."

@@ -200,15 +200,26 @@ parameter the task depends on.
 One MCP server, three families, all over the same seams the pipeline
 itself uses — never around them.
 
-- **DESCRIBE** (built, 15 tools): bundles, actuators, certified bundles,
+- **DESCRIBE** (built, 14 tools): bundles, actuators, certified bundles,
   tasks, engines, runs, evaluation records, a batch's datasheet, an
   actuator's friction curves. Read-only windows.
-- **ACT** (built, 12 tools): press demonstrations three ways, multiply,
-  run the whole chain, train and certify the walk, onboard a robot, open
-  the Studio, and the job handles (`job_status`, `cancel_job`,
-  `list_jobs`) that make long work pollable.
-- **CLOUD** (built, 8 tools, off by default): custody by stamp and
-  managed jobs; offline is a named state, not an error.
+- **ACT** (built, 23 tools plus the 18 project-and-loop doors of §3):
+  press demonstrations three ways, multiply, run the whole chain, train
+  and certify the walk, onboard a robot, ingest or capture telemetry
+  (the three capture doors were written 2026-09-09 and registered
+  2026-09-24), identify, create and accept tasks, export and gate a
+  deployment, check drift, capture and stage a scene, and the job
+  handles (`job_status`, `cancel_job`, `list_jobs`) that make long work
+  pollable.
+- **STUDIO** (built, 14 tools): launch, quit, open, show, compare, time,
+  panels, simulate, the simulator's controls, screenshot, events.
+- **CLOUD** (8 tools, off by default): custody by stamp and managed jobs;
+  offline is a named state, not an error. Built on the branch
+  `cloud-seam-2026-09-08`, NOT merged as of 2026-09-24; this list said
+  "built" without saying where until the market read named it.
+
+Counted from the registration list in `pipeline/rq_pipeline/mcp_server.py`
+on 2026-09-24: 69 tools on the tip.
 
 What the harness adds, by stage: a workspace description (what artifacts
 exist, by kind, with their lineage), robot ingest and identification
