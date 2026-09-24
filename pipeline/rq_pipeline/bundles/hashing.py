@@ -7,6 +7,7 @@ location on disk does not.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 from collections.abc import Mapping
@@ -18,8 +19,13 @@ from typing import Any
 STAMP_LENGTH = 12
 
 
-def bundle_hash(root: Path) -> str:
-    """SHA-256 over every file under `root`, in sorted relative-path order."""
+def bundle_hash(root: Path, exclude: tuple[str, ...] = ()) -> str:
+    """SHA-256 over every file under `root`, in sorted relative-path order.
+    `exclude` names files that live inside the root and are not its
+    content (glob patterns on the POSIX relative path; an artifact's run
+    records, `project.kinds.RUN_RECORDS`). Paths enter the digest in POSIX
+    form so a bundle hashes the same on Windows as on Linux and macOS
+    (identical bytes to `str(path)` on the latter, so no stamp moves)."""
     root = Path(root)
     if not root.exists():
         raise FileNotFoundError(f"bundle root does not exist: {root}")
@@ -36,11 +42,16 @@ def bundle_hash(root: Path) -> str:
         for path in root.rglob("*")
         if path.is_file()
         and not any(part.startswith(".") for part in path.relative_to(root).parts)
+        and not any(
+            fnmatch.fnmatch(path.relative_to(root).as_posix(), pattern)
+            for pattern in exclude
+        )
     )
     if not files:
-        raise ValueError(f"bundle is empty: {root}")
+        what = "once its excluded files are left out" if exclude else ""
+        raise ValueError(f"bundle is empty {what}: {root}".replace("  ", " "))
     for path in files:
-        digest.update(str(path.relative_to(root)).encode())
+        digest.update(path.relative_to(root).as_posix().encode())
         digest.update(b"\x00")
         digest.update(path.read_bytes())
         digest.update(b"\x00")

@@ -17,8 +17,6 @@ through `bundles/hashing.stamp`. Downstream code never invents a name.
 
 from __future__ import annotations
 
-import fnmatch
-import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
@@ -231,35 +229,11 @@ RUN_RECORDS: dict[Kind, Callable[[], tuple[str, ...]]] = {
 
 
 def artifact_hash(kind: Kind, root: Path) -> str:
-    """The artifact's content hash: `bundles.hashing.bundle_hash`, less the
-    run records its kind declares (`RUN_RECORDS`). The same bytes in the
-    same order as `bundle_hash` - pinned by test so the two never part -
-    with those files left out; a kind with none is `bundle_hash` itself.
-    (To collapse into an `exclude` argument of `bundle_hash` at merge.)"""
-    root = Path(root)
+    """The artifact's content hash: `bundles.hashing.bundle_hash` with the
+    run records its kind declares (`RUN_RECORDS`) left out; a kind with
+    none is `bundle_hash` itself."""
     records = RUN_RECORDS.get(kind)
-    if records is None or root.is_file():
-        return bundle_hash(root)
-    patterns = records()
-    digest = hashlib.sha256()
-    files = sorted(
-        path
-        for path in root.rglob("*")
-        if path.is_file()
-        and not any(part.startswith(".") for part in path.relative_to(root).parts)
-        and not any(
-            fnmatch.fnmatch(str(path.relative_to(root).as_posix()), pattern)
-            for pattern in patterns
-        )
-    )
-    if not files:
-        raise ValueError(f"artifact is empty once its run records are left out: {root}")
-    for path in files:
-        digest.update(str(path.relative_to(root)).encode())
-        digest.update(b"\x00")
-        digest.update(path.read_bytes())
-        digest.update(b"\x00")
-    return digest.hexdigest()
+    return bundle_hash(Path(root), exclude=records() if records else ())
 
 
 def stamp_kind(kind: Kind, root: Path, name: str | None = None) -> str:
