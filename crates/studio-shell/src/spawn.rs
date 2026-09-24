@@ -24,7 +24,8 @@ pub const PRESENTER_SCRIPT: &str = "studio-present.py";
 pub const RENDER_STREAM_SCRIPT: &str = "studio-render-stream.py";
 /// The pipeline extras a Studio subprocess needs: MuJoCo (`sim`) and
 /// the Rerun SDK (`viz`, so a script can narrate into this window).
-const PIPELINE_EXTRAS: &[&str] = &["sim", "viz"];
+// `deploy`: onnxruntime, for a deployment's policy in the viewport.
+const PIPELINE_EXTRAS: &[&str] = &["sim", "viz", "deploy"];
 
 /// The WSL-only environment for MuJoCo's offscreen GL (the box's
 /// documented gotcha: without these it falls back to llvmpipe, the

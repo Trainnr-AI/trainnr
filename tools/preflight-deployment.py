@@ -28,6 +28,7 @@ bootstrap()
 from rq_pipeline.bundles.basis import BASIS_OWN, BASIS_SIMULATION  # noqa: E402
 from rq_pipeline.deploy.preflight import (  # noqa: E402
     CHECK_MARKS,
+    POSES_TRACK,
     PREFLIGHT_FILE,
     STOP_FILE,
     card_line,
@@ -82,6 +83,7 @@ def _with_stack(
                     walk_command(manifest),
                     stand_in=stack.stand_in,
                     stop_file=deployment / STOP_FILE,
+                    poses=record.get(POSES_TRACK),
                 )
             else:
                 runtime.stop()

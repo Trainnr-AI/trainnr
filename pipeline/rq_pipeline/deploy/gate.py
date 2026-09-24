@@ -31,6 +31,7 @@ from rq_pipeline.deploy.course import (
 )
 from rq_pipeline.deploy.manifest import GATE_SCHEMA, Key, Manifest, load_manifest
 from rq_pipeline.deploy.mirror import GateMirror
+from rq_pipeline.deploy.poses import PoseTrack, poses_file, trial_segment
 from rq_pipeline.deploy.runtimes import (
     DEFAULT_RUNTIME,
     GateRuntime,
@@ -63,8 +64,15 @@ class Trial(TrackingOutcome):
     command: list[float]
 
 
-# The saved stream of a gate, per runtime, inside its deployment.
+# The saved stream of a gate, per runtime, inside its deployment; its
+# poses beside it (`deploy.poses`), one segment per trial.
 GATE_STREAM = "gate"
+POSES_KEY = "poses"  # the record's pointer to the pose file, relative to the folder
+
+
+def gate_stream_name(runtime_name: str) -> str:
+    """The saved stream's name for a runtime's gate (`gate-dds`)."""
+    return f"{GATE_STREAM}-{runtime_name}"
 
 
 def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
@@ -75,12 +83,18 @@ def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     mirror: GateMirror | None = None,
     index: int = 0,
     contacts: list[np.ndarray] | None = None,
+    poses: PoseTrack | None = None,
 ) -> Trial:
     """One episode at a held command, the manifest's length and rate;
     with a `mirror`, every tick's pose goes to the Studio; with a
-    `contacts` list, every tick's contact points are appended to it."""
+    `contacts` list, every tick's contact points are appended to it; with
+    `poses`, every tick's pose is kept under the trial's segment."""
     runtime.reset()
-    meter = Ticks(manifest.control.step_dt, mirror=mirror, contacts=contacts)
+    if poses is not None:
+        poses.begin(trial_segment(index))
+    meter = Ticks(
+        manifest.control.step_dt, mirror=mirror, contacts=contacts, poses=poses
+    )
     if mirror is not None:
         mirror.trial(index, command)
     for _ in range(manifest.control.episode_ticks):
@@ -149,6 +163,7 @@ def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside
     seed: int,
     mirror: GateMirror | None,
     contacts: list[np.ndarray],
+    poses: PoseTrack | None = None,
 ) -> list[TrackingOutcome]:
     """The plane's protocol: seeded held twists, the evaluation's own.
     Public because the attribution sweep (`deploy.attribution`) drives a
@@ -163,7 +178,15 @@ def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside
             f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
         )
     return [
-        run_trial(manifest, driver, c, mirror=mirror, index=i, contacts=contacts)
+        run_trial(
+            manifest,
+            driver,
+            c,
+            mirror=mirror,
+            index=i,
+            contacts=contacts,
+            poses=poses,
+        )
         for i, c in enumerate(commands)
     ]
 
@@ -177,6 +200,7 @@ def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional insid
     seed: int,
     mirror: GateMirror | None,
     contacts: list[np.ndarray],
+    poses: PoseTrack | None = None,
 ) -> list[TrackingOutcome]:
     """A staged scene's protocol: along its course (`deploy.course`),
     judged by arrival; the record says so in every field that differs."""
@@ -201,6 +225,7 @@ def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional insid
             mirror=mirror,
             index=i,
             contacts=contacts,
+            poses=poses,
         )
         for i, v in enumerate(speeds)
     ]
@@ -236,7 +261,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
                 manifest,
                 spec.name,
                 # The gate's picture, saved inside the deployment (docs/76 §10.5).
-                file=viewer_file(deployment_dir, f"{GATE_STREAM}-{spec.name}"),
+                file=viewer_file(deployment_dir, gate_stream_name(spec.name)),
                 scene_dir=scene_dir,
                 name=deployment_dir.name,
             )
@@ -254,13 +279,27 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
             "instrument": driver.instrument,
         }
         contacts: list[np.ndarray] = []
+        # Every tick's pose, whatever drives the policy: the Studio's own
+        # viewport replays a trial from this, even one run in Unitree's
+        # simulator that ours cannot re-run (deploy/viewport_source.py).
+        poses = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
         course = Course.of_manifest(manifest)
         results: list[TrackingOutcome] = (
             _walk_course(
-                manifest, driver, course, protocol, trials, seed, mirror, contacts
+                manifest,
+                driver,
+                course,
+                protocol,
+                trials,
+                seed,
+                mirror,
+                contacts,
+                poses,
             )
             if course is not None
-            else hold_twists(manifest, driver, protocol, trials, seed, mirror, contacts)
+            else hold_twists(
+                manifest, driver, protocol, trials, seed, mirror, contacts, poses
+            )
         )
         k = sum(t.success for t in results)
         lo, hi = clopper_pearson(k, trials)
@@ -286,6 +325,11 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
             scene_dir,
             seen=driver.contact_points() is not None,
         )
+        if len(poses):
+            saved = poses.save(
+                poses_file(viewer_file(deployment_dir, gate_stream_name(spec.name)))
+            )
+            record[POSES_KEY] = saved.relative_to(deployment_dir).as_posix()
         if certificate:
             record["certificate"] = {
                 "stamp": manifest.raw.get(Key.CERTIFICATE),

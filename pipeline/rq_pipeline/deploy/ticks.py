@@ -15,6 +15,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from rq_pipeline.deploy.mirror import GateMirror
+    from rq_pipeline.deploy.poses import PoseTrack
     from rq_pipeline.deploy.runtimes import GateRuntime
 
 
@@ -29,6 +30,7 @@ class Ticks:
     dt: float
     mirror: GateMirror | None = None
     contacts: list[np.ndarray] | None = None
+    poses: PoseTrack | None = None  # every tick's pose, for the viewport's replay
     err_sum: float = 0.0
     cmd_sum: float = 0.0
     steps: int = 0
@@ -41,6 +43,8 @@ class Ticks:
         v = runtime.base_velocity_b()
         if self.mirror is not None:
             self.mirror.tick(self.dt, runtime.pose(), command, v)
+        if self.poses is not None:
+            self.poses.add(runtime.pose())
         if self.contacts is not None:
             touched = runtime.contact_points()
             if touched is not None and len(touched):

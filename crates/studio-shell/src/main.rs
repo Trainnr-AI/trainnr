@@ -308,6 +308,16 @@ impl eframe::App for StudioShell {
             self.shell.show_requested = false;
         }
         self.seen_recording = has_recording;
+        // A deployment played or replayed from its drawer: the viewport
+        // runs it and the page turns to it.
+        if let Some(scene) = self.shell.scene_request.take() {
+            self.viewport = ViewportFeed::spawn(ui.ctx(), &scene, &self.shell.model.project_root);
+            if self.shell.section != Section::Live {
+                self.control
+                    .event(Event::open(BY_USER).in_section(Section::Live.slug()));
+            }
+            self.shell.section = Section::Live;
+        }
 
         if full {
             // Full screen: the picture and its transport bar, nothing else.
@@ -378,7 +388,8 @@ impl StudioShell {
         egui::Panel::bottom("simulator_transport")
             .resizable(false)
             .show(ui, |ui| {
-                action = simulator::transport(ui, &mut self.viewport);
+                let deployments = self.shell.model.deploy_scenes();
+                action = simulator::transport(ui, &mut self.viewport, &deployments);
             });
         let picture = self.viewport.show(ui);
         if let Some(picture) = picture {
@@ -731,13 +742,13 @@ impl StudioShell {
             Command::Simulate { task } => {
                 match task {
                     Some(name) => {
-                        let known = viewport::PREVIEW_TASKS.contains(&name.as_str())
-                            || name == viewport::WALK_TASK;
-                        if !known {
+                        if !viewport::is_known_scene(&name) {
                             return Err(format!(
-                                "no preview scene {name:?}; one of {:?} or {:?}",
+                                "no preview scene {name:?}; one of {:?}, {:?}, or a \
+                                 deployment as {}<name>",
                                 viewport::PREVIEW_TASKS,
-                                viewport::WALK_TASK
+                                viewport::WALK_TASK,
+                                viewport::DEPLOY_PREFIX
                             ));
                         }
                         self.viewport =

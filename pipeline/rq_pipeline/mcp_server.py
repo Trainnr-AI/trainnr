@@ -1615,8 +1615,12 @@ def set_studio_panels(
 def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
     """Run a scene in the Studio's MuJoCo viewport — a preview scene by a
     task's name (`describe_tasks`; the viewport's own list is what the
-    Simulator page offers) or `walk:<robot>` for the newest trained walk
-    policy of a registered walk family — and switch to the Live view;
+    Simulator page offers), `walk:<robot>` for the newest trained walk
+    policy of a registered walk family, or a deployment of the open
+    project (`deploy:<name>` live and drivable, `deploy:<name>:gate:
+    <runtime>:<trial>` a gate trial re-run or replayed, `deploy:<name>:
+    preflight:<segment>` a pre-flight segment replayed; the index's
+    `viewport` summary lists them, docs/77 §11) — and switch to the Live view;
     with no task, stop the viewport. The
     state file then reports `viewport_task` and `viewport_fps`, the
     frames drawn to the screen in the last second."""

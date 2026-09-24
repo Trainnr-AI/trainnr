@@ -305,6 +305,10 @@ pub struct SimModel {
     /// task that runs it; absent for a scene without commands.
     #[serde(default)]
     pub twist_ranges: Option<[[f64; 2]; 3]>,
+    /// What the scene is, in a line for the bar (a deployment's trial,
+    /// its outcome, re-run or replayed); absent: the scene's name says it.
+    #[serde(default)]
+    pub caption: Option<String>,
 }
 
 /// The twist the human commands in a walk scene: which world, and the
@@ -395,6 +399,20 @@ pub const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 /// same frame ring, Ctrl+drag shoves land in the batched sim). Its own
 /// spawn shape: the rq_mjlab venv, not the pipeline's.
 pub const WALK_TASK: &str = "walk";
+
+/// A deployment in the viewport: `deploy:<name>` live, or
+/// `deploy:<name>:gate:<runtime>:<trial>` and
+/// `deploy:<name>:preflight:<segment>` replayed
+/// (`rq_pipeline/deploy/viewport_source.py::DEPLOY_PREFIX`, pinned by
+/// `tests/test_studio_mirrors.py`). Run by the render stream, in the
+/// pipeline's venv, inside the open project.
+pub const DEPLOY_PREFIX: &str = "deploy:";
+
+/// Whether the viewport can run a scene by this name: a preview task,
+/// the walk, or a deployment.
+pub fn is_known_scene(name: &str) -> bool {
+    PREVIEW_TASKS.contains(&name) || name == WALK_TASK || name.starts_with(DEPLOY_PREFIX)
+}
 
 impl ViewportFeed {
     /// No subprocess, no canned scene: the panel starts as a slim strip
@@ -501,6 +519,11 @@ impl ViewportFeed {
             command
                 .arg("--latest")
                 .arg(format!("--envs={}", WALK_SPAWN.envs))
+                .arg(format!("--project={}", project_root.display()));
+        } else if task_name.starts_with(DEPLOY_PREFIX) {
+            // A deployment lives in the open project.
+            command
+                .arg(task_name)
                 .arg(format!("--project={}", project_root.display()));
         } else {
             command.arg(task_name);
@@ -1151,6 +1174,16 @@ fn encode_flag(tag: u8, flag: u32, on: bool) -> [u8; 6] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_deployment_is_a_known_scene_by_its_prefix() {
+        assert!(is_known_scene("kitting"));
+        assert!(is_known_scene(WALK_TASK));
+        assert!(is_known_scene("deploy:go2-c2"));
+        assert!(is_known_scene("deploy:go2-c2:gate:dds:3"));
+        assert!(!is_known_scene("go2-c2"));
+        assert!(!is_known_scene("nothing"));
+    }
 
     #[test]
     fn the_simulate_controls_match_pythons_struct_formats() {

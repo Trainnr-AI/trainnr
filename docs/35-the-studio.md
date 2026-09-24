@@ -127,7 +127,15 @@ serves two jobs and the 3D view is agnostic to which is live:
 ## 5. What the Studio shows today
 
 - **Idle**: a strip offering four scene previews — kitting, lift, duck,
-  and the newest trained walk checkpoint rolled live.
+  and the newest trained walk checkpoint rolled live — and, since
+  2026-09-24, every deployment of the open project (`deploy · <name>`):
+  the exported ONNX driven by the plain runtime in the viewport, the
+  command from WASD and the Commands tab inside the manifest's trained
+  ranges, the robot followed. A deployment's drawer adds **Play in
+  viewport** and **Replay in viewport** (each gate trial, re-run in plain
+  MuJoCo or replayed from the poses Unitree's simulator produced; each
+  pre-flight segment: the ramp both ways, each stop, their Passive), and
+  the viewport's bar says what the picture is (docs/77 §11).
 - **Active**: a resizable MuJoCo image, orbit and zoom and shove, with
   contact-force arrows; a red banner if the render stream dies.
 - **Everything else**: whatever streams in on 9876. In practice that

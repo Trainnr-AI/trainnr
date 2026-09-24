@@ -421,6 +421,9 @@ pub struct Nav {
     pub scroll_to_detail: bool,
     /// The page was just opened: a lone artifact opens its own drawer.
     pub entered: bool,
+    /// A viewport scene asked for from the drawer (a deployment played or
+    /// replayed in the Studio's own MuJoCo viewport).
+    pub scene: Option<String>,
 }
 
 struct CardText<'a> {
@@ -1512,6 +1515,31 @@ fn detail(
                             .clicked()
                         {
                             show = true;
+                        }
+                        // A deployment in the MuJoCo viewport: live, or a
+                        // gate trial / pre-flight segment replayed.
+                        let scenes = crate::model::viewport_scenes(artifact);
+                        if let Some(((_, live), replays)) = scenes.split_first() {
+                            if !replays.is_empty() {
+                                ui.menu_button("Replay in viewport", |ui| {
+                                    for (label, scene) in replays {
+                                        if ui.button(label).clicked() {
+                                            nav.scene = Some(scene.clone());
+                                            ui.close();
+                                        }
+                                    }
+                                });
+                            }
+                            if ui
+                                .button("Play in viewport")
+                                .on_hover_text(
+                                    "The exported policy live in the Simulator's MuJoCo \
+                                     viewport: drive it with WASD",
+                                )
+                                .clicked()
+                            {
+                                nav.scene = Some(live.clone());
+                            }
                         }
                     });
                 });

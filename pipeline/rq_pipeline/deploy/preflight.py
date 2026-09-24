@@ -46,6 +46,7 @@ from rq_pipeline.deploy.gate import (
     hold_twists,
 )
 from rq_pipeline.deploy.manifest import Key, Manifest, load_manifest, read_gates
+from rq_pipeline.deploy.poses import PoseTrack, poses_file
 from rq_pipeline.deploy.runtime import GRAVITY_DOWN, rotate_inverse
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 
@@ -62,6 +63,13 @@ PREFLIGHT_SUMMARY_KEY = "pre-flight"
 STOP_FILE = "STOP"
 STILL_FILE = "preflight-handover.png"
 STREAM = "preflight"
+# The replay's segments in the pose file beside the stream (`deploy.poses`):
+# the ramp each way, each stop, and theirs; the Studio's viewport lists them.
+RAMP_SEGMENT = "ramp in · {variant}"
+STOP_SEGMENT = "stop · {variant}"
+THEIR_STOP_SEGMENT = "stop · their Passive"
+POSES_KEY = "poses"  # the record's pointer to the pose file, relative to the folder
+POSES_TRACK = "_poses"  # the in-memory track, written beside the record, never in it
 DIGITS = 4
 
 
@@ -336,6 +344,7 @@ def measure_dds_stop(
     *,
     stand_in: bool,
     stop_file: Path | None = None,
+    poses: PoseTrack | None = None,
 ) -> dict[str, Any]:
     """Unitree's own stop through their controller: the policy walking at
     a held command, then their Passive chord (the pad is the hook);
@@ -345,8 +354,11 @@ def measure_dds_stop(
     read off their state; the record says how many ticks it walked. The
     Passive chord is sent whatever happens after the handover (a silent
     bus, a health that cannot be read): the robot is never left in their
-    velocity mode."""
+    velocity mode. With `poses`, the walk and the watch are kept at the
+    control rate for the Studio's replay."""
     runtime.command = command.astype(np.float32)
+    if poses is not None:
+        poses.begin(THEIR_STOP_SEGMENT)
     reason = WALK_END
     planned = round(DDS_WALK_S / runtime.step_dt)
     walked = 0
@@ -362,12 +374,18 @@ def measure_dds_stop(
                 break
             runtime.apply(np.zeros(0, dtype=np.float32))
             walked += 1
+            if poses is not None:
+                poses.add(runtime.pose())
     finally:
         runtime.stop()
     began = time.monotonic()
+    kept = began  # the watch reads the bus as fast as it comes; poses at the tick
     fall, spin, height = 0.0, 0.0, float("nan")
     while time.monotonic() - began < DDS_WATCH_S:
         _quat, velocity_w = runtime.bus.latest(DDS_POLL_MS)
+        if poses is not None and time.monotonic() >= kept:
+            poses.add(runtime.pose())
+            kept += runtime.step_dt
         reading = runtime.health()
         fall = max(fall, float(max(0.0, -velocity_w[2])))
         spin = max(spin, float(np.max(np.abs(reading["motor_speed"]))))
@@ -836,8 +854,10 @@ class Guarded:
         soft: bool = True,
         end_kd: float | None = None,
         stop_file: Path | None = None,
+        poses: PoseTrack | None = None,
     ) -> None:
         self.rt = runtime
+        self.poses = poses
         self.tr = transitions
         self.ramp = ramp
         self.soft = soft
@@ -916,6 +936,8 @@ class Guarded:
         prev = rt.data.ctrl[self._ctrl].copy()
         force_before = rt.data.actuator_force[self._ctrl].copy()
         rt.step(target, action)
+        if self.poses is not None:
+            self.poses.add(rt.pose())
         self.log.append(
             {
                 "tick": self.ticks,
@@ -997,14 +1019,19 @@ STOP_AFTER_S = 2.0
 STOP_EPISODE_S = 4.0
 
 
-def measure_ramp(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
+def measure_ramp(
+    runtime: Runtime, transitions: Transitions, *, poses: PoseTrack | None = None
+) -> dict[str, Any]:
     """Handover from lying in damping, standing command, with the ramp and
     without: the largest target step in one tick, the largest torque step,
-    and whether the robot stood."""
+    and whether the robot stood. With `poses`, each variant's ticks are
+    kept for the Studio's replay."""
     out: dict[str, Any] = {"window_s": transitions.ramp_in_s}
     for label, ramp in RAMP_VARIANTS:
         out["from"] = _lie_down(runtime, transitions)
-        guarded = Guarded(runtime, transitions, ramp=ramp)
+        if poses is not None:
+            poses.begin(RAMP_SEGMENT.format(variant=label))
+        guarded = Guarded(runtime, transitions, ramp=ramp, poses=poses)
         guarded.handover()
         runtime.command = np.zeros(3, dtype=np.float32)
         ticks = round(RAMP_EPISODE_S / runtime.step_dt)
@@ -1051,11 +1078,14 @@ STOP_VARIANTS: tuple[StopVariant, ...] = (
 )
 
 
-def measure_stop(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
+def measure_stop(
+    runtime: Runtime, transitions: Transitions, *, poses: PoseTrack | None = None
+) -> dict[str, Any]:
     """Walking at a held command, an operator stop at STOP_AFTER_S, each
     way of `STOP_VARIANTS`: the largest torque step in one tick, the time
     to damping, the body's fastest fall and the joints' fastest spin after
-    the stop, the height it ends at."""
+    the stop, the height it ends at. With `poses`, each variant's ticks
+    are kept for the Studio's replay."""
     out: dict[str, Any] = {
         "window_s": transitions.soft_stop_s,
         "ends_in": f"kp 0, kd {transitions.damping_kd:g} (Unitree's Passive)",
@@ -1067,8 +1097,14 @@ def measure_stop(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
     )
     for variant in STOP_VARIANTS:
         runtime.reset()
+        if poses is not None:
+            poses.begin(STOP_SEGMENT.format(variant=variant.name))
         guarded = Guarded(
-            runtime, transitions, soft=variant.soft, end_kd=variant.end_kd
+            runtime,
+            transitions,
+            soft=variant.soft,
+            end_kd=variant.end_kd,
+            poses=poses,
         )
         guarded.handover()
         guarded.ticks = guarded.ramp_ticks  # already walking: no ramp here
@@ -1197,11 +1233,13 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
     if measure and passed:
-        ramp = measure_ramp(runtime, transitions)
-        stop = measure_stop(runtime, transitions)
+        poses = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
+        ramp = measure_ramp(runtime, transitions, poses=poses)
+        stop = measure_stop(runtime, transitions, poses=poses)
         record["ramp_in"] = _without_logs(ramp)
         record["soft_stop"] = _without_logs(stop)
         record["_logs"] = {"ramp_in": ramp, "soft_stop": stop}
+        record[POSES_TRACK] = poses  # a live runtime's own stop adds to it
     return record
 
 
@@ -1217,7 +1255,15 @@ def _without_logs(block: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_record(deployment_dir: Path, record: dict[str, Any]) -> Path:
+    """The record beside the manifest; its poses (when the ramp and the
+    stops ran) beside the saved stream, for the Studio's replay."""
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
+
     body = {k: v for k, v in record.items() if not k.startswith("_")}
+    track = record.get(POSES_TRACK)
+    if track is not None and len(track):
+        saved = track.save(poses_file(viewer_file(deployment_dir, STREAM)))
+        body[POSES_KEY] = saved.relative_to(deployment_dir).as_posix()
     out = Path(deployment_dir) / PREFLIGHT_FILE
     staging = out.with_suffix(".json.tmp")
     staging.write_text(json.dumps(body, indent=1) + "\n", encoding="utf-8")

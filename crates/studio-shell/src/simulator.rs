@@ -304,7 +304,13 @@ fn set_drawer(ctx: &egui::Context, open: bool, tab: Tab) {
 // -- the transport bar ---------------------------------------------------------
 
 /// Under the picture. Returns what the page should do with the viewport.
-pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Action> {
+/// `deployments`: (name, live scene) for every deployment the project
+/// holds, offered beside the previews.
+pub fn transport(
+    ui: &mut egui::Ui,
+    viewport: &mut ViewportFeed,
+    deployments: &[(String, String)],
+) -> Option<Action> {
     let mut action = None;
     let (status, model) = viewport.report();
     ui.horizontal(|ui| {
@@ -326,6 +332,19 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
                 action = Some(Action::Spawn(WALK_TASK.to_owned()));
                 ui.close();
             }
+            if !deployments.is_empty() {
+                ui.separator();
+                for (name, scene) in deployments {
+                    if ui
+                        .button(format!("deploy · {name}"))
+                        .on_hover_text("the exported policy, live: drive it with WASD")
+                        .clicked()
+                    {
+                        action = Some(Action::Spawn(scene.clone()));
+                        ui.close();
+                    }
+                }
+            }
             if viewport.is_active() {
                 ui.separator();
                 if ui.button("Stop the scene").clicked() {
@@ -334,6 +353,9 @@ pub fn transport(ui: &mut egui::Ui, viewport: &mut ViewportFeed) -> Option<Actio
                 }
             }
         });
+        if let Some(caption) = model.as_ref().and_then(|m| m.caption.as_deref()) {
+            ui.label(egui::RichText::new(caption).color(ui.visuals().weak_text_color()));
+        }
         let Some(status) = status else {
             if viewport.is_active() {
                 ui.label(egui::RichText::new("starting…").color(ui.visuals().weak_text_color()));

@@ -109,6 +109,10 @@ class RuntimeSpec:
     platforms: tuple[str, ...] = ()  # empty: every platform
     needs_assets: bool = True  # the bundle's meshes for the scene
     stack: str | None = None  # "module:attr" of a context that surrounds the gate
+    # Whether a trial of this runtime's gate can be run again, exactly, in
+    # plain MuJoCo (the Studio's viewport re-runs it); False: only its
+    # recorded poses can be replayed (another process's simulator).
+    rerun_in_plain: bool = False
 
     def open(self) -> Opener:
         require_platform(self)
@@ -143,6 +147,7 @@ RUNTIMES: dict[str, RuntimeSpec] = {
         description="plain MuJoCo + onnxruntime, driven by the manifest alone",
         instrument="plain MuJoCo",
         record_file="gate.json",
+        rerun_in_plain=True,
     ),
     "dds": RuntimeSpec(
         name="dds",

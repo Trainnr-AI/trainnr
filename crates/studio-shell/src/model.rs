@@ -54,7 +54,32 @@ pub const UNRECORDED: &str = "unrecorded";
 /// Summary keys never shown as a fact or a table column: the index's own
 /// bookkeeping (`project/index.py::HIDDEN_SUMMARY_KEYS`, pinned by
 /// `tests/test_studio_mirrors.py`).
-pub const HIDDEN_KEYS: &[&str] = &["files", "fit_bases"];
+pub const HIDDEN_KEYS: &[&str] = &["files", "fit_bases", "viewport"];
+
+/// A deployment's viewport scenes in its summary, as [label, scene]
+/// pairs, live first (`deploy/viewport_source.py::VIEWPORT_KEY`, pinned
+/// by `tests/test_studio_mirrors.py`); the drawer offers them.
+pub const VIEWPORT_KEY: &str = "viewport";
+
+/// (label, scene) for every viewport scene the artifact's summary lists.
+pub fn viewport_scenes(artifact: &Artifact) -> Vec<(String, String)> {
+    artifact
+        .summary
+        .get(VIEWPORT_KEY)
+        .and_then(serde_json::Value::as_array)
+        .map(|pairs| {
+            pairs
+                .iter()
+                .filter_map(|pair| match pair.as_array().map(Vec::as_slice) {
+                    Some([label, scene]) => {
+                        Some((label.as_str()?.to_owned(), scene.as_str()?.to_owned()))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 /// The Deployments card's pre-flight key (`deploy/preflight.py`,
 /// `PREFLIGHT_SUMMARY_KEY`): its value reads "passed 7/7 on a simulation
@@ -429,6 +454,25 @@ impl Model {
         model.reload_jobs();
         model.rescan_projects();
         model
+    }
+
+    /// Every deployment's live scene, as the viewport's picker lists it:
+    /// (the deployment's name, its live scene).
+    pub fn deploy_scenes(&self) -> Vec<(String, String)> {
+        self.index()
+            .map(|index| {
+                index
+                    .artifacts
+                    .iter()
+                    .filter(|a| a.kind == crate::pages::kind::DEPLOY)
+                    .filter_map(|a| {
+                        let (name, _) = split_stamp(&a.stamp);
+                        let (_, live) = viewport_scenes(a).into_iter().next()?;
+                        Some((name.to_owned(), live))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub fn index(&self) -> Option<&Index> {
@@ -1100,5 +1144,35 @@ mod lookup_tests {
             "two artifacts share def"
         );
         assert!(index.artifact("ghost@zzz").is_none());
+    }
+
+    #[test]
+    fn a_deployments_viewport_scenes_come_from_its_summary_live_first() {
+        let artifact: Artifact = serde_json::from_value(serde_json::json!({
+            "kind": "deploy", "stamp": "go2-c2@abc", "path": "deploy/go2-c2",
+            "summary": {
+                "gate": "passed",
+                "viewport": [
+                    ["live", "deploy:go2-c2"],
+                    ["plain MuJoCo gate · trial 1 · tracked", "deploy:go2-c2:gate:mujoco:1"],
+                    ["malformed"],
+                    [3, "not a label"]
+                ]
+            }
+        }))
+        .unwrap();
+        let scenes = viewport_scenes(&artifact);
+        assert_eq!(scenes.len(), 2, "a pair that is not two strings is skipped");
+        assert_eq!(scenes[0].1, "deploy:go2-c2");
+        assert_eq!(scenes[1].1, "deploy:go2-c2:gate:mujoco:1");
+        assert!(
+            HIDDEN_KEYS.contains(&VIEWPORT_KEY),
+            "the list never reads on a card"
+        );
+        let none: Artifact = serde_json::from_value(serde_json::json!({
+            "kind": "robot", "stamp": "go2@abc", "path": "robots/go2"
+        }))
+        .unwrap();
+        assert!(viewport_scenes(&none).is_empty());
     }
 }

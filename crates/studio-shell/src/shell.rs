@@ -34,6 +34,9 @@ pub struct Shell {
     /// Set when the user asked to show an artifact; the frame loop
     /// switches to Live once the viewer has a recording.
     pub show_requested: bool,
+    /// A viewport scene the drawer asked for (a deployment played or
+    /// replayed), taken by the frame loop that owns the viewport.
+    pub scene_request: Option<String>,
     /// What was last sent to the viewer (a version, or `a vs b`), taken
     /// by the frame loop to log the event.
     pub shown: Option<String>,
@@ -67,6 +70,7 @@ impl Shell {
             switch_to: None,
             presenter: None,
             show_requested: false,
+            scene_request: None,
             shown: None,
             last_shown: None,
             table: None,
@@ -376,6 +380,9 @@ impl Shell {
                 }
                 if let Some(stamp) = nav.open {
                     self.navigate(&stamp);
+                }
+                if let Some(scene) = nav.scene.take() {
+                    self.scene_request = Some(scene);
                 }
                 if nav.back {
                     if let Some((section, selected)) = self.history.pop() {

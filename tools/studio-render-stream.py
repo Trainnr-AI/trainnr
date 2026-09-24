@@ -36,6 +36,12 @@ Fallback wire format, stdout, per frame, flushed immediately:
     height : u32 little-endian
     pixels : width * height * 3 raw RGB8 bytes, row-major, no padding
 
+Scenes: a registry task's preview (`kitting`, `lift`), the `duck`
+flock, or a deployment by prefix (`deploy:<name>[:gate:<runtime>:<i> |
+:preflight:<i>]`, `rq_pipeline.deploy.viewport_source`: the exported
+policy live, a gate trial re-run or replayed, a pre-flight segment
+replayed; `--project=<root>` names the project it lives in).
+
 Flags: `--shm=<ring>` (the controller's frame ring), `--shadows=on|off|auto`
 (auto, the default, keeps shadows while the measured render fits one
 60 Hz frame), `--no-rerun` (no narration into the viewer).
@@ -1205,12 +1211,15 @@ class SimControl:
     toggles and forwards the rest through the ring; every STATUS_EVERY_S
     it reports the clock, the inputs and, once, the model."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the scene's own facts, each named
         self,
         model: "mujoco.MjModel",
         ring: StateRing,
         camera: "OrbitCamera | None" = None,
         twist_ranges: TwistRanges | None = None,
+        *,
+        caption: str | None = None,
+        follow_body: int | None = None,
     ) -> None:
         self.model = model
         self.ring = ring
@@ -1218,6 +1227,10 @@ class SimControl:
         # A walk scene's command bounds, from the task that runs the
         # scene; None for a scene without commands.
         self.twist_ranges = twist_ranges
+        # What the scene is, in a line the viewport's bar shows (a
+        # deployment's trial, its outcome, re-run or replayed); None: the
+        # scene's name says it.
+        self.caption = caption
         self._lock = threading.Lock()
         self._vis: dict[int, bool] = {}
         self._rnd: dict[int, bool] = {}
@@ -1245,6 +1258,11 @@ class SimControl:
             prefix, sep, _ = name.partition("/")
             if sep and prefix.startswith("w") and prefix[1:].isdigit():
                 self._world_roots.setdefault(int(prefix[1:]), body)
+        # One robot (a deployment's scene): world 0 is its floating base,
+        # followed from the start - a walking robot leaves a fixed frame.
+        if follow_body is not None and not self._world_roots:
+            self._world_roots[0] = follow_body
+            self.follow = 0
 
     # -- reader thread ----------------------------------------------------
     def handle(self, tag: int, payload: bytes) -> None:
@@ -1474,6 +1492,7 @@ class SimControl:
             "ngroup": int(mujoco.mjNGROUP),
             "nworld": self.ring.nworld,
             "twist_ranges": self.twist_ranges,
+            "caption": self.caption,
         }
 
 
@@ -1851,6 +1870,51 @@ def run_flock_parade_forever(model: "mujoco.MjModel", pump: PhysicsPump) -> None
 
 
 WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched sim
+
+
+# The project a prefixed scene lives in (`--project=`); None: the
+# environment's current project (`rq_pipeline.project.current_project`).
+PROJECT_ROOT: "pathlib.Path | None" = None
+
+
+def open_deploy_scene(name: str) -> "object":
+    """A deployment in the viewport (`deploy.viewport_source`): its own
+    scene and meshes, built the same in both processes; refused by name."""
+    from rq_pipeline.deploy.viewport_source import open_scene  # noqa: PLC0415
+
+    return open_scene(
+        name,
+        project_root=PROJECT_ROOT,
+        offscreen_side=MAX_RENDER_SIDE,
+        twist_word=MAILBOX_TWIST,
+        twist_axes=TWIST_AXES,
+    )
+
+
+def deploy_camera() -> dict:
+    from rq_pipeline.deploy.viewport_source import CAMERA  # noqa: PLC0415
+
+    return dict(CAMERA)
+
+
+# Scenes named by a PREFIX, not a registry task: how both processes open
+# one (an object with `model`, `plan.caption`, `plan.twist_ranges`,
+# `free_body()` and `run(pump)`) and its camera. One entry per kind.
+PREFIX_SCENES: "dict[str, tuple[Callable[[str], object], Callable[[], dict]]]" = {
+    "deploy:": (open_deploy_scene, deploy_camera),
+}
+
+
+def prefix_scene(
+    name: str,
+) -> "tuple[Callable[[str], object], Callable[[], dict]] | None":
+    """The prefix entry that opens `name`, if a prefix names it."""
+    return next(
+        (entry for prefix, entry in PREFIX_SCENES.items() if name.startswith(prefix)),
+        None,
+    )
+
+
 WALK_SCENE_PARTS = 3  # walk:<robot>:<worlds>
 
 
@@ -1935,7 +1999,12 @@ def walk_scene(
 def build_scene(task_name: str) -> "tuple[object, mujoco.MjModel, str]":
     """The task (or None for the duck preview), its compiled model with
     the offscreen budget raised to the viewer's cap, and its rig name.
-    Both processes build the same model from the same spec path."""
+    Both processes build the same model from the same spec path. A
+    prefixed scene (`PREFIX_SCENES`) is its own task: the opened scene."""
+    entry = prefix_scene(task_name)
+    if entry is not None:
+        opened = entry[0](task_name)
+        return opened, opened.model, None
     if task_name == DUCK:
         task, spec, rig = None, duck_scene(), "microduck"
     else:
@@ -1999,16 +2068,32 @@ def stream(task_name: str, shm_path: str | None) -> None:
     ]
     if "--no-rerun" in sys.argv:
         physics_args.append("--no-rerun")
+    # A prefixed scene lives in a project: the physics side opens it too.
+    physics_args += [f for f in sys.argv[1:] if f.startswith("--project=")]
     # The child's stdin is a pipe this process never writes: when this
     # process dies, the pipe closes and the child exits on EOF — no
     # orphaned physics at 100 % of a core.
     physics = subprocess.Popen(physics_args, stdin=subprocess.PIPE)
 
+    entry = prefix_scene(task_name)
     orbit = OrbitCamera(
-        RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
+        entry[1]()
+        if entry is not None
+        else RIG_CAMERAS.get(rig or DEFAULT_CAMERA, RIG_CAMERAS[DEFAULT_CAMERA])
     )
     perturber = Perturber(model)
-    sim = SimControl(model, ring, orbit)
+    sim = (
+        SimControl(
+            model,
+            ring,
+            orbit,
+            _task.plan.twist_ranges,
+            caption=_task.plan.caption,
+            follow_body=_task.free_body(),
+        )
+        if entry is not None
+        else SimControl(model, ring, orbit)
+    )
     pump = RenderPump(model, orbit, perturber, FrameSink(shm_path), ring, sim)
     threading.Thread(
         target=_read_control_messages,
@@ -2074,6 +2159,8 @@ def physics_main(task_name: str, ring_path: str) -> None:
             if manual is not None:
                 data, steps = manual
                 run_manual_forever(model, data, pump, steps)
+            elif prefix_scene(task_name) is not None:
+                task.run(pump)  # the prefixed scene's own loop (PREFIX_SCENES)
             elif task is not None and task_name in TASKS_WITH_EXPERTS:
                 run_expert_forever(task, pump)
             elif task_name == DUCK:
@@ -2138,7 +2225,8 @@ if __name__ == "__main__":
             # are searched first (the Go2 lives only there, 2026-09-12).
             from rq_pipeline.project.locate import Project
 
-            Project(pathlib.Path(flag.removeprefix("--project=")).resolve()).use()
+            PROJECT_ROOT = pathlib.Path(flag.removeprefix("--project=")).resolve()
+            Project(PROJECT_ROOT).use()
     if model_path and ring_path:
         render_on(
             model_path,
@@ -2150,8 +2238,11 @@ if __name__ == "__main__":
         )
         raise SystemExit(0)
     task_name = arguments[0] if arguments else DEFAULT_TASK
-    if task_name != DUCK and task_name not in BUILDERS:
-        sys.exit(f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}")
+    if task_name != DUCK and task_name not in BUILDERS and not prefix_scene(task_name):
+        sys.exit(
+            f"unknown task {task_name!r}; one of {sorted([*BUILDERS, DUCK])}, or a "
+            f"scene named by a prefix ({', '.join(PREFIX_SCENES)})"
+        )
     if physics_ring:
         physics_main(task_name, physics_ring)
     else:

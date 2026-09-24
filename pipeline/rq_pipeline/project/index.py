@@ -39,6 +39,7 @@ from rq_pipeline.deploy.preflight import (
     read_preflight,
 )
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, RUNTIMES
+from rq_pipeline.deploy.viewport_source import VIEWPORT_KEY, scenes_of
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
 from rq_pipeline.evaluate.commands import describe_twist
@@ -705,6 +706,9 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
         out["terrain"] = (m.get("scene") or {}).get("terrain_kind", UNRECORDED)
     out["checkpoint"] = m.get("checkpoint", UNRECORDED)
     out["control"] = _hz((m.get("control") or {}).get("control_hz"))
+    # What the Studio's MuJoCo viewport can show of it: live, each gate
+    # trial, each pre-flight segment (hidden on the card; the drawer reads it).
+    out[VIEWPORT_KEY] = scenes_of(path)
     return out
 
 
@@ -776,7 +780,7 @@ def _summary_robot(p: Path) -> dict[str, Any]:
 
 # The summary facts every row carries for the index's own use and no card
 # shows (`model.rs::HIDDEN_KEYS`, pinned by test_studio_mirrors).
-HIDDEN_SUMMARY_KEYS = ("files", "fit_bases")
+HIDDEN_SUMMARY_KEYS = ("files", "fit_bases", VIEWPORT_KEY)
 BASIS_KEY = "basis"
 
 

@@ -1200,3 +1200,67 @@ their controller owns the gains, so our blend cannot be applied there:
 their stop is their Passive in one press, measured, not changed. The
 compute check measures this machine; the robot's computer is measured on
 the day. The margins are our stated choices, not a standard.
+
+## 11. The deployment in our own MuJoCo viewport (2026-09-24)
+
+The operator, after the DDS gate and the live pre-flight ran on go2-c2:
+"not in the 3d rerun viewer but our mujoco viewer". Until now the
+Simulator page's native viewport played preview tasks and the walk; a
+deployment only reached the Studio as the gate mirror's Rerun stream,
+and a gate started while no Studio listened was only a saved file.
+
+**The source** (`pipeline/rq_pipeline/deploy/viewport_source.py`), a
+registry of modes behind one scene grammar the picker, the drawer and
+the agent's `simulate_in_studio` share:
+
+| scene | what the viewport shows |
+|---|---|
+| `deploy:<name>` | live: the exported ONNX through the plain runtime and the gate's own tick (`Ticks`), the command the human's twist (WASD, the Commands tab) clipped to the manifest's ranges; a fall holds a second and resets |
+| `deploy:<name>:gate:<runtime>:<i>` | trial i of that runtime's gate: re-run through the gate's own trial code where our physics can (`RuntimeSpec.rerun_in_plain`: the MuJoCo gate), else replayed from the poses the gate saved (Unitree's simulator), no physics |
+| `deploy:<name>:preflight:<i>` | segment i of the pre-flight: the ramp with and without, the soft, damping and zeroed stops, their Passive |
+
+One truth: live and a re-run go through `deploy.gate.run_trial`,
+`deploy.course.run_course_trial` and `deploy.ticks.Ticks` over
+`deploy.runtime.Runtime`, the render stream's physics pump standing
+where the gate's Studio mirror stands. A trial re-runs from the
+record's own row (its command, or its course speed), so no draw is
+reinterpreted. **Every gate and every pre-flight now saves its poses**
+(`deploy.poses`: base position, orientation and joints per control
+tick, one segment per trial or phase) beside its stream,
+`.viewer/gate-<runtime>-poses.npz` and `.viewer/preflight-poses.npz`,
+inside the hidden folder so a replay file never moves the deployment's
+identity; the records point at them (`poses`). Refused by name: a
+deployment with no manifest, a trial the gate did not run, a mode it
+does not know, a replay whose poses were never saved ("the run was
+made before its poses were recorded; run it again"), a pose file whose
+joints are not the manifest's policy order. The drawer lists only what
+it can show.
+
+**Measured headless** through the real stream (both processes, the
+ring, the wire; frames read from the shared-memory ring) on a scratch
+copy of go2-c2, whose DDS gate (2 trials) and pre-flights (plain and on
+their stack) were re-run there so their poses exist, leaving the
+operator's records untouched:
+
+| scene | real-time factor | caption the bar shows |
+|---|---|---|
+| live, driven forward at 0.6 m/s | 1.00 | live: drive it with WASD or the Commands tab, inside the manifest's trained ranges |
+| plain MuJoCo gate, trial 1, re-run | 1.00 | trial 1 of 20 · vx +0.34, vy -0.86, wz -0.18 · tracked · re-run in plain MuJoCo |
+| DDS gate, trial 1, replayed | 1.00 | Unitree's simulator and controller over DDS gate · trial 1 of 2 · tracked · replayed from its recorded poses |
+| pre-flight, stop zeroed | 1.00 | the dog on its back |
+| pre-flight, their Passive | 1.00 | the dog folded down on its belly |
+
+![Live, driven forward](figures/viewport-deploy/live-driven-forward.png)
+![The DDS gate's trial 1, replayed](figures/viewport-deploy/gate-dds-trial-1-replayed.png)
+![The zeroed stop](figures/viewport-deploy/preflight-stop-zeroed.png)
+![Their Passive](figures/viewport-deploy/preflight-stop-their-passive.png)
+
+**Honest edges.** The records on the operator's go2-walk project were
+written before poses were recorded: its plain MuJoCo trials re-run in
+the viewport today, its DDS trials and pre-flight segments appear once
+the gate and the pre-flight are run again. The live-window check in the
+operator's Studio is the parent's to do after the merge (the port is
+the operator's Studio's; this was proved headless). The pipeline spawn
+now syncs the `deploy` extra (onnxruntime) for every preview, since uv
+runs sync the venv to the extras they name.
+

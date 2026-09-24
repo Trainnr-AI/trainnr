@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from rq_pipeline.deploy.manifest import Key, Manifest
+from rq_pipeline.deploy.poses import PoseTrack, trial_segment
 from rq_pipeline.deploy.ticks import Ticks
 from rq_pipeline.evaluate.tracking import TrackingOutcome
 
@@ -217,15 +218,19 @@ def run_course_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     mirror: GateMirror | None = None,
     index: int = 0,
     contacts: list[np.ndarray] | None = None,
+    poses: PoseTrack | None = None,
 ) -> CourseTrial:
     """One walk along the course at `speed`, steered every tick from
     the runtime's pose; the budget from the course's length; with a
     `mirror`, every tick goes to the Studio; with a `contacts` list,
-    every tick's contact points are appended to it."""
+    every tick's contact points are appended to it; with `poses`, every
+    tick's pose is kept under the trial's segment."""
     dt = manifest.control.step_dt
     budget_s = course.budget_s(speed)
     runtime.reset()
-    meter = Ticks(dt, mirror=mirror, contacts=contacts)
+    if poses is not None:
+        poses.begin(trial_segment(index))
+    meter = Ticks(dt, mirror=mirror, contacts=contacts, poses=poses)
     reached = 0
     if mirror is not None:
         mirror.note(f"trial {index}: along the course at {speed:.2f} m/s")

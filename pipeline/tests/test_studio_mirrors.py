@@ -250,6 +250,24 @@ class ProjectContracts(unittest.TestCase):
             PREFLIGHT_SUMMARY_KEY,
         )
 
+    def test_the_viewport_deployment_words_agree(self) -> None:
+        """A deployment in the MuJoCo viewport: the scene prefix the picker
+        and the stream share, and the summary key the drawer reads."""
+        from rq_pipeline.deploy import viewport_source  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(VIEWPORT_RS, r'pub const DEPLOY_PREFIX: &str = "([^"]+)";'),
+            viewport_source.DEPLOY_PREFIX,
+        )
+        self.assertEqual(
+            constant(MODEL_RS, r'pub const VIEWPORT_KEY: &str = "([^"]+)";'),
+            viewport_source.VIEWPORT_KEY,
+        )
+        self.assertIn(
+            viewport_source.DEPLOY_PREFIX,
+            constant(RENDER_STREAM, r'^    "(deploy:)": \(open_deploy_scene'),
+        )
+
     def test_the_state_bases_agree(self) -> None:
         from rq_pipeline.bundles.basis import BASES  # noqa: PLC0415
 
