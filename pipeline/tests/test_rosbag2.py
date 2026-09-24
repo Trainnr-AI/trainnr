@@ -603,6 +603,63 @@ class TheRegistry(unittest.TestCase):
                     public_logs.fetch("broken", Path(tmp), opener=serve)
                 self.assertIsNone(public_logs.locate("broken", Path(tmp)))
 
+    def test_a_download_that_breaks_leaves_nothing_that_is_served(self) -> None:
+        """A stream that drops midway, and a fetch whose second piece
+        fails after the first landed, leave no file and no folder that a
+        later `fetch` or `locate` would serve (review 2026-09-24: the
+        truncated file was returned unchecked the next time)."""
+        import hashlib  # noqa: PLC0415
+
+        first, second = b"first piece" * 100, b"second piece" * 50
+        entry = public_logs.PublicLog(
+            name="toy-files",
+            robot="go2",
+            url="https://example.invalid/x",
+            fetch=public_logs.FETCH_FILE,
+            pieces=(
+                public_logs.Piece(
+                    "a.bin", len(first), hashlib.sha256(first).hexdigest()
+                ),
+                public_logs.Piece(
+                    "b.bin", len(second), hashlib.sha256(second).hexdigest()
+                ),
+            ),
+            member="a.bin",
+            adapter="pt-dict",
+            source="a test",
+            recorded="2026-09-24",
+            licence="test",
+        )
+
+        class Drops(io.BytesIO):
+            def read(self, size: int = -1) -> bytes:
+                raise ConnectionResetError("network dropped")
+
+            def __enter__(self) -> Drops:
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                self.close()
+
+        served = iter([_Response(first), Drops()])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(public_logs.PUBLIC_LOGS, {"toy-files": entry}),
+        ):
+            with self.assertRaises(ConnectionResetError):
+                public_logs.fetch(
+                    "toy-files", Path(tmp), opener=lambda *a, **k: next(served)
+                )
+            self.assertIsNone(public_logs.locate("toy-files", Path(tmp)))
+            self.assertEqual([p.name for p in Path(tmp).rglob("*") if p.is_file()], [])
+            # a later fetch starts clean and serves only what checks
+            again = iter([_Response(first), _Response(second)])
+            out = public_logs.fetch(
+                "toy-files", Path(tmp), opener=lambda *a, **k: next(again)
+            )
+            self.assertEqual(out.read_bytes(), first)
+            self.assertEqual(public_logs.locate("toy-files", Path(tmp)), out)
+
     def test_a_server_that_ignores_the_range_is_refused(self) -> None:
         with self.assertRaisesRegex(ValueError, "ignores ranges"):
             public_logs._range(

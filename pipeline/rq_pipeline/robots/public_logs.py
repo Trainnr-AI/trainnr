@@ -292,11 +292,42 @@ def resolve(name: str) -> PublicLog:
     raise KeyError(f"unknown public log {name!r}; known: {sorted(PUBLIC_LOGS)}")
 
 
+# Written LAST, inside the entry's folder, once every piece checked: a
+# folder without it is a download that broke and is never served.
+FETCHED_MARKER = ".fetched"
+STAGING_PREFIX = "."  # the entry's staging folder: hidden, beside the slot
+STAGING_SUFFIX = ".part"
+
+
+def _complete(root: Path, entry: PublicLog) -> bool:
+    """The slot holds a finished fetch: the marker, and the member."""
+    return (root / FETCHED_MARKER).is_file() and (root / entry.member).exists()
+
+
+def _adopt_verified(root: Path, entry: PublicLog) -> bool:
+    """A slot fetched before the marker existed: when every piece is still
+    on disk (a file or zip-member fetch keeps them) and checks, it is
+    marked complete; an archive's pieces are gone, so it is fetched again."""
+    if entry.fetch == FETCH_ARCHIVE or not (root / entry.member).exists():
+        return False
+    for piece in entry.pieces:
+        path = root / piece.path
+        if not path.is_file() or path.stat().st_size != piece.bytes:
+            return False
+        if hashlib.sha256(path.read_bytes()).hexdigest() != piece.sha256:
+            return False
+    (root / FETCHED_MARKER).write_text(entry.name + "\n", encoding="utf-8")
+    return True
+
+
 def locate(name: str, cache: Path | None = None) -> Path | None:
-    """The fetched log's source path, or None when not in the cache."""
+    """The fetched log's source path, or None when it is not in the cache
+    COMPLETE (a download that broke is not a fetched log)."""
     entry = resolve(name)
-    path = (cache or cache_root()) / entry.name / entry.member
-    return path if path.exists() else None
+    root = (cache or cache_root()) / entry.name
+    if _complete(root, entry) or _adopt_verified(root, entry):
+        return root / entry.member
+    return None
 
 
 Opener = Callable[..., Any]
@@ -306,20 +337,32 @@ def fetch(
     name: str, cache: Path | None = None, *, opener: Opener = urllib.request.urlopen
 ) -> Path:
     """Download by the entry's fetcher, check every piece's byte count and
-    digest; returns the path the adapter reads. Idempotent: a fetched log
-    is returned as is. A piece of the wrong size or digest is deleted and
-    refused by name; nothing of it is read."""
+    digest; returns the path the adapter reads. Idempotent: a COMPLETE
+    fetch is returned as is. Everything lands in a hidden staging folder
+    first and is moved into place, marked complete, only when every piece
+    checked; a broken download (a piece of the wrong size or digest, a
+    network drop, an interrupt) leaves nothing that `fetch` or `locate`
+    would serve, and is refused by name."""
     entry = resolve(name)
-    root = (cache or cache_root()) / entry.name
-    source = root / entry.member
-    if source.exists():
-        return source
-    root.mkdir(parents=True, exist_ok=True)
-    FETCHERS[entry.fetch](entry, root, opener)
-    if not source.exists():
-        shutil.rmtree(root, ignore_errors=True)
-        raise ValueError(f"{entry.name}: the download holds no {entry.member!r}")
-    return source
+    base = cache or cache_root()
+    root = base / entry.name
+    found = locate(name, base)
+    if found is not None:
+        return found
+    staging = base / f"{STAGING_PREFIX}{entry.name}{STAGING_SUFFIX}"
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    try:
+        FETCHERS[entry.fetch](entry, staging, opener)
+        if not (staging / entry.member).exists():
+            raise ValueError(f"{entry.name}: the download holds no {entry.member!r}")
+        (staging / FETCHED_MARKER).write_text(entry.name + "\n", encoding="utf-8")
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    shutil.rmtree(root, ignore_errors=True)  # a slot a broken fetch left
+    staging.replace(root)
+    return root / entry.member
 
 
 def _fetch_archive(entry: PublicLog, root: Path, opener: Opener) -> None:
@@ -364,9 +407,9 @@ def _fetch_zip_members(entry: PublicLog, root: Path, opener: Opener) -> None:
         _check(entry, piece, len(data), hashlib.sha256(data).hexdigest())
         target = root / piece.path
         target.parent.mkdir(parents=True, exist_ok=True)
-        staging = target.with_name(target.name + ".part")
-        staging.write_bytes(data)
-        staging.replace(target)
+        part = target.with_name(target.name + STAGING_SUFFIX)
+        part.write_bytes(data)
+        part.replace(target)
 
 
 FETCHERS: dict[str, Callable[[PublicLog, Path, Opener], None]] = {
@@ -377,19 +420,23 @@ FETCHERS: dict[str, Callable[[PublicLog, Path, Opener], None]] = {
 
 
 def _stream_checked(entry: PublicLog, piece: Piece, out: Path, opener: Opener) -> None:
+    """Stream to `<out>.part`, check, then move into place: a stream that
+    breaks midway never leaves a file at `out`."""
     digest = hashlib.sha256()
     size = 0
     out.parent.mkdir(parents=True, exist_ok=True)
-    with opener(entry.url, timeout=TIMEOUT_S) as response, out.open("wb") as sink:
-        while chunk := response.read(CHUNK):
-            sink.write(chunk)
-            digest.update(chunk)
-            size += len(chunk)
+    part = out.with_name(out.name + STAGING_SUFFIX)
     try:
+        with opener(entry.url, timeout=TIMEOUT_S) as response, part.open("wb") as sink:
+            while chunk := response.read(CHUNK):
+                sink.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
         _check(entry, piece, size, digest.hexdigest())
-    except ValueError:
-        out.unlink(missing_ok=True)
+    except BaseException:
+        part.unlink(missing_ok=True)
         raise
+    part.replace(out)
 
 
 def _range(url: str, start: int, length: int, opener: Opener) -> bytes:
