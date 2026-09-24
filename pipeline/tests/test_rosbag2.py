@@ -17,6 +17,8 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from typing import Any
+from unittest import mock
 
 import numpy as np
 
@@ -32,8 +34,13 @@ from rq_pipeline.robots.ingest import ingest
 from rq_pipeline.robots.recording import (
     BASIS_OWN,
     BASIS_PUBLIC,
+    BASIS_UNKNOWN,
     IMU_ORIENTATION,
+    JOINT_COMMAND,
     JOINT_EFFORT,
+    JOINT_FEEDFORWARD,
+    JOINT_KD,
+    JOINT_KP,
     JOINT_POSITION,
     JOINT_VELOCITY,
     Recording,
@@ -79,6 +86,68 @@ int8 temperature
 uint32 lost
 uint32[2] reserve
 """
+
+
+# Unitree's own files (unitree_ros2 master, unitree_go/msg, read 2026-09-24).
+LOW_CMD_MSG = """\
+uint8[2] head
+uint8 level_flag
+uint8 frame_reserve
+uint32[2] sn
+uint32[2] version
+uint16 bandwidth
+MotorCmd[20] motor_cmd
+BmsCmd bms_cmd
+uint8[40] wireless_remote
+uint8[12] led
+uint8[2] fan
+uint8 gpio
+uint32 reserve
+uint32 crc
+"""
+MOTOR_CMD_MSG = """\
+uint8 mode
+float32 q
+float32 dq
+float32 tau
+float32 kp
+float32 kd
+uint32[3] reserve
+"""
+BMS_CMD_MSG = """\
+uint8 off
+uint8[3] reserve
+"""
+
+
+def _low_cmd(t: float) -> dict:
+    return {
+        "head": [0xFE, 0xEF],
+        "level_flag": 0xFF,
+        "frame_reserve": 0,
+        "sn": [0, 0],
+        "version": [0, 0],
+        "bandwidth": 0,
+        "motor_cmd": [
+            {
+                "mode": 1,
+                "q": 0.1 * i + t,
+                "dq": 0.0,
+                "tau": 0.5,
+                "kp": 25.0,
+                "kd": 0.5,
+                "reserve": [0, 0, 0],
+            }
+            for i in range(rosbag2.MOTOR_SLOTS)
+        ],
+        "bms_cmd": {"off": 0, "reserve": [0, 0, 0]},
+        "wireless_remote": [0] * 40,
+        "led": [0] * 12,
+        "fan": [0, 0],
+        "gpio": 0,
+        "reserve": 0,
+        "crc": 0,
+    }
 
 
 def _motor(i: int, t: float) -> dict:
@@ -140,10 +209,17 @@ def _low_state(t: float) -> dict:
     }
 
 
-def make_bag(root: Path, *, seconds: float = 1.0, gap_at: int | None = None) -> Path:
+def make_bag(
+    root: Path,
+    *,
+    seconds: float = 1.0,
+    gap_at: int | None = None,
+    with_cmd: bool = False,
+) -> Path:
     """A rosbag2 sqlite3 directory with /lowstate at RATE_HZ, written by
     the adapter's own layouts; `gap_at` drops ten samples after that
-    index so a dropout exists to be measured."""
+    index so a dropout exists to be measured; `with_cmd` adds /lowcmd at
+    the same rate, the pair a deployed controller would record."""
     root.mkdir(parents=True, exist_ok=True)
     start = 1_700_000_000 * NS
     db = root / "bag_0.db3"
@@ -162,6 +238,11 @@ def make_bag(root: Path, *, seconds: float = 1.0, gap_at: int | None = None) -> 
             (rosbag2.LOW_STATE,),
         )
         con.execute("INSERT INTO topics VALUES (2, '/other', 'x/msg/Y', 'cdr', '')")
+        if with_cmd:
+            con.execute(
+                "INSERT INTO topics VALUES (3, '/lowcmd', ?, 'cdr', '')",
+                (rosbag2.LOW_CMD,),
+            )
         rows = []
         for i in range(int(seconds * RATE_HZ)):
             if gap_at is not None and gap_at < i <= gap_at + 10:
@@ -171,6 +252,11 @@ def make_bag(root: Path, *, seconds: float = 1.0, gap_at: int | None = None) -> 
                 rosbag2.LAYOUTS[rosbag2.LOW_STATE], rosbag2.LAYOUTS, _low_state(t)
             )
             rows.append((1, start + int(t * NS), data))
+            if with_cmd:
+                cmd = Writer().message(
+                    rosbag2.LAYOUTS[rosbag2.LOW_CMD], rosbag2.LAYOUTS, _low_cmd(t)
+                )
+                rows.append((3, start + int(t * NS) + 1000, cmd))
         rows.append((2, start, b"\x00\x01\x00\x00"))
         con.executemany(
             "INSERT INTO messages(topic_id, timestamp, data) VALUES (?, ?, ?)", rows
@@ -192,6 +278,9 @@ class TheLayouts(unittest.TestCase):
         `.msg` text gives the same layout."""
         self.assertEqual(parse_msg(LOW_STATE_MSG), rosbag2.LAYOUTS[rosbag2.LOW_STATE])
         self.assertEqual(parse_msg(MOTOR_STATE_MSG), rosbag2.LAYOUTS["MotorState"])
+        self.assertEqual(parse_msg(LOW_CMD_MSG), rosbag2.LAYOUTS[rosbag2.LOW_CMD])
+        self.assertEqual(parse_msg(MOTOR_CMD_MSG), rosbag2.LAYOUTS["MotorCmd"])
+        self.assertEqual(parse_msg(BMS_CMD_MSG), rosbag2.LAYOUTS["BmsCmd"])
 
     def test_write_then_read_round_trips_every_field(self) -> None:
         msg = _low_state(0.25)
@@ -322,67 +411,206 @@ class TheProvenance(unittest.TestCase):
                 ingest(Path(tmp) / "r", bag, basis="borrowed")
 
 
-class TwoReadersOneContainer(unittest.TestCase):
-    """Two adapters read rosbag2's sqlite store — this one for Unitree's
-    message types, `robot/rosbag_sqlite.py` for other robots' profiles —
-    and they split a bag by its CONTENT, so `detect` names exactly one
-    (a suffix claim by both refused every bag, found at the merge of
-    2026-09-24)."""
+class OneAdapterManyProfiles(unittest.TestCase):
+    """One adapter reads rosbag2's sqlite store; which robot's bag it is
+    comes from the PROFILE its message types anchor (2026-09-24: two
+    readers had each claimed every `.db3` and refused every bag)."""
 
-    def test_a_unitree_bag_detects_as_this_adapter_and_not_the_other(self) -> None:
-        from rq_pipeline.robot.rosbag_sqlite import Rosbag2Sqlite  # noqa: PLC0415
-        from rq_pipeline.robots.adapter import detect  # noqa: PLC0415
-
+    def test_a_unitree_bag_reads_through_its_profile_with_basis_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bag = make_bag(Path(tmp) / "bag", seconds=0.1)
-            self.assertEqual(detect(bag).name, "rosbag2")
+            self.assertEqual(detect(bag).name, rosbag2.NAME)
             db3 = next(bag.glob("*.db3"))
-            self.assertEqual(detect(db3).name, "rosbag2")
-            self.assertFalse(Rosbag2Sqlite().accepts(db3))
+            self.assertEqual(detect(db3).name, rosbag2.NAME)
+            rec = rosbag2.Rosbag2Adapter().read(bag)
+        self.assertEqual(rec.census["profile"], "unitree-go2")
+        self.assertEqual(rec.census["motors_read"], 12)
+        # A Unitree bag may be the operator's own robot: the caller says whose.
+        self.assertEqual(rec.basis, BASIS_UNKNOWN)
 
-    def test_a_file_that_is_no_bag_is_claimed_by_neither(self) -> None:
-        from rq_pipeline.robot.rosbag_sqlite import Rosbag2Sqlite  # noqa: PLC0415
-        from rq_pipeline.robots.adapters.rosbag2 import Rosbag2Adapter  # noqa: PLC0415
+    def test_lowcmd_beside_lowstate_ingests_the_command_and_the_gains(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = rosbag2.Rosbag2Adapter().read(
+                make_bag(Path(tmp) / "bag", seconds=0.2, with_cmd=True)
+            )
+        for name in (JOINT_COMMAND, JOINT_FEEDFORWARD, JOINT_KP, JOINT_KD):
+            self.assertIn(name, rec.channels)
+        self.assertEqual(rec.channels[JOINT_KP].values.shape, (100, 12))
+        self.assertEqual(rec.channels[JOINT_KP].values[0, 0], 25.0)
+        self.assertAlmostEqual(rec.channels[JOINT_COMMAND].values[0, 3], 0.3, 6)
+        self.assertEqual(rec.channels[JOINT_COMMAND].components, rosbag2.GO2_MOTORS)
+        self.assertIn(rosbag2.NOTE_LOW_CMD, rec.notes)
+        # the state is still there, on its own clock
+        self.assertEqual(rec.channels[JOINT_POSITION].values.shape, (100, 12))
 
+    def test_a_bag_that_is_two_robots_or_two_imus_is_refused_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bag = make_bag(Path(tmp) / "bag", seconds=0.05)
+            db3 = next(bag.glob("*.db3"))
+            with sqlite3.connect(db3) as con:
+                con.execute(
+                    "INSERT INTO topics VALUES (7, '/joint_states', ?, 'cdr', '')",
+                    (rosbag2.DFKI_JOINT_STATE,),
+                )
+            with self.assertRaisesRegex(ValueError, "one bag is one robot"):
+                rosbag2.Rosbag2Adapter().read(bag)
+            with sqlite3.connect(db3) as con:
+                con.execute("DELETE FROM topics WHERE id = 7")
+                con.execute(
+                    "INSERT INTO topics VALUES (8, '/lowstate2', ?, 'cdr', '')",
+                    (rosbag2.LOW_STATE,),
+                )
+            with self.assertRaisesRegex(ValueError, "which is the robot's"):
+                rosbag2.Rosbag2Adapter().read(bag)
+
+    def test_a_file_that_is_no_bag_is_not_claimed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             junk = Path(tmp) / "x.db3"
             junk.write_bytes(b"not a database")
-            self.assertFalse(Rosbag2Adapter().accepts(junk))
-            self.assertFalse(Rosbag2Sqlite().accepts(junk))
+            self.assertFalse(rosbag2.Rosbag2Adapter().accepts(junk))
+
+    def test_big_endian_cdr_is_refused_by_name(self) -> None:
+        with self.assertRaisesRegex(ValueError, "big-endian"):
+            Reader(b"\x00\x00\x00\x00" + b"\x00" * 8)
+
+
+class _Response(io.BytesIO):
+    def __enter__(self) -> _Response:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+def _serving(payload: bytes) -> Any:
+    """An opener that serves `payload`, honouring a Range header the way
+    Zenodo does — so the zip-member fetcher is pinned with no network."""
+
+    def opener(request: Any, **_k: Any) -> _Response:
+        header = getattr(request, "headers", {}).get("Range")
+        if header is None:
+            return _Response(payload)
+        first, last = (int(v) for v in header.split("=", 1)[1].split("-"))
+        return _Response(payload[first : last + 1])
+
+    return opener
 
 
 class TheRegistry(unittest.TestCase):
-    def test_every_entry_names_its_bytes_digest_licence_and_robot(self) -> None:
+    def test_every_entry_names_its_pieces_digests_licence_and_robot(self) -> None:
         for entry in public_logs.PUBLIC_LOGS.values():
+            self.assertIn(entry.fetch, public_logs.FETCHERS)
             self.assertGreater(entry.bytes, 0)
-            self.assertEqual(len(entry.sha256), 64)
+            for piece in entry.pieces:
+                self.assertGreater(piece.bytes, 0)
+                self.assertEqual(len(piece.sha256), 64)
+                if entry.fetch == public_logs.FETCH_ZIP_MEMBERS:
+                    self.assertIsNotNone(piece.span)
             self.assertTrue(entry.licence and entry.robot and entry.recorded)
             self.assertEqual(entry.basis, BASIS_PUBLIC)
-        self.assertIn("go2-leg-odometry", [r["name"] for r in public_logs.listing()])
+        listed = {r["name"]: r for r in public_logs.listing()}
+        for name in ("go2-leg-odometry", "dfki-go2-field201", "iit-go2-chirp"):
+            self.assertTrue(listed[name]["readable"])
+            self.assertTrue(listed[name]["licence"])
+        for name in ("quadslam", "doglegs", "legkilo"):
+            self.assertFalse(listed[name]["readable"])
+            self.assertIn("ROS 1", listed[name]["why"])
+
+    def test_a_log_no_adapter_reads_is_refused_with_the_reason(self) -> None:
+        with self.assertRaisesRegex(KeyError, "ROS 1"):
+            public_logs.resolve("quadslam")
+        with self.assertRaisesRegex(KeyError, "unknown public log"):
+            public_logs.resolve("nope")
 
     def test_a_download_of_the_wrong_size_is_refused_and_deleted(self) -> None:
         payload = io.BytesIO()
         with zipfile.ZipFile(payload, "w") as z:
             z.writestr("rosbag2_2025_02_19-22_46_51/metadata.yaml", "x")
-        bad = payload.getvalue()
-
-        class Response(io.BytesIO):
-            def __enter__(self) -> Response:
-                return self
-
-            def __exit__(self, *_: object) -> None:
-                self.close()
-
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ValueError, "registry expects"):
                 public_logs.fetch(
                     "go2-leg-odometry",
                     Path(tmp),
-                    opener=lambda *_a, **_k: Response(bad),
+                    opener=_serving(payload.getvalue()),
                 )
             self.assertEqual(list((Path(tmp) / "go2-leg-odometry").glob("*.zip")), [])
-        with self.assertRaisesRegex(KeyError, "unknown public log"):
-            public_logs.resolve("nope")
+
+    def test_zip_members_are_read_by_range_inflated_and_checked(self) -> None:
+        """Two members out of a larger remote zip: only their bytes are
+        asked for, each inflated and checked against its digest; a
+        member that differs is refused and nothing lands."""
+        import dataclasses  # noqa: PLC0415
+        import hashlib  # noqa: PLC0415
+
+        bag_bytes = b"SQLite format 3\x00" + bytes(range(256)) * 400
+        meta = b"rosbag2_bagfile_information:\n  version: 5\n"
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("other/huge.db3", b"\x01" * 50_000)
+            z.writestr("run/bag/bag_0.db3", bag_bytes)
+            z.writestr("run/bag/metadata.yaml", meta)
+        archive = payload.getvalue()
+        with zipfile.ZipFile(io.BytesIO(archive)) as z:
+            info = {i.filename: i for i in z.infolist()}
+
+        def piece(name: str, data: bytes) -> public_logs.Piece:
+            i = info[name]
+            return public_logs.Piece(
+                name,
+                len(data),
+                hashlib.sha256(data).hexdigest(),
+                public_logs.ZipSpan(i.header_offset, i.compress_size, i.compress_type),
+            )
+
+        entry = public_logs.PublicLog(
+            name="toy",
+            robot="go2",
+            url="https://example.invalid/toy.zip",
+            fetch=public_logs.FETCH_ZIP_MEMBERS,
+            pieces=(
+                piece("run/bag/bag_0.db3", bag_bytes),
+                piece("run/bag/metadata.yaml", meta),
+            ),
+            member="run/bag",
+            adapter="rosbag2",
+            source="a test",
+            recorded="2026-09-24",
+            licence="test",
+        )
+        asked: list[str] = []
+        serve = _serving(archive)
+
+        def opener(request: Any, **k: Any) -> _Response:
+            asked.append(request.headers["Range"])
+            return serve(request, **k)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(public_logs.PUBLIC_LOGS, {"toy": entry}),
+        ):
+            out = public_logs.fetch("toy", Path(tmp), opener=opener)
+            self.assertEqual((out / "bag_0.db3").read_bytes(), bag_bytes)
+            self.assertEqual((out / "metadata.yaml").read_bytes(), meta)
+            self.assertEqual(len(asked), 4)  # a header and a body per member
+            self.assertEqual(public_logs.fetch("toy", Path(tmp), opener=None), out)
+            broken = dataclasses.replace(
+                entry,
+                name="broken",
+                pieces=(dataclasses.replace(entry.pieces[0], sha256="0" * 64),),
+            )
+            with mock.patch.dict(public_logs.PUBLIC_LOGS, {"broken": broken}):
+                with self.assertRaisesRegex(ValueError, "registry expects"):
+                    public_logs.fetch("broken", Path(tmp), opener=serve)
+                self.assertIsNone(public_logs.locate("broken", Path(tmp)))
+
+    def test_a_server_that_ignores_the_range_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ignores ranges"):
+            public_logs._range(
+                "https://example.invalid/x.zip",
+                10,
+                4,
+                lambda *_a, **_k: _Response(b"the whole archive, not four bytes"),
+            )
 
 
 REAL = public_logs.locate("go2-leg-odometry")

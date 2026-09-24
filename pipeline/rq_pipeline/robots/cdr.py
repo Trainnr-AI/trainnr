@@ -23,6 +23,9 @@ from typing import Any
 
 ENCAPSULATION_HEADER = 4  # representation id + options
 NS_PER_S = 1e9
+# The representation identifiers that mean big-endian (CDR_BE, PL_CDR_BE):
+# every ROS 2 middleware writes little-endian, and this reader reads only it.
+BIG_ENDIAN_IDS = (b"\x00\x00", b"\x00\x02")
 
 # The primitive types a `.msg` file spells, with their struct code and
 # size. `string` and nested messages are handled by name.
@@ -60,6 +63,11 @@ class Reader:
     """A little-endian CDR reader over one message's bytes."""
 
     def __init__(self, data: bytes) -> None:
+        if bytes(data[:2]) in BIG_ENDIAN_IDS:
+            raise ValueError(
+                f"big-endian CDR (representation {bytes(data[:2]).hex()}); "
+                "only little-endian is read"
+            )
         self.data = data
         self.pos = ENCAPSULATION_HEADER
 
@@ -117,7 +125,20 @@ class Reader:
         if field.count is None:
             return self._one(field.type, layouts)
         count = self.u32() if field.count == SEQUENCE else field.count
+        if field.type in PRIMITIVES:
+            return self.primitives(field.type, count)
         return [self._one(field.type, layouts) for _ in range(count)]
+
+    def primitives(self, kind: str, count: int) -> list[Any]:
+        """`count` primitives of one type in one unpack: CDR aligns the
+        first to its size and packs the rest back to back."""
+        code, size = PRIMITIVES[kind]
+        if count == 0:
+            return []
+        self.align(size)
+        values = struct.unpack_from(f"<{count}{code[1]}", self.data, self.pos)
+        self.pos += size * count
+        return list(values)
 
     def _one(self, kind: str, layouts: dict[str, Layout]) -> Any:
         if kind in PRIMITIVES:

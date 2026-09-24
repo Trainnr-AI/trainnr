@@ -1,7 +1,7 @@
-"""The two readers the public Go2 logs needed: a rosbag2 SQLite bag
-decoded by declared CDR layouts, and a torch-saved dict read without
-torch. Both build their fixtures by hand from the formats' own rules,
-so the tests need no ROS and no torch."""
+"""The readers the public Go2 logs needed: DFKI's rosbag2 SQLite bag
+through the one rosbag2 adapter's `dfki-go2` profile, and a torch-saved
+dict read without torch. Both build their fixtures by hand from the
+formats' own rules, so the tests need no ROS and no torch."""
 
 from __future__ import annotations
 
@@ -29,14 +29,16 @@ def _cdr_joint_state(values: np.ndarray, frame_id: str = "") -> bytes:
     return b"\x00\x01\x00\x00" + body
 
 
-class Rosbag2Sqlite(unittest.TestCase):
+class DfkiThroughTheOneAdapter(unittest.TestCase):
     def test_decodes_by_layout_with_cdr_alignment(self) -> None:
-        from rq_pipeline.robot.rosbag_sqlite import decode  # noqa: PLC0415
+        from rq_pipeline.robots.adapters import rosbag2  # noqa: PLC0415
+        from rq_pipeline.robots.cdr import Reader  # noqa: PLC0415
 
+        layout = rosbag2.LAYOUTS[rosbag2.DFKI_JOINT_STATE]
         values = np.linspace(-1.0, 1.0, 12)
         for frame in ("", "base", "a_longer_frame_id"):
-            message = decode(
-                "interfaces/msg/JointState", _cdr_joint_state(values, frame)
+            message = Reader(_cdr_joint_state(values, frame)).message(
+                layout, rosbag2.LAYOUTS
             )
             self.assertEqual(message["header"]["frame_id"], frame)
             np.testing.assert_allclose(message["position"], values)
@@ -45,11 +47,10 @@ class Rosbag2Sqlite(unittest.TestCase):
     def test_reads_a_bag_through_the_dfki_profile_and_refuses_an_unknown_one(
         self,
     ) -> None:
-        from rq_pipeline.robot.rosbag_sqlite import (  # noqa: PLC0415
-            Rosbag2Sqlite,
-            read_bag,
-        )
         from rq_pipeline.robots.adapter import detect  # noqa: PLC0415
+        from rq_pipeline.robots.adapters.rosbag2 import (  # noqa: PLC0415
+            Rosbag2Adapter,
+        )
         from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -73,8 +74,8 @@ class Rosbag2Sqlite(unittest.TestCase):
                         "VALUES (1, ?, ?)",
                         (1_000_000 * i, _cdr_joint_state(np.full(12, 0.01 * i))),
                     )
-            self.assertEqual(detect(bag).name, "db3")
-            recording = Rosbag2Sqlite().read(bag)
+            self.assertEqual(detect(bag).name, "rosbag2")
+            recording = Rosbag2Adapter().read(bag)
             self.assertEqual(recording.basis, BASIS_PUBLIC)
             self.assertEqual(recording.census["profile"], "dfki-go2")
             self.assertEqual(
@@ -83,10 +84,15 @@ class Rosbag2Sqlite(unittest.TestCase):
             self.assertAlmostEqual(
                 recording.channels["joint.position"].rate_hz or 0, 1000.0, delta=1
             )
+            # Profiles match by message TYPE, so a renamed topic still reads;
+            # a type no profile anchors is refused by name.
             with sqlite3.connect(bag) as db:
                 db.execute("UPDATE topics SET name = '/somewhere_else'")
+            self.assertEqual(Rosbag2Adapter().read(bag).census["profile"], "dfki-go2")
+            with sqlite3.connect(bag) as db:
+                db.execute("UPDATE topics SET type = 'other/msg/JointState'")
             with self.assertRaisesRegex(ValueError, "no rosbag2 profile matches"):
-                read_bag(bag)
+                Rosbag2Adapter().read(bag)
 
 
 def _torch_zip(path: Path, arrays: dict[str, np.ndarray]) -> None:
@@ -163,7 +169,7 @@ def _strides(shape: tuple[int, ...]) -> tuple[int, ...]:
 
 class TorchPickle(unittest.TestCase):
     def test_reads_tensors_without_torch_and_refuses_other_globals(self) -> None:
-        from rq_pipeline.robot.torch_pickle import load_tensors  # noqa: PLC0415
+        from rq_pipeline.robots.torch_pickle import load_tensors  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "t.pt"
@@ -184,7 +190,7 @@ class TorchPickle(unittest.TestCase):
                 load_tensors(evil)
 
     def test_reads_numpy_arrays_saved_in_the_dict(self) -> None:
-        from rq_pipeline.robot.torch_pickle import load_tensors  # noqa: PLC0415
+        from rq_pipeline.robots.torch_pickle import load_tensors  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "n.pt"
@@ -198,7 +204,7 @@ class TorchPickle(unittest.TestCase):
 
 class PtDict(unittest.TestCase):
     def test_the_iit_layout_becomes_a_recording_with_pd_gains(self) -> None:
-        from rq_pipeline.robot.pt_dict import PtDict  # noqa: PLC0415
+        from rq_pipeline.robots.adapters.pt_dict import PtDict  # noqa: PLC0415
         from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:

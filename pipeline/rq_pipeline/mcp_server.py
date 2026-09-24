@@ -1296,8 +1296,10 @@ def _capture_state(state: Any) -> dict[str, Any]:
 
 
 def list_public_logs() -> list[dict[str, Any]]:
-    """The public recordings of real robots the registry can fetch: robot,
-    source, recorded date, the data's licence state, whether fetched."""
+    """Every public recording of a real robot found: for the ones the
+    registry can fetch, robot, adapter, source, recorded date, the data's
+    licence state, whether fetched; for the ones no adapter reads (ROS 1
+    bags), the licence state and why."""
     from rq_pipeline.robots.public_logs import listing  # noqa: PLC0415
 
     return listing()
@@ -1306,12 +1308,13 @@ def list_public_logs() -> list[dict[str, Any]]:
 def ingest_public_log(
     name: str, recording_name: str | None = None
 ) -> dict[str, Any] | Refusal:
-    """Fetch a registered public log (checked against its byte count and
-    digest, cached under runs/public-logs) and ingest it into the current
-    project with a provenance block: origin "public log", source, url,
-    licence state, robot. The telemetry stage then reads "public log" -
-    a real robot, not ours. Refuses an unknown name, a download that
-    differs from the registry, and a network that is not there."""
+    """Fetch a registered public log (every piece checked against its byte
+    count and digest, cached under runs/public-logs) and ingest it into
+    the current project with its basis "public log" and a provenance
+    block: source, url, licence state, robot, digests. The telemetry stage
+    then reads "public log" - a real robot, not ours. Refuses an unknown
+    name, a log no adapter reads (with why), a download that differs from
+    the registry, and a network that is not there."""
     import urllib.error  # noqa: PLC0415
 
     from rq_pipeline.project import current_project  # noqa: PLC0415
@@ -2271,7 +2274,8 @@ def build_server() -> Any:  # noqa: PLR0915
     )(capture_status)
     server.tool(
         description="The public real-robot recordings the registry can fetch: "
-        "robot, source, recorded date, licence state, fetched or not."
+        "robot, source, recorded date, licence state, fetched or not; and "
+        "the ones no adapter reads, with why."
     )(list_public_logs)
     server.tool(
         description="Fetch a registered public log (size and digest checked) and "
