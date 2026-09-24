@@ -43,6 +43,18 @@ INSTALL_HINTS["unitree_sdk2py"] = {
     "*": "Unitree's SDK runs on Linux only; capture from a Linux machine on "
     "the robot's network",
 }
+# Reading USD (robot/usd_import): Newton's importer, pxr and Newton's
+# schemas are the `usd` extra; Newton's solver module imports mujoco_warp,
+# the `gpu` extra, which excludes macOS.
+USD_EXTRA_LINE = {"*": "in pipeline/: uv sync --extra usd"}
+INSTALL_HINTS["pxr"] = USD_EXTRA_LINE
+INSTALL_HINTS["newton"] = USD_EXTRA_LINE
+INSTALL_HINTS["newton_usd_schemas"] = USD_EXTRA_LINE
+INSTALL_HINTS["mujoco_warp"] = {
+    "Darwin": "the gpu extra excludes macOS; import on a Linux or Windows machine "
+    "and pull the bundle it writes — the bundle runs everywhere",
+    "*": "in pipeline/: uv sync --extra gpu (Newton's solver module imports it)",
+}
 # The Linux package managers by the distro family /etc/os-release names.
 LINUX_INSTALLERS: dict[str, str] = {
     "debian": "sudo apt install",

@@ -138,6 +138,76 @@ class Registry(unittest.TestCase):
             self.assertIn("root", str(ctx.exception))
 
 
+class LicenceAndPlugin(unittest.TestCase):
+    """Review of 2026-09-24: a local asset adopted the enclosing checkout's
+    LICENSE (the search walked three folders up), and a missing schema
+    plugin let a stage open unguarded."""
+
+    def test_a_local_asset_never_adopts_the_checkouts_licence(self) -> None:
+        from rq_pipeline.robot.usd_import import find_license  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout = Path(tmp)
+            (checkout / "LICENSE").write_text("MIT License\n")
+            asset = checkout / "robots" / "arm" / "arm.usda"
+            asset.parent.mkdir(parents=True)
+            asset.write_text("#usda 1.0\n")
+            self.assertEqual(find_license(asset), (None, "unrecorded"))
+
+    def test_a_fetched_asset_finds_its_licence_up_to_the_trees_root(self) -> None:
+        from rq_pipeline.robot.asset_fetch import MARKER_FILE  # noqa: PLC0415
+        from rq_pipeline.robot.usd_import import find_license  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "LICENSE").write_text("MIT License\n")  # above the tree
+            slot = Path(tmp) / "cache" / "owner-assets-0123456"
+            asset = slot / "grippers" / "g" / "g.usda"
+            asset.parent.mkdir(parents=True)
+            asset.write_text("#usda 1.0\n")
+            (slot / MARKER_FILE).write_text("{}")
+            self.assertEqual(find_license(asset), (None, "unrecorded"))
+            package = asset.parent / "PACKAGE-LICENSES" / "LICENSE"
+            package.parent.mkdir()
+            package.write_text("Attribution 4.0 International\n")
+            self.assertEqual(find_license(asset), (package, "CC-BY-4.0"))
+
+    def test_without_the_schema_plugin_no_stage_opens(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.robot import usd_import  # noqa: PLC0415
+
+        with (
+            mock.patch.object(
+                usd_import.importlib.util, "find_spec", return_value=None
+            ),
+            self.assertRaisesRegex(RuntimeError, "newton_usd_schemas"),
+        ):
+            usd_import.register_schemas()
+
+
+@needs_usd
+class StageUnits(unittest.TestCase):
+    def test_a_stage_in_centimetres_and_grams_says_so(self) -> None:
+        """The audit said "meter" whatever the stage declared (review
+        2026-09-24); a centimetre stage now reads as one, and the bundle's
+        metres make an unexplained unit change."""
+        from pxr import Usd, UsdGeom, UsdPhysics  # noqa: PLC0415
+
+        from rq_pipeline.robot.usd_import import (  # noqa: PLC0415
+            register_schemas,
+            stage_units,
+        )
+
+        register_schemas()
+        stage = Usd.Stage.CreateInMemory()
+        self.assertEqual(stage_units(stage)["length"], "meter")
+        UsdGeom.SetStageMetersPerUnit(stage, 0.01)
+        UsdPhysics.SetStageKilogramsPerUnit(stage, 0.001)
+        units = stage_units(stage)
+        self.assertEqual(units["length"], "0.01 meter per unit")
+        self.assertEqual(units["mass"], "0.001 kilogram per unit")
+
+
 class Settings(unittest.TestCase):
     def test_root_kinds_are_the_named_two(self) -> None:
         from rq_pipeline.robot.usd_import import ImportSettings  # noqa: PLC0415

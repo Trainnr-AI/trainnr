@@ -39,12 +39,15 @@ from rq_pipeline.robot.import_audit import (
     ANY,
     BALL,
     COUNT,
+    DEGREE,
     EQUALITIES,
     HINGE,
     JOINT_MISSING,
     JOINT_ORDER,
     KEYFRAMES,
+    KILOGRAM,
     MESHES,
+    METRE,
     MIMICS,
     SENSORS,
     SLIDE,
@@ -60,21 +63,14 @@ from rq_pipeline.robot.import_audit import (
 )
 from rq_pipeline.robot.onboarding import USD_SOURCE, model_source
 from rq_pipeline.scenes.record import UNRECORDED
+from rq_pipeline.scenes.tooling import INSTALL_HINTS, install_hint
 
 USD_SUFFIXES = (".usd", ".usda", ".usdc", ".usdz")
 USD_EXTRA = "usd"
-# The modules the reader needs and the extra that installs each; the
-# refusal names the missing one and its line.
-REQUIRED_MODULES: dict[str, str] = {
-    "pxr": "uv sync --extra usd",
-    "newton": "uv sync --extra usd",
-    "newton_usd_schemas": "uv sync --extra usd",
-    "mujoco_warp": "uv sync --extra gpu (Newton's solver module imports it)",
-}
-DARWIN_LINE = (
-    "the gpu extra excludes macOS; import on a Linux or Windows machine "
-    "and pull the bundle it writes — the bundle runs everywhere"
-)
+# The modules the reader needs, in the order they are checked; each one's
+# per-OS install line is in the shared table (`scenes.tooling.INSTALL_HINTS`).
+REQUIRED_MODULES = ("pxr", "newton", "newton_usd_schemas", "mujoco_warp")
+DARWIN_LINE = INSTALL_HINTS["mujoco_warp"]["Darwin"]
 
 NEWTON_VERSION_WARNING = "MuJoCo dependency version mismatch"
 
@@ -176,10 +172,9 @@ def missing_line(system: str | None = None) -> str | None:
     """The refusal when this interpreter cannot read USD: the first
     missing module and its install line, else None."""
     system = system or platform.system()
-    for module, line in REQUIRED_MODULES.items():
+    for module in REQUIRED_MODULES:
         if importlib.util.find_spec(module) is None:
-            darwin = module == "mujoco_warp" and system == "Darwin"
-            return f"USD import needs {module}: {DARWIN_LINE if darwin else line}"
+            return f"USD import needs {module}: {install_hint(module, system)}"
     return None
 
 
@@ -220,7 +215,12 @@ def register_schemas() -> None:
     order). Every pxr entry point here calls this first; a process
     already poisoned is refused by name rather than read wrong."""
     if importlib.util.find_spec(SCHEMA_PACKAGE) is None:
-        return  # `missing_line` names the install line
+        # Opening a stage without the plugin is the poisoning this guards
+        # against: refused by name, never a silent return (review 2026-09-24:
+        # the audit's reader opened a stage after that return).
+        raise RuntimeError(
+            f"USD reading needs {SCHEMA_PACKAGE}: {install_hint(SCHEMA_PACKAGE)}"
+        )
     importlib.import_module(SCHEMA_PACKAGE)  # its import registers the plugin
     from pxr import Tf, Usd  # noqa: PLC0415
 
@@ -646,10 +646,26 @@ def home_keyframe(spec: Any, stage: Any, read: UsdRead) -> None:
     spec.add_key(name=HOME_KEY, qpos=qpos.tolist(), ctrl=ctrl)
 
 
+def licence_folders(source: Path) -> list[Path]:
+    """Where an asset's licence may sit: its own folder and, inside a
+    fetched tree, every folder up to the tree's root (the fetch marker's
+    folder) and no further. A local asset is looked for beside itself
+    only: walking three folders up adopted the enclosing checkout's own
+    LICENSE as the asset's (review 2026-09-24)."""
+    from rq_pipeline.robot.asset_fetch import MARKER_FILE  # noqa: PLC0415
+
+    folders = []
+    for folder in source.parents:
+        folders.append(folder)
+        if (folder / MARKER_FILE).is_file():
+            return folders  # the fetched tree's root: no further
+    return [source.parent]  # not inside a fetched tree: beside the file only
+
+
 def find_license(source: Path) -> tuple[Path | None, str]:
-    """The licence file beside the asset (or above it, up to three
-    folders) and the licence it declares."""
-    for folder in (source.parent, *source.parents[1:4]):
+    """The licence file for the asset (`licence_folders`) and the licence
+    it declares; the path found is recorded beside it."""
+    for folder in licence_folders(source):
         for candidate in LICENSE_CANDIDATES:
             path = folder / candidate
             if path.is_file():
@@ -813,8 +829,11 @@ MJC_JOINT_ATTRIBUTES = {
 # schema applied (a multiple-apply schema carries an instance suffix).
 MIMIC_SCHEMAS = ("NewtonMimicAPI", "PhysxMimicJointAPI", "MjcPhysicsEqualityJointAPI")
 LOOP_ATTRIBUTE = "physics:excludeFromArticulation"
-DRIVE_STIFFNESS = "drive:angular:physics:stiffness"
-DRIVE_MAX_FORCE = "drive:angular:physics:maxForce"
+# UsdPhysics drives by the joint's motion: angular for a hinge, linear
+# for a slide (the audit read angular only; review 2026-09-24).
+DRIVE_FAMILY = {HINGE: "angular", SLIDE: "linear"}
+DRIVE_STIFFNESS = "drive:{family}:physics:stiffness"
+DRIVE_MAX_FORCE = "drive:{family}:physics:maxForce"
 COM_ATTRIBUTE = "physics:centerOfMass"
 DIAGONAL_INERTIA = "physics:diagonalInertia"
 PRINCIPAL_AXES = "physics:principalAxes"
@@ -875,7 +894,12 @@ def _usd_joint(prim: Any, kind: str) -> JointFacts:
     limited = math.isfinite(lower) and math.isfinite(upper) and lower <= upper
     if kind == HINGE:
         lower, upper = math.radians(lower), math.radians(upper)
-    max_force = float(_attr(prim, DRIVE_MAX_FORCE, 0.0))
+    family = DRIVE_FAMILY.get(kind)
+    max_force = (
+        float(_attr(prim, DRIVE_MAX_FORCE.format(family=family), 0.0))
+        if family
+        else 0.0
+    )
     params = {
         field_: float(_attr(prim, attribute, 0.0))
         for field_, attribute in MJC_JOINT_ATTRIBUTES.items()
@@ -924,7 +948,9 @@ def snapshot_stage(stage: Any) -> tuple[Snapshot, dict[str, str], tuple[str, ...
                 loops.append(path)
             if _is_mimic(prim):
                 mimics += 1
-            if float(_attr(prim, DRIVE_STIFFNESS, 0.0)) > 0:
+            family = DRIVE_FAMILY.get(kind)
+            stiffness = DRIVE_STIFFNESS.format(family=family) if family else ""
+            if family and float(_attr(prim, stiffness, 0.0)) > 0:
                 drives += 1
         if prim.GetTypeName() == "Mesh":
             meshes += 1
@@ -932,8 +958,26 @@ def snapshot_stage(stage: Any) -> tuple[Snapshot, dict[str, str], tuple[str, ...
     counts.update({SENSORS: 0, KEYFRAMES: 0})
     if drives:
         counts["actuators"] = drives
-    snapshot = Snapshot(bodies, joints, counts, {"angle": "degree", "length": "meter"})
+    snapshot = Snapshot(bodies, joints, counts, stage_units(stage))
     return snapshot, names, tuple(loops)
+
+
+def stage_units(stage: Any) -> dict[str, str]:
+    """The units the stage declares: joint angles in degrees (UsdPhysics),
+    lengths and masses by its `metersPerUnit` and `kilogramsPerUnit`.
+    A stage in centimetres or grams reads as such, so the audit sees a
+    unit change the bundle writer does not explain and refuses it by
+    name (it used to say "meter" whatever the stage said; review
+    2026-09-24)."""
+    from pxr import UsdGeom, UsdPhysics  # noqa: PLC0415
+
+    metres = float(UsdGeom.GetStageMetersPerUnit(stage))
+    kilograms = float(UsdPhysics.GetStageKilogramsPerUnit(stage))
+    return {
+        "angle": DEGREE,
+        "length": METRE if metres == 1.0 else f"{metres:g} {METRE} per unit",
+        "mass": KILOGRAM if kilograms == 1.0 else f"{kilograms:g} {KILOGRAM} per unit",
+    }
 
 
 @source_reader(USD_SOURCE, USD_SUFFIXES)

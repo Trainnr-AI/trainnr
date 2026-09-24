@@ -62,6 +62,10 @@ UNIT = "unit"
 ANY = "*"  # an explanation that covers every element of its kind
 
 HINGE, SLIDE, BALL, FREE = "hinge", "slide", "ball", "free"
+# The unit words a snapshot declares, spelled once: what an MJCF bundle
+# states, and what a source states unless it says otherwise.
+RADIAN, DEGREE, METRE, KILOGRAM = "radian", "degree", "meter", "kilogram"
+BUNDLE_UNITS = {"angle": RADIAN, "length": METRE, "mass": KILOGRAM}
 # MuJoCo's joint types by the XML's words, and the equality a mimic
 # becomes; read off MuJoCo's own enums (`_joint_kinds`, `_eq_joint`).
 JOINT_KIND_NAMES = {
@@ -390,7 +394,7 @@ def snapshot_model(model: Any) -> Snapshot:
         ACTUATORS: int(model.nu),
         MESHES: int(model.nmesh),
     }
-    return Snapshot(bodies, joints, counts, {"angle": "radian", "length": "meter"})
+    return Snapshot(bodies, joints, counts, dict(BUNDLE_UNITS))
 
 
 def snapshot_mjcf(path: Path) -> Snapshot:

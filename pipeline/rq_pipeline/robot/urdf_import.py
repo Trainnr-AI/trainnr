@@ -37,6 +37,7 @@ from rq_pipeline.robot.import_audit import (
     HINGE,
     INERTIA,
     MIMICS,
+    RADIAN,
     SLIDE,
     BodyFacts,
     Explanation,
@@ -203,7 +204,7 @@ def parse_urdf(path: Path) -> tuple[Snapshot, str, tuple[str, ...]]:
             advisories.append(f"{n} <{tag}> element(s) ignored by MuJoCo's loader")
     roots = [n for n in bodies if n not in children]
     root_link = roots[0] if roots else ""
-    snapshot = Snapshot(bodies, joints, {MIMICS: mimics}, {"angle": "radian"})
+    snapshot = Snapshot(bodies, joints, {MIMICS: mimics}, {"angle": RADIAN})
     return snapshot, root_link, tuple(advisories)
 
 
