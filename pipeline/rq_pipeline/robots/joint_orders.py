@@ -29,3 +29,61 @@ GO2_MENAGERIE_JOINTS = (
     "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
 )  # fmt: skip
 GO2_MENAGERIE_FEET = ("FL", "FR", "RL", "RR")
+
+# Unitree's foot order in `LowState.foot_force` (their leg order).
+GO2_UNITREE_FEET = ("FR", "FL", "RR", "RL")
+
+# What a Go2 joint is, by name, in either spelling: its leg and its class.
+# Read by the identification (which leg a contact channel masks) and the
+# synthetic study (which truth and amplitude a joint gets), never parsed
+# out of the name.
+GO2_JOINT_CLASSES = ("hip", "thigh", "calf")
+MODEL_JOINT_SUFFIX = "_joint"
+GO2_ANATOMY: dict[str, tuple[str, str]] = {
+    f"{leg}_{kind}{suffix}": (leg, kind)
+    for leg in GO2_MENAGERIE_FEET
+    for kind in GO2_JOINT_CLASSES
+    for suffix in ("", MODEL_JOINT_SUFFIX)
+}
+
+# Declared renames from a recording's joint names to a model's: Unitree's
+# bus names a motor `FR_hip`, the Go2 MJCFs name the joint `FR_hip_joint`.
+# The identification applies the one table that maps every unknown name
+# onto a hinge of the model, and records which (a live capture off the
+# vendor's bus reached no model joint before this table existed; review
+# 2026-09-24).
+JOINT_RENAMES: dict[str, dict[str, str]] = {
+    "unitree-motors-to-model": {m: f"{m}{MODEL_JOINT_SUFFIX}" for m in GO2_MOTORS},
+}
+
+
+def anatomy_of(joint: str) -> tuple[str, str]:
+    """(leg, class) of a Go2 joint by its name in either spelling; refused
+    by name for a joint the table does not know."""
+    try:
+        return GO2_ANATOMY[joint]
+    except KeyError:
+        raise ValueError(
+            f"joint {joint!r} is not a Go2 hip, thigh or calf in "
+            "rq_pipeline.robots.joint_orders (add its robot's table)"
+        ) from None
+
+
+def rename_to(
+    names: tuple[str, ...], targets: set[str]
+) -> tuple[tuple[str, ...], str | None]:
+    """`names` onto `targets` (a model's hinges): unchanged when every name
+    is already a target, else through the one declared table that maps
+    every name onto a target. Returns the names and the table used (None
+    when none was needed); refused by name when no table maps them."""
+    if all(n in targets for n in names):
+        return names, None
+    for table_name, table in JOINT_RENAMES.items():
+        mapped = tuple(table.get(n, n) for n in names)
+        if all(m in targets for m in mapped):
+            return mapped, table_name
+    unknown = [n for n in names if n not in targets]
+    raise ValueError(
+        f"joints {unknown} are not hinges of the model, and no table in "
+        f"JOINT_RENAMES ({sorted(JOINT_RENAMES)}) maps them onto one"
+    )

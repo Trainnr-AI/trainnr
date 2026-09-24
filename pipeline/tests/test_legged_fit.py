@@ -76,6 +76,80 @@ class Refusals(unittest.TestCase):
             self.assertIn("not hinges of the model", method.accepts(bundle, rec) or "")
 
 
+class TheFilterRuns(unittest.TestCase):
+    """The balance's low-pass runs on what is fitted, or refuses: an
+    hour-long 500 Hz log thinned by the sample budget alone fell to 17 Hz,
+    under the 15 Hz band, and the filter silently did nothing while the
+    record said it ran (review 2026-09-24)."""
+
+    def test_the_stride_keeps_the_band_where_the_budget_would_not(self) -> None:
+        from rq_pipeline.robot.legged_fit import Decimation  # noqa: PLC0415
+
+        hour_at_500 = 500 * 3600
+        by_budget = -(-hour_at_500 // Decimation().max_samples)
+        stride = Decimation().stride(hour_at_500, 500.0, 15.0)
+        self.assertEqual(by_budget, 30)  # 16.7 Hz: under the band
+        self.assertEqual(stride, 8)  # 62.5 Hz: Nyquist twice the band
+        self.assertEqual(Decimation().stride(hour_at_500, 500.0, 0.0), 30)
+
+    def test_a_band_the_rate_cannot_hold_is_refused(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.robot.torque_balance import Bandwidth, lowpass  # noqa: PLC0415
+
+        values = np.zeros((100, 2))
+        with self.assertRaisesRegex(ValueError, "15 Hz band needs samples faster"):
+            lowpass(values, 20.0, Bandwidth(cutoff_hz=15.0))
+        self.assertIs(lowpass(values, 20.0, Bandwidth(cutoff_hz=0.0)), values)
+
+
+@needs_sim
+class VendorNamesAndIdleStarts(unittest.TestCase):
+    """A recording named the way Unitree's bus names motors (`FR_hip`, not
+    the model's `FR_hip_joint`) reaches the fit through the declared
+    rename table, and a log whose motors idle at the start is judged on
+    its whole effort channel (review 2026-09-24: every live capture was
+    refused as 'not hinges of the model', and a two-sample look refused
+    an idle start)."""
+
+    def _vendor_named(self, root: Path) -> tuple[Path, Path]:
+        import dataclasses  # noqa: PLC0415
+
+        from rq_pipeline.robot.quadruped_synth import simulate  # noqa: PLC0415
+        from rq_pipeline.robots.joint_orders import MODEL_JOINT_SUFFIX  # noqa: PLC0415
+
+        bundle = _go2_bundle(root)
+        recording, _truth = simulate(bundle / "go2.xml")
+        channels = {}
+        for name, channel in recording.channels.items():
+            components = tuple(
+                c.removesuffix(MODEL_JOINT_SUFFIX) for c in channel.components
+            )
+            channels[name] = dataclasses.replace(channel, components=components)
+        effort = channels["joint.effort"]
+        values = effort.values.copy()
+        values[:2] = 0.0  # the motors idle at the start
+        channels["joint.effort"] = dataclasses.replace(effort, values=values)
+        for name in ("joint.command", "joint.kp", "joint.kd"):
+            channels.pop(name, None)
+        rec = root / "vendor"
+        dataclasses.replace(recording, channels=channels).write(rec)
+        return bundle, rec
+
+    def test_accepts_and_fits_with_the_mapping_recorded(self) -> None:
+        from rq_pipeline.robot.legged_fit import EFFORT, LeggedJoints  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle, rec = self._vendor_named(Path(tmp))
+            method = LeggedJoints()
+            self.assertIsNone(method.accepts(bundle, rec))
+            fit = method.fit_balance(bundle, rec)
+        self.assertEqual(fit.torque_source, EFFORT)
+        self.assertTrue(all(j.endswith("_joint") for j in fit.samples.joints))
+        self.assertIn("unitree-motors-to-model", fit.base_handling)
+        self.assertEqual(len(fit.balance.result.parameters), 36)
+
+
 @needs_sim
 class SyntheticFit(unittest.TestCase):
     def test_a_synthetic_log_fits_into_a_record_with_basis_and_metrics(self) -> None:

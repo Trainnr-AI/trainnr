@@ -113,6 +113,23 @@ class VelocityGate:
     still: float = 1.0
 
 
+FREE_QPOS = 7  # a free joint's position: xyz and a unit quaternion
+FREE_DOF = 6  # its velocity: linear and angular
+
+
+def free_joint_of(model: Any) -> int | None:
+    """The model's one free joint (the floating base), or None for a fixed
+    base; more than one is refused by name."""
+    import mujoco  # noqa: PLC0415
+
+    free = [
+        j for j in range(model.njnt) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
+    ]
+    if len(free) > 1:
+        raise ValueError(f"{len(free)} free joints; a quadruped has one floating base")
+    return free[0] if free else None
+
+
 @dataclass(frozen=True)
 class Bandwidth:
     """The filtered regressor: both sides of the torque balance pass the
@@ -134,12 +151,38 @@ class Bandwidth:
 
 
 def lowpass(values: np.ndarray, rate_hz: float, bandwidth: Bandwidth) -> np.ndarray:
+    """Zero-phase low-pass at the declared cutoff; the values as they are
+    when the cutoff is 0 (off). A cutoff at or above the Nyquist of
+    `rate_hz` is refused by name: it used to return the values
+    unfiltered while the record said they were filtered (review
+    2026-09-24)."""
     from scipy.signal import butter, filtfilt  # noqa: PLC0415
 
-    if bandwidth.cutoff_hz <= 0 or bandwidth.cutoff_hz >= rate_hz / 2:
+    if bandwidth.cutoff_hz <= 0:
         return values
+    if bandwidth.cutoff_hz >= rate_hz / 2:
+        raise ValueError(
+            f"the balance's {bandwidth.cutoff_hz:g} Hz band needs samples faster "
+            f"than {2 * bandwidth.cutoff_hz:g} Hz; these run at {rate_hz:.1f} Hz "
+            "(record faster, decimate less, or lower Bandwidth.cutoff_hz)"
+        )
     b, a = butter(bandwidth.order, bandwidth.cutoff_hz / (rate_hz / 2))
     return np.asarray(filtfilt(b, a, values, axis=0))
+
+
+def savgol_window(smoothing: Smoothing, rate_hz: float) -> int:
+    """The odd Savitzky-Golay window `smoothing.window_s` holds at
+    `rate_hz`; refused by name when it holds too few samples for the
+    polynomial (one rule for every caller: one of them used to widen the
+    window silently where the other refused)."""
+    window = round(smoothing.window_s * rate_hz)
+    window += 1 - window % 2  # odd
+    if window <= smoothing.order + 1:
+        raise ValueError(
+            f"the smoothing window ({smoothing.window_s} s) holds {window} samples "
+            f"at {rate_hz:.0f} Hz, too few for a cubic — record faster or widen it"
+        )
+    return window
 
 
 @dataclass(frozen=True)
@@ -192,13 +235,7 @@ def tick_aligned(
     step = float(np.median(dt))
     rate = 1.0 / step
     clean = np.asarray(position, dtype=np.float64)
-    window = round(smoothing.window_s * rate)
-    window += 1 - window % 2  # odd
-    if window <= smoothing.order + 1:
-        raise ValueError(
-            f"the smoothing window ({smoothing.window_s} s) holds {window} samples "
-            f"at {rate:.0f} Hz, too few for a cubic — record faster or widen it"
-        )
+    window = savgol_window(smoothing, rate)
     velocity = savgol_filter(
         clean, window, smoothing.order, deriv=1, delta=step, axis=0
     )
@@ -482,6 +519,7 @@ def fit_terms(  # noqa: PLR0913 - the fit's own knobs, each a named dataclass
             "block_samples": block,
             "replicates": plan.replicates,
             "cutoff_hz": bandwidth.cutoff_hz,
+            "rate_hz": float(samples.rate_hz),
             "coulomb_knee": coulomb.knee,
         },
     )

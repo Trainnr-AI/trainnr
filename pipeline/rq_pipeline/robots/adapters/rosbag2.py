@@ -54,6 +54,7 @@ from rq_pipeline.robots.joint_orders import (
     GO2_MENAGERIE_FEET,
     GO2_MENAGERIE_JOINTS,
     GO2_MOTORS,
+    GO2_UNITREE_FEET,
 )
 from rq_pipeline.robots.recording import (
     BASE_POSE,
@@ -283,7 +284,7 @@ LAYOUTS: dict[str, Layout] = {
 }
 
 MOTOR_SLOTS = 20  # every LowState and LowCmd carries 20; a Go2 fills 12
-FEET = ("FR", "FL", "RR", "RL")  # Unitree's foot order in LowState
+FEET = GO2_UNITREE_FEET  # Unitree's foot order in LowState
 XYZ = ("x", "y", "z")
 QUATERNION_WXYZ = ("w", "x", "y", "z")  # Unitree's order, unlike sensor_msgs
 POSE_COMPONENTS = ("x", "y", "z", "qw", "qx", "qy", "qz")  # MuJoCo's free-joint

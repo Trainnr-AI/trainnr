@@ -23,6 +23,12 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.robot.torque_balance import (
+    FREE_DOF,
+    FREE_QPOS,
+    free_joint_of,
+)
+from rq_pipeline.robots.joint_orders import GO2_MENAGERIE_FEET, anatomy_of
 from rq_pipeline.robots.recording import (
     BASE_ACCELERATION,
     BASE_POSE,
@@ -61,7 +67,7 @@ TRUTH_BY_CLASS: dict[str, JointTruth] = {
     "calf": JointTruth(0.020, 1.20, 0.80),
 }
 LEG_SPREAD = (1.00, 1.10, 0.90, 1.05)  # multiplies each class value per leg
-LEGS = ("FL", "FR", "RL", "RR")
+LEGS = GO2_MENAGERIE_FEET
 
 
 @dataclass(frozen=True)
@@ -111,37 +117,16 @@ class BaseShake:
     hz: float = 0.7
 
 
-FREE_QPOS = 7  # a free joint's position: xyz and a unit quaternion
-FREE_DOF = 6  # its velocity: linear and angular
-
-
-def free_joint_of(model: Any) -> int | None:
-    """The model's one free joint (the floating base), or None for a fixed
-    base; more than one is refused by name."""
-    import mujoco  # noqa: PLC0415
-
-    free = [
-        j for j in range(model.njnt) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
-    ]
-    if len(free) > 1:
-        raise ValueError(f"{len(free)} free joints; a quadruped has one floating base")
-    return free[0] if free else None
-
-
 def joint_class(name: str) -> str:
-    for word in ("hip", "thigh", "calf"):
-        if word in name:
-            return word
-    raise ValueError(f"joint {name!r} is not a hip, thigh or calf")
+    """hip, thigh or calf, from the joint table (never parsed from the name)."""
+    return anatomy_of(name)[1]
 
 
 def truth_table(joints: tuple[str, ...]) -> dict[str, JointTruth]:
     out = {}
     for name in joints:
-        leg = next((leg for leg in LEGS if name.startswith(leg)), None)
-        if leg is None:
-            raise ValueError(f"joint {name!r} names no leg of {LEGS}")
-        base = TRUTH_BY_CLASS[joint_class(name)]
+        leg, kind = anatomy_of(name)
+        base = TRUTH_BY_CLASS[kind]
         k = LEG_SPREAD[LEGS.index(leg)]
         out[name] = JointTruth(
             base.armature * k, base.damping * k, base.frictionloss * k
