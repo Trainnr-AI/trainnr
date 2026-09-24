@@ -214,6 +214,20 @@ LAYOUTS: dict[str, Layout] = {
         Field("foot_force", "int16", 4),
         Field("foot_position_body", "float32", 12),
         Field("foot_speed_body", "float32", 12),
+        # The SDK's IDL ends with ten path points (unitree_sdk2py
+        # idl/unitree_go/msg/dds_/_SportModeState_.py); without them every
+        # real message left 280 bytes unread, found when the reader began
+        # refusing leftovers (review 2026-09-24).
+        Field("path_point", "PathPoint", 10),
+    ),
+    "PathPoint": (
+        Field("t_from_start", "float32"),
+        Field("x", "float32"),
+        Field("y", "float32"),
+        Field("yaw", "float32"),
+        Field("vx", "float32"),
+        Field("vy", "float32"),
+        Field("vyaw", "float32"),
     ),
     TIME: (Field("sec", "int32"), Field("nanosec", "uint32")),
     HEADER: (Field("stamp", TIME), Field("frame_id", "string")),
@@ -781,12 +795,11 @@ def _channels(
 ) -> tuple[dict[str, Channel], int]:
     """The channels a topic's messages decode to, and how many samples the
     clock dropped (duplicate or non-increasing receive times)."""
-    layout = LAYOUTS[kind]
     extracts = CHANNELS[kind]
     times: list[float] = []
     columns: list[list[list[float]]] = [[] for _ in extracts]
     for stamp_ns, data in msgs:
-        decoded = Reader(data).message(layout, LAYOUTS)
+        decoded = Reader(data).decode(kind, LAYOUTS)
         times.append(stamp_ns / NS_PER_S)
         for rows, extract in zip(columns, extracts, strict=True):
             rows.append(extract.take(decoded))

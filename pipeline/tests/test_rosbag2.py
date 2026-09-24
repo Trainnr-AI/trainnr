@@ -503,6 +503,28 @@ class OneAdapterManyProfiles(unittest.TestCase):
             junk.write_bytes(b"not a database")
             self.assertFalse(rosbag2.Rosbag2Adapter().accepts(junk))
 
+    def test_a_layout_short_of_fields_or_bytes_is_refused_with_the_type(
+        self,
+    ) -> None:
+        """The checked decode refuses bytes the layout leaves unread (beyond
+        the trailing alignment) and a read past the end, naming the type
+        (review 2026-09-24: SportModeState's layout lacked its path points
+        and every real message left 280 bytes unread, silently)."""
+        full = Writer().message(
+            rosbag2.LAYOUTS[rosbag2.LOW_STATE], rosbag2.LAYOUTS, _low_state(0.0)
+        )
+        self.assertIn(
+            "motor_state", Reader(full).decode(rosbag2.LOW_STATE, rosbag2.LAYOUTS)
+        )
+        short = dict(rosbag2.LAYOUTS)
+        short[rosbag2.LOW_STATE] = rosbag2.LAYOUTS[rosbag2.LOW_STATE][:-2]
+        with self.assertRaisesRegex(ValueError, "LowState: .* bytes left unread"):
+            Reader(full).decode(rosbag2.LOW_STATE, short)
+        with self.assertRaisesRegex(ValueError, "LowState: the bytes end before"):
+            Reader(full[:100]).decode(rosbag2.LOW_STATE, rosbag2.LAYOUTS)
+        with self.assertRaisesRegex(ValueError, "runs past"):
+            Reader(b"\x00\x01\x00\x00" + (1000).to_bytes(4, "little")).string()
+
     def test_big_endian_cdr_is_refused_by_name(self) -> None:
         with self.assertRaisesRegex(ValueError, "big-endian"):
             Reader(b"\x00\x00\x00\x00" + b"\x00" * 8)

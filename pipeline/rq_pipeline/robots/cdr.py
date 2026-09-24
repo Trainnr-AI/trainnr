@@ -44,6 +44,10 @@ PRIMITIVES: dict[str, tuple[str, int]] = {
 }
 STRING = "string"
 SEQUENCE = -1  # a `type[]` field: a u32 count precedes the items
+# A serialized message may end in padding to the next 4-byte boundary
+# (the DDS payload's alignment); more unread bytes than that means the
+# layout is short of fields and the decode is refused, never trusted.
+MAX_TRAILING_PADDING = 3
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,11 @@ class Reader:
 
     def string(self) -> str:
         n = self.u32()
+        if n > len(self.data) - self.pos:
+            raise ValueError(
+                f"a string of {n} bytes at {self.pos} runs past the message's "
+                f"{len(self.data)} bytes"
+            )
         s = self.data[self.pos : self.pos + n - 1].decode("utf-8") if n else ""
         self.pos += n
         return s
@@ -112,6 +121,30 @@ class Reader:
         nsec = self.u32()
         self.string()
         return sec + nsec / NS_PER_S
+
+    def decode(self, kind: str, layouts: dict[str, Layout]) -> dict[str, Any]:
+        """A whole top-level message of type `kind`, checked: every byte
+        the layout does not account for, beyond the trailing alignment, is
+        refused (a layout short of fields decoded "successfully" before),
+        and a read past the end names the type (review 2026-09-24)."""
+        layout = layouts.get(kind)
+        if layout is None:
+            raise ValueError(f"no CDR layout for message type {kind!r}")
+        try:
+            out = self.message(layout, layouts)
+        except struct.error as why:
+            raise ValueError(
+                f"{kind}: the bytes end before the layout does ({why})"
+            ) from None
+        except ValueError as why:
+            raise ValueError(f"{kind}: {why}") from None
+        left = len(self.data) - self.pos
+        if left > MAX_TRAILING_PADDING:
+            raise ValueError(
+                f"{kind}: {left} bytes left unread after the layout's last field; "
+                "the layout is short of fields (or the type is another)"
+            )
+        return out
 
     def message(self, layout: Layout, layouts: dict[str, Layout]) -> dict[str, Any]:
         """A whole message by its layout; nested types resolved through
