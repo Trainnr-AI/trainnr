@@ -641,6 +641,35 @@ class Actions:
         ]
         return self.jobs.start("attribute-deployment", argv, PIPELINE_DIR)
 
+    def preflight_deployment(
+        self,
+        name: str,
+        *,
+        project: str,
+        runtime: str = "mujoco",
+        seed: int = 1000,
+    ) -> JobHandle:
+        """Pre-flight (docs/77 §10): every check before the first tick, the
+        ramp-in and the stops measured, the record `preflight.json` beside
+        the manifest; `runtime="dds"` reads the robot's state from
+        Unitree's simulator over DDS. A job."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "deploy", "viz"),
+            str(TOOLS_DIR / "preflight-deployment.py"),
+            "--project",
+            project,
+            "--name",
+            name,
+            "--runtime",
+            runtime,
+            "--seed",
+            str(seed),
+        ]
+        return self.jobs.start("preflight-deployment", argv, PIPELINE_DIR)
+
     def open_studio(self) -> JobHandle:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun

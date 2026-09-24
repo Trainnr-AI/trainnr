@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -35,9 +35,15 @@ DOMAIN_ID = 0
 FSM_SETTLE_S = 2.0  # the fixed stand takes about this long to reach
 CHORD_ATTEMPTS = 2
 STATE_TIMEOUT_MS = 1000
-# The two chords their state machine takes from passive to RL (their
-# `config.yaml` FSM): fixed stand, then velocity mode.
-FSM_CHORDS = (("LT", "up"), ("RT", "A"))
+# The chords their state machine moves on (their `config.yaml` FSM):
+# passive -> fixed stand, fixed stand -> velocity (the handover to the
+# policy), and back to passive (their damping state, kd 3) from either.
+STAND_CHORD = ("LT", "up")
+HANDOVER_CHORD = ("RT", "A")
+PASSIVE_CHORD = ("LT", "B")
+FSM_CHORDS = (STAND_CHORD, HANDOVER_CHORD)
+# The Go2's LowState carries 20 motor slots; the robot drives the first 12.
+GO2_MOTORS = 12
 STICKS_CENTERED = {"lx": 0.0, "ly": 0.0, "rx": 0.0, "ry": 0.0}
 Clock = Callable[[], float]
 Sleep = Callable[[float], None]
@@ -55,6 +61,12 @@ class Bus(Protocol):
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """(base position, base quaternion wxyz, motor positions in the
         SDK's order) as of the last `latest`."""
+        ...
+
+    def health(self) -> dict[str, Any]:
+        """The robot's reported state as of the last `latest`, the SDK
+        protect functions' inputs: gyro, motor speeds and temperatures,
+        battery (`preflight.health_of_lowstate` reads it)."""
         ...
 
 
@@ -112,7 +124,25 @@ class SdkBus:
             np.asarray(low.imu_state.quaternion, dtype=np.float64),  # w x y z
             np.asarray([m.q for m in low.motor_state], dtype=np.float64),
         )
+        motors = low.motor_state[:GO2_MOTORS]
+        self._health = {
+            "quaternion": self._pose[1].copy(),
+            "gyroscope": np.asarray(low.imu_state.gyroscope, dtype=np.float64),
+            "motor_speed": np.asarray([m.dq for m in motors], dtype=np.float64),
+            # the Go2 reports one temperature per motor (the H2's two are
+            # casing and winding); read against the casing limit
+            "motor_temperature": np.asarray(
+                [m.temperature for m in motors], dtype=np.float64
+            ),
+            "battery_percent": float(low.bms_state.soc),
+            "read_at": time.monotonic(),
+        }
         return self._pose[1].copy(), np.asarray(state.velocity, dtype=np.float64)
+
+    def health(self) -> dict[str, Any]:
+        if not getattr(self, "_health", None):
+            raise RuntimeError("no health yet: `latest` has not read their state")
+        return dict(self._health)
 
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """From the messages `latest` last read: base position, base
@@ -160,19 +190,41 @@ class DdsRuntime:
         controller = stack.controller if stack else "unrecorded"
         return f"unitree_mujoco + {controller} over DDS (unitree_rl_mjlab)"
 
-    def reset(self, *, keyframe: int = 0) -> None:
-        """Sticks to zero, their state machine to RL: passive -> fixed
-        stand (LT + up), settle, -> velocity (RT + A), settle."""
-        self.pad.sticks(**STICKS_CENTERED)
+    def _press(self, chord: tuple[str, str]) -> None:
         # Each chord twice: a repeat is a no-op in the state it leads to,
         # and a single press was missed once (2026-09-11).
-        for trigger, button in FSM_CHORDS:
-            for _ in range(CHORD_ATTEMPTS):
-                self.pad.chord(trigger, button)
-                self._sleep(FSM_SETTLE_S)
+        for _ in range(CHORD_ATTEMPTS):
+            self.pad.chord(*chord)
+            self._sleep(FSM_SETTLE_S)
+
+    def stand(self) -> None:
+        """Sticks to zero, their state machine to its fixed stand: the
+        state a pre-flight reads the robot in, before the policy has it."""
+        self.pad.sticks(**STICKS_CENTERED)
+        self._press(STAND_CHORD)
+        self._read()
+
+    def handover(self) -> None:
+        """Fixed stand -> velocity: their controller runs the policy now."""
+        self._press(HANDOVER_CHORD)
         self.ticks = 0
         self._next_tick = None
         self._read()
+
+    def stop(self) -> None:
+        """The operator's stop through their own machine: to Passive, their
+        damping state (kd 3, kp 0), in one press; the pad is the hook."""
+        self.pad.sticks(**STICKS_CENTERED)
+        self.pad.chord(*PASSIVE_CHORD)
+
+    def health(self) -> dict[str, Any]:
+        return self.bus.health()
+
+    def reset(self, *, keyframe: int = 0) -> None:
+        """Sticks to zero, their state machine to RL: passive -> fixed
+        stand (LT + up), settle, -> velocity (RT + A), settle."""
+        self.stand()
+        self.handover()
 
     def _read(self) -> None:
         latest = self.bus.latest(STATE_TIMEOUT_MS)

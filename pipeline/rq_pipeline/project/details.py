@@ -34,6 +34,7 @@ from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.assay import read_assay
 from rq_pipeline.deploy.attribution import SURVIVED, read_attribution
+from rq_pipeline.deploy.preflight import card_line, read_preflight
 from rq_pipeline.envs.lerobot_train_log import (
     CHAIN_LOG_FILE,
     RUN_MANIFEST_FILE,
@@ -1146,6 +1147,83 @@ COURSE_COLUMNS: tuple[tuple[str, tuple[str, ...], Callable[..., Any]], ...] = (
 )
 
 
+PREFLIGHT_MARK = {True: "passed", False: "REFUSED", None: "not measured"}
+
+
+def preflight_sections(record: dict[str, Any]) -> list[Section]:
+    """Before the first tick: every check with its number and its limit;
+    then the ramp-in and the stops as measured."""
+    sections: list[Section] = [
+        _table(
+            "Pre-flight (before the first tick on a robot)",
+            ["check", "verdict", "measured", "limit", "note"],
+            [
+                [
+                    c.get("name", UNRECORDED),
+                    PREFLIGHT_MARK.get(c.get("passed"), UNRECORDED),
+                    c.get("measured", ""),
+                    c.get("limit", ""),
+                    c.get("detail", ""),
+                ]
+                for c in record.get("checks", [])
+            ],
+            note=f"{card_line(record)}; the robot's state read from "
+            f"{record.get('state_from', UNRECORDED)}; watchdogs: "
+            f"{(record.get('watchdogs') or {}).get('source', UNRECORDED)}",
+        )
+    ]
+    ramp = record.get("ramp_in") or {}
+    stops = record.get("soft_stop") or {}
+    rows: list[list[Any]] = []
+    for name in ("with ramp", "without ramp"):
+        r = ramp.get(name)
+        if r:
+            rows.append(
+                [
+                    f"handover {name}",
+                    f"{_f(r.get('first_tick_target_step_rad'))} rad first tick, "
+                    f"{_f(r.get('max_target_step_rad'))} rad max",
+                    f"{_f(r.get('max_force_step_nm'))} N·m",
+                    "stood" if r.get("stood") else "did not stand",
+                ]
+            )
+    for name, s in stops.items():
+        if isinstance(s, dict):
+            rows.append(
+                [
+                    f"stop: {name}",
+                    f"damping in {_f(s.get('seconds_to_damping'))} s",
+                    f"{_f(s.get('max_force_step_nm'))} N·m",
+                    f"body falls at most {_f(s.get('max_body_fall_mps'))} m/s, "
+                    f"joints {_f(s.get('max_joint_speed_rad_s'))} rad/s",
+                ]
+            )
+    theirs = record.get("their_stop") or {}
+    if "max_body_fall_mps" in theirs:
+        rows.append(
+            [
+                "stop: their Passive, on their simulator",
+                "one press",
+                "unrecorded (their controller's torques)",
+                f"body falls at most {_f(theirs['max_body_fall_mps'])} m/s, "
+                f"joints {_f(theirs.get('max_joint_speed_rad_s'))} rad/s",
+            ]
+        )
+    if rows:
+        sections.append(
+            _table(
+                "Ramp-in and stop, measured",
+                ["what", "command", "largest torque step in a tick", "the body"],
+                rows,
+                note=f"ramp from {ramp.get('from', UNRECORDED)} over "
+                f"{ramp.get('window_s', UNRECORDED)} s; stops "
+                f"{stops.get('while', UNRECORDED)}, ending in "
+                f"{stops.get('ends_in', UNRECORDED)}",
+            )
+        )
+    return sections
+
+
 def attribution_table(record: dict[str, Any]) -> Section:
     """Which parameter breaks it first: one row per knob in the ranking's
     order - the cliff, then every rung that ran as k/n with its interval."""
@@ -1347,6 +1425,9 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                 ),
             )
         )
+    preflight = read_preflight(root)
+    if preflight:
+        sections.extend(preflight_sections(preflight))
     attribution = read_attribution(root)
     if attribution:
         sections.append(attribution_table(attribution))
