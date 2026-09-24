@@ -500,18 +500,14 @@ class ViewportScene:
         return int(self.model.jnt_bodyid[free[0]])
 
 
-def deployment_folder(name: str, project_root: Path | None = None) -> Path:
-    """The current project's (or `project_root`'s, made current: the
-    bundle's meshes are found project-first) deployment folder by name,
-    refused by name when it has no manifest."""
-    from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
-
-    project = Project(Path(project_root)).use() if project_root else current_project()
-    folder = project.folder(DEPLOY_FOLDER) / name
+def deployment_folder(name: str, deploy_root: Path) -> Path:
+    """The deployment folder by name under a project's deployments
+    (`deploy_root`, the caller's: this tier knows no project), refused by
+    name when it has no manifest."""
+    folder = Path(deploy_root) / name
     if not (folder / MANIFEST_FILE).is_file():
         raise FileNotFoundError(
-            f"no deployment {name!r} with a manifest in {project.root}"
+            f"no deployment {name!r} with a manifest in {deploy_root}"
         )
     return folder
 
@@ -519,17 +515,19 @@ def deployment_folder(name: str, project_root: Path | None = None) -> Path:
 def open_scene(
     text: str,
     *,
-    project_root: Path | None = None,
+    deploy_root: Path,
     offscreen_side: int | None = None,
     twist_word: str = "twist",
     twist_axes: int = 3,
 ) -> ViewportScene:
     """The scene's model (the deployment's own scene, the bundle's meshes)
-    and its plan; every refusal is raised here, before a frame."""
+    and its plan; every refusal is raised here, before a frame. The
+    bundle's meshes are found project-first: the caller has made the
+    project current (`Project.use()`)."""
     from rq_pipeline.deploy.runtime import assets_dir_of, load_scene  # noqa: PLC0415
 
     scene = parse_scene(text)
-    folder = deployment_folder(scene.name, project_root)
+    folder = deployment_folder(scene.name, deploy_root)
     manifest = load_manifest(folder)
     model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
     if offscreen_side is not None:  # raise, never lower, the offscreen budget

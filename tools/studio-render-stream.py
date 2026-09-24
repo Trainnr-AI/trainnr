@@ -1879,12 +1879,18 @@ PROJECT_ROOT: "pathlib.Path | None" = None
 
 def open_deploy_scene(name: str) -> "object":
     """A deployment in the viewport (`deploy.viewport_source`): its own
-    scene and meshes, built the same in both processes; refused by name."""
+    scene and meshes, built the same in both processes; refused by name.
+    The project is `--project=`'s, else the environment's current one,
+    made current so the bundle's meshes are found project-first."""
     from rq_pipeline.deploy.viewport_source import open_scene  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
 
+    project = Project(PROJECT_ROOT) if PROJECT_ROOT is not None else current_project()
+    project.use()
     return open_scene(
         name,
-        project_root=PROJECT_ROOT,
+        deploy_root=project.folder(DEPLOY_FOLDER),
         offscreen_side=MAX_RENDER_SIDE,
         twist_word=MAILBOX_TWIST,
         twist_axes=TWIST_AXES,
