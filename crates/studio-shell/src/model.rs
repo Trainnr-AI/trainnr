@@ -54,6 +54,12 @@ pub const UNRECORDED: &str = "unrecorded";
 /// Summary keys never shown as a fact or a table column.
 pub const HIDDEN_KEYS: &[&str] = &["files"];
 
+/// The Deployments card's pre-flight key (`deploy/preflight.py`,
+/// `PREFLIGHT_SUMMARY_KEY`): its value reads "passed 7/7 on a simulation
+/// stand-in" or "refused: <check> (<number>)", so the line says
+/// "pre-flight passed 7/7" with no word of ours between.
+pub const PREFLIGHT_KEY: &str = "pre-flight";
+
 /// `ProjectIndex`, as `rq_pipeline.project.index` writes it. Unknown
 /// fields are ignored so an older Studio still opens a newer index.
 #[derive(Deserialize, Default)]
@@ -829,6 +835,19 @@ mod tests {
         let mut gone = job.clone();
         gone.pid = 0;
         assert!(!gone.running());
+    }
+
+    #[test]
+    fn the_pre_flight_verdict_reads_as_one_phrase() {
+        let mut m = serde_json::Map::new();
+        m.insert(
+            PREFLIGHT_KEY.into(),
+            serde_json::json!("passed 7/7 on a simulation stand-in"),
+        );
+        assert_eq!(
+            summary_line(&m).as_deref(),
+            Some("pre-flight passed 7/7 on a simulation stand-in")
+        );
     }
 
     #[test]

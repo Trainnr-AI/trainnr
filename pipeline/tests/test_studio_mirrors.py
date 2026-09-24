@@ -238,6 +238,14 @@ class ProjectContracts(unittest.TestCase):
             control.STATE_SCHEMA,
         )
 
+    def test_the_pre_flight_key_agrees(self) -> None:
+        from rq_pipeline.deploy.preflight import PREFLIGHT_SUMMARY_KEY  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(MODEL_RS, r'pub const PREFLIGHT_KEY: &str = "([^"]+)";'),
+            PREFLIGHT_SUMMARY_KEY,
+        )
+
     def test_the_state_bases_agree(self) -> None:
         from rq_pipeline.bundles.basis import BASES  # noqa: PLC0415
 

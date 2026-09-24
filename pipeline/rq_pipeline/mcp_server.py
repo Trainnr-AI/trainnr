@@ -885,6 +885,76 @@ def attribute_deployment(
     )
 
 
+def _deployment_folder(deployment: str) -> Path | Refusal:
+    """The current project's deployment folder by name, or a refusal."""
+    from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    try:
+        plain_name(deployment, "deployment name")
+        project = current_project()
+    except (ValueError, FileNotFoundError) as why:
+        return refusal(str(why))
+    folder = project.folder(DEPLOY_FOLDER) / deployment
+    if not (folder / MANIFEST_FILE).is_file():
+        return refusal(f"no deployment {deployment!r} in this project")
+    return folder
+
+
+def preflight_deployment(
+    deployment: str, runtime: str = "mujoco", seed: int = 1000
+) -> JobHandle | Refusal:
+    """Pre-flight (docs/77 §10): everything that must hold before the
+    first tick on a robot, each a refusal by name with its number - the
+    policy's widths against the manifest, the joint order, the gains
+    against the scene and against the YAML Unitree's controller reads,
+    the targets and torques a dry rollout of the gate's held twists
+    commands against the joints' ranges and the actuators' force ranges,
+    the compute per tick, the robot's reported state against the SDK's
+    own watchdogs. Then the ramp-in (from lying, in damping) and the stop
+    (soft, damping at once, zeroed) measured. `runtime="dds"` reads the
+    state from Unitree's simulator in their fixed stand and measures
+    their own stop too (Linux). A job; `preflight.json` beside the
+    manifest, the card reads "pre-flight passed 7/7"."""
+    from rq_pipeline.deploy.preflight import read_preflight  # noqa: PLC0415
+    from rq_pipeline.deploy.runtimes import runtime_names  # noqa: PLC0415
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    if runtime not in runtime_names():
+        return refusal(
+            f"unknown runtime {runtime!r}; one of {', '.join(runtime_names())}"
+        )
+    folder = _deployment_folder(deployment)
+    if not isinstance(folder, Path):
+        return folder
+    try:
+        read_preflight(folder)  # a record of another schema is refused now
+    except ValueError as why:
+        return refusal(str(why))
+    return Actions(JobManager(_jobs_root())).preflight_deployment(
+        deployment, project=str(current_project().root), runtime=runtime, seed=seed
+    )
+
+
+def stop_deployment(
+    deployment: str, reason: str = "operator stop"
+) -> dict[str, Any] | Refusal:
+    """The operator's stop, from any process: a STOP file beside the
+    manifest that a guarded run reads every tick and answers with the
+    soft stop (the gains blended to damping, never zeroed). Clear it by
+    deleting the file before the next run."""
+    from rq_pipeline.deploy.preflight import request_stop  # noqa: PLC0415
+
+    folder = _deployment_folder(deployment)
+    if not isinstance(folder, Path):
+        return folder
+    out = request_stop(folder, reason)
+    return {"status": DONE, "stop_file": str(out), "reason": reason}
+
+
 def list_gate_runtimes() -> list[dict[str, Any]]:
     """Every runtime the sim-to-sim gate can drive an exported policy
     through, with the platforms it runs on (empty: every platform)."""
@@ -2337,6 +2407,18 @@ def build_server() -> Any:  # noqa: PLR0915
         "cliff per knob against the certificate's lower bound, the knobs ranked, "
         "the fall pictured. A job; attribution.json beside the manifest."
     )(attribute_deployment)
+    server.tool(
+        description="Pre-flight before the first tick on a robot: policy widths, "
+        "joint order, gains (scene and Unitree's YAML), a dry rollout's targets "
+        "and torques against ranges, compute per tick, the robot's state against "
+        "the SDK's watchdogs; then the ramp-in and the stops measured. runtime "
+        "'dds' reads Unitree's simulator. A job; preflight.json beside the manifest."
+    )(preflight_deployment)
+    server.tool(
+        description="The operator's stop: a STOP file beside the deployment's "
+        "manifest that a guarded run answers with the soft stop (gains blended "
+        "to damping, never zeroed)."
+    )(stop_deployment)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
         "version) without writing a fit record and judge every parameter against "

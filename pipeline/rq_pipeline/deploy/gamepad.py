@@ -69,6 +69,9 @@ COMMAND_LIMIT = 1.0  # a stick reaches 1.0 at most: the pad's command envelope
 XBOX_VENDOR = 0x045E
 XBOX_PRODUCT = 0x028E
 PAD_NAME = "trainnr virtual xbox pad"
+# What opens the kernel's pad device to this user until the next reboot
+# (docs/77 §7): the operator's line, never run for them.
+UINPUT_FIX = "run: sudo modprobe joydev && sudo chmod 666 /dev/uinput (docs/77 §7)"
 
 
 def axis_value(x: float, *, inverted: bool = False) -> int:
@@ -110,9 +113,16 @@ class VirtualPad:
                 for a in AXES
             ],
         }
-        self._ui = UInput(
-            capabilities, name=name, vendor=XBOX_VENDOR, product=XBOX_PRODUCT
-        )
+        from evdev.uinput import UInputError  # noqa: PLC0415
+
+        try:
+            self._ui = UInput(
+                capabilities, name=name, vendor=XBOX_VENDOR, product=XBOX_PRODUCT
+            )
+        except (UInputError, PermissionError) as denied:
+            # The node is root-only again after a reboot (2026-09-24): say the
+            # fix, not a traceback.
+            raise RuntimeError(f"{denied}; {UINPUT_FIX}") from denied
 
     def _abs(self, axis: str, value: int) -> None:
         self._ui.write(self._e.EV_ABS, getattr(self._e, axis), value)

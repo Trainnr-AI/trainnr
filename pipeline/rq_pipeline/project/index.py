@@ -32,6 +32,11 @@ from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.attribution import read_attribution
 from rq_pipeline.deploy.manifest import gate_word, read_gates
+from rq_pipeline.deploy.preflight import (
+    PREFLIGHT_SUMMARY_KEY,
+    card_line,
+    read_preflight,
+)
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
 from rq_pipeline.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
@@ -633,6 +638,9 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     for runtime in RUNTIMES:
         if runtime != DEFAULT_RUNTIME and runtime in gates:
             out[f"gate ({runtime.upper()})"] = gate_word(gates[runtime])
+    preflight = read_preflight(path)
+    if preflight:  # before the first tick on a robot: passed, or refused by name
+        out[PREFLIGHT_SUMMARY_KEY] = card_line(preflight)
     attribution = read_attribution(path)
     if attribution:  # what would break it first, right under the gate's word
         out["sensitivity"] = str(attribution.get("sensitivity", UNRECORDED))
