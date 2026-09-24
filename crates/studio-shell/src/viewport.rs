@@ -86,6 +86,26 @@ impl ShmReader {
     }
 }
 
+/// One number per spawned stream: a restart of the SAME scene gets its own
+/// frame file, so the old viewport's cleanup (`Drop for ShmReader`) cannot
+/// delete the new one's (2026-09-24: restarting `deploy:<name>` found its
+/// file gone and the render stream died at open).
+static SHM_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// A scene name as a file-name part on every platform: `deploy:` scenes
+/// carry colons, which Windows forbids in a file name.
+fn file_safe(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
 impl Drop for ShmReader {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
@@ -496,8 +516,10 @@ impl ViewportFeed {
         // sized for the largest frame the wire allows, handed to the
         // script by path. See ShmReader for the layout.
         let shm_path = std::env::temp_dir().join(format!(
-            "rq-viewport-{}-{task_name}.rgb",
-            std::process::id()
+            "rq-viewport-{}-{}-{}.rgb",
+            std::process::id(),
+            SHM_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+            file_safe(task_name),
         ));
         let shm = File::create(&shm_path)
             .and_then(|file| {
@@ -1173,6 +1195,23 @@ fn encode_flag(tag: u8, flag: u32, on: bool) -> [u8; 6] {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_scene_name_becomes_a_file_name_part_on_every_platform() {
+        assert_eq!(
+            super::file_safe("deploy:go2-c2:gate:dds:3"),
+            "deploy-go2-c2-gate-dds-3"
+        );
+        assert_eq!(super::file_safe("walk"), "walk");
+    }
+
+    #[test]
+    fn two_spawns_of_one_scene_get_two_frame_files() {
+        use std::sync::atomic::Ordering;
+        let a = super::SHM_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let b = super::SHM_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        assert_ne!(a, b);
+    }
+
     use super::*;
 
     #[test]

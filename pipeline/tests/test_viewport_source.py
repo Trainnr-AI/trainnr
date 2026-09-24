@@ -227,3 +227,58 @@ class TheReplay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheDressing(unittest.TestCase):
+    """The Studio's dressing is visual only: a scene exported for a
+    runtime (no lights, a bare plane) gains a sky, a key light and the
+    checker floor, and steps bit for bit like the bare scene (2026-09-24:
+    the deploy viewport showed a bare plane under a black sky)."""
+
+    BARE = """<mujoco><worldbody>
+      <geom name="floor" type="plane" size="0 0 0.01"/>
+      <body pos="0 0 0.5"><freejoint/>
+        <geom type="box" size="0.1 0.2 0.05" mass="1"/></body>
+    </worldbody></mujoco>"""
+
+    def test_the_dressed_scene_steps_exactly_like_the_bare_one(self) -> None:
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.scene import dress  # noqa: PLC0415
+
+        bare = mujoco.MjModel.from_xml_string(self.BARE)
+        spec = mujoco.MjSpec.from_string(self.BARE)
+        dress(spec)
+        dressed = spec.compile()
+        self.assertEqual(bare.nlight, 0)
+        self.assertEqual(dressed.nlight, 1)
+        self.assertIn(mujoco.mjtTexture.mjTEXTURE_SKYBOX, list(dressed.tex_type))
+        self.assertGreaterEqual(int(dressed.geom_matid[0]), 0)
+        runs = []
+        for model in (bare, dressed):
+            data = mujoco.MjData(model)
+            data.qvel[:3] = [0.3, -0.2, 0.0]
+            for _ in range(500):
+                mujoco.mj_step(model, data)
+            runs.append(data.qpos.copy())
+        np.testing.assert_array_equal(runs[0], runs[1])
+
+    def test_a_scene_with_its_own_light_and_floor_material_keeps_them(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.tasks.scene import dress  # noqa: PLC0415
+
+        xml = self.BARE.replace(
+            "<worldbody>",
+            '<asset><material name="m" rgba="1 0 0 1"/></asset>'
+            '<worldbody><light pos="0 0 3"/>',
+        ).replace('size="0 0 0.01"/>', 'size="0 0 0.01" material="m"/>')
+        spec = mujoco.MjSpec.from_string(xml)
+        dress(spec)
+        model = spec.compile()
+        self.assertEqual(model.nlight, 1)
+        self.assertEqual(
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, model.geom_matid[0]),
+            "m",
+        )

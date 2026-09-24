@@ -301,13 +301,23 @@ def assets_dir_of(manifest: Manifest) -> Path:
     return bundle / "assets"
 
 
-def load_scene(manifest: Manifest, *, assets_dir: Path) -> mujoco.MjModel:
+def load_scene(
+    manifest: Manifest, *, assets_dir: Path, dressed: bool = False
+) -> mujoco.MjModel:
     """The trained scene as a plain MuJoCo model, its timestep checked
-    against the manifest's."""
+    against the manifest's. `dressed`: the Studio's visual dressing (sky,
+    a key light, the checker floor; `tasks.scene.dress`) for a model a
+    person watches; physics identical either way, the gate never dresses."""
     assets = {p.name: p.read_bytes() for p in Path(assets_dir).iterdir() if p.is_file()}
-    model = mujoco.MjModel.from_xml_string(
-        manifest.scene_path.read_text(encoding="utf-8"), assets=assets
-    )
+    xml = manifest.scene_path.read_text(encoding="utf-8")
+    if dressed:
+        from rq_pipeline.tasks.scene import dress  # noqa: PLC0415
+
+        spec = mujoco.MjSpec.from_string(xml, assets=assets)
+        dress(spec)
+        model = spec.compile()
+    else:
+        model = mujoco.MjModel.from_xml_string(xml, assets=assets)
     expected_dt = manifest.control.physics_timestep_s
     if abs(model.opt.timestep - expected_dt) > TIMESTEP_TOLERANCE_S:
         raise ValueError(

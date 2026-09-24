@@ -248,6 +248,82 @@ def add_sky(scene: Any) -> None:
     )
 
 
+@dataclass(frozen=True)
+class Floor:
+    """The Studio's checker floor: the look of mjlab's grid ground, so a
+    deployed scene reads like the walk it was trained on (2026-09-24: the
+    deploy viewport showed a bare plane under a black sky)."""
+
+    rgb1: tuple[float, float, float] = (0.2, 0.3, 0.4)
+    rgb2: tuple[float, float, float] = (0.1, 0.2, 0.3)
+    mark: tuple[float, float, float] = (0.8, 0.8, 0.8)
+    size: int = 300  # texels per side
+    texrepeat: tuple[float, float] = (5.0, 5.0)  # tiles per metre
+    reflectance: float = 0.2
+
+
+FLOOR = Floor()
+
+
+@dataclass(frozen=True)
+class KeyLight:
+    """One directional light from above, for a scene that declares none
+    (a scene exported for a runtime carries no lights: only the viewer's
+    headlight would reach it)."""
+
+    pos: tuple[float, float, float] = (0.0, 0.0, 4.0)
+    dir: tuple[float, float, float] = (0.0, 0.0, -1.0)
+    diffuse: tuple[float, float, float] = (0.7, 0.7, 0.7)
+
+
+KEY_LIGHT = KeyLight()
+
+
+def dress(scene: Any) -> None:
+    """The Studio's dressing on a spec, VISUAL ONLY: a skybox, a key light
+    when the scene has none, and the checker material on every plane
+    geom that has none. No geom, body, joint, contact or option changes,
+    so a dressed model steps exactly like the bare one (pinned by
+    `test_viewport_source.TheDressing`)."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    add_sky(scene)
+    if not scene.lights:
+        scene.worldbody.add_light(
+            pos=list(KEY_LIGHT.pos),
+            dir=list(KEY_LIGHT.dir),
+            diffuse=list(KEY_LIGHT.diffuse),
+            type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
+        )
+    planes = [
+        g
+        for g in scene.geoms
+        if g.type == mujoco.mjtGeom.mjGEOM_PLANE and not g.material
+    ]
+    if not planes:
+        return
+    scene.add_texture(
+        name="studio_floor",
+        type=mujoco.mjtTexture.mjTEXTURE_2D,
+        builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+        mark=mujoco.mjtMark.mjMARK_EDGE,
+        rgb1=list(FLOOR.rgb1),
+        rgb2=list(FLOOR.rgb2),
+        markrgb=list(FLOOR.mark),
+        width=FLOOR.size,
+        height=FLOOR.size,
+    )
+    material = scene.add_material(
+        name="studio_floor",
+        texrepeat=list(FLOOR.texrepeat),
+        texuniform=True,
+        reflectance=FLOOR.reflectance,
+    )
+    material.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = "studio_floor"
+    for geom in planes:
+        geom.material = "studio_floor"
+
+
 def grid_of(  # noqa: PLR0913 - a grid's layout, each option named
     name: str,
     children: Any,

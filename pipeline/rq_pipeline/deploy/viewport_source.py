@@ -529,7 +529,7 @@ def open_scene(
     scene = parse_scene(text)
     folder = deployment_folder(scene.name, deploy_root)
     manifest = load_manifest(folder)
-    model = load_scene(manifest, assets_dir=assets_dir_of(manifest))
+    model = load_scene(manifest, assets_dir=assets_dir_of(manifest), dressed=True)
     if offscreen_side is not None:  # raise, never lower, the offscreen budget
         model.vis.global_.offwidth = max(model.vis.global_.offwidth, offscreen_side)
         model.vis.global_.offheight = max(model.vis.global_.offheight, offscreen_side)
