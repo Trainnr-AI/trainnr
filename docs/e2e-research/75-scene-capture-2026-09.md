@@ -89,7 +89,7 @@ New since August (VERIFIED abstracts unless noted): VGGT-Ω
 MapAnything (Apache code and weights, metric output), WorldMirror-2.0
 (Tencent licence excludes the EU and UK), BLASt3R (NAVER,
 non-commercial), COLMAP 4.2.0 with the global mapper and learned
-features (BSD-3, 2026-09-01), gsplat 1.6.0 (sparse, multi-GPU, LiDAR
+features (BSD-3, 2026-09-01), gsplat 1.5.3, the latest on PyPI and in tags as of 2026-09-24 — the "1.6.0" this note first cited does not exist (sparse, multi-GPU, LiDAR
 rasterization, Apache), LichtFeld Studio 0.5.3 (GPLv3), Brush
 (Apache, Rust/wgpu, "faster than gsplat" CLAIMED). Nerfstudio's last
 release is 2024-11-11. Geometry-accurate trainers (2DGS/PGSR class):
