@@ -32,12 +32,15 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from rq_pipeline.deploy import stills
 from rq_pipeline.deploy.gate import (
     CI_DIGITS,
-    DEFAULT_SEED,
     DEFAULT_TOLERANCE,
-    DEFAULT_TRIALS,
+    DRAW_KEY,
+    DRAW_NOW,
+    draw_commands,
     hold_twists,
+    require_same_draw,
 )
 from rq_pipeline.deploy.manifest import Key, Manifest, load_manifest, read_gates
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, Opener, runtime_spec
@@ -56,7 +59,6 @@ CLIFF_RULE = (
 )
 STILL_FILE = "attribution-cliff.png"
 PUSH_PERIOD_S = 4.0
-GRAVITY_MPS2 = 9.81
 NOT_PASSED = (
     "attribution needs a passing gate; the {runtime} gate of {name} read "
     "{word} ({successes}/{trials}): fix the gate first, then ask what would "
@@ -76,6 +78,15 @@ OTHER_RUNTIME = (
     "runtime is another process's and cannot be turned from here"
 )
 SURVIVED = "survived the ladder"
+NO_INTERVAL = (
+    "attribution judges every rung against the certificate's exact lower "
+    "bound; the evaluation {name} cites carries no ci95 (and {missing}): "
+    "re-run the evaluation"
+)
+PROTOCOL_MISMATCH = (
+    "the {runtime} gate of {name} ran {field} {theirs}; an attribution at "
+    "{field} {ours} would not run the gate's trials: leave {field} unset"
+)
 
 
 # -- the knobs ------------------------------------------------------------------
@@ -93,6 +104,7 @@ class Knob:
     unit: str
     ladder: tuple[float, ...]
     describe: str
+    source: str = ""  # where the rungs come from, as the record states it
 
     def label(self, level: float) -> str:
         return f"{self.name} {level:g} {self.unit}".rstrip()
@@ -153,13 +165,11 @@ def _kd_scale(runtime: Runtime, level: float, _seed: int) -> Runtime:
 
 def _tilt(runtime: Runtime, level: float, _seed: int) -> Runtime:
     """Gravity pitched by `level` degrees: the slope the robot believes
-    is flat, seen by the policy only through projected gravity."""
+    is flat, seen by the policy only through projected gravity; the
+    model's own gravity's magnitude, turned."""
     theta = np.radians(level)
-    runtime.model.opt.gravity[:] = (
-        GRAVITY_MPS2 * np.sin(theta),
-        0.0,
-        -GRAVITY_MPS2 * np.cos(theta),
-    )
+    g = float(np.linalg.norm(runtime.model.opt.gravity))
+    runtime.model.opt.gravity[:] = (g * np.sin(theta), 0.0, -g * np.cos(theta))
     return runtime
 
 
@@ -275,8 +285,9 @@ class Pushed:
         ticks = self.inner.ticks
         if ticks and ticks % self.period_ticks == 0:
             angle = self.rng.uniform(0.0, 2.0 * np.pi)
-            self.inner.data.qvel[0] += self.speed * np.cos(angle)
-            self.inner.data.qvel[1] += self.speed * np.sin(angle)
+            base = self.inner.base_qvel
+            self.inner.data.qvel[base] += self.speed * np.cos(angle)
+            self.inner.data.qvel[base + 1] += self.speed * np.sin(angle)
         self.inner.apply(action)
 
 
@@ -286,42 +297,77 @@ def _push(runtime: Runtime, level: float, seed: int) -> Runtime:
 
 
 # The knobs, one table: the sweep, the door's docstring, the drawer and the
-# record all read it. Rungs from the field's deployment mistakes and
-# randomization ranges (docs/77 §9): friction and payload from the
-# reference's DR tables, gains from the hand-written deploy configs that
-# went wrong, latency from the walk's own budget finding, noise from the
-# training noise, tilt from the terrains a plane policy meets, pushes
-# from the reference's push event.
+# record all read it. Each ladder's source is stated in the record: the
+# reference's DR tables (unitree_rl_mjlab src/tasks/velocity/
+# velocity_env_cfg.py, read 2026-09-24), the deploy configs that went wrong
+# in the field's trackers (docs/e2e-research/78 §1), our own findings, and
+# where none exists, "declared (ours)".
+REFERENCE_DR = (
+    "unitree_rl_mjlab velocity_env_cfg.py DR table (friction (0.3, 1.6), "
+    "base CoM, pushes 5-6 s), read 2026-09-24"
+)
 KNOBS: tuple[Knob, ...] = (
     Knob(
-        "latency", "ticks", (1, 2, 3, 4), "actions applied this many control ticks late"
+        "latency",
+        "ticks",
+        (1, 2, 3, 4),
+        "actions applied this many control ticks late",
+        "the walk's own budget finding (walk-latency-budget-2026-09-05); "
+        "rungs declared (ours)",
     ),
     Knob(
         "friction",
         "x",
         (0.8, 0.6, 0.4, 0.3, 0.2),
         "every geom's sliding friction scaled",
+        REFERENCE_DR + "; rungs below its floor declared (ours)",
     ),
     Knob(
         "payload",
         "kg",
         (1, 2, 4, 6, 8),
         "mass added to the base, inertia in proportion",
+        "declared (ours): bracketing the field's base-mass randomization, "
+        "carried as a payload",
     ),
-    Knob("kp", "x", (0.8, 0.6, 0.4, 0.3), "the servos' stiffness scaled"),
-    Knob("kd", "x", (2, 4, 8, 16), "the servos' damping scaled"),
+    Knob(
+        "kp",
+        "x",
+        (0.8, 0.6, 0.4, 0.3),
+        "the servos' stiffness scaled",
+        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; "
+        "docs/e2e-research/78 §1); rungs declared (ours)",
+    ),
+    Knob(
+        "kd",
+        "x",
+        (2, 4, 8, 16),
+        "the servos' damping scaled",
+        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; "
+        "docs/e2e-research/78 §1); rungs declared (ours)",
+    ),
     Knob(
         "joint_pos_noise",
         "rad",
         (0.01, 0.02, 0.05, 0.1),
         "gaussian noise on the joint position term",
+        "the training's own observation noise (unitree_rl_mjlab "
+        "velocity_env_cfg.py joint_pos Unoise ±0.01, read 2026-09-24); rungs "
+        "past it declared (ours)",
     ),
-    Knob("tilt", "deg", (3, 5, 8, 12, 15), "gravity pitched: a slope believed flat"),
+    Knob(
+        "tilt",
+        "deg",
+        (3, 5, 8, 12, 15),
+        "gravity pitched: a slope believed flat",
+        "declared (ours): the slopes a plane-trained policy meets outdoors",
+    ),
     Knob(
         "push",
         "m/s",
         (0.5, 1.0, 1.5, 2.0),
         f"the base shoved every {PUSH_PERIOD_S:g} s",
+        REFERENCE_DR + "; speeds declared (ours)",
     ),
 )
 APPLIERS: dict[str, Applier] = {
@@ -339,12 +385,14 @@ APPLIERS: dict[str, Applier] = {
 # The untouched runtime under the sweep's own draw: the record's baseline,
 # and the check that this trial count reproduces the gate (a draw of two
 # trials holds a command a draw of twenty does not, 2026-09-24).
-NOMINAL = Knob("nominal", "", (1.0,), "untouched: the gate's own protocol")
+NOMINAL = Knob(
+    "nominal", "", (1.0,), "untouched: the gate's own protocol", "the gate itself"
+)
 APPLIERS[NOMINAL.name] = lambda runtime, _level, _seed: runtime
 BASELINE_BELOW = (
     "at {trials} trials the untouched runtime reads {successes}/{trials} "
-    "[{lo}, {hi}], under the certificate's lower bound {lower}: this draw does "
-    "not reproduce the passing gate; use the gate's trial count"
+    "[{lo}, {hi}], under the certificate's lower bound {lower}: the passing "
+    "gate does not reproduce here, so no cliff can be told from it"
 )
 
 
@@ -406,7 +454,8 @@ def gate_rung(
     appliers: dict[str, Applier] | None = None,
 ) -> Rung:
     """One rung: a fresh runtime, the knob turned, the gate's held-twist
-    trials at the gate's seed, judged the gate's way."""
+    trials at the gate's own seed and count (`Sweep`, read from the gate's
+    record), judged the gate's way."""
     manifest = load_manifest(sweep.deployment_dir)
     opener = open if open is not None else runtime_spec(sweep.runtime).open()
     turned = (appliers or APPLIERS)[knob_.name](
@@ -519,6 +568,7 @@ def require_passing_gate(
     if runtime not in gates:
         raise ValueError(NO_GATE.format(name=name, runtime=runtime))
     base = gates[runtime]
+    require_same_draw(base, f"the {runtime} gate of {name}")
     if (base.get("verdict") or {}).get("passed") is not True:
         from rq_pipeline.deploy.manifest import gate_word  # noqa: PLC0415
 
@@ -534,14 +584,50 @@ def require_passing_gate(
     return manifest, base, certificate
 
 
+def gate_protocol(
+    base: dict[str, Any], name: str, runtime: str, **asked: int | None
+) -> dict[str, int]:
+    """The trials and seed the passing gate ran at; one asked for that
+    differs is refused by name (a rung would not run the gate's trials)."""
+    protocol = base.get("protocol") or {}
+    out = {
+        "trials": int(base.get("trials") or protocol.get("trials")),
+        "seed": int(protocol["seed"]),
+    }
+    for field_, ours in asked.items():
+        if ours is not None and int(ours) != out[field_]:
+            raise ValueError(
+                PROTOCOL_MISMATCH.format(
+                    runtime=runtime,
+                    name=name,
+                    field=field_,
+                    theirs=out[field_],
+                    ours=ours,
+                )
+            )
+    return out
+
+
+def certificate_bound(cited: dict[str, Any], name: str) -> tuple[float, float]:
+    """The certificate's exact lower bound and its rate, or a refusal by
+    name when either is missing (a lower bound of 0 would find no cliff)."""
+    missing = [k for k in ("ci95", "successes", "trials") if not cited.get(k)]
+    if "ci95" in missing or not cited.get("trials"):
+        raise ValueError(NO_INTERVAL.format(name=name, missing=", ".join(missing)))
+    return (
+        float(cited["ci95"][0]),
+        float(cited.get("successes") or 0) / float(cited["trials"]),
+    )
+
+
 def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     deployment_dir: Path,
     *,
     assets_dir: Path | None,
     certificate: dict[str, Any] | None,
     runtime: str = DEFAULT_RUNTIME,
-    trials: int = DEFAULT_TRIALS,
-    seed: int = DEFAULT_SEED,
+    trials: int | None = None,
+    seed: int | None = None,
     tolerance: float = DEFAULT_TOLERANCE,
     knobs: tuple[Knob, ...] = KNOBS,
     workers: int | None = None,
@@ -551,9 +637,13 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     """Climb every knob's ladder (in `workers` spawned processes, one per
     knob; in this process when 0, or when a fake `open`/`appliers` is
     injected), rank, write `attribution.json` beside the manifest and
-    return it."""
+    return it. `trials` and `seed` are the passing gate's own (read from
+    its record); a value given that differs is refused by name."""
+    name = Path(deployment_dir).name
     manifest, base, cited = require_passing_gate(deployment_dir, runtime, certificate)
-    lower = float((cited.get("ci95") or [0.0, 1.0])[0])
+    lower, cert_rate = certificate_bound(cited, name)
+    protocol = gate_protocol(base, name, runtime, trials=trials, seed=seed)
+    trials, seed = protocol["trials"], protocol["seed"]
     sweep = Sweep(
         deployment_dir=Path(deployment_dir),
         assets_dir=assets_dir,
@@ -590,7 +680,7 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
             for name, rungs in pool.map(_climb_in_worker, [(sweep, k) for k in knobs]):
                 climbed[name] = rungs
     ranking = rank(climbed, lower)
-    floor = float(cited["successes"]) / float(cited["trials"]) - tolerance
+    floor = cert_rate - tolerance
     record: dict[str, Any] = {
         "schema": ATTRIBUTION_SCHEMA,
         "deployment": manifest.raw.get(Key.STAMP_OF),
@@ -612,6 +702,7 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
         "protocol": {
             "trials": trials,
             "seed": seed,
+            DRAW_KEY: DRAW_NOW,
             "tolerance": tolerance,
             "rule": CLIFF_RULE,
             "workers": count,
@@ -625,10 +716,18 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
         "sensitivity": sensitivity_line(ranking, knobs),
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
-    staging = Path(deployment_dir) / (ATTRIBUTION_FILE + ".tmp")
-    staging.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
-    staging.replace(Path(deployment_dir) / ATTRIBUTION_FILE)
+    write_attribution(deployment_dir, record)
     return record
+
+
+def write_attribution(deployment_dir: Path, record: dict[str, Any]) -> Path:
+    """The record beside the manifest, atomically (a half-written file
+    once read would fail the whole project's index)."""
+    out = Path(deployment_dir) / ATTRIBUTION_FILE
+    staging = out.with_suffix(".json.tmp")
+    staging.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+    staging.replace(out)
+    return out
 
 
 def _knob_record(
@@ -639,6 +738,7 @@ def _knob_record(
         "name": knob_.name,
         "unit": knob_.unit,
         "describe": knob_.describe,
+        "source": knob_.source,
         "ladder": list(knob_.ladder),
         "rungs": [r.row(floor) for r in rungs],
         "cliff": (
@@ -664,8 +764,6 @@ def read_attribution(folder: Path) -> dict[str, Any] | None:
 
 # -- seen ------------------------------------------------------------------------
 
-STILL_SIZE = (640, 480)
-STILL_CAMERA = {"distance": 1.6, "azimuth": 135.0, "elevation": -18.0}
 STREAM = "attribution"
 UNRENDERED = "unrendered: {why}"
 
@@ -682,7 +780,8 @@ def still_at_cliff(
     sweep's own commands replayed until a trial fails, the frame at the
     fall (or the last frame of the first untracked trial) saved beside
     the record as `attribution-cliff.png`. Honest when nothing fell or
-    nothing can render: the reason, no file."""
+    nothing can render: the reason, no file. The runtime and the renderer
+    are closed on every way out."""
     fallen = [r for r in record.get("ranking", []) if r.get("cliff") is not None]
     if not fallen:
         return {"unrendered": UNRENDERED.format(why=SURVIVED)}
@@ -690,10 +789,6 @@ def still_at_cliff(
     protocol = record.get("protocol") or {}
     trials, seed = int(protocol.get("trials", 0)), int(protocol.get("seed", 0))
     try:
-        import mujoco  # noqa: PLC0415
-        from PIL import Image  # noqa: PLC0415
-
-        from rq_pipeline.deploy.gate import draw_commands  # noqa: PLC0415
         from rq_pipeline.deploy.ticks import Ticks  # noqa: PLC0415
     except ImportError as missing:
         return {"unrendered": UNRENDERED.format(why=str(missing))}
@@ -702,46 +797,30 @@ def still_at_cliff(
     turned = (appliers or APPLIERS)[name](
         opener(manifest, assets_dir=assets_dir), level, seed
     )
+    out = Path(deployment_dir) / STILL_FILE
     try:
-        renderer = mujoco.Renderer(turned.model, STILL_SIZE[1], STILL_SIZE[0])
-    except (RuntimeError, OSError, ValueError, ImportError) as why:
-        return {"unrendered": UNRENDERED.format(why=f"no renderer: {why}")}
-    camera = mujoco.MjvCamera()
-    camera.distance = STILL_CAMERA["distance"]
-    camera.azimuth = STILL_CAMERA["azimuth"]
-    camera.elevation = STILL_CAMERA["elevation"]
-    try:
-        commands = draw_commands(manifest, trials, seed)
-        first_untracked: tuple[int, int] | None = None
-        for i, command in enumerate(commands):
-            turned.reset()
-            meter = Ticks(manifest.control.step_dt)
-            for tick in range(manifest.control.episode_ticks):
-                fell = meter.tick(turned, command)
-                if fell:
-                    camera.lookat[:] = turned.data.qpos[0:3]
-                    renderer.update_scene(turned.data, camera)
-                    Image.fromarray(renderer.render()).save(
-                        Path(deployment_dir) / STILL_FILE
-                    )
-                    return {
-                        "file": STILL_FILE,
-                        "knob": name,
-                        "level": level,
-                        "trial": i,
-                        "tick": tick,
-                        "fell": True,
-                    }
-            if (
-                first_untracked is None
-                and not TrackingOutcome(**meter.outcome()).tracked
-            ):
-                first_untracked = (i, meter.steps)
-                camera.lookat[:] = turned.data.qpos[0:3]
-                renderer.update_scene(turned.data, camera)
-                Image.fromarray(renderer.render()).save(
-                    Path(deployment_dir) / STILL_FILE
-                )
+        with stills.renderer(turned.model, stills.CLIFF_CAMERA) as render:
+            first_untracked: tuple[int, int] | None = None
+            for i, command in enumerate(draw_commands(manifest, trials, seed)):
+                turned.reset()
+                meter = Ticks(manifest.control.step_dt)
+                for tick in range(manifest.control.episode_ticks):
+                    if meter.tick(turned, command):
+                        render(turned.data, turned.base_position(), out)
+                        return {
+                            "file": STILL_FILE,
+                            "knob": name,
+                            "level": level,
+                            "trial": i,
+                            "tick": tick,
+                            "fell": True,
+                        }
+                if (
+                    first_untracked is None
+                    and not TrackingOutcome(**meter.outcome()).tracked
+                ):
+                    first_untracked = (i, meter.steps)
+                    render(turned.data, turned.base_position(), out)
         if first_untracked is not None:
             return {
                 "file": STILL_FILE,
@@ -752,11 +831,33 @@ def still_at_cliff(
                 "fell": False,
             }
         return {"unrendered": UNRENDERED.format(why="no trial failed on replay")}
+    except (RuntimeError, OSError, ValueError, ImportError) as why:
+        return {"unrendered": UNRENDERED.format(why=f"no renderer: {why}")}
     finally:
-        renderer.close()
         close = getattr(turned, "close", None)
         if close is not None:
             close()
+
+
+# The series of one knob's ladder, spelled once (the stream here and the
+# presenter's replay both write them).
+SERIES = ("rate", "lower", "upper", "certificate_lower")
+
+
+def ladder_series(rung: dict[str, Any], certificate_lower: float) -> dict[str, float]:
+    """One rung as the series values `SERIES` names."""
+    return dict(
+        zip(
+            SERIES,
+            (
+                float(rung["rate"]),
+                float(rung["ci95"][0]),
+                float(rung["ci95"][1]),
+                certificate_lower,
+            ),
+            strict=True,
+        )
+    )
 
 
 def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
@@ -775,11 +876,8 @@ def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
         knob_name = entry["name"]
         for i, rung in enumerate(entry.get("rungs", []), start=1):
             rr.set_time("rung", sequence=i)
-            base = f"{STREAM}/{knob_name}"
-            rr.log(f"{base}/rate", rr.Scalars(float(rung["rate"])))
-            rr.log(f"{base}/lower", rr.Scalars(float(rung["ci95"][0])))
-            rr.log(f"{base}/upper", rr.Scalars(float(rung["ci95"][1])))
-            rr.log(f"{base}/certificate_lower", rr.Scalars(lower))
+            for series, value in ladder_series(rung, lower).items():
+                rr.log(f"{STREAM}/{knob_name}/{series}", rr.Scalars(value))
     units = {k["name"]: k.get("unit", "") for k in record.get("knobs", [])}
     lines = [f"# {name}: what would break it first", "", record.get("sensitivity", "")]
     for r in record.get("ranking", []):

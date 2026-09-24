@@ -10,42 +10,35 @@ the fall pictured, the ladders streamed. Spawned by the MCP door
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, deployment_args, resolve_deployment
 
 bootstrap()
 
 from rq_pipeline.deploy.attribution import (  # noqa: E402
-    ATTRIBUTION_FILE,
     SURVIVED,
     attribute,
     knob,
     still_at_cliff,
     stream,
+    write_attribution,
 )
-from rq_pipeline.deploy.gate import (  # noqa: E402
-    DEFAULT_SEED,
-    DEFAULT_TOLERANCE,
-    DEFAULT_TRIALS,
-)
-from rq_pipeline.deploy.manifest import Key, load_manifest  # noqa: E402
-from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: E402
-from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, runtime_names  # noqa: E402
+from rq_pipeline.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
+from rq_pipeline.deploy.manifest import Key  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.cited import cited_certificate  # noqa: E402
-from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--project", type=Path, required=True)
-    parser.add_argument("--name", required=True, help="the deployment's folder name")
-    parser.add_argument("--runtime", default=DEFAULT_RUNTIME, choices=runtime_names())
-    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS)
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    deployment_args(parser)
+    parser.add_argument(
+        "--trials", type=int, default=None, help="the passing gate's own when unset"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="the passing gate's own when unset"
+    )
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE)
     parser.add_argument(
         "--workers", type=int, default=None, help="knobs climbed at once (0: here)"
@@ -54,12 +47,9 @@ def main() -> None:
         "--no-still", action="store_true", help="skip the picture of the fall"
     )
     args = parser.parse_args()
-    project = Project(args.project.resolve()).use()
-    deployment = project.folder(DEPLOY_FOLDER) / args.name
     try:
-        manifest = load_manifest(deployment)
+        project, deployment, manifest, assets = resolve_deployment(args)
         certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
-        assets = assets_dir_of(manifest)
         record = attribute(
             deployment,
             assets_dir=assets,
@@ -94,9 +84,7 @@ def main() -> None:
     if not args.no_still:
         still = still_at_cliff(deployment, record, assets_dir=assets)
         record["still"] = still
-        (deployment / ATTRIBUTION_FILE).write_text(
-            json.dumps(record, indent=1) + "\n", encoding="utf-8"
-        )
+        write_attribution(deployment, record)
         print(
             "[attribution] still: "
             + (

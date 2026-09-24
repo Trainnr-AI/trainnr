@@ -89,13 +89,56 @@ def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     return Trial(command=[float(c) for c in command], **meter.outcome())
 
 
+# How the gate draws its trials, versioned in every record's protocol (the
+# `draw` field). Version 1 drew each axis as one vector the length of the
+# trial count, so trial i of a 2-trial gate was not trial i of a 20-trial
+# one; version 2 draws each trial from (seed, trial), so trial i is the
+# same command at any count and a gate is paired with its attribution and
+# its pre-flight by index (the review of 2026-09-24). A record without
+# the field was written before it: version 1, never reinterpreted.
+DRAW_KEY = "draw"
+DRAW_BY_COUNT = "by-count/1"
+DRAW_PER_TRIAL = "per-trial/2"
+DRAW_NOW = DRAW_PER_TRIAL
+MIXED_DRAWS = (
+    "{what} was drawn {theirs}, this code draws {ours}: trial i is not the same "
+    "command under both; re-run the gate (gate_deployment) before comparing"
+)
+
+
+def trial_rng(seed: int, trial: int) -> np.random.Generator:
+    """The generator of one trial: its own stream of (seed, trial), the
+    same whatever the trial count."""
+    return np.random.default_rng([int(seed), int(trial)])
+
+
 def draw_commands(manifest: Manifest, trials: int, seed: int) -> np.ndarray:
-    """Seeded held commands inside the manifest's ranges (heading off);
-    a manifest without ranges was refused by the loader."""
+    """Seeded held commands inside the manifest's ranges (heading off),
+    one per trial from (seed, trial): the first k are the same at any
+    count. A manifest without ranges was refused by the loader."""
     commands = manifest.commands
-    rng = np.random.default_rng(seed)
-    lo_hi = (commands.lin_vel_x, commands.lin_vel_y, commands.ang_vel_z)
-    return np.stack([rng.uniform(lo, hi, size=trials) for lo, hi in lo_hi], axis=1)
+    lo_hi = np.array(
+        (commands.lin_vel_x, commands.lin_vel_y, commands.ang_vel_z), dtype=np.float64
+    )
+    # one generator per trial, every axis from it (a generator per axis
+    # drew the same number three times: a trial's axes moved together)
+    return np.array(
+        [trial_rng(seed, i).uniform(lo_hi[:, 0], lo_hi[:, 1]) for i in range(trials)],
+        dtype=np.float64,
+    ).reshape(trials, len(lo_hi))
+
+
+def draw_of(record: dict[str, Any]) -> str:
+    """The draw a gate record was made under; one written before the
+    field is the count-dependent draw."""
+    return str((record.get("protocol") or {}).get(DRAW_KEY, DRAW_BY_COUNT))
+
+
+def require_same_draw(record: dict[str, Any], what: str) -> None:
+    """Refuse, by name, a record whose trials this code would not redraw."""
+    theirs = draw_of(record)
+    if theirs != DRAW_NOW:
+        raise ValueError(MIXED_DRAWS.format(what=what, theirs=theirs, ours=DRAW_NOW))
 
 
 def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
@@ -203,6 +246,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         protocol: dict[str, Any] = {
             "trials": trials,
             "seed": seed,
+            DRAW_KEY: DRAW_NOW,
             "criterion": criterion_text(),
             "err_ratio_bound": ERR_RATIO_BOUND,
             "err_floor_mps": ERR_FLOOR_MPS,

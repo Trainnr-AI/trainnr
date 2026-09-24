@@ -14,7 +14,13 @@ from types import SimpleNamespace
 import numpy as np
 
 import rq_pipeline.mcp_server as server
-from rq_pipeline.deploy.gate import ERR_RATIO_BOUND, Trial, draw_commands
+from rq_pipeline.deploy.gate import (
+    DRAW_KEY,
+    DRAW_NOW,
+    ERR_RATIO_BOUND,
+    Trial,
+    draw_commands,
+)
 from rq_pipeline.deploy.manifest import (
     GATE_SCHEMA,
     KNOWN_SOURCES,
@@ -271,6 +277,7 @@ class BothGateRecords(unittest.TestCase):
                         "schema": GATE_SCHEMA,
                         "successes": 4,
                         "trials": 4,
+                        "protocol": {DRAW_KEY: DRAW_NOW},
                         "verdict": {"passed": True},
                     }
                 )
@@ -291,7 +298,11 @@ class BothGateRecords(unittest.TestCase):
             self.assertEqual(list(read_gates(folder)), ["mujoco", "dds"])
             summary = _summary_deploy(folder)
             self.assertEqual(summary["gate"], "passed")
-            self.assertEqual(summary["gate (DDS)"], "reported, not judged")
+            # a record without the draw field was drawn by count: said so
+            self.assertEqual(
+                summary["gate (DDS)"],
+                "reported, not judged, drawn by count (re-run to pair)",
+            )
             self.assertEqual(gate_word({"verdict": {"passed": False}}), "failed")
 
 

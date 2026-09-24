@@ -146,6 +146,12 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     return argv
 
 
+def _given(flag: str, value: object) -> list[str]:
+    """A command-line option only when a value was given (the tool's own
+    default, never a second copy of it here, when not)."""
+    return [] if value is None else [flag, str(value)]
+
+
 class Actions:
     """The doors, bound to one JobManager (tests inject a fake spawner)
     and to the platform's launch environment (tests pass None)."""
@@ -614,14 +620,15 @@ class Actions:
         name: str,
         *,
         project: str,
-        runtime: str = "mujoco",
-        trials: int = 20,
-        seed: int = 1000,
+        runtime: str = DEFAULT_RUNTIME,
+        trials: int | None = None,
+        seed: int | None = None,
     ) -> JobHandle:
         """Attribution (docs/77 §9): a passing plane gate re-run with one
         dynamics knob turned at a time up its ladder; the cliff per knob,
         the knobs ranked by the rung they fall at, the fall pictured; the
-        record `attribution.json` beside the manifest. A job."""
+        record `attribution.json` beside the manifest. Trials and seed are
+        the gate's own unless given. A job."""
         from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
 
         plain_name(name, "deployment name")
@@ -634,10 +641,8 @@ class Actions:
             name,
             "--runtime",
             runtime,
-            "--trials",
-            str(trials),
-            "--seed",
-            str(seed),
+            *_given("--trials", trials),
+            *_given("--seed", seed),
         ]
         return self.jobs.start("attribute-deployment", argv, PIPELINE_DIR)
 
@@ -646,13 +651,13 @@ class Actions:
         name: str,
         *,
         project: str,
-        runtime: str = "mujoco",
-        seed: int = 1000,
+        runtime: str = DEFAULT_RUNTIME,
+        seed: int | None = None,
     ) -> JobHandle:
         """Pre-flight (docs/77 §10): every check before the first tick, the
         ramp-in and the stops measured, the record `preflight.json` beside
         the manifest; `runtime="dds"` reads the robot's state from
-        Unitree's simulator over DDS. A job."""
+        Unitree's simulator over DDS. The gate's seed unless given. A job."""
         from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
 
         plain_name(name, "deployment name")
@@ -665,10 +670,26 @@ class Actions:
             name,
             "--runtime",
             runtime,
-            "--seed",
-            str(seed),
+            *_given("--seed", seed),
         ]
         return self.jobs.start("preflight-deployment", argv, PIPELINE_DIR)
+
+    def ingest_public_log(
+        self, name: str, *, project: str, recording_name: str | None = None
+    ) -> JobHandle:
+        """A registered public log fetched (size and digest checked) and
+        ingested into the project with its provenance. A job: the fetch is
+        tens to hundreds of megabytes."""
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim"),
+            str(TOOLS_DIR / "public-log.py"),
+            "ingest",
+            name,
+            "--project",
+            project,
+            *_given("--as", recording_name),
+        ]
+        return self.jobs.start("ingest-public-log", argv, PIPELINE_DIR)
 
     def open_studio(self) -> JobHandle:
         """Launch the Studio (release build — the debug viewer's slow

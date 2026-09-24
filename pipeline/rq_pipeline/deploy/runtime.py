@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -103,13 +104,13 @@ class Runtime:
     @property
     def quat(self) -> np.ndarray:
         """The base's orientation, w x y z of the free joint."""
-        return self.data.qpos[3:FREE_JOINT_QPOS]
+        return self.data.qpos[self.base_qpos + 3 : self.base_qpos + FREE_JOINT_QPOS]
 
     def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Where the robot is, for the Studio's mirror: base position,
         base quaternion (w x y z), joints in the policy order."""
         return (
-            self.data.qpos[0:3].copy(),
+            self.base_position(),
             self.quat.copy(),
             self.data.qpos[self.joint_qpos].copy(),
         )
@@ -155,20 +156,59 @@ class Runtime:
         clip = self.manifest.action.clip
         return action if clip is None else np.clip(action, clip[0], clip[1])
 
-    def apply(self, action: np.ndarray) -> None:
-        """One control tick: targets from the action, `decimation` physics steps."""
-        target = self.default_pos + self.scale * action.astype(np.float64)
+    def target_of(self, action: np.ndarray) -> np.ndarray:
+        """The joint targets an action asks for: the manifest's home pose
+        plus its scale times the action (one spelling; the guards and the
+        pre-flight's recorder read it)."""
+        return self.default_pos + self.scale * np.asarray(action, dtype=np.float64)
+
+    def step(self, target: np.ndarray, action: np.ndarray) -> None:
+        """One control tick at `target`: the controls written, `decimation`
+        physics steps, the action remembered as the policy's last."""
         for i, ctrl in enumerate(self.action_to_ctrl):
             self.data.ctrl[ctrl] = target[i]
         for _ in range(self.decimation):
             mujoco.mj_step(self.model, self.data)
-        self.last_action = action.astype(np.float32)
+        self.last_action = np.asarray(action, dtype=np.float32)
         self.ticks += 1
+
+    def apply(self, action: np.ndarray) -> None:
+        """One control tick: targets from the action, `decimation` physics steps."""
+        self.step(self.target_of(action), action)
+
+    @cached_property
+    def base_qpos(self) -> int:
+        """Where the floating base starts in qpos (its free joint's
+        address; the free joint need not come first)."""
+        return int(self.model.jnt_qposadr[self._free_joint()])
+
+    @cached_property
+    def base_qvel(self) -> int:
+        return int(self.model.jnt_dofadr[self._free_joint()])
+
+    def _free_joint(self) -> int:
+        free = np.flatnonzero(self.model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
+        if free.size == 0:
+            raise ValueError("the scene has no floating base (no free joint)")
+        return int(free[0])
+
+    def base_position(self) -> np.ndarray:
+        return self.data.qpos[self.base_qpos : self.base_qpos + 3].copy()
+
+    def set_base_height(self, z: float) -> None:
+        self.data.qpos[self.base_qpos + 2] = float(z)
+
+    def base_linear_velocity_w(self) -> np.ndarray:
+        return self.data.qvel[self.base_qvel : self.base_qvel + 3].copy()
+
+    def base_angular_velocity(self) -> np.ndarray:
+        """The free joint's angular velocity (its body frame, MuJoCo's own)."""
+        return self.data.qvel[self.base_qvel + 3 : self.base_qvel + 6].copy()
 
     def base_velocity_b(self) -> np.ndarray:
         """The base's linear velocity in its own frame (what the verdict
         compares to the command)."""
-        return rotate_inverse(self.quat, self.data.qvel[0:3].copy())
+        return rotate_inverse(self.quat, self.base_linear_velocity_w())
 
     def contact_points(self) -> np.ndarray | None:
         """The active contacts between the robot's bodies and the rest

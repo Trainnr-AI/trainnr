@@ -286,3 +286,30 @@ def hold_until_closed(viewer: Any, period_s: float = VIEWER_HOLD_PERIOD_S) -> No
 
     while viewer.is_running():
         time.sleep(period_s)
+
+
+def deployment_args(parser: Any) -> None:
+    """The arguments every deployment tool shares: the project, the
+    deployment's folder name, the runtime (the registry's names)."""
+    from rq_pipeline.deploy.runtimes import (  # noqa: PLC0415
+        DEFAULT_RUNTIME,
+        runtime_names,
+    )
+
+    parser.add_argument("--project", type=Path, required=True)
+    parser.add_argument("--name", required=True, help="the deployment's folder name")
+    parser.add_argument("--runtime", default=DEFAULT_RUNTIME, choices=runtime_names())
+
+
+def resolve_deployment(args: Any) -> tuple[Any, Path, Any, Path]:
+    """(project, deployment folder, manifest, the bundle's assets) from
+    `deployment_args`; the project made current. Raises what the loaders
+    raise (FileNotFoundError, ValueError) for the tool to refuse by name."""
+    from rq_pipeline.deploy.manifest import load_manifest  # noqa: PLC0415
+    from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: PLC0415
+    from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
+
+    project = Project(Path(args.project).resolve()).use()
+    deployment = project.folder(DEPLOY_FOLDER) / args.name
+    manifest = load_manifest(deployment)
+    return project, deployment, manifest, assets_dir_of(manifest)

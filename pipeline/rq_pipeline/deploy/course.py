@@ -196,8 +196,15 @@ def draw_speeds(
             f"{manifest.root}: the manifest's forward range tops out at {hi}: "
             "no speed walks the course"
         )
-    rng = np.random.default_rng(seed)
-    return rng.uniform(COURSE_SPEED_FRACTION * hi, hi, size=trials)
+    from rq_pipeline.deploy.gate import trial_rng  # noqa: PLC0415 - gate imports this
+
+    # one per trial from (seed, trial): the gate's own draw (`gate.DRAW_NOW`)
+    return np.array(
+        [
+            trial_rng(seed, i).uniform(COURSE_SPEED_FRACTION * hi, hi)
+            for i in range(trials)
+        ]
+    )
 
 
 def run_course_trial(  # noqa: PLR0913 - the trial's own knobs, each named

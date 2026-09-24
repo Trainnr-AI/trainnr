@@ -38,9 +38,16 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from rq_pipeline.deploy.gate import DEFAULT_SEED, hold_twists
-from rq_pipeline.deploy.manifest import Key, Manifest, load_manifest
+from rq_pipeline.bundles.basis import BASIS_OWN, BASIS_SIMULATION
+from rq_pipeline.deploy import stills
+from rq_pipeline.deploy.gate import (
+    DEFAULT_SEED,
+    DRAW_NOW,
+    hold_twists,
+)
+from rq_pipeline.deploy.manifest import Key, Manifest, load_manifest, read_gates
 from rq_pipeline.deploy.runtime import GRAVITY_DOWN, rotate_inverse
+from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 
 if TYPE_CHECKING:
     from rq_pipeline.deploy.runtime import Runtime
@@ -82,11 +89,14 @@ class Margins:
     compute_share: float = 0.5
     # the robot is at rest before handover: every joint slower than this
     at_rest_rad_s: float = 0.5
-    # the dry rollout: the gate's own held twists, this many
+    # the dry rollout: the gate's own held twists, the first this many
     dry_trials: int = 4
 
 
 MARGINS = Margins()
+# Where the margins come from: ours, declared, each reasoned above; none is
+# a vendor's number (the watchdogs below are Unitree's, cited).
+MARGINS_SOURCE = "declared (ours): pipeline/rq_pipeline/deploy/preflight.py Margins"
 
 
 @dataclass(frozen=True)
@@ -103,58 +113,123 @@ class Transitions:
 
 
 TRANSITIONS = Transitions()
+TRANSITIONS_SOURCE = (
+    "windows declared (ours); damping_kd is Unitree's Passive state's kd "
+    "(unitree_rl_mjlab deploy/robots/go2/config/config.yaml, Passive)"
+)
 RAMP_KEY = "ramp_in_s"
 STOP_KEY = "soft_stop_s"
+DAMPING_KEY = "damping_kd"
 
 
 def transitions_of(manifest: Manifest) -> Transitions:
+    """The manifest's own windows and damping (`control.ramp_in_s`,
+    `control.soft_stop_s`, `control.damping_kd`), else the defaults."""
     control = manifest.raw.get(Key.CONTROL) or {}
     return Transitions(
         ramp_in_s=float(control.get(RAMP_KEY, TRANSITIONS.ramp_in_s)),
         soft_stop_s=float(control.get(STOP_KEY, TRANSITIONS.soft_stop_s)),
-        damping_kd=TRANSITIONS.damping_kd,
+        damping_kd=float(control.get(DAMPING_KEY, TRANSITIONS.damping_kd)),
     )
 
 
 # -- the watchdogs: Unitree's own thresholds ------------------------------------
 
+# The numbers are the defaults of the SDK's protect functions for its
+# humanoids (the `unitree_hg` robots, H2 and G1); the Go2 SDK ships none, so
+# they are applied to the Go2 as the vendor's nearest stated limits, and
+# its one temperature per motor is read against the casing limit.
+SDK_COMMIT = "9754cd1"
 SDK_SOURCE = (
-    "unitree_sdk2 include/unitree/robot/h2/common/terminations.hpp (and g1/), "
-    "read 2026-09-24: shipped as examples that print; no deploy repo wires them"
+    f"unitree_sdk2 @ {SDK_COMMIT}: include/unitree/robot/h2/common/terminations.hpp "
+    "(the same in g1/), the H2/G1 defaults, read 2026-09-24; shipped as examples "
+    "that print, and no deploy repo wires them"
 )
+# The link: the SDK measures `now - GetLastDataAvailableTime()`; their
+# Python SDK exposes no last-data time, so the link is enforced by the read
+# timeout itself (`dds_runtime.STATE_TIMEOUT_MS`, the same 1000 ms): a
+# silent bus raises, it is never measured as an age.
+LINK_BY_TIMEOUT = "enforced by the read timeout (dds_runtime.STATE_TIMEOUT_MS)"
 
 
 @dataclass(frozen=True)
 class Watchdog:
-    """One protective limit a running deployment is stopped soft on."""
+    """One protective limit a running deployment is stopped soft on.
+    `reading` names the `Health` field it judges; `trips_below` for a
+    limit a value must stay above (the battery); `enforced_by` when it is
+    not read off the state at all."""
 
     name: str
     limit: float
     unit: str
     sdk_function: str
     describe: str
+    reading: str | None
+    trips_below: bool = False
+    enforced_by: str | None = None
 
 
 WATCHDOGS: dict[str, Watchdog] = {
     w.name: w
     for w in (
-        Watchdog("tilt", 1.0, "rad", "bad_orientation", "the body's down from gravity"),
         Watchdog(
-            "joint_velocity", 10.0, "rad/s", "joint_vel_out_of_limit", "any joint"
+            "tilt",
+            1.0,
+            "rad",
+            "bad_orientation",
+            "the body's down from gravity",
+            "tilt_rad",
         ),
-        Watchdog("angular_velocity", 6.0, "rad/s", "ang_vel_out_of_limit", "the gyro"),
+        Watchdog(
+            "joint_velocity",
+            10.0,
+            "rad/s",
+            "joint_vel_out_of_limit",
+            "any joint",
+            "max_joint_velocity",
+        ),
+        Watchdog(
+            "angular_velocity",
+            6.0,
+            "rad/s",
+            "ang_vel_out_of_limit",
+            "the gyro",
+            "max_angular_velocity",
+        ),
         Watchdog(
             "winding_temperature",
             120.0,
             "degC",
             "motor_winding_overheat",
             "any motor's winding",
+            "max_winding_temperature",
         ),
         Watchdog(
-            "casing_temperature", 85.0, "degC", "motor_casing_overheat", "any motor"
+            "casing_temperature",
+            85.0,
+            "degC",
+            "motor_casing_overheat",
+            "any motor",
+            "max_casing_temperature",
         ),
-        Watchdog("battery", 20.0, "%", "low_battery", "state of charge (below trips)"),
-        Watchdog("link_lost", 1000.0, "ms", "lost_connection", "no LowState for"),
+        Watchdog(
+            "battery",
+            20.0,
+            "%",
+            "low_battery",
+            "state of charge (below trips)",
+            "battery_percent",
+            trips_below=True,
+        ),
+        Watchdog(
+            "link_lost",
+            1000.0,
+            "ms",
+            "lost_connection",
+            "no LowState for",
+            None,
+            enforced_by=LINK_BY_TIMEOUT,
+        ),
     )
 }
 OPERATOR_STOP = "operator stop"
@@ -172,28 +247,20 @@ class Health:
     max_winding_temperature: float | None = None
     max_casing_temperature: float | None = None
     battery_percent: float | None = None
-    link_age_ms: float | None = None
 
     def value(self, watchdog: str) -> float | None:
-        return {
-            "tilt": self.tilt_rad,
-            "joint_velocity": self.max_joint_velocity,
-            "angular_velocity": self.max_angular_velocity,
-            "winding_temperature": self.max_winding_temperature,
-            "casing_temperature": self.max_casing_temperature,
-            "battery": self.battery_percent,
-            "link_lost": self.link_age_ms,
-        }[watchdog]
+        reading = WATCHDOGS[watchdog].reading
+        return None if reading is None else getattr(self, reading)
 
 
 def tripped(health: Health) -> list[str]:
-    """The watchdogs this reading trips, by name (battery trips BELOW)."""
+    """The watchdogs this reading trips, by name."""
     out: list[str] = []
     for w in WATCHDOGS.values():
         v = health.value(w.name)
         if v is None:
             continue
-        if (v < w.limit) if w.name == "battery" else (v > w.limit):
+        if (v < w.limit) if w.trips_below else (v > w.limit):
             out.append(w.name)
     return out
 
@@ -210,7 +277,7 @@ def health_of_runtime(runtime: Runtime) -> Health:
     return Health(
         tilt_rad=tilt_of(runtime.quat),
         max_joint_velocity=float(np.max(np.abs(runtime.data.qvel[runtime.joint_qvel]))),
-        max_angular_velocity=float(np.max(np.abs(runtime.data.qvel[3:6]))),
+        max_angular_velocity=float(np.max(np.abs(runtime.base_angular_velocity()))),
     )
 
 
@@ -228,37 +295,75 @@ def health_of_lowstate(reading: dict[str, Any], *, stand_in: bool) -> Health:
         max_angular_velocity=float(np.max(np.abs(reading["gyroscope"]))),
         max_casing_temperature=None if silent_temps else float(np.max(temps)),
         battery_percent=None if (stand_in and soc == 0.0) else soc,
-        link_age_ms=round((time.monotonic() - float(reading["read_at"])) * 1e3, 1),
     )
 
 
 DDS_WALK_S = 2.0
 DDS_WATCH_S = 2.0
 DDS_POLL_MS = 1000
+WALK_END = "the walk's end"
+# The walk a stop is measured from: forward at this speed, clipped into
+# the manifest's forward range (`walk_command`); one number, spelled once.
+WALK_SPEED_MPS = 0.5
+STALE_STOP = (
+    "{file} is already there (an earlier stop, {reason!r}): a run that "
+    "starts on it stops at its first tick; read it, delete it, then run again"
+)
+
+
+def walk_command(manifest: Manifest) -> np.ndarray:
+    """The held command a stop is measured from: WALK_SPEED_MPS forward,
+    inside the manifest's own forward range."""
+    lo, hi = manifest.commands.lin_vel_x
+    return np.array([float(np.clip(WALK_SPEED_MPS, lo, hi)), 0.0, 0.0], np.float32)
+
+
+def refuse_stale_stop(deployment_dir: Path) -> None:
+    """A STOP file left by an earlier `stop_deployment` would end the next
+    run at its first tick and read as a stop: refused by name."""
+    path = Path(deployment_dir) / STOP_FILE
+    if path.is_file():
+        try:
+            reason = json.loads(path.read_text(encoding="utf-8")).get("reason", "")
+        except ValueError:
+            reason = "unreadable"
+        raise ValueError(STALE_STOP.format(file=path, reason=reason))
 
 
 def measure_dds_stop(
-    runtime: Any, command: np.ndarray, *, stop_file: Path | None = None
+    runtime: Any,
+    command: np.ndarray,
+    *,
+    stand_in: bool,
+    stop_file: Path | None = None,
 ) -> dict[str, Any]:
-    """Unitree's own stop on their simulator: the policy walking at a
-    held command through their controller, then their Passive chord (the
-    pad is the hook); watched from the bus. Their controller owns the
-    gains, so this is their damping at once, measured beside ours. An
-    operator's STOP file (`request_stop`) ends the walk early, and so do
-    the SDK's watchdogs read off their state."""
+    """Unitree's own stop through their controller: the policy walking at
+    a held command, then their Passive chord (the pad is the hook);
+    watched from the bus. Their controller owns the gains, so this is
+    their damping at once, measured beside ours. An operator's STOP file
+    (`request_stop`) ends the walk early, and so do the SDK's watchdogs
+    read off their state; the record says how many ticks it walked. The
+    Passive chord is sent whatever happens after the handover (a silent
+    bus, a health that cannot be read): the robot is never left in their
+    velocity mode."""
     runtime.command = command.astype(np.float32)
-    reason = "the walk's end"
-    for _ in range(round(DDS_WALK_S / runtime.step_dt)):
-        runtime.observe()
-        if stop_file is not None and stop_file.is_file():
-            reason = OPERATOR_STOP
-            break
-        trips = tripped(health_of_lowstate(runtime.health(), stand_in=True))
-        if trips:
-            reason = trips[0]
-            break
-        runtime.apply(np.zeros(0, dtype=np.float32))
-    runtime.stop()
+    reason = WALK_END
+    planned = round(DDS_WALK_S / runtime.step_dt)
+    walked = 0
+    try:
+        for _ in range(planned):
+            runtime.observe()
+            if stop_file is not None and stop_file.is_file():
+                reason = OPERATOR_STOP
+                break
+            trips = tripped(health_of_lowstate(runtime.health(), stand_in=stand_in))
+            if trips:
+                reason = trips[0]
+                break
+            runtime.apply(np.zeros(0, dtype=np.float32))
+            walked += 1
+    finally:
+        runtime.stop()
     began = time.monotonic()
     fall, spin, height = 0.0, 0.0, float("nan")
     while time.monotonic() - began < DDS_WATCH_S:
@@ -270,8 +375,11 @@ def measure_dds_stop(
     return {
         "describe": "their Passive chord (LT + B): kp 0, kd 3 in one step, "
         "their controller's own",
-        "while": f"walking at {float(command[0]):g} m/s for {DDS_WALK_S:g} s through "
-        f"their controller, watched {DDS_WATCH_S:g} s",
+        "while": f"walking at {float(command[0]):g} m/s through their controller "
+        f"for {walked} of {planned} ticks ({walked * runtime.step_dt:g} of "
+        f"{DDS_WALK_S:g} s), watched {DDS_WATCH_S:g} s",
+        "ticks_walked": walked,
+        "ticks_planned": planned,
         "stopped_by": reason,
         "max_body_fall_mps": round(fall, DIGITS),
         "max_joint_speed_rad_s": round(spin, DIGITS),
@@ -305,6 +413,8 @@ class Context:
     state_from: str
     margins: Margins = MARGINS
     seed: int = DEFAULT_SEED
+    # where the dry rollout's twists come from, as the record says it
+    twists_from: str = ""
     dry: DryRollout | None = None
 
 
@@ -470,6 +580,7 @@ class DryRollout:
     compute_s: list[float] = field(default_factory=list)
     successes: int = 0
     trials: int = 0
+    unlimited: list[str] = field(default_factory=list)  # joints with no force range
 
 
 class _Recording:
@@ -482,11 +593,17 @@ class _Recording:
         model = runtime.model
         ctrl = list(runtime.action_to_ctrl)
         joint_ids = [int(model.actuator_trnid[c, 0]) for c in ctrl]
-        self._ctrl = ctrl
         self._names = list(runtime.manifest.joints.policy_order)
+        self._ctrl = ctrl
         self._range = model.jnt_range[joint_ids].astype(float)
         self._limited = model.jnt_limited[joint_ids].astype(bool)
-        self._force = np.abs(model.actuator_forcerange[ctrl, 1]).astype(float)
+        # an actuator with no force range has no demand to judge: its range
+        # is infinite, its ratio 0, and the torque check says so
+        limited = model.actuator_forcelimited[ctrl].astype(bool)
+        self._force = np.where(
+            limited, np.abs(model.actuator_forcerange[ctrl, 1]), np.inf
+        ).astype(float)
+        self._unlimited = [self._names[i] for i in np.flatnonzero(~limited)]
         self._kp, self._kd = _scene_gains(runtime)
         self._t0 = 0.0
 
@@ -507,7 +624,7 @@ class _Recording:
 
     def apply(self, action: np.ndarray) -> None:
         rt = self._rt
-        target = rt.default_pos + rt.scale * action.astype(np.float64)
+        target = rt.target_of(action)
         q = rt.data.qpos[rt.joint_qpos]
         dq = rt.data.qvel[rt.joint_qvel]
         self._out.compute_s.append(time.perf_counter() - self._t0)
@@ -528,6 +645,7 @@ class _Recording:
         if np.any(ratio >= 1.0):
             self._out.saturated_ticks += 1
         self._out.ticks += 1
+        self._out.unlimited = self._unlimited
         rt.apply(action)
 
 
@@ -557,13 +675,22 @@ def check_targets(ctx: Context) -> Check:
         f"worst {dry.worst_past_range:.3f} rad past range "
         f"({dry.worst_past_joint or '-'}) over {dry.ticks} ticks",
         f"at most {limit:g} rad past a joint's range",
-        f"dry rollout: {dry.trials} held twists of the gate, {dry.successes} tracked",
+        f"dry rollout: {dry.trials} held twists ({ctx.twists_from}), "
+        f"{dry.successes} tracked",
     )
 
 
 def check_torques(ctx: Context) -> Check:
     dry = dry_rollout(ctx)
     m = ctx.margins
+    if len(dry.unlimited) == len(ctx.manifest.joints.policy_order):
+        return Check(
+            "torques within the actuators' ranges",
+            None,
+            "not measurable",
+            "the actuators' force ranges",
+            "no actuator declares a force range (forcelimited off)",
+        )
     share = dry.saturated_ticks / max(dry.ticks, 1)
     ok = dry.worst_demand_ratio <= m.torque_demand_ratio and share <= m.saturated_share
     return Check(
@@ -666,6 +793,15 @@ def run_checks(ctx: Context) -> list[Check]:
     return out
 
 
+# A check's verdict in one word: the stream, the tool's lines and the
+# drawer all read this.
+CHECK_MARKS: dict[bool | None, str] = {
+    True: "passed",
+    False: "REFUSED",
+    None: "not measured",
+}
+
+
 def verdict_word(checks: list[Check]) -> str:
     """ "passed 7/7" or "refused: <first failing check>"."""
     judged = [c for c in checks if c.passed is not None]
@@ -757,7 +893,7 @@ class Guarded:
 
     def target_of(self, action: np.ndarray) -> np.ndarray:
         rt = self.rt
-        policy = rt.default_pos + rt.scale * action.astype(np.float64)
+        policy = rt.target_of(action)
         if self.stopped_at is not None and self.hold is not None:
             return self.hold
         if self.ramp and self.start_pose is not None and self.ticks < self.ramp_ticks:
@@ -766,8 +902,6 @@ class Guarded:
 
     def apply(self, action: np.ndarray) -> None:
         """One guarded tick: watchdogs, gains, target, `decimation` steps."""
-        import mujoco  # noqa: PLC0415
-
         rt = self.rt
         self._watch()
         if self.stopped_at is not None:
@@ -780,13 +914,8 @@ class Guarded:
             )
         target = self.target_of(action)
         prev = rt.data.ctrl[self._ctrl].copy()
-        for i, c in enumerate(self._ctrl):
-            rt.data.ctrl[c] = target[i]
         force_before = rt.data.actuator_force[self._ctrl].copy()
-        for _ in range(rt.decimation):
-            mujoco.mj_step(rt.model, rt.data)
-        rt.last_action = action.astype(np.float32)
-        rt.ticks += 1
+        rt.step(target, action)
         self.log.append(
             {
                 "tick": self.ticks,
@@ -796,8 +925,8 @@ class Guarded:
                 ),
                 "kp": float(np.mean(rt.model.actuator_gainprm[self._ctrl, 0])),
                 "kd": float(np.mean(-rt.model.actuator_biasprm[self._ctrl, 2])),
-                "height": float(rt.data.qpos[2]),
-                "fall_speed": float(max(0.0, -rt.data.qvel[2])),
+                "height": float(rt.base_position()[2]),
+                "fall_speed": float(max(0.0, -rt.base_linear_velocity_w()[2])),
                 "joint_speed": float(np.max(np.abs(rt.data.qvel[rt.joint_qvel]))),
                 "stopping": self.stopped_at is not None,
             }
@@ -812,39 +941,56 @@ class Guarded:
 # FixStand first key pose (their config.yaml, qs[1]) in THEIR order
 # (FR, FL, RR, RL); the ramp is measured from it, not from the home pose.
 LYING_POSE_SDK = (0.0, 1.36, -2.65) * 4
+# Where the body is dropped from to settle (lying, the Go2's base sits at
+# about 0.1 m) and how long it settles in damping before the handover.
+LYING_DROP_HEIGHT_M = 0.12
+LYING_SETTLE_S = 1.0
+FROM_LYING = "lying (Unitree's FixStand first key pose), in damping"
+FROM_HOME = "the manifest's home pose, in damping (no lying pose for this robot)"
 
 
-def _lying_pose(runtime: Runtime) -> np.ndarray:
+def _lying_pose(runtime: Runtime) -> tuple[np.ndarray, str]:
+    """The pose the handover is measured from, and which it is: the Go2's
+    lying pose in the policy's order when the manifest maps the SDK's
+    motors, else the home pose, said so in the record."""
     order = runtime.manifest.joints.sdk_order_map
     sdk = np.asarray(LYING_POSE_SDK, float)
     if order is None or len(order) != sdk.size:
-        return runtime.default_pos.copy()
-    return sdk[list(order)]
+        return runtime.default_pos.copy(), FROM_HOME
+    return sdk[list(order)], FROM_LYING
 
 
-def _lie_down(runtime: Runtime) -> None:
+def _lie_down(runtime: Runtime, transitions: Transitions) -> str:
     """Reset, then place the joints in the lying pose and let the body
-    settle on the floor in damping, the state a controller hands over from."""
+    settle on the floor in damping, the state a controller hands over
+    from; returns which pose it was."""
     import mujoco  # noqa: PLC0415
 
     runtime.reset()
-    runtime.data.qpos[runtime.joint_qpos] = _lying_pose(runtime)
-    runtime.data.qpos[2] = 0.12
+    pose, which = _lying_pose(runtime)
+    runtime.data.qpos[runtime.joint_qpos] = pose
+    runtime.set_base_height(LYING_DROP_HEIGHT_M)
     runtime.data.qvel[:] = 0.0
     ctrl = list(runtime.action_to_ctrl)
     kp0, kd0 = _scene_gains(runtime)
     model = runtime.model
     model.actuator_gainprm[ctrl, 0] = 0.0
     model.actuator_biasprm[ctrl, 1] = 0.0
-    model.actuator_biasprm[ctrl, 2] = -TRANSITIONS.damping_kd
-    for _ in range(round(1.0 / model.opt.timestep)):
+    model.actuator_biasprm[ctrl, 2] = -transitions.damping_kd
+    for _ in range(round(LYING_SETTLE_S / model.opt.timestep)):
         mujoco.mj_step(model, runtime.data)
     model.actuator_gainprm[ctrl, 0] = kp0
     model.actuator_biasprm[ctrl, 1] = -kp0
     model.actuator_biasprm[ctrl, 2] = -kd0
+    return which
 
 
 RAMP_EPISODE_S = 3.0
+# The ramp measured both ways; the labels the record, the drawer and the
+# stream all read.
+WITH_RAMP = "with ramp"
+WITHOUT_RAMP = "without ramp"
+RAMP_VARIANTS = ((WITH_RAMP, True), (WITHOUT_RAMP, False))
 STOOD_HEIGHT_M = 0.2  # the base above this at the end: it stood (lying is ~0.1)
 KP_OFF = 1e-9  # a stiffness this small is damping
 STOP_AFTER_S = 2.0
@@ -855,9 +1001,9 @@ def measure_ramp(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
     """Handover from lying in damping, standing command, with the ramp and
     without: the largest target step in one tick, the largest torque step,
     and whether the robot stood."""
-    out: dict[str, Any] = {"window_s": transitions.ramp_in_s, "from": "lying, damping"}
-    for label, ramp in (("with ramp", True), ("without ramp", False)):
-        _lie_down(runtime)
+    out: dict[str, Any] = {"window_s": transitions.ramp_in_s}
+    for label, ramp in RAMP_VARIANTS:
+        out["from"] = _lie_down(runtime, transitions)
         guarded = Guarded(runtime, transitions, ramp=ramp)
         guarded.handover()
         runtime.command = np.zeros(3, dtype=np.float32)
@@ -870,9 +1016,9 @@ def measure_ramp(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
             "first_tick_target_step_rad": round(window[0]["target_step"], DIGITS),
             "max_force_step_nm": round(max(r["force_step"] for r in window), DIGITS),
             "stood": bool(
-                runtime.data.qpos[2] > STOOD_HEIGHT_M and not runtime.fell_over()
+                runtime.base_position()[2] > STOOD_HEIGHT_M and not runtime.fell_over()
             ),
-            "height_m": round(float(runtime.data.qpos[2]), DIGITS),
+            "height_m": round(float(runtime.base_position()[2]), DIGITS),
             "log": guarded.log,
         }
     return out
@@ -913,10 +1059,12 @@ def measure_stop(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
     out: dict[str, Any] = {
         "window_s": transitions.soft_stop_s,
         "ends_in": f"kp 0, kd {transitions.damping_kd:g} (Unitree's Passive)",
-        "while": f"walking at 0.5 m/s, stopped at {STOP_AFTER_S:g} s, watched "
-        f"{STOP_EPISODE_S - STOP_AFTER_S:g} s",
     }
-    command = np.array([0.5, 0.0, 0.0], dtype=np.float32)
+    command = walk_command(runtime.manifest)
+    out["while"] = (
+        f"walking at {float(command[0]):g} m/s, stopped at {STOP_AFTER_S:g} s, "
+        f"watched {STOP_EPISODE_S - STOP_AFTER_S:g} s"
+    )
     for variant in STOP_VARIANTS:
         runtime.reset()
         guarded = Guarded(
@@ -950,27 +1098,70 @@ def measure_stop(runtime: Runtime, transitions: Transitions) -> dict[str, Any]:
 # -- the record ------------------------------------------------------------------
 
 
+# Where the dry rollout's twists come from, as the record words it.
+TWISTS_OF_GATE = "the {runtime} gate's first {k}, its seed {seed}"
+TWISTS_NO_GATE = (
+    "the gate's draw at seed {seed}; no {runtime} gate record yet, so nothing "
+    "pairs them"
+)
+SEED_MISMATCH = (
+    "the {runtime} gate of {name} ran at seed {theirs}; a pre-flight at seed "
+    "{ours} would not dry-run the gate's twists: leave the seed unset"
+)
+STATE_OF_SIMULATION = "plain MuJoCo (a simulation)"
+
+
+def gate_twists(
+    deployment_dir: Path, seed: int | None, runtime: str = DEFAULT_RUNTIME
+) -> tuple[int, str]:
+    """The seed of the dry rollout and how the record words it: the
+    plain gate's own seed when it has a record (refused by name when that
+    record was drawn by the old count-dependent draw, or when `seed` is
+    given and differs), else the gate's default."""
+    gates = read_gates(deployment_dir)
+    record = gates.get(runtime)
+    name = Path(deployment_dir).name
+    if record is None:
+        used = DEFAULT_SEED if seed is None else int(seed)
+        return used, TWISTS_NO_GATE.format(seed=used, runtime=runtime)
+    from rq_pipeline.deploy.gate import require_same_draw  # noqa: PLC0415
+
+    require_same_draw(record, f"the {runtime} gate of {name}")
+    theirs = int((record.get("protocol") or {}).get("seed", DEFAULT_SEED))
+    if seed is not None and int(seed) != theirs:
+        raise ValueError(
+            SEED_MISMATCH.format(runtime=runtime, name=name, theirs=theirs, ours=seed)
+        )
+    return theirs, TWISTS_OF_GATE.format(
+        runtime=runtime, k=MARGINS.dry_trials, seed=theirs
+    )
+
+
 def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
     deployment_dir: Path,
     *,
     assets_dir: Path | None,
     health: Health | None = None,
-    state_from: str = "plain MuJoCo (a simulation)",
-    basis: str = "simulation",
+    state_from: str = STATE_OF_SIMULATION,
+    basis: str = BASIS_SIMULATION,
     stand_in: bool = False,
     margins: Margins = MARGINS,
-    seed: int = DEFAULT_SEED,
+    seed: int | None = None,
     measure: bool = True,
     manifest: Manifest | None = None,
 ) -> dict[str, Any]:
     """Every check, then (when `measure`) the ramp-in and the soft stop
     measured in plain MuJoCo; the record written beside the manifest.
     `health` is the robot's state as the driving runtime reports it (the
-    DDS stand-in's), else plain MuJoCo's own at rest. `manifest` overrides
-    the one on disk (a provoked refusal under test)."""
+    DDS stand-in's), else plain MuJoCo's own at rest; `basis` and
+    `stand_in` say whose state it was (`bundles.basis`), never a default
+    the caller forgot. The dry rollout runs the plain gate's first twists
+    at the gate's own seed (`gate_twists`). `manifest` overrides the one
+    on disk (a provoked refusal under test)."""
     from rq_pipeline.deploy.runtime import open_runtime  # noqa: PLC0415
 
     manifest = manifest or load_manifest(deployment_dir)
+    used_seed, twists_from = gate_twists(deployment_dir, seed)
     runtime = open_runtime(manifest, assets_dir=assets_dir)
     ctx = Context(
         manifest=manifest,
@@ -978,7 +1169,8 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
         health=health if health is not None else health_of_runtime(runtime),
         state_from=state_from,
         margins=margins,
-        seed=seed,
+        seed=used_seed,
+        twists_from=twists_from,
     )
     checks = run_checks(ctx)
     passed = all(c.passed is not False for c in checks)
@@ -994,7 +1186,10 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
         "passed": passed,
         "verdict": verdict_word(checks),
         "margins": asdict(margins),
+        "margins_source": MARGINS_SOURCE,
         "transitions": asdict(transitions),
+        "transitions_source": TRANSITIONS_SOURCE,
+        "dry_rollout": {"seed": used_seed, "twists": twists_from, "draw": DRAW_NOW},
         "watchdogs": {
             "source": SDK_SOURCE,
             "limits": [asdict(w) for w in WATCHDOGS.values()],
@@ -1043,17 +1238,27 @@ def read_preflight(folder: Path) -> dict[str, Any] | None:
     return raw
 
 
+# How the card qualifies a verdict by the state it read; only the
+# operator's own robot goes unqualified, and a basis this table does not
+# know is named as it is.
+ON_STAND_IN = " on a simulation stand-in"
+BASIS_QUALIFIER = {BASIS_OWN: "", BASIS_SIMULATION: " in simulation"}
+RAMP_DID_NOT_STAND = "; the ramp-in did not stand"
+
+
 def card_line(record: dict[str, Any]) -> str:
     """What the Deployments card says: the verdict and on what state - a
-    simulation stand-in for the robot (Unitree's simulator over DDS), or
-    the plain simulation alone."""
+    simulation stand-in for the robot (Unitree's simulator over DDS), the
+    plain simulation, or the robot itself - and a ramp-in that did not
+    stand the robot up, which the seven checks do not judge."""
+    basis = str(record.get("basis", "unrecorded"))
     if record.get("stand_in"):
-        where = " on a simulation stand-in"
-    elif record.get("basis") == "simulation":
-        where = " in simulation"
+        where = ON_STAND_IN
     else:
-        where = ""
-    return f"{record.get('verdict', 'unrecorded')}{where}"
+        where = BASIS_QUALIFIER.get(basis, f" on {basis}")
+    ramp = (record.get("ramp_in") or {}).get(WITH_RAMP) or {}
+    fell = RAMP_DID_NOT_STAND if ramp and not ramp.get("stood", True) else ""
+    return f"{record.get('verdict', 'unrecorded')}{where}{fell}"
 
 
 def request_stop(deployment_dir: Path, reason: str = OPERATOR_STOP) -> Path:
@@ -1099,13 +1304,10 @@ def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
                     rr.log(f"{base}/{key}", rr.Scalars(float(row[key])))
     lines = [f"# {Path(folder).name}: pre-flight", "", f"**{card_line(record)}**", ""]
     for c in record.get("checks", []):
-        mark = {True: "pass", False: "REFUSED", None: "n/a"}[c["passed"]]
+        mark = CHECK_MARKS[c["passed"]]
         lines.append(f"- {mark} · {c['name']}: {c['measured']} (limit: {c['limit']})")
     rr.log(f"{STREAM}/record", rr.TextDocument("\n".join(lines)), static=True)
     return file
-
-
-STILL_SIZE = (640, 480)
 
 
 def still_at_handover(
@@ -1114,29 +1316,23 @@ def still_at_handover(
     """The robot at the end of the ramp-in window, from lying: the moment
     the policy has the robot alone."""
     try:
-        import mujoco  # noqa: PLC0415
-        from PIL import Image  # noqa: PLC0415
-
         from rq_pipeline.deploy.runtime import open_runtime  # noqa: PLC0415
     except ImportError as missing:
         return {"unrendered": str(missing)}
     manifest = manifest or load_manifest(deployment_dir)
     runtime = open_runtime(manifest, assets_dir=assets_dir)
     transitions = transitions_of(manifest)
-    _lie_down(runtime)
+    _lie_down(runtime, transitions)
     guarded = Guarded(runtime, transitions)
     guarded.handover()
     runtime.command = np.zeros(3, dtype=np.float32)
     for _ in range(guarded.ramp_ticks):
         guarded.apply(runtime.act(runtime.observe()))
     try:
-        renderer = mujoco.Renderer(runtime.model, STILL_SIZE[1], STILL_SIZE[0])
-    except (RuntimeError, OSError, ValueError) as why:
+        with stills.renderer(runtime.model, stills.HANDOVER_CAMERA) as render:
+            render(
+                runtime.data, runtime.base_position(), Path(deployment_dir) / STILL_FILE
+            )
+    except (RuntimeError, OSError, ValueError, ImportError) as why:
         return {"unrendered": f"no renderer: {why}"}
-    camera = mujoco.MjvCamera()
-    camera.distance, camera.azimuth, camera.elevation = 1.4, 135.0, -15.0
-    camera.lookat[:] = runtime.data.qpos[0:3]
-    renderer.update_scene(runtime.data, camera)
-    Image.fromarray(renderer.render()).save(Path(deployment_dir) / STILL_FILE)
-    renderer.close()
     return {"file": STILL_FILE, "tick": guarded.ramp_ticks}

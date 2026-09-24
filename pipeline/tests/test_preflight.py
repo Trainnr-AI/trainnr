@@ -307,7 +307,9 @@ class TheDdsRuntime(unittest.TestCase):
         rt._clock = lambda: 0.0  # no pacing under test
         with tempfile.TemporaryDirectory() as tmp:
             stop_file = pf.request_stop(Path(tmp))
-            out = pf.measure_dds_stop(rt, np.array([0.5, 0, 0]), stop_file=stop_file)
+            out = pf.measure_dds_stop(
+                rt, np.array([0.5, 0, 0]), stand_in=True, stop_file=stop_file
+            )
         self.assertEqual(out["stopped_by"], pf.OPERATOR_STOP)
         self.assertEqual(pad.log[-1], ("chord", *PASSIVE_CHORD))
         self.assertAlmostEqual(out["max_body_fall_mps"], 0.2)
@@ -316,7 +318,7 @@ class TheDdsRuntime(unittest.TestCase):
         pad = _Pad()
         rt = _dds(_Bus(speed=12.0), pad)
         rt._clock = lambda: 0.0
-        out = pf.measure_dds_stop(rt, np.array([0.5, 0, 0]))
+        out = pf.measure_dds_stop(rt, np.array([0.5, 0, 0]), stand_in=True)
         self.assertEqual(out["stopped_by"], "joint_velocity")
 
 

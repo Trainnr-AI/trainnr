@@ -847,7 +847,10 @@ def _present_deploy(
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    from rq_pipeline.deploy.attribution import read_attribution  # noqa: PLC0415
+    from rq_pipeline.deploy.attribution import (  # noqa: PLC0415
+        ladder_series,
+        read_attribution,
+    )
     from rq_pipeline.deploy.gate import ERR_RATIO_BOUND  # noqa: PLC0415
     from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
         GATE_INSTRUMENTS,
@@ -926,9 +929,8 @@ def _present_deploy(
                 for i, rung in enumerate(entry.get("rungs", []), start=1):
                     rr_.set_time("rung", sequence=i)
                     base = f"{root}/attribution/{entry['name']}"
-                    rr_.log(f"{base}/rate", rr.Scalars(float(rung["rate"])))
-                    rr_.log(f"{base}/lower", rr.Scalars(float(rung["ci95"][0])))
-                    rr_.log(f"{base}/certificate", rr.Scalars(lower))
+                    for series, value in ladder_series(rung, lower).items():
+                        rr_.log(f"{base}/{series}", rr.Scalars(value))
         lines += [
             "",
             f"- checkpoint `{manifest.raw.get('checkpoint', UNRECORDED)}` "
