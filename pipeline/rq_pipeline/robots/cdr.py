@@ -106,22 +106,6 @@ class Reader:
         self.pos += n
         return s
 
-    def f64_seq(self) -> list[float]:
-        n = self.u32()
-        return [self.f64() for _ in range(n)]
-
-    def string_seq(self) -> list[str]:
-        n = self.u32()
-        return [self.string() for _ in range(n)]
-
-    def header(self) -> float:
-        """std_msgs/Header: stamp (sec i32, nanosec u32), frame_id — the
-        stamp in seconds."""
-        sec = self.i32()
-        nsec = self.u32()
-        self.string()
-        return sec + nsec / NS_PER_S
-
     def decode(self, kind: str, layouts: dict[str, Layout]) -> dict[str, Any]:
         """A whole top-level message of type `kind`, checked: every byte
         the layout does not account for, beyond the trailing alignment, is

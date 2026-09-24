@@ -80,6 +80,15 @@ from rq_pipeline.robots.recording import (
     Recording,
     monotone,
 )
+from rq_pipeline.robots.ros_layouts import (
+    ACCEL,
+    CLOCK_RECEIVE,
+    HEADER,
+    POSE_WITH_COVARIANCE,
+    ROS_IMU,
+    STANDARD_LAYOUTS,
+    TWIST_WITH_COVARIANCE,
+)
 
 NAME = "rosbag2"
 SUFFIX = ".db3"
@@ -109,13 +118,11 @@ DFKI_JOINT_STATE = "interfaces/msg/JointState"
 DFKI_JOINT_CMD = "interfaces/msg/JointCmd"
 DFKI_QUAD_STATE = "interfaces/msg/QuadState"
 DFKI_CONTACT_STATE = "interfaces/msg/ContactState"
-ROS_IMU = "sensor_msgs/msg/Imu"
-HEADER = "std_msgs/msg/Header"
-TIME = "builtin_interfaces/msg/Time"
-VECTOR3 = "geometry_msgs/msg/Vector3"
-QUATERNION = "geometry_msgs/msg/Quaternion"
 
 LAYOUTS: dict[str, Layout] = {
+    # ROS 2's standard messages (Header, Imu, the geometry types), one
+    # table shared with the MCAP adapter (robots/ros_layouts.py).
+    **STANDARD_LAYOUTS,
     "IMUState": (
         Field("quaternion", "float32", 4),
         Field("gyroscope", "float32", 3),
@@ -229,43 +236,6 @@ LAYOUTS: dict[str, Layout] = {
         Field("vy", "float32"),
         Field("vyaw", "float32"),
     ),
-    TIME: (Field("sec", "int32"), Field("nanosec", "uint32")),
-    HEADER: (Field("stamp", TIME), Field("frame_id", "string")),
-    "geometry_msgs/msg/Point": (
-        Field("x", "float64"),
-        Field("y", "float64"),
-        Field("z", "float64"),
-    ),
-    VECTOR3: (Field("x", "float64"), Field("y", "float64"), Field("z", "float64")),
-    QUATERNION: (
-        Field("x", "float64"),
-        Field("y", "float64"),
-        Field("z", "float64"),
-        Field("w", "float64"),
-    ),
-    "geometry_msgs/msg/Pose": (
-        Field("position", "geometry_msgs/msg/Point"),
-        Field("orientation", QUATERNION),
-    ),
-    "geometry_msgs/msg/PoseWithCovariance": (
-        Field("pose", "geometry_msgs/msg/Pose"),
-        Field("covariance", "float64", 36),
-    ),
-    "geometry_msgs/msg/Twist": (Field("linear", VECTOR3), Field("angular", VECTOR3)),
-    "geometry_msgs/msg/TwistWithCovariance": (
-        Field("twist", "geometry_msgs/msg/Twist"),
-        Field("covariance", "float64", 36),
-    ),
-    "geometry_msgs/msg/Accel": (Field("linear", VECTOR3), Field("angular", VECTOR3)),
-    ROS_IMU: (
-        Field("header", HEADER),
-        Field("orientation", QUATERNION),
-        Field("orientation_covariance", "float64", 9),
-        Field("angular_velocity", VECTOR3),
-        Field("angular_velocity_covariance", "float64", 9),
-        Field("linear_acceleration", VECTOR3),
-        Field("linear_acceleration_covariance", "float64", 9),
-    ),
     DFKI_JOINT_STATE: (
         Field("header", HEADER),
         Field("position", "float64", 12),
@@ -287,9 +257,9 @@ LAYOUTS: dict[str, Layout] = {
     ),
     DFKI_QUAD_STATE: (
         Field("header", HEADER),
-        Field("pose", "geometry_msgs/msg/PoseWithCovariance"),
-        Field("twist", "geometry_msgs/msg/TwistWithCovariance"),
-        Field("acceleration", "geometry_msgs/msg/Accel"),
+        Field("pose", POSE_WITH_COVARIANCE),
+        Field("twist", TWIST_WITH_COVARIANCE),
+        Field("acceleration", ACCEL),
         Field("joint_state", DFKI_JOINT_STATE),
         Field("foot_contact", "bool", 4),
         Field("ground_contact_force", "float64", 12),
@@ -308,9 +278,7 @@ NOTE_TAU_EST = (
     "motor driver, not measured by a torque sensor"
 )
 NOTE_CLOCK = "time is rosbag2's receive timestamp; LowState carries no header stamp"
-NOTE_RECEIVE_CLOCK = (
-    "time is rosbag2's receive timestamp, not the header stamps the messages carry"
-)
+NOTE_RECEIVE_CLOCK = CLOCK_RECEIVE
 NOTE_FOOT_FORCE = "foot.force is the sensor's raw count; Unitree publishes no unit"
 NOTE_LOW_CMD = (
     "joint.command, command_velocity, feedforward, kp, kd are LowCmd: what the "

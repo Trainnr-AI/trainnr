@@ -43,6 +43,13 @@ from rq_pipeline.robots.recording import (
     Recording,
     monotone,
 )
+from rq_pipeline.robots.ros_layouts import (
+    CLOCK_HEADER_ELSE_LOG,
+    ROS_IMU,
+    ROS_JOINT_STATE,
+    STANDARD_LAYOUTS,
+    header_seconds,
+)
 
 NAME = "mcap"
 SUFFIX = ".mcap"
@@ -57,8 +64,8 @@ OP_MESSAGE = 0x05
 OP_CHUNK = 0x06
 OP_DATA_END = 0x0F
 
-JOINT_STATE = "sensor_msgs/msg/JointState"
-IMU = "sensor_msgs/msg/Imu"
+JOINT_STATE = ROS_JOINT_STATE
+IMU = ROS_IMU
 CDR_ENCODING = "cdr"
 
 
@@ -119,7 +126,7 @@ class McapAdapter:
             )
         channels: dict[str, Channel] = {}
         topics: dict[str, dict[str, Any]] = {}
-        notes: list[str] = []
+        notes: list[str] = [CLOCK_HEADER_ELSE_LOG]
         for channel in bag.channels.values():
             schema = bag.schemas.get(channel.schema_id)
             kind = schema.name if schema else "unknown"
@@ -243,7 +250,7 @@ def _decompress(compression: str, data: bytes) -> bytes | None:
     return None
 
 
-# -- the two messages, decoded field by field ------------------------------
+# -- the two messages, decoded by the shared layouts (robots/ros_layouts) ---
 
 
 def _joint_state_channels(
@@ -255,13 +262,13 @@ def _joint_state_channels(
     vel_rows: list[list[float]] = []
     eff_rows: list[list[float]] = []
     for log_time, data in msgs:
-        r = Reader(data)
-        stamp = r.header()
+        message = Reader(data).decode(JOINT_STATE, STANDARD_LAYOUTS)
+        stamp = header_seconds(message)
         t = stamp if stamp > 0 else log_time / NS_PER_S
-        joint_names = tuple(r.string_seq())
-        position = r.f64_seq()
-        velocity = r.f64_seq()
-        effort = r.f64_seq()
+        joint_names = tuple(message["name"])
+        position = list(message["position"])
+        velocity = list(message["velocity"])
+        effort = list(message["effort"])
         if names is None:
             names = joint_names
         elif joint_names != names:
@@ -321,16 +328,14 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
     gyro: list[list[float]] = []
     accel: list[list[float]] = []
     for log_time, data in msgs:
-        r = Reader(data)
-        stamp = r.header()
+        message = Reader(data).decode(IMU, STANDARD_LAYOUTS)
+        stamp = header_seconds(message)
         times.append(stamp if stamp > 0 else log_time / NS_PER_S)
-        quat.append([r.f64() for _ in range(4)])  # x y z w
-        for _ in range(9):
-            r.f64()  # orientation covariance
-        gyro.append([r.f64() for _ in range(3)])
-        for _ in range(9):
-            r.f64()
-        accel.append([r.f64() for _ in range(3)])
+        q = message["orientation"]
+        quat.append([q["x"], q["y"], q["z"], q["w"]])  # sensor_msgs' x y z w
+        w, a = message["angular_velocity"], message["linear_acceleration"]
+        gyro.append([w["x"], w["y"], w["z"]])
+        accel.append([a["x"], a["y"], a["z"]])
     times_arr, keep = monotone(np.asarray(times, dtype=np.float64))
     prefix = "" if topic in ("/imu", "imu", "/imu/data") else f"{topic.strip('/')}."
     return {
