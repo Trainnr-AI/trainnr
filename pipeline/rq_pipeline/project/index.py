@@ -663,6 +663,23 @@ def _summary_scene(path: Path) -> dict[str, Any]:
     return out
 
 
+def _summary_robot(p: Path) -> dict[str, Any]:
+    """The bundle's files, and what its importer changed (the audit's one
+    line; absent for a bundle onboarded before the audit existed)."""
+    from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
+        AUDIT_KEY,
+        read_bundle_record,
+    )
+
+    out: dict[str, Any] = {
+        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
+    }
+    audit = read_bundle_record(p).get(AUDIT_KEY)
+    if audit and audit.get("summary"):
+        out["importer changed"] = audit["summary"]
+    return out
+
+
 _SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.SCENE: _summary_scene,
     Kind.DRIFT: _summary_drift,
@@ -673,9 +690,7 @@ _SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.FINDING: _summary_finding,
     Kind.DEPLOY: _summary_deploy,
     Kind.POLICY: _summary_policy,
-    Kind.ROBOT: lambda p: {
-        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
-    },
+    Kind.ROBOT: _summary_robot,
     Kind.TASK: _summary_task,
 }
 

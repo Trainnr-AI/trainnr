@@ -180,8 +180,9 @@ Hulls are what the stills show, because hulls are all the solver wrote.
 
 Every item above is now the writer's (`pipeline/rq_pipeline/robot/usd_import.py`)
 and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
-`robotiq-2f85-isaac@3ec025e4cd56`, 3.0 MB, deterministic: the scratch
-run and the library run gave the same stamp). Written on the box in
+`robotiq-2f85-isaac@3ec025e4cd56` at first, `@e1bc2cbba31f` since the
+importer audit landed on its record the same evening; 3.0 MB,
+deterministic: the scratch run and the library run gave the same stamp). Written on the box in
 2.9 s once Warp's kernels are cached, through the pinned venv (newton
 1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
 mujoco-warp 3.11.0), and pinned by `pipeline/tests/test_usd_import.py`:
@@ -276,6 +277,19 @@ registry refusal was not planned. The plan as written:
 1. **Day 1 — the reader and the test first.** *rq_pipeline/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
 2. **Day 2 — the bundle writer and the door.** Leaf names, mesh files, `ctrlrange` from the driven joint's range, the sensor block, a `home` key, `--free`/`--attach` root, the record with provenance, README with the CC BY line and the runtime options Robotiq recommends as a declared `<option>`. The onboarding registry gains `.usd|.usda|.usdc|.usdz`; `onboard_robot` in the Studio's MCP surface names the variant selections in its arguments; a missing `newton` refuses with the install line per OS.
 3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, docs/07, a docs/33 row, tools/README rows, this document's §4 replaced by the bundle's numbers.
+
+The same evening, every door gained the audit (branch
+`importer-audit-2026-09-24`; docs/07): the compiled bundle against the
+source as authored, per body (mass, centre of mass, the full inertia
+tensor), per joint (type, range, armature, damping, friction loss,
+stiffness, force range) and per element class, with the reader's
+explanations for the documented conversions and MuJoCo's loader losses
+at the running build; an unexplained change is refused by name. The
+2F-85 audits at 7 explained, 0 unexplained: every mass, centre of mass,
+inertia tensor and joint parameter equals the USD layer, which is the
+§4 test generalised to every format (`pipeline/rq_pipeline/robot/import_audit.py`,
+`pipeline/tests/test_import_audit.py`, `tools/audit-bundle.py`). The
+URDF door came with it (`pipeline/rq_pipeline/robot/urdf_import.py`).
 
 Risks, each with its fallback: Newton's next release moves the mujoco
 pin before we do (the extra pins Newton; the import is offline work,

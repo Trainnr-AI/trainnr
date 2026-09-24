@@ -35,3 +35,5 @@ queued work; inventing values to fill the wrong fields is not.
 
 Addressed as `so101-nominal@hash` via `rq_pipeline.bundles.stamp`, like
 every bundle.
+
+Onboarded before the importer audit existed (2026-09-24), so its record carries none and the robot card says "not audited"; `tools/audit-bundle.py` against so101.xml finds nothing changed (an MJCF bundle is a copy of its source).

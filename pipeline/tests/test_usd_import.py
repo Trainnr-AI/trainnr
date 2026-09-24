@@ -84,7 +84,9 @@ def usd_limits_and_masses(
 class Registry(unittest.TestCase):
     def test_sources_dispatch_by_suffix_and_refuse_the_rest(self) -> None:
         names = onboarding.sources()
-        self.assertEqual(set(names), {onboarding.MJCF_SOURCE, onboarding.USD_SOURCE})
+        self.assertEqual(
+            set(names), {onboarding.MJCF_SOURCE, "urdf", onboarding.USD_SOURCE}
+        )
         self.assertEqual(
             onboarding.source_for(Path("a/b.xml")).name, onboarding.MJCF_SOURCE
         )
@@ -93,8 +95,8 @@ class Registry(unittest.TestCase):
                 onboarding.source_for(Path(f"r{suffix}")).name, onboarding.USD_SOURCE
             )
         with self.assertRaises(ValueError) as ctx:
-            onboarding.source_for(Path("robot.urdf"))
-        self.assertIn(".urdf", str(ctx.exception))
+            onboarding.source_for(Path("robot.sdf"))
+        self.assertIn(".sdf", str(ctx.exception))
         self.assertIn("mjcf", str(ctx.exception))
         self.assertIn("usd", str(ctx.exception))
 
@@ -371,6 +373,46 @@ class TheBundle(unittest.TestCase):
     def test_the_bundle_json_is_plain(self) -> None:
         text = (self.bundle / "bundle.json").read_text()
         self.assertEqual(json.loads(text)["name"], "robotiq-2f85-isaac")
+
+
+@needs_usd
+class TheDoorAudits(unittest.TestCase):
+    """The door's audit of the 2F-85 (docs/e2e-research/78 §1 item 2):
+    every mass, centre of mass, inertia tensor, joint range and joint
+    parameter equal to the USD layer; what differs is explained — the
+    two spherical loop closures Newton writes as connect equalities, the
+    tree-ordered joints, the hulls, the sensors, the keyframe, degrees
+    to radians — and nothing is UNEXPLAINED."""
+
+    def test_the_audit_explains_every_change_and_finds_no_other(self) -> None:
+        from rq_pipeline.robot import import_audit as audit  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "robotiq-2f85-isaac"
+            out = onboarding.onboard(
+                asset_root() / ASSET_FILE,
+                "robotiq-2f85-isaac",
+                destination,
+                {"variants": NEWTON_VARIANT},
+            )
+            record = read_bundle_record(destination)
+        report = audit.Audit.from_record(record[audit.AUDIT_KEY])
+        self.assertEqual(report.unexplained, ())
+        self.assertEqual(out[audit.AUDIT_KEY], report.summary())
+        kinds = {(c.kind, c.element.rsplit("/", 1)[-1]) for c in report.changes}
+        self.assertEqual(
+            kinds,
+            {
+                (audit.JOINT_MISSING, "right_loop_closure"),
+                (audit.JOINT_MISSING, "left_loop_closure"),
+                (audit.JOINT_ORDER, audit.ANY),
+                (audit.COUNT, audit.MESHES),
+                (audit.COUNT, audit.SENSORS),
+                (audit.COUNT, audit.KEYFRAMES),
+                (audit.UNIT, "angle"),
+            },
+        )
+        self.assertEqual(report.reader["variants"]["Physics"], "Newton_compliant")
 
 
 @needs_usd

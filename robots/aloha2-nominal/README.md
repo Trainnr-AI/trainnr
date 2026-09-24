@@ -60,3 +60,5 @@ inventing values for the wrong fields is not.
 
 Addressed as `aloha2-nominal@hash` via `rq_pipeline.bundles.stamp`,
 like every bundle.
+
+Onboarded before the importer audit existed (2026-09-24), so its record carries none and the robot card says "not audited"; `tools/audit-bundle.py` against its model file finds nothing changed (an MJCF bundle is a copy of its source).
