@@ -9,8 +9,10 @@ option refusals and the layer check run on any venv with mujoco.
 
 from __future__ import annotations
 
+import http.client
 import json
 import math
+import os
 import shutil
 import tempfile
 import unittest
@@ -20,9 +22,10 @@ import numpy as np
 
 from rq_pipeline.bundles.bundle import read_bundle_record
 from rq_pipeline.robot import onboarding
-from rq_pipeline.robot.asset_fetch import AssetFetchError, fetch_tree
+from rq_pipeline.robot.asset_fetch import cached_tree, fetch_tree
 from tests._extras import USD_LINE, needs_sim, needs_usd
 
+FETCH_ENV = "RQ_FETCH_TEST_ASSETS"
 ASSET_REPOSITORY = "robotiq/isaacsim_assets"
 ASSET_COMMIT = "6d992b664428"  # 2026-09-23, the tip docs/77 read
 ASSET_PATH = "grippers/Robotiq_2F_85"
@@ -46,15 +49,25 @@ _SKIP: str | None = None
 
 
 def asset_root() -> Path:
-    """The fetched asset, once per run; a failed fetch is remembered."""
+    """The cached asset. A test run never goes to the network on its own:
+    an empty cache skips by name, unless RQ_FETCH_TEST_ASSETS=1 allows one
+    fetch per run (review 2026-09-24: a dropped connection mid-fetch
+    errored the suite instead of skipping)."""
     global _ASSET, _SKIP  # noqa: PLW0603 - one fetch per test run
     if _ASSET is None and _SKIP is None:
-        try:
-            _ASSET = fetch_tree(ASSET_REPOSITORY, ASSET_COMMIT, ASSET_PATH).root
-        except AssetFetchError as why:
+        cached = cached_tree(ASSET_REPOSITORY, ASSET_COMMIT, ASSET_PATH)
+        if cached is not None:
+            _ASSET = cached.root
+        elif os.environ.get(FETCH_ENV) != "1":
             _SKIP = (
-                f"the 2F-85 asset is not in the cache and could not be fetched: {why}"
+                f"the 2F-85 asset is not in the cache; fetch it with "
+                f"tools/import-usd.py or set {FETCH_ENV}=1 to let the tests fetch"
             )
+        else:
+            try:
+                _ASSET = fetch_tree(ASSET_REPOSITORY, ASSET_COMMIT, ASSET_PATH).root
+            except (OSError, http.client.HTTPException) as why:
+                _SKIP = f"the 2F-85 asset could not be fetched: {why}"
     if _SKIP:
         raise unittest.SkipTest(_SKIP)
     assert _ASSET is not None
