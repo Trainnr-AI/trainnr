@@ -267,7 +267,13 @@ SOURCES: dict[str, SourceSpec] = {
         "as one recording (the robot, or their simulator as a stand-in)",
         module="rq_pipeline.robots.dds_capture",
         cls="DdsCapture",
-        options=("network", "domain_id", "basis", *INTERNAL_OPTIONS),
+        options=(
+            "network",
+            "domain_id",
+            "basis",
+            "first_state_timeout_s",
+            *INTERNAL_OPTIONS,
+        ),
         platforms=("linux",),
     ),
 }

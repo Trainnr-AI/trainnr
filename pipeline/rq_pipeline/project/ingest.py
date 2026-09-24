@@ -35,9 +35,12 @@ def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, wh
     adapter: str | None = None,
     provenance: Mapping[str, Any] | None = None,
     basis: str | None = None,
+    keep_as: str | None = None,
 ) -> dict[str, Any]:
-    """A source into the project's recordings, stamped; the record
-    carries `stamp` and the recording's `path` relative to the project."""
+    """A source into the project's recordings, stamped AFTER everything
+    the recording keeps has landed (`keep_as`: a capture's store moved
+    into `raw/`); the record carries `stamp` and the recording's `path`
+    relative to the project."""
     record = ingest_into(
         project.recordings,
         source,
@@ -45,6 +48,7 @@ def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, wh
         adapter=adapter,
         provenance=provenance,
         basis=basis,
+        keep_as=keep_as,
     )
     out = Path(record["path"])
     return {

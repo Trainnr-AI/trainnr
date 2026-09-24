@@ -36,9 +36,14 @@ def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, wh
     adapter: str | None = None,
     provenance: Mapping[str, Any] | None = None,
     basis: str | None = None,
+    keep_as: str | None = None,
 ) -> dict[str, Any]:
     """Read `source` (with `adapter`, or the one that accepts it) and
-    write it under `recordings`. `basis` says whose robot it was (one of
+    write it under `recordings`. `keep_as` MOVES a directory source into
+    the recording's `raw/<keep_as>` (a capture's store, which exists only
+    to become this recording), so it is inside the artifact before any
+    layer above stamps it; a file source is always copied to `raw/`.
+    `basis` says whose robot it was (one of
     `BASES`: the operator's own, a public log, a simulation) and
     overrides the adapter's default; `provenance` carries the facts
     behind it (a public log's source, url, licence, robot). Refused by
@@ -68,7 +73,16 @@ def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, wh
     # directory stays where it is): an identification method reads the
     # original bytes, and a stranger can re-run the adapter on them.
     raw = None
-    if source.is_file():
+    if keep_as is not None:
+        if not source.is_dir() or any(c in keep_as for c in NAME_FORBIDDEN):
+            raise ValueError(
+                f"keep_as moves a directory source under a plain name; got "
+                f"{source} as {keep_as!r}"
+            )
+        (out / RAW_DIR).mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), out / RAW_DIR / keep_as)
+        raw = f"{RAW_DIR}/{keep_as}"
+    elif source.is_file():
         raw_dir = out / RAW_DIR
         raw_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, raw_dir / source.name)

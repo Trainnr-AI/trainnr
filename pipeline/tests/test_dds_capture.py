@@ -23,10 +23,10 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.basis import BASIS_OWN, BASIS_SIMULATION
-from rq_pipeline.robots import capture
+from rq_pipeline.robots import capture, dds_capture
 from rq_pipeline.robots.adapters import rosbag2
 from rq_pipeline.robots.cdr import SEQUENCE, Field, Layout, Reader, Writer
-from rq_pipeline.robots.dds_capture import TOPICS
+from rq_pipeline.robots.dds_capture import STANDIN_NETWORK, TOPICS
 from rq_pipeline.robots.recording import (
     JOINT_COMMAND,
     JOINT_KP,
@@ -120,8 +120,7 @@ class TheListener(unittest.TestCase):
             root / "state",
             "session-1",
             subscribe=bus.subscribe,
-            ingest=seam_ingest,
-            **options,
+            **{"network": STANDIN_NETWORK, "ingest": seam_ingest, **options},
         )
 
     def test_the_pair_lands_as_one_recording_with_the_commands_lead(self) -> None:
@@ -181,12 +180,90 @@ class TheListener(unittest.TestCase):
             self.assertIn("silent", final.error or "")
             self.assertFalse(list((Path(tmp) / "recordings").iterdir()))
 
+    def test_the_stamp_is_taken_after_the_store_lands(self) -> None:
+        """Through the STAMPING ingest: the stamp the capture reports is
+        the folder's own hash, with the kept store inside it (it was taken
+        before the store moved in; review 2026-09-24)."""
+        from rq_pipeline.bundles.hashing import bundle_hash  # noqa: PLC0415
+        from rq_pipeline.project import create_project  # noqa: PLC0415
+        from rq_pipeline.project.ingest import ingest as stamping  # noqa: PLC0415
+
+        bus = FakeBus()
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+
+            def land(_recordings: Path, source: Path, **kw: Any) -> dict[str, Any]:
+                return stamping(project, source, **kw)
+
+            listener = capture.open_capture(
+                "dds",
+                project.recordings,
+                Path(tmp) / "state",
+                "session-1",
+                subscribe=bus.subscribe,
+                network=STANDIN_NETWORK,
+                ingest=land,
+            )
+            listener.start(window_s=30.0)
+            bus.run(20)
+            final = listener.stop()
+            self.assertEqual(final.state, capture.INGESTED, final.error)
+            out = project.recordings / "session-1"
+            self.assertTrue((out / "raw" / "capture" / rosbag2.STORE_FILE).is_file())
+            digest = (final.stamp or "").split("@", 1)[1]
+            self.assertTrue(bundle_hash(out).startswith(digest))
+
+    def test_a_capture_names_its_interface(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaisesRegex(ValueError, "name the interface"),
+        ):
+            capture.open_capture(
+                "dds",
+                Path(tmp) / "r",
+                Path(tmp) / "s",
+                "x",
+                subscribe=FakeBus().subscribe,
+            )
+
+    def test_no_state_in_time_is_refused_by_name_at_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            listener = self.capture(Path(tmp), FakeBus(), first_state_timeout_s=0.3)
+            listener.start(window_s=30.0)
+            deadline = time.time() + 5.0
+            while listener.state.state != capture.FAILED and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(listener.state.state, capture.FAILED)
+            self.assertIn("no rt/lowstate", listener.state.error or "")
+            final = listener.stop()
+            self.assertEqual(final.state, capture.FAILED)
+            self.assertFalse(list((Path(tmp) / "recordings").iterdir()))
+
     def test_an_unknown_basis_is_refused_by_name(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,
             self.assertRaisesRegex(ValueError, "hearsay"),
         ):
             self.capture(Path(tmp), FakeBus(), basis="hearsay")
+
+
+class OneInterfacePerProcess(unittest.TestCase):
+    """Unitree's SDK binds one interface per process and silently keeps it
+    on a second Init; the capture refuses a second interface by name."""
+
+    def setUp(self) -> None:
+        self.saved = dict(dds_capture._BOUND)
+        dds_capture._BOUND.clear()
+
+    def tearDown(self) -> None:
+        dds_capture._BOUND.clear()
+        dds_capture._BOUND.update(self.saved)
+
+    def test_the_same_interface_rebinds_and_another_is_refused(self) -> None:
+        self.assertEqual(dds_capture.bind_interface("lo", 0), ("lo", 0))
+        self.assertEqual(dds_capture.bind_interface("lo", 0), ("lo", 0))
+        with self.assertRaisesRegex(RuntimeError, "bound to 'lo'.*'eth0'"):
+            dds_capture.bind_interface("eth0", 0)
 
 
 class TheRegistry(unittest.TestCase):
