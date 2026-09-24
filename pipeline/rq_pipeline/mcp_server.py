@@ -842,7 +842,10 @@ def assay_deployment(
 
 
 def attribute_deployment(
-    deployment: str, runtime: str = "mujoco", trials: int = 20, seed: int = 1000
+    deployment: str,
+    runtime: str = DEFAULT_RUNTIME,
+    trials: int | None = None,
+    seed: int | None = None,
 ) -> JobHandle | Refusal:
     """Which parameter would break this policy first (docs/77 §9): a
     deployment whose plane gate PASSED is re-run in plain MuJoCo with one
@@ -851,35 +854,45 @@ def attribute_deployment(
     and damping, encoder noise, a slope believed flat, pushes. A knob's
     cliff is the first rung where the tracked rate's exact lower bound
     falls under the certificate's; the knobs ranked by that rung are the
-    answer to "it walked in simulation and fell on the robot". A job;
+    answer to "it walked in simulation and fell on the robot". Every rung
+    runs the passing gate's own trials at its own seed (`trials` and
+    `seed` unset; a value that differs is refused). A job;
     `attribution.json` and a picture of the fall land beside the manifest,
-    the Deployments card reads "most sensitive to ...". Refused by name
-    when the gate did not pass, cites no evaluation, or is staged on a
-    scene (another protocol)."""
-    from rq_pipeline.deploy.attribution import read_attribution  # noqa: PLC0415
-    from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
+    the Deployments card reads "most sensitive to ...". Refused here, by
+    name, before the job: no project, an unknown runtime, a gate that did
+    not pass or was drawn by the old count-dependent draw, a deployment
+    that cites no evaluation or one without an interval, a staged scene
+    (another protocol)."""
+    from rq_pipeline.deploy.attribution import (  # noqa: PLC0415
+        certificate_bound,
+        gate_protocol,
+        read_attribution,
+        require_passing_gate,
+    )
+    from rq_pipeline.deploy.manifest import Key, load_manifest  # noqa: PLC0415
     from rq_pipeline.deploy.runtimes import runtime_names  # noqa: PLC0415
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+    from rq_pipeline.project.cited import cited_certificate  # noqa: PLC0415
 
-    project = current_project()
-    try:
-        plain_name(deployment, "deployment name")
-    except ValueError as why:
-        return refusal(str(why))
     if runtime not in runtime_names():
         return refusal(
             f"unknown runtime {runtime!r}; one of {', '.join(runtime_names())}"
         )
-    folder = project.folder(DEPLOY_FOLDER) / deployment
-    if not (folder / MANIFEST_FILE).is_file():
-        return refusal(f"no deployment {deployment!r} in this project")
+    folder = _deployment_folder(deployment)
+    if not isinstance(folder, Path):
+        return folder
+    project = current_project()
     try:
         read_attribution(folder)  # a record of another schema is refused now
-    except ValueError as why:
-        return refusal(str(why))
+        manifest = load_manifest(folder)
+        certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
+        _, base, cited = require_passing_gate(folder, runtime, certificate)
+        certificate_bound(cited, deployment)
+        gate_protocol(base, deployment, runtime, trials=trials, seed=seed)
+    except (ValueError, FileNotFoundError) as why:
+        return refusal(_reason(why))
     return Actions(JobManager(_jobs_root())).attribute_deployment(
         deployment, project=str(project.root), runtime=runtime, trials=trials, seed=seed
     )
@@ -903,22 +916,33 @@ def _deployment_folder(deployment: str) -> Path | Refusal:
 
 
 def preflight_deployment(
-    deployment: str, runtime: str = "mujoco", seed: int = 1000
+    deployment: str, runtime: str = DEFAULT_RUNTIME, seed: int | None = None
 ) -> JobHandle | Refusal:
     """Pre-flight (docs/77 §10): everything that must hold before the
     first tick on a robot, each a refusal by name with its number - the
     policy's widths against the manifest, the joint order, the gains
     against the scene and against the YAML Unitree's controller reads,
-    the targets and torques a dry rollout of the gate's held twists
-    commands against the joints' ranges and the actuators' force ranges,
-    the compute per tick, the robot's reported state against the SDK's
-    own watchdogs. Then the ramp-in (from lying, in damping) and the stop
-    (soft, damping at once, zeroed) measured. `runtime="dds"` reads the
-    state from Unitree's simulator in their fixed stand and measures
-    their own stop too (Linux). A job; `preflight.json` beside the
-    manifest, the card reads "pre-flight passed 7/7"."""
-    from rq_pipeline.deploy.preflight import read_preflight  # noqa: PLC0415
-    from rq_pipeline.deploy.runtimes import runtime_names  # noqa: PLC0415
+    the targets and torques a dry rollout of the gate's first held twists
+    commands (at the gate's own seed; `seed` unset) against the joints'
+    ranges and the actuators' force ranges, the compute per tick, the
+    robot's reported state against the SDK's own watchdogs. Then the
+    ramp-in (from lying, in damping) and the stop (soft, damping at once,
+    zeroed) measured. `runtime="dds"` reads the state from Unitree's
+    simulator in their fixed stand and measures their own stop too
+    (Linux). A job; `preflight.json` beside the manifest, the card reads
+    "pre-flight passed 7/7 ...". Refused here, by name: no project, an
+    unknown runtime or one this platform cannot run, a STOP file left by
+    an earlier stop, a gate drawn by the old draw or at another seed."""
+    from rq_pipeline.deploy.preflight import (  # noqa: PLC0415
+        gate_twists,
+        read_preflight,
+        refuse_stale_stop,
+    )
+    from rq_pipeline.deploy.runtimes import (  # noqa: PLC0415
+        require_platform,
+        runtime_names,
+        runtime_spec,
+    )
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
@@ -931,28 +955,35 @@ def preflight_deployment(
     if not isinstance(folder, Path):
         return folder
     try:
+        require_platform(runtime_spec(runtime))
         read_preflight(folder)  # a record of another schema is refused now
-    except ValueError as why:
-        return refusal(str(why))
+        refuse_stale_stop(folder)
+        gate_twists(folder, seed)
+    except (ValueError, RuntimeError) as why:
+        return refusal(_reason(why))
     return Actions(JobManager(_jobs_root())).preflight_deployment(
         deployment, project=str(current_project().root), runtime=runtime, seed=seed
     )
 
 
 def stop_deployment(
-    deployment: str, reason: str = "operator stop"
+    deployment: str, reason: str | None = None
 ) -> dict[str, Any] | Refusal:
     """The operator's stop, from any process: a STOP file beside the
     manifest that a guarded run reads every tick and answers with the
-    soft stop (the gains blended to damping, never zeroed). Clear it by
-    deleting the file before the next run."""
-    from rq_pipeline.deploy.preflight import request_stop  # noqa: PLC0415
+    soft stop (the gains blended to damping, never zeroed). The next
+    pre-flight refuses to start on it: read it, delete it, then run."""
+    from rq_pipeline.deploy.preflight import (  # noqa: PLC0415
+        OPERATOR_STOP,
+        request_stop,
+    )
 
     folder = _deployment_folder(deployment)
     if not isinstance(folder, Path):
         return folder
-    out = request_stop(folder, reason)
-    return {"status": DONE, "stop_file": str(out), "reason": reason}
+    said = reason or OPERATOR_STOP
+    out = request_stop(folder, said)
+    return {"status": DONE, "stop_file": str(out), "reason": said}
 
 
 def list_gate_runtimes() -> list[dict[str, Any]]:
@@ -1397,34 +1428,28 @@ def list_public_logs() -> list[dict[str, Any]]:
 
 def ingest_public_log(
     name: str, recording_name: str | None = None
-) -> dict[str, Any] | Refusal:
+) -> JobHandle | Refusal:
     """Fetch a registered public log (every piece checked against its byte
     count and digest, cached under runs/public-logs) and ingest it into
     the current project with its basis "public log" and a provenance
     block: source, url, licence state, robot, digests. The telemetry stage
-    then reads "public log" - a real robot, not ours. Refuses an unknown
-    name, a log no adapter reads (with why), a download that differs from
-    the registry, and a network that is not there."""
-    import urllib.error  # noqa: PLC0415
-
+    then reads "public log" - a real robot, not ours. A job (a log is
+    tens to hundreds of megabytes); refused here, by name, when no
+    project is open or the name is not in the registry; the job refuses a
+    download that differs from the registry, a log no adapter reads and a
+    network that is not there."""
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
     from rq_pipeline.robots import public_logs  # noqa: PLC0415
 
     try:
-        entry = public_logs.resolve(name)
-        source = public_logs.fetch(name)
-    except KeyError as why:
-        return refusal(str(why))
-    except (urllib.error.URLError, OSError, ValueError) as why:
-        return refusal(f"fetch {name!r}: {why}")
-    return ingest(
-        current_project(),
-        source,
-        name=recording_name or entry.name,
-        adapter=entry.adapter,
-        provenance=entry.provenance(),
-        basis=entry.basis,
+        project = current_project()
+        public_logs.resolve(name)
+    except (FileNotFoundError, KeyError) as why:
+        return refusal(_reason(why))
+    return Actions(JobManager(_jobs_root())).ingest_public_log(
+        name, project=str(project.root), recording_name=recording_name
     )
 
 
@@ -2374,7 +2399,8 @@ def build_server() -> Any:  # noqa: PLR0915
     )(list_public_logs)
     server.tool(
         description="Fetch a registered public log (size and digest checked) and "
-        "ingest it with its provenance; the telemetry stage reads 'public log'."
+        "ingest it with its provenance, as a job; the telemetry stage reads "
+        "'public log'."
     )(ingest_public_log)
     server.tool(
         description="Bring a trained rq_mjlab experiment into the project: run, policy "

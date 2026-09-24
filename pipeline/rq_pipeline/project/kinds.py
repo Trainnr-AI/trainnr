@@ -17,12 +17,20 @@ through `bundles/hashing.stamp`. Downstream code never invents a name.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import fnmatch
+import hashlib
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from rq_pipeline.bundles.hashing import content_stamp, stamp
+from rq_pipeline.bundles.hashing import (
+    STAMP_LENGTH,
+    STAMP_SEPARATOR,
+    bundle_hash,
+    content_stamp,
+    stamp,
+)
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.manifest import MANIFEST_FILE as DEPLOY_FILE
@@ -191,6 +199,69 @@ def _detect_file(path: Path) -> Kind:
     raise UnknownKindError(f"{path} is not a recognised single-file artifact")
 
 
+def _deploy_run_records() -> tuple[str, ...]:
+    """What a deployment's runs write beside its manifest - the gates'
+    records and contact sites, the attribution, the assay, the pre-flight,
+    their stills, an operator's STOP, a writer's staging file: records
+    ABOUT the deployment, never the deployment. A STOP file or a
+    pre-flight record once moved the deployment's identity (the review of
+    2026-09-24)."""
+    from rq_pipeline.deploy import assay, attribution, gate, preflight  # noqa: PLC0415
+    from rq_pipeline.deploy.manifest import GATE_RECORDS  # noqa: PLC0415
+
+    return (
+        *GATE_RECORDS.values(),
+        gate.CONTACTS_FILE.format(runtime="*"),
+        assay.ASSAY_FILE,
+        attribution.ATTRIBUTION_FILE,
+        attribution.STILL_FILE,
+        preflight.PREFLIGHT_FILE,
+        preflight.STILL_FILE,
+        preflight.STOP_FILE,
+        STAGING_SUFFIX_PATTERN,
+    )
+
+
+STAGING_SUFFIX_PATTERN = "*.tmp"
+# The files an artifact's runs write inside it that are not the artifact:
+# left out of its identity (patterns, relative to the artifact's root).
+RUN_RECORDS: dict[Kind, Callable[[], tuple[str, ...]]] = {
+    Kind.DEPLOY: _deploy_run_records,
+}
+
+
+def artifact_hash(kind: Kind, root: Path) -> str:
+    """The artifact's content hash: `bundles.hashing.bundle_hash`, less the
+    run records its kind declares (`RUN_RECORDS`). The same bytes in the
+    same order as `bundle_hash` - pinned by test so the two never part -
+    with those files left out; a kind with none is `bundle_hash` itself.
+    (To collapse into an `exclude` argument of `bundle_hash` at merge.)"""
+    root = Path(root)
+    records = RUN_RECORDS.get(kind)
+    if records is None or root.is_file():
+        return bundle_hash(root)
+    patterns = records()
+    digest = hashlib.sha256()
+    files = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
+        and not any(
+            fnmatch.fnmatch(str(path.relative_to(root).as_posix()), pattern)
+            for pattern in patterns
+        )
+    )
+    if not files:
+        raise ValueError(f"artifact is empty once its run records are left out: {root}")
+    for path in files:
+        digest.update(str(path.relative_to(root)).encode())
+        digest.update(b"\x00")
+        digest.update(path.read_bytes())
+        digest.update(b"\x00")
+    return digest.hexdigest()
+
+
 def stamp_kind(kind: Kind, root: Path, name: str | None = None) -> str:
     """The artifact's `name@hash`, after checking it IS that kind.
     `name` defaults to the directory's (or file's stem's) own name."""
@@ -202,8 +273,10 @@ def stamp_kind(kind: Kind, root: Path, name: str | None = None) -> str:
     # A stamp's name half must not carry the separator; RL arms are
     # named `identified#1` and the like — safe. Version suffixes are
     # stripped so `walk@abc` re-stamps as `walk@def`, not `walk@abc@def`.
-    if "@" in label:
-        label = label.split("@", 1)[0]
+    if STAMP_SEPARATOR in label:
+        label = label.split(STAMP_SEPARATOR, 1)[0]
+    if kind in RUN_RECORDS:
+        return f"{label}{STAMP_SEPARATOR}{artifact_hash(kind, root)[:STAMP_LENGTH]}"
     return stamp(label, root)
 
 

@@ -40,6 +40,7 @@ from rq_pipeline.deploy.attribution import (
     require_passing_gate,
     sensitivity_line,
 )
+from rq_pipeline.deploy.gate import DRAW_KEY, DRAW_NOW
 from rq_pipeline.deploy.manifest import GATE_SCHEMA, load_manifest
 from rq_pipeline.project import PROJECT_ENV, create_project
 from rq_pipeline.project.index import _summary_deploy
@@ -50,15 +51,18 @@ from tests.test_mcp_actions import PIPELINE_DIR, TOOLS_DIR, harness
 CERT = {"successes": 38, "trials": 40, "ci95": [0.8308, 0.9939]}
 
 
-def _passing_gate(folder: Path, *, passed: bool | None = True) -> None:
+def _passing_gate(
+    folder: Path, *, passed: bool | None = True, trials: int = 20, seed: int = 1000
+) -> None:
     (folder / "gate.json").write_text(
         json.dumps(
             {
                 "schema": GATE_SCHEMA,
                 "runtime": "mujoco",
-                "successes": 20,
-                "trials": 20,
+                "successes": trials,
+                "trials": trials,
                 "ci95": [0.8316, 1.0],
+                "protocol": {"trials": trials, "seed": seed, DRAW_KEY: DRAW_NOW},
                 "verdict": {"passed": passed},
                 "judged": "2026-09-24T00:00:00+00:00",
             }
@@ -218,16 +222,15 @@ class TheSweep(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             folder = _manifest(Path(tmp))
-            _passing_gate(folder)
+            _passing_gate(folder, trials=4, seed=7)
             # four trials cannot clear a lower bound of 0.83 (4/4 gives
-            # 0.398): a certificate judged looser lets a small draw climb
+            # 0.398): a certificate judged looser lets a small draw climb.
+            # Trials and seed are the gate's own, read from its record.
             loose = {"successes": 8, "trials": 10, "ci95": [0.3, 0.99]}
             record = attribute(
                 folder,
                 assets_dir=None,
                 certificate=loose,
-                trials=4,
-                seed=7,
                 knobs=(SOFT, HARD),
                 open=fake_open,
                 appliers=FAKE_APPLIERS,
@@ -242,6 +245,9 @@ class TheSweep(unittest.TestCase):
             self.assertIsNone(hard["cliff"])
             self.assertEqual(len(hard["rungs"]), 2)
             self.assertEqual(record["protocol"]["workers"], 0)
+            self.assertEqual(
+                (record["protocol"]["trials"], record["protocol"]["seed"]), (4, 7)
+            )
             self.assertEqual(record["certificate"]["lower"], 0.3)
             self.assertTrue((folder / ATTRIBUTION_FILE).is_file())
             self.assertEqual(read_attribution(folder), record)
@@ -254,7 +260,7 @@ class TheSweep(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             folder = _manifest(Path(tmp))
-            _passing_gate(folder)
+            _passing_gate(folder, seed=7)
             record = attribute(
                 folder,
                 assets_dir=None,
@@ -294,8 +300,43 @@ class TheSweep(unittest.TestCase):
                     open=fake_open,
                     appliers=FAKE_APPLIERS,
                 )
-            self.assertIn("does not reproduce the passing gate", str(why.exception))
+            self.assertIn("does not reproduce here", str(why.exception))
             self.assertFalse((folder / ATTRIBUTION_FILE).exists())
+
+    def test_another_protocol_or_no_interval_is_refused_by_name(self) -> None:
+        """The review of 2026-09-24: an attribution at a count or seed the
+        gate never ran ran other trials than the gate it cited, and a
+        certificate without `ci95` read a lower bound of 0 (no cliff ever)."""
+
+        def fake_open(manifest: Any, *, assets_dir: Any) -> FakeRuntime:
+            return FakeRuntime(manifest)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = _manifest(Path(tmp))
+            _passing_gate(folder, trials=20, seed=1000)
+            for asked, word in (
+                ({"trials": 8}, "trials 20"),
+                ({"seed": 5}, "seed 1000"),
+            ):
+                with self.assertRaisesRegex(ValueError, word):
+                    attribute(
+                        folder,
+                        assets_dir=None,
+                        certificate=CERT,
+                        knobs=(SOFT,),
+                        open=fake_open,
+                        appliers=FAKE_APPLIERS,
+                        **asked,
+                    )
+            with self.assertRaisesRegex(ValueError, "no ci95"):
+                attribute(
+                    folder,
+                    assets_dir=None,
+                    certificate={"successes": 38, "trials": 40},
+                    knobs=(SOFT,),
+                    open=fake_open,
+                    appliers=FAKE_APPLIERS,
+                )
 
     def test_a_record_of_another_schema_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -363,6 +404,7 @@ class TheWrappers(unittest.TestCase):
     def test_pushed_shoves_the_base_every_period(self) -> None:
         inner = self._inner()
         inner.data = SimpleNamespace(qvel=np.zeros(6))
+        inner.base_qvel = 0  # the free joint's first dof
         pushed = Pushed(inner, 1.0, np.random.default_rng(3), period_ticks=3)
         for _ in range(7):
             pushed.apply(np.zeros(2, np.float32))

@@ -24,7 +24,7 @@ use crate::control::{
 };
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
-    summary_line, Artifact, Index, Job, Model, STATE_BASES, UNRECORDED,
+    summary_line, Artifact, Index, Job, Model, BASIS_OWN, UNRECORDED,
 };
 use crate::widgets::{
     card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
@@ -831,9 +831,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         tokens.native_frame_stroke.color.linear_multiply(0.5),
                         ui.visuals().weak_text_color().linear_multiply(0.6),
                     )
-                } else if state.present
-                    && state.basis.as_deref().is_some_and(|b| b != STATE_BASES[0])
-                {
+                } else if state.present && state.basis.as_deref().is_some_and(|b| b != BASIS_OWN) {
                     // Proved on a basis that is not the operator's own robot (a
                     // public log, a simulation): outlined in the accent, never
                     // the success fill.
@@ -865,7 +863,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 // does), so the chip is measured first and the row broken
                 // when it would not fit — else it runs past the card.
                 let label = match state.basis.as_deref() {
-                    Some(basis) if state.present && basis != STATE_BASES[0] => {
+                    Some(basis) if state.present && basis != BASIS_OWN => {
                         format!("{} · {basis}", stage_label(&state.name))
                     }
                     _ => stage_label(&state.name).to_owned(),

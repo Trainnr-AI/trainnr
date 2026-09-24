@@ -71,6 +71,12 @@ class Stack(Protocol):
     runtime opened inside it must share with it (the DDS stack's one
     virtual pad)."""
 
+    # Whether the robot this stack drives is a simulation standing in for
+    # one (their simulator) rather than a robot; the pre-flight's basis
+    # and its card qualifier are read from it, never spelled at a call.
+    stand_in: bool
+    state_from: str  # whose state a pre-flight reads, as its record words it
+
     def __enter__(self) -> Stack: ...
     def __exit__(self, *exc: object) -> None: ...
     def runtime_options(self) -> dict[str, Any]: ...
@@ -78,7 +84,10 @@ class Stack(Protocol):
 
 class NoStack(AbstractContextManager["NoStack"]):
     """A runtime that is a library needs nothing around the gate and
-    shares nothing with it."""
+    shares nothing with it; the robot it drives is the simulation itself."""
+
+    stand_in = False
+    state_from = "plain MuJoCo (a simulation)"
 
     def __exit__(self, *exc: object) -> None:
         return None

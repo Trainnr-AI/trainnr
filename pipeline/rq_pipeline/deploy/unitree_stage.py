@@ -170,7 +170,13 @@ class UnitreeStack:
     """Their simulator and controller as two subprocesses for the gate's
     duration: the pad first (their simulator opens the joystick at
     start), the simulator, then the staged controller on loopback; logs
-    beside the deployment. A context: enter starts, exit ends both."""
+    beside the deployment. A context: enter starts, exit ends both. The
+    robot is their simulator: a stand-in, and every record says so."""
+
+    stand_in = True
+    state_from = (
+        "Unitree's simulator over DDS in their fixed stand (a simulation stand-in)"
+    )
 
     def __init__(
         self,

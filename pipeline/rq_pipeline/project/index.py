@@ -31,6 +31,7 @@ from rq_pipeline.bundles.basis import BASES, BASIS_OWN, BASIS_UNKNOWN
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.attribution import read_attribution
+from rq_pipeline.deploy.gate import DRAW_NOW, draw_of
 from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.deploy.preflight import (
     PREFLIGHT_SUMMARY_KEY,
@@ -49,6 +50,7 @@ from rq_pipeline.project.kinds import (
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
+    FIT_FILE,
     FITS_DIR,
     IDENTITY_FILE,
     POLICY_FILE,
@@ -484,7 +486,7 @@ def _summary_recording(path: Path) -> dict[str, Any]:
     basis = raw.get("basis") or BASIS_UNKNOWN
     if basis != BASIS_OWN:
         # Whose robot: a public log names it; the operator's own says nothing.
-        out["basis"] = basis
+        out[BASIS_KEY] = basis
         out.update(_take(raw.get("provenance") or {}, ("robot", "licence")))
     rate = _measured_rate(raw)
     if rate is not None:
@@ -655,25 +657,48 @@ def _hz(rate: object) -> str:
     return f"{rate:g} Hz" if isinstance(rate, (int, float)) else UNRECORDED
 
 
+# The card's word for a gate drawn before the per-trial draw
+# (`deploy.gate.DRAW_NOW`): its trials are not the ones a re-run would draw.
+OLD_DRAW = "{word}, drawn by count (re-run to pair)"
+# What the deployment card's picture shows when it is not the robot.
+PICTURE_KEY = "picture"
+CLIFF_PICTURE = "the fall at the cliff, {knob} {level:g}"
+
+
+def _gate_card_word(record: dict[str, Any]) -> str:
+    word = gate_word(record)
+    return word if draw_of(record) == DRAW_NOW else OLD_DRAW.format(word=word)
+
+
 def _summary_deploy(path: Path) -> dict[str, Any]:
     """A deployment at a glance: the gate's word first (what the card is
     for), then the checkpoint and the control rate."""
     m = _read(path / DEPLOY_FILE)
     gates = read_gates(path)
     out: dict[str, Any] = {
-        "gate": gate_word(gates[DEFAULT_RUNTIME])
+        "gate": _gate_card_word(gates[DEFAULT_RUNTIME])
         if DEFAULT_RUNTIME in gates
         else "not run",
     }
     for runtime in RUNTIMES:
         if runtime != DEFAULT_RUNTIME and runtime in gates:
-            out[f"gate ({runtime.upper()})"] = gate_word(gates[runtime])
+            out[f"gate ({runtime.upper()})"] = _gate_card_word(gates[runtime])
     preflight = read_preflight(path)
     if preflight:  # before the first tick on a robot: passed, or refused by name
         out[PREFLIGHT_SUMMARY_KEY] = card_line(preflight)
     attribution = read_attribution(path)
     if attribution:  # what would break it first, right under the gate's word
-        out["sensitivity"] = str(attribution.get("sensitivity", UNRECORDED))
+        sensitivity = str(attribution.get("sensitivity", UNRECORDED))
+        out["sensitivity"] = (
+            sensitivity
+            if draw_of(attribution) == DRAW_NOW
+            else OLD_DRAW.format(word=sensitivity)
+        )
+        still = attribution.get("still") or {}
+        if still.get("file"):  # the card's picture is then the fall, not the robot
+            out[PICTURE_KEY] = CLIFF_PICTURE.format(
+                knob=still.get("knob", UNRECORDED), level=still.get("level", "")
+            )
     scene = scene_name_of(m)
     if scene:  # a staged deployment: what it stands on, before the rest
         out["scene"] = scene
@@ -749,8 +774,23 @@ def _summary_robot(p: Path) -> dict[str, Any]:
     return out
 
 
+# The summary facts every row carries for the index's own use and no card
+# shows (`model.rs::HIDDEN_KEYS`, pinned by test_studio_mirrors).
+HIDDEN_SUMMARY_KEYS = ("files", "fit_bases")
+BASIS_KEY = "basis"
+
+
+def _summary_fit(p: Path) -> dict[str, Any]:
+    """Whose robot a fit record measured (`bundles.basis`): a fit folder's
+    `fit.json`, or a single-file record under `fits/`; a record written
+    before the field is unknown."""
+    raw = _read(p / FIT_FILE) if p.is_dir() else _read(p)
+    return {BASIS_KEY: raw.get(BASIS_KEY) or BASIS_UNKNOWN}
+
+
 _SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.SCENE: _summary_scene,
+    Kind.FIT: _summary_fit,
     Kind.DRIFT: _summary_drift,
     Kind.RECORDING: _summary_recording,
     Kind.BATCH: lambda p: {"episodes": len(list(p.glob("episode_*")))},
@@ -804,6 +844,13 @@ def fit_bases(fits: Path) -> list[str]:
     return [basis for basis in BASES if basis in found]
 
 
+# The kinds whose summaries say whose robot proved them, and what their
+# silence means: a recording's summary names the basis only when it is not
+# the operator's own. Every other stage has no basis (None): a policy, a
+# certificate or a deployment is not a measurement of a robot.
+SILENT_BASIS: dict[Kind, str] = {Kind.RECORDING: BASIS_OWN}
+
+
 def strongest_basis(bases: list[str]) -> str | None:
     """The first of BASES present: an own-robot fit outranks a public
     log, which outranks a simulation."""
@@ -825,17 +872,19 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
             carriers = [
                 a
                 for a in artifacts
-                if a.kind == Kind.ROBOT.value and "fits" in a.summary.get("files", [])
+                if a.kind == Kind.ROBOT.value and FITS_DIR in a.summary.get("files", [])
             ]
+            fits = [a for a in artifacts if a.kind == kind.value and a.stamp in proof]
             if not proof:
                 proof = [a.stamp for a in carriers]
             found = [b for a in carriers for b in a.summary.get("fit_bases", [])]
+            found += [str(a.summary.get(BASIS_KEY, BASIS_UNKNOWN)) for a in fits]
             basis = strongest_basis(found) if proof else None
-        elif proof:
-            # A recording (or any proving artifact) says whose robot it was;
-            # one that says nothing is the operator's own.
+        elif kind in SILENT_BASIS and proof:
+            # A kind whose summary says whose robot it was; its silence means
+            # SILENT_BASIS's word (a recording says nothing when it is ours).
             found = [
-                str(a.summary.get("basis", BASIS_OWN))
+                str(a.summary.get(BASIS_KEY, SILENT_BASIS[kind]))
                 for a in artifacts
                 if a.kind == kind.value and a.stamp in proof
             ]

@@ -22,6 +22,7 @@ from _lab import bootstrap
 
 bootstrap()
 
+from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.ingest import ingest  # noqa: E402
 from rq_pipeline.project.locate import Project  # noqa: E402
 from rq_pipeline.robots import public_logs  # noqa: E402
@@ -41,19 +42,28 @@ def main() -> int:
     if args.verb == "list":
         print(json.dumps(public_logs.listing(), indent=1))
         return 0
-    entry = public_logs.resolve(args.name)
-    source = public_logs.fetch(args.name)
-    if args.verb == "fetch":
-        print(f"{entry.name} -> {source}")
-        return 0
-    out = ingest(
-        Project(args.project.resolve()),
-        source,
-        name=args.recording or entry.name,
-        adapter=entry.adapter,
-        provenance=entry.provenance(),
-        basis=entry.basis,
-    )
+    try:
+        entry = public_logs.resolve(args.name)
+        source = public_logs.fetch(args.name)
+        if args.verb == "fetch":
+            print(f"{entry.name} -> {source}")
+            return 0
+        project = Project(args.project.resolve()).use()
+        out = ingest(
+            project,
+            source,
+            name=args.recording or entry.name,
+            adapter=entry.adapter,
+            provenance=entry.provenance(),
+            basis=entry.basis,
+        )
+    except KeyError as unknown:  # a refusal by name, not a traceback
+        raise SystemExit(
+            str(unknown.args[0]) if unknown.args else str(unknown)
+        ) from None
+    except (OSError, ValueError, FileExistsError) as why:
+        raise SystemExit(f"public log {args.name!r}: {why}") from None
+    write_index(project, index_project(project))
     print(json.dumps({k: v for k, v in out.items() if k != "channels"}, indent=1))
     return 0
 

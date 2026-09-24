@@ -51,13 +51,17 @@ const PROJECTS_RESCAN_EVERY: Duration = Duration::from_secs(10);
 /// What is shown when a fact was never recorded: the reader must not
 /// mistake an empty cell for a value. One spelling across the window.
 pub const UNRECORDED: &str = "unrecorded";
-/// Summary keys never shown as a fact or a table column.
-pub const HIDDEN_KEYS: &[&str] = &["files"];
+/// Summary keys never shown as a fact or a table column: the index's own
+/// bookkeeping (`project/index.py::HIDDEN_SUMMARY_KEYS`, pinned by
+/// `tests/test_studio_mirrors.py`).
+pub const HIDDEN_KEYS: &[&str] = &["files", "fit_bases"];
 
 /// The Deployments card's pre-flight key (`deploy/preflight.py`,
 /// `PREFLIGHT_SUMMARY_KEY`): its value reads "passed 7/7 on a simulation
 /// stand-in" or "refused: <check> (<number>)", so the line says
-/// "pre-flight passed 7/7" with no word of ours between.
+/// "pre-flight passed 7/7" with no word of ours between. The generic card
+/// line renders it; only the test names it (clippy's dead-code warning).
+#[cfg(test)]
 pub const PREFLIGHT_KEY: &str = "pre-flight";
 
 /// `ProjectIndex`, as `rq_pipeline.project.index` writes it. Unknown
@@ -168,9 +172,12 @@ pub struct State {
     pub basis: Option<String>,
 }
 
-/// Mirrors `rq_pipeline.robots.recording.BASES`, strongest first; pinned
+/// Mirrors `rq_pipeline.bundles.basis.BASES`, strongest first; pinned
 /// by `tests/test_studio_mirrors.py`.
 pub const STATE_BASES: [&str; 4] = ["own robot", "public log", "simulation", "unknown"];
+/// The one basis a chip never qualifies: the operator's own robot, the
+/// strongest (`bundles.basis.BASIS_OWN`).
+pub const BASIS_OWN: &str = STATE_BASES[0];
 
 fn yes() -> bool {
     true

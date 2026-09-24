@@ -35,6 +35,11 @@ DOMAIN_ID = 0
 FSM_SETTLE_S = 2.0  # the fixed stand takes about this long to reach
 CHORD_ATTEMPTS = 2
 STATE_TIMEOUT_MS = 1000
+# Their Python SDK's `ChannelSubscriber.Read(timeout)` takes SECONDS
+# (unitree_sdk2py/core/channel.py: `duration(seconds=timeout)`); a
+# millisecond count passed straight through waited 1000 s on a silent
+# link instead of 1 s (the review of 2026-09-24).
+MS_PER_S = 1000.0
 # The chords their state machine moves on (their `config.yaml` FSM):
 # passive -> fixed stand, fixed stand -> velocity (the handover to the
 # policy), and back to passive (their damping state, kd 3) from either.
@@ -42,7 +47,8 @@ STAND_CHORD = ("LT", "up")
 HANDOVER_CHORD = ("RT", "A")
 PASSIVE_CHORD = ("LT", "B")
 FSM_CHORDS = (STAND_CHORD, HANDOVER_CHORD)
-# The Go2's LowState carries 20 motor slots; the robot drives the first 12.
+# The Go2's LowState carries 20 motor slots; the robot drives the first 12
+# (the default when no manifest says how many joints it drives).
 GO2_MOTORS = 12
 STICKS_CENTERED = {"lx": 0.0, "ly": 0.0, "rx": 0.0, "ry": 0.0}
 Clock = Callable[[], float]
@@ -86,9 +92,18 @@ class SdkBus:
     velocity was judged in the world frame, so a turning trial's error
     grew with its heading and a fall could never register (2026-09-12)."""
 
-    def __init__(self, network: str = NETWORK, domain_id: int = DOMAIN_ID) -> None:
+    def __init__(
+        self,
+        network: str = NETWORK,
+        domain_id: int = DOMAIN_ID,
+        *,
+        motors: int = GO2_MOTORS,
+    ) -> None:
         require_platform(RUNTIMES["dds"])
         self.network = network
+        # how many of the message's motor slots the robot drives (the
+        # manifest's joint count; the Go2's 12 of LowState's 20 by default)
+        self.motors = motors
         from unitree_sdk2py.core.channel import (  # noqa: PLC0415
             ChannelFactoryInitialize,
             ChannelSubscriber,
@@ -110,11 +125,11 @@ class SdkBus:
         left, and a silent topic is named (two full waits blamed on one
         topic read as a doubled timeout, 2026-09-13)."""
         began = time.monotonic()
-        state = self._state.Read(timeout_ms)
+        state = self._state.Read(timeout_ms / MS_PER_S)
         if state is None:
             raise TimeoutError(_silent(TOPIC_STATE, timeout_ms, self.network))
-        spent_ms = int((time.monotonic() - began) * 1000)
-        low = self._low.Read(max(1, timeout_ms - spent_ms))
+        spent_ms = (time.monotonic() - began) * MS_PER_S
+        low = self._low.Read(max(1.0, timeout_ms - spent_ms) / MS_PER_S)
         if low is None:
             raise TimeoutError(_silent(TOPIC_LOW, timeout_ms, self.network))
         # Every motor slot their message carries; the runtime picks the
@@ -124,7 +139,7 @@ class SdkBus:
             np.asarray(low.imu_state.quaternion, dtype=np.float64),  # w x y z
             np.asarray([m.q for m in low.motor_state], dtype=np.float64),
         )
-        motors = low.motor_state[:GO2_MOTORS]
+        motors = low.motor_state[: self.motors]
         self._health = {
             "quaternion": self._pose[1].copy(),
             "gyroscope": np.asarray(low.imu_state.gyroscope, dtype=np.float64),
@@ -135,7 +150,6 @@ class SdkBus:
                 [m.temperature for m in motors], dtype=np.float64
             ),
             "battery_percent": float(low.bms_state.soc),
-            "read_at": time.monotonic(),
         }
         return self._pose[1].copy(), np.asarray(state.velocity, dtype=np.float64)
 
@@ -299,4 +313,6 @@ def open_dds_runtime(
             "(gate_deployment(runtime='dds') does; a pad of its own is a second "
             "joystick their simulator never reads)"
         )
-    return DdsRuntime(manifest, bus=bus or SdkBus(), pad=pad)
+    if bus is None:
+        bus = SdkBus(motors=len(manifest.joints.policy_order))
+    return DdsRuntime(manifest, bus=bus, pad=pad)

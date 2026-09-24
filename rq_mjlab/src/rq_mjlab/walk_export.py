@@ -208,10 +208,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
             obs_dim=obs_dim,
             checkpoint=checkpoint,
             run_dir=run_dir,
-            identity={
-                **identity,
-                **{k: trained[k] for k in (Key.SEED, Key.TASK) if k in trained},
-            },
+            identity=manifest_identity(identity, trained),
             robot=robot,
             certificate=certificate,
             policy_stamp=policy_stamp,
@@ -274,6 +271,27 @@ def _require_same_actor_width(checkpoint: Path, env: Any, device: str) -> None:
             "was trained by an earlier recipe and cannot be exported through "
             "this one - retrain on the current recipe"
         )
+
+
+# What the manifest takes from the RUN, not from the export's own env: the
+# export builds its env with no randomization (it only runs the actor), so
+# the env's `dr_basis` said "none" on every Go2 deployment whose run
+# trained under a declared ±0.1 span (the review of 2026-09-24). The
+# trained identity's word is the policy's; a run that predates the record
+# says so rather than lending the export env's.
+TRAINED_KEYS = (Key.SEED, Key.TASK, Key.DR_BASIS)
+
+
+def manifest_identity(built: dict[str, Any], trained: dict[str, Any]) -> dict[str, Any]:
+    """The identity a deployment's manifest carries: the export env's
+    robot and actuator (gated equal to the run's by
+    `require_same_identity`), and the run's own seed, task and
+    randomization basis; `unrecorded` where the run did not write one."""
+    out = dict(built)
+    out.update({k: trained[k] for k in TRAINED_KEYS if k in trained})
+    if not trained.get(Key.DR_BASIS):  # never the export env's own "none"
+        out[Key.DR_BASIS] = UNRECORDED
+    return out
 
 
 def _run_onnx(path: Path, probe: NDArray[np.float32]) -> NDArray[np.float32]:

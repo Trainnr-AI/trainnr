@@ -30,6 +30,10 @@ DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 
 
+# The kinds the index writes that no Studio page lists by kind.
+NOT_LISTED_KINDS = {"fit"}
+
+
 def constant(source: str, pattern: str) -> str:
     """The one capture group of `pattern`, which must match exactly once."""
     matches = re.findall(pattern, source, flags=re.MULTILINE)
@@ -253,6 +257,28 @@ class ProjectContracts(unittest.TestCase):
             MODEL_RS, r"pub const STATE_BASES: \[&str; \d+\] = \[([^\]]+)\];"
         )
         self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed)), BASES)
+
+    def test_the_hidden_summary_keys_agree(self) -> None:
+        """The index's bookkeeping keys never shown on a card: one list,
+        both sides (a `fit_bases` fact showed on every robot card)."""
+        from rq_pipeline.project.index import HIDDEN_SUMMARY_KEYS  # noqa: PLC0415
+
+        listed = constant(
+            MODEL_RS, r"pub const HIDDEN_KEYS: &\[&str\] = &\[([^\]]+)\];"
+        )
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed)), HIDDEN_SUMMARY_KEYS)
+
+    def test_the_kinds_agree(self) -> None:
+        """Every kind the Studio spells is a kind the index writes, and the
+        ones it does not list are named here (a fit is shown on its robot,
+        never on a page of its own)."""
+        from rq_pipeline.project.kinds import Kind  # noqa: PLC0415
+
+        block = PAGES_RS.split("pub mod kind {", 1)[1].split("\n}\n", 1)[0]
+        rust = set(re.findall(r'pub const \w+: &str = "([^"]+)";', block))
+        python = {k.value for k in Kind}
+        self.assertLessEqual(rust, python)
+        self.assertEqual(python - rust, NOT_LISTED_KINDS)
 
     def test_the_files_and_the_environment_agree(self) -> None:
         from rq_pipeline.project import control, locate, present  # noqa: PLC0415

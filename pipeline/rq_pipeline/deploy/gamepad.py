@@ -69,9 +69,28 @@ COMMAND_LIMIT = 1.0  # a stick reaches 1.0 at most: the pad's command envelope
 XBOX_VENDOR = 0x045E
 XBOX_PRODUCT = 0x028E
 PAD_NAME = "trainnr virtual xbox pad"
-# What opens the kernel's pad device to this user until the next reboot
-# (docs/77 §7): the operator's line, never run for them.
-UINPUT_FIX = "run: sudo modprobe joydev && sudo chmod 666 /dev/uinput (docs/77 §7)"
+# What lets this user create the virtual pad, for good (docs/77 §7): the
+# operator's lines, never run for them. Not `chmod 666 /dev/uinput`: that
+# lets every local user and process inject keyboard and mouse input, and
+# it is gone at the next reboot. A udev rule gives the node to the `input`
+# group, the user joins it, and the two modules load at boot.
+UINPUT_RULE = (
+    'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"'
+)
+UINPUT_RULE_FILE = "/etc/udev/rules.d/99-uinput.rules"
+UINPUT_MODULES_FILE = "/etc/modules-load.d/uinput.conf"
+UINPUT_FIX_LINES = (
+    f"echo '{UINPUT_RULE}' | sudo tee {UINPUT_RULE_FILE}",
+    f"printf 'uinput\\njoydev\\n' | sudo tee {UINPUT_MODULES_FILE}",
+    "sudo modprobe uinput && sudo modprobe joydev",
+    "sudo udevadm control --reload-rules && sudo udevadm trigger",
+    'sudo usermod -aG input "$USER"   # then log out and in (WSL: wsl --shutdown)',
+)
+UINPUT_FIX = (
+    "the virtual pad needs /dev/uinput writable by your user's group, once: "
+    + " ; ".join(UINPUT_FIX_LINES)
+    + " (docs/77 §7; not chmod 666, which opens input injection to every user)"
+)
 
 
 def axis_value(x: float, *, inverted: bool = False) -> int:

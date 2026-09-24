@@ -34,7 +34,12 @@ from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.assay import read_assay
 from rq_pipeline.deploy.attribution import SURVIVED, read_attribution
-from rq_pipeline.deploy.preflight import card_line, read_preflight
+from rq_pipeline.deploy.preflight import (
+    CHECK_MARKS,
+    RAMP_VARIANTS,
+    card_line,
+    read_preflight,
+)
 from rq_pipeline.envs.lerobot_train_log import (
     CHAIN_LOG_FILE,
     RUN_MANIFEST_FILE,
@@ -1147,9 +1152,6 @@ COURSE_COLUMNS: tuple[tuple[str, tuple[str, ...], Callable[..., Any]], ...] = (
 )
 
 
-PREFLIGHT_MARK = {True: "passed", False: "REFUSED", None: "not measured"}
-
-
 def preflight_sections(record: dict[str, Any]) -> list[Section]:
     """Before the first tick: every check with its number and its limit;
     then the ramp-in and the stops as measured."""
@@ -1160,7 +1162,7 @@ def preflight_sections(record: dict[str, Any]) -> list[Section]:
             [
                 [
                     c.get("name", UNRECORDED),
-                    PREFLIGHT_MARK.get(c.get("passed"), UNRECORDED),
+                    CHECK_MARKS.get(c.get("passed"), UNRECORDED),
                     c.get("measured", ""),
                     c.get("limit", ""),
                     c.get("detail", ""),
@@ -1175,7 +1177,7 @@ def preflight_sections(record: dict[str, Any]) -> list[Section]:
     ramp = record.get("ramp_in") or {}
     stops = record.get("soft_stop") or {}
     rows: list[list[Any]] = []
-    for name in ("with ramp", "without ramp"):
+    for name, _ramped in RAMP_VARIANTS:
         r = ramp.get(name)
         if r:
             rows.append(
