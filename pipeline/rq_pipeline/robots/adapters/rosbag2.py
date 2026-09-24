@@ -1,31 +1,47 @@
-"""A ROS 2 bag in rosbag2's sqlite3 form as a recording — Unitree's own
-low-level state, read with no ROS installed.
+"""A ROS 2 bag in rosbag2's sqlite3 form as a recording — any robot whose
+messages are tables here, read with no ROS installed.
 
 rosbag2's original storage (the default up to Humble, 2022, and what
-Unitree's `unitree_ros2` tutorials record) is a directory: `metadata.yaml`
-naming the topics and their types, and one or more `<name>_<n>.db3`
-SQLite files with a `topics` table and a `messages` table of CDR bytes.
-The standard library reads both (`sqlite3`, and the four YAML lines this
-needs, read as lines); the messages are decoded through `robots.cdr` by
-LAYOUTS copied from Unitree's `.msg` files (`unitree_go/msg/LowState`,
-`SportModeState` and the messages they nest). A third vendor's message
-is another layout entry and another `CHANNELS` table, never a decoder.
+Unitree's `unitree_ros2` tutorials and DFKI's field bags record) is a
+directory: `metadata.yaml` naming the topics and their types, and one or
+more `<name>_<n>.db3` SQLite files with a `topics` table and a `messages`
+table of CDR bytes. The standard library reads both (`sqlite3`, and the
+four YAML lines this needs, read as lines); every message is decoded by
+the one CDR reader (`robots.cdr`) from a LAYOUT copied from the vendor's
+`.msg` file.
 
-What becomes a channel, and in what unit, is the `CHANNELS` table: the
-12 leg motors of the 20 slots a `LowState` carries (Unitree's leg order,
-`GO2_MOTORS`), the IMU, the foot-force sensors, the battery. `tau_est`
-is what Unitree calls it — an estimate from motor current, not a
-measurement — and the channel's note says so. Clock: rosbag2 stamps a
-message when it was received (`timestamp`, ns since the epoch); a
-`LowState` carries no header stamp, so that receive time is the
-recording's clock, and the census reports the rate and jitter MEASURED
-from it, never the 500 Hz the SDK promises.
+Three tables carry everything that differs between robots, and none of
+them is code:
+
+- `LAYOUTS`: a message type's fields (Unitree's `LowState`, `LowCmd`,
+  `SportModeState`; DFKI's `JointState`, `JointCmd`, `QuadState`; the
+  standard `sensor_msgs/Imu` and the geometry messages they nest).
+- `CHANNELS`: what each message type yields, in the pipeline's channel
+  names where one exists (the identifier's contract) and the source's
+  own where not, with its unit and its components.
+- `PROFILES`: whose bag it is — which message types anchor it, which
+  it decodes, the robot, the basis ("public log" for DFKI's controller,
+  unknown for a Unitree bag until the caller says whose), the joint
+  order, the notes a reader must see. A bag is read through the ONE
+  profile its types match; two matches or none are refused by name,
+  with the types it carries, so the next robot is a data entry.
+
+Clock: rosbag2 stamps a message when it was received (`timestamp`, ns
+since the epoch). That receive time is every channel's clock — the
+same rule for every profile, and the census reports the rate and jitter
+MEASURED from it, never the rate a vendor promises.
+
+2026-09-24: this module absorbed `robot/rosbag_sqlite.py` (DFKI's
+profile, written first for the identification) — two readers of one
+container had both claimed every `.db3` and refused every bag at the
+merge. One decoder, one adapter, profiles as data.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,11 +50,22 @@ import numpy as np
 from rq_pipeline.robots import quality
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.cdr import NS_PER_S, Field, Layout, Reader
+from rq_pipeline.robots.joint_orders import (
+    GO2_MENAGERIE_FEET,
+    GO2_MENAGERIE_JOINTS,
+    GO2_MOTORS,
+)
 from rq_pipeline.robots.recording import (
+    BASE_POSE,
+    BASE_TWIST,
+    BASIS_PUBLIC,
+    BASIS_UNKNOWN,
     COLLECTION_ROBOT_OP,
+    FOOT_CONTACT,
     IMU_ANGULAR_VELOCITY,
     IMU_LINEAR_ACCELERATION,
     IMU_ORIENTATION,
+    JOINT_ACCELERATION,
     JOINT_COMMAND,
     JOINT_COMMAND_VELOCITY,
     JOINT_EFFORT,
@@ -58,12 +85,13 @@ SUFFIX = ".db3"
 METADATA_FILE = "metadata.yaml"
 CDR_FORMAT = "cdr"
 
-# -- Unitree's messages, as data (unitree_ros2, cyclonedds_ws/src/unitree/
-# unitree_go/msg, read 2026-09-24) --------------------------------------------
+# -- message layouts, as data ---------------------------------------------------
 
+# Unitree's (unitree_ros2, cyclonedds_ws/src/unitree/unitree_go/msg, read
+# 2026-09-24).
 LOW_STATE = "unitree_go/msg/LowState"
-SPORT_MODE_STATE = "unitree_go/msg/SportModeState"
 LOW_CMD = "unitree_go/msg/LowCmd"
+SPORT_MODE_STATE = "unitree_go/msg/SportModeState"
 # The DDS topics Unitree's stack publishes them on (their SDK and their
 # simulator's bridge alike); the live capture subscribes to these.
 TOPIC_LOW_STATE = "rt/lowstate"
@@ -74,6 +102,17 @@ TOPIC_TYPES: dict[str, str] = {
     TOPIC_LOW_CMD: LOW_CMD,
     TOPIC_SPORT_MODE_STATE: SPORT_MODE_STATE,
 }
+# DFKI's (dfki-ric-underactuated-lab/dfki-quad, ws/src/interfaces/msg, read
+# 2026-09-24) and the standard messages they nest.
+DFKI_JOINT_STATE = "interfaces/msg/JointState"
+DFKI_JOINT_CMD = "interfaces/msg/JointCmd"
+DFKI_QUAD_STATE = "interfaces/msg/QuadState"
+DFKI_CONTACT_STATE = "interfaces/msg/ContactState"
+ROS_IMU = "sensor_msgs/msg/Imu"
+HEADER = "std_msgs/msg/Header"
+TIME = "builtin_interfaces/msg/Time"
+VECTOR3 = "geometry_msgs/msg/Vector3"
+QUATERNION = "geometry_msgs/msg/Quaternion"
 
 LAYOUTS: dict[str, Layout] = {
     "IMUState": (
@@ -96,6 +135,15 @@ LAYOUTS: dict[str, Layout] = {
         Field("lost", "uint32"),
         Field("reserve", "uint32", 2),
     ),
+    "MotorCmd": (
+        Field("mode", "uint8"),
+        Field("q", "float32"),
+        Field("dq", "float32"),
+        Field("tau", "float32"),
+        Field("kp", "float32"),
+        Field("kd", "float32"),
+        Field("reserve", "uint32", 3),
+    ),
     "BmsState": (
         Field("version_high", "uint8"),
         Field("version_low", "uint8"),
@@ -107,17 +155,8 @@ LAYOUTS: dict[str, Layout] = {
         Field("mcu_ntc", "int8", 2),
         Field("cell_vol", "uint16", 15),
     ),
-    "TimeSpec": (Field("sec", "int32"), Field("nanosec", "uint32")),
-    "MotorCmd": (
-        Field("mode", "uint8"),
-        Field("q", "float32"),
-        Field("dq", "float32"),
-        Field("tau", "float32"),
-        Field("kp", "float32"),
-        Field("kd", "float32"),
-        Field("reserve", "uint32", 3),
-    ),
     "BmsCmd": (Field("off", "uint8"), Field("reserve", "uint8", 3)),
+    "TimeSpec": (Field("sec", "int32"), Field("nanosec", "uint32")),
     LOW_CMD: (
         Field("head", "uint8", 2),
         Field("level_flag", "uint8"),
@@ -175,21 +214,80 @@ LAYOUTS: dict[str, Layout] = {
         Field("foot_position_body", "float32", 12),
         Field("foot_speed_body", "float32", 12),
     ),
+    TIME: (Field("sec", "int32"), Field("nanosec", "uint32")),
+    HEADER: (Field("stamp", TIME), Field("frame_id", "string")),
+    "geometry_msgs/msg/Point": (
+        Field("x", "float64"),
+        Field("y", "float64"),
+        Field("z", "float64"),
+    ),
+    VECTOR3: (Field("x", "float64"), Field("y", "float64"), Field("z", "float64")),
+    QUATERNION: (
+        Field("x", "float64"),
+        Field("y", "float64"),
+        Field("z", "float64"),
+        Field("w", "float64"),
+    ),
+    "geometry_msgs/msg/Pose": (
+        Field("position", "geometry_msgs/msg/Point"),
+        Field("orientation", QUATERNION),
+    ),
+    "geometry_msgs/msg/PoseWithCovariance": (
+        Field("pose", "geometry_msgs/msg/Pose"),
+        Field("covariance", "float64", 36),
+    ),
+    "geometry_msgs/msg/Twist": (Field("linear", VECTOR3), Field("angular", VECTOR3)),
+    "geometry_msgs/msg/TwistWithCovariance": (
+        Field("twist", "geometry_msgs/msg/Twist"),
+        Field("covariance", "float64", 36),
+    ),
+    "geometry_msgs/msg/Accel": (Field("linear", VECTOR3), Field("angular", VECTOR3)),
+    ROS_IMU: (
+        Field("header", HEADER),
+        Field("orientation", QUATERNION),
+        Field("orientation_covariance", "float64", 9),
+        Field("angular_velocity", VECTOR3),
+        Field("angular_velocity_covariance", "float64", 9),
+        Field("linear_acceleration", VECTOR3),
+        Field("linear_acceleration_covariance", "float64", 9),
+    ),
+    DFKI_JOINT_STATE: (
+        Field("header", HEADER),
+        Field("position", "float64", 12),
+        Field("velocity", "float64", 12),
+        Field("effort", "float64", 12),
+        Field("acceleration", "float64", 12),
+    ),
+    DFKI_JOINT_CMD: (
+        Field("header", HEADER),
+        Field("position", "float64", 12),
+        Field("velocity", "float64", 12),
+        Field("effort", "float64", 12),
+        Field("kp", "float64", 12),
+        Field("kd", "float64", 12),
+    ),
+    DFKI_CONTACT_STATE: (
+        Field("header", HEADER),
+        Field("ground_contact_force", "float64", 4),
+    ),
+    DFKI_QUAD_STATE: (
+        Field("header", HEADER),
+        Field("pose", "geometry_msgs/msg/PoseWithCovariance"),
+        Field("twist", "geometry_msgs/msg/TwistWithCovariance"),
+        Field("acceleration", "geometry_msgs/msg/Accel"),
+        Field("joint_state", DFKI_JOINT_STATE),
+        Field("foot_contact", "bool", 4),
+        Field("ground_contact_force", "float64", 12),
+        Field("belly_contact", "bool"),
+    ),
 }
 
-MOTOR_SLOTS = 20  # every LowState carries 20; a Go2 fills 12
-# Unitree's leg order: front-right, front-left, rear-right, rear-left;
-# hip (abduction), thigh, calf — the order `unitree_go` and the SDK's
-# `LegID` use.
-GO2_MOTORS = (
-    "FR_hip", "FR_thigh", "FR_calf",
-    "FL_hip", "FL_thigh", "FL_calf",
-    "RR_hip", "RR_thigh", "RR_calf",
-    "RL_hip", "RL_thigh", "RL_calf",
-)  # fmt: skip
-FEET = ("FR", "FL", "RR", "RL")
+MOTOR_SLOTS = 20  # every LowState and LowCmd carries 20; a Go2 fills 12
+FEET = ("FR", "FL", "RR", "RL")  # Unitree's foot order in LowState
 XYZ = ("x", "y", "z")
 QUATERNION_WXYZ = ("w", "x", "y", "z")  # Unitree's order, unlike sensor_msgs
+POSE_COMPONENTS = ("x", "y", "z", "qw", "qx", "qy", "qz")  # MuJoCo's free-joint
+TWIST_COMPONENTS = ("vx", "vy", "vz", "wx", "wy", "wz")
 NOTE_TAU_EST = (
     "joint.effort is Unitree's tau_est: estimated from motor current by the "
     "motor driver, not measured by a torque sensor"
@@ -197,9 +295,9 @@ NOTE_TAU_EST = (
 NOTE_CLOCK = "time is rosbag2's receive timestamp; LowState carries no header stamp"
 NOTE_FOOT_FORCE = "foot.force is the sensor's raw count; Unitree publishes no unit"
 NOTE_LOW_CMD = (
-    "joint.command is what the controller sent on rt/lowcmd: the target, the "
-    "feed-forward torque and the motor-side kp/kd the motor's own loop ran; "
-    "paired with rt/lowstate by receive time"
+    "joint.command, command_velocity, feedforward, kp, kd are LowCmd: what the "
+    "controller SENT, not what the motors did; a live capture pairs it with "
+    "rt/lowstate by receive time"
 )
 
 
@@ -213,20 +311,16 @@ class Extract:
     take: Any  # decoded message dict -> list[float]
 
 
-def _motors(field: str) -> Any:
-    return lambda m: [m["motor_state"][i][field] for i in range(len(GO2_MOTORS))]
+def _motors(field_name: str, slot: str = "motor_state") -> Any:
+    return lambda m: [m[slot][i][field_name] for i in range(len(GO2_MOTORS))]
 
 
-def _motor_cmds(field: str) -> Any:
-    return lambda m: [m["motor_cmd"][i][field] for i in range(len(GO2_MOTORS))]
+def _imu(field_name: str) -> Any:
+    return lambda m: list(m["imu_state"][field_name])
 
 
-def _imu(field: str) -> Any:
-    return lambda m: list(m["imu_state"][field])
-
-
-def _top(field: str) -> Any:
-    return lambda m: list(m[field])
+def _top(field_name: str) -> Any:
+    return lambda m: list(m[field_name])
 
 
 def _scalar(*path: str) -> Any:
@@ -239,14 +333,48 @@ def _scalar(*path: str) -> Any:
     return take
 
 
-# What each message type yields, in the pipeline's channel names where a
-# name exists (the identifier's contract) and the source's own where not.
+def _xyz(*path: str) -> Any:
+    def take(m: dict[str, Any]) -> list[float]:
+        value: Any = m
+        for key in path:
+            value = value[key]
+        return [value["x"], value["y"], value["z"]]
+
+    return take
+
+
+def _wxyz(*path: str) -> Any:
+    def take(m: dict[str, Any]) -> list[float]:
+        value: Any = m
+        for key in path:
+            value = value[key]
+        return [value["w"], value["x"], value["y"], value["z"]]
+
+    return take
+
+
+def _pose(m: dict[str, Any]) -> list[float]:
+    pose = m["pose"]["pose"]
+    return _xyz("position")(pose) + _wxyz("orientation")(pose)
+
+
+def _twist(m: dict[str, Any]) -> list[float]:
+    twist = m["twist"]["twist"]
+    return _xyz("linear")(twist) + _xyz("angular")(twist)
+
+
+def _bools(field_name: str) -> Any:
+    return lambda m: [float(v) for v in m[field_name]]
+
+
+# What each message type yields. A type decoded by several profiles yields
+# the same channels in every one of them.
 CHANNELS: dict[str, tuple[Extract, ...]] = {
     LOW_STATE: (
         Extract(JOINT_POSITION, "rad", GO2_MOTORS, _motors("q")),
         Extract(JOINT_VELOCITY, "rad/s", GO2_MOTORS, _motors("dq")),
         Extract(JOINT_EFFORT, "N*m", GO2_MOTORS, _motors("tau_est")),
-        Extract("joint.acceleration", "rad/s^2", GO2_MOTORS, _motors("ddq")),
+        Extract(JOINT_ACCELERATION, "rad/s^2", GO2_MOTORS, _motors("ddq")),
         Extract("motor.temperature", "degC", GO2_MOTORS, _motors("temperature")),
         Extract("motor.lost", "count", GO2_MOTORS, _motors("lost")),
         Extract(IMU_ORIENTATION, "quaternion", QUATERNION_WXYZ, _imu("quaternion")),
@@ -262,12 +390,12 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract("power.current", "A", ("a",), _scalar("power_a")),
     ),
     LOW_CMD: (
-        Extract(JOINT_COMMAND, "rad", GO2_MOTORS, _motor_cmds("q")),
-        Extract(JOINT_COMMAND_VELOCITY, "rad/s", GO2_MOTORS, _motor_cmds("dq")),
-        Extract(JOINT_FEEDFORWARD, "N*m", GO2_MOTORS, _motor_cmds("tau")),
-        Extract(JOINT_KP, "N*m/rad", GO2_MOTORS, _motor_cmds("kp")),
-        Extract(JOINT_KD, "N*m*s/rad", GO2_MOTORS, _motor_cmds("kd")),
-        Extract("motor.command_mode", "enum", GO2_MOTORS, _motor_cmds("mode")),
+        Extract(JOINT_COMMAND, "rad", GO2_MOTORS, _motors("q", "motor_cmd")),
+        Extract(JOINT_COMMAND_VELOCITY, "rad/s", GO2_MOTORS, _motors("dq", "motor_cmd")),  # noqa: E501
+        Extract(JOINT_FEEDFORWARD, "N*m", GO2_MOTORS, _motors("tau", "motor_cmd")),
+        Extract(JOINT_KP, "N*m/rad", GO2_MOTORS, _motors("kp", "motor_cmd")),
+        Extract(JOINT_KD, "N*m*s/rad", GO2_MOTORS, _motors("kd", "motor_cmd")),
+        Extract("motor.command_mode", "enum", GO2_MOTORS, _motors("mode", "motor_cmd")),
     ),
     SPORT_MODE_STATE: (
         Extract("sport.position", "m", XYZ, _top("position")),
@@ -277,59 +405,166 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract("sport.mode", "enum", ("mode",), _scalar("mode")),
         Extract("sport.gait", "enum", ("gait",), _scalar("gait_type")),
     ),
+    DFKI_JOINT_STATE: (
+        Extract(JOINT_POSITION, "rad", GO2_MENAGERIE_JOINTS, _top("position")),
+        Extract(JOINT_VELOCITY, "rad/s", GO2_MENAGERIE_JOINTS, _top("velocity")),
+        Extract(JOINT_EFFORT, "N*m", GO2_MENAGERIE_JOINTS, _top("effort")),
+        Extract(JOINT_ACCELERATION, "rad/s^2", GO2_MENAGERIE_JOINTS, _top("acceleration")),  # noqa: E501
+    ),
+    DFKI_JOINT_CMD: (
+        Extract(JOINT_COMMAND, "rad", GO2_MENAGERIE_JOINTS, _top("position")),
+        Extract(JOINT_COMMAND_VELOCITY, "rad/s", GO2_MENAGERIE_JOINTS, _top("velocity")),  # noqa: E501
+        Extract(JOINT_FEEDFORWARD, "N*m", GO2_MENAGERIE_JOINTS, _top("effort")),
+        Extract(JOINT_KP, "N*m/rad", GO2_MENAGERIE_JOINTS, _top("kp")),
+        Extract(JOINT_KD, "N*m*s/rad", GO2_MENAGERIE_JOINTS, _top("kd")),
+    ),
+    # QuadState's `acceleration` field is not carried: in the field201 bag
+    # it reads thousands of m/s^2 (an unfiltered difference of the
+    # estimator's velocity), so the fit derives the base's acceleration
+    # from the IMU instead.
+    DFKI_QUAD_STATE: (
+        Extract(BASE_POSE, "m, unit quaternion", POSE_COMPONENTS, _pose),
+        Extract(BASE_TWIST, "m/s, rad/s", TWIST_COMPONENTS, _twist),
+        Extract(FOOT_CONTACT, "bool", GO2_MENAGERIE_FEET, _bools("foot_contact")),
+    ),
+    ROS_IMU: (
+        Extract(IMU_ORIENTATION, "unit quaternion", ("qw", "qx", "qy", "qz"), _wxyz("orientation")),  # noqa: E501
+        Extract(IMU_ANGULAR_VELOCITY, "rad/s", XYZ, _xyz("angular_velocity")),
+        Extract(IMU_LINEAR_ACCELERATION, "m/s^2", XYZ, _xyz("linear_acceleration")),
+    ),
 }  # fmt: skip
 NOTES: dict[str, tuple[str, ...]] = {
     LOW_STATE: (NOTE_CLOCK, NOTE_TAU_EST, NOTE_FOOT_FORCE),
     LOW_CMD: (NOTE_LOW_CMD,),
     SPORT_MODE_STATE: (),
+    DFKI_JOINT_STATE: (),
+    DFKI_JOINT_CMD: (),
+    DFKI_QUAD_STATE: (),
+    ROS_IMU: (),
 }
 
 
-DOC = "A ROS 2 bag (rosbag2 sqlite3): Unitree LowState as channels, no ROS needed"
+# -- profiles: whose bag, and what of it becomes channels ------------------------
+
+
+@dataclass(frozen=True)
+class Profile:
+    """A family of bags: the types that say "this is one of mine" (any of
+    `anchors` present), the types it decodes, and what a reader must know
+    about the result."""
+
+    name: str
+    robot: str
+    basis: str
+    anchors: tuple[str, ...]
+    decodes: tuple[str, ...]
+    joints: tuple[str, ...]
+    notes: tuple[str, ...] = ()
+    census: Mapping[str, Any] = field(default_factory=dict)
+
+
+PROFILES: dict[str, Profile] = {
+    "unitree-go2": Profile(
+        name="unitree-go2",
+        robot="Unitree Go2",
+        # A Unitree bag may be the operator's own robot: the caller says whose.
+        basis=BASIS_UNKNOWN,
+        anchors=(LOW_STATE, LOW_CMD, SPORT_MODE_STATE),
+        decodes=(LOW_STATE, LOW_CMD, SPORT_MODE_STATE),
+        joints=GO2_MOTORS,
+        census={"motor_slots": MOTOR_SLOTS, "motors_read": len(GO2_MOTORS)},
+    ),
+    "dfki-go2": Profile(
+        name="dfki-go2",
+        robot="Unitree Go2",
+        basis=BASIS_PUBLIC,
+        anchors=(DFKI_JOINT_STATE,),
+        decodes=(DFKI_JOINT_STATE, DFKI_JOINT_CMD, DFKI_QUAD_STATE, ROS_IMU),
+        joints=GO2_MENAGERIE_JOINTS,
+        notes=(
+            "public log: DFKI Bremen's Go2 under their own MPC/WBC controller, "
+            "not Unitree's (Zenodo record 19336009, CC-BY-4.0)",
+            "joint effort is the motor's current-derived estimate, not a torque sensor",
+            "base pose and twist are the state estimator's, not ground truth",
+            "time is rosbag2's receive timestamp, not the messages' header stamps",
+        ),
+    ),
+}
+
+
+def profile_for(types: Mapping[str, str]) -> Profile:
+    """The one profile whose anchor types the bag carries (topic → type);
+    none or two refused by name with the types it carries."""
+    carried = set(types.values())
+    matches = [p for p in PROFILES.values() if carried & set(p.anchors)]
+    if len(matches) == 1:
+        return matches[0]
+    listed = ", ".join(f"{name} ({kind})" for name, kind in sorted(types.items()))
+    if not matches:
+        raise ValueError(
+            f"no rosbag2 profile matches this bag's topics; it carries {listed}; "
+            f"known profiles: {sorted(PROFILES)} (add a layout and a profile as data)"
+        )
+    raise ValueError(
+        f"this bag matches the rosbag2 profiles {[p.name for p in matches]}; one "
+        f"bag is one robot's — it carries {listed}"
+    )
+
+
+DOC = "A ROS 2 bag (rosbag2 sqlite3) by declared layouts and profiles, no ROS needed"
 
 
 @adapter(NAME, doc=DOC)
 class Rosbag2Adapter:
-    """A ROS 2 bag (rosbag2 sqlite3): Unitree LowState as channels, no ROS needed."""
+    """A ROS 2 bag (rosbag2 sqlite3) by declared layouts and profiles, no ROS needed."""
 
     name = NAME
 
     def accepts(self, source: Path) -> bool:
-        """A rosbag2 store that carries a message type this adapter has a
-        layout for. Content, not suffix: another adapter reads the same
-        container for other robots' topics (`robot/rosbag_sqlite.py`),
-        and two adapters claiming every `.db3` would refuse them all."""
-        source = Path(source)
-        if source.is_dir():
-            if not (source / METADATA_FILE).is_file():
-                return False
-            files = sorted(source.glob(f"*{SUFFIX}"))
-        elif source.is_file() and source.suffix == SUFFIX:
-            files = [source]
-        else:
+        """A rosbag2 store that carries an anchor type of some profile.
+        Content, not suffix: a `.db3` of another robot's topics is not
+        claimed, and neither is a file that is no database."""
+        files = _files(Path(source))
+        if not files:
             return False
-        return bool(files) and any(kind in LAYOUTS for kind in _topic_types(files))
+        carried = _topic_types(files)
+        return any(carried & set(p.anchors) for p in PROFILES.values())
 
     def read(self, source: Path) -> Recording:
         source = Path(source)
-        files = sorted(source.glob(f"*{SUFFIX}")) if source.is_dir() else [source]
+        files = _files(source)
         if not files:
             raise ValueError(f"{source}: no {SUFFIX} file")
         topics, messages = _read_files(files)
+        census_topics = {
+            topic: {"type": kind, "messages": len(messages.get(topic, []))}
+            for topic, (kind, _fmt) in topics.items()
+        }
+        try:
+            profile = profile_for({t: kind for t, (kind, _fmt) in topics.items()})
+        except ValueError as why:
+            raise ValueError(f"{source}: {why}") from None
         channels: dict[str, Channel] = {}
-        notes: list[str] = []
-        census_topics: dict[str, dict[str, Any]] = {}
-        for topic, (kind, fmt) in topics.items():
-            msgs = messages.get(topic, [])
-            census_topics[topic] = {"type": kind, "messages": len(msgs)}
-            if not msgs or fmt != CDR_FORMAT or kind not in LAYOUTS:
+        notes: list[str] = list(profile.notes)
+        for kind in profile.decodes:
+            carrying = [t for t, (k, fmt) in topics.items() if k == kind]
+            if len(carrying) > 1:
+                raise ValueError(
+                    f"{source}: {kind} on {len(carrying)} topics {carrying}; the "
+                    f"profile {profile.name!r} reads one — which is the robot's?"
+                )
+            if not carrying or topics[carrying[0]][1] != CDR_FORMAT:
                 continue
-            channels.update(_channels(kind, topic, msgs))
-            notes.extend(n for n in NOTES[kind] if n not in notes)
+            msgs = messages.get(carrying[0], [])
+            if not msgs:
+                continue
+            channels.update(_channels(kind, carrying[0], msgs))
+            notes.extend(n for n in NOTES.get(kind, ()) if n not in notes)
         if not channels:
             raise ValueError(
-                f"{source}: no message this adapter decodes ({sorted(CHANNELS)}); "
-                f"topics: { {t: v['type'] for t, v in census_topics.items()} }"
+                f"{source}: no message the {profile.name!r} profile decodes "
+                f"({list(profile.decodes)}) holds any message; topics: "
+                f"{ {t: v['type'] for t, v in census_topics.items()} }"
             )
         recording = Recording(
             source=source.name,
@@ -337,13 +572,16 @@ class Rosbag2Adapter:
             collection=COLLECTION_ROBOT_OP,
             channels=channels,
             census={
+                "profile": profile.name,
+                "robot": profile.robot,
+                "joints": list(profile.joints),
                 "topics": census_topics,
                 "files": [f.name for f in files],
-                "motor_slots": MOTOR_SLOTS,
-                "motors_read": len(GO2_MOTORS),
                 "recorded": _recorded_at(source),
+                **profile.census,
             },
             notes=notes,
+            basis=profile.basis,
         )
         recording.census[quality.QUALITY_KEY] = quality.describe(recording)
         return recording
@@ -423,6 +661,18 @@ class Store:
             METADATA_TEXT.format(start=self._start_ns or 0), encoding="utf-8"
         )
         return self.root
+
+
+def _files(source: Path) -> list[Path]:
+    """The `.db3` files of a bag directory (with its `metadata.yaml`) or
+    the one file named; empty for anything else."""
+    if source.is_dir():
+        if not (source / METADATA_FILE).is_file():
+            return []
+        return sorted(source.glob(f"*{SUFFIX}"))
+    if source.is_file() and source.suffix == SUFFIX:
+        return [source]
+    return []
 
 
 def _topic_types(files: list[Path]) -> set[str]:

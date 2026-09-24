@@ -10,6 +10,10 @@ column order for the Go2 is Menagerie's (FL, FR, RL, RR; hip, thigh,
 calf), verified from the alternating hip-abduction signs of the
 recorded poses. A file whose keys match no layout is refused by name
 with the keys it has.
+
+2026-09-24: moved here from `robot/pt_dict.py` (it was written beside
+the identification that needed it first) and named `pt-dict`; the
+reader of torch's zip under it is `robots/torch_pickle.py`.
 """
 
 from __future__ import annotations
@@ -20,8 +24,9 @@ from typing import Any
 
 import numpy as np
 
-from rq_pipeline.robot.torch_pickle import load_tensors
+from rq_pipeline.robots import quality
 from rq_pipeline.robots.adapter import adapter
+from rq_pipeline.robots.joint_orders import GO2_MENAGERIE_JOINTS
 from rq_pipeline.robots.recording import (
     BASIS_PUBLIC,
     COLLECTION_SCRIPTED,
@@ -35,24 +40,10 @@ from rq_pipeline.robots.recording import (
     Recording,
     monotone,
 )
+from rq_pipeline.robots.torch_pickle import load_tensors
 
-NAME = "pt"
+NAME = "pt-dict"
 SUFFIX = ".pt"
-
-GO2_MENAGERIE_JOINTS = (
-    "FL_hip_joint",
-    "FL_thigh_joint",
-    "FL_calf_joint",
-    "FR_hip_joint",
-    "FR_thigh_joint",
-    "FR_calf_joint",
-    "RL_hip_joint",
-    "RL_thigh_joint",
-    "RL_calf_joint",
-    "RR_hip_joint",
-    "RR_thigh_joint",
-    "RR_calf_joint",
-)
 
 
 @dataclass(frozen=True)
@@ -132,7 +123,7 @@ def read_pt(path: Path) -> Recording:
         "keys": sorted(saved),
         "base": "fixed in the air",
     }
-    return Recording(
+    recording = Recording(
         source=Path(path).name,
         adapter=NAME,
         channels=channels,
@@ -141,6 +132,9 @@ def read_pt(path: Path) -> Recording:
         collection=COLLECTION_SCRIPTED,
         basis=layout.basis,
     )
+    # Measured like every adapter's: the clock, the joint range, the motion.
+    recording.census[quality.QUALITY_KEY] = quality.describe(recording)
+    return recording
 
 
 @adapter(
