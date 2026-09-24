@@ -48,6 +48,7 @@ CACHE_RELATIVE = ("runs", "public-logs")
 CHUNK = 1 << 20
 TIMEOUT_S = 600
 LICENCE_UNLABELLED = "unlabelled"
+LICENCE_NONE_STATED = "none stated"  # the source names no licence at all
 
 FETCH_ARCHIVE = "archive"
 FETCH_ZIP_MEMBERS = "zip-members"
@@ -253,7 +254,7 @@ UNREADABLE: dict[str, Unreadable] = {
         robot="go2",
         url="https://github.com/EN3D-Lab/Quadruped-SLAM-dataset",
         format="ROS 1 .bag (22 sequences, ~10 GB each, /low_state at 500 Hz)",
-        licence="none stated",
+        licence=LICENCE_NONE_STATED,
         why=ROS1_WHY,
     ),
     "doglegs": Unreadable(
@@ -261,7 +262,7 @@ UNREADABLE: dict[str, Unreadable] = {
         robot="go2",
         url="https://github.com/YibinWu/DogLegs",
         format="ROS 1 .bag (5 field sequences; q, dq, foot forces; no torque)",
-        licence="none stated",
+        licence=LICENCE_NONE_STATED,
         why=ROS1_WHY,
     ),
     "legkilo": Unreadable(
@@ -269,7 +270,7 @@ UNREADABLE: dict[str, Unreadable] = {
         robot="go1",
         url="https://github.com/ouguangjun/legkilo-dataset",
         format="ROS 1 .bag (HighState, 50 Hz effective)",
-        licence="none stated",
+        licence=LICENCE_NONE_STATED,
         why=ROS1_WHY,
     ),
 }

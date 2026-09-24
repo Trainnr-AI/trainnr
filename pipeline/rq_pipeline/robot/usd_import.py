@@ -602,12 +602,14 @@ def reset_newton_options(spec: Any) -> None:
         setattr(spec.option, name, getattr(defaults, name))
 
 
-CONES = {"pyramidal": 0, "elliptic": 1}  # mjtCone, by the XML's words
+CONES = {"pyramidal": "mjCONE_PYRAMIDAL", "elliptic": "mjCONE_ELLIPTIC"}
 
 
 def declare_grip_options(spec: Any, options: GripOptions = GRIP_OPTIONS) -> None:
+    import mujoco  # noqa: PLC0415 - sim extra
+
     spec.option.impratio = options.impratio
-    spec.option.cone = CONES[options.cone]
+    spec.option.cone = getattr(mujoco.mjtCone, CONES[options.cone])
 
 
 def home_keyframe(spec: Any, stage: Any, read: UsdRead) -> None:

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from rq_pipeline.bundles.bundle import read_bundle_record
+from rq_pipeline.bundles.bundle import AUDIT_KEY, read_bundle_record
 from rq_pipeline.robot import onboarding
 from rq_pipeline.robot.asset_fetch import cached_tree, fetch_tree
 from tests._extras import USD_LINE, needs_sim, needs_usd
@@ -409,9 +409,9 @@ class TheDoorAudits(unittest.TestCase):
                 {"variants": NEWTON_VARIANT},
             )
             record = read_bundle_record(destination)
-        report = audit.Audit.from_record(record[audit.AUDIT_KEY])
+        report = audit.Audit.from_record(record[AUDIT_KEY])
         self.assertEqual(report.unexplained, ())
-        self.assertEqual(out[audit.AUDIT_KEY], report.summary())
+        self.assertEqual(out[AUDIT_KEY], report.summary())
         kinds = {(c.kind, c.element.rsplit("/", 1)[-1]) for c in report.changes}
         self.assertEqual(
             kinds,

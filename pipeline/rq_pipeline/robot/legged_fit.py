@@ -32,6 +32,7 @@ from rq_pipeline.bundles.bundle import model_file_of
 from rq_pipeline.bundles.hashing import stamp
 from rq_pipeline.robot.fit_record import write_fit_record
 from rq_pipeline.robot.identify import IdentificationResult
+from rq_pipeline.robot.import_audit import quat_to_matrix
 from rq_pipeline.robot.methods import method
 from rq_pipeline.robot.torque_balance import (
     DEFAULT_BANDWIDTH,
@@ -148,15 +149,6 @@ def _resample(recording: Recording, name: str, times: np.ndarray) -> np.ndarray 
     return out
 
 
-def _quat_to_matrix(q: np.ndarray) -> np.ndarray:
-    """MuJoCo's own quaternion (w, x, y, z) to rotation matrix."""
-    import mujoco  # noqa: PLC0415
-
-    out = np.zeros(9)
-    mujoco.mju_quat2Mat(out, np.asarray(q, dtype=np.float64))
-    return out.reshape(3, 3)
-
-
 def torque_source_of(recording: Recording) -> str:
     """Which TORQUE_SOURCES entry the recording supplies, decided from its
     CHANNELS over the whole log (a two-sample look refused a log whose
@@ -267,7 +259,7 @@ def base_of(
         gravity = np.asarray(model.opt.gravity, dtype=np.float64)
         if specific is not None:
             for i in range(n):
-                lin[i] = _quat_to_matrix(pose[i, 3:]) @ specific[i] + gravity
+                lin[i] = quat_to_matrix(pose[i, 3:]) @ specific[i] + gravity
             words.append(
                 "linear acceleration from the IMU's specific force plus gravity"
             )

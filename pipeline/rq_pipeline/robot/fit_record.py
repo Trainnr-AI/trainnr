@@ -85,7 +85,7 @@ class FitRecord:
     units: dict[str, str] | None = None
     pinned_criterion: str | None = None
     # 2026-09-24, the legged fit on public logs: whose robot the data was
-    # (`robots.recording.BASES`), where it came from, and how well each
+    # (`bundles.basis.BASES`), where it came from, and how well each
     # part fitted. None on records written before.
     basis: str | None = None
     provenance: dict[str, Any] | None = None

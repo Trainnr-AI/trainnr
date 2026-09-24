@@ -35,7 +35,6 @@ import numpy as np
 from rq_pipeline.plugins import load_group
 
 AUDIT_SCHEMA = "trainnr-import-audit/1"
-AUDIT_KEY = "audit"
 ENTRY_POINT_GROUP = "rq_pipeline.source_readers"
 BUILTIN_MODULES = ("rq_pipeline.robot.urdf_import", "rq_pipeline.robot.usd_import")
 WORLD = "world"
@@ -63,8 +62,27 @@ UNIT = "unit"
 ANY = "*"  # an explanation that covers every element of its kind
 
 HINGE, SLIDE, BALL, FREE = "hinge", "slide", "ball", "free"
-JOINT_KINDS = {0: FREE, 1: BALL, 2: SLIDE, 3: HINGE}  # mjtJoint, by the XML's words
-EQ_JOINT = 2  # mjtEq.mjEQ_JOINT: a mimic is a joint equality in MuJoCo
+# MuJoCo's joint types by the XML's words, and the equality a mimic
+# becomes; read off MuJoCo's own enums (`_joint_kinds`, `_eq_joint`).
+JOINT_KIND_NAMES = {
+    "mjJNT_FREE": FREE,
+    "mjJNT_BALL": BALL,
+    "mjJNT_SLIDE": SLIDE,
+    "mjJNT_HINGE": HINGE,
+}
+
+
+def _joint_kinds() -> dict[int, str]:
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    return {int(getattr(mujoco.mjtJoint, k)): v for k, v in JOINT_KIND_NAMES.items()}
+
+
+def _eq_joint() -> int:
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    return int(mujoco.mjtEq.mjEQ_JOINT)
+
 
 # The element classes a source may count; a bundle count that differs
 # is a COUNT change on that class.
@@ -290,15 +308,13 @@ def reader_for(path: Path) -> SourceReader:
 
 
 def quat_to_matrix(quat: Sequence[float]) -> np.ndarray:
-    """A unit quaternion (w, x, y, z) as a rotation matrix — MuJoCo's order."""
-    w, x, y, z = (float(v) for v in quat)
-    return np.array(
-        [
-            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
-            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
-            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
-        ]
-    )
+    """A unit quaternion (w, x, y, z) as a rotation matrix: MuJoCo's own
+    `mju_quat2Mat`, the one rotation every module here uses."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    out = np.zeros(9)
+    mujoco.mju_quat2Mat(out, np.asarray(quat, dtype=np.float64))
+    return out.reshape(3, 3)
 
 
 def rpy_to_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
@@ -348,7 +364,7 @@ def snapshot_model(model: Any) -> Snapshot:
         dof = int(model.jnt_dofadr[j])
         limited = bool(model.jnt_limited[j])
         joints[name(mujoco.mjtObj.mjOBJ_JOINT, j)] = JointFacts(
-            kind=JOINT_KINDS[int(model.jnt_type[j])],
+            kind=_joint_kinds()[int(model.jnt_type[j])],
             axis=tuple(float(v) for v in model.jnt_axis[j]),
             limited=limited,
             range=tuple(float(v) for v in model.jnt_range[j])
@@ -365,7 +381,7 @@ def snapshot_model(model: Any) -> Snapshot:
             ),
         )
     counts = {
-        MIMICS: int(sum(1 for t in model.eq_type if int(t) == EQ_JOINT)),
+        MIMICS: int(sum(1 for t in model.eq_type if int(t) == _eq_joint())),
         EQUALITIES: int(model.neq),
         TENDONS: int(model.ntendon),
         SITES: int(model.nsite),
