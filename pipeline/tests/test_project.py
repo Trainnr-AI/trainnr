@@ -231,7 +231,8 @@ class Indexing(unittest.TestCase):
             self.assertEqual(index.artifacts, [])
             self.assertEqual(index.refused, [])
             self.assertEqual(
-                index.in_progress, [{"path": "scenes/garden", "stage": "colmap mapper"}]
+                index.in_progress,
+                [{"path": "scenes/garden", "stage": "colmap mapper", "kind": "scene"}],
             )
 
     def test_the_index_is_written_atomically_and_ignored_by_git(self) -> None:

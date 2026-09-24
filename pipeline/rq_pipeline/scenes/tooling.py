@@ -36,6 +36,13 @@ INSTALL_HINTS: dict[str, dict[str, str]] = {
     },
 }
 INSTALL_HINTS["ffprobe"] = INSTALL_HINTS["ffmpeg"]
+# Unitree's Python SDK and CycloneDDS under it: the `dds` extra (docs/77 §7).
+INSTALL_HINTS["unitree_sdk2py"] = {
+    "Linux": "build CycloneDDS and unitree_sdk2 into /usr/local (docs/77 §7), "
+    "then in pipeline/: CYCLONEDDS_HOME=/usr/local uv sync --extra dds",
+    "*": "Unitree's SDK runs on Linux only; capture from a Linux machine on "
+    "the robot's network",
+}
 # The Linux package managers by the distro family /etc/os-release names.
 LINUX_INSTALLERS: dict[str, str] = {
     "debian": "sudo apt install",

@@ -50,7 +50,7 @@ SIM_CONFIG = """robot: "{robot}"
 robot_scene: "{scene}"
 domain_id: {domain_id}
 interface: "{network}"
-use_joystick: 1
+use_joystick: {use_joystick}
 joystick_type: "{joystick_type}"
 joystick_device: "{device}"
 joystick_bits: {joystick_bits}
@@ -133,9 +133,12 @@ def stage(manifest: Manifest, reference: Path) -> Path:
     return proj
 
 
-def stage_simulator(manifest: Manifest, reference: Path, *, device: Path) -> Path:
+def stage_simulator(
+    manifest: Manifest, reference: Path, *, device: Path | None
+) -> Path:
     """`<deployment>/unitree/simulate/`: a copy of their simulator beside a
-    config of ours, the scene named absolutely in their checkout."""
+    config of ours, the scene named absolutely in their checkout. With no
+    `device` their simulator reads no joystick (a stack with no pad)."""
     reference = Path(reference)
     facts = facts_of(manifest)
     sim = manifest.root / STAGE_DIR / SIM_DIR
@@ -149,8 +152,9 @@ def stage_simulator(manifest: Manifest, reference: Path, *, device: Path) -> Pat
             scene=reference / facts.scene,
             domain_id=DOMAIN_ID,
             network=NETWORK,
+            use_joystick=int(device is not None),
             joystick_type=JOYSTICK_TYPE,
-            device=device,
+            device=device or "",
             joystick_bits=JOYSTICK_BITS,
         ),
         encoding="utf-8",
@@ -174,8 +178,14 @@ class UnitreeStack:
         *,
         reference: Path | None = None,
         log: IO[str] = sys.stdout,
+        with_pad: bool = True,
     ) -> None:
         require_platform(RUNTIMES["dds"])
+        # Without a pad their controller stays in its first state (passive:
+        # damping, still publishing rt/lowcmd) - what a telemetry capture of
+        # the stand-in needs, and all it can have where /dev/uinput is
+        # root's (the virtual pad needs it writable).
+        self.with_pad = with_pad
         self.manifest = manifest
         self.reference = reference_dir(reference)
         self._log = log
@@ -202,17 +212,20 @@ class UnitreeStack:
         env["LD_LIBRARY_PATH"] = ":".join(
             p for p in (env.get("LD_LIBRARY_PATH", ""), *SDK_LIB_DIRS) if p
         )
-        self.pad = VirtualPad()
-        time.sleep(JOYDEV_APPEAR_S)
-        nodes = joystick_nodes()
-        if not nodes:
-            self.close()
-            raise RuntimeError(
-                f"no {INPUT_DIR / JOYSTICK_GLOB} after creating the virtual pad: "
-                "modprobe joydev"
-            )
-        print(f"[gate] virtual pad at {nodes[-1]}", file=self._log, flush=True)
-        sim = stage_simulator(self.manifest, self.reference, device=nodes[-1])
+        device: Path | None = None
+        if self.with_pad:
+            self.pad = VirtualPad()
+            time.sleep(JOYDEV_APPEAR_S)
+            nodes = joystick_nodes()
+            if not nodes:
+                self.close()
+                raise RuntimeError(
+                    f"no {INPUT_DIR / JOYSTICK_GLOB} after creating the virtual "
+                    "pad: modprobe joydev"
+                )
+            device = nodes[-1]
+            print(f"[gate] virtual pad at {device}", file=self._log, flush=True)
+        sim = stage_simulator(self.manifest, self.reference, device=device)
         proj = stage(self.manifest, self.reference)
         logs = proj / LOG_DIR
         logs.mkdir(exist_ok=True)

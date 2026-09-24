@@ -39,7 +39,12 @@ from rq_pipeline.robots.recording import (
     IMU_ANGULAR_VELOCITY,
     IMU_LINEAR_ACCELERATION,
     IMU_ORIENTATION,
+    JOINT_COMMAND,
+    JOINT_COMMAND_VELOCITY,
     JOINT_EFFORT,
+    JOINT_FEEDFORWARD,
+    JOINT_KD,
+    JOINT_KP,
     JOINT_POSITION,
     JOINT_VELOCITY,
     UNKNOWN_UNIT,
@@ -58,6 +63,17 @@ CDR_FORMAT = "cdr"
 
 LOW_STATE = "unitree_go/msg/LowState"
 SPORT_MODE_STATE = "unitree_go/msg/SportModeState"
+LOW_CMD = "unitree_go/msg/LowCmd"
+# The DDS topics Unitree's stack publishes them on (their SDK and their
+# simulator's bridge alike); the live capture subscribes to these.
+TOPIC_LOW_STATE = "rt/lowstate"
+TOPIC_LOW_CMD = "rt/lowcmd"
+TOPIC_SPORT_MODE_STATE = "rt/sportmodestate"
+TOPIC_TYPES: dict[str, str] = {
+    TOPIC_LOW_STATE: LOW_STATE,
+    TOPIC_LOW_CMD: LOW_CMD,
+    TOPIC_SPORT_MODE_STATE: SPORT_MODE_STATE,
+}
 
 LAYOUTS: dict[str, Layout] = {
     "IMUState": (
@@ -92,6 +108,32 @@ LAYOUTS: dict[str, Layout] = {
         Field("cell_vol", "uint16", 15),
     ),
     "TimeSpec": (Field("sec", "int32"), Field("nanosec", "uint32")),
+    "MotorCmd": (
+        Field("mode", "uint8"),
+        Field("q", "float32"),
+        Field("dq", "float32"),
+        Field("tau", "float32"),
+        Field("kp", "float32"),
+        Field("kd", "float32"),
+        Field("reserve", "uint32", 3),
+    ),
+    "BmsCmd": (Field("off", "uint8"), Field("reserve", "uint8", 3)),
+    LOW_CMD: (
+        Field("head", "uint8", 2),
+        Field("level_flag", "uint8"),
+        Field("frame_reserve", "uint8"),
+        Field("sn", "uint32", 2),
+        Field("version", "uint32", 2),
+        Field("bandwidth", "uint16"),
+        Field("motor_cmd", "MotorCmd", 20),
+        Field("bms_cmd", "BmsCmd"),
+        Field("wireless_remote", "uint8", 40),
+        Field("led", "uint8", 12),
+        Field("fan", "uint8", 2),
+        Field("gpio", "uint8"),
+        Field("reserve", "uint32"),
+        Field("crc", "uint32"),
+    ),
     LOW_STATE: (
         Field("head", "uint8", 2),
         Field("level_flag", "uint8"),
@@ -154,6 +196,11 @@ NOTE_TAU_EST = (
 )
 NOTE_CLOCK = "time is rosbag2's receive timestamp; LowState carries no header stamp"
 NOTE_FOOT_FORCE = "foot.force is the sensor's raw count; Unitree publishes no unit"
+NOTE_LOW_CMD = (
+    "joint.command is what the controller sent on rt/lowcmd: the target, the "
+    "feed-forward torque and the motor-side kp/kd the motor's own loop ran; "
+    "paired with rt/lowstate by receive time"
+)
 
 
 @dataclass(frozen=True)
@@ -168,6 +215,10 @@ class Extract:
 
 def _motors(field: str) -> Any:
     return lambda m: [m["motor_state"][i][field] for i in range(len(GO2_MOTORS))]
+
+
+def _motor_cmds(field: str) -> Any:
+    return lambda m: [m["motor_cmd"][i][field] for i in range(len(GO2_MOTORS))]
 
 
 def _imu(field: str) -> Any:
@@ -210,6 +261,14 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract("power.voltage", "V", ("v",), _scalar("power_v")),
         Extract("power.current", "A", ("a",), _scalar("power_a")),
     ),
+    LOW_CMD: (
+        Extract(JOINT_COMMAND, "rad", GO2_MOTORS, _motor_cmds("q")),
+        Extract(JOINT_COMMAND_VELOCITY, "rad/s", GO2_MOTORS, _motor_cmds("dq")),
+        Extract(JOINT_FEEDFORWARD, "N*m", GO2_MOTORS, _motor_cmds("tau")),
+        Extract(JOINT_KP, "N*m/rad", GO2_MOTORS, _motor_cmds("kp")),
+        Extract(JOINT_KD, "N*m*s/rad", GO2_MOTORS, _motor_cmds("kd")),
+        Extract("motor.command_mode", "enum", GO2_MOTORS, _motor_cmds("mode")),
+    ),
     SPORT_MODE_STATE: (
         Extract("sport.position", "m", XYZ, _top("position")),
         Extract("sport.velocity", "m/s", XYZ, _top("velocity")),
@@ -221,6 +280,7 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
 }  # fmt: skip
 NOTES: dict[str, tuple[str, ...]] = {
     LOW_STATE: (NOTE_CLOCK, NOTE_TAU_EST, NOTE_FOOT_FORCE),
+    LOW_CMD: (NOTE_LOW_CMD,),
     SPORT_MODE_STATE: (),
 }
 
@@ -290,6 +350,79 @@ class Rosbag2Adapter:
 
 
 # -- the container: sqlite3 ----------------------------------------------------
+
+STORE_FILE = "capture_0.db3"  # the one file a live capture writes
+CREATE_TOPICS = (
+    "CREATE TABLE IF NOT EXISTS topics(id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+    "type TEXT NOT NULL, serialization_format TEXT NOT NULL, "
+    "offered_qos_profiles TEXT NOT NULL)"
+)
+CREATE_MESSAGES = (
+    "CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, topic_id INTEGER "
+    "NOT NULL, timestamp INTEGER NOT NULL, data BLOB NOT NULL)"
+)
+METADATA_TEXT = (
+    "rosbag2_bagfile_information:\n"
+    "  version: 5\n"
+    "  storage_identifier: sqlite3\n"
+    "  starting_time:\n"
+    "    nanoseconds_since_epoch: {start}\n"
+)
+
+
+class Store:
+    """A rosbag2 sqlite3 store being WRITTEN: what a live capture appends
+    CDR messages to, so the bag adapter above reads a capture exactly as
+    it reads a bag (one decoder, the layouts as data). Not thread-safe:
+    one writer thread owns it. `close` writes the `metadata.yaml` a bag
+    carries, with the first message's receive time as the start."""
+
+    def __init__(self, root: Path, types: dict[str, str] | None = None) -> None:
+        self.root = Path(root)
+        self.types = dict(TOPIC_TYPES if types is None else types)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._db = sqlite3.connect(self.root / STORE_FILE)
+        self._db.execute(CREATE_TOPICS)
+        self._db.execute(CREATE_MESSAGES)
+        self._ids: dict[str, int] = {}
+        self._start_ns: int | None = None
+        self.count = 0
+
+    def topic(self, name: str) -> int:
+        """The topic's id, declared on first use; a topic the store was not
+        told the type of is refused by name (a bag names every type)."""
+        if name not in self.types:
+            raise ValueError(f"no message type declared for topic {name!r}")
+        if name not in self._ids:
+            kind = self.types[name]
+            cur = self._db.execute(
+                "INSERT INTO topics(name, type, serialization_format, "
+                "offered_qos_profiles) VALUES (?, ?, ?, '')",
+                (name, kind, CDR_FORMAT),
+            )
+            self._ids[name] = int(cur.lastrowid or 0)
+        return self._ids[name]
+
+    def append(self, rows: list[tuple[str, int, bytes]]) -> None:
+        """(topic name, receive time ns since the epoch, CDR bytes) rows."""
+        if not rows:
+            return
+        self._db.executemany(
+            "INSERT INTO messages(topic_id, timestamp, data) VALUES (?, ?, ?)",
+            [(self.topic(t), ns, data) for t, ns, data in rows],
+        )
+        self._db.commit()
+        self.count += len(rows)
+        if self._start_ns is None:
+            self._start_ns = min(ns for _, ns, _ in rows)
+
+    def close(self) -> Path:
+        self._db.commit()
+        self._db.close()
+        (self.root / METADATA_FILE).write_text(
+            METADATA_TEXT.format(start=self._start_ns or 0), encoding="utf-8"
+        )
+        return self.root
 
 
 def _topic_types(files: list[Path]) -> set[str]:

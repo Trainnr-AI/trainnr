@@ -290,15 +290,26 @@ class ProjectContracts(unittest.TestCase):
         self.assertEqual(rust, python)
 
     def test_the_in_progress_entry_has_the_fields_the_index_writes(self) -> None:
+        """The Rust entry reads every key the index writes, for both kinds
+        of work in progress: a scene being captured, a capture listening
+        (the entry the index itself produces, not a line of its source)."""
+        import tempfile  # noqa: PLC0415
+
+        from rq_pipeline.project import create_project, index_project  # noqa: PLC0415
+        from rq_pipeline.project.locate import INDEX_DIR  # noqa: PLC0415
+        from rq_pipeline.robots.capture import LISTENING, CaptureState  # noqa: PLC0415
+
         block = MODEL_RS.split("pub struct InProgress {", 1)[1].split("}", 1)[0]
         fields = set(re.findall(r"pub (\w+):", block))
-        self.assertEqual(fields, {"path", "stage"})
-        index_py = (
-            REPO / "pipeline" / "rq_pipeline" / "project" / "index.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn(
-            'in_progress.append({"path": relative, "stage": stage})', index_py
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p", "test")
+            CaptureState(state=LISTENING, name="w", source="dds:lo").write(
+                project.root / INDEX_DIR
+            )
+            entries = index_project(project).in_progress
+        self.assertTrue(entries)
+        for entry in entries:
+            self.assertEqual(set(entry), fields)
 
     def test_the_pages_and_the_verbs_agree(self) -> None:
         """Every page the rail shows is a name the door accepts, and every

@@ -1277,6 +1277,15 @@ pub fn section(
                 }
             })
             .inner;
+        // Work this page's kinds are still becoming (a capture listening, a
+        // scene being captured), from the index's `in_progress`.
+        for p in index
+            .in_progress
+            .iter()
+            .filter(|p| section.kinds().any(|k| k == p.kind))
+        {
+            weak_body(ui, format!("⏳ {} — {}", p.path, p.stage));
+        }
         ui.add_space(16.0);
         if rows.is_empty() {
             card(ui, None).show(ui, |ui| {

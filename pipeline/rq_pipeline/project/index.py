@@ -58,8 +58,15 @@ from rq_pipeline.project.kinds import (
     stamp_kind,
     stamp_run,
 )
-from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
+from rq_pipeline.project.locate import (
+    FOLDERS,
+    INDEX_DIR,
+    LOOPS,
+    RECORDINGS_FOLDER,
+    Project,
+)
 from rq_pipeline.robot.fit_record import SPREAD_FILENAME as SPREAD_FILE
+from rq_pipeline.robots.capture import LISTENING, CaptureState
 from rq_pipeline.robots.recording import JOINT_POSITION
 from rq_pipeline.scenes.record import (
     capture_failed,
@@ -192,7 +199,9 @@ def index_project(project: Project) -> ProjectIndex:
                     refused.append({"path": relative, "reason": reason})
                 else:
                     stage = capture_stage(path)
-                    in_progress.append({"path": relative, "stage": stage})
+                    in_progress.append(
+                        {"path": relative, "stage": stage, "kind": Kind.SCENE.value}
+                    )
                 continue
             try:
                 kind = detect(path)
@@ -246,8 +255,29 @@ def index_project(project: Project) -> ProjectIndex:
         states=states,
         next_move=NEXT_MOVE[missing[0]] if missing else None,
         refused=refused,
-        in_progress=in_progress,
+        in_progress=in_progress + _live_capture(project),
     )
+
+
+def _live_capture(project: Project) -> list[dict[str, str]]:
+    """A capture listening right now, as work in progress: the recording
+    it will become and how much has arrived, per topic when there are
+    topics (the listener's own state file, `robots.capture`)."""
+    state = CaptureState.read(project.root / INDEX_DIR)
+    if state.state != LISTENING or not state.name:
+        return []
+    arrived = (
+        ", ".join(f"{topic} {n}" for topic, n in sorted(state.topics.items()))
+        if state.topics
+        else f"{state.datagrams} messages"
+    )
+    return [
+        {
+            "path": f"{RECORDINGS_FOLDER}/{state.name}",
+            "stage": f"capturing on {state.source}: {arrived}",
+            "kind": Kind.RECORDING.value,
+        }
+    ]
 
 
 def write_index(

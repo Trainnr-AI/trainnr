@@ -12,11 +12,14 @@ once, each already proven separately in this repo and composed here:
 3. at the end, the raw file goes through its **adapter** and lands in the
    project as a stamped recording (`robots/ingest`).
 
-The listener is the only part that speaks a wire protocol, and there is
-one today: this repo's Pico rig over UDP. A ROS 2 graph is captured by
+The listener is the only part that speaks a wire protocol, and the
+protocols are a registry (`SOURCES`): this repo's Pico rig over UDP
+here, and Unitree's bus over CycloneDDS in `robots/dds_capture.py`
+(2026-09-24: `rt/lowstate` and `rt/lowcmd` as one recording, landed as
+a rosbag2 store the bag adapter reads). A ROS 2 graph is captured by
 `ros2 bag record` into an MCAP file and ingested afterwards — a live ROS
 listener would need a ROS installation, which is exactly what the seam
-avoids. A Unitree listener waits on its SDK research (docs/76 §5).
+avoids.
 
 `Capture` is deliberately a small state machine (idle → listening →
 ingested) with its state on disk (`<project>/.index/capture.json`), so
@@ -29,14 +32,16 @@ injected for the same reason: the project layer's stamps the artifact.
 
 from __future__ import annotations
 
+import importlib
 import json
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from rq_pipeline.robots.ingest import ingest as ingest_into
 
@@ -46,6 +51,9 @@ ENCODING = "utf-8"
 # name, adapter) -> a record with at least `notes`; the project layer
 # passes its stamping ingest, the seam's own writes without a stamp.
 Ingest = Callable[..., dict[str, Any]]
+# Called with the state each time a listener writes it (the project
+# layer re-indexes so the Studio shows a capture as it runs).
+OnState = Callable[["CaptureState"], None]
 # The firmware's telemetry port (firmware/pico-odom, TELEMETRY_PORT); the
 # UDP bridge carries the same second copy on purpose.
 WIRE_UDP_PORT = 9870
@@ -62,11 +70,13 @@ FAILED = "failed"
 @dataclass
 class CaptureState:
     state: str = IDLE
-    source: str = ""  # "udp:9870", later "ros2:<topics>", "unitree:<iface>"
+    name: str = ""  # the recording it becomes
+    source: str = ""  # "udp:9870", "dds:lo"
     raw_file: str = ""
     started: float | None = None
-    datagrams: int = 0
+    datagrams: int = 0  # messages landed so far, whatever the protocol calls them
     last_datagram: float | None = None
+    topics: dict[str, int] = field(default_factory=dict)  # per topic, when there are
     stamp: str | None = None  # set when ingested
     error: str | None = None
     notes: list[str] = field(default_factory=list)
@@ -93,7 +103,7 @@ class WireUdpCapture:
     """Listen on the rig's UDP port; append datagrams to a `.wire` file;
     on `stop()` ingest it. One capture at a time per project."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the listener's knobs, each named
         self,
         recordings: Path,
         state_dir: Path,
@@ -101,14 +111,18 @@ class WireUdpCapture:
         *,
         port: int = WIRE_UDP_PORT,
         ingest: Ingest = ingest_into,
+        on_state: OnState | None = None,
     ) -> None:
+        self.on_state = on_state
         self.recordings = Path(recordings)
         self.state_dir = Path(state_dir)
         self.name = name
         self.port = port
         self.ingest = ingest
         self.raw = self.recordings / f".capture-{name}.wire"
-        self.state = CaptureState(source=f"udp:{port}", raw_file=str(self.raw))
+        self.state = CaptureState(
+            name=name, source=f"udp:{port}", raw_file=str(self.raw)
+        )
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -126,7 +140,7 @@ class WireUdpCapture:
         sock.settimeout(QUIET_S)
         self.state.state = LISTENING
         self.state.started = time.time()
-        self.state.write(self.state_dir)
+        self._write_state()
         self._thread = threading.Thread(
             target=self._listen,
             args=(sock, window_s),
@@ -144,7 +158,7 @@ class WireUdpCapture:
                     datagram, _addr = sock.recvfrom(DATAGRAM_BYTES)
                 except TimeoutError:
                     # quiet is visible, not a dead listener
-                    self.state.write(self.state_dir)
+                    self._write_state()
                     continue
                 except OSError:
                     break
@@ -153,7 +167,7 @@ class WireUdpCapture:
                 self.state.datagrams += 1
                 self.state.last_datagram = time.time()
                 if self.state.datagrams % 50 == 1:
-                    self.state.write(self.state_dir)
+                    self._write_state()
         sock.close()
 
     def stop(self) -> CaptureState:
@@ -181,9 +195,110 @@ class WireUdpCapture:
                 self.state.error = str(why)
             finally:
                 self.raw.unlink(missing_ok=True)
-        self.state.write(self.state_dir)
+        self._write_state()
         return self.state
+
+    def _write_state(self) -> None:
+        self.state.write(self.state_dir)
+        if self.on_state is not None:
+            self.on_state(self.state)
 
 
 def status(state_dir: Path) -> dict[str, Any]:
     return asdict(CaptureState.read(state_dir))
+
+
+# -- the registry of live sources ---------------------------------------------
+
+# Options every listener takes from the layer above, never from a caller.
+INTERNAL_OPTIONS = ("ingest", "on_state", "subscribe")
+
+
+class Listener(Protocol):
+    """What every source is: started for a window, stopped into a recording."""
+
+    name: str
+    state: CaptureState
+
+    def start(self, window_s: float = DEFAULT_WINDOW_S) -> CaptureState: ...
+    def stop(self) -> CaptureState: ...
+
+
+@dataclass(frozen=True)
+class SourceSpec:
+    """One way a robot's telemetry arrives live: the module and class
+    that listen, the options they take, where they run."""
+
+    name: str
+    description: str
+    module: str
+    cls: str
+    options: tuple[str, ...]
+    platforms: tuple[str, ...] = ()  # empty: everywhere
+
+    def open(self, recordings: Path, state_dir: Path, name: str, **options: Any) -> Any:
+        """The listener, or a refusal by name: an option the source does
+        not take, a platform it does not run on."""
+        unknown = sorted(set(options) - set(self.options))
+        if unknown:
+            raise ValueError(
+                f"source {self.name!r} takes {list(self.options)}, not {unknown}"
+            )
+        if self.platforms and sys.platform not in self.platforms:
+            raise RuntimeError(
+                f"the {self.name} capture source ({self.description}) runs on "
+                f"{', '.join(self.platforms)} only; this is {sys.platform}"
+            )
+        listener = getattr(importlib.import_module(self.module), self.cls)
+        return listener(recordings, state_dir, name, **options)
+
+
+SOURCES: dict[str, SourceSpec] = {
+    "udp": SourceSpec(
+        name="udp",
+        description="the Pico rig's status lines over UDP (this repo's wire bridge)",
+        module="rq_pipeline.robots.capture",
+        cls="WireUdpCapture",
+        options=("port", "ingest", "on_state"),
+    ),
+    "dds": SourceSpec(
+        name="dds",
+        description="Unitree's bus over CycloneDDS: rt/lowstate and rt/lowcmd "
+        "as one recording (the robot, or their simulator as a stand-in)",
+        module="rq_pipeline.robots.dds_capture",
+        cls="DdsCapture",
+        options=("network", "domain_id", "basis", *INTERNAL_OPTIONS),
+        platforms=("linux",),
+    ),
+}
+DEFAULT_SOURCE = "udp"
+
+
+def source_spec(name: str) -> SourceSpec:
+    try:
+        return SOURCES[name]
+    except KeyError:
+        raise ValueError(
+            f"unknown capture source {name!r}; known: {sorted(SOURCES)}"
+        ) from None
+
+
+def open_capture(
+    source: str, recordings: Path, state_dir: Path, name: str, **options: Any
+) -> Listener:
+    """A listener from the registry, by the source's name."""
+    return source_spec(source).open(recordings, state_dir, name, **options)
+
+
+def sources() -> list[dict[str, Any]]:
+    """The registry as a list a door can answer with."""
+    return [
+        {
+            "name": spec.name,
+            "description": spec.description,
+            "options": [o for o in spec.options if o not in INTERNAL_OPTIONS],
+            "platforms": list(spec.platforms) or ["any"],
+            "here": not spec.platforms or sys.platform in spec.platforms,
+        }
+        for spec in SOURCES.values()
+    ]

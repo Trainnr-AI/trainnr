@@ -1205,24 +1205,34 @@ def ingest_recording(
 _CAPTURES: dict[str, Any] = {}
 
 
-def start_capture(
-    name: str, port: int | None = None, window_s: float | None = None
+def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
+    name: str,
+    *,
+    source: str | None = None,
+    port: int | None = None,
+    network: str | None = None,
+    basis: str | None = None,
+    window_s: float | None = None,
 ) -> dict[str, Any] | Refusal:
-    """Listen for the rig's telemetry on its UDP port and append every
-    datagram to a raw file inside the current project; `stop_capture`
-    ingests it as a stamped recording. The state on disk
+    """Listen for a robot's telemetry and land it in the current project;
+    `stop_capture` ingests it as a stamped recording. `source` names the
+    protocol (`list_capture_sources`): `udp` (default) is the Pico rig's
+    port; `dds` is Unitree's bus, `rt/lowstate` and `rt/lowcmd` as one
+    recording, on `network` (`lo` for their simulator, the robot's
+    interface for the robot), its `basis` "own robot" unless declared
+    "simulation" for the stand-in. The state on disk
     (`<project>/.index/capture.json`) is what `capture_status` and the
-    Studio read, so a listener started here is visible everywhere.
-    Refused by name: no project open, a capture already listening for
-    this project, a recording of that name already present, a port
-    another process holds. `window_s` caps the listen (default ten
-    minutes); the listener also stops itself when the window passes."""
+    Studio read. Refused by name: no project open, a capture already
+    listening for this project, a recording of that name already present,
+    an unknown source, an option the source does not take, a platform it
+    does not run on, a port another process holds, a missing SDK.
+    `window_s` caps the listen (default ten minutes)."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.ingest import capture as live_capture  # noqa: PLC0415
     from rq_pipeline.robots.capture import (  # noqa: PLC0415
+        DEFAULT_SOURCE,
         DEFAULT_WINDOW_S,
         LISTENING,
-        WIRE_UDP_PORT,
     )
 
     try:
@@ -1233,20 +1243,30 @@ def start_capture(
     held = _CAPTURES.get(key)
     if held is not None and held.state.state == LISTENING:
         return refusal(
-            f"a capture named {held.name!r} is already listening on UDP "
-            f"{held.port} for this project; stop_capture first"
+            f"a capture named {held.name!r} is already listening on "
+            f"{held.state.source} for this project; stop_capture first"
         )
-    listener = live_capture(
-        project, name, port=WIRE_UDP_PORT if port is None else int(port)
-    )
+    given = {"port": port, "network": network, "basis": basis}
+    options = {k: v for k, v in given.items() if v is not None}
     try:
+        listener = live_capture(
+            project, name, source=source or DEFAULT_SOURCE, **options
+        )
         state = listener.start(
             DEFAULT_WINDOW_S if window_s is None else float(window_s)
         )
-    except (FileExistsError, OSError) as why:
+    except (FileExistsError, OSError, RuntimeError, ValueError) as why:
         return refusal(str(why))
     _CAPTURES[key] = listener
     return {"status": DONE, **_capture_state(state)}
+
+
+def list_capture_sources() -> list[dict[str, Any]]:
+    """Every protocol a live capture listens on: its name, what it is,
+    the options it takes, where it runs, and whether it runs here."""
+    from rq_pipeline.robots.capture import sources  # noqa: PLC0415
+
+    return sources()
 
 
 def stop_capture() -> dict[str, Any] | Refusal:
@@ -2258,8 +2278,13 @@ def build_server() -> Any:  # noqa: PLR0915
         "units, measured rates, census."
     )(ingest_recording)
     server.tool(
-        description="Listen on the rig's UDP port and record its telemetry into the "
-        "project; stop_capture ingests it. Refuses a held port or a taken name."
+        description="Every protocol a live capture listens on (udp, dds), its "
+        "options, and whether it runs on this machine."
+    )(list_capture_sources)
+    server.tool(
+        description="Record a robot's telemetry live into the project: udp (the "
+        "rig) or dds (Unitree's rt/lowstate + rt/lowcmd as one recording, the "
+        "robot or their simulator); stop_capture ingests it."
     )(start_capture)
     server.tool(
         description="Stop the project's listener and ingest the capture as a stamped "

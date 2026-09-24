@@ -181,6 +181,10 @@ pub struct Refused {
 pub struct InProgress {
     pub path: String,
     pub stage: String,
+    /// The kind of artifact the work becomes (`scene`, `recording`), so
+    /// its page can show it filling; empty from an older index.
+    #[serde(default)]
+    pub kind: String,
 }
 
 /// `JobRecord`, as `rq_pipeline.mcp_jobs` writes it, plus the exit code
