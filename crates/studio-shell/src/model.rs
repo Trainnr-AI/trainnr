@@ -155,7 +155,16 @@ pub struct State {
     pub needed: bool,
     #[serde(default)]
     pub note: Option<String>,
+    /// Whose robot the proof rests on: one of `STATE_BASES`, None when
+    /// the stage has no basis. A fit of a public log lights Sys ID and
+    /// the chip says so (2026-09-24).
+    #[serde(default)]
+    pub basis: Option<String>,
 }
+
+/// Mirrors `rq_pipeline.robots.recording.BASES`, strongest first; pinned
+/// by `tests/test_studio_mirrors.py`.
+pub const STATE_BASES: [&str; 4] = ["own robot", "public log", "simulation", "unknown"];
 
 fn yes() -> bool {
     true

@@ -64,6 +64,7 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 | `accept-task.py` | The critic loop as a command: the scripted expert must pass a task's referee on every paired trial and the do-nothing floor must pass none; prints the verdict, the funnel and every reason, exits 1 on rejection (`--tray-y`, `--in-slot-xy` compose kitting variants) |
 | `solver-study.py` | Constraint-solver sweep on the kitting scene: solver × cone × integrator plus an impratio sweep, judged by the referee, with penetration, solver iterations, peak pad slip and peak grip force per row |
 | `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts |
+| `show-legged-fit.py <bundle> <recording> [--stills DIR]` | A `legged-joints` fit in both viewers: measured, rigid and modelled torque per joint, residuals and bootstrap histograms into the Studio and `.viewer/fit-legged.rrd` beside the recording; MuJoCo stills of the bundle under the fitted terms |
 | `actuator-bundle.py` | Wrap vendored BAM fits into certified bundles; verify anyone's (stamps, rail/floor checks, honesty advisories) |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |

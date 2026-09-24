@@ -889,10 +889,25 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                                     .strong()
                                     .color(text_color),
                             );
+                            // A proof that is not the operator's own robot says so
+                            // on the chip, not only on hover: "public log", "simulation".
+                            if let Some(basis) = state.basis.as_deref() {
+                                if basis != crate::model::STATE_BASES[0] {
+                                    ui.label(
+                                        egui::RichText::new(basis)
+                                            .small()
+                                            .color(ui.visuals().weak_text_color()),
+                                    );
+                                }
+                            }
                         });
                     })
                     .response;
                 let mut hover = state.name.clone();
+                if let Some(basis) = &state.basis {
+                    hover.push_str("\nbasis: ");
+                    hover.push_str(basis);
+                }
                 if let Some(note) = &state.note {
                     hover.push_str("\nnot needed: ");
                     hover.push_str(note);

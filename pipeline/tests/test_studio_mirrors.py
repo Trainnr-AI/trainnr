@@ -237,6 +237,14 @@ class ProjectContracts(unittest.TestCase):
             control.STATE_SCHEMA,
         )
 
+    def test_the_state_bases_agree(self) -> None:
+        from rq_pipeline.bundles.basis import BASES  # noqa: PLC0415
+
+        listed = constant(
+            MODEL_RS, r"pub const STATE_BASES: \[&str; \d+\] = \[([^\]]+)\];"
+        )
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed)), BASES)
+
     def test_the_files_and_the_environment_agree(self) -> None:
         from rq_pipeline.project import control, locate, present  # noqa: PLC0415
 

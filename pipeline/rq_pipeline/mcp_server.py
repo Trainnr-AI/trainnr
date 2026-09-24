@@ -1600,7 +1600,11 @@ def identify_system(
         "anchor": records[-1].anchor if records else None,
         "records": len(records),
         "spread": spread,
-        "state": {"system identified": state.present, "proved_by": state.proved_by},
+        "state": {
+            "system identified": state.present,
+            "proved_by": state.proved_by,
+            "basis": state.basis,
+        },
     }
 
 

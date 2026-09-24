@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.basis import BASES, BASIS_UNKNOWN
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.manifest import gate_word, read_gates
@@ -42,6 +43,7 @@ from rq_pipeline.project.kinds import (
     CERTIFICATE_FILE,
     DEPLOY_FILE,
     DRIFT_FILE,
+    FITS_DIR,
     IDENTITY_FILE,
     POLICY_FILE,
     RECORDING_FILE,
@@ -56,6 +58,7 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
+from rq_pipeline.robot.fit_record import SPREAD_FILENAME as SPREAD_FILE
 from rq_pipeline.scenes.record import (
     capture_failed,
     capture_in_progress,
@@ -143,6 +146,11 @@ class State:
     # reinforcement-learning loop has no dataset); `note` says why.
     needed: bool = True
     note: str | None = None
+    # Whose robot the proof rests on (`robots.recording.BASES`, the
+    # strongest among the proving records): "own robot", "public log",
+    # "simulation". None for a stage that has no basis (2026-09-24: a fit
+    # of a public Go2 log lights Sys ID and must say so).
+    basis: str | None = None
 
 
 @dataclass(frozen=True)
@@ -674,7 +682,8 @@ _SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.DEPLOY: _summary_deploy,
     Kind.POLICY: _summary_policy,
     Kind.ROBOT: lambda p: {
-        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith("."))
+        "files": sorted(e.name for e in p.iterdir() if not e.name.startswith(".")),
+        "fit_bases": fit_bases(p / FITS_DIR),
     },
     Kind.TASK: _summary_task,
 }
@@ -701,21 +710,52 @@ def _loop_of(artifacts: list[Artifact]) -> str:
     return ""
 
 
+def fit_bases(fits: Path) -> list[str]:
+    """The `basis` words of the fit records under `fits`, distinct, in
+    BASES order; a record written before the field counts as unknown."""
+    import json  # noqa: PLC0415
+
+    if not fits.is_dir():
+        return []
+    found = set()
+    for path in sorted(fits.glob("*.json")):
+        if path.name == SPREAD_FILE:
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        found.add(raw.get("basis") or BASIS_UNKNOWN)
+    return [basis for basis in BASES if basis in found]
+
+
+def strongest_basis(bases: list[str]) -> str | None:
+    """The first of BASES present: an own-robot fit outranks a public
+    log, which outranks a simulation."""
+    return next((basis for basis in BASES if basis in bases), None)
+
+
 def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
     by_kind: dict[str, list[str]] = {}
     for a in artifacts:
         by_kind.setdefault(a.kind, []).append(a.stamp)
     skipped = NOT_NEEDED.get(loop, {})
-    # A robot bundle that carries fit records proves identification too.
+    # A robot bundle that carries fit records proves identification too,
+    # and its records say whose robot they measured.
     states: list[State] = []
     for name, kind in STATES:
         proof = list(by_kind.get(kind.value, []))
-        if kind is Kind.FIT and not proof:
-            proof = [
-                a.stamp
+        basis = None
+        if kind is Kind.FIT:
+            carriers = [
+                a
                 for a in artifacts
                 if a.kind == Kind.ROBOT.value and "fits" in a.summary.get("files", [])
             ]
+            if not proof:
+                proof = [a.stamp for a in carriers]
+            found = [b for a in carriers for b in a.summary.get("fit_bases", [])]
+            basis = strongest_basis(found) if proof else None
         states.append(
             State(
                 name=name,
@@ -723,6 +763,7 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
                 present=bool(proof),
                 needed=name not in skipped,
                 note=skipped.get(name),
+                basis=basis,
             )
         )
     return states
