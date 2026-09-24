@@ -606,13 +606,62 @@ CREATE_MESSAGES = (
     "CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, topic_id INTEGER "
     "NOT NULL, timestamp INTEGER NOT NULL, data BLOB NOT NULL)"
 )
-METADATA_TEXT = (
+# rosbag2's metadata.yaml, version 5 (Humble's sqlite3 storage): the
+# fields `ros2 bag info` reads — duration, start, message counts per
+# topic, the files. The first capture wrote only the start (review
+# 2026-09-24); written in full so the store is a bag to ROS tools too
+# (not run against ROS here: no ROS on the box).
+METADATA_VERSION = 5
+METADATA_HEAD = (
     "rosbag2_bagfile_information:\n"
-    "  version: 5\n"
+    f"  version: {METADATA_VERSION}\n"
     "  storage_identifier: sqlite3\n"
+    "  duration:\n"
+    "    nanoseconds: {duration}\n"
     "  starting_time:\n"
     "    nanoseconds_since_epoch: {start}\n"
+    "  message_count: {count}\n"
+    "  topics_with_message_count:\n"
 )
+METADATA_TOPIC = (
+    "    - topic_metadata:\n"
+    "        name: {name}\n"
+    "        type: {kind}\n"
+    "        serialization_format: {fmt}\n"
+    '        offered_qos_profiles: ""\n'
+    "      message_count: {count}\n"
+)
+METADATA_TAIL = (
+    '  compression_format: ""\n'
+    '  compression_mode: ""\n'
+    "  relative_file_paths:\n"
+    "    - {file}\n"
+    "  files:\n"
+    "    - path: {file}\n"
+    "      starting_time:\n"
+    "        nanoseconds_since_epoch: {start}\n"
+    "      duration:\n"
+    "        nanoseconds: {duration}\n"
+    "      message_count: {count}\n"
+)
+
+
+def metadata_text(
+    start_ns: int, end_ns: int, counts: dict[str, int], types: dict[str, str]
+) -> str:
+    """A rosbag2 v5 metadata.yaml for one sqlite3 file, from what was
+    written: the start, the duration, the count per topic."""
+    total = sum(counts.values())
+    duration = max(0, end_ns - start_ns)
+    head = METADATA_HEAD.format(duration=duration, start=start_ns, count=total)
+    topics = "".join(
+        METADATA_TOPIC.format(name=name, kind=types[name], fmt=CDR_FORMAT, count=n)
+        for name, n in counts.items()
+    )
+    tail = METADATA_TAIL.format(
+        file=STORE_FILE, start=start_ns, duration=duration, count=total
+    )
+    return head + topics + tail
 
 
 class Store:
@@ -631,6 +680,8 @@ class Store:
         self._db.execute(CREATE_MESSAGES)
         self._ids: dict[str, int] = {}
         self._start_ns: int | None = None
+        self._end_ns: int | None = None
+        self.counts: dict[str, int] = {}
         self.count = 0
 
     def topic(self, name: str) -> int:
@@ -658,14 +709,20 @@ class Store:
         )
         self._db.commit()
         self.count += len(rows)
-        if self._start_ns is None:
-            self._start_ns = min(ns for _, ns, _ in rows)
+        for topic, _ns, _data in rows:
+            self.counts[topic] = self.counts.get(topic, 0) + 1
+        first = min(ns for _, ns, _ in rows)
+        last = max(ns for _, ns, _ in rows)
+        self._start_ns = first if self._start_ns is None else min(self._start_ns, first)
+        self._end_ns = last if self._end_ns is None else max(self._end_ns, last)
 
     def close(self) -> Path:
         self._db.commit()
         self._db.close()
+        start = self._start_ns or 0  # an empty store: no start, read back as none
         (self.root / METADATA_FILE).write_text(
-            METADATA_TEXT.format(start=self._start_ns or 0), encoding="utf-8"
+            metadata_text(start, self._end_ns or start, self.counts, self.types),
+            encoding="utf-8",
         )
         return self.root
 
@@ -742,7 +799,11 @@ def _recorded_at(source: Path) -> str | None:
     for i, line in enumerate(lines):
         if line.strip() == "starting_time:" and i + 1 < len(lines):
             key, _, value = lines[i + 1].strip().partition(":")
-            if key == "nanoseconds_since_epoch" and value.strip().isdigit():
+            if (
+                key == "nanoseconds_since_epoch"
+                and value.strip().isdigit()
+                and int(value) > 0  # 0 is an empty store's, not 1970
+            ):
                 from datetime import datetime, timezone  # noqa: PLC0415
 
                 seconds = int(value) / NS_PER_S

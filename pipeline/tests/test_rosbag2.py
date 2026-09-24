@@ -414,6 +414,42 @@ class TheProvenance(unittest.TestCase):
                 ingest(Path(tmp) / "r", bag, basis="borrowed")
 
 
+class TheStoreIsABag(unittest.TestCase):
+    """The store a live capture writes carries the metadata ROS tools read
+    (review 2026-09-24: it wrote only the start, and an empty store's 0
+    read back as 1970)."""
+
+    def test_the_metadata_names_counts_duration_and_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = rosbag2.Store(Path(tmp) / "s")
+            state = Writer().message(
+                rosbag2.LAYOUTS[rosbag2.LOW_STATE], rosbag2.LAYOUTS, _low_state(0.0)
+            )
+            cmd = Writer().message(
+                rosbag2.LAYOUTS[rosbag2.LOW_CMD], rosbag2.LAYOUTS, _low_cmd(0.0)
+            )
+            start = 1_700_000_000 * NS
+            store.append(
+                [
+                    (rosbag2.TOPIC_LOW_CMD, start, cmd),
+                    (rosbag2.TOPIC_LOW_STATE, start + 2_000_000, state),
+                    (rosbag2.TOPIC_LOW_STATE, start + 4_000_000, state),
+                ]
+            )
+            root = store.close()
+            text = (root / rosbag2.METADATA_FILE).read_text(encoding="utf-8")
+            recorded = rosbag2._recorded_at(root)
+            empty = rosbag2.Store(Path(tmp) / "e").close()
+            recorded_empty = rosbag2._recorded_at(empty)
+        self.assertIn("  message_count: 3\n", text)
+        self.assertIn("    nanoseconds: 4000000\n", text)
+        self.assertIn(f"        name: {rosbag2.TOPIC_LOW_STATE}\n", text)
+        self.assertIn("      message_count: 2\n", text)
+        self.assertIn(f"    - {rosbag2.STORE_FILE}\n", text)
+        self.assertTrue((recorded or "").startswith("2023-11-14"))
+        self.assertIsNone(recorded_empty)
+
+
 class SplitBags(unittest.TestCase):
     def test_a_bag_split_past_ten_files_keeps_every_sample(self) -> None:
         """rosbag2 names splits `_0 ... _10`; read as text `_10` came before
