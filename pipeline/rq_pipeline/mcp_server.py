@@ -841,6 +841,50 @@ def assay_deployment(
     )
 
 
+def attribute_deployment(
+    deployment: str, runtime: str = "mujoco", trials: int = 20, seed: int = 1000
+) -> JobHandle | Refusal:
+    """Which parameter would break this policy first (docs/77 §9): a
+    deployment whose plane gate PASSED is re-run in plain MuJoCo with one
+    dynamics knob turned at a time up a ladder of the field's deployment
+    deviations - actions applied late, friction, payload, servo stiffness
+    and damping, encoder noise, a slope believed flat, pushes. A knob's
+    cliff is the first rung where the tracked rate's exact lower bound
+    falls under the certificate's; the knobs ranked by that rung are the
+    answer to "it walked in simulation and fell on the robot". A job;
+    `attribution.json` and a picture of the fall land beside the manifest,
+    the Deployments card reads "most sensitive to ...". Refused by name
+    when the gate did not pass, cites no evaluation, or is staged on a
+    scene (another protocol)."""
+    from rq_pipeline.deploy.attribution import read_attribution  # noqa: PLC0415
+    from rq_pipeline.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
+    from rq_pipeline.deploy.runtimes import runtime_names  # noqa: PLC0415
+    from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
+    from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+    project = current_project()
+    try:
+        plain_name(deployment, "deployment name")
+    except ValueError as why:
+        return refusal(str(why))
+    if runtime not in runtime_names():
+        return refusal(
+            f"unknown runtime {runtime!r}; one of {', '.join(runtime_names())}"
+        )
+    folder = project.folder(DEPLOY_FOLDER) / deployment
+    if not (folder / MANIFEST_FILE).is_file():
+        return refusal(f"no deployment {deployment!r} in this project")
+    try:
+        read_attribution(folder)  # a record of another schema is refused now
+    except ValueError as why:
+        return refusal(str(why))
+    return Actions(JobManager(_jobs_root())).attribute_deployment(
+        deployment, project=str(project.root), runtime=runtime, trials=trials, seed=seed
+    )
+
+
 def list_gate_runtimes() -> list[dict[str, Any]]:
     """Every runtime the sim-to-sim gate can drive an exported policy
     through, with the platforms it runs on (empty: every platform)."""
@@ -2232,6 +2276,13 @@ def build_server() -> Any:  # noqa: PLR0915
         "and gated on each with one seed; the success cliff that sets a task's "
         "collision tolerance and span. A job; assay.json on the nominal stage."
     )(assay_deployment)
+    server.tool(
+        description="Which parameter would break this policy first: a passing "
+        "plane gate re-run with one dynamics knob turned at a time up its ladder "
+        "(latency, friction, payload, kp, kd, encoder noise, tilt, pushes); the "
+        "cliff per knob against the certificate's lower bound, the knobs ranked, "
+        "the fall pictured. A job; attribution.json beside the manifest."
+    )(attribute_deployment)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
         "version) without writing a fit record and judge every parameter against "

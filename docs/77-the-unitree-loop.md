@@ -980,3 +980,78 @@ reference's rated PD is the declared point; an identified interval
 around it is what a check would judge against), then `check_drift` on
 every fresh recording. The strip's Sys ID and Telemetry flags are the
 same gap seen from the other end.
+
+## 9. What would break it first: the gate says why (2026-09-24)
+
+The field's most repeated unserved ask (docs/e2e-research/78 §1): "it
+walked in simulation and fell on the robot; which of gains, torque
+limits, control rate, observation order or normalizer is wrong". A gate
+says pass or fail with counts; this stage makes it say why, for the
+dynamics half of that list, before hardware.
+
+**The method** (`pipeline/rq_pipeline/deploy/attribution.py`). A gate
+that PASSED is re-run in plain MuJoCo with ONE dynamics knob turned at a
+time, up a ladder of the field's plausible deployment deviations from
+the smallest: actions applied late (1, 2, 3, 4 control ticks), every
+geom's sliding friction scaled (x0.8 to x0.2), a payload on the base (1
+to 8 kg, inertia in proportion), the servos' stiffness scaled down (x0.8
+to x0.3) and their damping scaled up (x2 to x16), gaussian noise on the
+joint-position term (0.01 to 0.1 rad), gravity pitched as a slope
+believed flat (3 to 15 deg), and the base shoved every 4 s (0.5 to 2
+m/s). Each rung is the gate's own protocol: the same twenty seeded held
+twists, the same judge. A knob's **cliff** is the first rung whose
+tracked rate's exact 95 % lower bound falls under the certificate's own
+lower bound; the ladder stops there (it is monotone by construction).
+The knobs ranked by the rung they fall at, then by the rate there, are
+the answer; the first two make the Deployments card's line. Refused by
+name: a gate that did not pass (nothing to find), a deployment that
+cites no evaluation (nothing to judge against), a staged scene (a course
+is another protocol), the DDS runtime (another process's model), and a
+trial count whose untouched draw does not reproduce the gate (a draw of
+two trials holds a command a draw of twenty does not; found while
+building this). The record `attribution.json` keeps the baseline, every
+rung that ran with both the cliff rule and the gate's own tolerance
+rule, the ranking and the line; a still of the fall at the top knob's
+cliff lands beside it and becomes the card's picture; the ladders stream
+as Rerun series with the certificate's bound drawn through them; the
+drawer shows the table. Door `attribute_deployment` (a job),
+`tools/attribute-deployment.py`; one spawned process per knob.
+
+**Measured on go2-c2** (finding `gate-attribution-go2-c2-2026-09-24`;
+the plane gate 20/20, the certificate 38/40 with lower bound 0.8308):
+
+| knob | rungs (k/20) | cliff |
+|---|---|---|
+| latency (ticks) | 1: 20 · 2: 0 | **2 ticks (40 ms)** |
+| kd (x) | 2: 20 · 4: 0 | **x4** |
+| kp (x) | 0.8: 20 · 0.6: 2 | **x0.6** |
+| tilt (deg) | 3: 20 · 5: 20 · 8: 13 | 8 deg |
+| push (m/s) | 0.5: 20 · 1: 20 · 1.5: 20 · 2: 12 | 2 m/s |
+| payload (kg) | 1: 20 · 2: 20 · 4: 20 · 6: 19 | 6 kg, by one trial |
+| joint noise (rad) | 0.01: 20 · 0.02: 20 · 0.05: 20 · 0.1: 19 | 0.1 rad, by one trial |
+| friction (x) | 0.8: 20 · 0.6: 20 · 0.4: 20 · 0.3: 20 · 0.2: 19 | x0.2, by one trial |
+
+The card reads "most sensitive to latency 2 ticks, then kd 4 x". Read
+plainly: this policy tolerates a third of the friction, four kilograms
+on its back, a 5 deg slope and shoves at 1.5 m/s, and dies at 40 ms of
+action delay or a deploy config with the gains off by a factor of two.
+That is the same shape the field's trackers report from hardware
+(gains hand-copied wrong, a slow link), now as a number a reader sees
+before the robot moves. Three minutes on eight cores.
+
+![The fall at the cliff: go2-c2 at two ticks of action latency, trial 13, tick 109](figures/attribution/go2-c2-latency-2-ticks.png)
+
+**Honest edges.** The knobs turn plain MuJoCo's model; nothing here is a
+hardware claim. The rule is strict at twenty trials: one lost trial is a
+cliff by the lower-bound rule while the gate's own tolerance would pass
+it, so friction, payload and joint noise fell by one trial each, and the
+record says so beside each rung. Latency here is the whole action
+applied late; the 2026-09-05 budget finding delayed a student's
+observations one tick, another mechanism, so the two numbers do not
+compare. The ranking compares rung indices across knobs of different
+units, a stated choice. Tilt pitches gravity, not the floor. Left:
+observation latency as a knob beside action latency; the DDS runtime
+swept through Unitree's own controller (its gains are the deploy YAML's,
+the very file the field mis-copies); the sweep on a scene's course once
+a walker clears one.
+

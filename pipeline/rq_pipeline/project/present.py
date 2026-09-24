@@ -824,6 +824,7 @@ def _present_deploy(
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
+    from rq_pipeline.deploy.attribution import read_attribution  # noqa: PLC0415
     from rq_pipeline.deploy.gate import ERR_RATIO_BOUND  # noqa: PLC0415
     from rq_pipeline.deploy.manifest import (  # noqa: PLC0415
         GATE_INSTRUMENTS,
@@ -894,6 +895,17 @@ def _present_deploy(
             )
         else:
             lines.append("sim-to-sim gate not run yet")
+        attribution = read_attribution(folder)
+        if attribution:  # what would break it first, its ladders as series
+            lines.append(f"- **{attribution.get('sensitivity', UNRECORDED)}**")
+            lower = float((attribution.get("certificate") or {}).get("lower", 0.0))
+            for entry in attribution.get("knobs", []):
+                for i, rung in enumerate(entry.get("rungs", []), start=1):
+                    rr_.set_time("rung", sequence=i)
+                    base = f"{root}/attribution/{entry['name']}"
+                    rr_.log(f"{base}/rate", rr.Scalars(float(rung["rate"])))
+                    rr_.log(f"{base}/lower", rr.Scalars(float(rung["ci95"][0])))
+                    rr_.log(f"{base}/certificate", rr.Scalars(lower))
         lines += [
             "",
             f"- checkpoint `{manifest.raw.get('checkpoint', UNRECORDED)}` "
@@ -908,8 +920,9 @@ def _present_deploy(
         ]
         rr_.log(f"{root}/reading", _doc("\n".join(lines)), static=True)
     return {
-        "paths": [f"{root}/scene", f"{root}/gate", f"{root}/reading"],
-        "view": "scene + gate + reading",
+        "paths": [f"{root}/scene", f"{root}/gate", f"{root}/reading"]
+        + ([f"{root}/attribution"] if attribution else []),
+        "view": "scene + gate + reading" + (" + attribution" if attribution else ""),
         "layout": rrb.Horizontal(
             rrb.Spatial3DView(origin=f"{root}/scene", name=artifact.stamp),
             rrb.Vertical(
@@ -921,6 +934,16 @@ def _present_deploy(
                     )
                     for runtime in gates
                 ],
+                *(
+                    [
+                        rrb.TimeSeriesView(
+                            origin=f"{root}/attribution",
+                            name="what would break it first: rate up each ladder",
+                        )
+                    ]
+                    if attribution
+                    else []
+                ),
                 rrb.TextDocumentView(origin=f"{root}/reading", name="deployment"),
             ),
             column_shares=[3, 2],

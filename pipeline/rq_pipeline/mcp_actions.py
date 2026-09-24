@@ -609,6 +609,38 @@ class Actions:
         ]
         return self.jobs.start("assay-deployment", argv, PIPELINE_DIR)
 
+    def attribute_deployment(
+        self,
+        name: str,
+        *,
+        project: str,
+        runtime: str = "mujoco",
+        trials: int = 20,
+        seed: int = 1000,
+    ) -> JobHandle:
+        """Attribution (docs/77 §9): a passing plane gate re-run with one
+        dynamics knob turned at a time up its ladder; the cliff per knob,
+        the knobs ranked by the rung they fall at, the fall pictured; the
+        record `attribution.json` beside the manifest. A job."""
+        from rq_pipeline.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        argv = [
+            *self._uv(PIPELINE_DIR, "sim", "deploy", "viz"),
+            str(TOOLS_DIR / "attribute-deployment.py"),
+            "--project",
+            project,
+            "--name",
+            name,
+            "--runtime",
+            runtime,
+            "--trials",
+            str(trials),
+            "--seed",
+            str(seed),
+        ]
+        return self.jobs.start("attribute-deployment", argv, PIPELINE_DIR)
+
     def open_studio(self) -> JobHandle:
         """Launch the Studio (release build — the debug viewer's slow
         ingest is a measured hazard). Everything that speaks the Rerun

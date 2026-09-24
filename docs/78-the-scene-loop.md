@@ -303,6 +303,10 @@ What the first stage taught:
    stages, every gate 0/2 with the smoke checkpoint, the cliff recorded
    as unmeasurable by name. go2-c2 on the box is the first policy that
    can measure it.
+   *2026-09-24: the dynamics cliff exists now, on the plane
+   (docs/77 §9, `deploy/attribution.py`: latency, friction, payload,
+   gains, noise, tilt, pushes, one at a time); the geometric assay above
+   still waits for a walker that clears a course.*
 
 Still E2's: the smoke train with camera observations (mjlab's
 CameraSensor passing the splat arrays through, the box's GPU), the

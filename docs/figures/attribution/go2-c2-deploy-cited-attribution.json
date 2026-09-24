@@ -1,0 +1,541 @@
+{
+ "schema": "trainnr-attribution/1",
+ "deployment": "go2 policy model_1499",
+ "policy": "go2-c2-model_1499@99b1655e2cec",
+ "runtime": "mujoco",
+ "base_gate": {
+  "successes": 20,
+  "trials": 20,
+  "ci95": [
+   0.8316,
+   1.0
+  ],
+  "judged": "2026-09-12T18:57:47+00:00"
+ },
+ "certificate": {
+  "stamp": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f",
+  "successes": 38,
+  "trials": 40,
+  "ci95": [
+   0.8308,
+   0.9939
+  ],
+  "lower": 0.8308
+ },
+ "protocol": {
+  "trials": 20,
+  "seed": 1000,
+  "tolerance": 0.1,
+  "rule": "a rung is past the cliff when the exact 95 % lower bound of its tracked rate falls below the certificate's exact 95 % lower bound; the ladder stops there",
+  "workers": 8
+ },
+ "baseline": {
+  "level": 1.0,
+  "successes": 20,
+  "trials": 20,
+  "ci95": [
+   0.8316,
+   1.0
+  ],
+  "mean_err_ratio": 0.0846,
+  "rate": 1.0,
+  "within_tolerance": true
+ },
+ "knobs": [
+  {
+   "name": "latency",
+   "unit": "ticks",
+   "describe": "actions applied this many control ticks late",
+   "ladder": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rungs": [
+    {
+     "level": 1.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1369,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 2.0,
+     "successes": 0,
+     "trials": 20,
+     "ci95": [
+      0.0,
+      0.1684
+     ],
+     "mean_err_ratio": 0.986,
+     "rate": 0.0,
+     "within_tolerance": false
+    }
+   ],
+   "cliff": {
+    "level": 2.0,
+    "rung": 2
+   }
+  },
+  {
+   "name": "friction",
+   "unit": "x",
+   "describe": "every geom's sliding friction scaled",
+   "ladder": [
+    0.8,
+    0.6,
+    0.4,
+    0.3,
+    0.2
+   ],
+   "rungs": [
+    {
+     "level": 0.8,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0777,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.6,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0748,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.4,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0745,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.3,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1033,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.2,
+     "successes": 19,
+     "trials": 20,
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "mean_err_ratio": 0.221,
+     "rate": 0.95,
+     "within_tolerance": true
+    }
+   ],
+   "cliff": {
+    "level": 0.2,
+    "rung": 5
+   }
+  },
+  {
+   "name": "payload",
+   "unit": "kg",
+   "describe": "mass added to the base, inertia in proportion",
+   "ladder": [
+    1,
+    2,
+    4,
+    6,
+    8
+   ],
+   "rungs": [
+    {
+     "level": 1.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0968,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 2.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1172,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 4.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1847,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 6.0,
+     "successes": 19,
+     "trials": 20,
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "mean_err_ratio": 0.2933,
+     "rate": 0.95,
+     "within_tolerance": true
+    }
+   ],
+   "cliff": {
+    "level": 6.0,
+    "rung": 4
+   }
+  },
+  {
+   "name": "kp",
+   "unit": "x",
+   "describe": "the servos' stiffness scaled",
+   "ladder": [
+    0.8,
+    0.6,
+    0.4,
+    0.3
+   ],
+   "rungs": [
+    {
+     "level": 0.8,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.2475,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.6,
+     "successes": 2,
+     "trials": 20,
+     "ci95": [
+      0.0123,
+      0.317
+     ],
+     "mean_err_ratio": 0.7025,
+     "rate": 0.1,
+     "within_tolerance": false
+    }
+   ],
+   "cliff": {
+    "level": 0.6,
+    "rung": 2
+   }
+  },
+  {
+   "name": "kd",
+   "unit": "x",
+   "describe": "the servos' damping scaled",
+   "ladder": [
+    2,
+    4,
+    8,
+    16
+   ],
+   "rungs": [
+    {
+     "level": 2.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.3454,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 4.0,
+     "successes": 0,
+     "trials": 20,
+     "ci95": [
+      0.0,
+      0.1684
+     ],
+     "mean_err_ratio": 0.6329,
+     "rate": 0.0,
+     "within_tolerance": false
+    }
+   ],
+   "cliff": {
+    "level": 4.0,
+    "rung": 2
+   }
+  },
+  {
+   "name": "joint_pos_noise",
+   "unit": "rad",
+   "describe": "gaussian noise on the joint position term",
+   "ladder": [
+    0.01,
+    0.02,
+    0.05,
+    0.1
+   ],
+   "rungs": [
+    {
+     "level": 0.01,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0856,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.02,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.0882,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.05,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1178,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 0.1,
+     "successes": 19,
+     "trials": 20,
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "mean_err_ratio": 0.2627,
+     "rate": 0.95,
+     "within_tolerance": true
+    }
+   ],
+   "cliff": {
+    "level": 0.1,
+    "rung": 4
+   }
+  },
+  {
+   "name": "tilt",
+   "unit": "deg",
+   "describe": "gravity pitched: a slope believed flat",
+   "ladder": [
+    3,
+    5,
+    8,
+    12,
+    15
+   ],
+   "rungs": [
+    {
+     "level": 3.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1899,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 5.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.2977,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 8.0,
+     "successes": 13,
+     "trials": 20,
+     "ci95": [
+      0.4078,
+      0.8461
+     ],
+     "mean_err_ratio": 0.4737,
+     "rate": 0.65,
+     "within_tolerance": false
+    }
+   ],
+   "cliff": {
+    "level": 8.0,
+    "rung": 3
+   }
+  },
+  {
+   "name": "push",
+   "unit": "m/s",
+   "describe": "the base shoved every 4 s",
+   "ladder": [
+    0.5,
+    1.0,
+    1.5,
+    2.0
+   ],
+   "rungs": [
+    {
+     "level": 0.5,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.109,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 1.0,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.1475,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 1.5,
+     "successes": 20,
+     "trials": 20,
+     "ci95": [
+      0.8316,
+      1.0
+     ],
+     "mean_err_ratio": 0.2067,
+     "rate": 1.0,
+     "within_tolerance": true
+    },
+    {
+     "level": 2.0,
+     "successes": 12,
+     "trials": 20,
+     "ci95": [
+      0.3605,
+      0.8088
+     ],
+     "mean_err_ratio": 0.3244,
+     "rate": 0.6,
+     "within_tolerance": false
+    }
+   ],
+   "cliff": {
+    "level": 2.0,
+    "rung": 4
+   }
+  }
+ ],
+ "ranking": [
+  {
+   "name": "latency",
+   "cliff": 2.0
+  },
+  {
+   "name": "kd",
+   "cliff": 4.0
+  },
+  {
+   "name": "kp",
+   "cliff": 0.6
+  },
+  {
+   "name": "tilt",
+   "cliff": 8.0
+  },
+  {
+   "name": "push",
+   "cliff": 2.0
+  },
+  {
+   "name": "payload",
+   "cliff": 6.0
+  },
+  {
+   "name": "joint_pos_noise",
+   "cliff": 0.1
+  },
+  {
+   "name": "friction",
+   "cliff": 0.2
+  }
+ ],
+ "sensitivity": "most sensitive to latency 2 ticks, then kd 4 x",
+ "judged": "2026-09-24T10:53:25+00:00",
+ "still": {
+  "file": "attribution-cliff.png",
+  "knob": "latency",
+  "level": 2.0,
+  "trial": 13,
+  "tick": 109,
+  "fell": true
+ }
+}

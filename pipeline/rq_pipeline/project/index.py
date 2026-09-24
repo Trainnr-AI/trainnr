@@ -29,6 +29,7 @@ from typing import Any
 
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
+from rq_pipeline.deploy.attribution import read_attribution
 from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from rq_pipeline.envs.lerobot_train_log import RUN_MANIFEST_FILE
@@ -606,6 +607,9 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     for runtime in RUNTIMES:
         if runtime != DEFAULT_RUNTIME and runtime in gates:
             out[f"gate ({runtime.upper()})"] = gate_word(gates[runtime])
+    attribution = read_attribution(path)
+    if attribution:  # what would break it first, right under the gate's word
+        out["sensitivity"] = str(attribution.get("sensitivity", UNRECORDED))
     scene = scene_name_of(m)
     if scene:  # a staged deployment: what it stands on, before the rest
         out["scene"] = scene
