@@ -1,0 +1,46 @@
+{
+ "id": "gate-paired-draw-go2-c2-2026-09-24",
+ "claim": "Paired by trial index, go2-c2's plane gate reads 18/20 [0.683, 0.9877] where the count-dependent draw read 20/20 [0.8316, 1.0]: it still passes the gate's own tolerance rule (0.90 against the certificate's 0.95 minus 0.10), but the strict cliff rule can no longer attribute it, because at 20 trials only 20/20 clears the certificate's exact lower bound of 0.8308. The earlier ranking (latency 2 ticks, then kd x4) stands as a reading of the old draw only.",
+ "date": "2026-09-24",
+ "repo_commit": "c451dcf",
+ "argv": [
+  "tools/gate-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited",
+  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --no-still",
+  "tools/preflight-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited"
+ ],
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL box (Ubuntu under WSL2, x86_64); 20 held twists at seed 1000, each trial drawn from its own (seed, trial) stream (deploy.gate.DRAW_NOW = per-trial/2)",
+ "outcome": {
+  "gate_count_draw": {"successes": 20, "trials": 20, "ci95": [0.8316, 1.0], "passed": true, "judged": "2026-09-12T18:57:47+00:00"},
+  "gate_paired_draw": {"successes": 18, "trials": 20, "ci95": [0.683, 0.9877], "passed": true, "judged": "2026-09-24T13:54:23+00:00"},
+  "failed_trials": [
+   {"trial": 0, "command": [0.04, 0.21, -0.03], "err_ratio": 0.672},
+   {"trial": 15, "command": [0.08, 0.0, 0.29], "err_ratio": 0.539}
+  ],
+  "certificate": {"successes": 38, "trials": 40, "ci95": [0.8308, 0.9939]},
+  "attribution_paired_draw": "refused: the untouched baseline reads 18/20 [0.683, 0.9877], under the certificate's lower bound 0.8308",
+  "attribution_count_draw": "most sensitive to latency 2 ticks, then kd 4 x (gate-attribution-go2-c2-2026-09-24)",
+  "preflight_paired_draw": "passed 7/7 in simulation; peak torque demand 0.56x the force range (RL_calf) over the gate's first four paired twists, 0.45x under the old draw's",
+  "first_draw_bug": "the first per-trial draw made a generator per axis, so a trial's three axes moved together; it read 16/20 and failed before the fix (one generator per trial, pinned in tests/test_review_deploy.py)"
+ },
+ "inputs": {
+  "deployment": "go2-c2-deploy-cited (policy go2-c2-model_1499@99b1655e2cec, robot go2@5003bf617b5f); its stamp now leaves run records out: go2-c2-deploy-cited@9eb3f5d5844c",
+  "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f"
+ },
+ "artifacts": {
+  "gate": "projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
+  "preflight": "projects/go2-walk/deploy/go2-c2-deploy-cited/preflight.json",
+  "old_records": "the 2026-09-12 gate record was replaced by the re-run (its numbers are kept here, gate_count_draw); attribution.json beside the manifest is still the count-draw record, and the card marks it 'drawn by count (re-run to pair)'"
+ },
+ "sources": {
+  "draw": "pipeline/rq_pipeline/deploy/gate.py draw_commands, trial_rng, DRAW_NOW",
+  "cliff_rule": "pipeline/rq_pipeline/deploy/attribution.py CLIFF_RULE, BASELINE_BELOW"
+ },
+ "protocol": "docs/77-the-unitree-loop.md §9",
+ "caveats": [
+  "Sim only; nothing here is a hardware claim.",
+  "Both failed trials are near-zero forward commands (0.04 and 0.08 m/s) whose tracking error is judged as a ratio of the command, the shape where the ratio rule is harshest; the gate's rule is unchanged.",
+  "20 trials: 18/20 and 20/20 are one draw each; the two gates' intervals overlap.",
+  "The cliff rule is the operator's open choice: the gate's own tolerance rule would let the sweep run; this record changes neither rule.",
+  "The DDS gate record (gate-dds.json, 2026-09-13) is still the count-dependent draw and the card says so; re-running it needs /dev/uinput writable (docs/77 §7)."
+ ]
+}

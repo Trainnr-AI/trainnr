@@ -219,7 +219,10 @@ itself uses — never around them.
   "built" without saying where until the market read named it.
 
 Counted from the registration list in `pipeline/rq_pipeline/mcp_server.py`
-on 2026-09-24: 69 tools on the tip.
+on 2026-09-24: 69 tools at noon, 75 by the evening (ACT gained
+`attribute_deployment`, `preflight_deployment`, `stop_deployment`,
+`ingest_public_log`; DESCRIBE gained `list_public_logs` and
+`list_capture_sources`).
 
 What the harness adds, by stage: a workspace description (what artifacts
 exist, by kind, with their lineage), robot ingest and identification
@@ -344,9 +347,11 @@ downstream, in the datasheet and on the evaluation.
 the third registry seam, the adapters' shape: an `IdentificationMethod`
 answers whether it can fit this bundle from this recording (and why not,
 in a sentence) and runs the fit; `@method(name)`, the built-ins, and the
-`rq_pipeline.identification_methods` entry-point group. One built-in
-today, `drivetrain-ratio`, the rig's ratio-form fit from a `.wire`
-sweep — and because a fit reads the original bytes, ingest now keeps
+`rq_pipeline.identification_methods` entry-point group. Two built-ins
+as of 2026-09-24: `drivetrain-ratio`, the rig's ratio-form fit from a
+`.wire` sweep, and `legged-joints` (`robot/legged_fit.py`, a quadruped's
+per-joint armature, damping and Coulomb friction with bootstrap
+intervals, docs/77 §8); the first — and because a fit reads the original bytes, ingest now keeps
 the raw source file inside the recording artifact (`raw/`). Three MCP
 doors: `list_identification_methods`, `identify_system(robot,
 recording, method?)` — both by version; writes the fit record into the
@@ -444,7 +449,12 @@ against the simulator and must reproduce the original evaluation's
 interval within a stated tolerance.** If the manifest is wrong — a
 transposed joint order, a missing scale — the numbers move and the gate
 fails. That is a full test of the deployment contract with no robot
-involved, and it is the last thing built before hardware enters.
+involved. It was the last thing built before hardware enters until
+2026-09-24, when the gate learned to say why (attribution, docs/77 §9)
+and the runtime gained a pre-flight, a ramp-in and a soft stop (docs/77
+§10); since the evening of that day the gate's trials are drawn per
+trial index, so a gate, its attribution and its pre-flight run the same
+commands.
 
 The safety doctrine binds it and does not move: limits are enforced
 *below* the policy, and a model output is never wired to a safety

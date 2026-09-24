@@ -63,17 +63,17 @@ second gate we can add on a Linux box.
 The states are docs/76's. For a reinforcement-learning loop two of them
 read differently, and the window must say so rather than show a gap.
 
-| state | for the Go2 | door | status 2026-09-10 |
+| state | for the Go2 | door | status (2026-09-10; updated 2026-09-24) |
 |---|---|---|---|
 | asset onboarded | Menagerie `go2.xml` into `projects/go2-walk/robots/go2` | `onboard_robot` | done by the door; two frictions (§3) |
 | telemetry recorded | none of our own — no Go2 in the room. The live Unitree adapter is BUILT (2026-09-24, `pipeline/rq_pipeline/robots/dds_capture.py`): `start_capture(source="dds", network=<the robot's interface>)` records `rt/lowstate` AND `rt/lowcmd` as one recording, basis "own robot"; rehearsed on their simulator and controller (basis "simulation"; docs/07 2026-09-24 evening). Since 2026-09-24: a REAL Go2's public bag (YibinWu/leg-odometry, 12 min of `/lowstate` at 499.8 Hz measured) enters through the rosbag2 adapter (`pipeline/rq_pipeline/robots/adapters/rosbag2.py`) with a provenance block, and the strip's chip reads "Telemetry · public log", never met (docs/07 2026-09-24 afternoon) | `ingest_recording`, `ingest_public_log` | a real robot's telemetry, not ours; shown as such |
-| system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `rq_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists | declared |
+| system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `rq_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists; the `legged-joints` method exists since 2026-09-24 (§8) and has fit public logs of other people's Go2s | declared for this robot; a method, no recording of ours |
 | environment defined | the walk families (`rq_pipeline/tasks/walks.py`): `robotiq/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; rq_mjlab builds the simulator environment from it (`rq_mjlab/src/rq_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12) → generic `evaluate_policy` (A5, still walk-shaped) | done 2026-09-10 on the box: go2-c1 40/40 twice, go2-c2 38/40 |
 | deployment exported | the deploy manifest (A6, `rq_mjlab/src/rq_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`rq_pipeline/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
-| drift monitored | fresh telemetry identified without writing a fit record, judged against the union of the pinned intervals (docs/76 §9.1); empty on the Go2 by design — no telemetry, no method (§8) | `check_drift` (A7) | built 2026-09-13, proved on the rig; waits on a real Go2 here |
+| drift monitored | fresh telemetry identified without writing a fit record, judged against the union of the pinned intervals (docs/76 §9.1); empty on the Go2 — a method since 2026-09-24, no telemetry of ours yet (§8) | `check_drift` (A7) | built 2026-09-13, proved on the rig; waits on a real Go2 here |
 
 ## 3. Frictions found, in the order the loop found them
 
@@ -890,7 +890,11 @@ operator's rule tonight: smoke runs only; the full retrain waits.
     sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev libglfw3-dev
     git clone https://github.com/unitreerobotics/unitree_sdk2 ~/src/unitree_sdk2
     cd ~/src/unitree_sdk2 && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && make -j8 && sudo make install
-    sudo modprobe joydev && sudo chmod 666 /dev/uinput
+    echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
+    printf 'uinput\njoydev\n' | sudo tee /etc/modules-load.d/uinput.conf
+    sudo modprobe uinput && sudo modprobe joydev
+    sudo udevadm control --reload-rules && sudo udevadm trigger
+    sudo usermod -aG input "$USER"   # then log out and in (WSL: wsl --shutdown)
 
 (their *doc/setup_en.md* names the apt line; `unitree_sdk2` brings
 CycloneDDS; `/dev/uinput` exists on this kernel, root-owned, and both
@@ -979,14 +983,31 @@ Pico rig: two real sweeps as the reference, a copy with one wheel's
 encoder scaled named that wheel's gear and nothing else, an untouched
 copy came back within. On the Go2 the stage stays empty and the strip
 says so — a drift check needs an identification method and a recording
-from the robot, and this robot has neither: its dynamics are the
-reference's declared constants (§1), never measured. The order that
+from the robot. As of 2026-09-24 the method exists (`legged-joints`, the
+paragraph below) and the recording does not: its dynamics are still the
+reference's declared constants (§1), never measured on this robot. The order that
 fills it is the one the loop already states: telemetry from a real Go2
 through an adapter, a method for a legged robot's actuators (the
 reference's rated PD is the declared point; an identified interval
 around it is what a check would judge against), then `check_drift` on
 every fresh recording. The strip's Sys ID and Telemetry flags are the
 same gap seen from the other end.
+
+**2026-09-24, the method exists and has run on real Go2s — not ours.**
+`legged-joints` (`pipeline/rq_pipeline/robot/legged_fit.py`) fits
+every hinge's armature, damping and Coulomb friction from a log of
+joint position, velocity and torque against the bundle's own MJCF, with
+bootstrap intervals, pinned verdicts and bound flags; proved on the
+Go2 model with a known truth (36/36 within 3 %,
+`go2-legged-fit-synthetic-2026-09-24`), then run through the doors on
+IIT's in-air chirp (31/36 pinned, 91-99 % explained) and DFKI's field
+bag (13/36, 0-51 %: a walking log under someone else's controller is
+not a chirp, and the record says so per joint;
+`go2-legged-fit-public-logs-2026-09-24`). The stage lights with the
+word "public log" beside it (`robots/recording.BASES`, the Studio's
+chip), and keeps that word until a recording of this robot exists. A
+drift check on the Go2 now has a method to run and still no telemetry
+of its own to run on.
 
 ## 9. What would break it first: the gate says why (2026-09-24)
 
@@ -1041,10 +1062,29 @@ the plane gate 20/20, the certificate 38/40 with lower bound 0.8308):
 The card reads "most sensitive to latency 2 ticks, then kd 4 x". Read
 plainly: this policy tolerates a third of the friction, four kilograms
 on its back, a 5 deg slope and shoves at 1.5 m/s, and dies at 40 ms of
-action delay or a deploy config with the gains off by a factor of two.
+action delay, stiffness at 60 % or damping ×4 (the count-dependent
+draw; the paired draw's re-measure is below).
 That is the same shape the field's trackers report from hardware
 (gains hand-copied wrong, a slow link), now as a number a reader sees
 before the robot moves. Three minutes on eight cores.
+
+**Re-measured under the paired draw (2026-09-24, evening).** The numbers
+above were read under the gate's first draw, where each command axis was
+one vector the length of the trial count: trial i of a 4-trial dry run
+was not trial i of the 20-trial gate. The gate now draws every trial
+from its own (seed, trial) stream (`deploy.gate.DRAW_NOW`, versioned in
+every record's protocol), and attribution and pre-flight take the
+passing gate's own trials and seed from its record. Paired, go2-c2's
+plane gate reads **18/20 [0.683, 0.988]** (the two losses are the
+near-zero forward commands, 0.04 and 0.08 m/s, where a ratio error is
+harshest); it still passes the gate's tolerance rule, and the strict
+cliff rule refuses to attribute it: at 20 trials only 20/20 clears the
+certificate's lower bound of 0.8308, so no cliff can be told from a
+baseline of 18 (finding `gate-paired-draw-go2-c2-2026-09-24`). The
+ranking above stands as a reading of the old draw only, and the card
+says "drawn by count (re-run to pair)" beside it. Which rule a cliff is
+read by, the strict lower bound or the gate's 0.10 tolerance, is the
+operator's call; both verdicts are in every rung's record.
 
 ![The fall at the cliff: go2-c2 at two ticks of action latency, trial 13, tick 109](figures/attribution/go2-c2-latency-2-ticks.png)
 
@@ -1061,22 +1101,6 @@ observation latency as a knob beside action latency; the DDS runtime
 swept through Unitree's own controller (its gains are the deploy YAML's,
 the very file the field mis-copies); the sweep on a scene's course once
 a walker clears one.
-
-**2026-09-24, the method exists and has run on real Go2s — not ours.**
-`legged-joints` (`pipeline/rq_pipeline/robot/legged_fit.py`) fits
-every hinge's armature, damping and Coulomb friction from a log of
-joint position, velocity and torque against the bundle's own MJCF, with
-bootstrap intervals, pinned verdicts and bound flags; proved on the
-Go2 model with a known truth (36/36 within 3 %,
-`go2-legged-fit-synthetic-2026-09-24`), then run through the doors on
-IIT's in-air chirp (31/36 pinned, 91-99 % explained) and DFKI's field
-bag (13/36, 0-51 %: a walking log under someone else's controller is
-not a chirp, and the record says so per joint;
-`go2-legged-fit-public-logs-2026-09-24`). The stage lights with the
-word "public log" beside it (`robots/recording.BASES`, the Studio's
-chip), and keeps that word until a recording of this robot exists. A
-drift check on the Go2 now has a method to run and still no telemetry
-of its own to run on.
 
 ## 10. Pre-flight: before the first tick on a robot (2026-09-24)
 
@@ -1167,8 +1191,11 @@ the card's check. The DDS run (the state read from their simulator in
 their fixed stand, their Passive stop measured beside ours) is built and
 tested against fakes of their bus and pad, and NOT yet run on their
 stack on 2026-09-24: `/dev/uinput` went back to root-only after the
-box's reboot, and `sudo modprobe joydev && sudo chmod 666 /dev/uinput`
-is the operator's line; the tool refuses with it. On the DDS runtime
+box's reboot. The operator's lines are a udev rule giving the node to
+the `input` group, the user in that group and the two modules loaded at
+boot (`deploy/gamepad.py::UINPUT_FIX_LINES`, §7); not `chmod 666`, which
+opens input injection to every local user and is gone at the next
+reboot. The tool refuses with them. On the DDS runtime
 their controller owns the gains, so our blend cannot be applied there:
 their stop is their Passive in one press, measured, not changed. The
 compute check measures this machine; the robot's computer is measured on
