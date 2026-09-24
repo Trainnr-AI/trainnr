@@ -30,6 +30,7 @@ from rq_pipeline.robot.torque_balance import (
 )
 from rq_pipeline.robots.joint_orders import GO2_MENAGERIE_FEET, anatomy_of
 from rq_pipeline.robots.recording import (
+    ACCELERATION_COMPONENTS,
     BASE_ACCELERATION,
     BASE_POSE,
     BASE_TWIST,
@@ -42,6 +43,8 @@ from rq_pipeline.robots.recording import (
     JOINT_KP,
     JOINT_POSITION,
     JOINT_VELOCITY,
+    POSE_COMPONENTS,
+    TWIST_COMPONENTS,
     Channel,
     Recording,
 )
@@ -317,21 +320,21 @@ def simulate(  # noqa: PLR0913, PLR0915 - the study's axes, each a dataclass; on
             times,
             base_pose,
             "m, unit quaternion",
-            ("x", "y", "z", "qw", "qx", "qy", "qz"),
+            POSE_COMPONENTS,
         )
         channels[BASE_TWIST] = Channel(
             BASE_TWIST,
             times,
             base_vel,
             "m/s, rad/s",
-            ("vx", "vy", "vz", "wx", "wy", "wz"),
+            TWIST_COMPONENTS,
         )
         channels[BASE_ACCELERATION] = Channel(
             BASE_ACCELERATION,
             times,
             base_acc,
             "m/s^2, rad/s^2",
-            ("vx", "vy", "vz", "wx", "wy", "wz"),
+            ACCELERATION_COMPONENTS,
         )
     recording = Recording(
         source=f"synthetic-{posture}-chirp",

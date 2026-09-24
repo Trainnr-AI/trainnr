@@ -344,6 +344,11 @@ class Mcap(unittest.TestCase):
             self.assertIn("N*m", rec.channels["joint.effort"].unit)
             gyro = rec.channels["imu.angular_velocity"]
             np.testing.assert_allclose(gyro.values[0], [0.01, 0.02, 0.03])
+            # sensor_msgs sends x, y, z, w; the channel is w first, MuJoCo's,
+            # as every adapter's is (review 2026-09-24: this one was x-first)
+            orientation = rec.channels["imu.orientation"]
+            self.assertEqual(orientation.components, ("w", "x", "y", "z"))
+            np.testing.assert_allclose(orientation.values[0], [1.0, 0.0, 0.0, 0.0])
             self.assertEqual(
                 rec.census["topics"]["/joint_states"]["type"], mcap_mod.JOINT_STATE
             )

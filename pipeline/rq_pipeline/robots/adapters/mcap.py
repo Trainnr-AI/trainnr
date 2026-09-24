@@ -39,6 +39,8 @@ from rq_pipeline.robots.recording import (
     JOINT_EFFORT,
     JOINT_POSITION,
     JOINT_VELOCITY,
+    QUATERNION_WXYZ,
+    XYZ,
     Channel,
     Recording,
     monotone,
@@ -332,7 +334,7 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
         stamp = header_seconds(message)
         times.append(stamp if stamp > 0 else log_time / NS_PER_S)
         q = message["orientation"]
-        quat.append([q["x"], q["y"], q["z"], q["w"]])  # sensor_msgs' x y z w
+        quat.append([q["w"], q["x"], q["y"], q["z"]])  # w first, MuJoCo's
         w, a = message["angular_velocity"], message["linear_acceleration"]
         gyro.append([w["x"], w["y"], w["z"]])
         accel.append([a["x"], a["y"], a["z"]])
@@ -344,21 +346,21 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
             times_arr,
             np.asarray(quat)[keep],
             unit="quaternion",
-            components=("x", "y", "z", "w"),
+            components=QUATERNION_WXYZ,
         ),
         f"{prefix}{IMU_ANGULAR_VELOCITY}": Channel(
             f"{prefix}{IMU_ANGULAR_VELOCITY}",
             times_arr,
             np.asarray(gyro)[keep],
             unit="rad/s",
-            components=("x", "y", "z"),
+            components=XYZ,
         ),
         f"{prefix}{IMU_LINEAR_ACCELERATION}": Channel(
             f"{prefix}{IMU_LINEAR_ACCELERATION}",
             times_arr,
             np.asarray(accel)[keep],
             unit="m/s^2",
-            components=("x", "y", "z"),
+            components=XYZ,
         ),
     }
 

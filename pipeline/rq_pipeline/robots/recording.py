@@ -72,6 +72,17 @@ IMU_ORIENTATION = "imu.orientation"
 BASE_POSE = "base.pose"
 BASE_TWIST = "base.twist"
 BASE_ACCELERATION = "base.acceleration"
+# Their components, spelled once. Every orientation channel is w-first
+# (MuJoCo's order): an adapter whose source is x, y, z, w (sensor_msgs)
+# reorders before it names IMU_ORIENTATION — the MCAP adapter did not,
+# and a fit reading the channel as MuJoCo's quaternion got it scrambled
+# (review 2026-09-24).
+XYZ = ("x", "y", "z")
+QUATERNION_WXYZ = ("w", "x", "y", "z")
+QUATERNION_UNIT = "unit quaternion"
+POSE_COMPONENTS = (*XYZ, "qw", "qx", "qy", "qz")
+TWIST_COMPONENTS = ("vx", "vy", "vz", "wx", "wy", "wz")
+ACCELERATION_COMPONENTS = ("ax", "ay", "az", "alpha_x", "alpha_y", "alpha_z")
 FOOT_CONTACT = "foot.contact"  # one column per foot, 1.0 in contact
 
 

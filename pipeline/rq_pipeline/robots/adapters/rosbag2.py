@@ -75,7 +75,12 @@ from rq_pipeline.robots.recording import (
     JOINT_KP,
     JOINT_POSITION,
     JOINT_VELOCITY,
+    POSE_COMPONENTS,
+    QUATERNION_UNIT,
+    QUATERNION_WXYZ,
+    TWIST_COMPONENTS,
     UNKNOWN_UNIT,
+    XYZ,
     Channel,
     Recording,
     monotone,
@@ -269,10 +274,6 @@ LAYOUTS: dict[str, Layout] = {
 
 MOTOR_SLOTS = 20  # every LowState and LowCmd carries 20; a Go2 fills 12
 FEET = GO2_UNITREE_FEET  # Unitree's foot order in LowState
-XYZ = ("x", "y", "z")
-QUATERNION_WXYZ = ("w", "x", "y", "z")  # Unitree's order, unlike sensor_msgs
-POSE_COMPONENTS = ("x", "y", "z", "qw", "qx", "qy", "qz")  # MuJoCo's free-joint
-TWIST_COMPONENTS = ("vx", "vy", "vz", "wx", "wy", "wz")
 NOTE_TAU_EST = (
     "joint.effort is Unitree's tau_est: estimated from motor current by the "
     "motor driver, not measured by a torque sensor"
@@ -363,7 +364,7 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract(JOINT_ACCELERATION, "rad/s^2", GO2_MOTORS, _motors("ddq")),
         Extract("motor.temperature", "degC", GO2_MOTORS, _motors("temperature")),
         Extract("motor.lost", "count", GO2_MOTORS, _motors("lost")),
-        Extract(IMU_ORIENTATION, "quaternion", QUATERNION_WXYZ, _imu("quaternion")),
+        Extract(IMU_ORIENTATION, QUATERNION_UNIT, QUATERNION_WXYZ, _imu("quaternion")),
         Extract(IMU_ANGULAR_VELOCITY, "rad/s", XYZ, _imu("gyroscope")),
         Extract(IMU_LINEAR_ACCELERATION, "m/s^2", XYZ, _imu("accelerometer")),
         Extract("imu.rpy", "rad", ("roll", "pitch", "yaw"), _imu("rpy")),
@@ -414,7 +415,9 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract(FOOT_CONTACT, "bool", GO2_MENAGERIE_FEET, _bools("foot_contact")),
     ),
     ROS_IMU: (
-        Extract(IMU_ORIENTATION, "unit quaternion", ("qw", "qx", "qy", "qz"), _wxyz("orientation")),  # noqa: E501
+        Extract(
+            IMU_ORIENTATION, QUATERNION_UNIT, QUATERNION_WXYZ, _wxyz("orientation")
+        ),
         Extract(IMU_ANGULAR_VELOCITY, "rad/s", XYZ, _xyz("angular_velocity")),
         Extract(IMU_LINEAR_ACCELERATION, "m/s^2", XYZ, _xyz("linear_acceleration")),
     ),
