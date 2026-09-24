@@ -68,6 +68,11 @@ FLUSH_S = 10.0
 # The channel components drawn per recording: all of them up to this many,
 # so a 14-joint arm plots as fourteen lines and not one unreadable braid.
 MAX_TRACES = 16
+# A viewer draws a trace, not every sample: a 12-minute 500 Hz bag is
+# 368k rows per trace and its stream saved as 605 MB (2026-09-24).
+# Above this many rows a trace is sent every k-th sample and the manifest
+# says so; the recording on disk keeps every row.
+MAX_ROWS_PER_TRACE = 20_000
 PAIR = 2  # a compare view holds two artifacts
 EPISODE_MANIFEST = "manifest.json"  # a generated episode's own record
 MAX_VIDEOS = 8  # a dataset's cameras shown at once
@@ -290,6 +295,7 @@ def _present_recording(
     recording = Recording.read(project.root / artifact.path)
     views = []
     paths = []
+    decimated: dict[str, int] = {}
     with _AsDefault(rr_):
         for name, channel in recording.channels.items():
             base = f"{root}/{name}"
@@ -297,16 +303,24 @@ def _present_recording(
             labels = channel.components or tuple(str(i) for i in range(channel.width))
             values = channel.values.reshape(len(channel.times), -1)
             traces = list(enumerate(labels[:MAX_TRACES]))
-            for _, label in traces:
+            # One column send per trace: a 12-minute 500 Hz bag is 368k
+            # rows, and a log call per row per trace took minutes.
+            stride = max(1, -(-len(channel.times) // MAX_ROWS_PER_TRACE))
+            if stride > 1:
+                decimated[name] = stride
+            values = values[::stride]
+            times = rr.TimeColumn("time", duration=channel.times[::stride])
+            for col, label in traces:
                 rr_.log(
                     f"{base}/{label}",
                     rr.SeriesLines(names=[f"{label} [{channel.unit}]"]),
                     static=True,
                 )
-            for t, row in zip(channel.times, values, strict=True):
-                rr_.set_time("time", duration=float(t))
-                for col, label in traces:
-                    rr_.log(f"{base}/{label}", rr.Scalars(float(row[col])))
+                rr_.send_columns(
+                    f"{base}/{label}",
+                    indexes=[times],
+                    columns=rr.Scalars.columns(scalars=values[:, col]),
+                )
             views.append(
                 rrb.TimeSeriesView(origin=base, name=f"{name} [{channel.unit}]")
             )
@@ -316,8 +330,17 @@ def _present_recording(
                 f"# {artifact.stamp}\n\n"
                 f"- source `{recording.source}` via `{recording.adapter}`"
                 f" · {recording.duration_s:.1f} s · collected: {recording.collection}\n"
-                f"- census: {json.dumps(recording.census)}\n"
+                + (
+                    f"- provenance: {json.dumps(recording.provenance)}\n"
+                    if recording.provenance
+                    else ""
+                )
+                + f"- census: {json.dumps(recording.census)}\n"
                 + "".join(f"- note: {n}\n" for n in recording.notes)
+                + "".join(
+                    f"- viewer shows every {k}th sample of {n} (disk keeps all)\n"
+                    for n, k in decimated.items()
+                )
             ),
         )
     return {

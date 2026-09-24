@@ -56,6 +56,11 @@ from rq_pipeline.project.kinds import (
     stamp_run,
 )
 from rq_pipeline.project.locate import FOLDERS, LOOPS, Project
+from rq_pipeline.robots.recording import (
+    JOINT_POSITION,
+    ORIGIN_OWN,
+    PROVENANCE_ORIGIN,
+)
 from rq_pipeline.scenes.record import (
     capture_failed,
     capture_in_progress,
@@ -90,7 +95,8 @@ STATES: tuple[tuple[str, Kind], ...] = (
 NEXT_MOVE: dict[str, str] = {
     "telemetry recorded": (
         "record the robot's telemetry (ingest_recording: a .wire file, a LeRobot "
-        "dataset, a ROS 2 .mcap bag, a mocap CSV or BVH) — or start from its model"
+        "dataset, a ROS 2 bag as .mcap or rosbag2 .db3, a mocap CSV or BVH), or a "
+        "registered public log (ingest_public_log) — or start from its model"
     ),
     "asset onboarded": "onboard the robot's model as an asset (onboard_robot)",
     "system identified": (
@@ -143,6 +149,14 @@ class State:
     # reinforcement-learning loop has no dataset); `note` says why.
     needed: bool = True
     note: str | None = None
+    # Whose robot proved the stage when not the operator's own: ORIGIN_PUBLIC_LOG
+    # when every proof is a public log. The Studio shows the word instead of
+    # "met"; None for the operator's own.
+    origin: str | None = None
+    # Whose robot proved the stage when not the operator's own: ORIGIN_PUBLIC_LOG
+    # when every proof is a public log. The Studio shows the word instead of
+    # "met"; None for the operator's own.
+    origin: str | None = None
 
 
 @dataclass(frozen=True)
@@ -435,7 +449,24 @@ def _summary_recording(path: Path) -> dict[str, Any]:
     out = _take(raw, ("adapter", "source", "duration_s", "collection"))
     if "channels" in raw:
         out["channels"] = len(raw["channels"])
+    provenance = raw.get("provenance") or {}
+    origin = str(provenance.get(PROVENANCE_ORIGIN, ORIGIN_OWN))
+    if origin != ORIGIN_OWN:
+        # Whose robot: a public log names it; the operator's own says nothing.
+        out["origin"] = origin
+        out.update(_take(provenance, ("robot", "licence")))
+    rate = _measured_rate(raw)
+    if rate is not None:
+        out["rate_hz"] = rate
     return out
+
+
+def _measured_rate(raw: dict[str, Any]) -> float | None:
+    """The joint-position channel's measured rate, for the card."""
+    for channel in raw.get("channels") or []:
+        if channel.get("name") == JOINT_POSITION and channel.get("rate_hz"):
+            return round(float(channel["rate_hz"]), 1)
+    return None
 
 
 def _summary_certificate(path: Path) -> dict[str, Any]:
@@ -723,6 +754,20 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
                 present=bool(proof),
                 needed=name not in skipped,
                 note=skipped.get(name),
+                origin=_origin(artifacts, kind, proof),
             )
         )
     return states
+
+
+def _origin(artifacts: list[Artifact], kind: Kind, proof: list[str]) -> str | None:
+    """The one origin every proving artifact shares, when it is not the
+    operator's own; None otherwise (own, mixed, or nothing proved)."""
+    origins = {
+        a.summary.get("origin", ORIGIN_OWN)
+        for a in artifacts
+        if a.kind == kind.value and a.stamp in proof
+    }
+    if len(origins) == 1 and ORIGIN_OWN not in origins:
+        return str(next(iter(origins)))
+    return None

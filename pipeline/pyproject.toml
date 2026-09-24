@@ -109,6 +109,7 @@ runpod = "rq_pipeline.cloud.runpod"
 wire = "rq_pipeline.robots.adapters.wire"
 lerobot = "rq_pipeline.robots.adapters.lerobot"
 mcap = "rq_pipeline.robots.adapters.mcap"
+rosbag2 = "rq_pipeline.robots.adapters.rosbag2"
 
 [project.entry-points."rq_pipeline.identification_methods"]
 drivetrain-ratio = "rq_pipeline.robot.methods:DrivetrainRatio"

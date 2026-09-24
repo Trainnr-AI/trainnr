@@ -1117,13 +1117,53 @@ def ingest_recording(
     source: str, name: str | None = None, adapter: str | None = None
 ) -> dict[str, Any]:
     """Read a robot's telemetry (a .wire file, a LeRobot dataset directory,
-    a ROS 2 .mcap bag) into the current project as a stamped recording:
-    named channels with units and rates, a census of what the robot
-    reported, and the adapter's honest notes. The first move of the loop."""
+    a ROS 2 bag as .mcap or rosbag2 sqlite3) into the current project as
+    a stamped recording: named channels with units and measured rates, a
+    census of what the robot reported, and the adapter's honest notes.
+    The first move of the loop."""
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
 
     return ingest(current_project(), Path(source), name=name, adapter=adapter)
+
+
+def list_public_logs() -> list[dict[str, Any]]:
+    """The public recordings of real robots the registry can fetch: robot,
+    source, recorded date, the data's licence state, whether fetched."""
+    from rq_pipeline.robots.public_logs import listing  # noqa: PLC0415
+
+    return listing()
+
+
+def ingest_public_log(
+    name: str, recording_name: str | None = None
+) -> dict[str, Any] | Refusal:
+    """Fetch a registered public log (checked against its byte count and
+    digest, cached under runs/public-logs) and ingest it into the current
+    project with a provenance block: origin "public log", source, url,
+    licence state, robot. The telemetry stage then reads "public log" -
+    a real robot, not ours. Refuses an unknown name, a download that
+    differs from the registry, and a network that is not there."""
+    import urllib.error  # noqa: PLC0415
+
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.ingest import ingest  # noqa: PLC0415
+    from rq_pipeline.robots import public_logs  # noqa: PLC0415
+
+    try:
+        entry = public_logs.resolve(name)
+        source = public_logs.fetch(name)
+    except KeyError as why:
+        return refusal(str(why))
+    except (urllib.error.URLError, OSError, ValueError) as why:
+        return refusal(f"fetch {name!r}: {why}")
+    return ingest(
+        current_project(),
+        source,
+        name=recording_name or entry.name,
+        adapter=entry.adapter,
+        provenance=entry.provenance(),
+    )
 
 
 # -- the Studio's control surface (docs/76 §10.1) ----------------------------------
@@ -2033,9 +2073,18 @@ def build_server() -> Any:  # noqa: PLR0915
         list_robot_adapters
     )
     server.tool(
-        description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap) "
-        "into the project as a stamped recording with channels, units, census."
+        description="Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap or "
+        "rosbag2 .db3) into the project as a stamped recording with channels, "
+        "units, measured rates, census."
     )(ingest_recording)
+    server.tool(
+        description="The public real-robot recordings the registry can fetch: "
+        "robot, source, recorded date, licence state, fetched or not."
+    )(list_public_logs)
+    server.tool(
+        description="Fetch a registered public log (size and digest checked) and "
+        "ingest it with its provenance; the telemetry stage reads 'public log'."
+    )(ingest_public_log)
     server.tool(
         description="Bring a trained rq_mjlab experiment into the project: run, policy "
         "and one evaluation per verdict, each citing the others by version."

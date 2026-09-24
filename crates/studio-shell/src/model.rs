@@ -155,7 +155,15 @@ pub struct State {
     pub needed: bool,
     #[serde(default)]
     pub note: Option<String>,
+    /// Whose robot proved the stage when not the operator's own: the
+    /// index's `ORIGIN_PUBLIC_LOG` word. Shown on the chip instead of
+    /// "met" — a public log is a real robot, and not ours.
+    #[serde(default)]
+    pub origin: Option<String>,
 }
+
+/// The one origin word the strip knows (`robots/recording.py::ORIGIN_PUBLIC_LOG`).
+pub const ORIGIN_PUBLIC_LOG: &str = "public log";
 
 fn yes() -> bool {
     true

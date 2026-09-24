@@ -24,7 +24,7 @@ use crate::control::{
 };
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
-    summary_line, Artifact, Index, Job, Model, UNRECORDED,
+    summary_line, Artifact, Index, Job, Model, ORIGIN_PUBLIC_LOG, UNRECORDED,
 };
 use crate::widgets::{
     card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
@@ -831,6 +831,14 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         tokens.native_frame_stroke.color.linear_multiply(0.5),
                         ui.visuals().weak_text_color().linear_multiply(0.6),
                     )
+                } else if state.present && state.origin.as_deref() == Some(ORIGIN_PUBLIC_LOG) {
+                    // Proved by someone else's robot (a public log): outlined
+                    // in the accent, never the success fill — real, not ours.
+                    (
+                        egui::Color32::TRANSPARENT,
+                        tokens.highlight_color,
+                        tokens.strong_fg_color,
+                    )
                 } else if state.present {
                     (
                         tokens.alert_success.fill,
@@ -853,7 +861,12 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 // A frame never wraps itself in a wrapped row (only a label
                 // does), so the chip is measured first and the row broken
                 // when it would not fit — else it runs past the card.
-                let label = stage_label(&state.name);
+                let label = match state.origin.as_deref() {
+                    Some(origin @ ORIGIN_PUBLIC_LOG) if state.present => {
+                        format!("{} · {origin}", stage_label(&state.name))
+                    }
+                    _ => stage_label(&state.name).to_owned(),
+                };
                 let font = DesignTokens::welcome_screen_body().resolve(ui.style());
                 let text_w = ui
                     .painter()
@@ -884,7 +897,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                             };
                             icon_at(ui, icon, 16.0, text_color);
                             ui.label(
-                                egui::RichText::new(stage_label(&state.name))
+                                egui::RichText::new(label.as_str())
                                     .text_style(DesignTokens::welcome_screen_body())
                                     .strong()
                                     .color(text_color),
@@ -893,6 +906,11 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     })
                     .response;
                 let mut hover = state.name.clone();
+                if let Some(origin) = &state.origin {
+                    hover.push_str("\nproved by a ");
+                    hover.push_str(origin);
+                    hover.push_str(": a real robot, not this project's own");
+                }
                 if let Some(note) = &state.note {
                     hover.push_str("\nnot needed: ");
                     hover.push_str(note);
