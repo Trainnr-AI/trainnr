@@ -36,7 +36,16 @@ TIER = {
     "robots": 4,  # the ingest seam: reads collect's wire, writes project artifacts
 }
 # Modules placed below their package: stdlib gates the lower tiers import.
-MODULE_TIER = {"rq_pipeline.robot.model_checks": 1}
+# And above it: the legged fit and the two public-log readers consume the
+# ingest seam's `Recording` (2026-09-24), so they sit with `robots`; the
+# method registry finds the fit by name at run time, not by import.
+MODULE_TIER = {
+    "rq_pipeline.robot.model_checks": 1,
+    "rq_pipeline.robot.legged_fit": 4,
+    "rq_pipeline.robot.quadruped_synth": 4,
+    "rq_pipeline.robot.rosbag_sqlite": 4,
+    "rq_pipeline.robot.pt_dict": 4,
+}
 
 
 def _package_of(module: str) -> str:

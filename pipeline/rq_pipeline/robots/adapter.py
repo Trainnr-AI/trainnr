@@ -25,6 +25,10 @@ BUILTIN_MODULES = (
     "rq_pipeline.robots.adapters.lerobot",
     "rq_pipeline.robots.adapters.mcap",
     "rq_pipeline.robots.adapters.mocap",
+    # The rosbag2 SQLite reader lives beside the identification that needed
+    # it first (robot/rosbag_sqlite); see its note on where it collapses.
+    "rq_pipeline.robot.rosbag_sqlite",
+    "rq_pipeline.robot.pt_dict",
 )
 
 

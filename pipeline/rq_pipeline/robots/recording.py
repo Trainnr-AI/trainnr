@@ -21,6 +21,13 @@ from typing import Any
 
 import numpy as np
 
+from rq_pipeline.bundles.basis import (  # noqa: F401 - re-exported: the adapters' home
+    BASES,
+    BASIS_OWN,
+    BASIS_PUBLIC,
+    BASIS_SIMULATION,
+    BASIS_UNKNOWN,
+)
 from rq_pipeline.bundles.json_record import JsonRecord
 
 
@@ -48,11 +55,24 @@ UNKNOWN_UNIT = "unknown"
 # source's own name and is carried, not dropped.
 JOINT_POSITION = "joint.position"
 JOINT_VELOCITY = "joint.velocity"
+JOINT_ACCELERATION = "joint.acceleration"
 JOINT_EFFORT = "joint.effort"
-JOINT_COMMAND = "joint.command"
+JOINT_COMMAND = "joint.command"  # the commanded joint position
+JOINT_COMMAND_VELOCITY = "joint.command_velocity"
+JOINT_FEEDFORWARD = "joint.feedforward"  # the commanded feed-forward torque
+JOINT_KP = "joint.kp"  # the motor-side PD gains the command ran under
+JOINT_KD = "joint.kd"
 IMU_ANGULAR_VELOCITY = "imu.angular_velocity"
 IMU_LINEAR_ACCELERATION = "imu.linear_acceleration"
 IMU_ORIENTATION = "imu.orientation"
+# A floating base, in MuJoCo's free-joint conventions: pose = xyz + wxyz
+# quaternion; twist and acceleration = linear (world frame) + angular
+# (body frame). An adapter whose source uses another convention
+# converts before it names these.
+BASE_POSE = "base.pose"
+BASE_TWIST = "base.twist"
+BASE_ACCELERATION = "base.acceleration"
+FOOT_CONTACT = "foot.contact"  # one column per foot, 1.0 in contact
 
 
 @dataclass(frozen=True)
@@ -141,6 +161,7 @@ class RecordingManifest(JsonRecord):
     census: dict[str, Any] = field(default_factory=dict)  # what the robot reported
     notes: list[str] = field(default_factory=list)  # honest caveats, per adapter
     collection: str = COLLECTION_UNKNOWN  # one of COLLECTIONS
+    basis: str = BASIS_UNKNOWN  # one of BASES: whose robot
 
 
 @dataclass(frozen=True)
@@ -153,6 +174,11 @@ class Recording:
     census: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     collection: str = COLLECTION_UNKNOWN
+    basis: str = BASIS_UNKNOWN
+
+    def __post_init__(self) -> None:
+        if self.basis not in BASES:
+            raise ValueError(f"basis must be one of {BASES}, got {self.basis!r}")
 
     @property
     def duration_s(self) -> float:
@@ -180,6 +206,7 @@ class Recording:
             census=dict(self.census),
             notes=list(self.notes),
             collection=self.collection,
+            basis=self.basis,
         )
 
     def write(self, out: Path) -> Path:
@@ -228,6 +255,7 @@ class Recording:
             census=dict(manifest.census),
             notes=list(manifest.notes),
             collection=manifest.collection,
+            basis=manifest.basis,
         )
 
     def excitation(

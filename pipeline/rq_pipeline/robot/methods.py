@@ -21,7 +21,7 @@ from rq_pipeline.plugins import load_group
 from rq_pipeline.robot.identify import IdentificationResult
 
 ENTRY_POINT_GROUP = "rq_pipeline.identification_methods"
-BUILTIN_MODULES = ("rq_pipeline.robot.methods",)
+BUILTIN_MODULES = ("rq_pipeline.robot.methods", "rq_pipeline.robot.legged_fit")
 
 
 @runtime_checkable
