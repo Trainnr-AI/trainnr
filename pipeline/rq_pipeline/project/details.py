@@ -732,6 +732,7 @@ _TASK_DESCRIBERS: tuple[tuple[Callable[[Any], bool], Callable[[Any], Rows]], ...
 
 
 def _recording(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    from rq_pipeline.robots.quality import QUALITY_KEY  # noqa: PLC0415
     from rq_pipeline.robots.recording import Recording  # noqa: PLC0415
 
     rec = Recording.read(root)
@@ -753,7 +754,7 @@ def _recording(project: Project, root: Path, artifact: Artifact) -> list[Section
                 ", ".join(ch.components) if ch.components else "",
             ]
         )
-    return [
+    sections = [
         _kv(
             "Recording",
             [
@@ -765,6 +766,17 @@ def _recording(project: Project, root: Path, artifact: Artifact) -> list[Section
                 ("channels", len(rec.channels)),
             ],
         ),
+    ]
+    if rec.provenance:
+        sections.append(
+            _kv(
+                "Provenance",
+                list(rec.provenance.items()),
+                note="whose robot this was; a public log is real and not ours",
+            )
+        )
+    sections.extend(_quality_sections(rec.census.get(QUALITY_KEY) or {}))
+    sections.append(
         _table(
             "Channels",
             [
@@ -780,15 +792,65 @@ def _recording(project: Project, root: Path, artifact: Artifact) -> list[Section
                 "components",
             ],
             rows,
-        ),
-        _kv(
-            "What the robot reported",
-            [(k, jsonable(v)) for k, v in rec.census.items()],
-        ),
-        _kv("Notes", [(f"{i + 1}", n) for i, n in enumerate(rec.notes)])
-        if rec.notes
-        else _kv("Notes", []),
-    ]
+        )
+    )
+    reported = {k: v for k, v in rec.census.items() if k != QUALITY_KEY}
+    sections.append(
+        _kv("What the robot reported", [(k, jsonable(v)) for k, v in reported.items()])
+    )
+    sections.append(_kv("Notes", [(f"{i + 1}", n) for i, n in enumerate(rec.notes)]))
+    return sections
+
+
+QUALITY_COLUMNS = [
+    "channel",
+    "samples",
+    "rate (Hz)",
+    "p50 (ms)",
+    "p99 (ms)",
+    "dropouts",
+    "longest gap (ms)",
+]
+
+
+def _quality_sections(quality: dict[str, Any]) -> list[dict[str, Any]]:
+    """What the recording's clock and joints did, measured (robots/quality)."""
+    out: list[dict[str, Any]] = []
+    clock = quality.get("clock") or {}
+    if clock:
+        out.append(
+            _table(
+                "Clock, measured",
+                QUALITY_COLUMNS,
+                [
+                    [
+                        name,
+                        c.get("samples"),
+                        c.get("rate_hz"),
+                        c.get("interval_p50_ms"),
+                        c.get("interval_p99_ms"),
+                        c.get("dropouts"),
+                        c.get("longest_gap_ms"),
+                    ]
+                    for name, c in clock.items()
+                ],
+                note="rate and jitter read off the samples, never a datasheet",
+            )
+        )
+    ranges = quality.get("joint_range") or {}
+    if ranges:
+        out.append(
+            _table(
+                "Joint range covered",
+                ["joint", "min", "max", "span"],
+                [[j, lo, hi, _f(hi - lo)] for j, (lo, hi) in ranges.items()],
+                note=(
+                    f"moving {quality.get('moving_fraction', 0):.0%} of the time "
+                    f"({quality.get('moving_threshold', '')})"
+                ),
+            )
+        )
+    return out
 
 
 # -- batch (a generated dataset) and dataset (an exported one) -------------------------

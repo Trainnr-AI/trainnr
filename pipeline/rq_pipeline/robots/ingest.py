@@ -16,12 +16,13 @@ this seam knows robots and files, nothing above them.
 from __future__ import annotations
 
 import shutil
-from dataclasses import asdict
+from collections.abc import Mapping
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
 from rq_pipeline.robots.adapter import detect, resolve
-from rq_pipeline.robots.recording import Recording
+from rq_pipeline.robots.recording import Recording, origin_of
 
 RAW_DIR = "raw"  # the source file as received, inside the recording
 NAME_FORBIDDEN = "@/"
@@ -33,17 +34,24 @@ def ingest(
     *,
     name: str | None = None,
     adapter: str | None = None,
+    provenance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read `source` (with `adapter`, or the one that accepts it) and
-    write it under `recordings`. Refuses to overwrite an existing
-    recording of the same name — re-ingest under another name or remove
-    it first. Returns the record with the recording's directory under
-    `path`."""
+    write it under `recordings`. `provenance` names whose robot it was
+    when not the operator's own (a public log: its origin, source, url,
+    licence, robot); refused by name when its origin is not a known
+    word. Refuses to overwrite an existing recording of the same name —
+    re-ingest under another name or remove it first. Returns the record
+    with the recording's directory under `path`."""
     source = Path(source)
     if not source.exists():
         raise FileNotFoundError(f"no source at {source}")
+    if provenance:
+        origin_of(provenance)
     entry = resolve(adapter) if adapter else detect(source)
     recording: Recording = entry.build().read(source)
+    if provenance:
+        recording = replace(recording, provenance=dict(provenance))
     label = name or source.stem
     if any(c in label for c in NAME_FORBIDDEN):
         raise ValueError(f"recording names are plain words, got {label!r}")
@@ -70,4 +78,5 @@ def ingest(
         "channels": [asdict(c) for c in manifest.channels],
         "census": manifest.census,
         "notes": manifest.notes,
+        "provenance": manifest.provenance,
     }

@@ -234,8 +234,10 @@ class Presenter(unittest.TestCase):
         self,
     ) -> None:
         """Run the recording presenter against a fake stream: every
-        channel gets a static series line and one scalar per sample, and
-        the blueprint holds one time-series view per channel."""
+        channel gets a static series line and one COLUMN send per trace
+        carrying every sample on the time timeline (one send, not one log
+        per row: a 500 Hz bag is 368k rows), and the blueprint holds one
+        time-series view per channel."""
         try:
             import rerun  # noqa: F401, PLC0415
         except ImportError:
@@ -252,11 +254,15 @@ class Presenter(unittest.TestCase):
             shown = _present_recording(project, artifact, fake)
             self.assertEqual(shown["view"], "time series")
             self.assertIn("recording/joint.position", shown["paths"])
-            scalars = [
-                p for p, t in fake.logged if t == "Scalars" and "joint.position" in p
+            lines = [
+                p
+                for p, t in fake.logged
+                if t == "SeriesLines" and "joint.position" in p
             ]
-            self.assertEqual(len(scalars), 3 * 2)  # 3 samples x 2 joints
-            self.assertTrue(all(tl == "time" for tl, _ in fake.times))
+            self.assertEqual(len(lines), 2)  # one series line per joint
+            sent = [c for c in fake.columns if "joint.position" in c[0]]
+            self.assertEqual([rows for _, _, rows in sent], [3, 3])  # 3 samples each
+            self.assertTrue(all(tl == "time" for _, tl, _ in sent))
             self.assertIn("Vertical", type(shown["layout"]).__name__)
 
 
@@ -272,6 +278,7 @@ class _RerunFake:
 
         self.logged: list[tuple[str, str]] = []
         self.times: list[tuple[str, float]] = []
+        self.columns: list[tuple[str, str, int]] = []  # path, timeline, rows
         self._stream = rr.RecordingStream(application_id="test-fake")
 
     def __getattr__(self, name: str) -> Any:
@@ -286,6 +293,10 @@ class _RerunFake:
 
     def set_time(self, timeline: str, **kw: Any) -> None:
         self.times.append((timeline, float(next(iter(kw.values())))))
+
+    def send_columns(self, path: str, indexes: Any, columns: Any) -> None:
+        index = indexes[0]
+        self.columns.append((path, index.timeline_name(), len(index.as_arrow_array())))
 
 
 if __name__ == "__main__":

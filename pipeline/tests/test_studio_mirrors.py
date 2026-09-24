@@ -6,6 +6,7 @@ instead of a silently broken stream (the test_firmware_mirror idiom).
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import unittest
 from pathlib import Path
@@ -269,6 +270,21 @@ class ProjectContracts(unittest.TestCase):
             int(constant(CONTROL_RS, r"pub const SCREENSHOT_WIDTH: u32 = (\d+);")),
             control.SCREENSHOT_WIDTH,
         )
+
+    def test_the_origin_word_and_the_state_fields_agree(self) -> None:
+        """The strip's "public log" is the recording's own word, and the
+        Rust State reads every field the index writes."""
+        from rq_pipeline.project import index  # noqa: PLC0415
+        from rq_pipeline.robots import recording  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(MODEL_RS, r'pub const ORIGIN_PUBLIC_LOG: &str = "([^"]+)";'),
+            recording.ORIGIN_PUBLIC_LOG,
+        )
+        block = MODEL_RS.split("pub struct State {", 1)[1].split("\n}\n", 1)[0]
+        rust = set(re.findall(r"pub (\w+):", block))
+        python = {f.name for f in dataclasses.fields(index.State)}
+        self.assertEqual(rust, python)
 
     def test_the_in_progress_entry_has_the_fields_the_index_writes(self) -> None:
         block = MODEL_RS.split("pub struct InProgress {", 1)[1].split("}", 1)[0]

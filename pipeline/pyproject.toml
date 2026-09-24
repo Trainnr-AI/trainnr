@@ -119,6 +119,7 @@ runpod = "rq_pipeline.cloud.runpod"
 wire = "rq_pipeline.robots.adapters.wire"
 lerobot = "rq_pipeline.robots.adapters.lerobot"
 mcap = "rq_pipeline.robots.adapters.mcap"
+rosbag2 = "rq_pipeline.robots.adapters.rosbag2"
 
 # The model-source registry's plugin door (rq_pipeline/robot/onboarding.py):
 # a robot file format registers itself with @model_source(name, suffixes)

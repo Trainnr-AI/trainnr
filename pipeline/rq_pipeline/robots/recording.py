@@ -15,6 +15,7 @@ a channel whose unit it cannot place.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -128,6 +129,24 @@ COLLECTIONS = (
     COLLECTION_UNKNOWN,
 )
 
+# Whose robot a recording came from — the `provenance` block's `origin`.
+# A recording with no provenance block is the operator's own by default;
+# a public log names its source, its licence state and the robot, and
+# the loop's telemetry stage is shown with that word, never as met.
+PROVENANCE_ORIGIN = "origin"
+ORIGIN_OWN = "own"
+ORIGIN_PUBLIC_LOG = "public log"
+ORIGINS = (ORIGIN_OWN, ORIGIN_PUBLIC_LOG)
+
+
+def origin_of(provenance: Mapping[str, Any]) -> str:
+    """The origin a provenance block names; the operator's own when it
+    names none; refused by name when it names one this code lacks."""
+    origin = str(provenance.get(PROVENANCE_ORIGIN, ORIGIN_OWN))
+    if origin not in ORIGINS:
+        raise ValueError(f"recording origin {origin!r}; known: {ORIGINS}")
+    return origin
+
 
 @dataclass(frozen=True)
 class RecordingManifest(JsonRecord):
@@ -141,6 +160,10 @@ class RecordingManifest(JsonRecord):
     census: dict[str, Any] = field(default_factory=dict)  # what the robot reported
     notes: list[str] = field(default_factory=list)  # honest caveats, per adapter
     collection: str = COLLECTION_UNKNOWN  # one of COLLECTIONS
+    # Where the recording came from when not from the operator's own robot:
+    # `origin` (one of ORIGINS), and for a public log its `source`, `url`,
+    # `licence`, `robot`, `recorded`. Empty for the operator's own.
+    provenance: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -153,6 +176,7 @@ class Recording:
     census: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     collection: str = COLLECTION_UNKNOWN
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration_s(self) -> float:
@@ -180,6 +204,7 @@ class Recording:
             census=dict(self.census),
             notes=list(self.notes),
             collection=self.collection,
+            provenance=dict(self.provenance),
         )
 
     def write(self, out: Path) -> Path:
@@ -228,6 +253,7 @@ class Recording:
             census=dict(manifest.census),
             notes=list(manifest.notes),
             collection=manifest.collection,
+            provenance=dict(manifest.provenance),
         )
 
     def excitation(

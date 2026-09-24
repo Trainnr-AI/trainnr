@@ -70,6 +70,7 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 | `import-usd.py` | A USD robot asset (Isaac Sim, Omniverse) into a hash-stamped bundle: Newton reads the stage, its MuJoCo bridge writes the MjSpec, our writer makes the bundle (leaf names, mesh files, sensors, a home key, provenance); `--variant Set=Choice`, `--root fixed|free`, `--grip-options`, `--fetch owner/repo@commit:path` for a public asset at a pinned commit (docs/e2e-research/77 §6); the same door the Studio's `onboard_robot` opens |
 | `actuator-bundle.py` | Wrap vendored BAM fits into certified bundles; verify anyone's (stamps, rail/floor checks, honesty advisories) |
 | `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
+| `public-log.py` | Public recordings of real robots: `list` the registry, `fetch` one (byte count and digest checked, cached under `runs/public-logs/`), `ingest` one into a project with its provenance so the telemetry stage reads "public log" |
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
 | `sync-bam-actuators.py` | Vendor new/changed servos from a BAM checkout or repomix pack into `robots/actuators/` — refuses a changed file with no `--version` |
 | `train-watch.py`, `rl-watch.py` | Watch a training run / RL policy roll out live in Rerun |

@@ -9,6 +9,7 @@ minted by the one stamping door.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +26,13 @@ def ingest(
     *,
     name: str | None = None,
     adapter: str | None = None,
+    provenance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A source into the project's recordings, stamped; the record
     carries `stamp` and the recording's `path` relative to the project."""
-    record = ingest_into(project.recordings, source, name=name, adapter=adapter)
+    record = ingest_into(
+        project.recordings, source, name=name, adapter=adapter, provenance=provenance
+    )
     out = Path(record["path"])
     return {
         "stamp": stamp_kind(Kind.RECORDING, out),

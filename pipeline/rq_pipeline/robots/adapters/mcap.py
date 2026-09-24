@@ -30,6 +30,7 @@ from typing import Any
 import numpy as np
 
 from rq_pipeline.robots.adapter import adapter
+from rq_pipeline.robots.cdr import NS_PER_S, Reader
 from rq_pipeline.robots.recording import (
     COLLECTION_ROBOT_OP,
     IMU_ANGULAR_VELOCITY,
@@ -59,7 +60,6 @@ OP_DATA_END = 0x0F
 JOINT_STATE = "sensor_msgs/msg/JointState"
 IMU = "sensor_msgs/msg/Imu"
 CDR_ENCODING = "cdr"
-NS_PER_S = 1e9
 
 
 class UnsupportedBagError(ValueError):
@@ -243,60 +243,7 @@ def _decompress(compression: str, data: bytes) -> bytes | None:
     return None
 
 
-# -- CDR decoding of the two messages ---------------------------------------
-
-
-class _Cdr:
-    """A little-endian CDR reader over one message's bytes."""
-
-    def __init__(self, data: bytes) -> None:
-        # 4-byte encapsulation header: representation id + options.
-        self.data = data
-        self.pos = 4
-
-    def align(self, n: int) -> None:
-        # CDR aligns relative to the start of the body (after the header).
-        rel = self.pos - 4
-        self.pos += (-rel) % n
-
-    def u32(self) -> int:
-        self.align(4)
-        (v,) = struct.unpack_from("<I", self.data, self.pos)
-        self.pos += 4
-        return v
-
-    def i32(self) -> int:
-        self.align(4)
-        (v,) = struct.unpack_from("<i", self.data, self.pos)
-        self.pos += 4
-        return v
-
-    def f64(self) -> float:
-        self.align(8)
-        (v,) = struct.unpack_from("<d", self.data, self.pos)
-        self.pos += 8
-        return v
-
-    def string(self) -> str:
-        n = self.u32()
-        s = self.data[self.pos : self.pos + n - 1].decode("utf-8") if n else ""
-        self.pos += n
-        return s
-
-    def f64_seq(self) -> list[float]:
-        n = self.u32()
-        return [self.f64() for _ in range(n)]
-
-    def string_seq(self) -> list[str]:
-        n = self.u32()
-        return [self.string() for _ in range(n)]
-
-    def header(self) -> float:
-        """std_msgs/Header: stamp (sec i32, nanosec u32), frame_id."""
-        sec = self.i32()
-        nsec = self.u32()
-        self.string()
-        return sec + nsec / NS_PER_S
+# -- the two messages, decoded field by field ------------------------------
 
 
 def _joint_state_channels(
@@ -308,7 +255,7 @@ def _joint_state_channels(
     vel_rows: list[list[float]] = []
     eff_rows: list[list[float]] = []
     for log_time, data in msgs:
-        r = _Cdr(data)
+        r = Reader(data)
         stamp = r.header()
         t = stamp if stamp > 0 else log_time / NS_PER_S
         joint_names = tuple(r.string_seq())
@@ -374,7 +321,7 @@ def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channe
     gyro: list[list[float]] = []
     accel: list[list[float]] = []
     for log_time, data in msgs:
-        r = _Cdr(data)
+        r = Reader(data)
         stamp = r.header()
         times.append(stamp if stamp > 0 else log_time / NS_PER_S)
         quat.append([r.f64() for _ in range(4)])  # x y z w
