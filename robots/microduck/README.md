@@ -33,3 +33,5 @@ bundle with a stamp (docs/e2e-research/63 §1).
 Nothing here is modified. A wrapper XML (sensors, scene) will sit
 BESIDE this file when the flagship's env lands, the same rule as
 `so101-nominal`: the upstream bytes stay upstream.
+
+Onboarded before the importer audit existed (2026-09-24), so its record carries none and the robot card says "not audited"; `tools/audit-bundle.py` against robot_walk.xml finds nothing changed (an MJCF bundle is a copy of its source).
