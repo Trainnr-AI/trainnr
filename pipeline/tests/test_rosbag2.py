@@ -382,6 +382,9 @@ class TheProvenance(unittest.TestCase):
             rec = Recording.read(project.root / out["path"])
             self.assertEqual(rec.provenance["robot"], "go2")
             self.assertIn("unlabelled", rec.provenance["licence"])
+            # the entry's facts about THIS log travel with it (they were
+            # listed on the entry and never reached the recording)
+            self.assertEqual(rec.provenance["notes"], list(entry.notes))
             index = index_project(project)
         telemetry = next(s for s in index.states if s.name == "telemetry recorded")
         self.assertTrue(telemetry.present)

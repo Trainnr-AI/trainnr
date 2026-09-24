@@ -28,7 +28,7 @@ from rq_pipeline.robots import quality
 from rq_pipeline.robots.adapter import adapter
 from rq_pipeline.robots.joint_orders import GO2_MENAGERIE_JOINTS
 from rq_pipeline.robots.recording import (
-    BASIS_PUBLIC,
+    BASIS_UNKNOWN,
     COLLECTION_SCRIPTED,
     JOINT_COMMAND,
     JOINT_COMMAND_VELOCITY,
@@ -54,20 +54,19 @@ class Layout:
     keys: tuple[str, ...]
     joints: tuple[str, ...]
     notes: tuple[str, ...]
-    basis: str
 
 
+# Layouts are FORMATS (which keys a saved dict carries): whose robot a file
+# is, its licence and how it was held (a base fixed in the air) are the
+# caller's to say — the public-log entry's, or the operator's (review
+# 2026-09-24: these key names are legged_gym's and common, and a layout
+# that said "IIT's public log" would have labelled anyone's file so).
 LAYOUTS: dict[str, Layout] = {
-    "iit-chirp": Layout(
-        name="iit-chirp",
+    "joint-trajectory-with-pd-targets": Layout(
+        name="joint-trajectory-with-pd-targets",
         keys=("time", "dof_pos", "dof_vel", "des_dof_pos", "des_dof_vel", "kp", "kd"),
         joints=GO2_MENAGERIE_JOINTS,
-        basis=BASIS_PUBLIC,
         notes=(
-            "public log: IIT DLS lab's Go2 chirp with the base fixed in the air "
-            "(iit-DLSLab/sim2real-robot-identification, BSD-3-Clause); the "
-            "collection script has a simulation flag, so the real-robot origin "
-            "is the maintainers' word",
             "no torque recorded: the motor torque is the PD law kp (q_des - q) + "
             "kd (dq_des - dq) the joint ran under",
         ),
@@ -121,7 +120,6 @@ def read_pt(path: Path) -> Recording:
         "layout": layout.name,
         "joints": list(joints),
         "keys": sorted(saved),
-        "base": "fixed in the air",
     }
     recording = Recording(
         source=Path(path).name,
@@ -130,7 +128,7 @@ def read_pt(path: Path) -> Recording:
         census=census,
         notes=list(layout.notes),
         collection=COLLECTION_SCRIPTED,
-        basis=layout.basis,
+        basis=BASIS_UNKNOWN,
     )
     # Measured like every adapter's: the clock, the joint range, the motion.
     recording.census[quality.QUALITY_KEY] = quality.describe(recording)

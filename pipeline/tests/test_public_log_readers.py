@@ -77,7 +77,7 @@ class DfkiThroughTheOneAdapter(unittest.TestCase):
         from rq_pipeline.robots.adapters.rosbag2 import (  # noqa: PLC0415
             Rosbag2Adapter,
         )
-        from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
+        from rq_pipeline.robots.recording import BASIS_UNKNOWN  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             bag = Path(tmp) / "run_0.db3"
@@ -102,8 +102,9 @@ class DfkiThroughTheOneAdapter(unittest.TestCase):
                     )
             self.assertEqual(detect(bag).name, "rosbag2")
             recording = Rosbag2Adapter().read(bag)
-            self.assertEqual(recording.basis, BASIS_PUBLIC)
-            self.assertEqual(recording.census["profile"], "dfki-go2")
+            # a format says nothing of whose robot: the caller does
+            self.assertEqual(recording.basis, BASIS_UNKNOWN)
+            self.assertEqual(recording.census["profile"], "dfki-quad")
             self.assertEqual(
                 recording.channels["joint.position"].components[0], "FL_hip_joint"
             )
@@ -114,7 +115,7 @@ class DfkiThroughTheOneAdapter(unittest.TestCase):
             # a type no profile anchors is refused by name.
             with sqlite3.connect(bag) as db:
                 db.execute("UPDATE topics SET name = '/somewhere_else'")
-            self.assertEqual(Rosbag2Adapter().read(bag).census["profile"], "dfki-go2")
+            self.assertEqual(Rosbag2Adapter().read(bag).census["profile"], "dfki-quad")
             with sqlite3.connect(bag) as db:
                 db.execute("UPDATE topics SET type = 'other/msg/JointState'")
             with self.assertRaisesRegex(ValueError, "no rosbag2 profile matches"):
@@ -231,7 +232,7 @@ class TorchPickle(unittest.TestCase):
 class PtDict(unittest.TestCase):
     def test_the_iit_layout_becomes_a_recording_with_pd_gains(self) -> None:
         from rq_pipeline.robots.adapters.pt_dict import PtDict  # noqa: PLC0415
-        from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
+        from rq_pipeline.robots.recording import BASIS_UNKNOWN  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "traj_0.pt"
@@ -248,7 +249,7 @@ class PtDict(unittest.TestCase):
             with zipfile.ZipFile(path, "w") as z:
                 z.writestr("archive/data.pkl", pickle.dumps(saved, protocol=2))
             recording = PtDict().read(path)
-            self.assertEqual(recording.basis, BASIS_PUBLIC)
+            self.assertEqual(recording.basis, BASIS_UNKNOWN)
             self.assertEqual(recording.channels["joint.kp"].values.shape, (n, 12))
             self.assertEqual(
                 recording.channels["joint.position"].components[3], "FR_hip_joint"
@@ -301,12 +302,12 @@ class TheRealDfkiBag(unittest.TestCase):
     def test_the_bag_reads_through_the_dfki_profile_with_its_numbers(self) -> None:
         from rq_pipeline.robots import quality  # noqa: PLC0415
         from rq_pipeline.robots.adapters.rosbag2 import Rosbag2Adapter  # noqa: PLC0415
-        from rq_pipeline.robots.recording import BASIS_PUBLIC  # noqa: PLC0415
+        from rq_pipeline.robots.recording import BASIS_UNKNOWN  # noqa: PLC0415
 
         assert DFKI is not None
         rec = Rosbag2Adapter().read(DFKI)
-        self.assertEqual(rec.census["profile"], "dfki-go2")
-        self.assertEqual(rec.basis, BASIS_PUBLIC)
+        self.assertEqual(rec.census["profile"], "dfki-quad")
+        self.assertEqual(rec.basis, BASIS_UNKNOWN)
         clock = rec.census[quality.QUALITY_KEY]["clock"]["joint.position"]
         self.assertEqual(clock["samples"], 39_676)
         self.assertAlmostEqual(clock["rate_hz"], 985, delta=10)

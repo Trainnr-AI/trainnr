@@ -19,10 +19,11 @@ them is code:
 - `CHANNELS`: what each message type yields, in the pipeline's channel
   names where one exists (the identifier's contract) and the source's
   own where not, with its unit and its components.
-- `PROFILES`: whose bag it is — which message types anchor it, which
-  it decodes, the robot, the basis ("public log" for DFKI's controller,
-  unknown for a Unitree bag until the caller says whose), the joint
-  order, the notes a reader must see. A bag is read through the ONE
+- `PROFILES`: which family of bags it is — which message types anchor
+  it, which it decodes, the robot, the joint order, the notes a reader
+  must see about the FORMAT. Whose robot a bag is and its licence are
+  never a profile's: the caller says (a public-log entry, or the
+  operator), and the basis stays unknown until it does. A bag is read through the ONE
   profile its types match; two matches or none are refused by name,
   with the types it carries, so the next robot is a data entry.
 
@@ -59,7 +60,6 @@ from rq_pipeline.robots.joint_orders import (
 from rq_pipeline.robots.recording import (
     BASE_POSE,
     BASE_TWIST,
-    BASIS_PUBLIC,
     BASIS_UNKNOWN,
     COLLECTION_ROBOT_OP,
     FOOT_CONTACT,
@@ -294,6 +294,9 @@ NOTE_TAU_EST = (
     "motor driver, not measured by a torque sensor"
 )
 NOTE_CLOCK = "time is rosbag2's receive timestamp; LowState carries no header stamp"
+NOTE_RECEIVE_CLOCK = (
+    "time is rosbag2's receive timestamp, not the header stamps the messages carry"
+)
 NOTE_FOOT_FORCE = "foot.force is the sensor's raw count; Unitree publishes no unit"
 NOTE_LOW_CMD = (
     "joint.command, command_velocity, feedforward, kp, kd are LowCmd: what the "
@@ -475,19 +478,22 @@ PROFILES: dict[str, Profile] = {
         joints=GO2_MOTORS,
         census={"motor_slots": MOTOR_SLOTS, "motors_read": len(GO2_MOTORS)},
     ),
-    "dfki-go2": Profile(
-        name="dfki-go2",
+    # dfki-quad's message set (their interfaces package): a FORMAT. Whose
+    # robot a bag of it is, and under which licence, is the caller's to say
+    # (a public-log entry, or the operator's own run of their stack) — a
+    # profile that said "public log, CC-BY" mislabelled a user's own bag
+    # (review 2026-09-24).
+    "dfki-quad": Profile(
+        name="dfki-quad",
         robot="Unitree Go2",
-        basis=BASIS_PUBLIC,
+        basis=BASIS_UNKNOWN,
         anchors=(DFKI_JOINT_STATE,),
         decodes=(DFKI_JOINT_STATE, DFKI_JOINT_CMD, DFKI_QUAD_STATE, ROS_IMU),
         joints=GO2_MENAGERIE_JOINTS,
         notes=(
-            "public log: DFKI Bremen's Go2 under their own MPC/WBC controller, "
-            "not Unitree's (Zenodo record 19336009, CC-BY-4.0)",
             "joint effort is the motor's current-derived estimate, not a torque sensor",
             "base pose and twist are the state estimator's, not ground truth",
-            "time is rosbag2's receive timestamp, not the messages' header stamps",
+            NOTE_RECEIVE_CLOCK,
         ),
     ),
 }

@@ -118,6 +118,9 @@ class PublicLog:
             "url": self.url,
             "recorded": self.recorded,
             "licence": self.licence,
+            # What a reader must know about THIS log (how it was held, whose
+            # controller, what it lacks): the entry's facts, not the format's.
+            "notes": list(self.notes),
             # One digest per piece, as one line a drawer can show.
             "sha256": (
                 self.pieces[0].sha256
