@@ -98,7 +98,7 @@ def draw_commands(manifest: Manifest, trials: int, seed: int) -> np.ndarray:
     return np.stack([rng.uniform(lo, hi, size=trials) for lo, hi in lo_hi], axis=1)
 
 
-def _hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
+def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
     manifest: Manifest,
     driver: GateRuntime,
     protocol: dict[str, Any],
@@ -107,7 +107,9 @@ def _hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional insid
     mirror: GateMirror | None,
     contacts: list[np.ndarray],
 ) -> list[TrackingOutcome]:
-    """The plane's protocol: seeded held twists, the evaluation's own."""
+    """The plane's protocol: seeded held twists, the evaluation's own.
+    Public because the attribution sweep (`deploy.attribution`) drives a
+    turned runtime through the very same trials."""
     commands = draw_commands(manifest, trials, seed)
     protocol["commands"] = COMMANDS_DRAWN
     limit = driver.command_limit
@@ -214,9 +216,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
                 manifest, driver, course, protocol, trials, seed, mirror, contacts
             )
             if course is not None
-            else _hold_twists(
-                manifest, driver, protocol, trials, seed, mirror, contacts
-            )
+            else hold_twists(manifest, driver, protocol, trials, seed, mirror, contacts)
         )
         k = sum(t.success for t in results)
         lo, hi = clopper_pearson(k, trials)

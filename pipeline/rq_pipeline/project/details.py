@@ -33,6 +33,7 @@ import numpy as np
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.assay import read_assay
+from rq_pipeline.deploy.attribution import SURVIVED, read_attribution
 from rq_pipeline.envs.lerobot_train_log import (
     CHAIN_LOG_FILE,
     RUN_MANIFEST_FILE,
@@ -1022,6 +1023,42 @@ COURSE_COLUMNS: tuple[tuple[str, tuple[str, ...], Callable[..., Any]], ...] = (
 )
 
 
+def attribution_table(record: dict[str, Any]) -> Section:
+    """Which parameter breaks it first: one row per knob in the ranking's
+    order - the cliff, then every rung that ran as k/n with its interval."""
+    by_name = {k["name"]: k for k in record.get("knobs", [])}
+    rows: list[list[Any]] = []
+    for r in record.get("ranking", []):
+        entry = by_name.get(r["name"]) or {}
+        unit = entry.get("unit", "")
+        cliff = r.get("cliff")
+        rows.append(
+            [
+                r["name"],
+                entry.get("describe", UNRECORDED),
+                SURVIVED if cliff is None else f"{cliff:g} {unit}".rstrip(),
+                " · ".join(
+                    f"{x['level']:g}{unit}: {x['successes']}/{x['trials']} "
+                    f"{_rng(*x['ci95'])}"
+                    for x in entry.get("rungs", [])
+                ),
+            ]
+        )
+    base = record.get("baseline") or {}
+    cert = record.get("certificate") or {}
+    return _table(
+        "What would break it first (one knob turned at a time)",
+        ["knob", "what is turned", "cliff", "rungs (k/n, exact 95 % interval)"],
+        rows,
+        note=(
+            f"{record.get('sensitivity', UNRECORDED)}; baseline "
+            f"{ratio_of(base)} at this draw against the certificate's lower bound "
+            f"{cert.get('lower', UNRECORDED)}; "
+            f"{(record.get('protocol') or {}).get('rule', '')}"
+        ),
+    )
+
+
 def gate_trials(g: dict[str, Any], instrument: str) -> Section:
     """The gate's trials as a table in the protocol's own shape: a course
     gate's rows say how far and how fast, a twist gate's what was held."""
@@ -1187,6 +1224,9 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                 ),
             )
         )
+    attribution = read_attribution(root)
+    if attribution:
+        sections.append(attribution_table(attribution))
     if not gates:
         sections.append(
             _kv(

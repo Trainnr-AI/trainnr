@@ -376,7 +376,10 @@ def _render_deploy(
     """A deployment's card is the robot it drives, from the project's or
     the library's bundle named by the manifest's robot version."""
     from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
+    from rq_pipeline.deploy.attribution import STILL_FILE  # noqa: PLC0415
 
+    if (source / STILL_FILE).is_file():  # the fall at the cliff, once pictured
+        return _copy_scaled(source / STILL_FILE, out)
     robot = str(read_json(source / DEPLOY_FILE, missing_ok=True).get("robot") or "")
     bundle = find_bundle(robot.split("@", 1)[0]) if robot else None
     if bundle is None:
