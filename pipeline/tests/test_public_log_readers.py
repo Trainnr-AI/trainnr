@@ -29,6 +29,32 @@ def _cdr_joint_state(values: np.ndarray, frame_id: str = "") -> bytes:
     return b"\x00\x01\x00\x00" + body
 
 
+class TensorViews(unittest.TestCase):
+    """The pickle reader rebuilds a tensor as a strided view into its
+    storage; a view that reaches past the storage is refused by name
+    rather than read (review 2026-09-24)."""
+
+    def test_a_view_inside_the_storage_is_read(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.robots.torch_pickle import _rebuild_tensor  # noqa: PLC0415
+
+        storage = np.arange(12, dtype=np.float32)
+        out = _rebuild_tensor(storage, 2, (2, 3), (3, 1))
+        self.assertEqual(out.tolist(), [[2, 3, 4], [5, 6, 7]])
+
+    def test_a_view_past_the_storage_is_refused(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.robots.torch_pickle import _rebuild_tensor  # noqa: PLC0415
+
+        storage = np.arange(12, dtype=np.float32)
+        with self.assertRaisesRegex(ValueError, "reaches element"):
+            _rebuild_tensor(storage, 10, (4, 4), (4, 1))
+        with self.assertRaisesRegex(ValueError, "negative"):
+            _rebuild_tensor(storage, 0, (2,), (-1,))
+
+
 class DfkiThroughTheOneAdapter(unittest.TestCase):
     def test_decodes_by_layout_with_cdr_alignment(self) -> None:
         from rq_pipeline.robots.adapters import rosbag2  # noqa: PLC0415

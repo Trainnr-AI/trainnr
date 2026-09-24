@@ -47,15 +47,18 @@ STORAGE_DTYPES: dict[str, np.dtype] = {
 # numpy arrays pickled inside the dict (the IIT chirps store numpy, not
 # tensors) rebuild through numpy's own hooks, listed under both module
 # spellings numpy has used.
+# numpy 2 moved its internals to `numpy._core` and deprecated `numpy.core`.
+_MULTIARRAY = getattr(np, "_core", None) or np.core
+_MULTIARRAY = _MULTIARRAY.multiarray
 ALLOWED_GLOBALS: dict[tuple[str, str], Any] = {
     ("collections", "OrderedDict"): OrderedDict,
     ("torch._utils", "_rebuild_tensor_v2"): "rebuild",
     ("numpy", "ndarray"): np.ndarray,
     ("numpy", "dtype"): np.dtype,
-    ("numpy.core.multiarray", "_reconstruct"): np.core.multiarray._reconstruct,
-    ("numpy._core.multiarray", "_reconstruct"): np.core.multiarray._reconstruct,
-    ("numpy.core.multiarray", "scalar"): np.core.multiarray.scalar,
-    ("numpy._core.multiarray", "scalar"): np.core.multiarray.scalar,
+    ("numpy.core.multiarray", "_reconstruct"): _MULTIARRAY._reconstruct,
+    ("numpy._core.multiarray", "_reconstruct"): _MULTIARRAY._reconstruct,
+    ("numpy.core.multiarray", "scalar"): _MULTIARRAY.scalar,
+    ("numpy._core.multiarray", "scalar"): _MULTIARRAY.scalar,
     # numpy spells a dtype descriptor as a byte string through this.
     ("_codecs", "encode"): codecs.encode,
 }
@@ -77,7 +80,27 @@ def _rebuild_tensor(
     *_ignored: Any,
 ) -> np.ndarray:
     """`torch._utils._rebuild_tensor_v2` on numpy: a strided view into
-    the storage, copied so the array owns its memory."""
+    the storage, copied so the array owns its memory. The view is checked
+    to lie inside the storage first — a crafted or corrupt file would
+    otherwise read memory past the buffer (review 2026-09-24)."""
+    size, stride = tuple(int(n) for n in size), tuple(int(n) for n in stride)
+    if (
+        offset < 0
+        or len(size) != len(stride)
+        or any(n < 0 for n in size)
+        or any(s < 0 for s in stride)
+    ):
+        raise ValueError(
+            f"tensor view refused: offset {offset}, size {size}, stride {stride} "
+            "(negative, or shape and strides of different rank)"
+        )
+    if all(size):
+        last = offset + sum((n - 1) * s for n, s in zip(size, stride, strict=True))
+        if last >= len(storage):
+            raise ValueError(
+                f"tensor view refused: it reaches element {last} of a storage of "
+                f"{len(storage)} (offset {offset}, size {size}, stride {stride})"
+            )
     itemsize = storage.dtype.itemsize
     view = np.lib.stride_tricks.as_strided(
         storage[offset:],
