@@ -176,6 +176,66 @@ The written MJCF with its inline vertex data elided is kept beside the
 stills (`docs/figures/usd-import/2f85-newton-compliant-elided.xml`).
 Hulls are what the stills show, because hulls are all the solver wrote.
 
+### 4.1 Built: the bundle (2026-09-24, branch `usd-bundle-2026-09-24`)
+
+Every item above is now the writer's (`pipeline/rq_pipeline/robot/usd_import.py`)
+and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
+`robotiq-2f85-isaac@3ec025e4cd56`, 3.0 MB, deterministic: the scratch
+run and the library run gave the same stamp). Written on the box in
+2.9 s once Warp's kernels are cached, through the pinned venv (newton
+1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
+mujoco-warp 3.11.0), and pinned by `pipeline/tests/test_usd_import.py`:
+
+| The bundle | Measured |
+|---|---|
+| Census | 11 links + world, 8 hinges, 3 equalities (2 connect, 1 mimic), 1 actuator, 16 sensors, 1 keyframe, 22 meshes (11 hulls + 11 visuals) |
+| Joint ranges vs a fresh pxr read of the USD | 8 of 8 equal |
+| Masses vs the USD | 11 of 11 equal |
+| Drive | `finger_joint_drive`: kp 1432, kv 158, `ctrlrange` 0-0.8 from its joint, `actuatorfrcrange` ±15, armature 0.3 |
+| Names | leaf names: `left_outer_knuckle`, `finger_joint`, `base_link_hull`, `base_link_visual` |
+| Meshes | `assets/<body>_hull.obj` (≤ 64 vertices, group 3) and `assets/<body>_visual.obj` (the USD's own mesh: 31,109 vertices on the base, 756 on a knuckle, group 2, no contact); no inline vertex data |
+| Closing from the `home` key | finger 0.8003 rad of 0.8, loops within 7.7 mm, at rest |
+| On a bench with a 30 mm cube between the pads (`tools/show-2f85-isaac.py`) | finger stops at 0.794 rad on the block, 4 contacts, the block held 29 mm below where it sat (the fingertips curl in as the five-bar closes) — stills below, the Rerun recording under `runs/` |
+| Physx_parallel_grip variant | 6 hinges, 5 joint equalities, 1 actuator |
+| Record | `bundle.json` carries `provenance`: repository, commit 6d992b6, file, both variant selections, root, `mesh_maxhullvert`, grip options, licence CC-BY-4.0, Newton's own census, the reader's versions |
+
+![The bundle on a bench, a cube between the pads](../figures/usd-import/bundle_open.png)
+![Closed on the cube: four contacts, held](../figures/usd-import/bundle_closed.png)
+
+What building it found, beyond §4's list:
+
+- **pxr's schema registry is built once per process**, on first use.
+  A stage opened through pxr before Newton's schema package
+  (`newton_usd_schemas`) registered its plugin leaves `NewtonMimicAPI`
+  unknown for the rest of the process, and every later import reads
+  the asset's mimic as nothing — silently, with the same census (found
+  by the test order: one class opened a stage plainly, the next lost
+  an equality). The reader registers the plugin before touching pxr at
+  every entry point and refuses a process already poisoned, naming the
+  cause; a subprocess test pins the refusal.
+- **Variant selections belong in the session layer.** Authored into
+  the root layer they outlive the stage: pxr shares a file's layer
+  between stages in one process.
+- **Newton 1.6.0 on PyPI declares mujoco 3.12** (its `sim` extra:
+  `mujoco-warp>=3.12,<3.13`) and warns at every bridge on 3.11.0; the
+  bridge measured equal to the USD layer on 3.11.0, so the `usd` extra
+  takes `newton[importers]` only and the `gpu` extra keeps supplying
+  mujoco-warp. Newton needs warp-lang 1.17 and `mujoco-mjx[warp]`
+  3.11.0 locks warp-lang 1.14: the `usd` and `mjx` extras are declared
+  mutually exclusive in `pipeline/pyproject.toml` (uv's `conflicts`).
+- **The solver step runs CPU-only.** Without a visible CUDA driver Warp
+  reports only the cpu device and the bridge still writes the MJCF; the
+  Mac question is answered for the solver, and open only for whether
+  mujoco-warp installs there (the `gpu` extra excludes darwin).
+- **Renaming is not enough**: excludes, equalities and actuator targets
+  reference bodies and joints by name and must be re-pointed; Newton
+  names a mesh geom `<prim path>_<shape index>`, which is how the
+  writer finds the USD mesh behind each hull.
+- **Newton's own solver defaults** (implicitfast, multiccd off, its
+  tolerances) are reset to MuJoCo's; the stage declared none of them.
+  The hulls' contact masks are Newton's encoding of the USD's collision
+  filters and are kept as written, beside the twelve `<exclude>` pairs.
+
 ## 5. Every other converter, and why not
 
 | Route | Direction | Licence | Mimic | Loop closure | Drive gains | Verdict |
@@ -193,23 +253,36 @@ Hulls are what the stills show, because hulls are all the solver wrote.
 | Decision | Rejected | Why |
 |---|---|---|
 | Newton reads, Newton's MuJoCo bridge writes the MjSpec; **our module is the bundle writer around the MjSpec** and the test that the bundle matches the USD | our own UsdPhysics reader and MJCF writer from pxr | additive over libraries; Newton's importer is the one every USD-native engine will keep current (the Newton schema is MuJoCo's own since 3.12); the MjSpec is the seam we already own for variants and sensors |
-| The USD door is a second **source kind** of the existing onboarding (`onboard_robot` in `pipeline/rq_pipeline/mcp_actions.py` takes an MJCF path today): suffix → reader, a registry, not an if/elif | a separate "import USD" tool | one door, one record, one stamp; the Studio's onboarding card gains a file type, nothing else |
-| `usd` extra = `newton[importers,sim]` pinned to the release that pins our mujoco (1.6.0 today) | a loose floor | Newton pins mujoco-warp release for release, and so do we; a floor would drag the engine (the 3.12 incident in `pipeline/pyproject.toml`) |
+| The USD door is a second **source kind** of the existing onboarding (`onboard_robot` in `pipeline/rq_pipeline/mcp_actions.py` took an MJCF path until 2026-09-24): suffix → reader, a registry, not an if/elif | a separate "import USD" tool | one door, one record, one stamp; the Studio's onboarding card gains a file type, nothing else |
+| `usd` extra = `newton[importers]` pinned to the release measured against our mujoco (1.6.0 today), mujoco-warp from the `gpu` extra | `newton[importers,sim]`; a loose floor | Newton's release declares mujoco 3.12 while the bridge measured right on 3.11.0; a floor would drag the engine (the 3.12 incident in `pipeline/pyproject.toml`) |
 | Provenance in the bundle record: repository, commit, file, variant selections, licence, newton and usd-core versions, `mesh_maxhullvert` | a README line | the record is inside the stamp; a re-import from a moved tip changes the stamp by itself |
 | The test compares the compiled bundle to a fresh pxr read of the USD: joint ranges, masses, inertias where real, drive gains, equality count, actuator force range | trusting Newton's return | the test is the product's word; it also catches the next Newton release silently changing a unit |
 | Visual meshes as OBJ files under `assets/`, collision as hulls | inline vertex arrays | every bundle references files; a 31k-vertex base inline is a 3 MB XML nobody can diff |
 
-Work, about three days on the box:
+Built on 2026-09-24 (§4.1), in one sitting on the box rather than three
+days, as planned with these differences: the `usd` extra is
+`newton[importers]` beside `gpu`, not `newton[importers,sim]` (§4.1,
+the 3.12 declaration); the root is `fixed` or `free` (a fixed root
+attaches under an arm as it is, so `--attach` is not a third kind); the
+door's registry lives in `pipeline/rq_pipeline/robot/onboarding.py`
+(MJCF and USD as `@model_source`s by suffix, third formats through the
+`rq_pipeline.model_sources` entry-point group) and `onboard_robot` in
+`pipeline/rq_pipeline/mcp_server.py` takes `variants` and `root`; a
+public asset is fetched at a pinned commit by
+`pipeline/rq_pipeline/robot/asset_fetch.py` (Git LFS aware, the
+empty-file refusal) and `tools/import-usd.py --fetch`; the schema
+registry refusal was not planned. The plan as written:
 
-1. **Day 1 — the reader and the test first.** *rq_pipeline/robot/usd_import.py* (to be written): open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
+1. **Day 1 — the reader and the test first.** *rq_pipeline/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
 2. **Day 2 — the bundle writer and the door.** Leaf names, mesh files, `ctrlrange` from the driven joint's range, the sensor block, a `home` key, `--free`/`--attach` root, the record with provenance, README with the CC BY line and the runtime options Robotiq recommends as a declared `<option>`. The onboarding registry gains `.usd|.usda|.usdc|.usdz`; `onboard_robot` in the Studio's MCP surface names the variant selections in its arguments; a missing `newton` refuses with the install line per OS.
 3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, docs/07, a docs/33 row, tools/README rows, this document's §4 replaced by the bundle's numbers.
 
 Risks, each with its fallback: Newton's next release moves the mujoco
 pin before we do (the extra pins Newton; the import is offline work,
 a scratch venv at the older release still imports); the solver step
-needs mujoco_warp on a Mac (unmeasured; fallback: import on the box,
-commit the bundle, the bundle runs everywhere); inline hulls at 64
+needs mujoco_warp on a Mac (the step itself runs CPU-only, measured;
+whether the package installs on darwin is not; fallback: import on the
+box, commit the bundle, the bundle runs everywhere); inline hulls at 64
 vertices are coarser than Menagerie's collision boxes (a declared
 `mesh_maxhullvert`, and the bundle writer can keep the USD's own
 collision meshes when an asset authors them separately); the mimic's
