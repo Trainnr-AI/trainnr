@@ -30,6 +30,7 @@ mod listing;
 mod model;
 mod pages;
 mod palette;
+mod running;
 mod shell;
 mod simulator;
 mod spawn;
@@ -288,8 +289,25 @@ impl eframe::App for StudioShell {
                 sender.send_ui(UICommand::ToggleBlueprintPanel);
             }
         });
-        // A presenter failure is a panel under the header, before the page.
+        // A presenter failure is a panel under the header, before the page;
+        // so is Running now, when its indicator was clicked.
         self.shell.presenter_failure(ui);
+        self.shell.running_panel(ui);
+        // A run's viewer file, asked for from Running now: loaded into
+        // the viewer as a file, and the page turns to it.
+        if let Some(path) = self.shell.viewer_request.take() {
+            use re_viewer::external::re_log_types::FileSource;
+            use re_viewer::external::re_viewer_context::{SystemCommand, SystemCommandSender as _};
+            self.rerun_app
+                .command_sender
+                .send_system(SystemCommand::LoadDataSource(
+                    re_data_source::LogDataSource::File {
+                        file_source: FileSource::Cli,
+                        path,
+                    },
+                ));
+            self.shell.show_requested = true;
+        }
         let full = self.viewport_full && self.shell.section == Section::Live;
         if !full {
             self.shell.rail(ui);

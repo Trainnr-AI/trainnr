@@ -59,6 +59,17 @@ pub struct Shell {
     pub palette: Option<crate::palette::Palette>,
     /// A presenter failure the user has dismissed (its stamp and reason).
     dismissed_failure: Option<(String, String)>,
+    /// The Running now panel, opened from the top bar's indicator.
+    pub running_open: bool,
+    /// The run whose stop was clicked once (the second click stops it).
+    stop_armed: Option<String>,
+    /// The run whose log is open in the panel.
+    log_open: Option<String>,
+    /// What the last stop answered, shown in the panel until the next.
+    stop_note: Option<String>,
+    /// A run's viewer file to load into the viewer, taken by the frame
+    /// loop that owns the viewer.
+    pub viewer_request: Option<std::path::PathBuf>,
 }
 
 impl Shell {
@@ -79,6 +90,11 @@ impl Shell {
             entered: true,
             palette: None,
             dismissed_failure: None,
+            running_open: false,
+            stop_armed: None,
+            log_open: None,
+            stop_note: None,
+            viewer_request: None,
         }
     }
 
@@ -222,20 +238,30 @@ impl Shell {
                         }
                         viewer_buttons(ui);
                         ui.add_space(8.0);
-                        let running = self.model.running_jobs();
-                        if running > 0 {
+                        // What runs, whoever started it: a click opens
+                        // the Running now panel (2026-09-25).
+                        let (text, color) = match crate::running::indicator_line(&self.model.jobs) {
+                            Some(line) => (line, tokens.highlight_color),
+                            None => ("idle".to_owned(), ui.visuals().weak_text_color()),
+                        };
+                        let clicked = ui
+                            .add(
+                                egui::Button::selectable(
+                                    self.running_open,
+                                    egui::RichText::new(text).small().color(color),
+                                )
+                                .frame_when_inactive(false),
+                            )
+                            .on_hover_text("Running now: every run in the job table")
+                            .clicked();
+                        if self.model.running_jobs() > 0 {
                             ui.small_icon(&icons::PLAY, Some(tokens.highlight_color));
-                            ui.label(
-                                egui::RichText::new(format!("{running} running"))
-                                    .small()
-                                    .color(tokens.highlight_color),
-                            );
-                        } else {
-                            ui.label(
-                                egui::RichText::new("idle")
-                                    .small()
-                                    .color(ui.visuals().weak_text_color()),
-                            );
+                        }
+                        if clicked {
+                            self.running_open = !self.running_open;
+                            if !self.running_open {
+                                self.close_log();
+                            }
                         }
                     });
                 });
@@ -529,6 +555,117 @@ impl Shell {
                     }
                 });
             });
+    }
+
+    /// The Running now panel, under the header on every page: each run
+    /// in the job table (door, tool or agent), the running first, then
+    /// what ended within `running::FINISHED_KEPT` with its exit code.
+    pub fn running_panel(&mut self, ui: &mut egui::Ui) {
+        use crate::running::{panel_rows, row, RowAction, FINISHED_KEPT};
+        if !self.running_open {
+            return;
+        }
+        let now = crate::model::now_epoch();
+        let jobs = self.model.jobs.clone();
+        let rows = panel_rows(&jobs, now, FINISHED_KEPT);
+        let mut chosen: Option<(crate::running::Job, RowAction)> = None;
+        egui::Panel::top("running-now")
+            .frame(
+                egui::Frame::new()
+                    .fill(ui.tokens().top_bar_color)
+                    .inner_margin(egui::Margin::symmetric(12, 8)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Running now").strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "the job table, read once a second · ended runs kept {} min",
+                            FINISHED_KEPT.as_secs() / 60
+                        ))
+                        .small()
+                        .color(ui.visuals().weak_text_color()),
+                    );
+                    if ui.small_button("close").clicked() {
+                        self.running_open = false;
+                    }
+                });
+                if let Some(note) = &self.stop_note {
+                    ui.label(
+                        egui::RichText::new(note)
+                            .small()
+                            .color(ui.visuals().warn_fg_color),
+                    );
+                }
+                if rows.is_empty() {
+                    ui.label(
+                        egui::RichText::new(
+                            "Nothing is running, and nothing ended in the last few minutes.",
+                        )
+                        .color(ui.visuals().weak_text_color()),
+                    );
+                }
+                egui::ScrollArea::vertical()
+                    .max_height(ui.ctx().content_rect().height() * 0.5)
+                    .show(ui, |ui| {
+                        for job in &rows {
+                            ui.separator();
+                            let log_open = self.log_open.as_deref() == Some(job.id.as_str());
+                            let armed = self.stop_armed.as_deref() == Some(job.id.as_str());
+                            if let Some(action) = row(ui, job, now, log_open, armed) {
+                                chosen = Some(((*job).clone(), action));
+                            }
+                            if log_open {
+                                match &self.model.log_tail {
+                                    Some((id, lines)) if id == &job.id => {
+                                        crate::running::log_tail(ui, lines)
+                                    }
+                                    _ => {
+                                        ui.label(egui::RichText::new("reading the log…").small());
+                                    }
+                                }
+                            }
+                        }
+                    });
+            });
+        if !self.running_open {
+            self.close_log();
+        }
+        if let Some((job, action)) = chosen {
+            self.act_on_run(&job, action);
+        }
+    }
+
+    fn close_log(&mut self) {
+        self.log_open = None;
+        self.model.watch_log(None);
+    }
+
+    fn act_on_run(&mut self, job: &crate::running::Job, action: crate::running::RowAction) {
+        use crate::running::RowAction;
+        match action {
+            RowAction::Log => {
+                if self.log_open.as_deref() == Some(job.id.as_str()) {
+                    self.close_log();
+                } else {
+                    self.log_open = Some(job.id.clone());
+                    self.model.watch_log(Some(&job.id));
+                }
+            }
+            RowAction::Viewer => {
+                self.viewer_request = Some(std::path::PathBuf::from(&job.viewer));
+            }
+            RowAction::Viewport => self.scene_request = Some(job.viewport.clone()),
+            RowAction::ArmStop => self.stop_armed = Some(job.id.clone()),
+            RowAction::Disarm => self.stop_armed = None,
+            RowAction::Stop => {
+                self.stop_armed = None;
+                self.stop_note = Some(match crate::running::stop(job) {
+                    Ok(()) => format!("asked {} (pid {}) to stop", job.tool, job.pid),
+                    Err(err) => format!("could not stop {} (pid {}): {err}", job.tool, job.pid),
+                });
+            }
+        }
     }
 
     /// Go to an artifact by its stamp, from a lineage link: the page it

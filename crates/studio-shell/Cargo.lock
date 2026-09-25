@@ -10020,6 +10020,7 @@ dependencies = [
  "egui_extras",
  "image",
  "mimalloc",
+ "re_data_source",
  "re_ui",
  "rerun",
  "serde",

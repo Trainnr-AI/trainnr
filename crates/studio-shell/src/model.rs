@@ -225,56 +225,7 @@ pub struct InProgress {
     pub kind: String,
 }
 
-/// `JobRecord`, as `rq_pipeline.mcp_jobs` writes it, plus the exit code
-/// from the sibling `.exit` file when the job has ended.
-#[derive(Deserialize, Clone)]
-pub struct Job {
-    pub id: String,
-    pub tool: String,
-    #[serde(default)]
-    pub argv: Vec<String>,
-    pub started: f64,
-    #[serde(default)]
-    pub pid: u32,
-    #[serde(skip)]
-    pub exit: Option<i32>,
-}
-
-impl Job {
-    /// Running means no exit recorded AND the process still there: a
-    /// job whose runner was killed before it could write the exit file
-    /// showed as running for an hour after it ended (2026-09-10).
-    pub fn running(&self) -> bool {
-        self.exit.is_none() && pid_alive(self.pid)
-    }
-}
-
-/// Whether a process id is alive. Linux answers through `/proc`; any
-/// other unix (macOS) through `kill -0`, the same binary `spawn.rs`
-/// signals with; Windows has no dependency-free check here and answers
-/// "alive", so there the exit file alone decides (the runner writes it).
-fn pid_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    if cfg!(target_os = "linux") {
-        return std::path::Path::new(&format!("/proc/{pid}")).exists();
-    }
-    #[cfg(unix)]
-    {
-        std::process::Command::new("kill")
-            .args(["-0", "--", &pid.to_string()])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(true)
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
-}
+pub use crate::running::Job;
 
 impl Index {
     /// Once per load: parse every time, index every stamp and hash, so
@@ -398,9 +349,11 @@ pub struct Model {
     /// The selected artifact's detail file, re-read only when it moves:
     /// the drawer asks for it every frame it is open.
     detail: RefCell<Option<Watched<Rc<Detail>>>>,
-    jobs_dir: PathBuf,
-    jobs_seen: Option<SystemTime>,
+    /// The job table's poll, off the UI thread (`running::JobsWatch`).
+    jobs_watch: crate::running::JobsWatch,
     pub jobs: Vec<Job>,
+    /// The log the Running now panel has open: (job id, its last lines).
+    pub log_tail: Option<(String, Vec<String>)>,
     /// The newest window events (`.index/events.jsonl`), newest first.
     pub events: Vec<Event>,
     events_seen: Option<std::time::SystemTime>,
@@ -439,9 +392,9 @@ impl Model {
             projects_scanned_at: None,
             index: Watched::new(root.join(INDEX_RELATIVE)),
             detail: RefCell::new(None),
-            jobs_dir: root.join(JOBS_DIR),
-            jobs_seen: None,
+            jobs_watch: crate::running::JobsWatch::start(root.join(JOBS_DIR)),
             jobs: Vec::new(),
+            log_tail: None,
             events: Vec::new(),
             events_seen: None,
             present_status: None,
@@ -451,7 +404,7 @@ impl Model {
             last_poll: None,
         };
         model.reload_index();
-        model.reload_jobs();
+        model.take_jobs();
         model.rescan_projects();
         model
     }
@@ -669,15 +622,7 @@ impl Model {
         if projects_stale {
             self.rescan_projects();
         }
-        let jobs_modified = std::fs::metadata(&self.jobs_dir)
-            .and_then(|m| m.modified())
-            .ok();
-        // A directory's mtime moves when entries are added; an exit file
-        // landing is such an entry, so this catches job ends too.
-        if jobs_modified != self.jobs_seen || self.jobs.iter().any(Job::running) {
-            self.jobs_seen = jobs_modified;
-            self.reload_jobs();
-        }
+        self.take_jobs();
         let events_path = self.project_root.join(crate::control::EVENTS_RELATIVE);
         let events_modified = std::fs::metadata(&events_path)
             .and_then(|m| m.modified())
@@ -755,26 +700,21 @@ impl Model {
         self.events = events;
     }
 
-    fn reload_jobs(&mut self) {
-        let Ok(entries) = std::fs::read_dir(&self.jobs_dir) else {
-            self.jobs.clear();
-            return;
-        };
-        let mut jobs: Vec<Job> = entries
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "json"))
-            .filter_map(|p| {
-                let text = std::fs::read_to_string(&p).ok()?;
-                let mut job: Job = serde_json::from_str(&text).ok()?;
-                job.exit = std::fs::read_to_string(p.with_extension("exit"))
-                    .ok()
-                    .and_then(|s| s.trim().parse().ok());
-                Some(job)
-            })
-            .collect();
-        jobs.sort_by(|a, b| b.started.total_cmp(&a.started));
-        self.jobs = jobs;
+    /// The job table as the watch thread last read it; the frame only
+    /// swaps a snapshot in (no file I/O here).
+    fn take_jobs(&mut self) {
+        if let Some(snapshot) = self.jobs_watch.take() {
+            self.jobs = snapshot.jobs;
+            self.log_tail = snapshot.log_tail;
+        }
+    }
+
+    /// Tail one job's log in the next polls (None: close it).
+    pub fn watch_log(&mut self, job_id: Option<&str>) {
+        self.jobs_watch.watch_log(job_id);
+        if job_id.is_none() {
+            self.log_tail = None;
+        }
     }
 }
 
@@ -878,7 +818,8 @@ mod tests {
             r#"{{"id":"generate-demos-1a2b","tool":"generate-demos",
             "argv":["uv","run"],"cwd":"/p","log":"/p/x.log","pid":{alive},"started":1757000000.5}}"#
         );
-        let job: Job = serde_json::from_str(&text).expect("parses");
+        let mut job: Job = serde_json::from_str(&text).expect("parses");
+        job.alive = crate::running::pid_alive(job.pid);
         assert!(job.running());
         assert_eq!(job.tool, "generate-demos");
         // An exit recorded ends it whatever the pid says.
@@ -889,6 +830,7 @@ mod tests {
         // not running on Linux, where the check exists.
         let mut gone = job.clone();
         gone.pid = 0;
+        gone.alive = crate::running::pid_alive(gone.pid);
         assert!(!gone.running());
     }
 

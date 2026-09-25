@@ -28,6 +28,7 @@ MODEL_RS = (SHELL_SRC / "model.rs").read_text(encoding="utf-8")
 CONTROL_RS = (SHELL_SRC / "control.rs").read_text(encoding="utf-8")
 DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
+RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
 
 
 # The kinds the index writes that no Studio page lists by kind.
@@ -375,3 +376,55 @@ class ProjectContracts(unittest.TestCase):
         enum = CONTROL_RS.split("pub enum Command {", 1)[1].split("\n}\n", 1)[0]
         variants = {v.lower() for v in re.findall(r"^    ([A-Z]\w+)", enum, re.M)}
         self.assertEqual(set(control.VERBS), variants)
+
+
+def _serde_fields(source: str, struct: str) -> set[str]:
+    """The fields a Rust struct reads off JSON: its `pub` fields, less
+    the `#[serde(skip)]` ones the poll fills itself."""
+    body = source.split(f"pub struct {struct} {{", 1)[1].split("\n}\n", 1)[0]
+    body = re.sub(r"#\[serde\(skip\)\]\s*(?:///[^\n]*\n\s*)*pub \w+:", "", body)
+    return set(re.findall(r"^\s*pub (\w+):", body, re.M))
+
+
+class RunningNow(unittest.TestCase):
+    """The job table as the Running now panel reads it (2026-09-25):
+    every word, file suffix and key, once in `rq_pipeline.mcp_jobs`,
+    once in `running.rs`."""
+
+    def test_the_table_s_words_agree(self) -> None:
+        from rq_pipeline import mcp_jobs  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(RUNNING_RS, r'pub const STATUS_SUFFIX: &str = "([^"]+)";'),
+            mcp_jobs.STATUS_SUFFIX,
+        )
+        self.assertEqual(
+            constant(RUNNING_RS, r'pub const STATUS_SCHEMA: &str = "([^"]+)";'),
+            mcp_jobs.STATUS_SCHEMA,
+        )
+        listed = constant(
+            RUNNING_RS, r"pub const JOB_SOURCES: \[&str; \d+\] = \[([^\]]+)\];"
+        )
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed)), mcp_jobs.JOB_SOURCES)
+        self.assertEqual(
+            constant(MODEL_RS, r'const JOBS_DIR: &str = "([^"]+)";'),
+            mcp_jobs.JOBS_DIR_NAME,
+        )
+        self.assertEqual(
+            constant(VIEWPORT_RS, r'pub const WALK_TASK: &str = "([^"]+)";'),
+            mcp_jobs.VIEWPORT_WALK,
+        )
+        for word in (mcp_jobs.STATE_RUNNING, mcp_jobs.STATE_DIED):
+            self.assertIn(f'"{word}"', RUNNING_RS)
+
+    def test_the_keys_rust_reads_are_written(self) -> None:
+        from rq_pipeline import mcp_jobs  # noqa: PLC0415
+
+        record = {f.name for f in dataclasses.fields(mcp_jobs.JobRecord)}
+        status = {f.name for f in dataclasses.fields(mcp_jobs.RunStatus)}
+        job_keys = _serde_fields(RUNNING_RS, "Job")
+        status_keys = _serde_fields(RUNNING_RS, "RunStatus")
+        self.assertIn("source", job_keys)
+        self.assertLessEqual(job_keys, record)
+        self.assertIn("stage", status_keys)
+        self.assertLessEqual(status_keys, status)
