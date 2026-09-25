@@ -30,6 +30,7 @@ ENTRY_POINT_GROUP = "rq_pipeline.tasks"
 # a checkout works before its entry points are installed.
 BUILTIN_MODULES = (
     "rq_pipeline.tasks.aloha2",
+    "rq_pipeline.tasks.gripper_pick",
     "rq_pipeline.tasks.so101",
     "rq_pipeline.tasks.walks",
 )
