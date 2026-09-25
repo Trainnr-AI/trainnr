@@ -1,0 +1,38 @@
+{
+ "id": "gripper-pick-acceptance-2026-09-25",
+ "claim": "The Robotiq 2F-85 imported from USD (robotiq-2f85-isaac@f8e77bf83c08) runs a declared, refereed task and its acceptance critic accepts it: on gripper-pick@0c9d94d5b256 the scripted expert passes 4/4 paired trials and the hold-home floor 0/4; the ladder's graded failures fail, never closing 0/4 and every drive cut 0/4. Over a 5 x 5 grid covering the whole declared spawn band the expert passes 25/25 and both failures 0/25.",
+ "date": "2026-09-25",
+ "repo_commit": "gripper-pick-2026-09-25 (this branch; the commit that adds this record)",
+ "argv": [
+  "cd pipeline && uv run --no-sync --extra sim python ../tools/accept-task.py --project ../projects/gripper-pick --name gripper-pick",
+  "pipeline tests/test_tasks_gripper_pick.py::Ladder (tasks/acceptance.accept once per rung of tasks/gripper_pick.LADDER)",
+  "a 5 x 5 grid of cube starts over cube_spawn_x x cube_spawn_y (both -0.05..0.05 m), each rung through the same expert and referee (a scratch probe, not a tool)"
+ ],
+ "instrument": "mujoco-3.11.0+x86_64 (CPU MuJoCo; Newton solver, elliptic cone, impratio 10, Euler, 2 ms), the WSL box",
+ "outcome": {
+  "arms": {
+   "expert": {"successes": 4, "trials": 4, "interval_95": [0.398, 1.0]},
+   "floor": {"successes": 0, "trials": 4, "interval_95": [0.0, 0.602]},
+   "no-close": {"successes": 0, "trials": 4, "interval_95": [0.0, 0.602]},
+   "limp": {"successes": 0, "trials": 4, "interval_95": [0.0, 0.602]},
+   "expert-band-grid": {"successes": 25, "trials": 25, "interval_95": [0.863, 1.0]},
+   "no-close-band-grid": {"successes": 0, "trials": 25, "interval_95": [0.0, 0.137]},
+   "limp-band-grid": {"successes": 0, "trials": 25, "interval_95": [0.0, 0.137]},
+   "expert-condim-3": {"successes": 3, "trials": 4, "interval_95": [0.194, 0.994]}
+  },
+  "funnels": {
+   "expert": "jaw_closed 4/4, cube_moved 4/4, cube_lifted 4/4, cube_held 4/4",
+   "no-close": "jaw_closed 0/4, cube_moved 0/4, cube_lifted 0/4, cube_held 0/4",
+   "limp": "jaw_closed 4/4, cube_moved 0/4, cube_lifted 0/4, cube_held 0/4"
+  },
+  "hold": "trial 0: the cube ends 95.8 mm above its spawn (the carriage rises 100 mm, its z axis sags 2.7 mm under the carried mass); the finger stops at about 0.52 rad on the 40 mm cube"
+ },
+ "caveats": [
+  "Intervals are exact 95 % (Clopper-Pearson). Four paired trials are the task's acceptance protocol, not a rate estimate; the band grid is a denser diagnostic of the same deterministic expert, not independent draws.",
+  "The expert is privileged and open-loop: it reads the cube's spawn from state. The carriage is task scaffolding (three position-driven slides), not a robot arm.",
+  "expert-condim-3 is a negative from the development of this task: with the cube at MuJoCo's default condim 3 (the spec then stamped gripper-pick@29d8fab94486, before its cube_condim field existed) a pinch has no torsional friction: the cube pivoted about the line through its two pad contacts in every trial (120 degrees in trial 0) and fell out of the pads in one of four. The shipped cube carries condim 4 with the pads' own solref and solimp (tasks/gripper_pick.CubeContact).",
+  "limp's funnel fires jaw_closed: with every drive cut the hanging fingers fall shut past 0.3 rad on their own; the cube never moves past 3 mm.",
+  "One MuJoCo build (3.11.0, x86_64). The pipeline's other instrument (3.12, the train venv) was not run."
+ ],
+ "protocol": "tasks/gripper_pick.GripperPickSpec defaults: 40 mm cube, 0.05 kg; spawn band x, y in -0.05..0.05 m, paired starts at the band's corners inset 10 %; success = the cube's centre at least 0.05 m above its spawn for the episode's last 1.0 s of 7 s."
+}

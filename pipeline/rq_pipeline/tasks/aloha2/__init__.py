@@ -76,7 +76,6 @@ from rq_pipeline.tasks.aloha2.rig import (
     ARM_SENSOR_WIDTH,
     ARMS,
     BUNDLE_XML,
-    CORNERS,
     CUBE_BODY,
     CUBE_HALF,
     CUBE_HOME,
@@ -111,6 +110,7 @@ from rq_pipeline.tasks.aloha2.transfer_cube import (
     TRANSFER_CUBE_INSTRUCTION,
     build_transfer_cube,
 )
+from rq_pipeline.tasks.scene import CORNERS
 
 __all__ = [
     "ACT_SIM_LOOK",

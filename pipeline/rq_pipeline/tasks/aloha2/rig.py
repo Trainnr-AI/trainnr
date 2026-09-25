@@ -17,6 +17,7 @@ from rq_pipeline.tasks.scene import (
     FLOOR_GEOM,
     GeomGroup,
     add_free_box,
+    corner_fraction,
     pin_nominal_options,
     set_render_budget,
 )
@@ -307,22 +308,8 @@ def _add_top_camera_and_referees(scene: Any) -> None:
         )
 
 
-CORNERS = (
-    (0.0, 0.0),
-    (1.0, 0.0),
-    (0.0, 1.0),
-    (1.0, 1.0),
-)  # the spawn box, as fractions
-
-
-def _corner_fraction(trial: int, inset: float) -> tuple[float, float]:
-    """Deterministic paired starts: the spawn box's four corners pulled
-    in by `inset` (a fraction of each side), cycling with the trial
-    index — gym-aloha's per-episode draw in spirit, identical across
-    policies by construction."""
-    fx, fy = CORNERS[trial % len(CORNERS)]
-    span = 1.0 - 2.0 * inset
-    return (inset + fx * span, inset + fy * span)
+# The paired corners live in tasks/scene.py (shared with gripper-pick).
+_corner_fraction = corner_fraction
 
 
 ARM_IK_JOINTS = {

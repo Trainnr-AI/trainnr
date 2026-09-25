@@ -115,6 +115,27 @@ def apply_options(  # noqa: PLR0913 - the five knobs of one condition, each name
         opt.impratio = impratio
 
 
+# The paired starts every spawn band here uses: the band's four corners,
+# as fractions of each side, cycled by trial index (moved from the ALOHA
+# rig 2026-09-25 when a second rig's task needed them).
+CORNERS = (
+    (0.0, 0.0),
+    (1.0, 0.0),
+    (0.0, 1.0),
+    (1.0, 1.0),
+)
+
+
+def corner_fraction(trial: int, inset: float) -> tuple[float, float]:
+    """Deterministic paired starts: the spawn box's four corners pulled
+    in by `inset` (a fraction of each side), cycling with the trial
+    index — gym-aloha's per-episode draw in spirit, identical across
+    policies by construction."""
+    fx, fy = CORNERS[trial % len(CORNERS)]
+    span = 1.0 - 2.0 * inset
+    return (inset + fx * span, inset + fy * span)
+
+
 FLOOR_GEOM = "floor"
 # The geom every task object starts on, in both rigs: the SO-101 scenes
 # add it by this name; the ALOHA bundle's table compiles under it too
