@@ -72,6 +72,15 @@ step "mypy (pipeline)"         "(cd pipeline && uv run --extra sim --extra mcp -
 step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
+# The USD door's own tests need Newton (the `usd` extra), which cannot
+# share a venv with `mjx` (uv's conflicts), so the main suite skips 14 of
+# them. Skipped, a wrong test sat unrun for a day (the stage-units line,
+# 2026-09-25). They run here in their own venv, and a skip FAILS the step
+# (`grep -qx OK`, not "OK (skipped=N)"). The Isaac asset is fetched at its
+# pinned commit when the cache (runs/assets) lacks it.
+step "python tests (USD import, Newton)" \
+     "(cd pipeline && { [ -x .venv-usd/bin/python ] || UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu; } \
+      && RQ_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -qx OK)"
 # sim-run spawns the Rerun viewer by name: the pipeline venv's, whatever
 # the shell's PATH holds (a fresh session had none, 2026-09-23).
 step "simulator solves the U-trap" \

@@ -200,6 +200,11 @@ class StageUnits(unittest.TestCase):
 
         register_schemas()
         stage = Usd.Stage.CreateInMemory()
+        # USD's own fallback for an unauthored metersPerUnit is 0.01: a
+        # stage that says nothing is in centimetres (this line read "meter"
+        # and never ran - skipped without Newton - until 2026-09-25)
+        self.assertEqual(stage_units(stage)["length"], "0.01 meter per unit")
+        UsdGeom.SetStageMetersPerUnit(stage, 1.0)
         self.assertEqual(stage_units(stage)["length"], "meter")
         UsdGeom.SetStageMetersPerUnit(stage, 0.01)
         UsdPhysics.SetStageKilogramsPerUnit(stage, 0.001)

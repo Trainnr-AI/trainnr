@@ -180,8 +180,9 @@ Hulls are what the stills show, because hulls are all the solver wrote.
 
 Every item above is now the writer's (`pipeline/rq_pipeline/robot/usd_import.py`)
 and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
-`robotiq-2f85-isaac@3ec025e4cd56` at first, `@e1bc2cbba31f` since the
-importer audit landed on its record the same evening; 3.0 MB,
+`robotiq-2f85-isaac@3ec025e4cd56` at first, `@e1bc2cbba31f` once the
+importer audit landed on its record the same evening, and `@a2b73f6d43bc` since
+2026-09-25, when the audit moved to `audit.json` outside the stamp; 3.0 MB,
 deterministic: the scratch run and the library run gave the same stamp). Written on the box in
 2.9 s once Warp's kernels are cached, through the pinned venv (newton
 1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
