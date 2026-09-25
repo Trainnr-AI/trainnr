@@ -46,3 +46,78 @@ class TheRunner(unittest.TestCase):
                 "x",
             ],
         )
+
+
+class TheEnvironmentIsReadyBeforeTheJob(unittest.TestCase):
+    """A door launches `uv run --no-sync`; the sync runs once, under a
+    per-project lock, before the job (four launches raced on 2026-09-25)."""
+
+    def test_the_prepare_line_is_the_same_uv_run_with_the_sync_on(self) -> None:
+        from rq_pipeline.mcp_jobs import uv_prepare_argv  # noqa: PLC0415
+
+        launch = [
+            "uv",
+            "run",
+            "--no-sync",
+            "--project",
+            "/p",
+            "--extra",
+            "sim",
+            "python",
+            "-m",
+            "x",
+            "--k",
+        ]
+        self.assertEqual(
+            uv_prepare_argv(launch),
+            ["uv", "run", "--project", "/p", "--extra", "sim", "python", "-c", "pass"],
+        )
+        self.assertIsNone(uv_prepare_argv(["uv", "run", "--project", "/p", "python"]))
+        self.assertIsNone(uv_prepare_argv(["/box/wsl-run.sh", "cargo", "run"]))
+
+    def test_one_lock_per_project(self) -> None:
+        from rq_pipeline.mcp_jobs import uv_lock_path  # noqa: PLC0415
+
+        a = uv_lock_path(["uv", "run", "--no-sync", "--project", "/p/a", "python"])
+        self.assertEqual(
+            a,
+            uv_lock_path(
+                ["uv", "run", "--no-sync", "--project", "/p/a", "python", "-m", "y"]
+            ),
+        )
+        self.assertNotEqual(
+            a, uv_lock_path(["uv", "run", "--no-sync", "--project", "/p/b", "python"])
+        )
+
+    def test_the_lock_admits_one_holder_at_a_time(self) -> None:
+        import threading  # noqa: PLC0415
+        import time  # noqa: PLC0415
+        from tempfile import TemporaryDirectory  # noqa: PLC0415
+
+        from rq_pipeline.mcp_jobs import exclusive  # noqa: PLC0415
+
+        inside, most = [0], [0]
+        guard = threading.Lock()
+
+        def hold(path: Path) -> None:
+            with exclusive(path):
+                with guard:
+                    inside[0] += 1
+                    most[0] = max(most[0], inside[0])
+                time.sleep(0.05)
+                with guard:
+                    inside[0] -= 1
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "x.lock"
+            threads = [threading.Thread(target=hold, args=(path,)) for _ in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        self.assertEqual(most[0], 1)
+
+    def test_a_non_uv_launch_is_not_prepared(self) -> None:
+        from rq_pipeline.mcp_jobs import prepare_uv  # noqa: PLC0415
+
+        prepare_uv(["cargo", "run", "--release"], Path())  # returns, runs nothing

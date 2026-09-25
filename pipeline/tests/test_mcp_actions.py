@@ -42,6 +42,10 @@ class _FakeSpawner:
 
     def __init__(self) -> None:
         self.calls: list[tuple[list[str], Path]] = []
+        self.prepared: list[list[str]] = []
+
+    def prepare(self, argv, cwd) -> None:
+        self.prepared.append(list(argv))
 
     def __call__(self, argv, cwd, log_path) -> _FakeProcess:
         self.calls.append((list(argv), Path(cwd)))
@@ -58,15 +62,15 @@ def harness(env_file: Path | None = None) -> Iterator[tuple[Actions, _FakeSpawne
     still writing the exit file while rmtree ran (2026-09-02)."""
     with TemporaryDirectory() as tmp:
         spawner = _FakeSpawner()
-        jobs = JobManager(Path(tmp), spawner=spawner)
+        jobs = JobManager(Path(tmp), spawner=spawner, preparer=spawner.prepare)
         try:
             yield Actions(jobs, env_file=env_file), spawner
         finally:
             jobs.join()
 
 
-UV_PIPELINE = ["uv", "run", "--project", str(PIPELINE_DIR)]
-UV_MJLAB = ["uv", "run", "--project", str(RQ_MJLAB_DIR), "python"]
+UV_PIPELINE = ["uv", "run", "--no-sync", "--project", str(PIPELINE_DIR)]
+UV_MJLAB = ["uv", "run", "--no-sync", "--project", str(RQ_MJLAB_DIR), "python"]
 
 
 class TheDoors(unittest.TestCase):
@@ -229,7 +233,7 @@ class TheDoors(unittest.TestCase):
         self.assertEqual(
             argv,
             [
-                *UV_MJLAB[:4],
+                *UV_MJLAB[:5],
                 "--env-file",
                 "/box/wsl.env",
                 "python",
@@ -319,6 +323,40 @@ class TheStudentEvaluation(unittest.TestCase):
             self.assertEqual(
                 argv[-4:], ["--student", "runs/s/pretrained_model", "--horizon", "10"]
             )
+
+
+class TheCrossEvaluation(unittest.TestCase):
+    def test_a_cliff_rung_in_another_world_rides_the_same_door(self) -> None:
+        with harness() as (actions, spawner):
+            actions.evaluate_walk(
+                "runs/x/model_1.pt",
+                robot="go2",
+                judge_in_fit="fit@ab",
+                judge_at_scale=0.8,
+                judge_param="kp",
+                delay=2,
+            )
+            [(argv, _)] = spawner.calls
+            self.assertEqual(
+                argv[-8:],
+                [
+                    "--judge-in-fit",
+                    "fit@ab",
+                    "--judge-at-scale",
+                    "0.8",
+                    "--judge-param",
+                    "kp",
+                    "--delay",
+                    "2",
+                ],
+            )
+
+    def test_the_policy_own_world_adds_nothing(self) -> None:
+        with harness() as (actions, spawner):
+            actions.evaluate_walk("runs/x/model_1.pt", robot="go2")
+            [(argv, _)] = spawner.calls
+            for flag in ("--judge-in-fit", "--judge-at-scale", "--delay"):
+                self.assertNotIn(flag, argv)
 
 
 class TheWalkDemosDoor(unittest.TestCase):
@@ -427,7 +465,7 @@ class TheLaunchEnvironment(unittest.TestCase):
         with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
             actions.evaluate_walk("runs/x/model_1.pt", trials=2, robot="microduck")
             [(argv, _)] = spawner.calls
-            self.assertEqual(argv[:6], [*UV_MJLAB[:4], "--env-file", "/box/wsl.env"])
+            self.assertEqual(argv[:7], [*UV_MJLAB[:5], "--env-file", "/box/wsl.env"])
 
     def test_the_train_venv_chain_runs_under_wsl_run(self) -> None:
         with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):

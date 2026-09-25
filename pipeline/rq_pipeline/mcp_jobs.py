@@ -248,12 +248,105 @@ def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
         log.close()
 
 
+# A door launches `uv run --no-sync`: the environment is made ready once,
+# under a lock, BEFORE the job starts (`prepare_uv`). Four evaluations
+# launched together after a branch switch each re-installed the project
+# and collided on its dist-info (2026-09-25, three of four died at 1 s).
+UV_NO_SYNC = "--no-sync"
+UV_PREPARE_TIMEOUT_S = 900.0  # a cold install of the train extras
+
+
+@contextmanager
+def exclusive(path: Path) -> Iterator[None]:
+    """A lock across processes on `path` (created if missing): `flock` on
+    POSIX, `msvcrt.locking` on Windows; released on exit either way."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt  # noqa: PLC0415
+
+            handle.seek(0)
+            while True:
+                try:  # LK_LOCK gives up after ~10 s; a sync may take longer
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    continue
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl  # noqa: PLC0415
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def uv_prepare_argv(argv: Sequence[str]) -> list[str] | None:
+    """The sync a `uv run --no-sync ... python <rest>` launch needs: the same
+    `uv run` flags (project, env file, extras) with the sync left on, running
+    nothing. None for any other command line."""
+    if list(argv[:3]) != ["uv", "run", UV_NO_SYNC] or "python" not in argv:
+        return None
+    head = list(argv[: list(argv).index("python") + 1])
+    return [head[0], head[1], *head[3:], "-c", "pass"]
+
+
+def uv_lock_path(argv: Sequence[str]) -> Path:
+    """One lock per uv project (the `--project` it names), in the temp dir:
+    two doors on different venvs never wait on each other."""
+    import hashlib  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    args = list(argv)
+    project = args[args.index("--project") + 1] if "--project" in args else os.getcwd()
+    digest = hashlib.sha256(str(Path(project).resolve()).encode()).hexdigest()[:12]
+    return Path(tempfile.gettempdir()) / f"trainnr-uv-{digest}.lock"
+
+
+def prepare_uv(argv: Sequence[str], cwd: Path) -> None:
+    """Make a `uv run --no-sync` launch's environment ready, one door at a
+    time per project; refused by name, with uv's own words, if it cannot."""
+    prepare = uv_prepare_argv(argv)
+    if prepare is None:
+        return
+    with exclusive(uv_lock_path(argv)):
+        done = subprocess.run(
+            prepare,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=UV_PREPARE_TIMEOUT_S,
+            check=False,
+        )
+    if done.returncode != 0:
+        raise RuntimeError(
+            f"the environment for {' '.join(prepare)} is not ready: "
+            f"{(done.stderr or done.stdout).strip()[-800:]}"
+        )
+
+
+Preparer = Callable[[Sequence[str], Path], None]
+
+
 class JobManager:
     """Start, poll, tail and cancel the doors' subprocesses."""
 
-    def __init__(self, runs_root: Path, *, spawner: Spawner = _spawn) -> None:
+    def __init__(
+        self,
+        runs_root: Path,
+        *,
+        spawner: Spawner = _spawn,
+        preparer: Preparer = prepare_uv,
+    ) -> None:
         self.jobs_dir = Path(runs_root) / JOBS_DIR_NAME
         self._spawner = spawner
+        self._preparer = preparer
         self._watchers: list[threading.Thread] = []
 
     def join(self, timeout: float | None = None) -> None:
@@ -264,7 +357,10 @@ class JobManager:
             watcher.join(timeout)
 
     def start(self, tool: str, argv: Sequence[str], cwd: Path) -> JobHandle:
-        """Spawn `argv` in `cwd`; returns the job's id, log path and pid."""
+        """Spawn `argv` in `cwd`; returns the job's id, log path and pid.
+        Its environment is made ready first (`prepare_uv`), so the job
+        itself never installs anything."""
+        self._preparer(argv, Path(cwd))
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"

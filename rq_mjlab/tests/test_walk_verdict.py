@@ -174,6 +174,21 @@ class TheCrossWorld(unittest.TestCase):
         self.assertEqual(fitted_policy["fit"], "fit@b")
         self.assertEqual(fitted_policy["judged_in_fit"], "declared")
 
+    def test_the_running_job_names_its_world(self) -> None:
+        import sys  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import parse_args, verdict_job_name  # noqa: PLC0415
+
+        argv = ["walk_verdict", "runs/go2-c2/model_1499.pt"]
+        with mock.patch.object(sys, "argv", argv):
+            self.assertEqual(verdict_job_name(parse_args()), "go2-c2")
+        cross = [*argv, "--judge-in-fit", "fit@ab", "--judge-at-scale", "0.8"]
+        with mock.patch.object(sys, "argv", [*cross, "--judge-param", "kp"]):
+            self.assertEqual(
+                verdict_job_name(parse_args()), "go2-c2 in fit@ab at kp x0.8"
+            )
+
     def test_the_cross_file_names_its_world(self) -> None:
         from rq_mjlab.walk_verdict import cross_world_word  # noqa: PLC0415
 

@@ -42,6 +42,7 @@ from rq_pipeline.evaluate.tracking import (
     TrackingOutcome,
     criterion_text,
 )
+from rq_pipeline.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
 from rq_pipeline.viz import viewer_file
 
 from rq_mjlab.envelope import COMMAND_TERM, checkpoint_iteration, pin_command_envelope
@@ -440,6 +441,30 @@ def cross_identity(
     return record
 
 
+VERDICT_KIND = "evaluate-walk"  # the job table's kind, the door's own tool name
+
+
+def verdict_viewer(checkpoint: Path) -> Path:
+    """The saved stream of a judgment, in the run the checkpoint belongs to."""
+    return viewer_file(checkpoint.parent, f"verdict-{checkpoint.stem}")
+
+
+def verdict_job_name(args: argparse.Namespace) -> str:
+    """What a judgment is called while it runs: the run, and the world
+    when it is not the policy's own (a cross, a scaled law, a delay)."""
+    words = [args.checkpoint.parent.name]
+    if args.student is not None:
+        words.append(f"student {args.student.parent.name}")
+    if args.judge_in_fit is not None:
+        words.append(f"in {args.judge_in_fit}")
+    if args.judge_at_scale is not None:
+        axis = "" if args.judge_param == "all" else f"{args.judge_param} "
+        words.append(f"at {axis}x{args.judge_at_scale:g}")
+    if args.delay:
+        words.append(f"delay {args.delay}")
+    return " ".join(words)
+
+
 def cross_world_word(judge_in_fit: str) -> str:
     """The judged world as a file-name part: `declared`, or the fit's hash."""
     return judge_in_fit.replace("@", "-")
@@ -644,9 +669,22 @@ def write_certificate(  # noqa: PLR0913 - every fact of one certificate, named
     print(f"[verdict] rows in {out_dir}")
 
 
-def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
+def main() -> None:
+    """One judgment, in the project's job table while it runs: the Studio's
+    Running now names it by the run and the world it is judged in."""
     args = parse_args()
+    with track(
+        VERDICT_KIND,
+        jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
+        name=verdict_job_name(args),
+        viewport=VIEWPORT_WALK,
+        viewer=str(verdict_viewer(args.checkpoint)),
+    ) as run:
+        judge(args, run)
 
+
+def judge(args: argparse.Namespace, run: Any) -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
+    """The certificate's procedure; `run` is the job table's tracker."""
     import warp as wp  # noqa: PLC0415
 
     wp.init()
@@ -755,6 +793,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
     print(f"[verdict] {source} on {instrument}, {args.trials} trials")
     print(f"[verdict] commands: {envelope['commands']} ({envelope['basis']})")
 
+    run.stage(f"building {args.trials} worlds on {device}")
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
@@ -808,11 +847,12 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         else VerdictFeed.connect(
             policy_name.split("@")[0],
             # The saved stream lands in the run the checkpoint belongs to.
-            viewer_file(args.checkpoint.parent, f"verdict-{args.checkpoint.stem}"),
+            verdict_viewer(args.checkpoint),
         )
     )
     if isinstance(policy, StudentPolicy):
         policy.feed = feed
+    run.stage(f"walking {args.trials} paired trials")
     outcomes = rollout_outcomes(env, policy, args.trials)
     if isinstance(policy, StudentPolicy):
         policy.close()
@@ -861,20 +901,24 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
     else:
         protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
-    if args.judge_in_fit is not None:
-        world = cross_world_word(args.judge_in_fit)
-        suffix = f"in-{world}-{suffix}"
-        protocol["judged_at"] = (
-            f"CROSS-evaluation: trained in "
-            f"{fit_of(trained_identity) or JUDGE_DECLARED}, judged in {world}"
-        )
     if args.judge_at_scale is not None:
         axis = "" if args.judge_param == "all" else f"{args.judge_param}-"
         suffix = f"at-x{args.judge_at_scale:g}-{axis}{suffix}"
         moved = "every law parameter" if args.judge_param == "all" else args.judge_param
         protocol["judged_at"] = f"{moved} at fit x {args.judge_at_scale:g}"
+    if args.judge_in_fit is not None:
+        # last, so it wraps the rung it may be combined with (a cliff judged
+        # in another world keeps both names)
+        world = cross_world_word(args.judge_in_fit)
+        suffix = f"in-{world}-{suffix}"
+        protocol["judged_at"] = (
+            f"CROSS-evaluation: trained in "
+            f"{fit_of(trained_identity) or JUDGE_DECLARED}, judged in {world}; "
+            f"{protocol['judged_at']}"
+        )
     append_records(out_dir / f"records-{suffix}.jsonl", records)
 
+    run.stage(f"{sum(o.success for o in outcomes)}/{len(outcomes)} walked")
     write_certificate(
         out_dir,
         suffix,

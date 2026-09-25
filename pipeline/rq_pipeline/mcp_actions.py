@@ -29,7 +29,7 @@ from typing import Any
 from rq_pipeline.bundles.locate import robots_dir
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
 from rq_pipeline.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
-from rq_pipeline.mcp_jobs import Cancelled, JobHandle, JobManager, JobStatus
+from rq_pipeline.mcp_jobs import UV_NO_SYNC, Cancelled, JobHandle, JobManager, JobStatus
 from rq_pipeline.paths import train_python
 
 # The checkout this package runs from (rq_pipeline/ -> pipeline/ -> the
@@ -75,7 +75,7 @@ WSL_RUN = TOOLS_DIR / "wsl-run.sh"  # the same env for interpreters uv does not 
 
 
 def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
-    argv = ["uv", "run", "--project", str(project)]
+    argv = ["uv", "run", UV_NO_SYNC, "--project", str(project)]
     if env_file is not None:
         argv += ["--env-file", str(env_file)]
     for extra in extras:
@@ -326,6 +326,9 @@ class Actions:
         project: str | None = None,
         scene: str | None = None,
         judge_in_fit: str | None = None,
+        judge_at_scale: float | None = None,
+        judge_param: str = "all",
+        delay: int = 0,
     ) -> JobHandle:
         """The locomotion evaluation (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
@@ -355,6 +358,15 @@ class Actions:
             argv += ["--scene", scene]
         if judge_in_fit is not None:  # a cross-evaluation in another robot world
             argv += ["--judge-in-fit", judge_in_fit]
+        if judge_at_scale is not None:  # a cliff rung: one law axis pinned
+            argv += [
+                "--judge-at-scale",
+                str(judge_at_scale),
+                "--judge-param",
+                judge_param,
+            ]
+        if delay:  # the teacher's action late by `delay` control ticks
+            argv += ["--delay", str(delay)]
         return self.jobs.start("evaluate-walk", argv, RQ_MJLAB_DIR)
 
     def play_walk(

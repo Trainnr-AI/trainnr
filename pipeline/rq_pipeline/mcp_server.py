@@ -493,6 +493,9 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     robot: str | None = None,
     scene: str | None = None,
     judge_in_fit: str | None = None,
+    judge_at_scale: float | None = None,
+    judge_param: str = "all",
+    delay: int = 0,
 ) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
     the run's versions on every row; `robot` names the walk the checkpoint
@@ -502,8 +505,11 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     on it, and its protocol names it. `judge_in_fit` makes it a CROSS-
     evaluation: the policy judged in another robot world - a joints fit
     (`fit@<stamp>`) or the vendor's declared constants (`declared`) -
-    recorded under its own name, never as the policy's certificate. Job
-    handle."""
+    recorded under its own name, never as the policy's certificate.
+    `judge_at_scale` with `judge_param` (`kp`, `kd`, `armature` or `all`)
+    judges at a cliff rung, that law axis pinned at the fit times the
+    scale; `delay` makes the policy's action late by that many control
+    ticks. Both combine with `judge_in_fit`. Job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -527,6 +533,9 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
             project=str(root) if root else None,
             scene=_scene_dir(root, scene),
             judge_in_fit=judge_in_fit,
+            judge_at_scale=judge_at_scale,
+            judge_param=judge_param,
+            delay=delay,
         )
     except ValueError as why:
         return refusal(str(why))
