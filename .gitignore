@@ -46,3 +46,4 @@ docs/paper/latex/*.fls
 docs/paper/latex/*.fdb_latexmk
 docs/paper/latex/*.toc
 docs/paper/latex/*.synctex.gz
+.playwright-mcp/
