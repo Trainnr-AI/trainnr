@@ -42,7 +42,13 @@ from rq_pipeline.evaluate.tracking import (
     TrackingOutcome,
     criterion_text,
 )
-from rq_pipeline.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
+from rq_pipeline.mcp_jobs import (
+    VIEWPORT_WALK,
+    Tracker,
+    default_jobs_root,
+    jobs_dir_of,
+    track,
+)
 from rq_pipeline.viz import viewer_file
 
 from rq_mjlab.envelope import COMMAND_TERM, checkpoint_iteration, pin_command_envelope
@@ -429,16 +435,34 @@ def judged_fit(judge_in_fit: str | None, trained: dict[str, Any]) -> str | None:
 
 
 def cross_identity(
-    identity: dict[str, Any], trained: dict[str, Any], judge_in_fit: str
+    identity: dict[str, Any], trained: dict[str, Any], judged: dict[str, Any]
 ) -> dict[str, Any]:
-    """The record of a cross-evaluation: the trained fit under `fit` (absent
-    when it trained on declared numbers), the judged world under
-    `judged_in_fit` - never one key standing for both."""
-    record = {k: v for k, v in identity.items() if k != Identity.FIT}
-    if fit_of(trained):
-        record[Identity.FIT] = fit_of(trained)
-    record["judged_in_fit"] = judge_in_fit
+    """The record of a cross-evaluation: the trained fit and its basis under
+    `fit` / `fit_basis` (absent when it trained on declared numbers), the
+    judged world under `judged_in_fit` / `judged_fit_basis` - read from
+    the environment as BUILT (`judged`), never as typed - so no key stands
+    for both worlds."""
+    record = {
+        k: v for k, v in identity.items() if k not in (Identity.FIT, Identity.FIT_BASIS)
+    }
+    for key in (Identity.FIT, Identity.FIT_BASIS):
+        if trained.get(key):
+            record[key] = trained[key]
+    record[Identity.JUDGED_IN_FIT] = judged.get(Identity.FIT) or JUDGE_DECLARED
+    if judged.get(Identity.FIT_BASIS):
+        record[Identity.JUDGED_FIT_BASIS] = judged[Identity.FIT_BASIS]
     return record
+
+
+def require_another_world(trained: dict[str, Any], judged: dict[str, Any]) -> None:
+    """A cross-evaluation in the world the policy trained in is its own
+    certificate under another name: refused."""
+    own = fit_of(trained) or JUDGE_DECLARED
+    if (judged.get(Identity.FIT) or JUDGE_DECLARED) == own:
+        raise SystemExit(
+            f"--judge-in-fit names {own}, the world this policy trained in: "
+            "that is its own certificate, judge it without --judge-in-fit"
+        )
 
 
 VERDICT_KIND = "evaluate-walk"  # the job table's kind, the door's own tool name
@@ -466,7 +490,7 @@ def verdict_job_name(args: argparse.Namespace) -> str:
 
 
 def cross_world_word(judge_in_fit: str) -> str:
-    """The judged world as a file-name part: `declared`, or the fit's hash."""
+    """The judged world as a file-name part: `declared`, or `fit-<hash>`."""
     return judge_in_fit.replace("@", "-")
 
 
@@ -678,12 +702,14 @@ def main() -> None:
         jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
         name=verdict_job_name(args),
         viewport=VIEWPORT_WALK,
-        viewer=str(verdict_viewer(args.checkpoint)),
+        # no stream is written under --no-studio: point at none, not at an
+        # older judgment's file
+        viewer="" if args.no_studio else str(verdict_viewer(args.checkpoint)),
     ) as run:
         judge(args, run)
 
 
-def judge(args: argparse.Namespace, run: Any) -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
+def judge(args: argparse.Namespace, run: Tracker) -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
     """The certificate's procedure; `run` is the job table's tracker."""
     import warp as wp  # noqa: PLC0415
 
@@ -734,6 +760,10 @@ def judge(args: argparse.Namespace, run: Any) -> None:  # noqa: PLR0912, PLR0915
         else trained_identity,
         identity,
     )
+    # the judged world as built, before the trained identity is merged in
+    judged = {k: identity.get(k) for k in (Identity.FIT, Identity.FIT_BASIS)}
+    if args.judge_in_fit is not None:
+        require_another_world(trained_identity, judged)
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
     if trained_identity:
@@ -755,7 +785,7 @@ def judge(args: argparse.Namespace, run: Any) -> None:  # noqa: PLR0912, PLR0915
     if args.judge_in_fit is not None:
         # a cross record names both worlds: `fit` stays the one the policy
         # trained under (none for declared), `judged_in_fit` the one it ran in
-        identity = cross_identity(identity, trained_identity, args.judge_in_fit)
+        identity = cross_identity(identity, trained_identity, judged)
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
@@ -909,8 +939,8 @@ def judge(args: argparse.Namespace, run: Any) -> None:  # noqa: PLR0912, PLR0915
     if args.judge_in_fit is not None:
         # last, so it wraps the rung it may be combined with (a cliff judged
         # in another world keeps both names)
-        world = cross_world_word(args.judge_in_fit)
-        suffix = f"in-{world}-{suffix}"
+        world = identity[Identity.JUDGED_IN_FIT]
+        suffix = f"in-{cross_world_word(world)}-{suffix}"
         protocol["judged_at"] = (
             f"CROSS-evaluation: trained in "
             f"{fit_of(trained_identity) or JUDGE_DECLARED}, judged in {world}; "

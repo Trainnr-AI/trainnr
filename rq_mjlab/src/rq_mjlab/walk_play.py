@@ -28,7 +28,13 @@ from rq_mjlab.walk_view import (
     trained_identity,
     trained_with_cameras,
 )
-from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
+from rq_mjlab.walks import (
+    DEFAULT_ROBOT,
+    ROBOTS,
+    TERRAIN_SCAN_GROUP,
+    use_project,
+    walk_spec,
+)
 
 
 def main() -> None:
@@ -127,20 +133,27 @@ def main() -> None:
 
 def showing_the_ground(viewer: type) -> type:
     """`viewer` with the scene's ground group drawn: mjviser's group list
-    (its "G4" checkbox still reads off until toggled) or MuJoCo's
-    `opt.geomgroup` in the native window."""
-    from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
+    through its private `_sync_visibilities` (mjlab 1.6.0 / mjviser as
+    installed; no public setter exists, and its "G4" checkbox still reads
+    off until toggled) or MuJoCo's public `opt.geomgroup` in the native
+    window. A viewer with neither is refused by name, never a silent
+    invisible ground."""
 
     class Shown(viewer):  # type: ignore[misc, valid-type]
         def setup(self) -> None:
             super().setup()
             scene = getattr(self, "_scene", None)
+            native = getattr(self, "viewer", None)
             if scene is not None:  # the browser viewer
                 scene.geom_groups_visible[TERRAIN_SCAN_GROUP] = True
                 scene._sync_visibilities()
-            native = getattr(self, "viewer", None)
-            if native is not None:  # the MuJoCo window
+            elif native is not None:  # the MuJoCo window
                 native.opt.geomgroup[TERRAIN_SCAN_GROUP] = 1
+            else:
+                raise RuntimeError(
+                    f"{viewer.__name__} has neither `_scene` (mjviser) nor `viewer` "
+                    "(MuJoCo's window): cannot show the scene's ground group"
+                )
 
     Shown.__name__ = f"{viewer.__name__}ShowingTheGround"
     return Shown

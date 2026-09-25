@@ -42,10 +42,6 @@ class _FakeSpawner:
 
     def __init__(self) -> None:
         self.calls: list[tuple[list[str], Path]] = []
-        self.prepared: list[list[str]] = []
-
-    def prepare(self, argv, cwd) -> None:
-        self.prepared.append(list(argv))
 
     def __call__(self, argv, cwd, log_path) -> _FakeProcess:
         self.calls.append((list(argv), Path(cwd)))
@@ -62,7 +58,7 @@ def harness(env_file: Path | None = None) -> Iterator[tuple[Actions, _FakeSpawne
     still writing the exit file while rmtree ran (2026-09-02)."""
     with TemporaryDirectory() as tmp:
         spawner = _FakeSpawner()
-        jobs = JobManager(Path(tmp), spawner=spawner, preparer=spawner.prepare)
+        jobs = JobManager(Path(tmp), spawner=spawner)
         try:
             yield Actions(jobs, env_file=env_file), spawner
         finally:

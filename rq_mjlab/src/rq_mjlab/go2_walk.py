@@ -46,7 +46,7 @@ from rq_pipeline.deploy.manifest import UnitreeFacts
 from rq_pipeline.deploy.runtime import STANDING_COMMAND
 from rq_pipeline.deploy.unitree_yaml import deployable_actor_terms
 
-from rq_mjlab.envelope import COMMAND_TERM
+from rq_mjlab.envelope import COMMAND_TERM, CURRICULUM_TERM, STAGES_KEY
 from rq_mjlab.go1_walk import SCALED, GainsBasis, actuator_dr_events
 from rq_mjlab.linter import lint
 from rq_mjlab.scene_stage import TERRAIN_BODY
@@ -55,8 +55,10 @@ from rq_mjlab.walks import (
     ACTOR_LEGACY,
     ACTOR_ROUGH,
     NO_CAMERAS,
+    ROBOT_ENTITY,
     DeployFacts,
     Identity,
+    ScanSensor,
 )
 
 ROBOT = "unitree-go2"
@@ -178,8 +180,6 @@ def articulation(*, declared_armature: bool = True) -> EntityArticulationInfoCfg
     )
 
 
-ARTICULATION = articulation()
-
 INIT_STATE = EntityCfg.InitialStateCfg(
     pos=(0.0, 0.0, DECLARED["home"]["z"]),
     joint_pos={
@@ -211,7 +211,7 @@ def go2_robot_cfg(fit: Any = None) -> EntityCfg:
             init_state=INIT_STATE,
             collisions=(FULL_COLLISION,),
             spec_fn=get_spec,
-            articulation=ARTICULATION,
+            articulation=articulation(),  # fresh: never shared across configs
         )
     from rq_mjlab.fit_walk import apply_to_spec  # noqa: PLC0415
 
@@ -232,12 +232,12 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
     cfg.sim.contact_sensor_maxmatch = 500
     cfg.scene.entities = {"robot": go2_robot_cfg()}
     for sensor in cfg.scene.sensors or ():
-        if sensor.name == "terrain_scan":
+        if sensor.name == ScanSensor.TERRAIN:
             assert isinstance(sensor, RayCastSensorCfg)
             assert isinstance(sensor.frame, ObjRef)
             sensor.frame.name = TRUNK
     for sensor in cfg.scene.sensors or ():
-        if sensor.name == "foot_height_scan":
+        if sensor.name == ScanSensor.FOOT_HEIGHT:
             assert isinstance(sensor, RayCastSensorCfg)  # TerrainHeightSensorCfg
             sensor.frame = tuple(
                 ObjRef(type="site", name=s, entity="robot") for s in FOOT_SITES
@@ -311,7 +311,7 @@ def _rough_env_cfg(play: bool) -> ManagerBasedRlEnvCfg:
             r".*(FR|FL|RR|RL)_calf_joint.*": 0.5,
         }
     cfg.rewards["upright"].params["asset_cfg"].body_names = (TRUNK,)
-    cfg.rewards["upright"].params["terrain_sensor_names"] = ("terrain_scan",)
+    cfg.rewards["upright"].params["terrain_sensor_names"] = (ScanSensor.TERRAIN,)
     cfg.rewards["body_ang_vel"].params["asset_cfg"].body_names = (TRUNK,)
     for reward_name in ("foot_clearance", "foot_slip"):
         cfg.rewards[reward_name].params["asset_cfg"].site_names = FOOT_SITES
@@ -386,7 +386,7 @@ def go2_flat_env_cfg(
     cfg.scene.terrain.terrain_type = "plane"
     cfg.scene.terrain.terrain_generator = None
     remove = {
-        "terrain_scan",
+        ScanSensor.TERRAIN,
         "thigh_ground_touch",
         "shank_ground_touch",
         "trunk_ground_touch",
@@ -439,7 +439,7 @@ def _with_actuator_dr(
         from rq_mjlab.fit_walk import basis_text, dr_events, resolve  # noqa: PLC0415
 
         record = resolve(bundle_dir(), fit)
-        cfg.scene.entities["robot"] = go2_robot_cfg(record)
+        cfg.scene.entities[ROBOT_ENTITY] = go2_robot_cfg(record)
         events.pop(ARMATURE_EVENT, None)  # the fit's own draw replaces it
         events.update(dr_events(record))
         dr_basis = f"{basis_text(record)}; gains: {dr_basis}"
@@ -518,15 +518,11 @@ def gentle_scene_commands(cfg: ManagerBasedRlEnvCfg) -> None:
     """The scene's command schedule in place of the plane's, its first
     stage also the ranges before the curriculum's first call. A play
     config has no curriculum and keeps its own commands."""
-    from rq_mjlab.envelope import (  # noqa: PLC0415
-        COMMAND_TERM,
-        CURRICULUM_TERM,
-        STAGES_KEY,
-    )
-
     term = (cfg.curriculum or {}).get(CURRICULUM_TERM)
     if term is None:
         return
+    # the Go2 recipe's steps per iteration; the smoke agent shares them
+    # (pinned by test_scene_commands), or the stages would key wrong
     stages = scene_command_stages(go2_agent(1).num_steps_per_env)
     term.params[STAGES_KEY] = stages
     ranges = cfg.commands[COMMAND_TERM].ranges
@@ -606,8 +602,13 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     )
     # the model's resting pose (qpos0, what mjlab allocates contacts from
     # before the first reset) at the course's start, not inside the scene
-    robot = cfg.scene.entities["robot"]
+    robot = cfg.scene.entities[ROBOT_ENTITY]
     robot.spec_fn = seated_at(robot.spec_fn, scene_start(scene_dir))
+    # the schedule it trains under is part of the record: a scene run's
+    # commands are not the recipe's (SCENE_COMMAND_STAGES)
+    identity[Identity.COMMANDS] = (
+        f"scene schedule @{fields_hash({'stages': SCENE_COMMAND_STAGES})}"
+    )
     identity[Identity.SCENE] = scene_stamp(scene_dir)
     identity[Identity.TERRAIN] = f"the scene's heightfield at {TRAIN_CELL_M} m"
     identity[Identity.ACTOR] = ACTOR_ROUGH
@@ -625,8 +626,13 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
         if camera_in_actor:
             for group in ("actor", "critic"):
                 cfg.observations[group].terms[CAMERA_TERM] = camera_term(head.name)
+            # mjlab renders one union of the camera's groups and the scans':
+            # the scan ground (TERRAIN_SCAN_GROUP) is drawn under the splat,
+            # and the record says so (review 2026-09-26; not yet removable
+            # without blinding the scans, which skip transparent geometry)
             identity[Identity.CAMERAS] = (
-                f"{head.name} {head.width}x{head.height} rgb over {gaussians} splats"
+                f"{head.name} {head.width}x{head.height} rgb over {gaussians} splats, "
+                "the scan ground drawn under them"
             )
     return cfg, identity
 

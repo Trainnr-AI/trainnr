@@ -24,16 +24,56 @@ class TheSceneCommands(unittest.TestCase):
         KeyError on the first scene play, 2026-09-25)."""
         from types import SimpleNamespace  # noqa: PLC0415
 
+        from rq_mjlab.envelope import COMMAND_TERM  # noqa: PLC0415
         from rq_mjlab.go2_walk import gentle_scene_commands  # noqa: PLC0415
 
         ranges = SimpleNamespace(
             lin_vel_x=(-2.0, 2.0), lin_vel_y=(-1, 1), ang_vel_z=(-1, 1)
         )
         cfg = SimpleNamespace(
-            curriculum={}, commands={"twist": SimpleNamespace(ranges=ranges)}
+            curriculum={}, commands={COMMAND_TERM: SimpleNamespace(ranges=ranges)}
         )
         gentle_scene_commands(cfg)
         self.assertEqual(ranges.lin_vel_x, (-2.0, 2.0))
+
+    def test_a_training_config_takes_the_scene_schedule(self) -> None:
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        from rq_mjlab.envelope import (  # noqa: PLC0415
+            COMMAND_TERM,
+            CURRICULUM_TERM,
+            STAGES_KEY,
+        )
+        from rq_mjlab.go2_walk import (  # noqa: PLC0415
+            gentle_scene_commands,
+            go2_agent,
+            scene_command_stages,
+        )
+
+        ranges = SimpleNamespace(
+            lin_vel_x=(-1, 1), lin_vel_y=(-1, 1), ang_vel_z=(-1, 1)
+        )
+        term = SimpleNamespace(params={STAGES_KEY: "the plane's"})
+        cfg = SimpleNamespace(
+            curriculum={CURRICULUM_TERM: term},
+            commands={COMMAND_TERM: SimpleNamespace(ranges=ranges)},
+        )
+        gentle_scene_commands(cfg)
+        stages = scene_command_stages(go2_agent(1).num_steps_per_env)
+        self.assertEqual(term.params[STAGES_KEY], stages)
+        self.assertEqual(ranges.lin_vel_x, stages[0]["lin_vel_x"])
+        self.assertEqual(ranges.lin_vel_y, stages[0]["lin_vel_y"])
+
+    def test_the_smoke_agent_keys_the_stages_alike(self) -> None:
+        """The schedule converts iterations with the Go2 recipe's steps
+        per iteration; a smoke run must count the same, or its stages
+        would open at other iterations."""
+        from rq_mjlab.go2_walk import go2_agent  # noqa: PLC0415
+        from rq_mjlab.walk_train import smoke_agent  # noqa: PLC0415
+
+        self.assertEqual(
+            smoke_agent(1).num_steps_per_env, go2_agent(1).num_steps_per_env
+        )
 
     def test_the_verdict_pins_the_stage_a_checkpoint_reached(self) -> None:
         from rq_mjlab.envelope import stage_reached  # noqa: PLC0415
@@ -72,7 +112,7 @@ class TheScansSeeTheScene(unittest.TestCase):
         from rq_pipeline.scenes.cameras import VISUAL_GROUPS  # noqa: PLC0415
         from rq_pipeline.scenes.record import COLLISION_GROUP  # noqa: PLC0415
 
-        from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
+        from rq_mjlab.walks import TERRAIN_SCAN_GROUP  # noqa: PLC0415
 
         self.assertNotIn(
             TERRAIN_SCAN_GROUP, VISUAL_GROUPS
@@ -87,8 +127,8 @@ class ThePlayShowsTheGround(unittest.TestCase):
     def test_both_viewers_turn_the_ground_group_on(self) -> None:
         from types import SimpleNamespace  # noqa: PLC0415
 
-        from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
         from rq_mjlab.walk_play import showing_the_ground  # noqa: PLC0415
+        from rq_mjlab.walks import TERRAIN_SCAN_GROUP  # noqa: PLC0415
 
         synced = []
 

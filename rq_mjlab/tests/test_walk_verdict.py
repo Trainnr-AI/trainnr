@@ -165,14 +165,46 @@ class TheCrossWorld(unittest.TestCase):
 
     def test_the_record_names_both_worlds(self) -> None:
         from rq_mjlab.walk_verdict import cross_identity  # noqa: PLC0415
+        from rq_mjlab.walks import Identity  # noqa: PLC0415
 
-        built = {"robot": "go2@1", "fit": "fit@b"}
-        declared_policy = cross_identity(built, {}, "fit@b")
-        self.assertNotIn("fit", declared_policy)
-        self.assertEqual(declared_policy["judged_in_fit"], "fit@b")
-        fitted_policy = cross_identity({"robot": "go2@1"}, {"fit": "fit@b"}, "declared")
-        self.assertEqual(fitted_policy["fit"], "fit@b")
-        self.assertEqual(fitted_policy["judged_in_fit"], "declared")
+        # declared-trained, judged in fit b: the judged basis never sits
+        # under the trained key
+        built = {"robot": "go2@1", "fit": "fit@b", "fit_basis": "b's robot"}
+        judged = {"fit": "fit@b", "fit_basis": "b's robot"}
+        record = cross_identity(built, {}, judged)
+        self.assertNotIn(Identity.FIT, record)
+        self.assertNotIn(Identity.FIT_BASIS, record)
+        self.assertEqual(record[Identity.JUDGED_IN_FIT], "fit@b")
+        self.assertEqual(record[Identity.JUDGED_FIT_BASIS], "b's robot")
+        # fit-trained, judged on the declared constants
+        trained = {"fit": "fit@b", "fit_basis": "b's robot"}
+        record = cross_identity({"robot": "go2@1"}, trained, {})
+        self.assertEqual(record[Identity.FIT], "fit@b")
+        self.assertEqual(record[Identity.FIT_BASIS], "b's robot")
+        self.assertEqual(record[Identity.JUDGED_IN_FIT], "declared")
+        self.assertNotIn(Identity.JUDGED_FIT_BASIS, record)
+
+    def test_a_cross_still_holds_the_robot_and_actuator(self) -> None:
+        """The cross gate lets only the fit move (walk_verdict's override)."""
+        from rq_mjlab.walk_view import require_same_identity  # noqa: PLC0415
+
+        trained = {"robot": "go2@1", "actuator": "a@1", "fit": "fit@a"}
+        built = {"robot": "go2@1", "actuator": "a@1", "fit": "fit@b"}
+        require_same_identity({**trained, "fit": built["fit"]}, built)
+        with self.assertRaisesRegex(SystemExit, "mismatch on robot"):
+            require_same_identity(
+                {**trained, "fit": built["fit"]}, {**built, "robot": "go1@1"}
+            )
+
+    def test_a_cross_into_its_own_world_is_refused(self) -> None:
+        from rq_mjlab.walk_verdict import require_another_world  # noqa: PLC0415
+
+        with self.assertRaisesRegex(SystemExit, "own certificate"):
+            require_another_world({"fit": "fit@b"}, {"fit": "fit@b"})
+        with self.assertRaisesRegex(SystemExit, "declared"):
+            require_another_world({}, {})
+        require_another_world({"fit": "fit@b"}, {})  # fit -> declared: a cross
+        require_another_world({}, {"fit": "fit@b"})  # declared -> fit: a cross
 
     def test_the_running_job_names_its_world(self) -> None:
         import sys  # noqa: PLC0415

@@ -125,20 +125,13 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     (`env_file`) the trainer needs on the box, so no caller can drop it."""
     argv = [*_uv(RQ_MJLAB_DIR, env_file=env_file), "-m", "rq_mjlab.walk_train"]
     argv += ["--agent", agent, "--robot", require_walk_robot(robot)]
-    if project is not None:
-        argv += ["--project", project]
-    if envs is not None:
-        argv += ["--envs", str(envs)]
-    if iterations is not None:
-        argv += ["--iterations", str(iterations)]
-    if seed is not None:
-        argv += ["--seed", str(seed)]
-    if log_dir is not None:
-        argv += ["--log-dir", log_dir]
-    if dr_span is not None:
-        argv += ["--dr-span", str(dr_span)]
-    if task_stamp is not None:
-        argv += ["--task-stamp", task_stamp]
+    argv += _given("--project", project)
+    argv += _given("--envs", envs)
+    argv += _given("--iterations", iterations)
+    argv += _given("--seed", seed)
+    argv += _given("--log-dir", log_dir)
+    argv += _given("--dr-span", dr_span)
+    argv += _given("--task-stamp", task_stamp)
     if not recorder:
         argv.append("--no-recorder")
     if scene is not None:  # the walk on a captured scene (docs/78 E2)
@@ -147,9 +140,16 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
             argv.append("--no-cameras")
     if fit is not None:  # the joints at a measured fit (rq_mjlab.fit_walk)
         argv += ["--fit", fit]
+    if lag_dr_ms < 0:
+        raise ValueError(f"a command lag is not negative: {lag_dr_ms} ms")
     if lag_dr_ms:  # a random command lag in training (rq_mjlab.lag_dr)
         argv += ["--lag-dr-ms", f"{lag_dr_ms:g}"]
     return argv
+
+
+# walk_verdict's word for moving every law axis at a cliff rung (rq_mjlab
+# cannot be imported here; the CLI refuses any other mismatch the same way)
+JUDGE_ALL_AXES = "all"
 
 
 def _given(flag: str, value: object) -> list[str]:
@@ -332,7 +332,7 @@ class Actions:
         scene: str | None = None,
         judge_in_fit: str | None = None,
         judge_at_scale: float | None = None,
-        judge_param: str = "all",
+        judge_param: str = JUDGE_ALL_AXES,
         delay: int = 0,
     ) -> JobHandle:
         """The locomotion evaluation (C1's shape): seeded paired
@@ -363,10 +363,14 @@ class Actions:
             argv += ["--scene", scene]
         if judge_in_fit is not None:  # a cross-evaluation in another robot world
             argv += ["--judge-in-fit", judge_in_fit]
+        if judge_param != JUDGE_ALL_AXES and judge_at_scale is None:
+            raise ValueError(f"judge_param {judge_param!r} needs judge_at_scale")
+        if delay < 0:
+            raise ValueError(f"delay is control ticks late, not {delay}")
         if judge_at_scale is not None:  # a cliff rung: one law axis pinned
             argv += [
                 "--judge-at-scale",
-                str(judge_at_scale),
+                f"{judge_at_scale:g}",
                 "--judge-param",
                 judge_param,
             ]

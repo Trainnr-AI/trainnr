@@ -55,7 +55,7 @@ from rq_pipeline.scenes.terrain import (
     read_grid,
 )
 
-from rq_mjlab.walks import ROBOT_ENTITY
+from rq_mjlab.walks import ROBOT_ENTITY, TERRAIN_SCAN_GROUP, ScanSensor
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
@@ -73,17 +73,6 @@ CAMERA_TERM = "head_rgb"
 # smoke): at the stage's 2 cm a calf capsule's footprint alone holds 66
 # prisms; at 5 cm it holds 20 and only a trunk lying flat exceeds the cap.
 TRAIN_CELL_M = 0.05
-# The scene's ground in training sits in a group of its own: mjlab's height
-# scans see only the groups they name, the head camera draws VISUAL_GROUPS
-# (0-2), and the robot's colliders are the collision group (3). In the
-# collision group the scans saw nothing: go2-scene-c1 trained blind to its
-# hurdles (0/40 tracked, 2026-09-23), and without a camera mujoco_warp
-# refit an empty ray structure and crashed (2026-09-25).
-TERRAIN_SCAN_GROUP = 4
-# Every viewer draws groups 0-2 by default (MuJoCo's, mjviser's, the Studio
-# mirror's), so a scene played or recorded without its splat must turn the
-# ground's group on or the robots walk on nothing (2026-09-25).
-SCAN_SENSORS = ("terrain_scan", "foot_height_scan")  # the rough recipe's
 NO_GRID = (
     "scene {name} has no {file}: the grid is sampled when the scene is staged "
     "(stage_deployment) or by scenes.terrain.ensure_grid, in the pipeline's "
@@ -127,9 +116,10 @@ class SceneHeightfieldCfg(SubTerrainCfg):
     ) -> TerrainOutput:
         del difficulty, rng  # the scene is what it is
         grid = self.grid
-        # the same asset, geom, group and friction the staged gate collides
-        # with (scenes.terrain.add_heightfield), placed against the corner
-        # mjlab's generator will add
+        # the same asset, geom and friction the staged gate collides with
+        # (scenes.terrain.add_heightfield), in the height scans' group rather
+        # than the gate's collision group, placed against the corner mjlab's
+        # generator will add
         field, geom = add_heightfield(
             spec,
             spec.body(TERRAIN_BODY),
@@ -138,12 +128,17 @@ class SceneHeightfieldCfg(SubTerrainCfg):
             shift=tuple(-self.corner),
             group=TERRAIN_SCAN_GROUP,
         )
-        start = np.array(self.start_xy, dtype=np.float64)
-        surface_z = float(grid.at(start[None, :])[0])
-        origin = np.array([start[0], start[1], surface_z]) - self.corner
+        origin = np.array(surface_point(grid, self.start_xy)) - self.corner
         return TerrainOutput(
             origin=origin, geometries=[TerrainGeometry(geom=geom, hfield=field)]
         )
+
+
+def surface_point(grid: Grid, xy: tuple[float, float]) -> tuple[float, float, float]:
+    """(x, y) on the grid's surface: the one rule for where a world spawns
+    and where the robot's resting pose stands."""
+    x, y = float(xy[0]), float(xy[1])
+    return x, y, float(grid.at(np.array([[x, y]]))[0])
 
 
 def scene_grid(scene_dir: Path, *, cell: float = TRAIN_CELL_M) -> Grid:
@@ -169,9 +164,8 @@ def scene_start(
     garden's Go2 stood inside the scene, 142 contacts before its first
     reset, and mujoco_warp refused the model (2026-09-25)."""
     record = load_scene_record(Path(scene_dir) / SCENE_FILE)
-    (x, y), _heading = course_start(record)
-    z = float(scene_grid(scene_dir, cell=cell).at(np.array([[x, y]]))[0])
-    return float(x), float(y), z
+    start_xy, _heading = course_start(record)
+    return surface_point(scene_grid(scene_dir, cell=cell), start_xy)
 
 
 def scene_terrain_cfg(
@@ -205,8 +199,8 @@ def scene_terrain_cfg(
 def scans_see_the_scene(sensors: Any) -> None:
     """Point the rough recipe's height scans at the scene's ground
     (`TERRAIN_SCAN_GROUP`), in place; refuses a recipe that lacks them."""
-    found = {s.name: s for s in sensors or () if s.name in SCAN_SENSORS}
-    missing = set(SCAN_SENSORS) - set(found)
+    found = {s.name: s for s in sensors or () if s.name in ScanSensor.ALL}
+    missing = set(ScanSensor.ALL) - set(found)
     if missing:
         raise ValueError(
             f"the scene walk's height scans are missing: {sorted(missing)}"

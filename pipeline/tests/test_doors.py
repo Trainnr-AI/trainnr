@@ -307,9 +307,18 @@ class TheAcceptanceSmoke(unittest.TestCase):
 
         with project_with("go2-walk") as (project, _):
             ref = read_task_reference(project, "go2-flat")
-            accepted = module.review_walk(project, ref.folder, ref, "go2", run=fake_run)
+            prepared = []
+            accepted = module.review_walk(
+                project,
+                ref.folder,
+                ref,
+                "go2",
+                run=fake_run,
+                prepare=lambda argv, cwd: prepared.append(list(argv)),
+            )
             self.assertTrue(accepted)
             [argv] = calls
+            self.assertEqual(prepared, [argv])  # made ready before it ran
             self.assertEqual(argv[argv.index("-m") + 1], "rq_mjlab.walk_train")
             self.assertEqual(argv[argv.index("--robot") + 1], "go2")
             self.assertEqual(argv[argv.index("--dr-span") + 1], "0.05")

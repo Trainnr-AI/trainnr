@@ -37,7 +37,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.locate import bundle_file, require_bundle_file
+from rq_pipeline.bundles.bundle import model_file_of
+from rq_pipeline.bundles.locate import bundle_file, find_bundle, require_bundle_file
 from rq_pipeline.protocol import CameraSpec, EpisodeProtocol, Placement
 from rq_pipeline.tasks.registry import register, register_expert
 from rq_pipeline.tasks.scene import (
@@ -53,9 +54,23 @@ from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 GRIPPER_PICK = "gripper-pick"
 BUNDLE = "robotiq-2f85-isaac"
 RIG = BUNDLE  # the bundle family this task composes
-BUNDLE_XML = bundle_file(BUNDLE, f"{BUNDLE}.xml")
+
+
+def bundle_model(bundle: str) -> Path:
+    """The MJCF the bundle's record names (`bundles.bundle.model_file_of`);
+    a bundle found nowhere resolves into the library, so the loader's
+    error names it."""
+    root = find_bundle(bundle)
+    found = model_file_of(root) if root is not None else None
+    return found if found is not None else bundle_file(bundle, f"{bundle}.xml")
+
+
+BUNDLE_XML = bundle_model(BUNDLE)
 GRIPPER_PREFIX = "gripper_"
 FINGER_JOINT = f"{GRIPPER_PREFIX}finger_joint"
+# The bundle's own names (before the prefix): its base and its two pads.
+BASE_BODY = f"{GRIPPER_PREFIX}base_link"
+FINGERTIP_HULLS = ("left_fingertip_hull", "right_fingertip_hull")
 CUBE_BODY = "cube"
 
 
@@ -101,7 +116,7 @@ class Carriage:
 
 # The finger drive, as the bundle names it (its ctrlrange, 0-0.8, is
 # read off the compiled model: open is the bottom, closed the top).
-FINGER_DRIVE = f"{GRIPPER_PREFIX}finger_joint_drive"
+FINGER_DRIVE = f"{FINGER_JOINT}_drive"
 # What agent_pos is: the carriage's three jointpos, then the finger's.
 STATE_WIDTH = len(Carriage.AXES) + 1
 FINGER_SENSOR = len(Carriage.AXES)  # finger_joint_pos in sensordata
@@ -114,7 +129,9 @@ class GripperPickSpec:
     under. A variant is `replace(GRIPPER_PICK_SPEC, ...)`, named by
     `Task.stamp`, admitted only by `tasks/acceptance.py`. Changing any
     field changes the stamp: records under the old one are a different
-    protocol."""
+    protocol. The scene's structure — the carriage (`Carriage`), the
+    table (`Stage`) and the milestones' thresholds — stays code, as in
+    `KittingSpec`, and is covered by the code's version, not this stamp."""
 
     cube_half: float = 0.02  # a 40 mm cube; the stroke is 85 mm
     cube_mass: float = 0.05
@@ -131,7 +148,7 @@ class GripperPickSpec:
     cube_spawn_y: tuple[float, float] = (-0.05, 0.05)
     # The paired starts: the band's corners pulled in by this fraction.
     spawn_inset: float = 0.1
-    # The referee: the cube's centre at least this far above where it
+    # The referee: the cube's centre more than this far above where it
     # spawned, for the whole of the episode's last `hold_s`.
     lift_m: float = 0.05
     hold_s: float = 1.0
@@ -181,7 +198,7 @@ class CubeContact:
     time, never restated) keeps the pads' stiffness and adds the
     torsion. The second is what the scene does."""
 
-    PAD_GEOM = "left_fingertip_hull"  # the bundle's name, before the prefix
+    PAD_GEOM = FINGERTIP_HULLS[0]  # the bundle's name, before the prefix
     PRIORITY_ABOVE_PAD = 1
 
 
@@ -315,6 +332,8 @@ class Layout:
             return int(index)
 
         cube = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, CUBE_BODY)
+        if cube < 0:
+            raise KeyError(f"no body {CUBE_BODY!r} in the gripper-pick scene")
         start = FullPhysicsLayout(model).qpos.start + int(
             model.jnt_qposadr[model.body_jntadr[cube]]
         )
@@ -368,14 +387,14 @@ def build_gripper_pick(
     STATE; no sensor carries the cube's pose."""
     import numpy as np  # noqa: PLC0415
 
-    from rq_pipeline.tasks.scene import NominalOptions  # noqa: PLC0415
-
     refuse_unreachable_band(spec)
     scene = gripper_pick_scene(bundle_xml, spec=spec)
     layout = Layout.of(scene.compile())
     cube = layout.cube_pos
-    hold = hold_steps(spec, NominalOptions.TIMESTEP)
-    if hold >= spec.steps:
+    hold = hold_steps(spec, layout.timestep)
+    # An empty hold would turn the referee over: every row read (never
+    # passes) and an always-true held milestone (review 2026-09-26).
+    if not 0 < hold < spec.steps:
         raise ValueError(
             f"hold_s {spec.hold_s} is {hold} steps, not inside an episode of "
             f"{spec.steps}"
@@ -464,9 +483,7 @@ class PickChoreography:
     LIFT_S = 4.0  # up to the carry height; hold to the end
 
 
-def pick_controls(
-    layout: Layout, cube_xy: Any, spec: GripperPickSpec, *, close: bool = True
-) -> Any:
+def pick_controls(layout: Layout, cube_xy: Any, *, close: bool = True) -> Any:
     """The open-loop plan for a cube at `cube_xy`: `act(step, sensors)`
     returning the full ctrl vector for that physics step's phase.
     `close=False` is the ladder's no-close rung — every beat identical,
@@ -532,7 +549,7 @@ def scripted_gripper_pick(
 
     layout = Layout.of(model)
     cube_xy = np.asarray(initial_state)[layout.cube_pos][:2]
-    act = pick_controls(layout, cube_xy, spec, close=close)
+    act = pick_controls(layout, cube_xy, close=close)
     stepper = Stepper(model, initial_state, spec.steps)
     while not stepper.done:
         stepper.advance(act(stepper.step, stepper.sensordata), CONTROL_INTERVAL)

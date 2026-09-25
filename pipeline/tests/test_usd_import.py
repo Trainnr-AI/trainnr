@@ -213,6 +213,54 @@ class StageUnits(unittest.TestCase):
         self.assertEqual(units["mass"], "0.001 kilogram per unit")
 
 
+@needs_usd
+class MimicSoftness(unittest.TestCase):
+    """A short solimp keeps MuJoCo's remaining defaults; authored softness
+    that finds no equality is refused by name (review 2026-09-26)."""
+
+    def stage_and_spec(self, name1: str):
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        import mujoco  # noqa: PLC0415
+        from pxr import Sdf, Usd  # noqa: PLC0415
+
+        from rq_pipeline.robot.usd_import import (  # noqa: PLC0415
+            MIMIC_SOLIMP,
+            register_schemas,
+        )
+
+        register_schemas()
+        stage = Usd.Stage.CreateInMemory()
+        prim = stage.DefinePrim("/robot/follower", "PhysicsRevoluteJoint")
+        prim.AddAppliedSchema("NewtonMimicAPI")
+        prim.CreateAttribute(MIMIC_SOLIMP, Sdf.ValueTypeNames.DoubleArray).Set(
+            [0.8, 0.85, 0.002]
+        )
+        equality = SimpleNamespace(
+            type=mujoco.mjtEq.mjEQ_JOINT,
+            name1=name1,
+            solref=[0.02, 1.0],
+            solimp=[0.9, 0.95, 0.001, 0.5, 2.0],
+        )
+        return stage, SimpleNamespace(equalities=[equality]), equality
+
+    def test_a_short_solimp_keeps_the_rest_of_the_default(self) -> None:
+        from rq_pipeline.robot.usd_import import mimic_softness  # noqa: PLC0415
+
+        stage, spec, equality = self.stage_and_spec("follower")
+        done = mimic_softness(spec, stage, {"_robot_follower": "follower"})
+        self.assertEqual(done, ["follower"])
+        self.assertEqual(equality.solimp, [0.8, 0.85, 0.002, 0.5, 2.0])
+        self.assertEqual(equality.solref, [0.02, 1.0])  # not authored: the default
+
+    def test_softness_with_no_equality_is_refused_by_name(self) -> None:
+        from rq_pipeline.robot.usd_import import mimic_softness  # noqa: PLC0415
+
+        stage, spec, _ = self.stage_and_spec("someone_else")
+        with self.assertRaisesRegex(ValueError, "/robot/follower"):
+            mimic_softness(spec, stage, {"_robot_follower": "follower"})
+
+
 class Settings(unittest.TestCase):
     def test_root_kinds_are_the_named_two(self) -> None:
         from rq_pipeline.robot.usd_import import ImportSettings  # noqa: PLC0415

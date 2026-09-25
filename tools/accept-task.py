@@ -21,7 +21,7 @@ import contextlib
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,6 +33,7 @@ bootstrap()
 import mujoco  # noqa: E402
 from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
 from rq_pipeline.mcp_actions import RQ_MJLAB_DIR, walk_train_argv  # noqa: E402
+from rq_pipeline.mcp_jobs import prepare_uv  # noqa: E402
 from rq_pipeline.physics.backend import instrument_stamp  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.kinds import (  # noqa: E402
@@ -94,13 +95,14 @@ ACCEPTANCE_LOG = "acceptance.log"
 Runner = Callable[..., subprocess.CompletedProcess[Any]]
 
 
-def review_walk(
+def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     project: Project,
     folder: Path,
     ref: TaskReference,
     robot: str,
     *,
     run: Runner = subprocess.run,
+    prepare: Callable[[Sequence[str], Path], None] = prepare_uv,
 ) -> bool:
     """A walk's acceptance is learnability: the environment builds from
     the project's robot and a few PPO iterations run — rq_mjlab's smoke,
@@ -117,6 +119,9 @@ def review_walk(
         recorder=False,
     )
     log_path = folder / ACCEPTANCE_LOG
+    # the door's line is `uv run --no-sync`: its environment is made ready
+    # here, as the job runner does for a door (a failure is refused by name)
+    prepare(argv, RQ_MJLAB_DIR)
     with log_path.open("w") as log:
         result = run(
             argv, cwd=RQ_MJLAB_DIR, stdout=log, stderr=subprocess.STDOUT, check=False

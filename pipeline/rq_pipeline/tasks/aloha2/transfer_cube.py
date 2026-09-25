@@ -33,12 +33,12 @@ from rq_pipeline.tasks.aloha2.rig import (
     TRANSFER_CUBE,
     _add_free_box,
     _add_top_camera_and_referees,
-    _corner_fraction,
     _task_scene,
 )
 from rq_pipeline.tasks.registry import register
 from rq_pipeline.tasks.scene import (
     TABLE_GEOM,
+    corner_fraction,
 )
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
@@ -61,7 +61,7 @@ def build_transfer_cube(bundle_xml: Path = BUNDLE_XML, look: str = ALOHA2_LOOK) 
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
-        fx, fy = _corner_fraction(trial, inset=CUBE_SPAWN_INSET)
+        fx, fy = corner_fraction(trial, inset=CUBE_SPAWN_INSET)
         initial[CUBE_STATE_SLICE.start] = CUBE_SPAWN_X[0] + fx * (
             CUBE_SPAWN_X[1] - CUBE_SPAWN_X[0]
         )

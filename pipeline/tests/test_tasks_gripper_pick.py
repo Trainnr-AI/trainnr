@@ -12,6 +12,7 @@ from tests._extras import needs_sim
 
 TASK_ID = "robotiq/gripper-pick"
 TEST_SOURCE = "robotiq-2f85-isaac@000000000000"
+SETTLE_STEPS = 1500  # 3 s at 500 Hz: the fingers closed and still
 
 
 def _built(spec=None):
@@ -144,6 +145,9 @@ class Composition(unittest.TestCase):
         import numpy as np  # noqa: PLC0415
 
         from rq_pipeline.tasks.gripper_pick import (  # noqa: PLC0415
+            BASE_BODY,
+            CUBE_BODY,
+            FINGERTIP_HULLS,
             GRIPPER_PREFIX,
             Layout,
             PickChoreography,
@@ -152,15 +156,17 @@ class Composition(unittest.TestCase):
         model = self.backend.model
         layout = Layout.of(model)
         data = mujoco.MjData(model)
-        # lift the cube out of the way; hold the carriage at home
-        data.qpos[layout.cube_pos.start - 1 + 2] = -1.0
+        # drop the cube below the table, out of the fingers' way; hold the
+        # carriage at home and close the fingers until they settle
+        cube_z = model.jnt_qposadr[model.body(CUBE_BODY).jntadr[0]] + 2
+        data.qpos[cube_z] = -1.0
         data.ctrl[layout.finger_ctrl] = layout.finger_closed
-        for _ in range(1500):
+        for _ in range(SETTLE_STEPS):
             mujoco.mj_step(model, data)
-        base = data.xpos[model.body(f"{GRIPPER_PREFIX}base_link").id]
+        base = data.xpos[model.body(BASE_BODY).id]
         lowest = np.inf
-        for side in ("left", "right"):
-            geom = model.geom(f"{GRIPPER_PREFIX}{side}_fingertip_hull")
+        for hull in FINGERTIP_HULLS:
+            geom = model.geom(f"{GRIPPER_PREFIX}{hull}")
             mesh = int(geom.dataid[0])
             start = model.mesh_vertadr[mesh]
             verts = model.mesh_vert[start : start + model.mesh_vertnum[mesh]]
@@ -208,7 +214,8 @@ class Composition(unittest.TestCase):
         for overlay, words in (
             ({"cube_spawn_x": (-0.05, 0.2)}, "reach"),
             ({"cube_spawn_y": (0.05, -0.05)}, "backwards"),
-            ({"cube_spawn_x": (-0.05, 0.05), "cube_half": 0.2}, "off the table"),
+            # 0.25 m table half minus 0.22 leaves +-0.03: the band is plainly off
+            ({"cube_spawn_x": (-0.05, 0.05), "cube_half": 0.22}, "off the table"),
         ):
             with self.subTest(overlay=overlay):
                 with self.assertRaises(ValueError) as caught:
@@ -221,9 +228,45 @@ class Composition(unittest.TestCase):
             build_gripper_pick,
         )
 
-        with self.assertRaises(ValueError) as caught:
-            build_gripper_pick(spec=replace(GRIPPER_PICK_SPEC, hold_s=60.0))
-        self.assertIn("hold_s", str(caught.exception))
+        for hold_s in (60.0, 0.0):  # longer than the episode, or empty
+            with self.subTest(hold_s=hold_s), self.assertRaises(ValueError) as caught:
+                build_gripper_pick(spec=replace(GRIPPER_PICK_SPEC, hold_s=hold_s))
+            self.assertIn("hold_s", str(caught.exception))
+
+    def test_the_referee_reads_the_whole_hold_window(self) -> None:
+        """Made-up state rows: lifted for exactly the hold passes; dropped
+        before the end, or lifted by exactly lift_m (the rule is strict),
+        fails - a weakened rule ("lifted at any step") would pass all."""
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.tasks.gripper_pick import (  # noqa: PLC0415
+            GRIPPER_PICK_SPEC,
+            Layout,
+            hold_steps,
+        )
+
+        spec, model = GRIPPER_PICK_SPEC, self.backend.model
+        layout = Layout.of(model)
+        width = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        hold = hold_steps(spec, layout.timestep)
+        z = layout.cube_pos.start + 2
+        success = self.task.protocol.success
+
+        def rows(lift_from: int, height: float, drop_at: int | None = None):
+            states = np.zeros((spec.steps, width))
+            states[lift_from:, z] = height
+            if drop_at is not None:
+                states[drop_at:, z] = 0.0
+            return states
+
+        above = spec.lift_m + 0.01
+        self.assertTrue(success(rows(spec.steps - hold, above), None))
+        self.assertFalse(success(rows(spec.steps - hold + 1, above), None))
+        self.assertFalse(
+            success(rows(100, above, drop_at=spec.steps - hold // 2), None)
+        )
+        self.assertFalse(success(rows(100, spec.lift_m), None))  # strict: not above
 
 
 @needs_sim

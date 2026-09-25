@@ -4,6 +4,7 @@ script that returned still leaves the code the Studio reads."""
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import time
@@ -76,18 +77,27 @@ class TheEnvironmentIsReadyBeforeTheJob(unittest.TestCase):
         self.assertIsNone(uv_prepare_argv(["/box/wsl-run.sh", "cargo", "run"]))
 
     def test_one_lock_per_project(self) -> None:
-        from rq_pipeline.mcp_jobs import uv_lock_path  # noqa: PLC0415
+        from rq_pipeline.mcp_jobs import uv_lock_path, uv_project  # noqa: PLC0415
 
-        a = uv_lock_path(["uv", "run", "--no-sync", "--project", "/p/a", "python"])
+        here = Path("/p")
+        a = uv_lock_path(
+            ["uv", "run", "--no-sync", "--project", "/p/a", "python"], here
+        )
         self.assertEqual(
             a,
-            uv_lock_path(
-                ["uv", "run", "--no-sync", "--project", "/p/a", "python", "-m", "y"]
-            ),
+            uv_lock_path(["uv", "run", "--no-sync", "--project=/p/a", "python"], here),
+        )
+        self.assertEqual(
+            a, uv_lock_path(["uv", "run", "--project", "a", "python"], here)
         )
         self.assertNotEqual(
-            a, uv_lock_path(["uv", "run", "--no-sync", "--project", "/p/b", "python"])
+            a,
+            uv_lock_path(
+                ["uv", "run", "--no-sync", "--project", "/p/b", "python"], here
+            ),
         )
+        # no --project: the directory the command runs in
+        self.assertEqual(uv_project(["uv", "run", "python"], here), here.resolve())
 
     def test_the_lock_admits_one_holder_at_a_time(self) -> None:
         import threading  # noqa: PLC0415
@@ -121,3 +131,86 @@ class TheEnvironmentIsReadyBeforeTheJob(unittest.TestCase):
         from rq_pipeline.mcp_jobs import prepare_uv  # noqa: PLC0415
 
         prepare_uv(["cargo", "run", "--release"], Path())  # returns, runs nothing
+
+
+@unittest.skipIf(os.name == "nt", "the stand-in uv is a POSIX shell script")
+class ThePrepareRuns(unittest.TestCase):
+    """prepare_uv against a stand-in `uv` on PATH: its output reaches this
+    process's own (the job's log), a failure and a missing uv are refused
+    by name, and the runner records a refused prepare as the job's exit."""
+
+    ARGV = ("uv", "run", "--no-sync", "--project", ".", "python", "-m", "x")
+
+    def stand_in(self, tmp: Path, code: int) -> dict[str, str]:
+        uv = tmp / "uv"
+        uv.write_text(f'#!/bin/sh\necho stand-in uv "$@"\nexit {code}\n')
+        uv.chmod(0o755)
+        return {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}"}
+
+    def test_a_good_sync_passes_and_a_bad_one_is_refused(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.mcp_jobs import (  # noqa: PLC0415
+            EnvironmentNotReadyError,
+            prepare_uv,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, self.stand_in(Path(tmp), 0)):
+                prepare_uv(self.ARGV, Path(tmp))
+            with (
+                mock.patch.dict(os.environ, self.stand_in(Path(tmp), 7)),
+                self.assertRaisesRegex(EnvironmentNotReadyError, "exit 7"),
+            ):
+                prepare_uv(self.ARGV, Path(tmp))
+            with mock.patch.dict(os.environ, {"PATH": tmp}):
+                (Path(tmp) / "uv").unlink()
+                with self.assertRaisesRegex(EnvironmentNotReadyError, "not on PATH"):
+                    prepare_uv(self.ARGV, Path(tmp))
+
+    def test_the_runner_records_a_refused_prepare(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.mcp_jobs import PREPARE_FAILED, main  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_file = Path(tmp) / "job.exit"
+            with (
+                mock.patch.dict(os.environ, self.stand_in(Path(tmp), 1)),
+                mock.patch("os.getcwd", return_value=tmp),
+            ):
+                code = main(["--exit-file", str(exit_file), "--", *self.ARGV])
+            self.assertEqual(code, PREPARE_FAILED)
+            self.assertEqual(exit_file.read_text().strip(), str(PREPARE_FAILED))
+
+
+class TheLockGivesUp(unittest.TestCase):
+    def test_a_held_lock_ends_in_a_refusal_by_name(self) -> None:
+        import threading  # noqa: PLC0415
+
+        from rq_pipeline.mcp_jobs import (  # noqa: PLC0415
+            EnvironmentNotReadyError,
+            exclusive,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "x.lock"
+            held, release = threading.Event(), threading.Event()
+
+            def holder() -> None:
+                with exclusive(path):
+                    held.set()
+                    release.wait(5)
+
+            thread = threading.Thread(target=holder)
+            thread.start()
+            held.wait(5)
+            try:
+                with (
+                    self.assertRaisesRegex(EnvironmentNotReadyError, "still held"),
+                    exclusive(path, wait_s=0.3),
+                ):
+                    pass
+            finally:
+                release.set()
+                thread.join()

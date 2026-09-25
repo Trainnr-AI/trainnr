@@ -17,7 +17,6 @@ from rq_pipeline.tasks.scene import (
     FLOOR_GEOM,
     GeomGroup,
     add_free_box,
-    corner_fraction,
     pin_nominal_options,
     set_render_budget,
 )
@@ -306,10 +305,6 @@ def _add_top_camera_and_referees(scene: Any) -> None:
             objtype=mujoco.mjtObj.mjOBJ_GEOM,
             objname=f"{arm}/left_g1",
         )
-
-
-# The paired corners live in tasks/scene.py (shared with gripper-pick).
-_corner_fraction = corner_fraction
 
 
 ARM_IK_JOINTS = {

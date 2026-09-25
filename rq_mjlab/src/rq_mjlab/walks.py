@@ -276,6 +276,23 @@ def _go2_deploy() -> DeployFacts:
     return DEPLOY
 
 
+class ScanSensor:
+    """mjlab's rough recipe's two height scans, by the names it gives them."""
+
+    TERRAIN = "terrain_scan"
+    FOOT_HEIGHT = "foot_height_scan"
+    ALL = (TERRAIN, FOOT_HEIGHT)
+
+
+# A captured scene's training ground sits in a geometry group of its own:
+# mjlab's height scans see only the groups they name, the head camera draws
+# groups 0-2, and the robot's colliders are group 3. In group 3 the scans
+# saw nothing: go2-scene-c1 trained blind to its hurdles (0/40 tracked,
+# 2026-09-23), and without a camera mujoco_warp refit an empty ray structure
+# and crashed (2026-09-25). Every viewer draws only 0-2 by default, so a
+# scene played or recorded without its splat turns this group on.
+TERRAIN_SCAN_GROUP = 4
+
 DEFAULT_ROBOT = "microduck"
 # mjlab's name for the walking entity in every walk's scene: what the
 # sensors, the cameras and the export address bodies through.
@@ -303,6 +320,14 @@ class Identity:
     # the command lag a run trained under (rq_mjlab.lag_dr): training
     # randomization, recorded, never gated - the verdict judges without it
     LAG_DR = "lag_dr"
+    # a cross-evaluation's judged world (walk_verdict --judge-in-fit): the
+    # fit it ran in (or "declared") and that fit's basis, apart from the
+    # trained `fit` / `fit_basis`
+    JUDGED_IN_FIT = "judged_in_fit"
+    JUDGED_FIT_BASIS = "judged_fit_basis"
+    # the command schedule a run trained under, when it is not the recipe's
+    # own (a captured scene's, go2_walk.SCENE_COMMAND_STAGES)
+    COMMANDS = "commands"
 
 
 NO_CAMERAS = "none"  # the identity's word for an actor that saw no camera

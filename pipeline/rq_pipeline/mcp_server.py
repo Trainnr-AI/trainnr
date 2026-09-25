@@ -38,6 +38,7 @@ from rq_pipeline.bundles.hashing import FITS_DIR, stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
 from rq_pipeline.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
+from rq_pipeline.mcp_actions import JUDGE_ALL_AXES
 from rq_pipeline.mcp_jobs import DONE, JobHandle, Refusal, refusal
 from rq_pipeline.physics.registry import engines
 from rq_pipeline.project.locate import (
@@ -498,7 +499,7 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     scene: str | None = None,
     judge_in_fit: str | None = None,
     judge_at_scale: float | None = None,
-    judge_param: str = "all",
+    judge_param: str = JUDGE_ALL_AXES,
     delay: int = 0,
 ) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,

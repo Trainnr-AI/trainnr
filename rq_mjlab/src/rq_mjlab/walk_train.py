@@ -280,7 +280,8 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         default=0.0,
         metavar="MS",
         help="train under a random command lag of 0..MS milliseconds, redrawn "
-        "every second per world, on top of the bundle's identified delay "
+        "every LAG_RESAMPLE_S per world (rq_mjlab.lag_dr), on top of the "
+        "bundle's identified delay "
         "(rq_mjlab.lag_dr); 0 = none. Recorded in the identity; the verdict "
         "judges without it and measures delay as a rung (walk_verdict --delay)",
     )

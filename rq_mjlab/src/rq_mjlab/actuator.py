@@ -48,6 +48,14 @@ from rq_mjlab.kernel import LawParams, duty, external_torque, friction_budget, t
 FRICTION_DOF = 1
 
 
+def seconds_to_steps(seconds: float, physics_dt: float) -> int:
+    """A delay in whole physics steps, CEIL not round: a delay that is not a
+    whole number of steps becomes the next step UP, so the sim's command is
+    never fresher than the delay it models (21 ms at dt=5 ms -> 25 ms).
+    Direction stated because it is a choice (review 2026-09-01)."""
+    return math.ceil(round(seconds / physics_dt, 9))
+
+
 def as_torch(array: Any) -> torch.Tensor:
     """A torch view of a raw `wp.array` — everything else passes through
     untouched. Three shapes reach these seams: raw warp arrays (from
@@ -190,11 +198,7 @@ class BamActuatorCfg(ActuatorCfg):
             max_pwm=firmware.max_pwm,
             max_current=firmware.max_current or 0.0,
         )
-        # CEIL, not round: a delay that is not a whole number of physics
-        # steps becomes the next step UP — the sim's command is never
-        # fresher than the identified bus (21 ms at dt=5 ms -> 25 ms).
-        # Direction stated because it is a choice (review 2026-09-01).
-        delay_steps = math.ceil(round(params.get("command_delay", 0.0) / physics_dt, 9))
+        delay_steps = seconds_to_steps(params.get("command_delay", 0.0), physics_dt)
         return cls(
             target_names_expr=target_names_expr,
             bundle_path=str(bundle_path),

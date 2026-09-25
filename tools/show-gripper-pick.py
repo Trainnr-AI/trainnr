@@ -39,12 +39,14 @@ import mujoco.viewer  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
+from rq_pipeline.evaluate.harness import home_state  # noqa: E402
 from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: E402
 from rq_pipeline.protocol import events_for  # noqa: E402
 from rq_pipeline.tasks.gripper_pick import (  # noqa: E402
+    BASE_BODY,
     EXPERT_RUNG,
     FINGER_SENSOR,
-    GRIPPER_PREFIX,
+    GRIPPER_PICK_SPEC,
     LADDER,
     Layout,
     PickChoreography,
@@ -65,12 +67,13 @@ class Show:
     viewer_hz: float = 50.0  # replay at real time, synced this often
     frame_w: int = 640
     frame_h: int = 480
-    # stills: (file stem, rung, seconds into the episode)
+    # stills: (file stem, rung, seconds into the episode; negative counts
+    # back from its end, so a longer or shorter episode still has them)
     moments: tuple[tuple[str, str, float], ...] = (
         ("pick-grasp", "pick", PickChoreography.CLOSE_S - 0.05),
-        ("pick-hold", "pick", 6.5),
-        ("no-close-end", "no-close", 6.5),
-        ("limp-end", "limp", 6.5),
+        ("pick-hold", "pick", -0.5),
+        ("no-close-end", "no-close", -0.5),
+        ("limp-end", "limp", -0.5),
     )
     close_distance: float = 0.42
     close_azimuth: float = 160.0
@@ -87,7 +90,7 @@ def seat(model, data, row) -> None:
 
 def close_camera(data, model, show: Show) -> mujoco.MjvCamera:
     cam = mujoco.MjvCamera()
-    base = data.xpos[model.body(f"{GRIPPER_PREFIX}base_link").id]
+    base = data.xpos[model.body(BASE_BODY).id]
     cam.lookat[:] = (base[0], base[1], base[2] - PickChoreography.PAD_REACH_M * 0.7)
     cam.distance = show.close_distance
     cam.azimuth = show.close_azimuth
@@ -178,6 +181,7 @@ def stills(model, episodes: dict[str, Episode], folder: Path, show: Show) -> Non
     for stem, rung, at_s in show.moments:
         if rung not in episodes:
             continue
+        # a negative instant indexes from the episode's end
         seat(model, data, episodes[rung].states[round(at_s / dt)])
         renderer.update_scene(data, close_camera(data, model, show), visual_option())
         path = folder / f"{stem}.png"
@@ -209,7 +213,9 @@ def replay(model, episodes: dict[str, Episode], show: Show, *, hold: bool) -> No
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--trial", type=int, default=0)
+    parser.add_argument(
+        "--trial", type=int, default=0, choices=range(GRIPPER_PICK_SPEC.trials)
+    )
     parser.add_argument("--rungs", nargs="+", default=list(LADDER), choices=LADDER)
     parser.add_argument("--stills", type=Path, default=None)
     parser.add_argument("--no-viewer", action="store_true")
@@ -224,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     backend = MuJoCoBackend()
     backend.load_spec(task.spec)
     model = backend.model
-    start = task.protocol.perturb(args.trial, backend.default_initial_state())
+    start = task.protocol.perturb(args.trial, home_state(backend, task.protocol))
     source = bundle_source(task.bundle_dir)
     print(f"{task.stamp} on {source}, trial {args.trial}", flush=True)
     episodes = run_ladder(task, model, start, args.rungs)

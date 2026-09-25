@@ -27,13 +27,13 @@ from rq_pipeline.tasks.aloha2.rig import (
     SERVOS,
     _add_free_box,
     _add_top_camera_and_referees,
-    _corner_fraction,
     _task_scene,
 )
 from rq_pipeline.tasks.registry import register
 from rq_pipeline.tasks.scene import (
     TABLE_GEOM,
     add_slot_walls,
+    corner_fraction,
 )
 from rq_pipeline.tasks.task import CONTROL_INTERVAL, PAIRED_TRIALS, Task
 
@@ -88,7 +88,7 @@ class KittingSpec:
     steps: int = 14000
     trials: int = PAIRED_TRIALS
     # The paired starts: the spawn box's corners pulled in by this fraction
-    # of each side (`_corner_fraction`).
+    # of each side (`tasks.scene.corner_fraction`).
     spawn_inset: float = 0.2
     # The referee: a part is in its slot within this radius of the slot
     # centre and below this height (resting on the tray floor).
@@ -188,7 +188,7 @@ def build_kitting(
 
     def perturb(trial: int, home: Any) -> Any:
         initial = home.copy()
-        fx, fy = _corner_fraction(trial, inset=spec.spawn_inset)
+        fx, fy = corner_fraction(trial, inset=spec.spawn_inset)
         for arm in PART_ORDER:
             (x_low, x_high), (y_low, y_high) = spec.part_spawn[arm]
             part = PART_STATE_SLICE[arm]

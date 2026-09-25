@@ -33,10 +33,13 @@ door's own record instead of opening a second one.
 
 from __future__ import annotations
 
+import errno
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -44,6 +47,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from typing import Any
 
 # pydantic (the MCP surface) reads these signatures; on Python < 3.12 it
 # accepts only typing_extensions' TypedDict (the box's 3.11 venv, 2026-09-12).
@@ -249,42 +253,84 @@ def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
 
 
 # A door launches `uv run --no-sync`: the environment is made ready once,
-# under a lock, BEFORE the job starts (`prepare_uv`). Four evaluations
-# launched together after a branch switch each re-installed the project
-# and collided on its dist-info (2026-09-25, three of four died at 1 s).
+# under a lock, by the job's runner before the tool starts (`prepare_uv`).
+# Four evaluations launched together after a branch switch each re-installed
+# the project and collided on its dist-info (2026-09-25, three of four died
+# at 1 s). The runner, not the door, prepares: a cold install then takes the
+# job's time, not the caller's, and uv's words land in the job's log.
 UV_NO_SYNC = "--no-sync"
+UV_PROJECT = "--project"
 UV_PREPARE_TIMEOUT_S = 900.0  # a cold install of the train extras
+UV_LOCK_PREFIX = "trainnr-uv-"
+LOCK_POLL_S = 0.2
+# The lock's holder is bounded by its own sync's timeout; a waiter gives up
+# a little after that, by name.
+LOCK_WAIT_S = UV_PREPARE_TIMEOUT_S + 60.0
+# What another holder looks like when a non-blocking lock is refused.
+LOCK_CONTENDED = frozenset(
+    {errno.EACCES, errno.EAGAIN, getattr(errno, "EDEADLOCK", errno.EDEADLK)}
+)
+
+
+PREPARE_FAILED = 3  # the runner's exit code when the environment was not made ready
+
+
+class EnvironmentNotReadyError(RuntimeError):
+    """A job's environment could not be made ready: uv missing, the sync
+    failed or timed out, or another prepare held the lock too long."""
+
+
+def _try_lock(handle: Any) -> bool:
+    """One non-blocking attempt at an exclusive lock on the file's first
+    byte: True when taken, False when another holder has it, any other
+    error raised."""
+    try:
+        if os.name == "nt":
+            import msvcrt  # noqa: PLC0415 - Windows only
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl  # noqa: PLC0415 - POSIX only
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as why:
+        if why.errno in LOCK_CONTENDED:
+            return False
+        raise
+    return True
+
+
+def _unlock(handle: Any) -> None:
+    if os.name == "nt":
+        import msvcrt  # noqa: PLC0415 - Windows only
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl  # noqa: PLC0415 - POSIX only
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 @contextmanager
-def exclusive(path: Path) -> Iterator[None]:
-    """A lock across processes on `path` (created if missing): `flock` on
-    POSIX, `msvcrt.locking` on Windows; released on exit either way."""
+def exclusive(path: Path, *, wait_s: float = LOCK_WAIT_S) -> Iterator[None]:
+    """A lock across processes on `path` (created if missing), the same on
+    POSIX and Windows: polled without blocking, so a holder that never lets
+    go ends in a refusal by name after `wait_s`, never a silent hang."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
-        if os.name == "nt":
-            import msvcrt  # noqa: PLC0415
-
-            handle.seek(0)
-            while True:
-                try:  # LK_LOCK gives up after ~10 s; a sync may take longer
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-                    break
-                except OSError:
-                    continue
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl  # noqa: PLC0415
-
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        deadline = time.monotonic() + wait_s
+        while not _try_lock(handle):
+            if time.monotonic() >= deadline:
+                raise EnvironmentNotReadyError(
+                    f"{path} is still held by another prepare after {wait_s:g} s"
+                )
+            time.sleep(LOCK_POLL_S)
+        try:
+            yield
+        finally:
+            _unlock(handle)
 
 
 def uv_prepare_argv(argv: Sequence[str]) -> list[str] | None:
@@ -297,56 +343,61 @@ def uv_prepare_argv(argv: Sequence[str]) -> list[str] | None:
     return [head[0], head[1], *head[3:], "-c", "pass"]
 
 
-def uv_lock_path(argv: Sequence[str]) -> Path:
-    """One lock per uv project (the `--project` it names), in the temp dir:
-    two doors on different venvs never wait on each other."""
-    import hashlib  # noqa: PLC0415
-    import tempfile  # noqa: PLC0415
-
+def uv_project(argv: Sequence[str], cwd: Path) -> Path:
+    """The uv project a command line names (`--project P` or `--project=P`),
+    resolved against the directory it runs in; that directory when it
+    names none."""
     args = list(argv)
-    project = args[args.index("--project") + 1] if "--project" in args else os.getcwd()
-    digest = hashlib.sha256(str(Path(project).resolve()).encode()).hexdigest()[:12]
-    return Path(tempfile.gettempdir()) / f"trainnr-uv-{digest}.lock"
+    for i, arg in enumerate(args):
+        if arg == UV_PROJECT and i + 1 < len(args):
+            return (Path(cwd) / args[i + 1]).resolve()
+        if arg.startswith(f"{UV_PROJECT}="):
+            return (Path(cwd) / arg.split("=", 1)[1]).resolve()
+    return Path(cwd).resolve()
+
+
+def uv_lock_path(argv: Sequence[str], cwd: Path) -> Path:
+    """One lock per uv project, in the temp dir: two jobs on different venvs
+    never wait on each other."""
+    digest = hashlib.sha256(str(uv_project(argv, cwd)).encode()).hexdigest()[:12]
+    return Path(tempfile.gettempdir()) / f"{UV_LOCK_PREFIX}{digest}.lock"
 
 
 def prepare_uv(argv: Sequence[str], cwd: Path) -> None:
-    """Make a `uv run --no-sync` launch's environment ready, one door at a
-    time per project; refused by name, with uv's own words, if it cannot."""
+    """Make a `uv run --no-sync` launch's environment ready, one job at a
+    time per project. uv writes to this process's own output (the job's log
+    under the runner). Refused by name if uv is missing, fails, or outlives
+    `UV_PREPARE_TIMEOUT_S` (its whole process group is then stopped)."""
     prepare = uv_prepare_argv(argv)
     if prepare is None:
         return
-    with exclusive(uv_lock_path(argv)):
-        done = subprocess.run(
-            prepare,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=UV_PREPARE_TIMEOUT_S,
-            check=False,
+    with exclusive(uv_lock_path(argv, cwd)):
+        print(f"[prepare] {' '.join(prepare)}", flush=True)
+        try:
+            process = subprocess.Popen(
+                prepare, cwd=cwd, stdin=subprocess.DEVNULL, start_new_session=True
+            )
+        except FileNotFoundError as why:
+            raise EnvironmentNotReadyError(f"uv is not on PATH ({why})") from why
+        try:
+            code = process.wait(timeout=UV_PREPARE_TIMEOUT_S)
+        except subprocess.TimeoutExpired as why:
+            terminate_group(process.pid)
+            raise EnvironmentNotReadyError(
+                f"{' '.join(prepare)} did not finish in {UV_PREPARE_TIMEOUT_S:g} s"
+            ) from why
+    if code != 0:
+        raise EnvironmentNotReadyError(
+            f"{' '.join(prepare)} failed (exit {code}); uv's words are above"
         )
-    if done.returncode != 0:
-        raise RuntimeError(
-            f"the environment for {' '.join(prepare)} is not ready: "
-            f"{(done.stderr or done.stdout).strip()[-800:]}"
-        )
-
-
-Preparer = Callable[[Sequence[str], Path], None]
 
 
 class JobManager:
     """Start, poll, tail and cancel the doors' subprocesses."""
 
-    def __init__(
-        self,
-        runs_root: Path,
-        *,
-        spawner: Spawner = _spawn,
-        preparer: Preparer = prepare_uv,
-    ) -> None:
+    def __init__(self, runs_root: Path, *, spawner: Spawner = _spawn) -> None:
         self.jobs_dir = Path(runs_root) / JOBS_DIR_NAME
         self._spawner = spawner
-        self._preparer = preparer
         self._watchers: list[threading.Thread] = []
 
     def join(self, timeout: float | None = None) -> None:
@@ -357,10 +408,8 @@ class JobManager:
             watcher.join(timeout)
 
     def start(self, tool: str, argv: Sequence[str], cwd: Path) -> JobHandle:
-        """Spawn `argv` in `cwd`; returns the job's id, log path and pid.
-        Its environment is made ready first (`prepare_uv`), so the job
-        itself never installs anything."""
-        self._preparer(argv, Path(cwd))
+        """Spawn `argv` in `cwd`; returns the job's id, log path and pid at
+        once. The runner makes its environment ready first (`prepare_uv`)."""
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"
@@ -605,6 +654,12 @@ def main(args: Sequence[str] | None = None) -> int:
     argv = parsed.argv[1:] if parsed.argv[:1] == ["--"] else parsed.argv
     if not argv:
         parser.error("no command after --")
+    try:
+        prepare_uv(argv, Path.cwd())
+    except EnvironmentNotReadyError as why:
+        print(f"[prepare] refused: {why}", flush=True)
+        record_exit(parsed.exit_file, PREPARE_FAILED)
+        return PREPARE_FAILED
     code = subprocess.call(argv, stdin=subprocess.DEVNULL)
     record_exit(parsed.exit_file, code)
     return code

@@ -16,10 +16,10 @@ a delay only as a named rung (`walk_verdict --delay`).
 
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import Any
 
+from rq_mjlab.actuator import seconds_to_steps
 from rq_mjlab.walks import ROBOT_ENTITY, Identity
 
 # A bus latency drifts; it does not jump every 5 ms. One second per draw,
@@ -28,11 +28,12 @@ LAG_RESAMPLE_S = 1.0
 
 
 def lag_steps(max_ms: float, physics_dt: float) -> int:
-    """The widest lag in physics steps: CEIL, so the draw covers `max_ms`
-    (the same rounding the bundle's identified delay takes, actuator.py)."""
+    """The widest lag in physics steps, rounded up so the draw covers
+    `max_ms` - the bundle's identified delay's own rule
+    (`actuator.seconds_to_steps`)."""
     if max_ms < 0:
         raise ValueError(f"a command lag is not negative: {max_ms} ms")
-    return math.ceil(round(max_ms / 1000.0 / physics_dt, 9))
+    return seconds_to_steps(max_ms / 1000.0, physics_dt)
 
 
 def lag_basis(max_ms: float, steps: int, physics_dt: float) -> str:
@@ -54,15 +55,21 @@ def with_command_lag(
         return identity
     physics_dt = float(cfg.sim.mujoco.timestep)
     steps = lag_steps(max_ms, physics_dt)
-    articulation = cfg.scene.entities[ROBOT_ENTITY].articulation
-    articulation.actuators = tuple(
-        replace(
-            actuator,
-            delay_max_lag=actuator.delay_max_lag + steps,
-            delay_update_period=max(1, round(LAG_RESAMPLE_S / physics_dt)),
-            delay_per_env_phase=True,
-        )
-        for actuator in articulation.actuators
+    # a NEW articulation on this config's entity: a walk may share one
+    # articulation object across configs (mjlab mutates configs in place),
+    # and editing it would put the lag into every later config silently
+    entity = cfg.scene.entities[ROBOT_ENTITY]
+    entity.articulation = replace(
+        entity.articulation,
+        actuators=tuple(
+            replace(
+                actuator,
+                delay_max_lag=actuator.delay_max_lag + steps,
+                delay_update_period=max(1, round(LAG_RESAMPLE_S / physics_dt)),
+                delay_per_env_phase=True,
+            )
+            for actuator in entity.articulation.actuators
+        ),
     )
     basis = lag_basis(max_ms, steps, physics_dt)
     return {

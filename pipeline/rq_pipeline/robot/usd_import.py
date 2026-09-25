@@ -592,12 +592,17 @@ def mimic_softness(spec: Any, stage: Any, renamed: Mapping[str, str]) -> list[st
     equality Newton wrote for it. Newton's bridge carried them onto the
     loop closures' connects but left the mimic at MuJoCo's defaults
     (0.02 s against the 2F-85's authored 0.005 s, 2026-09-25). A value
-    the USD does not author stays MuJoCo's default. Returns the names of
-    the equalities set."""
+    the USD does not author stays MuJoCo's default; a short `solimp` (MJCF
+    allows 3 of its 5 numbers) keeps the rest of the default. Authored
+    softness that finds no joint equality is refused by name, never
+    dropped. Returns the followers set."""
     import mujoco  # noqa: PLC0415
+    from pxr import Usd  # noqa: PLC0415
 
     authored: dict[str, dict[str, list[float]]] = {}
-    for prim in stage.Traverse():
+    paths: dict[str, str] = {}
+    # instance proxies too, as the audit's snapshot walks the stage
+    for prim in Usd.PrimRange(stage.GetPseudoRoot(), Usd.TraverseInstanceProxies()):
         if not _is_mimic(prim):
             continue
         values = {
@@ -607,13 +612,22 @@ def mimic_softness(spec: Any, stage: Any, renamed: Mapping[str, str]) -> list[st
         }
         if values:
             follower = _newton_name(str(prim.GetPath()))
-            authored[renamed.get(follower, follower)] = values
+            key = renamed.get(follower, follower)
+            authored[key] = values
+            paths[key] = str(prim.GetPath())
     done = []
     for equality in spec.equalities:
         if equality.type == mujoco.mjtEq.mjEQ_JOINT and equality.name1 in authored:
             for field, value in authored[equality.name1].items():
-                setattr(equality, field, value)
+                default = [float(v) for v in getattr(equality, field)]
+                setattr(equality, field, value + default[len(value) :])
             done.append(equality.name1)
+    missed = sorted(set(authored) - set(done))
+    if missed:
+        raise ValueError(
+            "mimic softness authored but no joint equality follows it: "
+            + ", ".join(paths[name] for name in missed)
+        )
     return done
 
 

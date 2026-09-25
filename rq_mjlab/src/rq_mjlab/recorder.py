@@ -37,6 +37,8 @@ from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 from rq_pipeline.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
 from rq_pipeline.viz import VISUAL_ONLY_SKIP_GROUPS, open_stream
 
+from rq_mjlab.walks import TERRAIN_SCAN_GROUP
+
 
 def _require_rerun() -> Any:
     try:
@@ -94,15 +96,22 @@ class RerunRecorder(RecorderTerm):
             # z-fight them into shimmering shades (the duck: 5 opaque
             # group-3 collision meshes over 70 visual ones, 2026-09-01).
             # ...and a captured scene's ground, which sits in a group of its
-            # own for the height scans (scene_stage.TERRAIN_SCAN_GROUP):
-            # skipped, the Studio showed the robots on nothing (2026-09-25).
-            from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
-
+            # own for the height scans: skipped, the Studio showed the robots
+            # on nothing (2026-09-25). Only a model with a heightfield in that
+            # group; any other walk mirrors exactly as before.
+            ground = bool(
+                (
+                    (mj_model.geom_type == mujoco.mjtGeom.mjGEOM_HFIELD)
+                    & (mj_model.geom_group == TERRAIN_SCAN_GROUP)
+                ).any()
+            )
             self._mirror = RigMirror(
                 mj_model,
                 model_colors=True,
                 skip_groups=tuple(
-                    g for g in VISUAL_ONLY_SKIP_GROUPS if g != TERRAIN_SCAN_GROUP
+                    g
+                    for g in VISUAL_ONLY_SKIP_GROUPS
+                    if not (ground and g == TERRAIN_SCAN_GROUP)
                 ),
             )
         self._said_no_reward = False

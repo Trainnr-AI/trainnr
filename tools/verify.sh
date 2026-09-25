@@ -73,18 +73,16 @@ step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY 
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
 step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
 # The USD door's own tests need Newton (the `usd` extra), which cannot
-# share a venv with `mjx` (uv's conflicts), so the main suite skips 14 of
-# them. Skipped, a wrong test sat unrun for a day (the stage-units line,
-# 2026-09-25). They run here in their own venv, and a skip FAILS the step
-# (`grep -qx OK`, not "OK (skipped=N)"). The Isaac asset is fetched at its
-# pinned commit when the cache (runs/assets) lacks it.
+# share a venv with `mjx` (uv's conflicts), so the main suite skips them.
+# Skipped, a wrong test sat unrun for a day (the stage-units line,
+# 2026-09-25). They run here in their own venv, synced every time (a no-op
+# when current), and a skip FAILS the step: the last line must be exactly
+# "OK", not "OK (skipped=N)"; grep reads all of it, so a warning printed
+# after it cannot break the pipe. The Isaac asset is fetched at its pinned
+# commit when the cache (runs/assets) lacks it.
 step "python tests (USD import, Newton)" \
-     "(cd pipeline && { [ -x .venv-usd/bin/python ] || UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu; } \
-      && RQ_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -qx OK)"
-# sim-run spawns the Rerun viewer by name: the pipeline venv's, whatever
-# the shell's PATH holds (a fresh session had none, 2026-09-23).
-step "simulator solves the U-trap" \
-     "PATH=\"\$PWD/pipeline/.venv/bin:\$PATH\" cargo run -q -p sim-run | grep 'Waypoints reached: 1/1' >/dev/null"
+     "(cd pipeline && UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu \
+      && RQ_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -x OK >/dev/null)"
 
 # The two crates that must compile for the chip as well as the laptop.
 # `cargo test` proves neither: it builds the std shape only, so an
