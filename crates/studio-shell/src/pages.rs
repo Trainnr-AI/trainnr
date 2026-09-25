@@ -1185,14 +1185,17 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
             tag(ui, std::env::consts::OS);
         });
         ui.add_space(4.0);
-        weak_body(
-            ui,
-            if running == 0 {
-                "idle · no jobs running".to_owned()
-            } else {
-                format!("{running} job(s) running")
-            },
-        );
+        // The same runs as the top bar's Running now panel: every run in
+        // the job table, whoever started it; the panel has their buttons.
+        let now = crate::model::now_epoch();
+        let rows = crate::running::panel_rows(&model.jobs, now, crate::running::FINISHED_KEPT);
+        if running == 0 {
+            weak_body(ui, "idle · no jobs running");
+        }
+        for job in rows {
+            ui.separator();
+            crate::running::summary(ui, job, now);
+        }
         // What a running chain is filling in, with its stage (the index's
         // `in_progress`): the folder is work, not a warning, until the
         // record lands and it becomes a card.

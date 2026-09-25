@@ -937,6 +937,12 @@ def certificate_bound(cited: dict[str, Any], name: str) -> tuple[float, float]:
     )
 
 
+# Told as each knob's ladder is climbed: (knobs climbed, knobs in all,
+# that knob's name, its rungs) - how a sweep says "knob 3 of 8: latency"
+# to the Studio's Running now panel (`mcp_jobs.Tracker.progress`).
+KnobProgress = Callable[[int, int, str, "list[Rung]"], None]
+
+
 def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     deployment_dir: Path,
     *,
@@ -952,6 +958,7 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     open: Opener | None = None,
     appliers: dict[str, Applier] | None = None,
     on_knob: Callable[[dict[str, Any], float], None] | None = None,
+    on_progress: KnobProgress | None = None,
 ) -> dict[str, Any]:
     """Climb every knob's ladder (in `workers` spawned processes, one per
     knob; in this process when 0, or when a fake `open`/`appliers` is
@@ -1001,6 +1008,8 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
         climbed[knob_name] = rungs
         if on_knob is not None:  # the live stream: a knob as it finishes
             on_knob(_knob_record(by_name[knob_name], rungs, sweep), lower)
+        if on_progress is not None:  # the Running now panel
+            on_progress(len(climbed), len(knobs), knob_name, rungs)
 
     if in_process:
         for k in knobs:

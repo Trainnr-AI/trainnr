@@ -19,18 +19,30 @@ than guessing.
 The job table is JSON files under `runs/mcp-jobs/`, one per job,
 readable by a human when the tooling is not around; liveness and the
 stop are the Studio's (`project/control`), one probe for every process.
+
+2026-09-25: the table is every running piece of work, not only the
+doors'. A tool started from a terminal, or by an agent's fork, enters it
+through `track()` (the operator: "I want to see in real time some
+information about what is currently running in the studio" - a gate run
+from a terminal showed "idle"). Each job also keeps a `<id>.status` beside
+its record: the stage it is at and its progress (`Tracker.stage`,
+`Tracker.progress`), rewritten atomically, which the Studio's Running
+now panel reads. A door's child inherits `JOB_ID_ENV` and adopts the
+door's own record instead of opening a second one.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
 import uuid
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 # pydantic (the MCP surface) reads these signatures; on Python < 3.12 it
@@ -44,6 +56,23 @@ from rq_pipeline.bundles.json_record import JsonRecord
 from rq_pipeline.project.control import pid_alive, terminate_group
 
 JOBS_DIR_NAME = "mcp-jobs"
+
+# Who started a job: a door (the MCP surface), a tool from a terminal, or
+# an agent's fork (which says so through SOURCE_ENV). One vocabulary, read
+# by the Studio (`model.rs::JOB_SOURCES`, pinned by test_studio_mirrors).
+SOURCE_DOOR = "door"
+SOURCE_TOOL = "tool"
+SOURCE_AGENT = "agent"
+JOB_SOURCES = (SOURCE_DOOR, SOURCE_TOOL, SOURCE_AGENT)
+SOURCE_ENV = "TRAINNR_RUN_SOURCE"
+# A door's child learns its own job here, so `track()` adopts the door's
+# record rather than opening a second one for the same work.
+JOB_ID_ENV = "TRAINNR_JOB_ID"
+JOBS_DIR_ENV = "TRAINNR_JOBS_DIR"
+# The Studio's viewport scene that plays the project's walk (its newest
+# checkpoint): what a training run's "watch in viewport" opens
+# (`viewport.rs::WALK_TASK`, pinned by test_studio_mirrors).
+VIEWPORT_WALK = "walk"
 
 # The three shapes a door answers with, so every caller reads one word
 # (`status`) before anything else. A refusal names the reason; a handle
@@ -68,7 +97,7 @@ class Refusal(TypedDict):
 
 
 class JobStatus(TypedDict):
-    """A job's state and its log tail."""
+    """A job's state and its log tail, with who started it and where it is."""
 
     job_id: str
     tool: str
@@ -76,6 +105,18 @@ class JobStatus(TypedDict):
     argv: list[str]
     log: str
     log_tail: list[str]
+    source: str
+    name: str
+    stage: str
+    done: int
+    total: int
+    unit: str
+
+
+STATE_RUNNING = "running"
+# The process is gone and no exit code was recorded: killed, crashed, or
+# its watcher gone with it. Said as that, never guessed as done.
+STATE_DIED = "died (no exit recorded)"
 
 
 class Cancelled(TypedDict):
@@ -103,6 +144,15 @@ class JobRecord(JsonRecord):
     log: str
     pid: int
     started: float
+    source: str = SOURCE_DOOR
+    # What the work is about, for a person: the deployment, the run, the
+    # scene. Empty for a door job that never said.
+    name: str = ""
+    # The Studio's MuJoCo viewport scene that shows this work (a
+    # `deploy:<name>` scene, the walk), and the Rerun stream file it
+    # writes; empty when it has none.
+    viewport: str = ""
+    viewer: str = ""
 
 
 # The spawner is injectable so tests assert the exact command lines
@@ -117,6 +167,48 @@ EXIT_SUFFIX = ".exit"
 def exit_path_for(log_path: Path) -> Path:
     """The job's exit file, beside its log (`<id>.log` -> `<id>.exit`)."""
     return log_path.with_suffix(EXIT_SUFFIX)
+
+
+STATUS_SUFFIX = ".status"
+STATUS_SCHEMA = "trainnr-job-status/1"
+# A per-trial or per-iteration loop may call progress() thousands of
+# times; the file is rewritten at most this often (the last step always).
+STATUS_EVERY_S = 0.25
+
+
+def status_path_for(log_path: Path) -> Path:
+    """The job's live status, beside its log (`<id>.log` -> `<id>.status`)."""
+    return log_path.with_suffix(STATUS_SUFFIX)
+
+
+@dataclass(frozen=True)
+class RunStatus:
+    """Where a running job is: what it is doing, and how far along.
+    `total` 0 means no count is known (a stage line alone)."""
+
+    stage: str = ""
+    done: int = 0
+    total: int = 0
+    unit: str = ""
+    updated: float = 0.0
+    schema: str = STATUS_SCHEMA
+
+
+def write_status(path: Path, status: RunStatus) -> None:
+    """Atomic, like the exit file: a reader sees the old status or the new."""
+    staged = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    staged.write_text(json.dumps(asdict(status)), encoding="utf-8")
+    os.replace(staged, path)
+
+
+def read_status(path: Path) -> RunStatus | None:
+    """The status a job last wrote, or None when it wrote none."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    known = set(RunStatus.__dataclass_fields__)
+    return RunStatus(**{k: v for k, v in raw.items() if k in known})
 
 
 def record_exit(exit_path: Path, code: int) -> None:
@@ -137,10 +229,14 @@ def runner_argv(argv: Sequence[str], exit_path: Path) -> list[str]:
 
 def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
     log = open(log_path, "ab")  # noqa: SIM115 - the child owns it past this frame
+    # The child adopts this job in `track()`: its stages land in the
+    # door's own record (the job id is the log's stem).
+    env = {**os.environ, JOB_ID_ENV: log_path.stem, JOBS_DIR_ENV: str(log_path.parent)}
     try:
         return subprocess.Popen(
             runner_argv(argv, exit_path_for(log_path)),
             cwd=cwd,
+            env=env,
             stdout=log,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
@@ -203,15 +299,16 @@ class JobManager:
             code = int(exit_path.read_text())
             state = "done" if code == 0 else f"failed (exit {code})"
         elif pid_alive(record.pid):
-            state = "running"
+            state = STATE_RUNNING
         else:
-            state = "ended (exit unrecorded — the watching server restarted)"
+            state = STATE_DIED
         log_path = Path(record.log)
         lines = (
             log_path.read_text(errors="replace").splitlines()
             if log_path.exists()
             else []
         )
+        live = read_status(self.jobs_dir / f"{job_id}{STATUS_SUFFIX}") or RunStatus()
         return {
             "job_id": job_id,
             "tool": record.tool,
@@ -219,6 +316,12 @@ class JobManager:
             "argv": record.argv,
             "log": record.log,
             "log_tail": lines[-tail:],
+            "source": record.source,
+            "name": record.name,
+            "stage": live.stage,
+            "done": live.done,
+            "total": live.total,
+            "unit": live.unit,
         }
 
     def cancel(self, job_id: str) -> Cancelled:
@@ -247,6 +350,151 @@ class JobManager:
             known = sorted(p.stem for p in self.jobs_dir.glob("*.json"))
             raise KeyError(f"no job {job_id!r}; known: {known}")
         return JobRecord.read(path)
+
+
+class Tracker:
+    """A running job's voice: `stage(text)` says what it is doing,
+    `progress(done, total, unit)` how far along. Both land in the job's
+    `.status` (atomic) and the stage line also in its log, so the Studio
+    shows the one and "open log" the history."""
+
+    def __init__(self, jobs_dir: Path, job_id: str) -> None:
+        self.job_id = job_id
+        self._status_path = jobs_dir / f"{job_id}{STATUS_SUFFIX}"
+        self._log_path = jobs_dir / f"{job_id}.log"
+        self._status = RunStatus()
+        self._written = 0.0
+
+    def stage(self, text: str) -> None:
+        """A new stage: the line replaces the last and joins the log."""
+        self._status = replace(self._status, stage=text, done=0, total=0, unit="")
+        with self._log_path.open("a", encoding="utf-8") as log:
+            log.write(f"[{time.strftime('%H:%M:%S')}] {text}\n")
+        self._write(force=True)
+
+    def progress(self, done: int, total: int, unit: str = "", detail: str = "") -> None:
+        """How far along: `done` of `total` `unit`s, with `detail` as the
+        stage line when given (a rung's verdict, a reward)."""
+        stage = detail or self._status.stage
+        # A new line or a new count is news; only repeats are throttled.
+        news = stage != self._status.stage or int(total) != self._status.total
+        self._status = replace(
+            self._status, stage=stage, done=int(done), total=int(total), unit=unit
+        )
+        self._write(force=news or done >= total)
+
+    def _write(self, *, force: bool) -> None:
+        now = time.time()
+        if not force and now - self._written < STATUS_EVERY_S:
+            return
+        self._written = now
+        write_status(self._status_path, replace(self._status, updated=now))
+
+
+def jobs_dir_of(project_root: Path) -> Path:
+    """The job table of a project (the one `JobManager` writes)."""
+    return Path(project_root) / JOBS_DIR_NAME
+
+
+# Where the job table lives when no project is open: the pipeline's own
+# runs folder (the legacy home of `mcp-jobs/`).
+PIPELINE_RUNS = Path(__file__).parents[1] / "runs"
+
+
+def default_jobs_root() -> Path:
+    """The root whose `mcp-jobs/` the doors and the tools share: the
+    current project's, else `PIPELINE_RUNS`."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+
+    try:
+        return current_project().root
+    except FileNotFoundError:
+        return PIPELINE_RUNS
+
+
+# The shell's convention for a run ended by Ctrl-C.
+INTERRUPTED_EXIT = 130
+
+
+def exit_code_of(error: BaseException | None) -> int:
+    """The code a tracked block ends with: 0, a SystemExit's own code,
+    `INTERRUPTED_EXIT` for an interrupt, else 1."""
+    if error is None:
+        return 0
+    if isinstance(error, SystemExit):
+        code = error.code
+        return code if isinstance(code, int) else (0 if code is None else 1)
+    if isinstance(error, KeyboardInterrupt):
+        return INTERRUPTED_EXIT
+    return 1
+
+
+def _adopted(jobs_dir: Path) -> Path | None:
+    """The door's own record this process was started under, if any."""
+    job_id = os.environ.get(JOB_ID_ENV, "")
+    table = os.environ.get(JOBS_DIR_ENV, "")
+    if not job_id or not table or Path(table).resolve() != jobs_dir.resolve():
+        return None
+    path = jobs_dir / f"{job_id}.json"
+    return path if path.is_file() else None
+
+
+@contextmanager
+def track(  # noqa: PLR0913 - a job's identity, each field named
+    kind: str,
+    *,
+    jobs_dir: Path,
+    name: str = "",
+    argv: Sequence[str] | None = None,
+    viewport: str = "",
+    viewer: str = "",
+) -> Iterator[Tracker]:
+    """This process's work, in the project's job table while it runs.
+
+    Under a door (the environment names the job, `JOB_ID_ENV`) the door's
+    record is adopted: its name, viewport and viewer are filled in and the
+    runner records the exit. Otherwise a record is opened with this
+    process's pid and `source` from `SOURCE_ENV` (an agent's fork sets
+    `agent`; a terminal leaves `tool`), and the exit is recorded here:
+    0, the SystemExit's code, 130 for Ctrl-C, 1 for an error. Refused by
+    name: a source word the Studio does not know."""
+    jobs_dir = Path(jobs_dir)
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    adopted = _adopted(jobs_dir)
+    if adopted is not None:
+        record = JobRecord.read(adopted)
+        replace(
+            record, name=name or record.name, viewport=viewport, viewer=viewer
+        ).write(adopted)
+        yield Tracker(jobs_dir, record.id)
+        return
+    source = os.environ.get(SOURCE_ENV, SOURCE_TOOL)
+    if source not in JOB_SOURCES:
+        raise ValueError(f"{SOURCE_ENV}={source!r}; known: {JOB_SOURCES}")
+    job_id = f"{kind}-{uuid.uuid4().hex[:8]}"
+    log_path = jobs_dir / f"{job_id}.log"
+    log_path.touch()
+    JobRecord(
+        id=job_id,
+        tool=kind,
+        argv=list(argv if argv is not None else sys.argv),
+        cwd=str(Path.cwd()),
+        log=str(log_path),
+        pid=os.getpid(),
+        started=time.time(),
+        source=source,
+        name=name,
+        viewport=viewport,
+        viewer=viewer,
+    ).write(jobs_dir / f"{job_id}.json")
+    error: BaseException | None = None
+    try:
+        yield Tracker(jobs_dir, job_id)
+    except BaseException as caught:
+        error = caught
+        raise
+    finally:
+        record_exit(exit_path_for(log_path), exit_code_of(error))
 
 
 def main(args: Sequence[str] | None = None) -> int:

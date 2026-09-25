@@ -32,6 +32,8 @@ eframe = { version = "0.36.1", default-features = false, features = [
 egui = "0.36.1"
 mimalloc = "0.1.52"
 re_ui = "0.36.3"
+# A run's viewer file loaded into the viewer (Running now, 2026-09-25).
+re_data_source = "0.36.3"
 rerun = { version = "0.36.3", default-features = false, features = ["native_viewer", "sdk", "server"] }
 # The project panel reads `.index/project.json`, written by the Python
 # side (rq_pipeline.project) — the Studio never speaks MCP itself

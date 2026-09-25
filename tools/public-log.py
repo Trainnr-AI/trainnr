@@ -18,7 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, running
 
 bootstrap()
 
@@ -44,19 +44,23 @@ def main() -> int:
         return 0
     try:
         entry = public_logs.resolve(args.name)
-        source = public_logs.fetch(args.name)
         if args.verb == "fetch":
-            print(f"{entry.name} -> {source}")
+            print(f"{entry.name} -> {public_logs.fetch(args.name)}")
             return 0
         project = Project(args.project.resolve()).use()
-        out = ingest(
-            project,
-            source,
-            name=args.recording or entry.name,
-            adapter=entry.adapter,
-            provenance=entry.provenance(),
-            basis=entry.basis,
-        )
+        with running(project.root, name=args.recording or entry.name) as run:
+            run.stage(f"fetching {entry.name} (size and digest checked)")
+            source = public_logs.fetch(args.name)
+            run.stage(f"decoding {entry.name} with {entry.adapter}")
+            out = ingest(
+                project,
+                source,
+                name=args.recording or entry.name,
+                adapter=entry.adapter,
+                provenance=entry.provenance(),
+                basis=entry.basis,
+            )
+            run.stage(f"ingested {out.get('stamp')}")
     except KeyError as unknown:  # a refusal by name, not a traceback
         raise SystemExit(
             str(unknown.args[0]) if unknown.args else str(unknown)

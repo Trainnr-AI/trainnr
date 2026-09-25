@@ -794,20 +794,37 @@ CHECKS: dict[str, CheckSpec] = {
 NOT_RUN = "not run: {first} refused first, and driving the policy would be unsafe"
 
 
-def run_checks(ctx: Context) -> list[Check]:
+# Told as each step of a pre-flight ends: (steps done, steps in all,
+# the line) - the Studio's Running now panel (`mcp_jobs.Tracker.progress`)
+# shows "check 3 of 9: gains passed" without the pre-flight knowing it.
+StepProgress = Callable[[int, int, str], None]
+# The steps after the checks when a pre-flight measures: the ramp-in and
+# the stops.
+MEASURED_STEPS = ("ramp-in", "stops")
+
+
+def run_checks(
+    ctx: Context, on_step: StepProgress | None = None, steps: int = 0
+) -> list[Check]:
     """Every check in table order; a check that drives the policy is not
     run once a structural one refused (a policy fed the wrong vector does
-    nothing meaningful, in simulation or on a robot)."""
+    nothing meaningful, in simulation or on a robot). `on_step` is told
+    each check's verdict as it lands, as step n of `steps` (the checks'
+    own count when 0)."""
+    total = steps or len(CHECKS)
     out: list[Check] = []
     for name, spec in CHECKS.items():
         refused = next((c.name for c in out if c.passed is False), None)
         if spec.drives_policy and refused is not None:
             out.append(Check(name, None, "not run", "", NOT_RUN.format(first=refused)))
-            continue
-        try:
-            out.append(spec.fn(ctx))
-        except (ValueError, IndexError, KeyError, RuntimeError) as why:
-            out.append(Check(name, False, "could not run", "", str(why)))
+        else:
+            try:
+                out.append(spec.fn(ctx))
+            except (ValueError, IndexError, KeyError, RuntimeError) as why:
+                out.append(Check(name, False, "could not run", "", str(why)))
+        if on_step is not None:
+            last = out[-1]
+            on_step(len(out), total, f"{last.name}: {CHECK_MARKS[last.passed]}")
     return out
 
 
@@ -1185,6 +1202,7 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
     seed: int | None = None,
     measure: bool = True,
     manifest: Manifest | None = None,
+    on_step: StepProgress | None = None,
 ) -> dict[str, Any]:
     """Every check, then (when `measure`) the ramp-in and the soft stop
     measured in plain MuJoCo; the record written beside the manifest.
@@ -1208,7 +1226,8 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
         seed=used_seed,
         twists_from=twists_from,
     )
-    checks = run_checks(ctx)
+    steps = len(CHECKS) + (len(MEASURED_STEPS) if measure else 0)
+    checks = run_checks(ctx, on_step, steps)
     passed = all(c.passed is not False for c in checks)
     transitions = transitions_of(manifest)
     record: dict[str, Any] = {
@@ -1235,7 +1254,11 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
     if measure and passed:
         poses = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
         ramp = measure_ramp(runtime, transitions, poses=poses)
+        if on_step is not None:
+            on_step(len(CHECKS) + 1, steps, f"{MEASURED_STEPS[0]} measured")
         stop = measure_stop(runtime, transitions, poses=poses)
+        if on_step is not None:
+            on_step(steps, steps, f"{MEASURED_STEPS[1]} measured")
         record["ramp_in"] = _without_logs(ramp)
         record["soft_stop"] = _without_logs(stop)
         record["_logs"] = {"ramp_in": ramp, "soft_stop": stop}

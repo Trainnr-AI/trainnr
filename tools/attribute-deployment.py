@@ -14,11 +14,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from _lab import bootstrap, deployment_args, resolve_deployment
+from _lab import bootstrap, deployment_args, resolve_deployment, running
 
 bootstrap()
 
 from rq_pipeline.deploy.attribution import (  # noqa: E402
+    STREAM,
     SURVIVED,
     attribute,
     knob,
@@ -31,8 +32,10 @@ from rq_pipeline.deploy.attribution import (  # noqa: E402
 )
 from rq_pipeline.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
 from rq_pipeline.deploy.manifest import Key  # noqa: E402
+from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.cited import cited_certificate  # noqa: E402
+from rq_pipeline.viz import viewer_file  # noqa: E402
 
 
 def main() -> None:
@@ -65,18 +68,27 @@ def main() -> None:
         certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
         fit = load_fit(args.fit) if args.fit is not None else None
         live = _live(deployment)
-        record = attribute(
-            deployment,
-            assets_dir=assets,
-            certificate=certificate,
-            runtime=args.runtime,
-            trials=args.trials,
-            seed=args.seed,
-            tolerance=args.tolerance,
-            fit=fit,
-            workers=args.workers,
-            on_knob=None if live is None else _on_knob(live),
-        )
+        with running(
+            project.root,
+            name=args.name,
+            viewport=scene_text(args.name),
+            viewer=viewer_file(deployment, STREAM),
+        ) as run:
+            run.stage("the baseline: the passing gate's own trials, untouched")
+            record = attribute(
+                deployment,
+                assets_dir=assets,
+                certificate=certificate,
+                runtime=args.runtime,
+                trials=args.trials,
+                seed=args.seed,
+                tolerance=args.tolerance,
+                fit=fit,
+                workers=args.workers,
+                on_knob=None if live is None else _on_knob(live),
+                on_progress=_climbed(run),
+            )
+            run.stage(record["sensitivity"])
     except (FileNotFoundError, ValueError, ImportError) as exc:
         raise SystemExit(str(exc)) from exc
     base = record["baseline"]
@@ -134,6 +146,19 @@ def main() -> None:
         )
     write_index(project, index_project(project))
     sys.exit(0)
+
+
+def _climbed(run: Any) -> Any:
+    """Each knob's ladder, as it lands, told to the Running now panel."""
+
+    def told(done: int, total: int, name: str, rungs: list[Any]) -> None:
+        last = rungs[-1] if rungs else None
+        tail = f": {last.successes}/{last.trials} at its last rung" if last else ""
+        run.progress(
+            done, total, "knobs", f"knob {done} of {total} climbed, {name}{tail}"
+        )
+
+    return told
 
 
 def _live(deployment: Path) -> Any:

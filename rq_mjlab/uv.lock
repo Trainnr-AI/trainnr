@@ -1544,6 +1544,7 @@ requires-dist = [
     { name = "mujoco", extras = ["sysid"], marker = "extra == 'sim'", specifier = "~=3.11.0" },
     { name = "mujoco-mjx", extras = ["warp"], marker = "extra == 'mjx'", specifier = "~=3.11.0" },
     { name = "mujoco-warp", marker = "sys_platform != 'darwin' and extra == 'gpu'", specifier = "~=3.11.0" },
+    { name = "newton", extras = ["importers"], marker = "extra == 'usd'", specifier = "~=1.6.0" },
     { name = "onnx", specifier = ">=1.22.0" },
     { name = "onnx", marker = "extra == 'deploy'", specifier = ">=1.16" },
     { name = "onnxruntime", specifier = ">=1.24.3" },

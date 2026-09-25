@@ -15,7 +15,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, running, trial_reporter
 
 bootstrap()
 
@@ -24,6 +24,7 @@ from rq_pipeline.deploy.gate import (  # noqa: E402
     DEFAULT_TOLERANCE,
     DEFAULT_TRIALS,
     gate,
+    gate_stream_name,
 )
 from rq_pipeline.deploy.manifest import Key, load_manifest  # noqa: E402
 from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: E402
@@ -32,10 +33,19 @@ from rq_pipeline.deploy.runtimes import (  # noqa: E402
     runtime_names,
     runtime_spec,
 )
+from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.cited import cited_certificate  # noqa: E402
 from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
 from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
+from rq_pipeline.viz import viewer_file  # noqa: E402
+
+# The verdict as the Running now panel's last line says it.
+VERDICT_WORDS = {
+    True: "passed",
+    False: "failed",
+    None: "judged nothing (no evaluation cited, or another protocol)",
+}
 
 
 def main() -> None:
@@ -82,11 +92,21 @@ def main() -> None:
             f"[gate] scene {scene_name!r} not in this project: no splat in the picture"
         )
         scene_dir = None
-    with stack:
+    with (
+        running(
+            project.root,
+            name=f"{args.name} ({spec.name})",
+            viewport=scene_text(args.name),
+            viewer=viewer_file(folder, gate_stream_name(spec.name)),
+        ) as run,
+        stack,
+    ):
+        run.stage(f"standing up the {spec.name} runtime")
         # What the stack started that the runtime must share (the DDS
         # stack's one virtual pad); a library runtime's NoStack shares nothing.
         shared = stack.runtime_options()
         opener = spec.open()
+        run.progress(0, args.trials, "trials", f"trial 1 of {args.trials}")
         record = gate(
             folder,
             assets_dir=assets_dir,
@@ -100,6 +120,14 @@ def main() -> None:
             ),
             narrate=True,
             scene_dir=scene_dir,
+            on_trial=trial_reporter(run),
+        )
+        run.progress(
+            record["trials"],
+            record["trials"],
+            "trials",
+            f"{record['successes']}/{record['trials']} tracked: "
+            f"{VERDICT_WORDS[record['verdict'].get('passed')]}",
         )
     verdict = record["verdict"]
     print(
