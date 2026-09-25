@@ -1009,6 +1009,27 @@ chip), and keeps that word until a recording of this robot exists. A
 drift check on the Go2 now has a method to run and still no telemetry
 of its own to run on.
 
+**2026-09-25, identification feeds training.** A fit is a record about
+the robot, not the robot: `bundles.hashing.BUNDLE_RECORDS` (the `fits/`
+folder and `audit.json`) never move the bundle's stamp, so identifying
+the Go2 in go2-walk left it at `go2@5003bf617b5f` and every certified
+checkpoint still passes its identity gate. The fit carries its own stamp
+(`fit_record.fit_stamp`, `fit@<hash of the record>`). A walk trains
+under one with `train_walk(fit=...)` / `walk_train --fit` / a task.json
+`fit` field (`rq_mjlab/src/rq_mjlab/fit_walk.py`): every hinge's armature, viscous
+damping and Coulomb friction set at the fit's estimate in the training
+model; each pinned term drawn per reset over its bootstrap interval,
+each unpinned one over a declared ±0.5 of its estimate, said as "not
+pinned"; the gains keep the declared ±0.1. The run identity, the
+certificate and the manifest name the fit and its basis, the card says
+"trained under fit@… (public log)", and the identity gate refuses to
+judge a fit-trained checkpoint in a world without its fit. Drift reads
+like with like: only fits of the fresh recording's basis are the
+reference, the others named as left out. The IIT chirp's fit in
+go2-walk is `fit@0ad6202797c5` (31/36 pinned); a 30-iteration smoke
+(`runs/go2-c3-fit-smoke`) proved the chain; the full `go2-c3-fit` run
+waits for the operator.
+
 ## 9. What would break it first: the gate says why (2026-09-24)
 
 The field's most repeated unserved ask (docs/e2e-research/78 §1): "it
