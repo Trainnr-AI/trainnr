@@ -22,7 +22,7 @@ import argparse
 from dataclasses import asdict
 from pathlib import Path
 
-from rq_mjlab.walk_view import require_same_identity, trained_identity
+from rq_mjlab.walk_view import fit_of, require_same_identity, trained_identity
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 
@@ -67,7 +67,10 @@ def main() -> None:
     spec = walk_spec(args.robot)
     # The walk in play mode: the curriculum and the pushes off, episodes
     # open-ended, the same robot, actuator and gains it trained under.
-    cfg, identity = spec.env_cfg(play=True, dr_span=None, pin_scale=None)
+    recorded = trained_identity(args.checkpoint)
+    cfg, identity = spec.env_cfg(
+        play=True, dr_span=None, pin_scale=None, fit=fit_of(recorded)
+    )
     cfg.scene.num_envs = args.envs
     if not args.no_recorder:
         cfg.recorders = {
@@ -76,7 +79,6 @@ def main() -> None:
 
     # The identity beside the run's own: a checkpoint rolled on a rig it
     # was not trained for is a wrong answer with a straight face.
-    recorded = trained_identity(args.checkpoint)
     if recorded:
         print(f"[play] run identity:  {recorded}")
     require_same_identity(recorded, identity)  # the one gate (walk_view)

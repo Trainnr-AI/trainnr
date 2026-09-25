@@ -151,6 +151,13 @@ class DriftRecord(JsonRecord):
     instrument: str
     schema: str = DRIFT_SCHEMA
     rule: str = RULE
+    # 2026-09-25, like with like: whose robot the fresh recording is, the
+    # reference fits of ANOTHER recorded basis left out (a public log of
+    # someone else's Go2 is not our robot's reference), and the
+    # deployment or certificate whose span this check is read against.
+    basis: str = ""
+    left_out: tuple[str, ...] = ()
+    against: str = ""
 
     @property
     def references(self) -> int:
@@ -284,22 +291,52 @@ def recommendation_for(left: tuple[str, ...], unresolved: tuple[str, ...]) -> st
     return RECOMMEND_CLEAN
 
 
-def judge(
+def same_basis(
+    records: tuple[FitRecord, ...], basis: str
+) -> tuple[tuple[FitRecord, ...], tuple[str, ...]]:
+    """The reference fits a fresh recording of `basis` is judged against:
+    those that measured the same kind of robot, and those that predate the
+    basis field (kept, as before 2026-09-25); the rest are left out and
+    named - drift of OUR robot against a union that includes other labs'
+    Go2s would say nothing about ours."""
+    kept, left_out = [], []
+    for record in records:
+        if record.basis is None or record.basis == basis:
+            kept.append(record)
+        else:
+            left_out.append(f"{record.recording} ({record.basis})")
+    return tuple(kept), tuple(left_out)
+
+
+def judge(  # noqa: PLR0913 - what is judged, against what, each named
     bundle_dir: Path,
     recording_dir: Path,
     fitter: IdentificationMethod,
     *,
     robot: str,
     recording: str,
+    basis: str,
+    against: str = "",
 ) -> DriftRecord:
     """Identify the fresh recording without writing, judge it against the
-    bundle's records. Refuses by name a bundle with no fit record."""
+    bundle's records of the same `basis` - the recording's own, which the
+    caller reads (`same_basis`). Refuses by name a bundle with no fit
+    record, or none of the recording's basis. `against` names the
+    deployment or certificate whose span the check is read against,
+    recorded as given."""
     bundle_dir, recording_dir = Path(bundle_dir), Path(recording_dir)
-    records = load_fit_records(bundle_dir)
-    if not records:
+    every = load_fit_records(bundle_dir)
+    if not every:
         raise ValueError(
             f"{robot}: no fit record to compare against; identify the robot "
             "from a recording first (identify_system)"
+        )
+    records, left_out = same_basis(every, basis)
+    if not records:
+        raise ValueError(
+            f"{robot}: no fit of the recording's basis ({basis}) to compare "
+            f"against; the bundle holds {list(left_out)} - identify this robot "
+            "from a recording of the same basis first"
         )
     fresh, _ = fitter.fit(bundle_dir, recording_dir, write=False)
     parameters = judge_parameters(records, fresh, anchored=method_anchors(fitter))
@@ -319,6 +356,9 @@ def judge(
         created_utc=datetime.now(timezone.utc).isoformat(),
         code=code_version(),
         instrument=_instrument(),
+        basis=basis,
+        left_out=left_out,
+        against=against,
     )
 
 
@@ -332,7 +372,7 @@ def load_drift_record(path: Path) -> DriftRecord:
             f"{path}: schema {schema!r}, this reader speaks {DRIFT_SCHEMA!r}"
         )
     raw["parameters"] = tuple(ParameterDrift(**p) for p in raw.get("parameters", []))
-    for key in ("fit", "left", "unresolved"):
+    for key in ("fit", "left", "unresolved", "left_out"):
         raw[key] = tuple(raw.get(key, ()))
     known = set(DriftRecord.__dataclass_fields__)
     return DriftRecord(**{k: v for k, v in raw.items() if k in known})

@@ -46,7 +46,7 @@ from rq_pipeline.deploy.runtime import STANDING_COMMAND
 from rq_pipeline.deploy.unitree_yaml import deployable_actor_terms
 
 from rq_mjlab.envelope import COMMAND_TERM
-from rq_mjlab.go1_walk import GainsBasis, actuator_dr_events
+from rq_mjlab.go1_walk import SCALED, GainsBasis, actuator_dr_events
 from rq_mjlab.linter import lint
 from rq_mjlab.scene_stage import TERRAIN_BODY
 from rq_mjlab.walks import (
@@ -148,25 +148,36 @@ def actuator_stamp() -> str:
     return f"{ROBOT}-declared-pd@{fields_hash(declared_actuator_constants())}"
 
 
-def _actuator(group: str, targets: tuple[str, ...]) -> BuiltinPositionActuatorCfg:
+def _actuator(
+    group: str, targets: tuple[str, ...], *, declared_armature: bool = True
+) -> BuiltinPositionActuatorCfg:
+    """One group's PD. Under a fit the armature is the fit's, per joint,
+    already on the model's joints: the actuator leaves it alone (mjlab's
+    None preserves the XML value)."""
     numbers = DECLARED[group]
     return BuiltinPositionActuatorCfg(
         target_names_expr=targets,
         stiffness=numbers["stiffness"],
         damping=numbers["damping"],
         effort_limit=numbers["effort_limit"],
-        armature=numbers["armature"],
+        armature=numbers["armature"] if declared_armature else None,
     )
 
 
-ARTICULATION = EntityArticulationInfoCfg(
-    actuators=(
-        _actuator("hip", (".*hip_.*",)),
-        _actuator("thigh", (".*thigh_.*",)),
-        _actuator("calf", (".*calf_.*",)),
-    ),
-    soft_joint_pos_limit_factor=0.9,
-)
+GROUPS = (("hip", (".*hip_.*",)), ("thigh", (".*thigh_.*",)), ("calf", (".*calf_.*",)))
+
+
+def articulation(*, declared_armature: bool = True) -> EntityArticulationInfoCfg:
+    return EntityArticulationInfoCfg(
+        actuators=tuple(
+            _actuator(group, targets, declared_armature=declared_armature)
+            for group, targets in GROUPS
+        ),
+        soft_joint_pos_limit_factor=0.9,
+    )
+
+
+ARTICULATION = articulation()
 
 INIT_STATE = EntityCfg.InitialStateCfg(
     pos=(0.0, 0.0, DECLARED["home"]["z"]),
@@ -191,13 +202,23 @@ FULL_COLLISION = CollisionCfg(
 )
 
 
-def go2_robot_cfg() -> EntityCfg:
-    """A fresh entity config each time: mjlab mutates configs in place."""
+def go2_robot_cfg(fit: Any = None) -> EntityCfg:
+    """A fresh entity config each time: mjlab mutates configs in place.
+    `fit`: a fit record whose estimates the model's joints take."""
+    if fit is None:
+        return EntityCfg(
+            init_state=INIT_STATE,
+            collisions=(FULL_COLLISION,),
+            spec_fn=get_spec,
+            articulation=ARTICULATION,
+        )
+    from rq_mjlab.fit_walk import apply_to_spec  # noqa: PLC0415
+
     return EntityCfg(
         init_state=INIT_STATE,
         collisions=(FULL_COLLISION,),
-        spec_fn=get_spec,
-        articulation=ARTICULATION,
+        spec_fn=lambda: apply_to_spec(get_spec(), fit),
+        articulation=articulation(declared_armature=False),
     )
 
 
@@ -395,12 +416,36 @@ def _with_actuator_dr(
     dr_span: float | None,
     pin_scale: float | None,
     pin_only: tuple[str, ...] | None,
+    fit: str | None = None,
 ) -> dict[str, str]:
     """The study's actuator randomization around the declared gains,
-    added to the config; returns the identity it gives the run."""
+    added to the config; returns the identity it gives the run. `fit`:
+    a fit's stamp (or its recording's) in the bundle - the joints take
+    its estimates, its intervals replace the declared armature scaling,
+    and the gains keep the declared span (a fit measures the joints, not
+    the controller)."""
     events, dr_basis = actuator_dr_events(
-        dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, gains=DECLARED_GAINS
+        dr_span=dr_span,
+        pin_scale=pin_scale,
+        pin_only=pin_only,
+        gains=DECLARED_GAINS,
+        scaled=GAINS_ONLY if fit is not None else SCALED,
     )
+    identity: dict[str, str] = {}
+    if fit is not None:
+        from rq_pipeline.robot.fit_record import fit_stamp  # noqa: PLC0415
+
+        from rq_mjlab.fit_walk import basis_text, dr_events, resolve  # noqa: PLC0415
+
+        record = resolve(bundle_dir(), fit)
+        cfg.scene.entities["robot"] = go2_robot_cfg(record)
+        events.pop(ARMATURE_EVENT, None)  # the fit's own draw replaces it
+        events.update(dr_events(record))
+        dr_basis = f"{basis_text(record)}; gains: {dr_basis}"
+        identity = {
+            Identity.FIT: fit_stamp(record),
+            Identity.FIT_BASIS: record.basis or "unrecorded",
+        }
     for name in events:
         if name in cfg.events:
             raise ValueError(f"the Go2 cfg already carries an event named {name!r}")
@@ -410,25 +455,33 @@ def _with_actuator_dr(
         Identity.ROBOT: robot_stamp(),
         Identity.ACTUATOR: actuator_stamp(),
         Identity.DR_BASIS: dr_basis,
+        **identity,
     }
 
 
-def go2_walk_env_cfg(
+ARMATURE_EVENT = "actuator_armature"  # go1_walk.actuator_dr_events' name for it
+# Under a fit the declared span moves the gains only; the armature is the fit's.
+GAINS_ONLY = tuple(name for name in SCALED if name != "armature")
+
+
+def go2_walk_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     *,
     play: bool = False,
     dr_span: float | None = ACTUATOR_DR_SPAN,
     pin_scale: float | None = None,
     pin_only: tuple[str, ...] | None = None,
     legacy_actor: bool = False,
+    fit: str | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The Go2 flat walk with the study's actuator randomization around
-    the declared gains, and its identity."""
+    the declared gains, and its identity; `fit` (a fit's stamp in the
+    bundle): the joints at the fit, randomized over its intervals."""
     from rq_mjlab.scene_stage import unrender_splats  # noqa: PLC0415
 
     cfg = go2_flat_env_cfg(play=play, legacy_actor=legacy_actor)
     unrender_splats()  # a plane after a scene in one process sees no splats
     identity = _with_actuator_dr(
-        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
+        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, fit=fit
     )
     identity[Identity.ACTOR] = ACTOR_LEGACY if legacy_actor else ACTOR_DEPLOYABLE
     return cfg, identity
@@ -444,6 +497,7 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     cameras: bool = True,
     camera_in_actor: bool = True,
     camera_size: tuple[int, int] | None = None,
+    fit: str | None = None,
 ) -> tuple[ManagerBasedRlEnvCfg, dict[str, str]]:
     """The Go2 walk on a captured scene (docs/78 §4 E2): the rough
     recipe's rules and sensors (the height scan sees the hurdles) on the
@@ -476,7 +530,7 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
         func=out_of_scene_bounds, time_out=True
     )
     identity = _with_actuator_dr(
-        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only
+        cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, fit=fit
     )
     identity[Identity.SCENE] = scene_stamp(scene_dir)
     identity[Identity.TERRAIN] = f"the scene's heightfield at {TRAIN_CELL_M} m"

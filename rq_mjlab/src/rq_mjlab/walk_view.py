@@ -267,7 +267,18 @@ class LoadedWalk:
 
 
 # The identity keys a checkpoint and the env it runs in must agree on.
-IDENTITY_GATE = (Identity.ROBOT, Identity.ACTUATOR, Identity.SCENE)
+# The fit (2026-09-25) is gated like the rest: a run trained under a fit
+# is judged, played and exported in that same fitted world; a run that
+# predates fits names none and is not held to it.
+IDENTITY_GATE = (Identity.ROBOT, Identity.ACTUATOR, Identity.SCENE, Identity.FIT)
+
+
+def fit_of(trained: dict[str, Any]) -> str | None:
+    """The fit a checkpoint trained under, for rebuilding its world."""
+    value = trained.get(Identity.FIT)
+    return str(value) if value else None
+
+
 PLANE = "the plane"  # the identity's ground when it names no scene
 
 
@@ -349,7 +360,14 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
         }
 
     def build(**more: Any) -> tuple[Any, dict[str, str]]:
-        return spec.env_cfg(play=True, dr_span=None, pin_scale=None, **stage, **more)
+        return spec.env_cfg(
+            play=True,
+            dr_span=None,
+            pin_scale=None,
+            fit=fit_of(trained),
+            **stage,
+            **more,
+        )
 
     cfg, identity = build()
     require_same_identity(trained, identity)

@@ -74,6 +74,47 @@ def _fresh(*params: tuple[str, float, float, bool]) -> IdentificationResult:
     )
 
 
+class LikeWithLike(unittest.TestCase):
+    """Our robot's drift is judged against fits of our robot: a public log
+    of another lab's Go2 is left out and named (2026-09-25)."""
+
+    def test_only_fits_of_the_recording_s_basis_are_the_reference(self) -> None:
+        from dataclasses import replace  # noqa: PLC0415
+
+        from rq_pipeline.fleet.drift import same_basis  # noqa: PLC0415
+
+        ours = replace(_record(("a", 1.0, 0.1, True), when="ours"), basis="own robot")
+        public = replace(_record(("a", 5.0, 0.1, True), when="iit"), basis="public log")
+        legacy = _record(("a", 1.05, 0.1, True), when="legacy")  # no basis field
+        kept, left_out = same_basis((ours, public, legacy), "own robot")
+        self.assertEqual(
+            [r.recording for r in kept], [ours.recording, legacy.recording]
+        )
+        self.assertEqual(left_out, (f"{public.recording} (public log)",))
+        # the union no longer stretches to the other lab's 5.0
+        low, high = reference_intervals(kept)["a"]
+        self.assertAlmostEqual(low, 0.9)
+        self.assertAlmostEqual(high, 1.15)
+
+    def test_no_fit_of_the_basis_is_refused_by_name(self) -> None:
+        from dataclasses import replace  # noqa: PLC0415
+
+        from rq_pipeline.fleet.drift import judge  # noqa: PLC0415
+        from rq_pipeline.robot.fit_record import FITS_DIRECTORY  # noqa: PLC0415
+
+        public = replace(_record(("a", 5.0, 0.1, True), when="iit"), basis="public log")
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = Path(tmp) / "b"
+            (bundle / FITS_DIRECTORY).mkdir(parents=True)
+            (bundle / FITS_DIRECTORY / f"{public.recording}.json").write_text(
+                public.to_json()
+            )
+            with self.assertRaisesRegex(ValueError, r"own robot.*public log"):
+                judge(
+                    bundle, Path(tmp), None, robot="r", recording="x", basis="own robot"
+                )  # type: ignore[arg-type]
+
+
 class TheRule(unittest.TestCase):
     def test_the_reference_is_the_union_across_records(self) -> None:
         ref = reference_intervals(

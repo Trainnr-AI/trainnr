@@ -47,6 +47,7 @@ from rq_pipeline.viz import viewer_file
 from rq_mjlab.envelope import COMMAND_TERM, checkpoint_iteration, pin_command_envelope
 from rq_mjlab.walk_export import ACTOR_OBS_GROUP
 from rq_mjlab.walk_view import (
+    fit_of,
     require_same_identity,
     trained_with_cameras,
 )
@@ -642,6 +643,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         # the actor sees a camera exactly when it trained with one (the
         # scene walk's picture: 12,288 inputs a plain actor never had)
         cameras=trained_with_cameras(trained_identity),
+        fit=fit_of(trained_identity),
     )
     # The one gate (walk_view): robot, actuator and ground must match; the
     # DR basis may differ on purpose (a policy trained under one span is
@@ -654,6 +656,13 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
             **identity,
             "task": trained_identity.get("task"),
             "trained_dr_basis": trained_identity.get("dr_basis"),
+            # the fit the policy trained under and whose robot it measured
+            # (2026-09-25); absent for a run that trained on declared numbers
+            **{
+                k: trained_identity[k]
+                for k in (Identity.FIT, Identity.FIT_BASIS)
+                if trained_identity.get(k)
+            },
             # The training run's seed (walk_train --seed; mjlab's default
             # 42 when the run predates the knob) — a replicate's name.
             "seed": trained_identity.get("seed", 42),

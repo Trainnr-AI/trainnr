@@ -44,7 +44,7 @@ from rq_pipeline.project.kinds import IDENTITY_FILE, stamp_run
 from rq_pipeline.scenes.stage import FLOOR_GEOM
 
 from rq_mjlab.envelope import COMMAND_TERM
-from rq_mjlab.walk_view import require_same_identity
+from rq_mjlab.walk_view import fit_of, require_same_identity
 from rq_mjlab.walks import ROBOT_ENTITY, DeployFacts
 
 POLICY_FILE = "policy.onnx"
@@ -157,7 +157,9 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         if identity_file.is_file()
         else {}
     )
-    cfg, identity = spec.env_cfg(dr_span=None, pin_scale=None, bundle=None)
+    cfg, identity = spec.env_cfg(
+        dr_span=None, pin_scale=None, bundle=None, fit=fit_of(trained)
+    )
     require_same_identity(trained, identity)  # the one gate (walk_view)
     cfg.scene.num_envs = 1
     device = "cpu"
@@ -279,7 +281,7 @@ def _require_same_actor_width(checkpoint: Path, env: Any, device: str) -> None:
 # trained under a declared ±0.1 span (the review of 2026-09-24). The
 # trained identity's word is the policy's; a run that predates the record
 # says so rather than lending the export env's.
-TRAINED_KEYS = (Key.SEED, Key.TASK, Key.DR_BASIS)
+TRAINED_KEYS = (Key.SEED, Key.TASK, Key.DR_BASIS, Key.FIT, Key.FIT_BASIS)
 
 
 def manifest_identity(built: dict[str, Any], trained: dict[str, Any]) -> dict[str, Any]:

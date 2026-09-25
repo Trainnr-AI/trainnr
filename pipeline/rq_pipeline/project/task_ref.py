@@ -48,6 +48,16 @@ class TaskReference:
         value = self.spec.get("dr_span")
         return float(value) if value is not None else None
 
+    @property
+    def fit(self) -> str | None:
+        """A declared walk's joint fit (its stamp, or its recording's),
+        when the spec names one (2026-09-25; rq_mjlab.fit_walk)."""
+        value = self.spec.get(FIT_FIELD)
+        return str(value) if value else None
+
+
+FIT_FIELD = "fit"  # task.json's spec field naming the fit a walk trains under
+
 
 def read_task_reference(project: Project, name: str) -> TaskReference:
     """The project's task `name`, or a refusal by name (FileNotFoundError)."""
