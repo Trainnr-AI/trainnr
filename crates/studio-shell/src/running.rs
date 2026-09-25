@@ -641,62 +641,79 @@ pub fn chip(
         .show(ui, |ui| {
             ui.set_width(inner);
             ui.set_max_width(inner);
-            let name_color = if dim {
-                weak
-            } else {
-                ui.visuals().strong_text_color()
-            };
-            ui.add(
-                egui::Label::new(egui::RichText::new(job.who()).strong().color(name_color))
-                    .truncate(),
-            );
-            let status = job.status.clone().unwrap_or_default();
-            if !narrow {
-                let mut facts = vec![job.tool.clone()];
-                let count = status.count_text();
-                if !count.is_empty() {
-                    facts.push(count);
-                }
-                ui.add(
-                    egui::Label::new(egui::RichText::new(facts.join(" · ")).small().color(weak))
-                        .truncate(),
-                );
-            }
-            let full = if state == ChipState::Running {
-                0.0
-            } else {
-                1.0
-            };
-            ui.add(
-                egui::ProgressBar::new(status.fraction().unwrap_or(full))
-                    .desired_height(4.0)
-                    .desired_width(inner)
-                    .fill(color.linear_multiply(if dim { 0.5 } else { 0.8 })),
-            );
-            if !narrow {
-                let until = job.ended.unwrap_or(now);
-                let took = crate::model::elapsed(until - job.started);
-                let tail = match state {
-                    ChipState::Running => took,
-                    _ => format!("{} · {took}", job.state_word()),
-                };
-                ui.add(
-                    egui::Label::new(egui::RichText::new(tail).small().color(
-                        if state == ChipState::Running {
-                            weak
-                        } else {
-                            color
-                        },
-                    ))
-                    .truncate(),
-                );
-            }
+            // The strip lays chips out in a horizontal row; the chip's own
+            // lines stack. Without this they inherited the row's direction and
+            // a chip became one long line running past its card (seen on the
+            // Compute card, 2026-09-25).
+            ui.vertical(|ui| chip_body(ui, job, now, inner, narrow, state, color, weak, dim));
         })
         .response;
     response
         .interact(egui::Sense::click())
         .on_hover_text(job.short_line())
         .clicked()
+}
+
+/// A chip's stacked lines: its name, its kind and count, its bar, its time.
+#[allow(clippy::too_many_arguments)]
+fn chip_body(
+    ui: &mut egui::Ui,
+    job: &Job,
+    now: f64,
+    inner: f32,
+    narrow: bool,
+    state: ChipState,
+    color: egui::Color32,
+    weak: egui::Color32,
+    dim: bool,
+) {
+    ui.set_width(inner);
+    let name_color = if dim {
+        weak
+    } else {
+        ui.visuals().strong_text_color()
+    };
+    ui.add(egui::Label::new(egui::RichText::new(job.who()).strong().color(name_color)).truncate());
+    let status = job.status.clone().unwrap_or_default();
+    if !narrow {
+        let mut facts = vec![job.tool.clone()];
+        let count = status.count_text();
+        if !count.is_empty() {
+            facts.push(count);
+        }
+        ui.add(
+            egui::Label::new(egui::RichText::new(facts.join(" · ")).small().color(weak)).truncate(),
+        );
+    }
+    let full = if state == ChipState::Running {
+        0.0
+    } else {
+        1.0
+    };
+    ui.add(
+        egui::ProgressBar::new(status.fraction().unwrap_or(full))
+            .desired_height(4.0)
+            .desired_width(inner)
+            .fill(color.linear_multiply(if dim { 0.5 } else { 0.8 })),
+    );
+    if !narrow {
+        let until = job.ended.unwrap_or(now);
+        let took = crate::model::elapsed(until - job.started);
+        let tail = match state {
+            ChipState::Running => took,
+            _ => format!("{} · {took}", job.state_word()),
+        };
+        ui.add(
+            egui::Label::new(egui::RichText::new(tail).small().color(
+                if state == ChipState::Running {
+                    weak
+                } else {
+                    color
+                },
+            ))
+            .truncate(),
+        );
+    }
 }
 
 /// The "+N more" chip: the runs that did not fit; a click opens the list.
