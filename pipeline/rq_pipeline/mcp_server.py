@@ -1031,13 +1031,19 @@ def list_gate_runtimes() -> list[dict[str, Any]]:
 
 
 def play_walk(
-    run: str, checkpoint: str, envs: int = 9, viewer: str = "viser"
+    run: str,
+    checkpoint: str,
+    envs: int = 9,
+    viewer: str = "viser",
+    scene: str | None = None,
 ) -> JobHandle | Refusal:
     """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
     its browser viewer (the URL is on the job's log), or `native`, its
     MuJoCo window - with the same rollout streamed into the Studio's Live
     view by the recorder. `run` is the experiment's folder under runs/,
-    `checkpoint` a file in it. Job handle; the viewer lives until closed."""
+    `checkpoint` a file in it; `scene` names the captured scene a
+    scene-trained checkpoint walks on (its identity says which). Job
+    handle; the viewer lives until closed."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
     from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
@@ -1054,7 +1060,12 @@ def play_walk(
         if robot is None:
             return refusal(f"run {run!r} names no walk")
         return Actions(JobManager(_jobs_root())).play_walk(
-            str(path), robot=robot, envs=envs, project=str(project.root), viewer=viewer
+            str(path),
+            robot=robot,
+            envs=envs,
+            project=str(project.root),
+            viewer=viewer,
+            scene=_scene_dir(project.root, scene),
         )
     except ValueError as why:
         return refusal(str(why))

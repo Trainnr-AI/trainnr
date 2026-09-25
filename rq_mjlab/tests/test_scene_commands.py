@@ -19,6 +19,22 @@ class TheSceneCommands(unittest.TestCase):
         self.assertEqual(stages[-1]["lin_vel_y"], (-1.0, 1.0))
         self.assertEqual(stages[-1]["ang_vel_z"], (-0.5, 0.5))
 
+    def test_a_play_config_keeps_its_own_commands(self) -> None:
+        """Play has no curriculum; the scene schedule left it alone (a
+        KeyError on the first scene play, 2026-09-25)."""
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        from rq_mjlab.go2_walk import gentle_scene_commands  # noqa: PLC0415
+
+        ranges = SimpleNamespace(
+            lin_vel_x=(-2.0, 2.0), lin_vel_y=(-1, 1), ang_vel_z=(-1, 1)
+        )
+        cfg = SimpleNamespace(
+            curriculum={}, commands={"twist": SimpleNamespace(ranges=ranges)}
+        )
+        gentle_scene_commands(cfg)
+        self.assertEqual(ranges.lin_vel_x, (-2.0, 2.0))
+
     def test_the_verdict_pins_the_stage_a_checkpoint_reached(self) -> None:
         from rq_mjlab.envelope import stage_reached  # noqa: PLC0415
         from rq_mjlab.go2_walk import scene_command_stages  # noqa: PLC0415

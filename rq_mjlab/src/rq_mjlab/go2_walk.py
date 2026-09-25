@@ -516,15 +516,19 @@ def scene_command_stages(steps_per_iteration: int) -> list[dict[str, Any]]:
 
 def gentle_scene_commands(cfg: ManagerBasedRlEnvCfg) -> None:
     """The scene's command schedule in place of the plane's, its first
-    stage also the ranges before the curriculum's first call."""
+    stage also the ranges before the curriculum's first call. A play
+    config has no curriculum and keeps its own commands."""
     from rq_mjlab.envelope import (  # noqa: PLC0415
         COMMAND_TERM,
         CURRICULUM_TERM,
         STAGES_KEY,
     )
 
+    term = (cfg.curriculum or {}).get(CURRICULUM_TERM)
+    if term is None:
+        return
     stages = scene_command_stages(go2_agent(1).num_steps_per_env)
-    cfg.curriculum[CURRICULUM_TERM].params[STAGES_KEY] = stages
+    term.params[STAGES_KEY] = stages
     ranges = cfg.commands[COMMAND_TERM].ranges
     ranges.lin_vel_x = stages[0]["lin_vel_x"]
     ranges.lin_vel_y = stages[0]["lin_vel_y"]

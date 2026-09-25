@@ -374,7 +374,7 @@ class Actions:
             argv += ["--delay", str(delay)]
         return self.jobs.start("evaluate-walk", argv, RQ_MJLAB_DIR)
 
-    def play_walk(
+    def play_walk(  # noqa: PLR0913 - the play's knobs, each named
         self,
         checkpoint: str,
         *,
@@ -382,6 +382,7 @@ class Actions:
         envs: int = 9,
         project: str | None = None,
         viewer: str = "native",
+        scene: str | None = None,
     ) -> JobHandle:
         """A checkpoint in mjlab's own viewer - its MuJoCo window or its
         browser viewer - the walk in play mode, streamed to the Studio at
@@ -400,6 +401,8 @@ class Actions:
         ]
         if project is not None:
             argv += ["--project", project]
+        if scene is not None:  # played on the captured scene it trained on
+            argv += ["--scene", scene]
         return self.jobs.start("play-walk", argv, RQ_MJLAB_DIR)
 
     def preview_rewards(  # noqa: PLR0913 - the preview's knobs, each named

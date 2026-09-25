@@ -22,7 +22,12 @@ import argparse
 from dataclasses import asdict
 from pathlib import Path
 
-from rq_mjlab.walk_view import fit_of, require_same_identity, trained_identity
+from rq_mjlab.walk_view import (
+    fit_of,
+    require_same_identity,
+    trained_identity,
+    trained_with_cameras,
+)
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, use_project, walk_spec
 
 
@@ -42,6 +47,13 @@ def main() -> None:
         type=Path,
         default=None,
         help="a project root: its robots are searched first (the Go2 lives there)",
+    )
+    parser.add_argument(
+        "--scene",
+        type=Path,
+        default=None,
+        help="the captured scene the checkpoint trained on (a project's "
+        "scenes/<name>): played on it, as the verdict judges it (docs/78 E2)",
     )
     parser.add_argument(
         "--no-recorder",
@@ -69,7 +81,13 @@ def main() -> None:
     # open-ended, the same robot, actuator and gains it trained under.
     recorded = trained_identity(args.checkpoint)
     cfg, identity = spec.env_cfg(
-        play=True, dr_span=None, pin_scale=None, fit=fit_of(recorded)
+        play=True,
+        dr_span=None,
+        pin_scale=None,
+        fit=fit_of(recorded),
+        scene=args.scene,
+        # the actor sees a camera exactly when it trained with one
+        cameras=trained_with_cameras(recorded),
     )
     cfg.scene.num_envs = args.envs
     if not args.no_recorder:
