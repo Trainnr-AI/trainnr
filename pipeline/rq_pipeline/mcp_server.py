@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.hashing import FITS_DIR, stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
 from rq_pipeline.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
@@ -91,7 +91,7 @@ def describe_bundles() -> list[dict[str, Any]]:
                 "stamp": stamp(name, root),
                 "files": files,
                 "has_profile": "profile.json" in files,
-                "has_fits": "fits" in files,
+                "has_fits": FITS_DIR in files,
             }
         )
     return described
@@ -113,7 +113,7 @@ def describe_bundle(name: str) -> dict[str, Any]:
         # loader: that schema describes the rig drivetrain's constants,
         # and this window reports what a bundle SAYS, schema or not.
         detail["profile"] = json.loads(profile.read_text())
-    fits = root / "fits"
+    fits = root / FITS_DIR
     if fits.is_dir():
         detail["fits"] = {
             record.name: json.loads(record.read_text())
@@ -327,6 +327,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     task: str | None = None,
     scene: str | None = None,
     cameras: bool = True,
+    fit: str | None = None,
 ) -> JobHandle | Refusal:
     """Train a walk policy through rq_mjlab. `task` names a declared walk
     in the project: its robot and randomization span are used and its
@@ -339,8 +340,12 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     nothing). `scene` names a captured scene in the project: the walk
     trains on its heightfield from the course's start with the head
     camera seeing its splat (docs/78 E2; the Go2); `cameras=False` trains
-    on the scene without the camera (the rate without pictures). Minutes
-    to hours; returns a job handle."""
+    on the scene without the camera (the rate without pictures). `fit`
+    names a joint fit in the robot's bundle (its own stamp `fit@...`, or
+    its recording's; a declared walk's task.json may carry one): the
+    joints train at the fit's estimates, randomized over its intervals,
+    and the run names it (2026-09-25; the Go2). Minutes to hours;
+    returns a job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -356,6 +361,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
         if isinstance(declared, str):
             return refusal(declared)
         robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
+        fit = fit if fit is not None else declared.fit
     try:
         log_dir = _run_dir(root, name)
         scene_dir = _scene_dir(root, scene)
@@ -374,6 +380,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             task_stamp=task_stamp,
             scene=scene_dir,
             cameras=cameras,
+            fit=fit,
         )
     except ValueError as why:
         return refusal(str(why))
@@ -417,6 +424,7 @@ class DeclaredWalk:
     robot: str
     dr_span: float | None
     stamp: str
+    fit: str | None = None  # the joint fit the walk trains under, if declared
 
 
 def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
@@ -435,7 +443,9 @@ def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
         return _reason(why)
     if walk is None:
         return f"{task!r} is not a walk"
-    return DeclaredWalk(name=task, robot=walk, dr_span=ref.dr_span, stamp=ref.stamp)
+    return DeclaredWalk(
+        name=task, robot=walk, dr_span=ref.dr_span, stamp=ref.stamp, fit=ref.fit
+    )
 
 
 def _declared_walks(root: Path | None) -> list[DeclaredWalk]:
@@ -1898,9 +1908,17 @@ def identify_system(
     index = index_project(project)
     write_index(project, index)
     state = next(s for s in index.states if s.name == "system identified")
-    # The record lives inside the bundle, so the robot's version moved:
-    # an identified robot is a different artifact from an unidentified
-    # one, and every later citation names the identified version.
+    # A fit is a record ABOUT the robot (2026-09-25): the robot's version
+    # stays, and the fit carries its own stamp - what a walk trains under
+    # (`train_walk(fit=...)`). Read back from the index all the same.
+    from rq_pipeline.robot.fit_record import (  # noqa: PLC0415
+        fit_stamp,
+        read_fit_record,
+    )
+
+    # the record the method just wrote, read from its file: the record names
+    # the recording as the fitter saw it, not by the project's stamp
+    fit_now = fit_stamp(read_fit_record(path)) if path else None
     robot_now = next(
         (
             a.stamp
@@ -1915,6 +1933,7 @@ def identify_system(
         "robot": robot_now,
         "robot_before": robot,
         "recording": recording,
+        "fit": fit_now,
         "record": str(path.relative_to(project.root)) if path else None,
         "summary": result.summary(),
         "parameters": [
@@ -1940,7 +1959,11 @@ def identify_system(
 
 
 def check_drift(
-    robot: str, recording: str, method: str | None = None, name: str | None = None
+    robot: str,
+    recording: str,
+    method: str | None = None,
+    name: str | None = None,
+    against: str | None = None,
 ) -> dict[str, Any] | Refusal:
     """Drift monitoring as a door: identify fresh telemetry (a recording in
     this project, by version) with the robot's identification method
@@ -1949,9 +1972,13 @@ def check_drift(
     the project's monitoring folder — the verdict per parameter (within,
     left, unresolved, anchored), the parameters that left, the
     recommendation (re-identify, then re-evaluate) — and re-indexes so the
-    loop's 'drift monitored' state is proved by it. Refused by name: an
-    unknown version, a robot with no fit record yet, a robot no method can
-    fit from this recording, a check name already taken."""
+    loop's 'drift monitored' state is proved by it. Like with like
+    (2026-09-25): only fits of the recording's own basis are the
+    reference, the others named as left out; `against` names the
+    deployment or certificate whose span the check is read against.
+    Refused by name: an unknown version, a robot with no fit record yet
+    (or none of this basis), a robot no method can fit from this
+    recording, a check name already taken."""
     from rq_pipeline.fleet.drift import DRIFT_FILE, judge  # noqa: PLC0415
     from rq_pipeline.project import index_project, write_index  # noqa: PLC0415
     from rq_pipeline.project.index import UNRECORDED  # noqa: PLC0415
@@ -1977,8 +2004,16 @@ def check_drift(
         why = fitter.accepts(bundle_dir, recording_dir)
         if why is not None:
             raise ValueError(f"{entry.name} cannot fit {robot} from {recording}: {why}")
+        from rq_pipeline.robots.recording import Recording  # noqa: PLC0415
+
         record = judge(
-            bundle_dir, recording_dir, fitter, robot=robot, recording=recording
+            bundle_dir,
+            recording_dir,
+            fitter,
+            robot=robot,
+            recording=recording,
+            basis=Recording.read(recording_dir).basis,
+            against=against or "",
         )
     except (FileNotFoundError, KeyError, ValueError) as refused:
         return refusal(_reason(refused))

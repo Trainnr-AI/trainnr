@@ -478,9 +478,23 @@ def _summary_run(path: Path) -> dict[str, Any]:
     basis = ident.get("dr_basis") or ""
     if basis:
         out["randomization"] = _basis_name(basis)
+    out.update(_trained_under(ident))
     if "seed" in ident:
         out["seed"] = ident["seed"]
     return out
+
+
+TRAINED_UNDER_KEY = "trained under"  # the card's word for a run's fit
+
+
+def _trained_under(identity: dict[str, Any]) -> dict[str, str]:
+    """`trained under: fit@... (public log)` when a run, a policy or a
+    deployment trained under a measured fit; nothing when it trained on
+    declared numbers (2026-09-25)."""
+    fit = identity.get("fit")
+    if not fit:
+        return {}
+    return {TRAINED_UNDER_KEY: f"{fit} ({identity.get('fit_basis') or UNRECORDED})"}
 
 
 def _summary_recording(path: Path) -> dict[str, Any]:
@@ -542,9 +556,11 @@ def _summary_policy(path: Path) -> dict[str, Any]:
             "iterations": UNRECORDED if iterations is None else iterations
         }
         out["randomization"] = _basis_name(basis) if basis else UNRECORDED
+        out.update(_trained_under(manifest))
         out["format"] = manifest.get("format", "")
         return out
-    return _take(_read(path / IDENTITY_FILE), ("dr_basis", "seed"))
+    identity = _read(path / IDENTITY_FILE)
+    return {**_take(identity, ("dr_basis", "seed")), **_trained_under(identity)}
 
 
 CLAIM_CHARS = 160  # a card's subtitle: the claim's first sentence, this long at most
@@ -691,6 +707,7 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     preflight = read_preflight(path)
     if preflight:  # before the first tick on a robot: passed, or refused by name
         out[PREFLIGHT_SUMMARY_KEY] = card_line(preflight)
+    out.update(_trained_under(m))  # the fit the shipped policy trained under
     attribution = read_attribution(path)
     if attribution:  # what would break it first, right under the gate's word
         # marked when ranked under another cliff rule, or drawn by count
@@ -771,16 +788,13 @@ def _summary_scene(path: Path) -> dict[str, Any]:
 def _summary_robot(p: Path) -> dict[str, Any]:
     """The bundle's files, and what its importer changed (the audit's one
     line; absent for a bundle onboarded before the audit existed)."""
-    from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
-        AUDIT_KEY,
-        read_bundle_record,
-    )
+    from rq_pipeline.bundles.bundle import read_audit  # noqa: PLC0415
 
     out: dict[str, Any] = {
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith(".")),
         "fit_bases": fit_bases(p / FITS_DIR),
     }
-    audit = read_bundle_record(p).get(AUDIT_KEY)
+    audit = read_audit(p)
     if audit and audit.get("summary"):
         out["importer changed"] = audit["summary"]
     return out

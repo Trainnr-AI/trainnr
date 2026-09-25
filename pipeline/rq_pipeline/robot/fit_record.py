@@ -30,14 +30,14 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.basis import BASES
-from rq_pipeline.bundles.hashing import require_stamp, stamp
+from rq_pipeline.bundles.hashing import FITS_DIR, content_stamp, require_stamp, stamp
 from rq_pipeline.robot.identify import (
     DEFAULT_PINNED_FRACTION,
     IdentificationResult,
     IdentifiedParameter,
 )
 
-FITS_DIRECTORY = "fits"
+FITS_DIRECTORY = FITS_DIR  # the one spelling lives in bundles.hashing
 SPREAD_FILENAME = "SPREAD.json"
 
 
@@ -169,29 +169,55 @@ def write_fit_record(  # noqa: PLR0913 - each argument is a refusal rule
     return path
 
 
+FIT_STAMP_NAME = "fit"  # a fit's own stamp: `fit@<hash of its record>`
+
+
+def fit_stamp(record: FitRecord) -> str:
+    """A fit's own identity, apart from the robot's (2026-09-25): a hash
+    over the record's content, so a run trained under it, the certificate
+    that judged it and the manifest that ships it all name the exact fit,
+    and writing the fit never moves the robot's stamp."""
+    return content_stamp(FIT_STAMP_NAME, json.loads(record.to_json()))
+
+
+def find_fit(bundle_dir: Path, wanted: str) -> FitRecord:
+    """The bundle's fit whose own stamp (`fit_stamp`) or recording stamp
+    is `wanted`; refused by name, listing the fits the bundle holds."""
+    records = load_fit_records(bundle_dir)
+    for record in records:
+        if wanted in (fit_stamp(record), record.recording):
+            return record
+    held = [f"{fit_stamp(r)} ({r.recording})" for r in records] or ["none"]
+    raise KeyError(f"no fit {wanted!r} under {Path(bundle_dir).name}; it holds {held}")
+
+
+def read_fit_record(path: Path) -> FitRecord:
+    """One fit record file, as written by `write_fit_record`."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    for parameter in raw["parameters"]:
+        if parameter["half_width"] is None:
+            parameter["half_width"] = float("inf")
+    raw["parameters"] = tuple(
+        IdentifiedParameter(**parameter) for parameter in raw["parameters"]
+    )
+    try:
+        return FitRecord(**raw)
+    except TypeError as error:
+        raise ValueError(
+            f"fit record {path} has unknown field(s) — written by newer code? ({error})"
+        ) from error
+
+
 def load_fit_records(bundle_dir: Path) -> tuple[FitRecord, ...]:
     """Every fit the bundle carries, oldest first by creation time."""
     fits = Path(bundle_dir) / FITS_DIRECTORY
     if not fits.is_dir():
         return ()
-    records = []
-    for path in sorted(fits.glob("*.json")):
-        if path.name == SPREAD_FILENAME:
-            continue
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        for parameter in raw["parameters"]:
-            if parameter["half_width"] is None:
-                parameter["half_width"] = float("inf")
-        raw["parameters"] = tuple(
-            IdentifiedParameter(**parameter) for parameter in raw["parameters"]
-        )
-        try:
-            records.append(FitRecord(**raw))
-        except TypeError as error:
-            raise ValueError(
-                f"fit record {path} has unknown field(s) — written by newer "
-                f"code? ({error})"
-            ) from error
+    records = [
+        read_fit_record(path)
+        for path in sorted(fits.glob("*.json"))
+        if path.name != SPREAD_FILENAME
+    ]
     return tuple(sorted(records, key=lambda record: record.created_utc))
 
 

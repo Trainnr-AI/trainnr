@@ -92,6 +92,7 @@ def _no_scene(  # noqa: PLR0913, PLR0917 - the door keywords every walk takes, r
     legacy_actor: bool,
     camera_in_actor: bool,
     camera_size: tuple[int, int] | None,
+    fit: str | None = None,
 ) -> None:
     """The scene stage and its camera are the Go2's so far (docs/78 E2),
     and only the Go2 has an earlier actor recipe; the other walks take
@@ -103,6 +104,10 @@ def _no_scene(  # noqa: PLR0913, PLR0917 - the door keywords every walk takes, r
         )
     if legacy_actor:
         raise TypeError(f"the {robot} walk has no earlier actor recipe")
+    if fit is not None:
+        raise ValueError(
+            f"the {robot} walk takes no joint fit yet (rq_mjlab.fit_walk: the Go2)"
+        )
 
 
 def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
@@ -118,13 +123,16 @@ def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     legacy_actor: bool = False,
     camera_in_actor: bool = True,
     camera_size: tuple[int, int] | None = None,
+    fit: str | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.microduck_walk import (  # noqa: PLC0415
         PIN_AXES,
         microduck_walk_env_cfg,
     )
 
-    _no_scene("microduck", scene, cameras, legacy_actor, camera_in_actor, camera_size)
+    _no_scene(
+        "microduck", scene, cameras, legacy_actor, camera_in_actor, camera_size, fit
+    )
 
     return microduck_walk_env_cfg(
         play=play,
@@ -161,10 +169,11 @@ def _go1_env(  # noqa: PLR0913 - the walk's knobs, named
     legacy_actor: bool = False,
     camera_in_actor: bool = True,
     camera_size: tuple[int, int] | None = None,
+    fit: str | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES, go1_walk_env_cfg  # noqa: PLC0415
 
-    _no_scene("go1", scene, cameras, legacy_actor, camera_in_actor, camera_size)
+    _no_scene("go1", scene, cameras, legacy_actor, camera_in_actor, camera_size, fit)
     if bundle is not None:
         raise ValueError("the Go1 walk has no actuator bundle to swap (derived PD)")
     if isinstance(dr_span, str):  # "identified" names the bundle's interval
@@ -211,6 +220,7 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
     cameras: bool = True,
     camera_in_actor: bool = True,
     camera_size: tuple[int, int] | None = None,
+    fit: str | None = None,
 ) -> tuple[Any, dict[str, str]]:
     from rq_mjlab.go1_walk import PIN_AXES  # noqa: PLC0415
     from rq_mjlab.go2_walk import go2_scene_env_cfg, go2_walk_env_cfg  # noqa: PLC0415
@@ -236,6 +246,7 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
             cameras=cameras,
             camera_in_actor=camera_in_actor,
             camera_size=camera_size,
+            fit=fit,
         )
     return go2_walk_env_cfg(
         play=play,
@@ -243,6 +254,7 @@ def _go2_env(  # noqa: PLR0913 - the walk's knobs, each named
         pin_scale=pin_scale,
         pin_only=_axis(PIN_AXES, pin_axis),
         legacy_actor=legacy_actor,
+        fit=fit,
     )
 
 
@@ -284,6 +296,10 @@ class Identity:
     HEAD = "head"
     SEED = "seed"
     TASK = "task"
+    # 2026-09-25: the fit a run trained under (its own stamp, apart from
+    # the robot's) and whose robot the fit measured (`bundles.basis`).
+    FIT = "fit"
+    FIT_BASIS = "fit_basis"
 
 
 NO_CAMERAS = "none"  # the identity's word for an actor that saw no camera

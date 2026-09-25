@@ -40,6 +40,10 @@ class Key:
     ACTUATOR = "actuator"
     TASK = "task"
     DR_BASIS = "dr_basis"
+    # The fit the policy trained under (its own stamp) and whose robot it
+    # measured (2026-09-25); absent for a policy trained on declared numbers.
+    FIT = "fit"
+    FIT_BASIS = "fit_basis"
     SEED = "seed"
     CERTIFICATE = "certificate"
     CONTROL = "control"

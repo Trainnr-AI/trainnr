@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from rq_pipeline.bundles.hashing import FITS_DIR
 from rq_pipeline.paths import checkout
 from rq_pipeline.project.files import read_json, write_json
 
@@ -37,7 +38,7 @@ SCHEMA = "trainnr-project/1"
 # directory listing reads as an inventory.
 ROBOTS_FOLDER = "robots"
 RECORDINGS_FOLDER = "recordings"
-FITS_FOLDER = "fits"
+FITS_FOLDER = FITS_DIR  # the one spelling lives in bundles.hashing
 TASKS_FOLDER = "tasks"
 BATCHES_FOLDER = "batches"
 DATASETS_FOLDER = "datasets"

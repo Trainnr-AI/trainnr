@@ -286,13 +286,10 @@ AUDIT_TITLE = "What the importer changed"
 def _importer_audit(root: Path) -> Section:
     """What the importer changed, as the bundle record carries it: the
     facts as key/values when nothing changed, the changes as a table."""
-    from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
-        AUDIT_KEY,
-        read_bundle_record,
-    )
+    from rq_pipeline.bundles.bundle import read_audit  # noqa: PLC0415
     from rq_pipeline.robot.import_audit import Audit  # noqa: PLC0415
 
-    record = read_bundle_record(root).get(AUDIT_KEY)
+    record = read_audit(root)
     if not record:
         return _kv(AUDIT_TITLE, [("audit", NOT_AUDITED)])
     audit = Audit.from_record(record)

@@ -20,7 +20,12 @@ from pathlib import Path
 
 import numpy as np
 
-from rq_pipeline.bundles.bundle import AUDIT_KEY, BUNDLE_SCHEMA, read_bundle_record
+from rq_pipeline.bundles.bundle import (
+    AUDIT_KEY,
+    BUNDLE_SCHEMA,
+    read_audit,
+    read_bundle_record,
+)
 from rq_pipeline.robot import import_audit as audit
 from tests._extras import needs_sim
 
@@ -222,7 +227,9 @@ class TheUrdfDoor(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             source = write_urdf(Path(tmp) / "src")
             out = onboard(source, "fixture", Path(tmp) / "robots" / "fixture")
-            record = read_bundle_record(Path(tmp) / "robots" / "fixture")
+            bundle = Path(tmp) / "robots" / "fixture"
+            record = {**read_bundle_record(bundle), AUDIT_KEY: read_audit(bundle)}
+            self.assertNotIn(AUDIT_KEY, read_bundle_record(bundle))  # its own file
         self.assertEqual(record["schema"], BUNDLE_SCHEMA)
         self.assertEqual(record["provenance"]["format"], "urdf")
         report = audit.Audit.from_record(record[AUDIT_KEY])
@@ -262,7 +269,7 @@ class TheUrdfDoor(unittest.TestCase):
             self.assertFalse(destination.exists())
             out = onboard(source, "fixture", destination, {"accept_changes": True})
             self.assertIn("UNEXPLAINED", out[AUDIT_KEY])
-            self.assertTrue(read_bundle_record(destination)[AUDIT_KEY]["accepted"])
+            self.assertTrue(read_audit(destination)["accepted"])
             self.assertEqual(len(out["audit_unexplained"]), 1)
 
     def test_the_door_refuses_an_option_a_urdf_does_not_take(self) -> None:
@@ -303,7 +310,7 @@ class TheLibraryAuditsClean(unittest.TestCase):
                 '<geom size="0.1"/></body></worldbody></mujoco>'
             )
             out = onboard(src / "one.xml", "one", Path(tmp) / "robots" / "one")
-            record = read_bundle_record(Path(tmp) / "robots" / "one")
+            record = {AUDIT_KEY: read_audit(Path(tmp) / "robots" / "one")}
         self.assertEqual(out[AUDIT_KEY], "nothing")
         self.assertEqual(record[AUDIT_KEY]["changes"], [])
         self.assertEqual(record[AUDIT_KEY]["format"], "mjcf")

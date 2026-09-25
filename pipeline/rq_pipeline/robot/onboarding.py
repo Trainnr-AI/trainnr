@@ -29,8 +29,8 @@ from typing import Any
 
 from rq_pipeline.bundles.bundle import (
     AUDIT_KEY,
-    amend_bundle_record,
     model_file_of,
+    write_audit,
     write_bundle_record,
 )
 from rq_pipeline.bundles.hashing import stamp
@@ -142,7 +142,7 @@ def onboard(
     source.check_options(options)
     out = source.onboard(source_path, name, destination, options)
     audit = audit_written(source_path, destination, options, accept=accept)
-    out["stamp"] = stamp(name, destination)  # the record changed under it
+    out["stamp"] = stamp(name, destination)
     out[AUDIT_KEY] = audit.summary()
     if audit.unexplained:
         out[f"{AUDIT_KEY}_unexplained"] = [c.line() for c in audit.unexplained]
@@ -172,7 +172,7 @@ def audit_written(
     record = audit.to_record()
     if accept and audit.unexplained:
         record[ACCEPTED_WORD] = True
-    amend_bundle_record(destination, AUDIT_KEY, record)
+    write_audit(destination, record)
     return audit
 
 

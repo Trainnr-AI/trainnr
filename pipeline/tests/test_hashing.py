@@ -59,6 +59,72 @@ class BundleHash(unittest.TestCase):
                 stamp("bad@name", root)
 
 
+class RecordsAboutABundle(unittest.TestCase):
+    """Identifying a robot or auditing its import is a record ABOUT the
+    bundle, not its content: writing one never moves its stamp. Until
+    2026-09-25 it did, and every checkpoint certified on the old stamp
+    was refused by the identity gate (go2@5003bf617b5f -> c699dc1b0772)."""
+
+    def _bundle(self, root: Path) -> None:
+        (root / "robot.xml").write_text("<mujoco/>")
+        (root / "bundle.json").write_text('{\n "name": "r"\n}\n')
+
+    def test_a_fit_record_and_an_audit_leave_the_stamp_alone(self) -> None:
+        from rq_pipeline.bundles.bundle import write_audit  # noqa: PLC0415
+        from rq_pipeline.bundles.hashing import FITS_DIR  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._bundle(root)
+            before = stamp("r", root)
+            (root / FITS_DIR).mkdir()
+            (root / FITS_DIR / "rec@000000000000.json").write_text("{}")
+            write_audit(root, {"summary": "nothing"})
+            self.assertEqual(stamp("r", root), before)
+            (root / "robot.xml").write_text("<mujoco><worldbody/></mujoco>")
+            self.assertNotEqual(stamp("r", root), before)  # content still counts
+
+    def test_the_robot_kind_hashes_what_stamp_hashes(self) -> None:
+        from rq_pipeline.project.kinds import Kind, artifact_hash  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._bundle(root)
+            (root / "audit.json").write_text("{}")
+            self.assertEqual(
+                artifact_hash(Kind.ROBOT, root)[:12], stamp("r", root).split("@")[1]
+            )
+
+    def test_a_2026_09_24_audit_migrates_out_and_the_old_stamp_returns(self) -> None:
+        import json  # noqa: PLC0415
+
+        from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
+            AUDIT_KEY,
+            migrate_audit,
+            read_audit,
+            read_bundle_record,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._bundle(root)
+            original = stamp("r", root)
+            record = read_bundle_record(root)
+            record[AUDIT_KEY] = {"summary": "7 explained"}
+            (root / "bundle.json").write_text(
+                json.dumps(record, indent=1, sort_keys=True) + "\n"
+            )
+            self.assertNotEqual(stamp("r", root), original)
+            self.assertEqual(
+                read_audit(root), {"summary": "7 explained"}
+            )  # legacy read
+            self.assertTrue(migrate_audit(root))
+            self.assertEqual(stamp("r", root), original)
+            self.assertEqual(read_audit(root), {"summary": "7 explained"})
+            self.assertNotIn(AUDIT_KEY, read_bundle_record(root))
+            self.assertFalse(migrate_audit(root))  # once only
+
+
 class StampRule(unittest.TestCase):
     def test_require_stamp_is_the_one_rule(self) -> None:
         from rq_pipeline.bundles.hashing import is_stamp, require_stamp  # noqa: PLC0415

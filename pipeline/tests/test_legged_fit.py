@@ -218,6 +218,8 @@ class Door(unittest.TestCase):
                 self.assertEqual(answer["method"], "legged-joints")
                 self.assertTrue(answer["state"]["system identified"])
                 self.assertEqual(answer["state"]["basis"], BASIS_SIMULATION)
-                self.assertNotEqual(answer["robot"], robot)
+                # A fit is a record ABOUT the robot: the robot's stamp stays,
+                # so checkpoints certified on it stay valid (2026-09-25).
+                self.assertEqual(answer["robot"], robot)
             finally:
                 os.environ.pop(PROJECT_ENV, None)

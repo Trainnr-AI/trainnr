@@ -217,6 +217,13 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         action="store_true",
         help="on a scene, train without the head camera (the rate without pictures)",
     )
+    parser.add_argument(
+        "--fit",
+        default=None,
+        help="a joint fit in the robot's bundle, by its own stamp (fit@...) or its "
+        "recording's: the joints take its estimates and are randomized over its "
+        "intervals; the run's identity names it (rq_mjlab.fit_walk; the Go2)",
+    )
     args = parser.parse_args()
     knobs = DEFAULTS[args.agent]
     envs = args.envs if args.envs is not None else knobs["envs"]
@@ -244,11 +251,14 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         head=args.head,
         scene=args.scene,
         cameras=not args.no_cameras,
+        fit=args.fit,
     )
     print(
         f"[train] actuator {identity[Identity.ACTUATOR]}; "
         f"dr_basis: {identity[Identity.DR_BASIS]}"
     )
+    if Identity.FIT in identity:
+        print(f"[train] fit {identity[Identity.FIT]} ({identity[Identity.FIT_BASIS]})")
     if args.scene is not None:
         print(
             f"[train] scene {identity[Identity.SCENE]}; "

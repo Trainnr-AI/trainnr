@@ -125,10 +125,14 @@ def actuator_dr_events(
     pin_scale: float | None,
     pin_only: tuple[str, ...] | None = None,
     gains: GainsBasis = DERIVED_GAINS,
+    scaled: tuple[str, ...] = SCALED,
 ) -> tuple[dict[str, EventTermCfg], str]:
     """The study's events and their basis string: a drawn span, a
     pinned scale (of every scaled parameter, or only `pin_only`), or
-    nothing; `gains` words the basis for the gains this walk moves."""
+    nothing; `gains` words the basis for the gains this walk moves.
+    `scaled`: the parameters the declared span moves (all three by
+    default; a walk trained under a fit draws its armature from the fit
+    and scales only the gains, and its basis must say so)."""
     if pin_scale is not None:
         moved = set(SCALED if pin_only is None else pin_only)
         unknown = moved - set(SCALED)
@@ -143,12 +147,12 @@ def actuator_dr_events(
     elif dr_span:
         lo, hi = 1.0 - float(dr_span), 1.0 + float(dr_span)
         basis = (
-            f"declared ±{dr_span:g} scale on {', '.join(SCALED)} around {gains.around}"
+            f"declared ±{dr_span:g} scale on {', '.join(scaled)} around {gains.around}"
         )
     else:
         return {}, f"none: {gains.exact} exactly (no actuator DR)"
     if pin_scale is None:
-        moved = set(SCALED)
+        moved = set(scaled)
     unit = (1.0, 1.0)  # a parameter the pin leaves at derived
     events = {
         "actuator_gains": EventTermCfg(

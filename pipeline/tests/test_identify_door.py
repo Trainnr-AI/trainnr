@@ -75,9 +75,11 @@ class Door(unittest.TestCase):
                 self.assertTrue(any(p["identified"] for p in answer["parameters"]))
                 self.assertTrue(answer["state"]["system identified"])
                 self.assertIsNone(answer["spread"], "one record: no spread yet")
-                # The record is inside the bundle: the robot's version moved.
-                self.assertNotEqual(answer["robot"], robot)
+                # A fit is a record ABOUT the robot (2026-09-25): the
+                # robot's version stays; the fit carries its own stamp.
+                self.assertEqual(answer["robot"], robot)
                 self.assertEqual(answer["robot_before"], robot)
+                self.assertTrue(answer["fit"].startswith("fit@"))
                 robot = answer["robot"]
                 described = describe_identification(robot)
                 self.assertEqual(len(described["records"]), 1)
