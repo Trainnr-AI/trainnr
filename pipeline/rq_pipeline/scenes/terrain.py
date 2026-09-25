@@ -333,17 +333,19 @@ def ensure_grid(scene_dir: Path, source: str = PROXY_FILE) -> tuple[Grid, float]
     return grid, filled
 
 
-def add_heightfield(
+def add_heightfield(  # noqa: PLR0913 - the placement knobs, each named
     spec: Any,
     body: Any,
     grid: Grid,
     *,
     friction: list[float] | None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    group: int = COLLISION_GROUP,
 ) -> tuple[Any, Any]:
     """The grid as one `hfield` asset and one geom on `body`, data inline,
-    in the collision group (a picture never draws it: the splat is what
-    is seen), at the grid's own place plus `shift` (mjlab's terrain
+    in `group` - the collision group by default (a picture never draws it:
+    the splat is what is seen); training passes the group its height scans
+    look in - at the grid's own place plus `shift` (mjlab's terrain
     generator adds a patch corner of its own). One home for the walk
     package's training terrain and the stage's; returns (field, geom)."""
     import mujoco  # noqa: PLC0415
@@ -358,7 +360,7 @@ def add_heightfield(
         name=HFIELD_NAME,
         type=mujoco.mjtGeom.mjGEOM_HFIELD,
         hfieldname=HFIELD_NAME,
-        group=COLLISION_GROUP,
+        group=group,
     )
     geom.pos[:] = np.array([*grid.centre, z_min]) + np.asarray(shift, dtype=np.float64)
     _friction(geom, friction)

@@ -25,6 +25,7 @@ here too (`DEPLOY`): the SDK's joint order and the reference's stack
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -487,6 +488,69 @@ def go2_walk_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     return cfg, identity
 
 
+# A captured scene has things in it. The plane's first stage (every way at
+# up to 1 m/s from the first tick) drove go2-scene-c1 into the hurdles
+# before it could walk: survived 38/40, tracked 0/40 (2026-09-23). A scene
+# starts slow and widens to the plane's first stage; each row is (the
+# iteration it starts at, forward/back m/s, sideways m/s, turn rad/s).
+SCENE_COMMAND_STAGES = (
+    (0, (-0.5, 0.5), (-0.3, 0.3), (-0.5, 0.5)),
+    (500, (-0.8, 0.8), (-0.6, 0.6), (-0.5, 0.5)),
+    (1000, (-1.0, 1.0), (-1.0, 1.0), (-0.5, 0.5)),
+)
+
+
+def scene_command_stages(steps_per_iteration: int) -> list[dict[str, Any]]:
+    """`SCENE_COMMAND_STAGES` in mjlab's `commands_vel` shape (stages keyed
+    on the environment's step counter)."""
+    return [
+        {
+            "step": iteration * steps_per_iteration,
+            "lin_vel_x": forward,
+            "lin_vel_y": sideways,
+            "ang_vel_z": turn,
+        }
+        for iteration, forward, sideways, turn in SCENE_COMMAND_STAGES
+    ]
+
+
+def gentle_scene_commands(cfg: ManagerBasedRlEnvCfg) -> None:
+    """The scene's command schedule in place of the plane's, its first
+    stage also the ranges before the curriculum's first call."""
+    from rq_mjlab.envelope import (  # noqa: PLC0415
+        COMMAND_TERM,
+        CURRICULUM_TERM,
+        STAGES_KEY,
+    )
+
+    stages = scene_command_stages(go2_agent(1).num_steps_per_env)
+    cfg.curriculum[CURRICULUM_TERM].params[STAGES_KEY] = stages
+    ranges = cfg.commands[COMMAND_TERM].ranges
+    ranges.lin_vel_x = stages[0]["lin_vel_x"]
+    ranges.lin_vel_y = stages[0]["lin_vel_y"]
+    ranges.ang_vel_z = stages[0]["ang_vel_z"]
+
+
+def seated_at(
+    spec_fn: Callable[[], mujoco.MjSpec], ground: tuple[float, float, float]
+) -> Callable[[], mujoco.MjSpec]:
+    """`spec_fn` with the free-floating root body moved over `ground` (x, y,
+    surface z), keeping its own height above the floor. A free joint's
+    resting pose is its body's position, so the model's qpos0 stands there;
+    `init_state` only writes a keyframe."""
+
+    def build() -> mujoco.MjSpec:
+        spec = spec_fn()
+        root = spec.worldbody.first_body()
+        if not any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints):
+            raise ValueError(f"the root body {root.name!r} has no free joint to seat")
+        x, y, z = ground
+        root.pos = [x, y, z + float(root.pos[2])]
+        return spec
+
+    return build
+
+
 def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     scene_dir: Path,
     *,
@@ -514,12 +578,15 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
         head_camera_cfg,
         out_of_scene_bounds,
         render_splats,
+        scans_see_the_scene,
         scene_stamp,
+        scene_start,
         scene_terrain_cfg,
     )
 
     cfg = _rough_env_cfg(play=play)
     cfg.scene.terrain = scene_terrain_cfg(scene_dir)
+    scans_see_the_scene(cfg.scene.sensors)
     # one patch: no difficulty rows to climb, no other patch to move to;
     # the bounds are the scene's footprint, not the grid mjlab centres at
     # the origin (a world off the heightfield falls forever: NaN, 2026-09-23)
@@ -529,9 +596,14 @@ def go2_scene_env_cfg(  # noqa: PLR0913 - the walk's knobs, each named
     cfg.terminations["out_of_scene_bounds"] = TerminationTermCfg(
         func=out_of_scene_bounds, time_out=True
     )
+    gentle_scene_commands(cfg)
     identity = _with_actuator_dr(
         cfg, dr_span=dr_span, pin_scale=pin_scale, pin_only=pin_only, fit=fit
     )
+    # the model's resting pose (qpos0, what mjlab allocates contacts from
+    # before the first reset) at the course's start, not inside the scene
+    robot = cfg.scene.entities["robot"]
+    robot.spec_fn = seated_at(robot.spec_fn, scene_start(scene_dir))
     identity[Identity.SCENE] = scene_stamp(scene_dir)
     identity[Identity.TERRAIN] = f"the scene's heightfield at {TRAIN_CELL_M} m"
     identity[Identity.ACTOR] = ACTOR_ROUGH

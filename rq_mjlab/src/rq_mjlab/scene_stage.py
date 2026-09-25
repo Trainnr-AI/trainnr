@@ -73,6 +73,14 @@ CAMERA_TERM = "head_rgb"
 # smoke): at the stage's 2 cm a calf capsule's footprint alone holds 66
 # prisms; at 5 cm it holds 20 and only a trunk lying flat exceeds the cap.
 TRAIN_CELL_M = 0.05
+# The scene's ground in training sits in a group of its own: mjlab's height
+# scans see only the groups they name, the head camera draws VISUAL_GROUPS
+# (0-2), and the robot's colliders are the collision group (3). In the
+# collision group the scans saw nothing: go2-scene-c1 trained blind to its
+# hurdles (0/40 tracked, 2026-09-23), and without a camera mujoco_warp
+# refit an empty ray structure and crashed (2026-09-25).
+TERRAIN_SCAN_GROUP = 4
+SCAN_SENSORS = ("terrain_scan", "foot_height_scan")  # the rough recipe's
 NO_GRID = (
     "scene {name} has no {file}: the grid is sampled when the scene is staged "
     "(stage_deployment) or by scenes.terrain.ensure_grid, in the pipeline's "
@@ -125,6 +133,7 @@ class SceneHeightfieldCfg(SubTerrainCfg):
             grid,
             friction=self.friction,
             shift=tuple(-self.corner),
+            group=TERRAIN_SCAN_GROUP,
         )
         start = np.array(self.start_xy, dtype=np.float64)
         surface_z = float(grid.at(start[None, :])[0])
@@ -146,6 +155,20 @@ def scene_grid(scene_dir: Path, *, cell: float = TRAIN_CELL_M) -> Grid:
     if proxy != proxy_hash(scene_dir):  # the gate would re-sample; say so
         raise ValueError(STALE_GRID.format(name=Path(scene_dir).name, file=GRID_FILE))
     return grid if grid.cell == cell else grid.resampled(cell)
+
+
+def scene_start(
+    scene_dir: Path, *, cell: float = TRAIN_CELL_M
+) -> tuple[float, float, float]:
+    """The course's start on the scene's surface, in world coordinates
+    (the patch sits in the scene's own frame): where every world spawns,
+    and where a robot's default pose must stand. At the world origin the
+    garden's Go2 stood inside the scene, 142 contacts before its first
+    reset, and mujoco_warp refused the model (2026-09-25)."""
+    record = load_scene_record(Path(scene_dir) / SCENE_FILE)
+    (x, y), _heading = course_start(record)
+    z = float(scene_grid(scene_dir, cell=cell).at(np.array([[x, y]]))[0])
+    return float(x), float(y), z
 
 
 def scene_terrain_cfg(
@@ -174,6 +197,19 @@ def scene_terrain_cfg(
         textures=(),
         materials=(),
     )
+
+
+def scans_see_the_scene(sensors: Any) -> None:
+    """Point the rough recipe's height scans at the scene's ground
+    (`TERRAIN_SCAN_GROUP`), in place; refuses a recipe that lacks them."""
+    found = {s.name: s for s in sensors or () if s.name in SCAN_SENSORS}
+    missing = set(SCAN_SENSORS) - set(found)
+    if missing:
+        raise ValueError(
+            f"the scene walk's height scans are missing: {sorted(missing)}"
+        )
+    for sensor in found.values():
+        sensor.include_geom_groups = (TERRAIN_SCAN_GROUP,)
 
 
 def scene_stamp(scene_dir: Path) -> str:
