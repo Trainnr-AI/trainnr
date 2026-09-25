@@ -149,5 +149,50 @@ class TheSceneGate(unittest.TestCase):
         self.assertTrue(trained_with_cameras({"cameras": "head 64x64 rgb"}))
 
 
+class TheCrossWorld(unittest.TestCase):
+    """--judge-in-fit judges a policy in another robot world: its own fit
+    by default, another fit, or the declared constants; the file and the
+    protocol say it is a cross-evaluation, never the policy's certificate."""
+
+    def test_the_world_a_policy_is_judged_in(self) -> None:
+        from rq_mjlab.walk_verdict import JUDGE_DECLARED, judged_fit  # noqa: PLC0415
+
+        fitted = {"fit": "fit@0ad6202797c5"}
+        self.assertEqual(judged_fit(None, fitted), "fit@0ad6202797c5")
+        self.assertIsNone(judged_fit(None, {}))
+        self.assertIsNone(judged_fit(JUDGE_DECLARED, fitted))
+        self.assertEqual(judged_fit("fit@abc", {}), "fit@abc")
+
+    def test_the_record_names_both_worlds(self) -> None:
+        from rq_mjlab.walk_verdict import cross_identity  # noqa: PLC0415
+
+        built = {"robot": "go2@1", "fit": "fit@b"}
+        declared_policy = cross_identity(built, {}, "fit@b")
+        self.assertNotIn("fit", declared_policy)
+        self.assertEqual(declared_policy["judged_in_fit"], "fit@b")
+        fitted_policy = cross_identity({"robot": "go2@1"}, {"fit": "fit@b"}, "declared")
+        self.assertEqual(fitted_policy["fit"], "fit@b")
+        self.assertEqual(fitted_policy["judged_in_fit"], "declared")
+
+    def test_the_cross_file_names_its_world(self) -> None:
+        from rq_mjlab.walk_verdict import cross_world_word  # noqa: PLC0415
+
+        self.assertEqual(cross_world_word("fit@0ad6202797c5"), "fit-0ad6202797c5")
+        self.assertEqual(cross_world_word("declared"), "declared")
+
+    def test_the_flag_exists_and_defaults_off(self) -> None:
+        import sys  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_mjlab.walk_verdict import parse_args  # noqa: PLC0415
+
+        with mock.patch.object(sys, "argv", ["walk_verdict", "model.pt"]):
+            self.assertIsNone(parse_args().judge_in_fit)
+        with mock.patch.object(
+            sys, "argv", ["walk_verdict", "model.pt", "--judge-in-fit", "declared"]
+        ):
+            self.assertEqual(parse_args().judge_in_fit, "declared")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -415,6 +415,36 @@ class StudentPolicy:
         self._camera.close()
 
 
+# `--judge-in-fit declared`: the robot as the vendor declares it, no fit.
+JUDGE_DECLARED = "declared"
+
+
+def judged_fit(judge_in_fit: str | None, trained: dict[str, Any]) -> str | None:
+    """The fit the judged world is built with: the policy's own (a normal
+    certificate), another fit's stamp, or none for the declared robot."""
+    if judge_in_fit is None:
+        return fit_of(trained)
+    return None if judge_in_fit == JUDGE_DECLARED else judge_in_fit
+
+
+def cross_identity(
+    identity: dict[str, Any], trained: dict[str, Any], judge_in_fit: str
+) -> dict[str, Any]:
+    """The record of a cross-evaluation: the trained fit under `fit` (absent
+    when it trained on declared numbers), the judged world under
+    `judged_in_fit` - never one key standing for both."""
+    record = {k: v for k, v in identity.items() if k != Identity.FIT}
+    if fit_of(trained):
+        record[Identity.FIT] = fit_of(trained)
+    record["judged_in_fit"] = judge_in_fit
+    return record
+
+
+def cross_world_word(judge_in_fit: str) -> str:
+    """The judged world as a file-name part: `declared`, or the fit's hash."""
+    return judge_in_fit.replace("@", "-")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("checkpoint", type=Path)
@@ -513,6 +543,16 @@ def parse_args() -> argparse.Namespace:
         help="with --judge-at-scale: pin only this mismatch axis (the walk's "
         "PIN_AXES, e.g. kt / R / friction on the microduck, kp / kd / armature "
         "on the Go1); 'all' moves every parameter together",
+    )
+    parser.add_argument(
+        "--judge-in-fit",
+        default=None,
+        metavar="FIT|declared",
+        help="a CROSS-evaluation: judge the policy in another robot world - a "
+        "joints fit's (`fit@<stamp>`) or the declared constants (`declared`) - "
+        "instead of the one it trained in. Recorded as such (its own suffix, "
+        "`judged_at` says both worlds); never a certificate of the policy in "
+        "its own world",
     )
     parser.add_argument(
         "--judge-at-fit",
@@ -643,12 +683,19 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         # the actor sees a camera exactly when it trained with one (the
         # scene walk's picture: 12,288 inputs a plain actor never had)
         cameras=trained_with_cameras(trained_identity),
-        fit=fit_of(trained_identity),
+        fit=judged_fit(args.judge_in_fit, trained_identity),
     )
     # The one gate (walk_view): robot, actuator and ground must match; the
     # DR basis may differ on purpose (a policy trained under one span is
-    # judged at the fit), and the certificate records both.
-    require_same_identity(trained_identity, identity)
+    # judged at the fit), and the certificate records both. A cross-
+    # evaluation moves the fit on purpose: the gate then holds every other
+    # key and the record says which world it judged in.
+    require_same_identity(
+        {**trained_identity, Identity.FIT: identity.get(Identity.FIT)}
+        if args.judge_in_fit is not None
+        else trained_identity,
+        identity,
+    )
     cfg.scene.num_envs = args.trials
     cfg.seed = args.seed
     if trained_identity:
@@ -667,6 +714,10 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
             # 42 when the run predates the knob) — a replicate's name.
             "seed": trained_identity.get("seed", 42),
         }
+    if args.judge_in_fit is not None:
+        # a cross record names both worlds: `fit` stays the one the policy
+        # trained under (none for declared), `judged_in_fit` the one it ran in
+        identity = cross_identity(identity, trained_identity, args.judge_in_fit)
 
     devicetag = "cuda" if device.startswith("cuda") else "cpu"
     instrument = instrument_for(device)
@@ -810,6 +861,13 @@ def main() -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedur
         protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
     else:
         protocol["judged_at"] = f"law DR: {identity['dr_basis']}"
+    if args.judge_in_fit is not None:
+        world = cross_world_word(args.judge_in_fit)
+        suffix = f"in-{world}-{suffix}"
+        protocol["judged_at"] = (
+            f"CROSS-evaluation: trained in "
+            f"{fit_of(trained_identity) or JUDGE_DECLARED}, judged in {world}"
+        )
     if args.judge_at_scale is not None:
         axis = "" if args.judge_param == "all" else f"{args.judge_param}-"
         suffix = f"at-x{args.judge_at_scale:g}-{axis}{suffix}"

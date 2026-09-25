@@ -492,13 +492,18 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     horizon: int = 20,
     robot: str | None = None,
     scene: str | None = None,
+    judge_in_fit: str | None = None,
 ) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
     the run's versions on every row; `robot` names the walk the checkpoint
     belongs to, else the project's one declared walk. With a project open
     its robots are searched first. `scene` names the captured scene the
     checkpoint trained on (its identity says): the certificate is judged
-    on it, and its protocol names it. Job handle."""
+    on it, and its protocol names it. `judge_in_fit` makes it a CROSS-
+    evaluation: the policy judged in another robot world - a joints fit
+    (`fit@<stamp>`) or the vendor's declared constants (`declared`) -
+    recorded under its own name, never as the policy's certificate. Job
+    handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -521,6 +526,7 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
             robot=robot,
             project=str(root) if root else None,
             scene=_scene_dir(root, scene),
+            judge_in_fit=judge_in_fit,
         )
     except ValueError as why:
         return refusal(str(why))

@@ -325,6 +325,7 @@ class Actions:
         robot: str | None,
         project: str | None = None,
         scene: str | None = None,
+        judge_in_fit: str | None = None,
     ) -> JobHandle:
         """The locomotion evaluation (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
@@ -352,6 +353,8 @@ class Actions:
             argv += ["--student", student, "--horizon", str(horizon)]
         if scene is not None:  # judged on the captured scene it trained on (docs/78 E2)
             argv += ["--scene", scene]
+        if judge_in_fit is not None:  # a cross-evaluation in another robot world
+            argv += ["--judge-in-fit", judge_in_fit]
         return self.jobs.start("evaluate-walk", argv, RQ_MJLAB_DIR)
 
     def play_walk(
