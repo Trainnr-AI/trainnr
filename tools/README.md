@@ -83,7 +83,9 @@ and the shared MuJoCo→Rerun mirror lives in `pipeline/rq_pipeline/viz.py`; nei
 
 | File | What it is |
 |---|---|
-| `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `pipeline/rq_pipeline/viz.py`) |
+| `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `pipeline/rq_pipeline/viz.py`). `running(project_root, name=, viewport=, viewer=)` puts a tool's run in the project's job table while it runs (`rq_pipeline.mcp_jobs.track`), so the Studio's Running now panel shows its stage and progress; `trial_reporter(run)` is the gate's per-trial line |
+
+Running now: `gate-deployment.py`, `attribute-deployment.py`, `preflight-deployment.py`, `capture-telemetry.py`, `public-log.py` (ingest), `import-usd.py`, `capture-scene.py` and rq_mjlab's `walk_train` each enter `<project>/mcp-jobs/` with a `.status` beside the record (stage, `done/total unit`). A run started by an agent sets `TRAINNR_RUN_SOURCE=agent`; a door's own job is adopted, never listed twice (docs/35 §5).
 | `_firmware.sh` | `build_uf2 <crate>`: asks cargo where a firmware binary landed, sourced by the `sim-*.sh` scripts |
 | `wsl-run.sh` | Runs a command under `pipeline/wsl.env`, the WSL box's GPU routing in one file |
 | `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (fmt, clippy, docs, unsafe, ruff over `pipeline/` and `tools/`, the unit suite) |

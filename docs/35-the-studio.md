@@ -145,6 +145,42 @@ serves two jobs and the 3D view is agnostic to which is live:
   length, nine worlds mirrored into one model), verdict funnels, and the
   cloud feed — a rented pod's log tailed over SSH into live cards, which
   has watched three pods at once.
+- **Running now** (since 2026-09-25): the top bar's indicator reads
+  `N running · <the newest run's name: its stage>`. Clicking it opens a
+  panel under the header, on every page. Each row shows kind, name,
+  source (`door`, `tool` or `agent`) and state. Under that come a
+  progress bar with `k/n <unit>`, the stage line, the elapsed time and
+  the pid. The buttons are **open log** (the last 12 lines, live),
+  **show in viewer** (the run's `.rrd` loaded into the viewer),
+  **watch in viewport** (`deploy:<name>`, or `walk` for training) and
+  **stop**. Stop asks twice: it signals a door job's process group,
+  and a tool's or agent's pid. Ended runs stay 5 minutes
+  (`FINISHED_KEPT`) with their exit code. A run gone with no exit says
+  `died (no exit recorded)`. The Overview's Compute card lists the same
+  rows.
+
+  **The source** is one table, `<project>/mcp-jobs/`. `mcp_jobs.track`
+  is the context manager every long-running entry wraps itself in. It
+  writes a `JobRecord` (kind, name, project, pid, argv, started,
+  source, viewport scene, viewer file) and a `<id>.status` beside it:
+  `RunStatus`, `trainnr-job-status/1`, written atomically at most every
+  0.25 s, except that a new stage, a new total or the last step always
+  lands. It also writes `<id>.exit` at the end: 0, 1 on an error, 130
+  on Ctrl-C. `TRAINNR_RUN_SOURCE` says who started it (the default is
+  `tool`). A door's child adopts the door's own record through
+  `TRAINNR_JOB_ID`, so one run is never listed twice.
+
+  These are wired: gate (trial by trial), attribution (knob by knob),
+  pre-flight (check by check, then the ramp and the stops),
+  capture-telemetry (seconds heard), public-log ingest, import-usd,
+  capture-scene (its stages), and the walk trainer (iteration and mean
+  reward, read off rsl_rl's console by `TrainingTicker`).
+
+  **Rust side**: `running.rs`. A `jobs-watch` thread re-reads the table
+  once a second: records, exits, statuses, pid liveness and the open
+  log's tail. The frame only swaps the snapshot in, so there is no file
+  I/O on the UI thread. The words and keys Rust reads are pinned in
+  `tests/test_studio_mirrors.py::RunningNow`.
 
 ## 6. Performance lessons, all measured
 

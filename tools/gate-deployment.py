@@ -40,6 +40,13 @@ from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
 from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
 from rq_pipeline.viz import viewer_file  # noqa: E402
 
+# The verdict as the Running now panel's last line says it.
+VERDICT_WORDS = {
+    True: "passed",
+    False: "failed",
+    None: "judged nothing (no evaluation cited, or another protocol)",
+}
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -115,9 +122,12 @@ def main() -> None:
             scene_dir=scene_dir,
             on_trial=trial_reporter(run),
         )
-        run.stage(
-            f"{record['successes']}/{record['trials']} tracked, "
-            f"passed={record['verdict'].get('passed')}"
+        run.progress(
+            record["trials"],
+            record["trials"],
+            "trials",
+            f"{record['successes']}/{record['trials']} tracked: "
+            f"{VERDICT_WORDS[record['verdict'].get('passed')]}",
         )
     verdict = record["verdict"]
     print(
