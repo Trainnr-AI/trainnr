@@ -763,16 +763,13 @@ def _summary_scene(path: Path) -> dict[str, Any]:
 def _summary_robot(p: Path) -> dict[str, Any]:
     """The bundle's files, and what its importer changed (the audit's one
     line; absent for a bundle onboarded before the audit existed)."""
-    from rq_pipeline.bundles.bundle import (  # noqa: PLC0415
-        AUDIT_KEY,
-        read_bundle_record,
-    )
+    from rq_pipeline.bundles.bundle import read_audit  # noqa: PLC0415
 
     out: dict[str, Any] = {
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith(".")),
         "fit_bases": fit_bases(p / FITS_DIR),
     }
-    audit = read_bundle_record(p).get(AUDIT_KEY)
+    audit = read_audit(p)
     if audit and audit.get("summary"):
         out["importer changed"] = audit["summary"]
     return out

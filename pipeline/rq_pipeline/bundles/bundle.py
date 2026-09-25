@@ -16,9 +16,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from rq_pipeline.bundles.hashing import AUDIT_FILE
+
 BUNDLE_FILE = "bundle.json"
-# /2 (2026-09-24): the importer audit under AUDIT_KEY (robot/import_audit);
-# a /1 record has none and the drawer says "not audited".
+# /2 (2026-09-24): the importer audit (robot/import_audit). Since
+# 2026-09-25 it lives in its own AUDIT_FILE beside the record, out of the
+# bundle's identity (`hashing.BUNDLE_RECORDS`); AUDIT_KEY is the key a
+# 2026-09-24 record carried it under, read once by `migrate_audit`.
 BUNDLE_SCHEMA = "trainnr-robot/2"
 AUDIT_KEY = "audit"
 
@@ -89,6 +93,45 @@ def amend_bundle_record(bundle_dir: Path, key: str, value: Any) -> Path:
         json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     return out
+
+
+def write_audit(bundle_dir: Path, audit: Mapping[str, Any]) -> Path:
+    """The importer audit, in its own file beside the record: a record
+    about the bundle, so writing it never moves the bundle's stamp."""
+    out = Path(bundle_dir) / AUDIT_FILE
+    out.write_text(
+        json.dumps(dict(audit), indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return out
+
+
+def read_audit(bundle_dir: Path) -> dict[str, Any] | None:
+    """The audit, or None for a bundle never audited; a 2026-09-24 bundle
+    whose record still carries it under AUDIT_KEY is read there."""
+    path = Path(bundle_dir) / AUDIT_FILE
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return None
+    legacy = read_bundle_record(bundle_dir).get(AUDIT_KEY)
+    return dict(legacy) if isinstance(legacy, Mapping) else None
+
+
+def migrate_audit(bundle_dir: Path) -> bool:
+    """Move a 2026-09-24 audit out of `bundle.json` into AUDIT_FILE and
+    rewrite the record without it, in the canonical sorted form: the
+    bundle returns to the stamp it had before the audit landed. True when
+    something moved; a bundle already migrated, or never audited, is
+    left alone."""
+    record = read_bundle_record(bundle_dir)
+    if AUDIT_KEY not in record:
+        return False
+    write_audit(bundle_dir, record.pop(AUDIT_KEY))
+    (Path(bundle_dir) / BUNDLE_FILE).write_text(
+        json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return True
 
 
 def read_bundle_record(bundle_dir: Path) -> dict[str, Any]:

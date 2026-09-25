@@ -30,14 +30,14 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.basis import BASES
-from rq_pipeline.bundles.hashing import require_stamp, stamp
+from rq_pipeline.bundles.hashing import FITS_DIR, require_stamp, stamp
 from rq_pipeline.robot.identify import (
     DEFAULT_PINNED_FRACTION,
     IdentificationResult,
     IdentifiedParameter,
 )
 
-FITS_DIRECTORY = "fits"
+FITS_DIRECTORY = FITS_DIR  # the one spelling lives in bundles.hashing
 SPREAD_FILENAME = "SPREAD.json"
 
 

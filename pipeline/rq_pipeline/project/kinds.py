@@ -23,6 +23,8 @@ from enum import Enum
 from pathlib import Path
 
 from rq_pipeline.bundles.hashing import (
+    BUNDLE_RECORDS,
+    FITS_DIR,
     STAMP_LENGTH,
     STAMP_SEPARATOR,
     bundle_hash,
@@ -56,7 +58,6 @@ ACCEPTED, REJECTED, UNREVIEWED = "accepted", "rejected", "unreviewed"
 IDENTITY_FILE = "identity.json"  # rq_mjlab's walk run identity (walk_train.py)
 CHECKPOINT_SUFFIX = ".pt"  # rsl_rl's checkpoints (`model_<iteration>.pt`)
 FINDINGS_DIR = "findings"  # single-file findings live under this folder name
-FITS_DIR = "fits"  # single-file fit records under a bundle or a project
 
 
 class Kind(str, Enum):
@@ -230,10 +231,14 @@ RUN_RECORDS: dict[Kind, Callable[[], tuple[str, ...]]] = {
 
 def artifact_hash(kind: Kind, root: Path) -> str:
     """The artifact's content hash: `bundles.hashing.bundle_hash` with the
-    run records its kind declares (`RUN_RECORDS`) left out; a kind with
-    none is `bundle_hash` itself."""
+    run records its kind declares (`RUN_RECORDS`) and every bundle's
+    records about itself (`BUNDLE_RECORDS`: fits, the audit) left out -
+    the same bytes `stamp()` hashes for a kind with no run records."""
     records = RUN_RECORDS.get(kind)
-    return bundle_hash(Path(root), exclude=records() if records else ())
+    root = Path(root)
+    if root.is_file():
+        return bundle_hash(root)
+    return bundle_hash(root, exclude=(*(records() if records else ()), *BUNDLE_RECORDS))
 
 
 def stamp_kind(kind: Kind, root: Path, name: str | None = None) -> str:

@@ -60,12 +60,27 @@ def bundle_hash(root: Path, exclude: tuple[str, ...] = ()) -> str:
 
 STAMP_SEPARATOR = "@"
 
+# The folder a bundle's fit records live in (one spelling; before
+# 2026-09-25 it was spelled in four modules).
+FITS_DIR = "fits"
+# The file a bundle's importer audit lives in (`bundles.bundle`).
+AUDIT_FILE = "audit.json"
+# Records ABOUT a bundle, not its content: identifying the robot or
+# auditing its import must not change which robot it is. Until
+# 2026-09-25 a fit or an audit written into the bundle moved its stamp,
+# and every checkpoint certified on the old stamp was refused by the
+# identity gate (go2@5003bf617b5f -> go2@c699dc1b0772 on 2026-09-24).
+BUNDLE_RECORDS: tuple[str, ...] = (f"{FITS_DIR}/*", AUDIT_FILE)
+
 
 def stamp(name: str, root: Path) -> str:
-    """`name@hash` identity for an artifact, e.g. `scene-lab@3fa9c12ab45d`."""
+    """`name@hash` identity for an artifact, e.g. `scene-lab@3fa9c12ab45d`.
+    A directory's records about itself (`BUNDLE_RECORDS`) are not its
+    content and never move its stamp."""
     if STAMP_SEPARATOR in name:
         raise ValueError(f"artifact name must not contain '{STAMP_SEPARATOR}': {name}")
-    return f"{name}{STAMP_SEPARATOR}{bundle_hash(root)[:STAMP_LENGTH]}"
+    digest = bundle_hash(root, exclude=() if Path(root).is_file() else BUNDLE_RECORDS)
+    return f"{name}{STAMP_SEPARATOR}{digest[:STAMP_LENGTH]}"
 
 
 def is_stamp(value: str) -> bool:

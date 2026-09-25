@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.bundles.hashing import stamp
+from rq_pipeline.bundles.hashing import FITS_DIR, stamp
 from rq_pipeline.bundles.locate import bundle_dirs, find_bundle
 from rq_pipeline.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME
@@ -91,7 +91,7 @@ def describe_bundles() -> list[dict[str, Any]]:
                 "stamp": stamp(name, root),
                 "files": files,
                 "has_profile": "profile.json" in files,
-                "has_fits": "fits" in files,
+                "has_fits": FITS_DIR in files,
             }
         )
     return described
@@ -113,7 +113,7 @@ def describe_bundle(name: str) -> dict[str, Any]:
         # loader: that schema describes the rig drivetrain's constants,
         # and this window reports what a bundle SAYS, schema or not.
         detail["profile"] = json.loads(profile.read_text())
-    fits = root / "fits"
+    fits = root / FITS_DIR
     if fits.is_dir():
         detail["fits"] = {
             record.name: json.loads(record.read_text())
