@@ -93,8 +93,17 @@ class RerunRecorder(RecorderTerm):
             # collision geoms share surfaces with the visual meshes and
             # z-fight them into shimmering shades (the duck: 5 opaque
             # group-3 collision meshes over 70 visual ones, 2026-09-01).
+            # ...and a captured scene's ground, which sits in a group of its
+            # own for the height scans (scene_stage.TERRAIN_SCAN_GROUP):
+            # skipped, the Studio showed the robots on nothing (2026-09-25).
+            from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
+
             self._mirror = RigMirror(
-                mj_model, model_colors=True, skip_groups=VISUAL_ONLY_SKIP_GROUPS
+                mj_model,
+                model_colors=True,
+                skip_groups=tuple(
+                    g for g in VISUAL_ONLY_SKIP_GROUPS if g != TERRAIN_SCAN_GROUP
+                ),
             )
         self._said_no_reward = False
         self._began = time.time()

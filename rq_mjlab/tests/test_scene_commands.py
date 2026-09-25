@@ -80,5 +80,42 @@ class TheScansSeeTheScene(unittest.TestCase):
         self.assertNotEqual(TERRAIN_SCAN_GROUP, COLLISION_GROUP)  # not the robot's legs
 
 
+class ThePlayShowsTheGround(unittest.TestCase):
+    """Viewers draw groups 0-2 by default; a scene's ground (group 4) was
+    invisible in the play window and the Studio (2026-09-25)."""
+
+    def test_both_viewers_turn_the_ground_group_on(self) -> None:
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
+        from rq_mjlab.walk_play import showing_the_ground  # noqa: PLC0415
+
+        synced = []
+
+        class Browser:
+            def setup(self) -> None:
+                self._scene = SimpleNamespace(
+                    geom_groups_visible=[True, True, True, False, False, False],
+                    _sync_visibilities=lambda: synced.append(True),
+                )
+
+        class Window:
+            def setup(self) -> None:
+                self.viewer = SimpleNamespace(
+                    opt=SimpleNamespace(geomgroup=[1, 1, 1, 0, 0, 0])
+                )
+
+        browser = showing_the_ground(Browser)()
+        browser.setup()
+        self.assertTrue(browser._scene.geom_groups_visible[TERRAIN_SCAN_GROUP])
+        self.assertEqual(synced, [True])
+        window = showing_the_ground(Window)()
+        window.setup()
+        self.assertEqual(window.viewer.opt.geomgroup[TERRAIN_SCAN_GROUP], 1)
+        self.assertEqual(
+            window.viewer.opt.geomgroup[3], 0
+        )  # robot colliders stay hidden
+
+
 if __name__ == "__main__":
     unittest.main()

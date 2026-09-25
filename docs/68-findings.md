@@ -23,7 +23,7 @@ not this page.
   - verdicts: projects/go2-walk/runs/go2-garden-c1/verdict/
 - caveats:
   - One run, one seed, no camera: the height scan was its only view of the garden.
-  - The commands are random directions from the course start in a cluttered garden (table legs, pots, beds): some commanded motions run into objects, which no walker can track; the slow-command subset (2/10) says clutter is not the whole story.
+  - CORRECTED the same night: the test cannot be passed in this garden. The training heightfield samples the full proxy, which cannot hold anything with space beneath it: the table and objects become solid blocks and hedges walls up to 2.50 m (18.6 % of cells more than 0.3 m above the floor). The nearest obstacle is 0.88 m from the course start, and 18-25 % of the ground within 2-3 m of it is obstacle, while the certificate commands random directions for 20 s (5 m of travel even at 0.25 m/s). Nearly every trial meets a wall, which no walker can track. The first reading ('slow commands fail too, so clutter is not the whole story') was wrong. The ground-only grid (.heightfield-ground.npz) tops out at 0.25 m.
   - The command schedule widened sideways speed to ±1 m/s as well; the plateau at about 1.0 m/s training error began when it did.
 
 ## gripper-pick-acceptance-2026-09-25

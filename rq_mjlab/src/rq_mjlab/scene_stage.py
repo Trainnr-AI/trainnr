@@ -80,6 +80,9 @@ TRAIN_CELL_M = 0.05
 # hurdles (0/40 tracked, 2026-09-23), and without a camera mujoco_warp
 # refit an empty ray structure and crashed (2026-09-25).
 TERRAIN_SCAN_GROUP = 4
+# Every viewer draws groups 0-2 by default (MuJoCo's, mjviser's, the Studio
+# mirror's), so a scene played or recorded without its splat must turn the
+# ground's group on or the robots walk on nothing (2026-09-25).
 SCAN_SENSORS = ("terrain_scan", "foot_height_scan")  # the rough recipe's
 NO_GRID = (
     "scene {name} has no {file}: the grid is sampled when the scene is staged "

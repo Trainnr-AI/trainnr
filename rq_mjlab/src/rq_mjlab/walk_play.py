@@ -115,14 +115,35 @@ def main() -> None:
         map_location=device,
     )
     policy = runner.get_inference_policy(device=device)
-    # mjlab's two viewers as they are. The native window drew at 0 FPS
-    # on the WSLg box's X11 path (2026-09-11); the browser one does not
-    # touch that path.
-    if args.viewer == "viser":
-        ViserPlayViewer(env, policy).run()
-    else:
-        NativeMujocoViewer(env, policy).run()
+    # mjlab's two viewers as they are, drawing a scene's ground too. The
+    # native window drew at 0 FPS on the WSLg box's X11 path (2026-09-11,
+    # again 2026-09-25); the browser one does not touch that path.
+    viewer = ViserPlayViewer if args.viewer == "viser" else NativeMujocoViewer
+    if args.scene is not None:
+        viewer = showing_the_ground(viewer)
+    viewer(env, policy).run()
     env.close()
+
+
+def showing_the_ground(viewer: type) -> type:
+    """`viewer` with the scene's ground group drawn: mjviser's group list
+    (its "G4" checkbox still reads off until toggled) or MuJoCo's
+    `opt.geomgroup` in the native window."""
+    from rq_mjlab.scene_stage import TERRAIN_SCAN_GROUP  # noqa: PLC0415
+
+    class Shown(viewer):  # type: ignore[misc, valid-type]
+        def setup(self) -> None:
+            super().setup()
+            scene = getattr(self, "_scene", None)
+            if scene is not None:  # the browser viewer
+                scene.geom_groups_visible[TERRAIN_SCAN_GROUP] = True
+                scene._sync_visibilities()
+            native = getattr(self, "viewer", None)
+            if native is not None:  # the MuJoCo window
+                native.opt.geomgroup[TERRAIN_SCAN_GROUP] = 1
+
+    Shown.__name__ = f"{viewer.__name__}ShowingTheGround"
+    return Shown
 
 
 if __name__ == "__main__":
