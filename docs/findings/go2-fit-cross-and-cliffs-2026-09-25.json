@@ -1,0 +1,141 @@
+{
+ "id": "go2-fit-cross-and-cliffs-2026-09-25",
+ "claim": "Training the Go2 walk on a measured joints fit (fit@0ad6202797c5, a public log's Go2) buys a delay margin in the fitted world and nothing measurable at the easy rung: judged in the fitted world with every action 2 control ticks (40 ms) late, the fit-trained go2-c3-fit tracks 18/40 [0.2926, 0.6151] against the declared-trained go2-c2's 0/40 [0.0, 0.0881] (intervals disjoint); with no delay each policy walks 39/40 [0.8684, 0.9994] in the other's world (38/40 and 40/40 in its own); with kp pinned at 0.8x the fitted world gives 33/40 against 26/40 (overlapping); on the declared constants neither holds 2 ticks (1/40 and 5/40).",
+ "date": "2026-09-25",
+ "repo_commit": "aad9f8c",
+ "argv": [
+  "rq_mjlab.walk_verdict <run>/model_1499.pt --trials 40 --seed 1000 --device cuda:0 --robot go2 --project projects/go2-walk [--judge-in-fit fit@0ad6202797c5|declared] [--judge-at-scale 0.8 --judge-param kp] [--delay 2] (through the MCP door evaluate_walk)"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL box; 40 paired trials per cell (the same seeded draws per trial across cells)",
+ "outcome": {
+  "arms": {
+   "go2-c2 declared world (own, certificate)": {
+    "successes": 38,
+    "trials": 40,
+    "ci95": [
+     0.8308,
+     0.9939
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-cuda.json"
+   },
+   "go2-c2 in the fitted world (cross)": {
+    "successes": 39,
+    "trials": 40,
+    "ci95": [
+     0.8684,
+     0.9994
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-cuda.json"
+   },
+   "go2-c3-fit fitted world (own, certificate)": {
+    "successes": 40,
+    "trials": 40,
+    "ci95": [
+     0.9119,
+     1.0
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-cuda.json"
+   },
+   "go2-c3-fit in the declared world (cross)": {
+    "successes": 39,
+    "trials": 40,
+    "ci95": [
+     0.8684,
+     0.9994
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-cuda.json"
+   },
+   "go2-c2 declared world, kp x0.8": {
+    "successes": 35,
+    "trials": 40,
+    "ci95": [
+     0.732,
+     0.9581
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-at-x0.8-kp-cuda.json"
+   },
+   "go2-c2 fitted world, kp x0.8": {
+    "successes": 26,
+    "trials": 40,
+    "ci95": [
+     0.4832,
+     0.7937
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-at-x0.8-kp-cuda.json"
+   },
+   "go2-c3-fit declared world, kp x0.8": {
+    "successes": 37,
+    "trials": 40,
+    "ci95": [
+     0.7961,
+     0.9843
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-at-x0.8-kp-cuda.json"
+   },
+   "go2-c3-fit fitted world, kp x0.8": {
+    "successes": 33,
+    "trials": 40,
+    "ci95": [
+     0.6722,
+     0.9266
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-at-x0.8-kp-cuda.json"
+   },
+   "go2-c2 declared world, delay 2 ticks": {
+    "successes": 5,
+    "trials": 40,
+    "ci95": [
+     0.0419,
+     0.268
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-delay-2-cuda.json"
+   },
+   "go2-c2 fitted world, delay 2 ticks": {
+    "successes": 0,
+    "trials": 40,
+    "ci95": [
+     0.0,
+     0.0881
+    ],
+    "file": "projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-delay-2-cuda.json"
+   },
+   "go2-c3-fit declared world, delay 2 ticks": {
+    "successes": 1,
+    "trials": 40,
+    "ci95": [
+     0.0006,
+     0.1316
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-delay-2-cuda.json"
+   },
+   "go2-c3-fit fitted world, delay 2 ticks": {
+    "successes": 18,
+    "trials": 40,
+    "ci95": [
+     0.2926,
+     0.6151
+    ],
+    "file": "projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-delay-2-cuda.json"
+   }
+  },
+  "go2-c3-fit chain": {
+   "training": "fit@0ad6202797c5, 4096 worlds, 1500 iterations, cuda (docs/07 2026-09-25 afternoon)",
+   "gate": "18/20 [0.683, 0.9877] passed, plain MuJoCo runtime (deploy/go2-c3-fit-deploy/gate.json)",
+   "preflight": "7/7 passed in simulation (deploy/go2-c3-fit-deploy/preflight.json)",
+   "attribution_cliffs": "kp 0.8x (16/20), kd 2x (17/20), latency 2 ticks (2/20), payload 2 kg (17/20), push 1 m/s (17/20), tilt 8 deg (14/20), joint noise 0.05 rad (17/20), joint friction 0.25 N*m (17/20); survived: friction, armature, joint damping (deploy/go2-c3-fit-deploy/attribution.json)"
+  },
+  "repeat": "both cross cells at the easy rung were run twice; identical 39/40 each time"
+ },
+ "caveats": [
+  "Sim only, and the fit is a public log's Go2 (IIT chirp), not the operator's robot: the fitted world stands in for 'the measured robot'.",
+  "The kp rungs pin kp at 0.8x and every other law parameter at x1 (no randomization); the delay rungs keep each world's own law DR. The two rung families are different protocols.",
+  "Delay here is the whole action applied late by walk_verdict's Delayed wrapper (control ticks of 20 ms); the gate's attribution applies latency in its own runtime at 20 trials and read go2-c3-fit 2/20 at 2 ticks - a different harness, both stand.",
+  "A cross record is never the policy's certificate; judged_at and judged_in_fit name the world.",
+  "n=40 per cell: 'no difference' at the easy rung means the intervals overlap, not that the policies are equal."
+ ],
+ "artifacts": {
+  "verdicts": "projects/go2-walk/runs/{go2-c2,go2-c3-fit}/verdict/ (the WSL box; projects/ is not tracked)",
+  "studio": "the Evaluations page shows every cell as a card (screenshots in projects/go2-walk/.index/screenshots/)"
+ },
+ "protocol": "docs/07-progress-log.md 2026-09-25 evening entries"
+}
