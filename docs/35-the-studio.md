@@ -145,19 +145,38 @@ serves two jobs and the 3D view is agnostic to which is live:
   length, nine worlds mirrored into one model), verdict funnels, and the
   cloud feed — a rented pod's log tailed over SSH into live cards, which
   has watched three pods at once.
-- **Running now** (since 2026-09-25): the top bar's indicator reads
-  `N running · <the newest run's name: its stage>`. Clicking it opens a
-  panel under the header, on every page. Each row shows kind, name,
-  source (`door`, `tool` or `agent`) and state. Under that come a
-  progress bar with `k/n <unit>`, the stage line, the elapsed time and
-  the pid. The buttons are **open log** (the last 12 lines, live),
-  **show in viewer** (the run's `.rrd` loaded into the viewer),
-  **watch in viewport** (`deploy:<name>`, or `walk` for training) and
-  **stop**. Stop asks twice: it signals a door job's process group,
-  and a tool's or agent's pid. Ended runs stay 5 minutes
-  (`FINISHED_KEPT`) with their exit code. A run gone with no exit says
-  `died (no exit recorded)`. The Overview's Compute card lists the same
-  rows.
+- **Running now** (since 2026-09-25; chips since the same evening): the
+  top bar's indicator reads `N running · <a run's name: its stage>`, and
+  the run it names rotates through the running ones every
+  `ROTATE_EVERY` (4 s), so a short gate never hides a long training.
+  Clicking it opens a panel under the header, on every page.
+
+  **The chips.** Each run is one chip: its name, `kind · k/n unit`, a
+  progress bar and the elapsed time. An ended run's bar fills if it had
+  no count. Its last line says how it ended, followed by how long it
+  took: `done`, `failed (exit N)`, or `died (no exit recorded)`. Done chips are dimmed,
+  failed and died ones are drawn in the warning colour, and ended runs
+  stay 5 minutes (`FINISHED_KEPT`). The order is `panel_rows`: running
+  ones newest first, then the recently ended. `chip_layout` shares the
+  width: every chip gets the same width between `CHIP_MIN_WIDTH` (170)
+  and `CHIP_MAX_WIDTH` (280), with `CHIP_GAP` between them. The runs
+  that do not fit fold into a **+N more** chip, which lists them all.
+  Below two chips' width the strip goes narrow, with name and bar only
+  and chips down to `CHIP_NARROW_MIN_WIDTH` (96). Chips never overlap:
+  the layout maths is tested. Hovering a chip shows its one-line
+  summary.
+
+  **The detail.** Clicking a chip shows that run's full row below the
+  strip: kind, name, source (`door`, `tool` or `agent`), state, the bar,
+  the stage line, elapsed time, pid, and the buttons. The buttons are
+  **open log** (the last 12 lines, live), **show in viewer** (the run's
+  `.rrd` loaded into the viewer), **watch in viewport** (`deploy:<name>`,
+  or `walk` for training) and **stop**. Stop asks twice: it signals a
+  door job's process group, and a tool's or agent's pid. The selection
+  is kept by job id through the once-a-second refresh
+  (`kept_selection`) and clears when its run drops off. Clicking the
+  chip again closes the detail. The Overview's Compute card shows the
+  same chips, read-only; a click there opens the panel on that run.
 
   **The source** is one table, `<project>/mcp-jobs/`. `mcp_jobs.track`
   is the context manager every long-running entry wraps itself in. It
