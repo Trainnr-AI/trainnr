@@ -18,6 +18,7 @@ from rq_pipeline.deploy.gate import POSES_KEY, gate
 from rq_pipeline.deploy.manifest import MANIFEST_FILE, Manifest
 from rq_pipeline.deploy.poses import PoseFile, PoseTrack, trial_segment
 from rq_pipeline.deploy.viewport_source import (
+    ATTRIBUTION,
     DEPLOY_PREFIX,
     GATE,
     LIVE,
@@ -46,12 +47,14 @@ class TheSceneGrammar(unittest.TestCase):
             "deploy:go2-c2",
             "deploy:go2-c2:gate:dds:3",
             "deploy:go2-c2:preflight:4",
+            "deploy:go2-c2:attribution:armature:2",
+            "deploy:go2-c2:attribution:fit:fit",
         ):
             self.assertEqual(parse_scene(text).text(), text)
         self.assertEqual(parse_scene("deploy:go2-c2").mode, LIVE)
         self.assertEqual(scene_text("a", GATE, "mujoco", 1), "deploy:a:gate:mujoco:1")
         self.assertEqual(scene_text("a", PREFLIGHT, 0), "deploy:a:preflight:0")
-        self.assertEqual(set(MODES), {LIVE, GATE, PREFLIGHT})
+        self.assertEqual(set(MODES), {LIVE, GATE, PREFLIGHT, ATTRIBUTION})
 
     def test_a_malformed_scene_is_refused_by_name(self) -> None:
         for text, word in (

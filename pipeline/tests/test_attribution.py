@@ -735,3 +735,76 @@ class TheFit(unittest.TestCase):
                 summary["measured joints"], "at the fit: 0/20, past the cliff"
             )
         self.assertIsNone(fit_line({"sensitivity": "x"}))
+
+
+class TheReplays(unittest.TestCase):
+    """Every rung keeps its worst trial's frames (the first that fell,
+    else the first untracked, else the first), saved as
+    `.viewer/attribution-poses.npz`; the Studio's MuJoCo viewport lists
+    and opens them as `deploy:<name>:attribution:<knob>:<rung>`; each
+    knob reaches the live stream as it lands (the operator, 2026-09-25:
+    "again the studio is not showing whats happening")."""
+
+    def test_the_worst_trial_is_kept_listed_and_opened(self) -> None:
+        from rq_pipeline.deploy import viewport_source as vs  # noqa: PLC0415
+        from rq_pipeline.deploy.attribution import worst_of  # noqa: PLC0415
+        from rq_pipeline.deploy.poses import PoseFile  # noqa: PLC0415
+        from rq_pipeline.evaluate.tracking import TrackingOutcome  # noqa: PLC0415
+
+        held = TrackingOutcome(10, False, 0.0, 1.0)
+        fell = TrackingOutcome(3, True, 0.0, 1.0)
+        drift = TrackingOutcome(10, False, 1.0, 1.0)
+        self.assertEqual(worst_of([held, drift, fell]), (2, "fell"))
+        self.assertEqual(worst_of([held, drift]), (1, "survived, did not track"))
+        self.assertEqual(worst_of([held]), (0, "tracked (every trial held)"))
+
+        def fake_open(manifest: Any, *, assets_dir: Any) -> FakeRuntime:
+            return FakeRuntime(manifest)
+
+        landed: list[str] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = _manifest(Path(tmp))
+            _passing_gate(folder, seed=7)
+            record = attribute(
+                folder,
+                assets_dir=None,
+                certificate=CERT,
+                knobs=(SOFT, HARD),
+                open=fake_open,
+                appliers=FAKE_APPLIERS,
+                on_knob=lambda entry, _lower: landed.append(entry["name"]),
+            )
+            self.assertEqual(landed, ["soft", "hard"])
+            soft = record["knobs"][0]
+            # 0.5 and 0.9 hold every trial; 2.0 falls at the first
+            self.assertEqual(
+                soft["rungs"][0]["replay"]["outcome"], "tracked (every trial held)"
+            )
+            self.assertEqual(
+                soft["rungs"][2]["replay"], {"trial": 0, "outcome": "fell"}
+            )
+            poses = PoseFile.load(folder / record["replay"]["poses"])
+            self.assertIn("soft 3", poses.segments)
+            self.assertEqual(len(poses.segments), 5)  # 3 soft rungs, 2 hard
+            listed = dict((scene, label) for label, scene in vs.scenes_of(folder))
+            scene = vs.scene_text(folder.name, vs.ATTRIBUTION, "soft", 3)
+            self.assertIn(scene, listed)
+            self.assertIn("soft 2 u · 0/20", listed[scene])
+            ctx = vs.Context(
+                scene=vs.parse_scene(scene),
+                folder=folder,
+                manifest=load_manifest(folder),
+            )
+            plan = vs.MODES[vs.ATTRIBUTION].plan(ctx)
+            self.assertIn("trial 0, fell", plan.caption)
+            for bad in ("soft:9", "nope:1"):
+                with self.assertRaises(ValueError):
+                    vs.MODES[vs.ATTRIBUTION].plan(
+                        vs.Context(
+                            scene=vs.parse_scene(
+                                f"deploy:{folder.name}:attribution:{bad}"
+                            ),
+                            folder=folder,
+                            manifest=load_manifest(folder),
+                        )
+                    )

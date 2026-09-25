@@ -80,6 +80,35 @@ class PoseTrack:
     def __len__(self) -> int:
         return len(self._rows)
 
+    @property
+    def segments(self) -> tuple[str, ...]:
+        return tuple(self._segments)
+
+    def frames(self, index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Segment `index`'s frames so far: (positions, quaternions, joints),
+        stacked; empty arrays for a segment that holds none."""
+        rows = [r for r in self._rows if r[0] == index]
+        if not rows:
+            width = 0 if not self._rows else len(self._rows[0][3])
+            return (
+                np.zeros((0, POSITION_WIDTH), np.float32),
+                np.zeros((0, QUAT_WIDTH), np.float32),
+                np.zeros((0, width), np.float32),
+            )
+        return (
+            np.stack([r[1] for r in rows]),
+            np.stack([r[2] for r in rows]),
+            np.stack([r[3] for r in rows]),
+        )
+
+    def extend(
+        self, name: str, frames: tuple[np.ndarray, np.ndarray, np.ndarray]
+    ) -> None:
+        """A whole segment at once (frames recorded elsewhere, a worker's)."""
+        self.begin(name)
+        for position, quat, joints in zip(*frames, strict=True):
+            self.add((position, quat, joints))
+
     def save(self, path: Path) -> Path:
         """Written atomically; an empty track writes nothing and says so."""
         if not self._rows:

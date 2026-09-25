@@ -11,6 +11,8 @@ A viewport scene names a deployment and what to show of it:
                                         the Commands tab and WASD
     deploy:<name>:gate:<runtime>:<i>    trial i of that runtime's gate
     deploy:<name>:preflight:<i>         segment i of the pre-flight's poses
+    deploy:<name>:attribution:<k>:<r>   the attribution's knob k at rung r
+                                        (1-based, or `fit`): its worst trial
 
 One truth for every picture: live and a re-run trial go through the
 gate's own code (`deploy.gate.run_trial`, `deploy.course.run_course_trial`,
@@ -51,6 +53,7 @@ SEPARATOR = ":"
 LIVE = "live"
 GATE = "gate"
 PREFLIGHT = "preflight"
+ATTRIBUTION = "attribution"
 # The index's summary key listing a deployment's viewport scenes as
 # [label, scene] pairs (hidden on the card; the drawer reads it).
 VIEWPORT_KEY = "viewport"
@@ -419,6 +422,73 @@ def _run_preflight(model: Any, loop: Loop, ctx: Context) -> None:
     replay_forever(model, loop, ctx.manifest, poses, int(ctx.scene.args[0]))
 
 
+# -- an attribution rung ------------------------------------------------------------
+
+
+def _attribution_poses_path(folder: Path) -> Path:
+    from rq_pipeline.deploy.attribution import STREAM  # noqa: PLC0415
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
+
+    return poses_file(viewer_file(folder, STREAM))
+
+
+def _attribution_rung(ctx: Context) -> tuple[str, dict[str, Any], str]:
+    """(segment, the rung's row, its words), refused by name."""
+    from rq_pipeline.deploy.attribution import (  # noqa: PLC0415
+        FIT_RUNG,
+        read_attribution,
+        replay_segment,
+    )
+
+    knob_name, rung = ctx.scene.args
+    record = read_attribution(ctx.folder)
+    if record is None:
+        raise FileNotFoundError(
+            f"{ctx.scene.name}: no attribution has run; attribute_deployment first"
+        )
+    if rung == FIT_RUNG:
+        rows = {r["name"]: r for r in (record.get("fit") or {}).get("rungs") or []}
+        if knob_name not in rows:
+            raise ValueError(f"no fit rung {knob_name!r}; the record ran {list(rows)}")
+        row = rows[knob_name]
+        what = f"{knob_name} at the fit ({'+'.join(row.get('terms', []))})"
+    else:
+        knobs = {k["name"]: k for k in record.get("knobs", [])}
+        if knob_name not in knobs:
+            raise ValueError(f"no knob {knob_name!r}; the record ran {list(knobs)}")
+        ladder = knobs[knob_name].get("rungs", [])
+        index = _index(rung, "a rung")
+        if not 1 <= index <= len(ladder):
+            raise ValueError(f"{knob_name} ran {len(ladder)} rung(s), not {index}")
+        row = ladder[index - 1]
+        what = f"{knob_name} {row['level']:g} {knobs[knob_name].get('unit', '')}"
+    replay = row.get("replay") or {}
+    words = (
+        f"{what} · {row['successes']}/{row['trials']} · trial "
+        f"{replay.get('trial', '?')}, {replay.get('outcome', 'unrecorded')}"
+    )
+    return replay_segment(knob_name, rung), row, words
+
+
+def _plan_attribution(ctx: Context) -> Plan:
+    segment, _row, words = _attribution_rung(ctx)
+    poses = _poses_or_refuse(ctx, _attribution_poses_path(ctx.folder))
+    if segment not in poses.segments:
+        raise ValueError(
+            f"no poses for {segment!r}: re-run attribute_deployment to record them"
+        )
+    return Plan(
+        caption=f"{ctx.scene.name} · attribution · {words} · {REPLAY_WORD}",
+        run=_run_attribution,
+    )
+
+
+def _run_attribution(model: Any, loop: Loop, ctx: Context) -> None:
+    segment, _row, _words = _attribution_rung(ctx)
+    poses = _poses_or_refuse(ctx, _attribution_poses_path(ctx.folder))
+    replay_forever(model, loop, ctx.manifest, poses, poses.segments.index(segment))
+
+
 # -- the replay ---------------------------------------------------------------------
 
 
@@ -473,6 +543,7 @@ MODES: dict[str, Mode] = {
     LIVE: Mode(LIVE, 0, "none", _plan_live),
     GATE: Mode(GATE, 2, "<runtime>:<trial>", _plan_gate),
     PREFLIGHT: Mode(PREFLIGHT, 1, "<segment>", _plan_preflight),
+    ATTRIBUTION: Mode(ATTRIBUTION, 2, "<knob>:<rung or fit>", _plan_attribution),
 }
 
 
@@ -573,9 +644,54 @@ def scenes_of(folder: Path) -> list[list[str]]:
     try:
         poses = PoseFile.load(_preflight_poses_path(folder))
     except (FileNotFoundError, ValueError):
-        return out
-    out.extend(
-        [f"pre-flight · {segment}", scene_text(name, PREFLIGHT, i)]
-        for i, segment in enumerate(poses.segments)
+        pass
+    else:
+        out.extend(
+            [f"pre-flight · {segment}", scene_text(name, PREFLIGHT, i)]
+            for i, segment in enumerate(poses.segments)
+        )
+    out.extend(_attribution_scenes(folder))
+    return out
+
+
+def _attribution_scenes(folder: Path) -> list[list[str]]:
+    """The attribution's rungs that kept a replay: the fit rungs first
+    (the robot as measured), then every ladder rung that ran."""
+    from rq_pipeline.deploy.attribution import (  # noqa: PLC0415
+        FIT_RUNG,
+        read_attribution,
+        replay_segment,
     )
+
+    try:
+        record = read_attribution(folder)
+        poses = PoseFile.load(_attribution_poses_path(folder))
+    except (FileNotFoundError, ValueError):
+        return []
+    if record is None:
+        return []
+    kept = set(poses.segments)
+    name = Path(folder).name
+    out: list[list[str]] = []
+    fit = record.get("fit") or {}
+    for r in fit.get("rungs") or []:
+        if replay_segment(r["name"], FIT_RUNG) in kept:
+            word = "past the cliff" if r.get("past_cliff") else "holds"
+            out.append(
+                [
+                    f"attribution · {r['name']} {fit.get('label', 'at the fit')} · "
+                    f"{r['successes']}/{r['trials']} {word}",
+                    scene_text(name, ATTRIBUTION, r["name"], FIT_RUNG),
+                ]
+            )
+    for k in record.get("knobs", []):
+        for i, r in enumerate(k.get("rungs", []), start=1):
+            if replay_segment(k["name"], str(i)) in kept:
+                out.append(
+                    [
+                        f"attribution · {k['name']} {r['level']:g} "
+                        f"{k.get('unit', '')} · {r['successes']}/{r['trials']}",
+                        scene_text(name, ATTRIBUTION, k["name"], i),
+                    ]
+                )
     return out

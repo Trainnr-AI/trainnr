@@ -421,8 +421,10 @@ pub const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 pub const WALK_TASK: &str = "walk";
 
 /// A deployment in the viewport: `deploy:<name>` live, or
-/// `deploy:<name>:gate:<runtime>:<trial>` and
-/// `deploy:<name>:preflight:<segment>` replayed
+/// `deploy:<name>:gate:<runtime>:<trial>`,
+/// `deploy:<name>:preflight:<segment>` and
+/// `deploy:<name>:attribution:<knob>:<rung>` replayed (the modes are the
+/// Python registry's; this side knows only the prefix)
 /// (`rq_pipeline/deploy/viewport_source.py::DEPLOY_PREFIX`, pinned by
 /// `tests/test_studio_mirrors.py`). Run by the render stream, in the
 /// pipeline's venv, inside the open project.

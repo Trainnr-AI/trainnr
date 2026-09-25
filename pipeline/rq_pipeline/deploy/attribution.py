@@ -29,7 +29,7 @@ import os
 from collections import deque
 from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -47,6 +47,7 @@ from rq_pipeline.deploy.gate import (
     require_same_draw,
 )
 from rq_pipeline.deploy.manifest import Key, Manifest, load_manifest, read_gates
+from rq_pipeline.deploy.poses import PoseTrack, poses_file, trial_segment
 from rq_pipeline.deploy.runtimes import DEFAULT_RUNTIME, Opener, runtime_spec
 from rq_pipeline.evaluate.tracking import TrackingOutcome
 from rq_pipeline.stats.intervals import clopper_pearson
@@ -640,21 +641,59 @@ def knob(name: str) -> Knob:
 
 
 @dataclass(frozen=True)
+class Worst:
+    """A rung's worst trial, kept so the Studio's MuJoCo viewport can
+    replay it: the first that fell, else the first that did not track,
+    else the first (every trial held). Its frames, as `deploy.poses`
+    keeps a trial's."""
+
+    trial: int
+    outcome: str
+    frames: tuple[np.ndarray, np.ndarray, np.ndarray]
+
+
+WORST_FELL = "fell"
+WORST_UNTRACKED = "survived, did not track"
+WORST_HELD = "tracked (every trial held)"
+
+
+def worst_of(results: list[TrackingOutcome]) -> tuple[int, str]:
+    """(trial index, outcome word) of the trial a replay shows."""
+    for i, t in enumerate(results):
+        if t.fell:
+            return i, WORST_FELL
+    for i, t in enumerate(results):
+        if not t.success:
+            return i, WORST_UNTRACKED
+    return 0, WORST_HELD
+
+
+@dataclass(frozen=True)
 class Rung:
-    """One rung's gate: the count and its exact interval."""
+    """One rung's gate: the count and its exact interval, and its worst
+    trial's frames for the viewport (not part of the rung's identity)."""
 
     level: float
     successes: int
     trials: int
     ci95: tuple[float, float]
     mean_err_ratio: float
+    worst: Worst | None = field(default=None, compare=False, repr=False)
 
     @property
     def rate(self) -> float:
         return self.successes / max(self.trials, 1)
 
     def row(self, bar: Bar) -> dict[str, Any]:
-        return asdict(self) | {
+        out: dict[str, Any] = {
+            "level": self.level,
+            "successes": self.successes,
+            "trials": self.trials,
+            "mean_err_ratio": self.mean_err_ratio,
+        }
+        if self.worst is not None:
+            out["replay"] = {"trial": self.worst.trial, "outcome": self.worst.outcome}
+        return out | {
             "ci95": list(self.ci95),  # JSON has no tuples: the record is plain
             "rate": round(self.rate, CI_DIGITS),
             # every rule's verdict beside the one ranked by, so a reader
@@ -725,10 +764,11 @@ def _run_rung(
         if close is not None:
             close()
         raise
+    track = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
     try:
         protocol: dict[str, Any] = {}
         results: list[TrackingOutcome] = hold_twists(
-            manifest, turned, protocol, sweep.trials, sweep.seed, None, []
+            manifest, turned, protocol, sweep.trials, sweep.seed, None, [], track
         )
     finally:
         close = getattr(turned, "close", None)
@@ -736,12 +776,17 @@ def _run_rung(
             close()
     k = sum(t.success for t in results)
     lo, hi = clopper_pearson(k, sweep.trials)
+    index, outcome = worst_of(results)
+    worst = Worst(
+        index, outcome, track.frames(track.segments.index(trial_segment(index)))
+    )
     return Rung(
         level=float(level),
         successes=k,
         trials=sweep.trials,
         ci95=(round(lo, CI_DIGITS), round(hi, CI_DIGITS)),
         mean_err_ratio=round(float(np.mean([t.err_ratio for t in results])), CI_DIGITS),
+        worst=worst,
     )
 
 
@@ -906,6 +951,7 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     workers: int | None = None,
     open: Opener | None = None,
     appliers: dict[str, Applier] | None = None,
+    on_knob: Callable[[dict[str, Any], float], None] | None = None,
 ) -> dict[str, Any]:
     """Climb every knob's ladder (in `workers` spawned processes, one per
     knob; in this process when 0, or when a fake `open`/`appliers` is
@@ -947,16 +993,24 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
                 lower=lower,
             )
         )
+    by_name = {k.name: k for k in knobs}
     climbed: dict[str, list[Rung]] = {}
     at_fit: dict[str, Rung] = {}
+
+    def landed(knob_name: str, rungs: list[Rung]) -> None:
+        climbed[knob_name] = rungs
+        if on_knob is not None:  # the live stream: a knob as it finishes
+            on_knob(_knob_record(by_name[knob_name], rungs, sweep), lower)
+
     if in_process:
         for k in knobs:
-            climbed[k.name] = climb(sweep, k, open=open, appliers=appliers)
+            landed(k.name, climb(sweep, k, open=open, appliers=appliers))
         for rung_name, terms in fit_terms.items():
             assert fit is not None
             at_fit[rung_name] = fit_rung(sweep, fit, terms, open=open)
     else:
         import multiprocessing  # noqa: PLC0415
+        from concurrent.futures import as_completed  # noqa: PLC0415
 
         with ProcessPoolExecutor(
             max_workers=count, mp_context=multiprocessing.get_context("spawn")
@@ -965,13 +1019,14 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
                 pool.submit(_fit_in_worker, (sweep, fit, rung_name, terms))
                 for rung_name, terms in fit_terms.items()
             ]
-            for knob_name, rungs in pool.map(
-                _climb_in_worker, [(sweep, k) for k in knobs]
+            for future in as_completed(
+                [pool.submit(_climb_in_worker, (sweep, k)) for k in knobs]
             ):
-                climbed[knob_name] = rungs
+                landed(*future.result())
             for future in fits:
                 rung_name, rung = future.result()
                 at_fit[rung_name] = rung
+    climbed = {k.name: climbed[k.name] for k in knobs}  # the table's order
     ranking = rank(climbed, sweep.past)
     record: dict[str, Any] = {
         "schema": ATTRIBUTION_SCHEMA,
@@ -1012,8 +1067,50 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     }
     if fit is not None:
         record["fit"] = _fit_record(fit, fit_terms, at_fit, sweep)
+    replay = save_replays(deployment_dir, manifest, climbed, at_fit)
+    if replay is not None:
+        record["replay"] = replay
     write_attribution(deployment_dir, record)
     return record
+
+
+def replay_segment(knob_name: str, rung: str) -> str:
+    """A rung's segment in the attribution's pose file: `armature 2` for
+    the ladder's second rung, `joint_friction fit` at the fit."""
+    return f"{knob_name} {rung}"
+
+
+FIT_RUNG = "fit"  # the rung word of a fit rung, in a replay scene and a segment
+
+
+def save_replays(
+    deployment_dir: Path,
+    manifest: Manifest,
+    climbed: dict[str, list[Rung]],
+    at_fit: dict[str, Rung],
+) -> dict[str, Any] | None:
+    """Every rung's worst trial, one segment each, saved beside the
+    deployment's saved streams (`.viewer/attribution-poses.npz`, hidden:
+    it never moves the deployment's identity), so the Studio's MuJoCo
+    viewport replays them. None when no rung kept frames (a fake runtime's)."""
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
+
+    track = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
+    rungs = [
+        (replay_segment(name, str(i)), r)
+        for name, ladder in climbed.items()
+        for i, r in enumerate(ladder, start=1)
+    ] + [(replay_segment(name, FIT_RUNG), r) for name, r in at_fit.items()]
+    for segment, rung in rungs:
+        if rung.worst is not None and len(rung.worst.frames[0]):
+            track.extend(segment, rung.worst.frames)
+    if not len(track):
+        return None
+    path = track.save(poses_file(viewer_file(Path(deployment_dir), STREAM)))
+    return {
+        "poses": str(path.relative_to(Path(deployment_dir))),
+        "segments": len(rungs),
+    }
 
 
 def write_attribution(deployment_dir: Path, record: dict[str, Any]) -> Path:
@@ -1193,26 +1290,37 @@ def ladder_series(rung: dict[str, Any], certificate_lower: float) -> dict[str, f
     )
 
 
-def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
-    """The record as the Studio sees it: per knob, the tracked rate and
-    its interval up the ladder on a `rung` timeline, the certificate's
-    lower bound beside them, the ranking as a document. Saved as the
-    deployment's `attribution` stream; sent to a listening Studio."""
+def open_live(folder: Path, *, rr: Any = None) -> Any:
+    """The deployment's `attribution` stream, opened once: saved beside the
+    deployment and sent to a listening Studio while the sweep runs."""
     from rq_pipeline.viz import open_stream, viewer_file  # noqa: PLC0415
 
     file = viewer_file(folder, STREAM)
     file.parent.mkdir(parents=True, exist_ok=True)
-    name = Path(folder).name
-    rr = open_stream(f"rq-{STREAM}-{name}", file=file, rr=rr, on_term=False)
-    lower = float((record.get("certificate") or {}).get("lower", 0.0))
-    for entry in record.get("knobs", []):
-        knob_name = entry["name"]
-        for i, rung in enumerate(entry.get("rungs", []), start=1):
-            rr.set_time("rung", sequence=i)
-            for series, value in ladder_series(rung, lower).items():
-                rr.log(f"{STREAM}/{knob_name}/{series}", rr.Scalars(value))
+    return open_stream(
+        f"rq-{STREAM}-{Path(folder).name}", file=file, rr=rr, on_term=False
+    )
+
+
+def log_knob(rr: Any, entry: dict[str, Any], certificate_lower: float) -> None:
+    """One knob's ladder: the tracked rate and its interval per rung on a
+    `rung` timeline, the certificate's lower bound beside them."""
+    for i, rung in enumerate(entry.get("rungs", []), start=1):
+        rr.set_time("rung", sequence=i)
+        for series, value in ladder_series(rung, certificate_lower).items():
+            rr.log(f"{STREAM}/{entry['name']}/{series}", rr.Scalars(value))
+
+
+def log_ranking(rr: Any, record: dict[str, Any], name: str) -> None:
+    """The ranking, the fit rungs and the rule, as one document."""
     units = {k["name"]: k.get("unit", "") for k in record.get("knobs", [])}
-    lines = [f"# {name}: what would break it first", "", record.get("sensitivity", "")]
+    lines = [
+        f"# {name}: what would break it first",
+        "",
+        marked_sensitivity(record),
+        f"cliff rule {rule_of(record)}",
+        "",
+    ]
     for r in record.get("ranking", []):
         cliff = r.get("cliff")
         lines.append(
@@ -1223,5 +1331,25 @@ def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
                 else f"cliff at {cliff:g} {units.get(r['name'], '')}".rstrip()
             )
         )
+    fit = record.get("fit") or {}
+    for r in fit.get("rungs") or []:
+        word = "past the cliff" if r.get("past_cliff") else "holds"
+        lines.append(
+            f"- {r['name']} {fit.get('label', FIT_LABEL)}: "
+            f"{r['successes']}/{r['trials']}, {word}"
+        )
     rr.log(f"{STREAM}/ranking", rr.TextDocument("\n".join(lines)), static=True)
-    return file
+
+
+def stream(record: dict[str, Any], folder: Path, *, rr: Any = None) -> Path:
+    """The record as the Studio sees it, all at once (a re-show of a saved
+    record); a live sweep calls `open_live`, `log_knob` per knob as it
+    lands, then `log_ranking`."""
+    from rq_pipeline.viz import viewer_file  # noqa: PLC0415
+
+    rr = open_live(folder, rr=rr)
+    lower = float((record.get("certificate") or {}).get("lower", 0.0))
+    for entry in record.get("knobs", []):
+        log_knob(rr, entry, lower)
+    log_ranking(rr, record, Path(folder).name)
+    return viewer_file(folder, STREAM)

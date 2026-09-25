@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from _lab import bootstrap, deployment_args, resolve_deployment
 
@@ -22,8 +23,10 @@ from rq_pipeline.deploy.attribution import (  # noqa: E402
     attribute,
     knob,
     load_fit,
+    log_knob,
+    log_ranking,
+    open_live,
     still_at_cliff,
-    stream,
     write_attribution,
 )
 from rq_pipeline.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
@@ -61,6 +64,7 @@ def main() -> None:
         project, deployment, manifest, assets = resolve_deployment(args)
         certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
         fit = load_fit(args.fit) if args.fit is not None else None
+        live = _live(deployment)
         record = attribute(
             deployment,
             assets_dir=assets,
@@ -71,6 +75,7 @@ def main() -> None:
             tolerance=args.tolerance,
             fit=fit,
             workers=args.workers,
+            on_knob=None if live is None else _on_knob(live),
         )
     except (FileNotFoundError, ValueError, ImportError) as exc:
         raise SystemExit(str(exc)) from exc
@@ -117,13 +122,39 @@ def main() -> None:
             ),
             flush=True,
         )
-    try:
-        file = stream(record, deployment)
-        print(f"[attribution] stream -> {file}", flush=True)
-    except ImportError as missing:  # no viz extra: the record stands alone
-        print(f"[attribution] stream not written: {missing}", flush=True)
+    if live is not None:  # the ladders are already in; the ranking closes it
+        log_ranking(live, record, deployment.name)
+        print("[attribution] streamed live to the Studio and saved", flush=True)
+    if record.get("replay"):
+        print(
+            f"[attribution] replays: {record['replay']['poses']} "
+            f"({record['replay']['segments']} rungs; the Studio's MuJoCo viewport "
+            f"shows them as deploy:{deployment.name}:attribution:<knob>:<rung>)",
+            flush=True,
+        )
     write_index(project, index_project(project))
     sys.exit(0)
+
+
+def _live(deployment: Path) -> Any:
+    """The attribution's stream, opened before the sweep so each knob's
+    ladder reaches a listening Studio as it lands; None without the viz
+    extra (the record stands alone)."""
+    try:
+        return open_live(deployment)
+    except ImportError as missing:
+        print(f"[attribution] no live stream: {missing}", flush=True)
+        return None
+
+
+def _on_knob(rr: Any) -> Any:
+    def log(entry: dict[str, Any], certificate_lower: float) -> None:
+        log_knob(rr, entry, certificate_lower)
+        cliff = entry["cliff"]
+        word = SURVIVED if cliff is None else f"cliff at {cliff['level']:g}"
+        print(f"[attribution] live: {entry['name']} landed, {word}", flush=True)
+
+    return log
 
 
 if __name__ == "__main__":
