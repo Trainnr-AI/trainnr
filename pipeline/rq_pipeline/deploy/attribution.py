@@ -1,10 +1,14 @@
 """Attribution: which parameter would break this policy first (docs/77
 §9). A gate that PASSED is re-run with one dynamics knob turned at a
 time, up a ladder of the field's plausible deployment deviations from
-the smallest; the knob's **cliff** is the first rung where the tracked
-rate's exact lower bound falls below the certificate's own lower bound;
-the knobs ranked by the rung they fall at are the answer to "it walked
-in simulation and fell on the robot: what is most likely wrong".
+the smallest; the knob's **cliff** is the first rung the gate itself
+would fail - its tracked rate more than the gate's tolerance under the
+certificate's rate (`CLIFF_RULES`, the rule named in every record); the
+knobs ranked by the rung they fall at are the answer to "it walked in
+simulation and fell on the robot: what is most likely wrong". Given a
+joints fit record, the joints' armature, damping and friction are also
+set AT the fitted values, one term at a time and all three together:
+whether the policy survives the robot as it was measured.
 
 Every knob turns the plain MuJoCo runtime's model or its loop and
 nothing else: the policy, the manifest, the commands and the judge are
@@ -52,11 +56,6 @@ if TYPE_CHECKING:
 
 ATTRIBUTION_FILE = "attribution.json"
 ATTRIBUTION_SCHEMA = "trainnr-attribution/1"
-CLIFF_RULE = (
-    "a rung is past the cliff when the exact 95 % lower bound of its tracked "
-    "rate falls below the certificate's exact 95 % lower bound; the ladder "
-    "stops there"
-)
 STILL_FILE = "attribution-cliff.png"
 PUSH_PERIOD_S = 4.0
 NOT_PASSED = (
@@ -79,14 +78,97 @@ OTHER_RUNTIME = (
 )
 SURVIVED = "survived the ladder"
 NO_INTERVAL = (
-    "attribution judges every rung against the certificate's exact lower "
-    "bound; the evaluation {name} cites carries no ci95 (and {missing}): "
-    "re-run the evaluation"
+    "attribution judges every rung against the certificate (its rate and its "
+    "exact lower bound); the evaluation {name} cites carries no ci95 (and "
+    "{missing}): re-run the evaluation"
 )
+NO_FIT = "no fit record at {path}: identify the robot first (`identify_system`)"
+FIT_EMPTY = (
+    "the fit record {path} fits none of {terms} for any joint: it is not a "
+    "joints fit (`legged-joints`)"
+)
+FIT_JOINT_MISSING = (
+    "the fit record names joints the deployment's scene lacks: {joints}; a "
+    "fit of another robot cannot be set on this one"
+)
+# The card's word for a record ranked under a rule that is not today's: it
+# is not re-ranked silently, it is said.
+OLD_RULE = "{word}, cliff rule {rule} (re-run under {now})"
 PROTOCOL_MISMATCH = (
     "the {runtime} gate of {name} ran {field} {theirs}; an attribution at "
     "{field} {ours} would not run the gate's trials: leave {field} unset"
 )
+
+
+# -- the cliff rule --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Bar:
+    """What a rung is judged against: the certificate's rate and exact
+    lower bound, and the gate's tolerance."""
+
+    certificate_rate: float
+    certificate_lower: float
+    tolerance: float = DEFAULT_TOLERANCE
+
+    @property
+    def floor(self) -> float:
+        """The lowest tracked rate the gate itself passes."""
+        return self.certificate_rate - self.tolerance
+
+
+@dataclass(frozen=True)
+class CliffRule:
+    """A named, versioned rule for "this rung is past the cliff"."""
+
+    name: str
+    describe: str
+    past: Callable[[Rung, Bar], bool]
+
+
+# The rules a record may carry, by name; `CLIFF_RULE` is the one the sweep
+# ranks by now. `lower-bound/1` (2026-09-24) could not attribute a policy
+# whose paired gate lost a trial at 20: only 20/20 clears a lower bound of
+# 0.83. The operator chose the gate's own rule (2026-09-25): a rung is past
+# the cliff when the gate would fail it.
+TOLERANCE_RULE = "tolerance/1"
+LOWER_BOUND_RULE = "lower-bound/1"
+CLIFF_RULES: dict[str, CliffRule] = {
+    rule.name: rule
+    for rule in (
+        CliffRule(
+            TOLERANCE_RULE,
+            "a rung is past the cliff when its tracked rate falls more than the "
+            "gate's tolerance under the certificate's rate - the rule the gate "
+            "passes a deployment by; the ladder stops there",
+            lambda rung, bar: rung.rate < bar.floor,
+        ),
+        CliffRule(
+            LOWER_BOUND_RULE,
+            "a rung is past the cliff when the exact 95 % lower bound of its "
+            "tracked rate falls below the certificate's exact 95 % lower bound; "
+            "the ladder stops there",
+            lambda rung, bar: rung.ci95[0] < bar.certificate_lower,
+        ),
+    )
+}
+CLIFF_RULE = TOLERANCE_RULE
+
+
+def rule_of(record: dict[str, Any]) -> str:
+    """The rule a record was ranked by; a record written before the rule
+    was named was ranked by the lower bound."""
+    return str((record.get("protocol") or {}).get("cliff_rule", LOWER_BOUND_RULE))
+
+
+def marked_sensitivity(record: dict[str, Any]) -> str:
+    """The record's one line, marked when its rule is not today's."""
+    word = str(record.get("sensitivity", ""))
+    rule = rule_of(record)
+    if rule == CLIFF_RULE:
+        return word
+    return OLD_RULE.format(word=word, rule=rule, now=CLIFF_RULE)
 
 
 # -- the knobs ------------------------------------------------------------------
@@ -105,6 +187,9 @@ class Knob:
     ladder: tuple[float, ...]
     describe: str
     source: str = ""  # where the rungs come from, as the record states it
+    # The joints fit's term this knob turns (`FIT_TERMS`), when it has one:
+    # the knob is then also set AT the fitted values, a rung of its own.
+    fit_term: str = ""
 
     def label(self, level: float) -> str:
         return f"{self.name} {level:g} {self.unit}".rstrip()
@@ -170,6 +255,37 @@ def _tilt(runtime: Runtime, level: float, _seed: int) -> Runtime:
     theta = np.radians(level)
     g = float(np.linalg.norm(runtime.model.opt.gravity))
     runtime.model.opt.gravity[:] = (g * np.sin(theta), 0.0, -g * np.cos(theta))
+    return runtime
+
+
+def _joint_dofs(model: Any) -> np.ndarray:
+    """The dofs of the robot's own joints (hinges and slides), never the
+    floating base's: it has no motor's armature or friction."""
+    import mujoco  # noqa: PLC0415
+
+    kinds = (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE)
+    return np.array(
+        [model.jnt_dofadr[j] for j in range(model.njnt) if model.jnt_type[j] in kinds],
+        dtype=int,
+    )
+
+
+def _armature_scale(runtime: Runtime, level: float, _seed: int) -> Runtime:
+    """Every joint's armature (the motor's reflected rotor inertia) scaled."""
+    runtime.model.dof_armature[_joint_dofs(runtime.model)] *= level
+    return runtime
+
+
+def _damping_add(runtime: Runtime, level: float, _seed: int) -> Runtime:
+    """Viscous damping added on every joint (N*m*s/rad): the gearbox's loss
+    a declared model leaves at zero."""
+    runtime.model.dof_damping[_joint_dofs(runtime.model)] += level
+    return runtime
+
+
+def _friction_add(runtime: Runtime, level: float, _seed: int) -> Runtime:
+    """Coulomb friction added on every joint (N*m, `frictionloss`)."""
+    runtime.model.dof_frictionloss[_joint_dofs(runtime.model)] += level
     return runtime
 
 
@@ -306,6 +422,10 @@ REFERENCE_DR = (
     "unitree_rl_mjlab velocity_env_cfg.py DR table (friction (0.3, 1.6), "
     "base CoM, pushes 5-6 s), read 2026-09-24"
 )
+FIT_SOURCE = (
+    "the legged-joints fit of a real Go2's in-air chirp (IIT, public log; "
+    "finding go2-legged-fit-public-logs-2026-09-24)"
+)
 KNOBS: tuple[Knob, ...] = (
     Knob(
         "latency",
@@ -369,8 +489,38 @@ KNOBS: tuple[Knob, ...] = (
         f"the base shoved every {PUSH_PERIOD_S:g} s",
         REFERENCE_DR + "; speeds declared (ours)",
     ),
+    Knob(
+        "armature",
+        "x",
+        (1.5, 2.0, 3.0, 4.0),
+        "every joint's armature scaled",
+        FIT_SOURCE + ": armature 0.019-0.039 kg*m^2, about 2x the declared "
+        "0.01/0.02; rungs declared (ours) around it",
+        fit_term="armature",
+    ),
+    Knob(
+        "joint_damping",
+        "N*m*s/rad",
+        (0.1, 0.2, 0.3, 0.5),
+        "viscous damping added on every joint",
+        FIT_SOURCE + ": damping 0.15-0.26 N*m*s/rad where the declared model "
+        "has none; rungs declared (ours) around it",
+        fit_term="damping",
+    ),
+    Knob(
+        "joint_friction",
+        "N*m",
+        (0.25, 0.5, 1.0, 1.5),
+        "Coulomb friction added on every joint",
+        FIT_SOURCE + ": frictionloss 0.10-1.33 N*m where the declared model "
+        "has none; rungs declared (ours) around it",
+        fit_term="frictionloss",
+    ),
 )
 APPLIERS: dict[str, Applier] = {
+    "armature": _armature_scale,
+    "joint_damping": _damping_add,
+    "joint_friction": _friction_add,
     "latency": _latency,
     "friction": _world_friction,
     "payload": _payload,
@@ -391,9 +541,88 @@ NOMINAL = Knob(
 APPLIERS[NOMINAL.name] = lambda runtime, _level, _seed: runtime
 BASELINE_BELOW = (
     "at {trials} trials the untouched runtime reads {successes}/{trials} "
-    "[{lo}, {hi}], under the certificate's lower bound {lower}: the passing "
-    "gate does not reproduce here, so no cliff can be told from it"
+    "[{lo}, {hi}], past the cliff under rule {rule} (the gate's floor "
+    "{floor}, the certificate's lower bound {lower}): the passing gate does "
+    "not reproduce here, so no cliff can be told from it"
 )
+
+
+# -- the fit ---------------------------------------------------------------------
+
+# The joints fit's terms, as the fit record names them (`JOINT.term`), and
+# the model field each sets. Set AT the fitted value, not scaled: the rung
+# is the robot as it was measured.
+FIT_TERMS: dict[str, str] = {
+    "armature": "dof_armature",
+    "damping": "dof_damping",
+    "frictionloss": "dof_frictionloss",
+}
+FIT_LABEL = "at the fit"
+FIT_ALL = "fit"  # the rung that sets every term at once
+
+
+@dataclass(frozen=True)
+class FitValues:
+    """A joints fit record's estimates per joint and term, and where they
+    came from (read once in the parent, carried to every worker)."""
+
+    source: str
+    basis: str
+    values: dict[str, dict[str, float]]  # joint -> term -> estimate
+    pinned: dict[str, dict[str, bool]]
+
+    def span(self, term: str) -> tuple[float, float]:
+        vals = [v[term] for v in self.values.values() if term in v]
+        return (min(vals), max(vals)) if vals else (0.0, 0.0)
+
+
+def load_fit(path: Path) -> FitValues:
+    """A fit record (`robot/fit_record.py`'s JSON) as the values a rung
+    sets; refused by name when absent or when it fits none of `FIT_TERMS`."""
+    path = Path(path)
+    if not path.is_file():
+        raise ValueError(NO_FIT.format(path=path))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    values: dict[str, dict[str, float]] = {}
+    pinned: dict[str, dict[str, bool]] = {}
+    for p in raw.get("parameters") or []:
+        joint, _, term = str(p.get("name", "")).rpartition(".")
+        if joint and term in FIT_TERMS and p.get("estimate") is not None:
+            values.setdefault(joint, {})[term] = float(p["estimate"])
+            pinned.setdefault(joint, {})[term] = bool(p.get("pinned"))
+    if not values:
+        raise ValueError(FIT_EMPTY.format(path=path, terms=", ".join(FIT_TERMS)))
+    return FitValues(
+        source=path.name,
+        basis=str(raw.get("basis") or "unknown"),
+        values=values,
+        pinned=pinned,
+    )
+
+
+def apply_fit(runtime: Runtime, fit: FitValues, terms: tuple[str, ...]) -> Runtime:
+    """The named terms set at the fitted values on every fitted joint; a
+    joint the scene lacks is refused by name, before a trial."""
+    model = runtime.model
+    names = {model.joint(j).name for j in range(model.njnt)}
+    missing = sorted(set(fit.values) - names)
+    if missing:
+        raise ValueError(FIT_JOINT_MISSING.format(joints=", ".join(missing)))
+    for joint, by_term in fit.values.items():
+        dof = int(model.joint(joint).dofadr[0])
+        for term in terms:
+            if term in by_term:
+                getattr(model, FIT_TERMS[term])[dof] = by_term[term]
+    return runtime
+
+
+def fit_rung_terms(knobs: tuple[Knob, ...]) -> dict[str, tuple[str, ...]]:
+    """The fit rungs a sweep runs: one per knob that names a fit term (that
+    term alone), then `FIT_ALL` with every term those knobs name."""
+    out = {k.name: (k.fit_term,) for k in knobs if k.fit_term}
+    if out:
+        out[FIT_ALL] = tuple(t for terms in out.values() for t in terms)
+    return out
 
 
 def knob_names() -> tuple[str, ...]:
@@ -424,12 +653,14 @@ class Rung:
     def rate(self) -> float:
         return self.successes / max(self.trials, 1)
 
-    def row(self, tolerance_floor: float) -> dict[str, Any]:
+    def row(self, bar: Bar) -> dict[str, Any]:
         return asdict(self) | {
             "ci95": list(self.ci95),  # JSON has no tuples: the record is plain
             "rate": round(self.rate, CI_DIGITS),
-            # the gate's own rule beside the cliff's, so a reader sees both
-            "within_tolerance": self.rate >= tolerance_floor,
+            # every rule's verdict beside the one ranked by, so a reader
+            # of this record sees each (the rule is named in the protocol)
+            "within_tolerance": not CLIFF_RULES[TOLERANCE_RULE].past(self, bar),
+            "above_lower_bound": not CLIFF_RULES[LOWER_BOUND_RULE].past(self, bar),
         }
 
 
@@ -441,8 +672,12 @@ class Sweep:
     assets_dir: Path | None
     trials: int
     seed: int
-    certificate_lower: float
+    bar: Bar
     runtime: str = DEFAULT_RUNTIME
+    rule: str = CLIFF_RULE
+
+    def past(self, rung: Rung) -> bool:
+        return CLIFF_RULES[self.rule].past(rung, self.bar)
 
 
 def gate_rung(
@@ -456,11 +691,40 @@ def gate_rung(
     """One rung: a fresh runtime, the knob turned, the gate's held-twist
     trials at the gate's own seed and count (`Sweep`, read from the gate's
     record), judged the gate's way."""
+    applier = (appliers or APPLIERS)[knob_.name]
+    return _run_rung(
+        sweep, level, lambda runtime: applier(runtime, level, sweep.seed), open
+    )
+
+
+def fit_rung(
+    sweep: Sweep,
+    fit: FitValues,
+    terms: tuple[str, ...],
+    *,
+    open: Opener | None = None,
+) -> Rung:
+    """One rung with the named fit terms set AT the fitted values on every
+    fitted joint (the robot as it was measured); level 1.0 by convention."""
+    return _run_rung(sweep, 1.0, lambda runtime: apply_fit(runtime, fit, terms), open)
+
+
+def _run_rung(
+    sweep: Sweep,
+    level: float,
+    turn: Callable[[Any], Any],
+    open: Opener | None,
+) -> Rung:
     manifest = load_manifest(sweep.deployment_dir)
     opener = open if open is not None else runtime_spec(sweep.runtime).open()
-    turned = (appliers or APPLIERS)[knob_.name](
-        opener(manifest, assets_dir=sweep.assets_dir), level, sweep.seed
-    )
+    runtime = opener(manifest, assets_dir=sweep.assets_dir)
+    try:
+        turned = turn(runtime)
+    except Exception:
+        close = getattr(runtime, "close", None)
+        if close is not None:
+            close()
+        raise
     try:
         protocol: dict[str, Any] = {}
         results: list[TrackingOutcome] = hold_twists(
@@ -495,7 +759,7 @@ def climb(
     for level in knob_.ladder:
         rung = gate_rung(sweep, knob_, level, open=open, appliers=appliers)
         rungs.append(rung)
-        if rung.ci95[0] < sweep.certificate_lower:
+        if sweep.past(rung):
             break
     return rungs
 
@@ -505,17 +769,25 @@ def _climb_in_worker(args: tuple[Sweep, Knob]) -> tuple[str, list[Rung]]:
     return knob_.name, climb(sweep, knob_)
 
 
-def cliff_of(rungs: Iterable[Rung], certificate_lower: float) -> Rung | None:
-    """The first rung whose lower bound is under the certificate's."""
+def _fit_in_worker(
+    args: tuple[Sweep, FitValues, str, tuple[str, ...]],
+) -> tuple[str, Rung]:
+    sweep, fit, name, terms = args
+    return name, fit_rung(sweep, fit, terms)
+
+
+Past = Callable[[Rung], bool]
+
+
+def cliff_of(rungs: Iterable[Rung], past: Past) -> Rung | None:
+    """The first rung past the cliff under the rule `past` applies."""
     for rung in rungs:
-        if rung.ci95[0] < certificate_lower:
+        if past(rung):
             return rung
     return None
 
 
-def rank(
-    climbed: dict[str, list[Rung]], certificate_lower: float
-) -> list[tuple[str, Rung | None]]:
+def rank(climbed: dict[str, list[Rung]], past: Past) -> list[tuple[str, Rung | None]]:
     """Knobs by the rung they fall at (its index in the ladder, then the
     rate there); the ones that survived their ladder last, in the order
     they were climbed."""
@@ -523,14 +795,14 @@ def rank(
 
     def key(item: tuple[str, list[Rung]]) -> tuple[int, int, float, int]:
         name, rungs = item
-        cliff = cliff_of(rungs, certificate_lower)
+        cliff = cliff_of(rungs, past)
         order = climbed_order.index(name)
         if cliff is None:
             return (1, 0, 0.0, order)
         return (0, rungs.index(cliff), cliff.rate, order)
 
     return [
-        (name, cliff_of(rungs, certificate_lower))
+        (name, cliff_of(rungs, past))
         for name, rungs in sorted(climbed.items(), key=key)
     ]
 
@@ -630,57 +902,77 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     seed: int | None = None,
     tolerance: float = DEFAULT_TOLERANCE,
     knobs: tuple[Knob, ...] = KNOBS,
+    fit: FitValues | None = None,
     workers: int | None = None,
     open: Opener | None = None,
     appliers: dict[str, Applier] | None = None,
 ) -> dict[str, Any]:
     """Climb every knob's ladder (in `workers` spawned processes, one per
     knob; in this process when 0, or when a fake `open`/`appliers` is
-    injected), rank, write `attribution.json` beside the manifest and
-    return it. `trials` and `seed` are the passing gate's own (read from
-    its record); a value given that differs is refused by name."""
+    injected), and with a `fit`, run each fit term AT its fitted values
+    and all of them together; rank by `CLIFF_RULE`, write
+    `attribution.json` beside the manifest and return it. `trials` and
+    `seed` are the passing gate's own (read from its record); a value
+    given that differs is refused by name."""
     name = Path(deployment_dir).name
     manifest, base, cited = require_passing_gate(deployment_dir, runtime, certificate)
     lower, cert_rate = certificate_bound(cited, name)
     protocol = gate_protocol(base, name, runtime, trials=trials, seed=seed)
     trials, seed = protocol["trials"], protocol["seed"]
+    bar = Bar(certificate_rate=cert_rate, certificate_lower=lower, tolerance=tolerance)
     sweep = Sweep(
         deployment_dir=Path(deployment_dir),
         assets_dir=assets_dir,
         trials=trials,
         seed=seed,
-        certificate_lower=lower,
+        bar=bar,
         runtime=runtime,
     )
+    fit_terms = fit_rung_terms(knobs) if fit is not None else {}
     in_process = workers == 0 or open is not None or appliers is not None
-    count = 0 if in_process else min(len(knobs), workers or os.cpu_count() or 1)
+    jobs = len(knobs) + len(fit_terms)
+    count = 0 if in_process else min(jobs, workers or os.cpu_count() or 1)
     baseline = gate_rung(
         sweep, NOMINAL, NOMINAL.ladder[0], open=open, appliers=appliers
     )
-    if baseline.ci95[0] < lower:
+    if sweep.past(baseline):
         raise ValueError(
             BASELINE_BELOW.format(
                 trials=trials,
                 successes=baseline.successes,
                 lo=baseline.ci95[0],
                 hi=baseline.ci95[1],
+                rule=sweep.rule,
+                floor=round(bar.floor, CI_DIGITS),
                 lower=lower,
             )
         )
     climbed: dict[str, list[Rung]] = {}
+    at_fit: dict[str, Rung] = {}
     if in_process:
         for k in knobs:
             climbed[k.name] = climb(sweep, k, open=open, appliers=appliers)
+        for rung_name, terms in fit_terms.items():
+            assert fit is not None
+            at_fit[rung_name] = fit_rung(sweep, fit, terms, open=open)
     else:
         import multiprocessing  # noqa: PLC0415
 
         with ProcessPoolExecutor(
             max_workers=count, mp_context=multiprocessing.get_context("spawn")
         ) as pool:
-            for name, rungs in pool.map(_climb_in_worker, [(sweep, k) for k in knobs]):
-                climbed[name] = rungs
-    ranking = rank(climbed, lower)
-    floor = cert_rate - tolerance
+            fits = [
+                pool.submit(_fit_in_worker, (sweep, fit, rung_name, terms))
+                for rung_name, terms in fit_terms.items()
+            ]
+            for knob_name, rungs in pool.map(
+                _climb_in_worker, [(sweep, k) for k in knobs]
+            ):
+                climbed[knob_name] = rungs
+            for future in fits:
+                rung_name, rung = future.result()
+                at_fit[rung_name] = rung
+    ranking = rank(climbed, sweep.past)
     record: dict[str, Any] = {
         "schema": ATTRIBUTION_SCHEMA,
         "deployment": manifest.raw.get(Key.STAMP_OF),
@@ -698,24 +990,28 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
             "trials": cited.get("trials"),
             "ci95": cited.get("ci95"),
             "lower": lower,
+            "floor": round(bar.floor, CI_DIGITS),
         },
         "protocol": {
             "trials": trials,
             "seed": seed,
             DRAW_KEY: DRAW_NOW,
             "tolerance": tolerance,
-            "rule": CLIFF_RULE,
+            "cliff_rule": sweep.rule,
+            "rule": CLIFF_RULES[sweep.rule].describe,
             "workers": count,
         },
-        "baseline": baseline.row(floor),
-        "knobs": [_knob_record(k, climbed[k.name], lower, floor) for k in knobs],
+        "baseline": baseline.row(bar),
+        "knobs": [_knob_record(k, climbed[k.name], sweep) for k in knobs],
         "ranking": [
-            {"name": name, "cliff": None if c is None else c.level}
-            for name, c in ranking
+            {"name": knob_name, "cliff": None if c is None else c.level}
+            for knob_name, c in ranking
         ],
         "sensitivity": sensitivity_line(ranking, knobs),
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
+    if fit is not None:
+        record["fit"] = _fit_record(fit, fit_terms, at_fit, sweep)
     write_attribution(deployment_dir, record)
     return record
 
@@ -730,23 +1026,60 @@ def write_attribution(deployment_dir: Path, record: dict[str, Any]) -> Path:
     return out
 
 
-def _knob_record(
-    knob_: Knob, rungs: list[Rung], lower: float, floor: float
-) -> dict[str, Any]:
-    cliff = cliff_of(rungs, lower)
+def _knob_record(knob_: Knob, rungs: list[Rung], sweep: Sweep) -> dict[str, Any]:
+    cliff = cliff_of(rungs, sweep.past)
     return {
         "name": knob_.name,
         "unit": knob_.unit,
         "describe": knob_.describe,
         "source": knob_.source,
         "ladder": list(knob_.ladder),
-        "rungs": [r.row(floor) for r in rungs],
+        "rungs": [r.row(sweep.bar) for r in rungs],
         "cliff": (
             None
             if cliff is None
             else {"level": cliff.level, "rung": rungs.index(cliff) + 1}
         ),
     }
+
+
+def _fit_record(
+    fit: FitValues,
+    terms: dict[str, tuple[str, ...]],
+    at_fit: dict[str, Rung],
+    sweep: Sweep,
+) -> dict[str, Any]:
+    """The fit rungs: which record, whose robot, the values each set, and
+    each rung's gate with its verdict under the rule ranked by."""
+    return {
+        "source": fit.source,
+        "basis": fit.basis,
+        "label": FIT_LABEL,
+        "spans": {t: list(fit.span(t)) for t in FIT_TERMS},
+        "rungs": [
+            {
+                "name": rung_name,
+                "terms": list(terms[rung_name]),
+                "past_cliff": sweep.past(at_fit[rung_name]),
+                **at_fit[rung_name].row(sweep.bar),
+            }
+            for rung_name in terms
+        ],
+    }
+
+
+def fit_line(record: dict[str, Any]) -> str | None:
+    """The card's line for the fit rungs: the all-terms rung's count and
+    word, or None when the record ran none."""
+    fit = record.get("fit") or {}
+    for rung in fit.get("rungs") or []:
+        if rung.get("name") == FIT_ALL:
+            word = "past the cliff" if rung.get("past_cliff") else "holds"
+            return (
+                f"{fit.get('label', FIT_LABEL)}: {rung['successes']}/"
+                f"{rung['trials']}, {word}"
+            )
+    return None
 
 
 def read_attribution(folder: Path) -> dict[str, Any] | None:

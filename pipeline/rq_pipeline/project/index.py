@@ -30,7 +30,11 @@ from typing import Any
 from rq_pipeline.bundles.basis import BASES, BASIS_OWN, BASIS_UNKNOWN
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
-from rq_pipeline.deploy.attribution import read_attribution
+from rq_pipeline.deploy.attribution import (
+    fit_line,
+    marked_sensitivity,
+    read_attribution,
+)
 from rq_pipeline.deploy.gate import DRAW_NOW, draw_of
 from rq_pipeline.deploy.manifest import gate_word, read_gates
 from rq_pipeline.deploy.preflight import (
@@ -689,12 +693,16 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
         out[PREFLIGHT_SUMMARY_KEY] = card_line(preflight)
     attribution = read_attribution(path)
     if attribution:  # what would break it first, right under the gate's word
-        sensitivity = str(attribution.get("sensitivity", UNRECORDED))
+        # marked when ranked under another cliff rule, or drawn by count
+        sensitivity = marked_sensitivity(attribution) or UNRECORDED
         out["sensitivity"] = (
             sensitivity
             if draw_of(attribution) == DRAW_NOW
             else OLD_DRAW.format(word=sensitivity)
         )
+        at_fit = fit_line(attribution)
+        if at_fit is not None:  # the robot as it was measured: holds or not
+            out["measured joints"] = at_fit
         still = attribution.get("still") or {}
         if still.get("file"):  # the card's picture is then the fall, not the robot
             out[PICTURE_KEY] = CLIFF_PICTURE.format(

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from _lab import bootstrap, deployment_args, resolve_deployment
 
@@ -20,6 +21,7 @@ from rq_pipeline.deploy.attribution import (  # noqa: E402
     SURVIVED,
     attribute,
     knob,
+    load_fit,
     still_at_cliff,
     stream,
     write_attribution,
@@ -46,10 +48,19 @@ def main() -> None:
     parser.add_argument(
         "--no-still", action="store_true", help="skip the picture of the fall"
     )
+    parser.add_argument(
+        "--fit",
+        type=Path,
+        default=None,
+        help="a joints fit record (robots/<robot>/fits/<recording>.json): its "
+        "armature, damping and friction set AT the fitted values, one term "
+        "at a time and all together",
+    )
     args = parser.parse_args()
     try:
         project, deployment, manifest, assets = resolve_deployment(args)
         certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
+        fit = load_fit(args.fit) if args.fit is not None else None
         record = attribute(
             deployment,
             assets_dir=assets,
@@ -58,6 +69,7 @@ def main() -> None:
             trials=args.trials,
             seed=args.seed,
             tolerance=args.tolerance,
+            fit=fit,
             workers=args.workers,
         )
     except (FileNotFoundError, ValueError, ImportError) as exc:
@@ -65,8 +77,9 @@ def main() -> None:
     base = record["baseline"]
     print(
         f"[attribution] baseline {base['successes']}/{base['trials']} ci95 "
-        f"{base['ci95']} against the certificate's lower bound "
-        f"{record['certificate']['lower']}",
+        f"{base['ci95']}; cliff rule {record['protocol']['cliff_rule']}: the "
+        f"gate's floor {record['certificate']['floor']}, the certificate's "
+        f"lower bound {record['certificate']['lower']}",
         flush=True,
     )
     for entry in record["knobs"]:
@@ -81,6 +94,15 @@ def main() -> None:
         )
         print(f"[attribution] {entry['name']:>16}: {word} — {rungs}", flush=True)
     print(f"[attribution] {record['sensitivity']}", flush=True)
+    fit = record.get("fit") or {}
+    for r in fit.get("rungs") or []:
+        word = "past the cliff" if r["past_cliff"] else "holds"
+        print(
+            f"[attribution] {r['name']:>16} ({fit['label']}, "
+            f"{'+'.join(r['terms'])}): {r['successes']}/{r['trials']} "
+            f"[{r['ci95'][0]}, {r['ci95'][1]}] {word}",
+            flush=True,
+        )
     if not args.no_still:
         still = still_at_cliff(deployment, record, assets_dir=assets)
         record["still"] = still

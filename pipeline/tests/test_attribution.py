@@ -23,21 +23,34 @@ from rq_pipeline.deploy.attribution import (
     APPLIERS,
     ATTRIBUTION_FILE,
     ATTRIBUTION_SCHEMA,
+    CLIFF_RULE,
+    CLIFF_RULES,
+    FIT_ALL,
+    FIT_TERMS,
     KNOBS,
+    LOWER_BOUND_RULE,
     NOMINAL,
     SURVIVED,
+    TOLERANCE_RULE,
+    Bar,
     Delayed,
     Knob,
     Noisy,
     Pushed,
     Rung,
+    apply_fit,
     attribute,
     cliff_of,
+    fit_line,
+    fit_rung_terms,
     knob,
     knob_names,
+    load_fit,
+    marked_sensitivity,
     rank,
     read_attribution,
     require_passing_gate,
+    rule_of,
     sensitivity_line,
 )
 from rq_pipeline.deploy.gate import DRAW_KEY, DRAW_NOW
@@ -141,6 +154,24 @@ class TheKnobTable(unittest.TestCase):
         with self.assertRaises(ValueError):
             knob("gravity_constant")
 
+    def test_the_fit_knobs_name_a_fit_term_and_cite_the_fit(self) -> None:
+        fitted = {k.name: k.fit_term for k in KNOBS if k.fit_term}
+        self.assertEqual(
+            fitted,
+            {
+                "armature": "armature",
+                "joint_damping": "damping",
+                "joint_friction": "frictionloss",
+            },
+        )
+        for name in fitted:
+            self.assertIn("go2-legged-fit-public-logs-2026-09-24", knob(name).source)
+        self.assertTrue(set(fitted.values()) <= set(FIT_TERMS))
+        terms = fit_rung_terms(KNOBS)
+        self.assertEqual(terms[FIT_ALL], ("armature", "damping", "frictionloss"))
+        self.assertEqual(terms["joint_friction"], ("frictionloss",))
+        self.assertEqual(fit_rung_terms((knob("latency"),)), {})
+
     def test_labels_carry_the_unit(self) -> None:
         self.assertEqual(knob("friction").label(0.6), "friction 0.6 x")
         self.assertEqual(knob("latency").label(2), "latency 2 ticks")
@@ -153,26 +184,56 @@ def _rung(level: float, k: int, n: int = 20) -> Rung:
     return Rung(level, k, n, (round(lo, 4), round(hi, 4)), 0.1)
 
 
+BAR = Bar(certificate_rate=38 / 40, certificate_lower=0.8308)  # go2-c2's
+
+
+def _past(rule: str = CLIFF_RULE) -> Any:
+    return lambda rung: CLIFF_RULES[rule].past(rung, BAR)
+
+
 class TheCliffAndTheRanking(unittest.TestCase):
-    def test_the_cliff_is_the_first_rung_under_the_certificates_bound(self) -> None:
-        rungs = [_rung(1, 20), _rung(2, 19), _rung(3, 10)]
-        self.assertEqual(cliff_of(rungs, 0.8308).level, 2)  # 19/20 -> lo 0.7513
-        self.assertIsNone(cliff_of([_rung(1, 20)], 0.8308))
+    def test_the_cliff_is_the_first_rung_the_gate_would_fail(self) -> None:
+        """The operator's rule (2026-09-25): past the cliff when the rate
+        falls more than the gate's tolerance under the certificate's
+        (0.95 - 0.10 = 0.85). 19/20 and 18/20 hold; 16/20 does not."""
+        self.assertEqual(CLIFF_RULE, TOLERANCE_RULE)
+        rungs = [_rung(1, 20), _rung(2, 19), _rung(3, 18), _rung(4, 16)]
+        self.assertEqual(cliff_of(rungs, _past()).level, 4)
+        self.assertIsNone(cliff_of([_rung(1, 20), _rung(2, 18)], _past()))
+
+    def test_the_old_rule_is_kept_and_said_not_silently_reused(self) -> None:
+        """`lower-bound/1` read one lost trial at 20 as a cliff (19/20 has a
+        lower bound 0.7513 < 0.8308), which is why go2-c2's paired gate
+        (18/20) could not be attributed; a record ranked under it keeps its
+        word and is marked on the card."""
+        rungs = [_rung(1, 20), _rung(2, 19)]
+        self.assertEqual(cliff_of(rungs, _past(LOWER_BOUND_RULE)).level, 2)
+        self.assertIsNone(cliff_of(rungs, _past(TOLERANCE_RULE)))
+        old = {"sensitivity": "most sensitive to latency 2 ticks", "protocol": {}}
+        self.assertEqual(rule_of(old), LOWER_BOUND_RULE)
+        self.assertIn("cliff rule lower-bound/1", marked_sensitivity(old))
+        self.assertIn(f"re-run under {CLIFF_RULE}", marked_sensitivity(old))
+        new = {"sensitivity": "x", "protocol": {"cliff_rule": CLIFF_RULE}}
+        self.assertEqual(marked_sensitivity(new), "x")
+        # every rung row carries both rules' verdicts
+        row = _rung(2, 19).row(BAR)
+        self.assertTrue(row["within_tolerance"])
+        self.assertFalse(row["above_lower_bound"])
 
     def test_knobs_are_ranked_by_the_rung_they_fall_at(self) -> None:
         climbed = {
             "friction": [_rung(0.8, 20), _rung(0.6, 20), _rung(0.4, 12)],
             "latency": [_rung(1, 15)],
             "payload": [_rung(1, 20), _rung(2, 20)],  # survived its (short) ladder
-            "kp": [_rung(0.8, 20), _rung(0.6, 20), _rung(0.4, 18)],
+            "kp": [_rung(0.8, 20), _rung(0.6, 20), _rung(0.4, 14)],
         }
-        order = [name for name, _ in rank(climbed, 0.8308)]
+        order = [name for name, _ in rank(climbed, _past())]
         # latency fell at rung 1; friction and kp at rung 3, friction lower
         self.assertEqual(order, ["latency", "friction", "kp", "payload"])
-        line = sensitivity_line(rank(climbed, 0.8308))
+        line = sensitivity_line(rank(climbed, _past()))
         self.assertEqual(line, "most sensitive to latency 1 ticks, then friction 0.4 x")
         self.assertEqual(
-            sensitivity_line(rank({"payload": climbed["payload"]}, 0.83)), SURVIVED
+            sensitivity_line(rank({"payload": climbed["payload"]}, _past())), SURVIVED
         )
 
 
@@ -503,6 +564,22 @@ class TheAppliersOnAModel(unittest.TestCase):
         self.assertEqual(pushed.period_ticks, round(attr.PUSH_PERIOD_S / rt.step_dt))
         self.assertIs(APPLIERS[NOMINAL.name](rt, 1.0, 0), rt)
 
+    def test_the_joint_knobs_turn_the_joints_and_never_the_base(self) -> None:
+        """The three fit-term knobs on a real model: the hinge's dof turned,
+        the floating base's never (it has no motor)."""
+        rt = self._runtime()
+        dof = int(rt.model.joint("j").dofadr[0])
+        base = int(rt.model.joint("root").dofadr[0])
+        rt.model.dof_armature[dof] = 0.01
+        APPLIERS["armature"](rt, 2.0, 0)
+        self.assertAlmostEqual(float(rt.model.dof_armature[dof]), 0.02)
+        APPLIERS["joint_damping"](rt, 0.2, 0)
+        APPLIERS["joint_friction"](rt, 0.5, 0)
+        self.assertAlmostEqual(float(rt.model.dof_damping[dof]), 0.2)
+        self.assertAlmostEqual(float(rt.model.dof_frictionloss[dof]), 0.5)
+        for field_ in ("dof_armature", "dof_damping", "dof_frictionloss"):
+            self.assertEqual(float(getattr(rt.model, field_)[base]), 0.0, field_)
+
 
 class TheDoor(unittest.TestCase):
     def test_the_action_spawns_the_tool_verbatim(self) -> None:
@@ -539,3 +616,122 @@ class TheDoor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _fit_file(folder: Path, joints: dict[str, dict[str, float]]) -> Path:
+    """A joints fit record in `robot/fit_record.py`'s shape."""
+    path = folder / "fit.json"
+    path.write_text(
+        json.dumps(
+            {
+                "robot": "tiny@test",
+                "basis": "public log",
+                "parameters": [
+                    {"name": f"{j}.{t}", "estimate": v, "pinned": True}
+                    for j, terms in joints.items()
+                    for t, v in terms.items()
+                ],
+            }
+        )
+    )
+    return path
+
+
+@needs_sim
+class TheFit(unittest.TestCase):
+    """The fit rungs set a joints fit's armature, damping and friction AT
+    the fitted values (the robot as it was measured), one term at a time
+    and all together; a fit that is absent, fits no joint term, or names a
+    joint the scene lacks is refused by name, before a trial."""
+
+    def _model(self) -> Any:
+        import mujoco  # noqa: PLC0415
+
+        return mujoco.MjModel.from_xml_string(TINY_XML)
+
+    def test_the_record_is_read_and_set_at_the_fitted_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fit = load_fit(
+                _fit_file(
+                    Path(tmp),
+                    {"j": {"armature": 0.03, "damping": 0.2, "frictionloss": 0.4}},
+                )
+            )
+        self.assertEqual(fit.basis, "public log")
+        self.assertEqual(fit.span("damping"), (0.2, 0.2))
+        runtime = SimpleNamespace(model=self._model())
+        dof = int(runtime.model.joint("j").dofadr[0])
+        free = int(runtime.model.joint("root").dofadr[0])
+        apply_fit(runtime, fit, ("damping",))
+        self.assertAlmostEqual(float(runtime.model.dof_damping[dof]), 0.2)
+        self.assertEqual(float(runtime.model.dof_armature[dof]), 0.0)  # untouched
+        apply_fit(runtime, fit, ("armature", "damping", "frictionloss"))
+        self.assertAlmostEqual(float(runtime.model.dof_armature[dof]), 0.03)
+        self.assertAlmostEqual(float(runtime.model.dof_frictionloss[dof]), 0.4)
+        self.assertEqual(float(runtime.model.dof_damping[free]), 0.0)  # the base
+
+    def test_every_fit_that_cannot_be_set_is_refused_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "no fit record at"):
+                load_fit(Path(tmp) / "absent.json")
+            empty = Path(tmp) / "empty.json"
+            empty.write_text(json.dumps({"parameters": [{"name": "j.kp"}]}))
+            with self.assertRaisesRegex(ValueError, "not a joints fit"):
+                load_fit(empty)
+            other = load_fit(_fit_file(Path(tmp), {"knee": {"damping": 0.2}}))
+        with self.assertRaisesRegex(ValueError, "knee"):
+            apply_fit(SimpleNamespace(model=self._model()), other, ("damping",))
+
+    def test_the_fit_rungs_and_the_combined_rung_are_run_and_recorded(self) -> None:
+        """A fake robot that falls when any joint's friction reaches 1 N*m:
+        with a fit of 1.33 N*m the friction rung and the combined `fit`
+        rung are past the cliff, the armature and damping rungs hold, and
+        the card says the combined rung's word."""
+
+        @dataclass
+        class Joints(FakeRuntime):
+            model: Any = None
+
+            def fell_over(self) -> bool:
+                return float(self.model.dof_frictionloss.max()) >= 1.0
+
+        def fake_open(manifest: Any, *, assets_dir: Any) -> Joints:
+            return Joints(manifest, model=self._model())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = _manifest(Path(tmp))
+            _passing_gate(folder, seed=7)
+            fit = load_fit(
+                _fit_file(
+                    Path(tmp),
+                    {"j": {"armature": 0.03, "damping": 0.2, "frictionloss": 1.33}},
+                )
+            )
+            record = attribute(
+                folder,
+                assets_dir=None,
+                certificate=CERT,
+                knobs=(knob("armature"), knob("joint_damping"), knob("joint_friction")),
+                fit=fit,
+                open=fake_open,
+            )
+            self.assertEqual(record["protocol"]["cliff_rule"], CLIFF_RULE)
+            rungs = {r["name"]: r for r in record["fit"]["rungs"]}
+            self.assertEqual(
+                list(rungs), ["armature", "joint_damping", "joint_friction", FIT_ALL]
+            )
+            self.assertFalse(rungs["armature"]["past_cliff"])
+            self.assertFalse(rungs["joint_damping"]["past_cliff"])
+            self.assertTrue(rungs["joint_friction"]["past_cliff"])
+            self.assertTrue(rungs[FIT_ALL]["past_cliff"])
+            self.assertEqual(rungs[FIT_ALL]["successes"], 0)
+            self.assertEqual(record["fit"]["basis"], "public log")
+            self.assertEqual(fit_line(record), "at the fit: 0/20, past the cliff")
+            # the added-friction ladder climbs to 1.0 N*m and stops there
+            friction = next(k for k in record["knobs"] if k["name"] == "joint_friction")
+            self.assertEqual(friction["cliff"], {"level": 1.0, "rung": 3})
+            summary = _summary_deploy(folder)
+            self.assertEqual(
+                summary["measured joints"], "at the fit: 0/20, past the cliff"
+            )
+        self.assertIsNone(fit_line({"sensitivity": "x"}))

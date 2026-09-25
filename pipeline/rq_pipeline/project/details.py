@@ -33,7 +33,12 @@ import numpy as np
 from rq_pipeline.collect.datasheet import DATASHEET_FILE
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.assay import read_assay
-from rq_pipeline.deploy.attribution import SURVIVED, read_attribution
+from rq_pipeline.deploy.attribution import (
+    SURVIVED,
+    marked_sensitivity,
+    read_attribution,
+    rule_of,
+)
 from rq_pipeline.deploy.preflight import (
     CHECK_MARKS,
     RAMP_VARIANTS,
@@ -1247,6 +1252,16 @@ def attribution_table(record: dict[str, Any]) -> Section:
                 ),
             ]
         )
+    fit = record.get("fit") or {}
+    for r in fit.get("rungs") or []:
+        rows.append(
+            [
+                f"{r['name']} ({fit.get('label', '')})",
+                "set at the fitted values: " + ", ".join(r.get("terms", [])),
+                "past the cliff" if r.get("past_cliff") else "holds",
+                f"{r['successes']}/{r['trials']} {_rng(*r['ci95'])}",
+            ]
+        )
     base = record.get("baseline") or {}
     cert = record.get("certificate") or {}
     return _table(
@@ -1254,10 +1269,17 @@ def attribution_table(record: dict[str, Any]) -> Section:
         ["knob", "what is turned", "cliff", "rungs (k/n, exact 95 % interval)"],
         rows,
         note=(
-            f"{record.get('sensitivity', UNRECORDED)}; baseline "
-            f"{ratio_of(base)} at this draw against the certificate's lower bound "
-            f"{cert.get('lower', UNRECORDED)}; "
+            f"{marked_sensitivity(record)}; baseline {ratio_of(base)} at this "
+            f"draw; the gate's floor {cert.get('floor', UNRECORDED)}, the "
+            f"certificate's lower bound {cert.get('lower', UNRECORDED)}; cliff "
+            f"rule {rule_of(record)}: "
             f"{(record.get('protocol') or {}).get('rule', '')}"
+            + (
+                f"; the fit rungs set {fit.get('source', UNRECORDED)} "
+                f"({fit.get('basis', UNRECORDED)})"
+                if fit
+                else ""
+            )
         ),
     )
 
