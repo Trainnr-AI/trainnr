@@ -275,6 +275,16 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         help="on a scene, train without the head camera (the rate without pictures)",
     )
     parser.add_argument(
+        "--lag-dr-ms",
+        type=float,
+        default=0.0,
+        metavar="MS",
+        help="train under a random command lag of 0..MS milliseconds, redrawn "
+        "every second per world, on top of the bundle's identified delay "
+        "(rq_mjlab.lag_dr); 0 = none. Recorded in the identity; the verdict "
+        "judges without it and measures delay as a rung (walk_verdict --delay)",
+    )
+    parser.add_argument(
         "--fit",
         default=None,
         help="a joint fit in the robot's bundle, by its own stamp (fit@...) or its "
@@ -296,6 +306,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
     from rq_pipeline.viz import viewer_file  # noqa: PLC0415
 
+    from rq_mjlab.lag_dr import with_command_lag  # noqa: PLC0415
     from rq_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
     use_project(args.project)
@@ -310,6 +321,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         cameras=not args.no_cameras,
         fit=args.fit,
     )
+    identity = with_command_lag(cfg, identity, args.lag_dr_ms)
     print(
         f"[train] actuator {identity[Identity.ACTUATOR]}; "
         f"dr_basis: {identity[Identity.DR_BASIS]}"

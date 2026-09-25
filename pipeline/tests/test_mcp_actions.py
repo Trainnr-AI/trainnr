@@ -359,6 +359,20 @@ class TheCrossEvaluation(unittest.TestCase):
                 self.assertNotIn(flag, argv)
 
 
+class TheLagTraining(unittest.TestCase):
+    def test_a_lag_draw_rides_the_train_door(self) -> None:
+        with harness() as (actions, spawner):
+            actions.train_walk("g3", robot="go2", fit="fit@ab", lag_dr_ms=40.0)
+            [(argv, _)] = spawner.calls
+            self.assertEqual(argv[-4:], ["--fit", "fit@ab", "--lag-dr-ms", "40"])
+
+    def test_no_lag_adds_nothing(self) -> None:
+        with harness() as (actions, spawner):
+            actions.train_walk("g3", robot="go2")
+            [(argv, _)] = spawner.calls
+            self.assertNotIn("--lag-dr-ms", argv)
+
+
 class TheWalkDemosDoor(unittest.TestCase):
     def test_generate_walk_demos_on_a_scene_names_the_robot_and_the_scene(self) -> None:
         with harness() as (actions, spawner):

@@ -328,6 +328,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     scene: str | None = None,
     cameras: bool = True,
     fit: str | None = None,
+    lag_dr_ms: float = 0.0,
 ) -> JobHandle | Refusal:
     """Train a walk policy through rq_mjlab. `task` names a declared walk
     in the project: its robot and randomization span are used and its
@@ -344,8 +345,10 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     names a joint fit in the robot's bundle (its own stamp `fit@...`, or
     its recording's; a declared walk's task.json may carry one): the
     joints train at the fit's estimates, randomized over its intervals,
-    and the run names it (2026-09-25; the Go2). Minutes to hours;
-    returns a job handle."""
+    and the run names it (2026-09-25; the Go2). `lag_dr_ms` trains under a
+    random command lag of 0..that many milliseconds, redrawn every second
+    per world (rq_mjlab.lag_dr; any walk), recorded in the identity.
+    Minutes to hours; returns a job handle."""
     from rq_pipeline.mcp_actions import Actions  # noqa: PLC0415
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -381,6 +384,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             scene=scene_dir,
             cameras=cameras,
             fit=fit,
+            lag_dr_ms=lag_dr_ms,
         )
     except ValueError as why:
         return refusal(str(why))

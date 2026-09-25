@@ -117,6 +117,7 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     scene: str | None = None,
     cameras: bool = True,
     fit: str | None = None,
+    lag_dr_ms: float = 0.0,
     env_file: Path | None = ENV_FILE,
 ) -> list[str]:
     """The one command line that trains a walk through rq_mjlab, for the
@@ -146,6 +147,8 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
             argv.append("--no-cameras")
     if fit is not None:  # the joints at a measured fit (rq_mjlab.fit_walk)
         argv += ["--fit", fit]
+    if lag_dr_ms:  # a random command lag in training (rq_mjlab.lag_dr)
+        argv += ["--lag-dr-ms", f"{lag_dr_ms:g}"]
     return argv
 
 
@@ -288,6 +291,7 @@ class Actions:
         scene: str | None = None,
         cameras: bool = True,
         fit: str | None = None,
+        lag_dr_ms: float = 0.0,
     ) -> JobHandle:
         """Train a walk through rq_mjlab (the certified stack: stamped
         bundles, declared DR bases, the linter green by construction).
@@ -309,6 +313,7 @@ class Actions:
             scene=scene,
             cameras=cameras,
             fit=fit,
+            lag_dr_ms=lag_dr_ms,
             env_file=self.env_file,
         )
         return self.jobs.start("train-walk", argv, RQ_MJLAB_DIR)

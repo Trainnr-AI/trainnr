@@ -300,6 +300,9 @@ class Identity:
     # the robot's) and whose robot the fit measured (`bundles.basis`).
     FIT = "fit"
     FIT_BASIS = "fit_basis"
+    # the command lag a run trained under (rq_mjlab.lag_dr): training
+    # randomization, recorded, never gated - the verdict judges without it
+    LAG_DR = "lag_dr"
 
 
 NO_CAMERAS = "none"  # the identity's word for an actor that saw no camera
