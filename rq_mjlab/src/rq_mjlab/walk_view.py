@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rq_pipeline.project.kinds import IDENTITY_FILE, TASK_FILE
+from rq_pipeline.project.kinds import IDENTITY_FILE, POLICY_FILE, TASK_FILE
 from rq_pipeline.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
 from rq_pipeline.viz import SIM_TIMELINE
 
@@ -182,15 +182,35 @@ def latest_checkpoint(project: Path | None = None) -> Path:
     else under runs/microduck-walk or the flagship study's arms."""
     if project is not None:
         # A policy artifact first (a judged checkpoint, copied there by
-        # the live loop), else any run's checkpoint; newest by time.
+        # the live loop), else any run's checkpoint; newest by time, and
+        # only one the plain walk scene can play: a checkpoint trained on
+        # a staged scene or with a camera needs that scene or camera, and
+        # the plain view would feed it the wrong observation (2026-09-25:
+        # go2-scene-c1's 235-wide actor loaded into the 48-wide flat walk
+        # crashed the Studio's render stream).
         root = Path(project)
+        skipped: list[str] = []
         for folder in (POLICIES_FOLDER, RUNS_FOLDER):
             checkpoints = sorted(
                 root.glob(f"{folder}/*/{CHECKPOINT_GLOB}"),
                 key=lambda p: p.stat().st_mtime,
             )
-            if checkpoints:
-                return checkpoints[-1]
+            playable = [c for c in checkpoints if plain_walk_plays(c, root)]
+            skipped += [c.parent.name for c in checkpoints if c not in playable]
+            if playable:
+                if skipped:
+                    print(
+                        f"[walk_view] skipped {sorted(set(skipped))}: trained on a "
+                        "staged scene or with a camera the plain walk does not show",
+                        file=sys.stderr,
+                    )
+                return playable[-1]
+        if skipped:
+            raise SystemExit(
+                f"every checkpoint under {project} needs a staged scene or a "
+                f"camera the plain walk scene does not show ({sorted(set(skipped))}); "
+                "play one with walk_play --scene, or train a plane walk"
+            )
         raise SystemExit(
             f"no {CHECKPOINT_GLOB} under {project}/{POLICIES_FOLDER} or "
             f"{RUNS_FOLDER} - train a walk first"
@@ -305,11 +325,35 @@ def require_same_identity(trained: dict[str, Any], built: dict[str, str]) -> Non
             )
 
 
-def trained_identity(checkpoint: Path) -> dict[str, Any]:
-    """What the run wrote beside its checkpoints (`IDENTITY_FILE`); empty
-    for a run that predates the record."""
+def trained_identity(checkpoint: Path, project: Path | None = None) -> dict[str, Any]:
+    """What the run wrote beside its checkpoints (`IDENTITY_FILE`). A policy
+    artifact holds only the checkpoint and its `POLICY_FILE`, which names
+    the run (`run: name@stamp`); with the project given, the identity is
+    read from that run's folder. Empty for a run that predates the
+    record."""
     file = checkpoint.parent / IDENTITY_FILE
-    return json.loads(file.read_text(encoding="utf-8")) if file.is_file() else {}
+    if file.is_file():
+        return json.loads(file.read_text(encoding="utf-8"))
+    policy = checkpoint.parent / POLICY_FILE
+    if project is None and checkpoint.parent.parent.name == POLICIES_FOLDER:
+        # `<project>/policies/<name>/model_N.pt`: the project is the folder
+        # above, so every loader (the Studio's walk scene, walk_play) sees
+        # the run's identity - a fit-trained policy stands in its fitted
+        # world, never silently in the plain one.
+        project = checkpoint.parent.parent.parent
+    if project is not None and policy.is_file():
+        run = str(json.loads(policy.read_text(encoding="utf-8")).get("run") or "")
+        run_file = Path(project) / RUNS_FOLDER / run.split("@", 1)[0] / IDENTITY_FILE
+        if run and run_file.is_file():
+            return json.loads(run_file.read_text(encoding="utf-8"))
+    return {}
+
+
+def plain_walk_plays(checkpoint: Path, project: Path | None = None) -> bool:
+    """Whether the plain walk scene can play this checkpoint: it trained on
+    the plane (no staged scene) and without a camera."""
+    trained = trained_identity(checkpoint, project)
+    return not trained.get(Identity.SCENE) and not trained_with_cameras(trained)
 
 
 def trained_with_cameras(trained: dict[str, Any]) -> bool:

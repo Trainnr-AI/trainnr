@@ -70,6 +70,58 @@ class TheNewestCheckpoint(unittest.TestCase):
                 latest_checkpoint(root), judged, "a judged checkpoint first"
             )
 
+    def test_a_scene_trained_policy_is_skipped_for_the_plain_walk(self) -> None:
+        """go2-scene-c1 (235-wide, a staged scene) was newest and crashed the
+        plain walk scene; its identity is read through the run its policy
+        names, and the newest plane policy is played instead."""
+        import json  # noqa: PLC0415
+        import os  # noqa: PLC0415
+
+        from rq_pipeline.project.kinds import (  # noqa: PLC0415
+            IDENTITY_FILE,
+            POLICY_FILE,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for run, scene in (("plane-run", None), ("scene-run", "garden@abc")):
+                folder = root / RUNS_FOLDER / run
+                folder.mkdir(parents=True)
+                identity = {"scene": scene} if scene else {}
+                (folder / IDENTITY_FILE).write_text(json.dumps(identity))
+            plane = root / POLICIES_FOLDER / "plane-model_1" / "model_1.pt"
+            scene = root / POLICIES_FOLDER / "scene-model_1" / "model_1.pt"
+            for checkpoint, run in ((plane, "plane-run"), (scene, "scene-run")):
+                checkpoint.parent.mkdir(parents=True)
+                checkpoint.write_bytes(b"0")
+                (checkpoint.parent / POLICY_FILE).write_text(
+                    json.dumps({"run": f"{run}@0123456789ab"})
+                )
+            later = time.time() + 5
+            os.utime(scene, (later, later))  # the scene policy is newest
+            self.assertEqual(latest_checkpoint(root), plane)
+            from rq_mjlab.walk_view import trained_identity  # noqa: PLC0415
+
+            self.assertEqual(
+                trained_identity(scene),
+                {"scene": "garden@abc"},
+                "a policy's identity is its run's, the project found from its path",
+            )
+
+    def test_only_scene_policies_are_refused_by_name(self) -> None:
+        import json  # noqa: PLC0415
+
+        from rq_pipeline.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / RUNS_FOLDER / "scene-run"
+            run.mkdir(parents=True)
+            (run / IDENTITY_FILE).write_text(json.dumps({"scene": "garden@abc"}))
+            (run / "model_1.pt").write_bytes(b"0")
+            with self.assertRaisesRegex(SystemExit, "staged scene"):
+                latest_checkpoint(root)
+
     def test_an_empty_project_is_refused_by_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(SystemExit, "train a walk first"):
