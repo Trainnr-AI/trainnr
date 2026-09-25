@@ -79,8 +79,11 @@ DOMAIN_ID = 0
 # not yet in low-level mode). Refused then, not after the whole window.
 FIRST_STATE_TIMEOUT_S = 5.0
 # How long `stop()` waits for the writer to land the last batch and
-# close the store before it refuses by name.
-WRITER_JOIN_S = 2.0
+# close the store before it refuses by name. Only a bound against a hung
+# writer, never a performance target: at 2 s a loaded box (the full test
+# suite beside it, 2026-09-25) made a healthy stop report the writer
+# stuck and ingest nothing - on a robot, a lost recording.
+WRITER_JOIN_S = 30.0
 # The two topics of the pair, and the SDK class each carries.
 TOPICS: tuple[str, ...] = (TOPIC_LOW_STATE, TOPIC_LOW_CMD)
 SDK_CLASSES: dict[str, str] = {TOPIC_LOW_STATE: "LowState_", TOPIC_LOW_CMD: "LowCmd_"}
