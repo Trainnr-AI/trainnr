@@ -65,6 +65,11 @@ pub struct Shell {
     stop_armed: Option<String>,
     /// The run whose log is open in the panel.
     log_open: Option<String>,
+    /// The run whose chip was clicked: its full detail shows under the
+    /// chips (by job id, so it survives the once-a-second refresh).
+    pub run_selected: Option<String>,
+    /// The "+N more" chip was clicked: every run, as a list.
+    runs_listed: bool,
     /// What the last stop answered, shown in the panel until the next.
     stop_note: Option<String>,
     /// A run's viewer file to load into the viewer, taken by the frame
@@ -93,6 +98,8 @@ impl Shell {
             running_open: false,
             stop_armed: None,
             log_open: None,
+            run_selected: None,
+            runs_listed: false,
             stop_note: None,
             viewer_request: None,
         }
@@ -240,10 +247,17 @@ impl Shell {
                         ui.add_space(8.0);
                         // What runs, whoever started it: a click opens
                         // the Running now panel (2026-09-25).
-                        let (text, color) = match crate::running::indicator_line(&self.model.jobs) {
-                            Some(line) => (line, tokens.highlight_color),
-                            None => ("idle".to_owned(), ui.visuals().weak_text_color()),
-                        };
+                        // The line rotates through the running runs, so a
+                        // short gate never hides a long training.
+                        let t = ui.input(|i| i.time);
+                        let (text, color) =
+                            match crate::running::indicator_line(&self.model.jobs, t) {
+                                Some(line) => {
+                                    ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
+                                    (line, tokens.highlight_color)
+                                }
+                                None => ("idle".to_owned(), ui.visuals().weak_text_color()),
+                            };
                         let clicked = ui
                             .add(
                                 egui::Button::selectable(
@@ -369,7 +383,14 @@ impl Shell {
             }
             Section::Overview => {
                 let mut go_to = None;
-                pages::overview(ui, &self.model, &mut go_to);
+                let mut open_run = None;
+                pages::overview(ui, &self.model, &mut go_to, &mut open_run);
+                if let Some(id) = open_run {
+                    // A chip on the Compute card: the panel opens on it.
+                    self.running_open = true;
+                    self.runs_listed = false;
+                    self.run_selected = Some(id);
+                }
                 if let Some((section, stamp)) = go_to {
                     self.section = section;
                     self.scroll_to_detail = stamp.is_some();
@@ -558,17 +579,24 @@ impl Shell {
     }
 
     /// The Running now panel, under the header on every page: each run
-    /// in the job table (door, tool or agent), the running first, then
-    /// what ended within `running::FINISHED_KEPT` with its exit code.
+    /// in the job table (door, tool or agent) as a chip, the running
+    /// first, then what ended within `running::FINISHED_KEPT` with its
+    /// exit code; a chip's click opens that run's full detail below, the
+    /// "+N more" chip the full list (2026-09-25).
     pub fn running_panel(&mut self, ui: &mut egui::Ui) {
-        use crate::running::{panel_rows, row, RowAction, FINISHED_KEPT};
+        use crate::running::{
+            chip_strip, kept_selection, panel_rows, row, RowAction, StripClick, FINISHED_KEPT,
+        };
         if !self.running_open {
             return;
         }
         let now = crate::model::now_epoch();
         let jobs = self.model.jobs.clone();
         let rows = panel_rows(&jobs, now, FINISHED_KEPT);
+        // A selected run that dropped off the table clears the selection.
+        self.run_selected = kept_selection(self.run_selected.as_deref(), &rows);
         let mut chosen: Option<(crate::running::Job, RowAction)> = None;
+        let mut strip_click: Option<StripClick> = None;
         egui::Panel::top("running-now")
             .frame(
                 egui::Frame::new()
@@ -605,29 +633,66 @@ impl Shell {
                         .color(ui.visuals().weak_text_color()),
                     );
                 }
-                egui::ScrollArea::vertical()
-                    .max_height(ui.ctx().content_rect().height() * 0.5)
-                    .show(ui, |ui| {
-                        for job in &rows {
-                            ui.separator();
-                            let log_open = self.log_open.as_deref() == Some(job.id.as_str());
-                            let armed = self.stop_armed.as_deref() == Some(job.id.as_str());
-                            if let Some(action) = row(ui, job, now, log_open, armed) {
-                                chosen = Some(((*job).clone(), action));
-                            }
-                            if log_open {
-                                match &self.model.log_tail {
-                                    Some((id, lines)) if id == &job.id => {
-                                        crate::running::log_tail(ui, lines)
-                                    }
-                                    _ => {
-                                        ui.label(egui::RichText::new("reading the log…").small());
+                ui.add_space(4.0);
+                strip_click = chip_strip(
+                    ui,
+                    &rows,
+                    now,
+                    self.run_selected.as_deref(),
+                    self.runs_listed,
+                );
+                // Below the chips: the selected run in full, or every run
+                // as a list when "+N more" is open.
+                let detail: Vec<&crate::running::Job> = if self.runs_listed {
+                    rows.clone()
+                } else {
+                    rows.iter()
+                        .copied()
+                        .filter(|j| self.run_selected.as_deref() == Some(j.id.as_str()))
+                        .collect()
+                };
+                if !detail.is_empty() {
+                    egui::ScrollArea::vertical()
+                        .max_height(ui.ctx().content_rect().height() * 0.5)
+                        .show(ui, |ui| {
+                            for job in &detail {
+                                ui.separator();
+                                let log_open = self.log_open.as_deref() == Some(job.id.as_str());
+                                let armed = self.stop_armed.as_deref() == Some(job.id.as_str());
+                                if let Some(action) = row(ui, job, now, log_open, armed) {
+                                    chosen = Some(((*job).clone(), action));
+                                }
+                                if log_open {
+                                    match &self.model.log_tail {
+                                        Some((id, lines)) if id == &job.id => {
+                                            crate::running::log_tail(ui, lines)
+                                        }
+                                        _ => {
+                                            ui.label(
+                                                egui::RichText::new("reading the log…").small(),
+                                            );
+                                        }
                                     }
                                 }
                             }
-                        }
-                    });
+                        });
+                }
             });
+        match strip_click {
+            Some(StripClick::Chip(id)) => {
+                self.runs_listed = false;
+                self.run_selected = if self.run_selected.as_deref() == Some(id.as_str()) {
+                    None
+                } else {
+                    Some(id)
+                };
+            }
+            Some(StripClick::More) => {
+                self.runs_listed = !self.runs_listed;
+                self.run_selected = None;
+            }
+            None => {}
+        }
         if !self.running_open {
             self.close_log();
         }

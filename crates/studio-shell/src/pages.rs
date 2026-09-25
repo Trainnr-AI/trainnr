@@ -624,7 +624,14 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
 // ---------------------------------------------------------------------
 // Overview
 
-pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<(Section, Option<String>)>) {
+/// `open_run`: a chip on the Compute card was clicked (its job id); the
+/// shell opens the Running now panel on it.
+pub fn overview(
+    ui: &mut egui::Ui,
+    model: &Model,
+    go_to: &mut Option<(Section, Option<String>)>,
+    open_run: &mut Option<String>,
+) {
     let Some(index) = model.index() else {
         return;
     };
@@ -653,7 +660,7 @@ pub fn overview(ui: &mut egui::Ui, model: &Model, go_to: &mut Option<(Section, O
         // and its jobs, then the newest artifacts.
         ui.columns(2, |cols| {
             activity(&mut cols[0], &model.jobs, &model.events);
-            compute(&mut cols[1], model);
+            compute(&mut cols[1], model, open_run);
         });
         ui.add_space(24.0);
         latest_pictures(ui, model, index, go_to);
@@ -1168,7 +1175,7 @@ fn cloud_line() -> String {
 
 /// Where work runs: local by default; a rented machine when the cloud
 /// tools are configured. Honest about what it does not know.
-fn compute(ui: &mut egui::Ui, model: &Model) {
+fn compute(ui: &mut egui::Ui, model: &Model, open_run: &mut Option<String>) {
     subheading(ui, "Compute");
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
@@ -1185,16 +1192,22 @@ fn compute(ui: &mut egui::Ui, model: &Model) {
             tag(ui, std::env::consts::OS);
         });
         ui.add_space(4.0);
-        // The same runs as the top bar's Running now panel: every run in
-        // the job table, whoever started it; the panel has their buttons.
+        // The same runs as the top bar's Running now panel, as the same
+        // chips: every run in the job table, whoever started it; a click
+        // opens the panel on that run, which has its buttons.
         let now = crate::model::now_epoch();
         let rows = crate::running::panel_rows(&model.jobs, now, crate::running::FINISHED_KEPT);
-        if running == 0 {
+        if running == 0 && rows.is_empty() {
             weak_body(ui, "idle · no jobs running");
         }
-        for job in rows {
-            ui.separator();
-            crate::running::summary(ui, job, now);
+        if !rows.is_empty() {
+            match crate::running::chip_strip(ui, &rows, now, None, false) {
+                Some(crate::running::StripClick::Chip(id)) => *open_run = Some(id),
+                Some(crate::running::StripClick::More) => {
+                    *open_run = rows.first().map(|j| j.id.clone());
+                }
+                None => {}
+            }
         }
         // What a running chain is filling in, with its stage (the index's
         // `in_progress`): the folder is work, not a warning, until the

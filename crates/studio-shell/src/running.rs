@@ -35,6 +35,19 @@ pub const LOG_TAIL_LINES: usize = 12;
 /// How often the thread re-reads the table.
 const POLL_EVERY: Duration = Duration::from_secs(1);
 
+/// The chip strip (2026-09-25, the operator: "the top section gets divided
+/// into all runs ... click on a particular run shows the full info"): one
+/// chip per run, sharing the width between these bounds.
+pub const CHIP_MIN_WIDTH: f32 = 170.0;
+pub const CHIP_MAX_WIDTH: f32 = 280.0;
+/// Below two full chips' width the strip turns narrow: chips show the
+/// name and the bar only, and may shrink to this.
+pub const CHIP_NARROW_MIN_WIDTH: f32 = 96.0;
+pub const CHIP_GAP: f32 = 8.0;
+/// How long the top bar shows each running run before the next, so a short
+/// gate never hides a long training.
+pub const ROTATE_EVERY: Duration = Duration::from_secs(4);
+
 /// `RunStatus`, as `rq_pipeline.mcp_jobs.write_status` writes it.
 #[derive(Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct RunStatus {
@@ -130,6 +143,25 @@ impl Job {
             Some(code) => format!("failed (exit {code})"),
             None if self.died() => "died (no exit recorded)".to_owned(),
             None => "running".to_owned(),
+        }
+    }
+
+    /// Its chip's state: running, done (exit 0), failed, died.
+    pub fn chip_state(&self) -> ChipState {
+        match self.exit {
+            Some(0) => ChipState::Done,
+            Some(_) => ChipState::Failed,
+            None if self.died() => ChipState::Died,
+            None => ChipState::Running,
+        }
+    }
+
+    /// Its name, else its kind.
+    pub fn who(&self) -> &str {
+        if self.name.is_empty() {
+            &self.tool
+        } else {
+            &self.name
         }
     }
 
@@ -383,20 +415,101 @@ pub fn tail_lines(path: &Path, n: usize) -> Vec<String> {
         .collect()
 }
 
-/// The top bar's words for what runs: `2 running · go2-c2 (mujoco):
-/// trial 3 of 4: tracked`, cut to `SHORT_LINE_CHARS`; None when idle.
-pub fn indicator_line(jobs: &[Job]) -> Option<String> {
-    const SHORT_LINE_CHARS: usize = 56;
+/// A chip's state, coloured through the design tokens (`chip`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChipState {
+    Running,
+    Done,
+    Failed,
+    Died,
+}
+
+/// How the strip lays its chips out at a width: how many show, how many
+/// fold into the "+N more" chip, each chip's width, and whether they are
+/// narrow (name and bar only).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChipLayout {
+    pub shown: usize,
+    pub more: usize,
+    pub width: f32,
+    pub narrow: bool,
+}
+
+/// How many chips of `min` width fit in `available`, with the gap.
+fn fitting(available: f32, min: f32) -> usize {
+    if available < min {
+        return 0;
+    }
+    ((available + CHIP_GAP) / (min + CHIP_GAP)).floor() as usize
+}
+
+/// The strip's layout for `count` runs at `available` width: chips share
+/// the width between `CHIP_MIN_WIDTH` and `CHIP_MAX_WIDTH`; when they do
+/// not fit, the last slot becomes "+N more"; below two full chips the
+/// strip turns narrow. Never more chips than fit, never overlap.
+pub fn chip_layout(count: usize, available: f32) -> ChipLayout {
+    let narrow = available < 2.0 * CHIP_MIN_WIDTH + CHIP_GAP;
+    let min = if narrow {
+        CHIP_NARROW_MIN_WIDTH
+    } else {
+        CHIP_MIN_WIDTH
+    };
+    let fit = fitting(available, min).max(1);
+    let (shown, more) = if count <= fit {
+        (count, 0)
+    } else {
+        // The last slot holds "+N more"; at least one run stays visible.
+        let shown = fit.saturating_sub(1).max(1).min(count);
+        (shown, count - shown)
+    };
+    let slots = shown + usize::from(more > 0);
+    let width = if slots == 0 {
+        min
+    } else {
+        ((available - CHIP_GAP * (slots as f32 - 1.0)) / slots as f32).clamp(min, CHIP_MAX_WIDTH)
+    };
+    ChipLayout {
+        shown,
+        more,
+        width,
+        narrow,
+    }
+}
+
+/// The running run the top bar shows at `t` seconds, with its place and
+/// the count: the running runs in the panel's own order (`panel_rows`, the
+/// one truth), a new one every `ROTATE_EVERY`; None when nothing runs.
+pub fn rotating(jobs: &[Job], t: f64) -> Option<(usize, usize, &Job)> {
     let running: Vec<&Job> = panel_rows(jobs, 0.0, Duration::ZERO)
         .into_iter()
         .filter(|j| j.running())
         .collect();
-    let first = running.first()?;
-    let mut line = first.short_line();
+    if running.is_empty() {
+        return None;
+    }
+    let step = (t.max(0.0) / ROTATE_EVERY.as_secs_f64()) as usize % running.len();
+    Some((step, running.len(), running[step]))
+}
+
+/// A selection that still names a row survives a refresh; one whose run
+/// dropped off the table (or out of `FINISHED_KEPT`) is cleared.
+pub fn kept_selection(selected: Option<&str>, rows: &[&Job]) -> Option<String> {
+    let id = selected?;
+    rows.iter().any(|j| j.id == id).then(|| id.to_owned())
+}
+
+/// The top bar's words for what runs at `t` seconds: `2 running · go2-c2
+/// (mujoco): trial 3 of 4: tracked`, the line rotating through the running
+/// runs every `ROTATE_EVERY` (a short gate never hides a long training),
+/// cut to `SHORT_LINE_CHARS`; None when idle.
+pub fn indicator_line(jobs: &[Job], t: f64) -> Option<String> {
+    const SHORT_LINE_CHARS: usize = 56;
+    let (_, count, job) = rotating(jobs, t)?;
+    let mut line = job.short_line();
     if line.chars().count() > SHORT_LINE_CHARS {
         line = line.chars().take(SHORT_LINE_CHARS - 1).collect::<String>() + "…";
     }
-    Some(format!("{} running · {line}", running.len()))
+    Some(format!("{count} running · {line}"))
 }
 
 /// What a click on a row asks for; the shell carries it out.
@@ -467,6 +580,174 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
             .small()
             .color(ui.visuals().weak_text_color()),
     );
+}
+
+/// What a click in the chip strip asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StripClick {
+    /// A run's chip: open (or close) its full detail.
+    Chip(String),
+    /// The "+N more" chip: open (or close) the full list.
+    More,
+}
+
+/// A chip's colour through the design tokens: the highlight while it runs,
+/// the weak text once done, the warning when it failed or died.
+fn chip_color(ui: &egui::Ui, state: ChipState) -> egui::Color32 {
+    use re_ui::UiExt as _;
+    match state {
+        ChipState::Running => ui.tokens().highlight_color,
+        ChipState::Done => ui.visuals().weak_text_color(),
+        ChipState::Failed | ChipState::Died => ui.visuals().warn_fg_color,
+    }
+}
+
+/// A chip's inner margin (points, each side) and its outline widths.
+const CHIP_MARGIN: i8 = 8;
+const CHIP_STROKE: f32 = 1.0;
+const CHIP_STROKE_SELECTED: f32 = 2.0;
+
+/// One run as a chip `width` wide: its name, its kind and `k/n unit`, a
+/// progress bar, how long or how it ended; narrow, the name and the bar.
+/// Done runs are dimmed. Returns whether it was clicked.
+pub fn chip(
+    ui: &mut egui::Ui,
+    job: &Job,
+    now: f64,
+    width: f32,
+    narrow: bool,
+    selected: bool,
+) -> bool {
+    let state = job.chip_state();
+    let color = chip_color(ui, state);
+    let weak = ui.visuals().weak_text_color();
+    let dim = state == ChipState::Done;
+    let stroke = if selected {
+        CHIP_STROKE_SELECTED
+    } else {
+        CHIP_STROKE
+    };
+    let inner = (width - 2.0 * f32::from(CHIP_MARGIN) - 2.0 * stroke).max(0.0);
+    let fill = if selected {
+        color.linear_multiply(0.12)
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let response = egui::Frame::new()
+        .stroke(egui::Stroke::new(stroke, color))
+        .fill(fill)
+        .corner_radius(6.0)
+        .inner_margin(egui::Margin::same(CHIP_MARGIN))
+        .show(ui, |ui| {
+            ui.set_width(inner);
+            ui.set_max_width(inner);
+            let name_color = if dim {
+                weak
+            } else {
+                ui.visuals().strong_text_color()
+            };
+            ui.add(
+                egui::Label::new(egui::RichText::new(job.who()).strong().color(name_color))
+                    .truncate(),
+            );
+            let status = job.status.clone().unwrap_or_default();
+            if !narrow {
+                let mut facts = vec![job.tool.clone()];
+                let count = status.count_text();
+                if !count.is_empty() {
+                    facts.push(count);
+                }
+                ui.add(
+                    egui::Label::new(egui::RichText::new(facts.join(" · ")).small().color(weak))
+                        .truncate(),
+                );
+            }
+            let full = if state == ChipState::Running {
+                0.0
+            } else {
+                1.0
+            };
+            ui.add(
+                egui::ProgressBar::new(status.fraction().unwrap_or(full))
+                    .desired_height(4.0)
+                    .desired_width(inner)
+                    .fill(color.linear_multiply(if dim { 0.5 } else { 0.8 })),
+            );
+            if !narrow {
+                let until = job.ended.unwrap_or(now);
+                let took = crate::model::elapsed(until - job.started);
+                let tail = match state {
+                    ChipState::Running => took,
+                    _ => format!("{} · {took}", job.state_word()),
+                };
+                ui.add(
+                    egui::Label::new(egui::RichText::new(tail).small().color(
+                        if state == ChipState::Running {
+                            weak
+                        } else {
+                            color
+                        },
+                    ))
+                    .truncate(),
+                );
+            }
+        })
+        .response;
+    response
+        .interact(egui::Sense::click())
+        .on_hover_text(job.short_line())
+        .clicked()
+}
+
+/// The "+N more" chip: the runs that did not fit; a click opens the list.
+fn more_chip(ui: &mut egui::Ui, more: usize, width: f32, open: bool) -> bool {
+    let weak = ui.visuals().weak_text_color();
+    let inner = (width - 2.0 * f32::from(CHIP_MARGIN) - 2.0 * CHIP_STROKE).max(0.0);
+    let words = if open {
+        "hide the list".to_owned()
+    } else {
+        format!("+{more} more")
+    };
+    egui::Frame::new()
+        .stroke(egui::Stroke::new(CHIP_STROKE, weak))
+        .corner_radius(6.0)
+        .inner_margin(egui::Margin::same(CHIP_MARGIN))
+        .show(ui, |ui| {
+            ui.set_width(inner);
+            ui.set_max_width(inner);
+            ui.add(egui::Label::new(egui::RichText::new(words).strong().color(weak)).truncate());
+        })
+        .response
+        .interact(egui::Sense::click())
+        .on_hover_text("every run, as a list")
+        .clicked()
+}
+
+/// The strip: the rows (`panel_rows`' order) as chips laid out by
+/// `chip_layout` at this width, the ones that do not fit folded into
+/// "+N more". Returns what was clicked.
+pub fn chip_strip(
+    ui: &mut egui::Ui,
+    rows: &[&Job],
+    now: f64,
+    selected: Option<&str>,
+    more_open: bool,
+) -> Option<StripClick> {
+    let layout = chip_layout(rows.len(), ui.available_width());
+    let mut click = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = CHIP_GAP;
+        for job in rows.iter().take(layout.shown) {
+            let is_selected = selected == Some(job.id.as_str());
+            if chip(ui, job, now, layout.width, layout.narrow, is_selected) {
+                click = Some(StripClick::Chip(job.id.clone()));
+            }
+        }
+        if layout.more > 0 && more_chip(ui, layout.more, layout.width, more_open) {
+            click = Some(StripClick::More);
+        }
+    });
+    click
 }
 
 /// A row with its buttons: the log, the viewer, the viewport, stop
@@ -623,22 +904,112 @@ mod tests {
     }
 
     #[test]
-    fn the_indicator_names_the_newest_run_and_says_idle_as_none() {
-        let mut a = job("a", 10.0);
-        a.alive = true;
-        a.name = "go2-c2 (mujoco)".to_owned();
-        a.status = Some(RunStatus {
+    fn the_indicator_rotates_through_the_running_runs_and_says_idle_as_none() {
+        let mut gate = job("gate", 10.0);
+        gate.alive = true;
+        gate.name = "go2-c2 (mujoco)".to_owned();
+        gate.status = Some(RunStatus {
             stage: "trial 3 of 4: tracked".to_owned(),
             ..RunStatus::default()
         });
-        let mut b = job("b", 5.0);
-        b.alive = true;
+        let mut train = job("train", 5.0);
+        train.alive = true;
+        train.name = "go2-c3-fit".to_owned();
+        let jobs = [train.clone(), gate];
+        let step = ROTATE_EVERY.as_secs_f64();
+        // The newest first, then the older one: a short gate never hides
+        // the training for longer than one step.
         assert_eq!(
-            indicator_line(&[b.clone(), a]).as_deref(),
+            indicator_line(&jobs, 0.0).as_deref(),
             Some("2 running · go2-c2 (mujoco): trial 3 of 4: tracked")
         );
-        b.alive = false;
-        assert_eq!(indicator_line(&[b]), None);
+        assert_eq!(
+            indicator_line(&jobs, step + 0.1).as_deref(),
+            Some("2 running · go2-c3-fit")
+        );
+        assert_eq!(
+            indicator_line(&jobs, 2.0 * step + 0.1).as_deref(),
+            Some("2 running · go2-c2 (mujoco): trial 3 of 4: tracked")
+        );
+        train.alive = false;
+        assert_eq!(indicator_line(&[train], 0.0), None);
+    }
+
+    #[test]
+    fn chips_share_the_width_between_their_bounds() {
+        // Three runs on a wide strip: all shown, each at most the max width.
+        let wide = chip_layout(3, 1400.0);
+        assert_eq!((wide.shown, wide.more, wide.narrow), (3, 0, false));
+        assert!((wide.width - CHIP_MAX_WIDTH).abs() < f32::EPSILON);
+        // Two runs sharing 500: each (500 - gap) / 2, inside the bounds.
+        let two = chip_layout(2, 500.0);
+        assert_eq!((two.shown, two.more), (2, 0));
+        assert!((two.width - (500.0 - CHIP_GAP) / 2.0).abs() < 1e-3);
+        assert!(two.width >= CHIP_MIN_WIDTH && two.width <= CHIP_MAX_WIDTH);
+    }
+
+    #[test]
+    fn what_does_not_fit_folds_into_more_and_nothing_overlaps() {
+        // 900 fits floor((900 + 8) / (170 + 8)) = 5 slots: 4 runs and "+6 more".
+        let layout = chip_layout(10, 900.0);
+        assert_eq!((layout.shown, layout.more), (4, 6));
+        let slots = (layout.shown + 1) as f32;
+        let used = slots * layout.width + (slots - 1.0) * CHIP_GAP;
+        assert!(used <= 900.0 + 1e-3, "{used} overflows 900");
+        assert!(layout.width >= CHIP_MIN_WIDTH);
+        // Exactly as many as fit: no "more" chip.
+        let exact = chip_layout(5, 900.0);
+        assert_eq!((exact.shown, exact.more), (5, 0));
+    }
+
+    #[test]
+    fn a_narrow_window_shrinks_the_chips_to_name_and_bar() {
+        let narrow = chip_layout(3, 300.0);
+        assert!(narrow.narrow);
+        assert!(narrow.width >= CHIP_NARROW_MIN_WIDTH);
+        let slots = (narrow.shown + usize::from(narrow.more > 0)) as f32;
+        assert!(slots * narrow.width + (slots - 1.0) * CHIP_GAP <= 300.0 + 1e-3);
+        // Narrower than one chip: one run still shows, the rest fold.
+        let tiny = chip_layout(3, 60.0);
+        assert_eq!((tiny.shown, tiny.more), (1, 2));
+        assert_eq!(chip_layout(0, 800.0).shown, 0);
+    }
+
+    #[test]
+    fn a_selection_survives_a_refresh_and_clears_when_its_run_drops_off() {
+        let now = 1_000.0;
+        let mut a = job("a", 10.0);
+        a.alive = true;
+        let mut ended = job("ended", 5.0);
+        ended.exit = Some(0);
+        ended.ended = Some(now - 10.0);
+        let jobs = [a, ended.clone()];
+        let rows = panel_rows(&jobs, now, FINISHED_KEPT);
+        assert_eq!(
+            kept_selection(Some("ended"), &rows).as_deref(),
+            Some("ended")
+        );
+        // Past FINISHED_KEPT the ended run leaves the rows, and the selection.
+        let later = now + FINISHED_KEPT.as_secs_f64() + 1.0;
+        let rows = panel_rows(&jobs, later, FINISHED_KEPT);
+        assert_eq!(kept_selection(Some("ended"), &rows), None);
+        assert_eq!(kept_selection(Some("gone"), &rows), None);
+        assert_eq!(kept_selection(None, &rows), None);
+    }
+
+    #[test]
+    fn a_chip_says_running_done_failed_or_died() {
+        let mut running = job("r", 1.0);
+        running.alive = true;
+        assert_eq!(running.chip_state(), ChipState::Running);
+        let mut done = job("d", 1.0);
+        done.exit = Some(0);
+        assert_eq!(done.chip_state(), ChipState::Done);
+        let mut failed = job("f", 1.0);
+        failed.exit = Some(130);
+        assert_eq!(failed.chip_state(), ChipState::Failed);
+        assert_eq!(job("x", 1.0).chip_state(), ChipState::Died);
+        assert_eq!(job("x", 1.0).who(), "gate-deployment", "no name: its kind");
     }
 
     #[test]
