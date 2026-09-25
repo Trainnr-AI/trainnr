@@ -166,7 +166,7 @@ named item in §6):
 - **The root is a mocap body** (fixed root): right for a standalone gripper, wrong for attaching to an arm; the writer offers `--free` / `--attach`.
 - **Body frames are world-aligned at the root** (child bodies at the origin, joints carrying absolute positions, geoms rotated by a quaternion): valid MJCF, unlike Menagerie's nested frames; harmless, but a reader diffing against Menagerie should know.
 - **No sensors, no keyframe, no ctrlrange**: our harness observes sensors by contract; the writer adds the jointpos/jointvel block and a `home` key from the USD's joint state, exactly as `robots/so101-nominal/so101.xml` wraps Menagerie.
-- **Mimic compliance dropped**: the USD's `naturalFrequency`/`dampingRatio` on the mimic becomes a plain `mjEQ_JOINT` with default solref.
+- **Mimic compliance dropped**: the USD's `naturalFrequency`/`dampingRatio` on the mimic becomes a plain `mjEQ_JOINT` with default solref. *Carried since 2026-09-25 where the USD authors it in MuJoCo's words: the Newton_compliant layer puts `mjc:solref` 0.005, 1 and `mjc:solimp` on the mimic joint, and the writer's `mimic_softness` sets them on the equality.*
 - **`mujoco_warp` is a hard import of Newton's solver module**, even with `use_mujoco_cpu=True`: the first run failed inside a Warp kernel build. The import path therefore needs the `gpu` extra's package on the machine that imports; Warp's CPU backend ran `add_usd` without a visible CUDA driver, the solver step ran with one. Whether the solver step runs CPU-only is unmeasured (a Mac question).
 
 ![The imported 2F-85 open, rendered from the written MJCF in mujoco 3.11.0](../figures/usd-import/gripper_open.png)
@@ -181,8 +181,9 @@ Hulls are what the stills show, because hulls are all the solver wrote.
 Every item above is now the writer's (`pipeline/rq_pipeline/robot/usd_import.py`)
 and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
 `robotiq-2f85-isaac@3ec025e4cd56` at first, `@e1bc2cbba31f` once the
-importer audit landed on its record the same evening, and `@a2b73f6d43bc` since
-2026-09-25, when the audit moved to `audit.json` outside the stamp; 3.0 MB,
+importer audit landed on its record the same evening, and `@a2b73f6d43bc` once
+the audit moved to `audit.json` outside the stamp (2026-09-25), and `@f8e77bf83c08`
+since the mimic carries its authored softness (the same night); 3.0 MB,
 deterministic: the scratch run and the library run gave the same stamp). Written on the box in
 2.9 s once Warp's kernels are cached, through the pinned venv (newton
 1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
@@ -197,7 +198,7 @@ mujoco-warp 3.11.0), and pinned by `pipeline/tests/test_usd_import.py`:
 | Names | leaf names: `left_outer_knuckle`, `finger_joint`, `base_link_hull`, `base_link_visual` |
 | Meshes | `assets/<body>_hull.obj` (≤ 64 vertices, group 3) and `assets/<body>_visual.obj` (the USD's own mesh: 31,109 vertices on the base, 756 on a knuckle, group 2, no contact); no inline vertex data |
 | Closing from the `home` key | finger 0.8003 rad of 0.8, loops within 7.7 mm, at rest |
-| On a bench with a 30 mm cube between the pads (`tools/show-2f85-isaac.py`) | finger stops at 0.794 rad on the block, 4 contacts, the block held 29 mm below where it sat (the fingertips curl in as the five-bar closes) — stills below, the Rerun recording under `runs/` |
+| On a bench with a 30 mm cube between the pads (`tools/show-2f85-isaac.py`) | finger stops at 0.794 rad on the block, 4 contacts, the block held 29 mm below where it sat (the fingertips curl in as the five-bar closes) — stills below, the Rerun recording under `runs/` | *Since the mimic carries its authored 0.005 s (2026-09-25): the finger stops at 0.756 rad (was 0.794), 4 contacts, the block held at the same 29 mm; the stills are re-rendered.*
 | Physx_parallel_grip variant | 6 hinges, 5 joint equalities, 1 actuator |
 | Record | `bundle.json` carries `provenance`: repository, commit 6d992b6, file, both variant selections, root, `mesh_maxhullvert`, grip options, licence CC-BY-4.0, Newton's own census, the reader's versions |
 
@@ -301,8 +302,10 @@ box, commit the bundle, the bundle runs everywhere); inline hulls at 64
 vertices are coarser than Menagerie's collision boxes (a declared
 `mesh_maxhullvert`, and the bundle writer can keep the USD's own
 collision meshes when an asset authors them separately); the mimic's
-compliance is lost (declared in the README as a known gap until the
-bridge writes eq solref).
+compliance was lost (Newton's bridge wrote MuJoCo's default solref); since
+2026-09-25 the writer's `mimic_softness` sets the USD's authored `mjc:solref`
+and `mjc:solimp` on the joint equality (0.005 s on the 2F-85, not the
+default 0.02 s); a PhysX-only natural frequency is still not converted.
 
 ## 7. Newton and Warp as a runtime, not just an importer
 

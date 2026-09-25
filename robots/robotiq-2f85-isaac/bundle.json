@@ -38,6 +38,6 @@
    "warp-lang": "1.17.0"
   }
  },
- "schema": "trainnr-robot/1",
+ "schema": "trainnr-robot/2",
  "source": "grippers/Robotiq_2F_85/Robotiq_2F_85.usda"
 }

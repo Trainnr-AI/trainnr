@@ -114,7 +114,7 @@
   <equality>
     <connect name="connect_right_inner_finger_right_outer_finger" body1="right_inner_finger" body2="right_outer_finger" anchor="0 0.0682 0.09844" solref="0.005" solimp="0.95 0.99"/>
     <connect name="connect_left_inner_finger_left_outer_finger" body1="left_inner_finger" body2="left_outer_finger" anchor="0 -0.0682 0.09844" solref="0.005" solimp="0.95 0.99"/>
-    <joint name="mimic_right_driver_joint_finger_joint" joint1="right_driver_joint" joint2="finger_joint" polycoef="0 1 0 0 0"/>
+    <joint name="mimic_right_driver_joint_finger_joint" joint1="right_driver_joint" joint2="finger_joint" polycoef="0 1 0 0 0" solref="0.005" solimp="0.95 0.99"/>
   </equality>
 
   <actuator>

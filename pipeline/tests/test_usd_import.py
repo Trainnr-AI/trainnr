@@ -342,6 +342,31 @@ class TheBundle(unittest.TestCase):
         self.assertEqual(m.nkey, 1)
         self.assertTrue(self.report["stamp"].startswith("robotiq-2f85-isaac@"))
 
+    def test_the_mimic_is_as_soft_as_the_usd_says(self) -> None:
+        """Newton's bridge left the mimic at MuJoCo's defaults (solref
+        0.02, 1); the USD authors 0.005, 1 and its solimp (2026-09-25)."""
+        import mujoco  # noqa: PLC0415
+
+        from rq_pipeline.robot.usd_import import (  # noqa: PLC0415
+            MIMIC_SOLIMP,
+            MIMIC_SOLREF,
+            open_stage,
+        )
+
+        stage, _ = open_stage(asset_root() / ASSET_FILE, NEWTON_VARIANT)
+        mimic = next(p for p in stage.Traverse() if p.GetName() == "right_driver_joint")
+        m = self.model()
+        [row] = [i for i in range(m.neq) if m.eq_type[i] == mujoco.mjtEq.mjEQ_JOINT]
+        self.assertEqual(
+            list(m.eq_solref[row]),
+            [float(v) for v in mimic.GetAttribute(MIMIC_SOLREF).Get()],
+        )
+        self.assertEqual(
+            list(m.eq_solimp[row]),
+            [float(v) for v in mimic.GetAttribute(MIMIC_SOLIMP).Get()],
+        )
+        self.assertEqual(list(m.eq_solref[row]), [0.005, 1.0])
+
     def test_limits_and_masses_equal_the_usd_layer(self) -> None:
         import mujoco  # noqa: PLC0415
 

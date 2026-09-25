@@ -581,6 +581,42 @@ def name_equalities(spec: Any) -> None:
             equality.name = unique(f"{word}_{equality.name1}_{equality.name2}", taken)
 
 
+# MuJoCo's own words for an equality's softness, as the mjcPhysics schema
+# authors them on a mimic joint (its `mjc:target` names the leader).
+MIMIC_SOLREF = "mjc:solref"
+MIMIC_SOLIMP = "mjc:solimp"
+
+
+def mimic_softness(spec: Any, stage: Any, renamed: Mapping[str, str]) -> list[str]:
+    """Each mimic's authored `mjc:solref` / `mjc:solimp` onto the joint
+    equality Newton wrote for it. Newton's bridge carried them onto the
+    loop closures' connects but left the mimic at MuJoCo's defaults
+    (0.02 s against the 2F-85's authored 0.005 s, 2026-09-25). A value
+    the USD does not author stays MuJoCo's default. Returns the names of
+    the equalities set."""
+    import mujoco  # noqa: PLC0415
+
+    authored: dict[str, dict[str, list[float]]] = {}
+    for prim in stage.Traverse():
+        if not _is_mimic(prim):
+            continue
+        values = {
+            field: [float(v) for v in value]
+            for field, name in (("solref", MIMIC_SOLREF), ("solimp", MIMIC_SOLIMP))
+            if (value := _attr(prim, name)) is not None
+        }
+        if values:
+            follower = _newton_name(str(prim.GetPath()))
+            authored[renamed.get(follower, follower)] = values
+    done = []
+    for equality in spec.equalities:
+        if equality.type == mujoco.mjtEq.mjEQ_JOINT and equality.name1 in authored:
+            for field, value in authored[equality.name1].items():
+                setattr(equality, field, value)
+            done.append(equality.name1)
+    return done
+
+
 def set_root(spec: Any, kind: str) -> str:
     """The root body Newton wrote as mocap becomes a plain welded body
     (`fixed`) or gets a free joint (`free`). Returns the root's name."""
@@ -727,8 +763,11 @@ def readme_text(
         "",
         f"Root: {prov['root']}. Runtime grip options declared: {prov['grip_options']}.",
         "",
-        "What the USD carries that the bundle does NOT: the mimic joint's compliance "
-        "(natural frequency, damping ratio) — Newton writes a rigid joint equality; "
+        "A mimic's softness is carried when the USD authors it in MuJoCo's words "
+        f"(`{MIMIC_SOLREF}`, `{MIMIC_SOLIMP}`); Newton's bridge wrote "
+        "MuJoCo's defaults. "
+        "What the USD carries that the bundle does NOT: a PhysX mimic's natural "
+        "frequency and damping ratio (no exact MuJoCo equivalent is claimed); "
         "PhysX-only attributes. Newton's own solver defaults were reset to MuJoCo's.",
     ]
     if hull_only:
@@ -755,7 +794,8 @@ def write_usd_bundle(
     stage, _ = open_stage(source, settings.variants)
     spec = mujoco.MjSpec.from_string(read.xml)
     spec.modelname = name
-    rename_elements(spec, read)
+    renamed = rename_elements(spec, read)
+    mimic_softness(spec, stage, renamed)
     destination.mkdir(parents=True)
     visuals = meshes_to_files(spec, stage, read, destination / ASSETS_DIR)
     spec.modelfiledir = str(destination)  # the in-memory compile finds the files
