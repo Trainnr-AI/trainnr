@@ -1102,6 +1102,68 @@ swept through Unitree's own controller (its gains are the deploy YAML's,
 the very file the field mis-copies); the sweep on a scene's course once
 a walker clears one.
 
+**2026-09-25: the gate's own rule, the fit's joints, and the Studio.**
+The paired draw (§7) made go2-c2's plane gate read 18/20, and the strict
+rule above could not attribute it at all: only 20/20 clears the
+certificate's lower bound at twenty trials. The operator chose the
+gate's own rule: a rung is past the cliff when its tracked rate falls
+more than the gate's tolerance (0.10) under the certificate's rate,
+0.95 - 0.10 = 0.85 for go2-c2. Rules are a registry
+(`attribution.CLIFF_RULES`: `tolerance/1` now, `lower-bound/1` kept);
+the record names its rule (`protocol.cliff_rule`), every rung row
+carries both verdicts, and a record ranked under the other rule is
+marked on the card, never silently re-read.
+
+Three knobs for what the legged fit measures (§8), each citing the
+finding: armature scaled 1.5x-4x, viscous damping added 0.1-0.5
+N*m*s/rad, Coulomb friction added 0.25-1.5 N*m, on the robot's joints
+only. With `--fit <record>` each term is also set AT the fitted value
+per joint, and all three together (`fit`): the robot as it was measured.
+Measured on go2-c2 (finding `gate-attribution-fit-knobs-go2-c2-2026-09-25`,
+the IIT chirp fit; paired draw, seed 1000, twenty trials per rung):
+
+| knob | rungs (k/20) | cliff |
+|---|---|---|
+| kp (x) | 0.8: 15 | **x0.8** |
+| kd (x) | 2: 16 | **x2** |
+| latency (ticks) | 1: 19 · 2: 0 | 2 ticks (the only collapse) |
+| payload (kg) | 1: 18 · 2: 17 · 4: 17 · 6: 14 | 6 kg |
+| tilt (deg) | 3: 18 · 5: 17 · 8: 14 | 8 deg |
+| push (m/s) | 0.5: 18 · 1: 18 · 1.5: 17 · 2: 12 | 2 m/s |
+| joint friction (N*m) | 0.25: 18 · 0.5: 17 · 1.0: 15 | **1 N*m**, inside the fit's 0.10-1.33 |
+| friction (x) | 0.8 … 0.2: 18-20 | survived |
+| joint noise (rad) | 0.01 … 0.1: 17-18 | survived |
+| armature (x) | 1.5: 18 · 2: 19 · 3: 19 · 4: 20 | survived |
+| joint damping | 0.1 … 0.5: 18 | survived |
+
+| at the IIT fit | k/20 | verdict |
+|---|---|---|
+| armature | 19 | holds |
+| joint damping | 18 | holds |
+| joint friction | 17 | holds |
+| all three (`fit`) | 17 [0.621, 0.968] | **holds, exactly at the floor 0.85** |
+
+Read plainly: the declared-trained walker survives a real Go2's measured
+joints, by no margin; the fit's friction is what costs it, and a friction
+of 1 N*m on every joint (within the fit's own span) is past its edge.
+The margins are one to three trials at twenty: the baseline is 18/20 and
+the floor 17/20, so kp and kd "fall at x0.8 and x2" by three and two
+trials, and a decision on them wants forty trials a rung. Latency at two
+ticks is the one collapse (0/20).
+
+The Studio sees it as it runs: the stream opens before the first rung
+and each knob's ladder is logged as that knob lands (`open_live`,
+`log_knob`, `attribute(on_knob=)`), the ranking and the fit rungs last.
+Each rung keeps its worst trial (the first that fell, else the first
+untracked, else the first) in `.viewer/attribution-poses.npz`, and the
+Studio's MuJoCo viewport replays it as
+`deploy:<name>:attribution:<knob>:<rung>` (`<rung>` 1-based, or `fit`),
+captioned with the rung's count and the trial's outcome; the drawer's
+"Replay in viewport" lists the fit rungs first. Frames rendered through
+the viewport's own path: `figures/attribution/viewport-attribution-fit-999.png`
+(the fit rung's worst trial ends standing, untracked, not fallen) and
+`…-latency2-347.png` (two ticks late: on its back).
+
 ## 10. Pre-flight: before the first tick on a robot (2026-09-24)
 
 The hardware is not here yet; this stage makes sure that the day it is,
