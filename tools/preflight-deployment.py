@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from _lab import bootstrap, deployment_args, resolve_deployment
+from _lab import bootstrap, deployment_args, resolve_deployment, running
 
 bootstrap()
 
@@ -42,13 +42,20 @@ from rq_pipeline.deploy.preflight import (  # noqa: E402
     write_record,
 )
 from rq_pipeline.deploy.runtimes import runtime_spec  # noqa: E402
+from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 
 CTRL_C = "Ctrl-C"
 
 
-def _with_stack(
-    spec: Any, manifest: Any, deployment: Path, assets: Path, seed: int | None
+def _with_stack(  # noqa: PLR0913 - the stack's run and its voice, each named
+    spec: Any,
+    manifest: Any,
+    deployment: Path,
+    assets: Path,
+    *,
+    seed: int | None,
+    run: Any,
 ) -> dict:
     """The stack up; the robot stood by its controller; the state read
     before handover; the checks; then the handover, a walk and its stop.
@@ -65,6 +72,7 @@ def _with_stack(
 
         previous = signal.signal(signal.SIGINT, operator_stop)
         try:
+            run.stage(f"standing the robot up in {spec.name}")
             runtime.stand()
             health = health_of_lowstate(runtime.health(), stand_in=stack.stand_in)
             record = preflight(
@@ -75,8 +83,10 @@ def _with_stack(
                 basis=basis,
                 stand_in=stack.stand_in,
                 seed=seed,
+                on_step=_stepped(run),
             )
             if record["passed"]:
+                run.stage("handover, a walk, and their stop")
                 runtime.handover()
                 record["their_stop"] = measure_dds_stop(
                     runtime,
@@ -96,6 +106,15 @@ def _with_stack(
     return record
 
 
+def _stepped(run: Any) -> Any:
+    """Each check and measurement, as it ends, told to the Running now panel."""
+
+    def told(done: int, total: int, line: str) -> None:
+        run.progress(done, total, "steps", f"step {done} of {total}: {line}")
+
+    return told
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     deployment_args(parser)
@@ -108,12 +127,29 @@ def main() -> None:
         project, deployment, manifest, assets = resolve_deployment(args)
         refuse_stale_stop(deployment)
         spec = runtime_spec(args.runtime)
-        if spec.stack is not None:
-            record = _with_stack(spec, manifest, deployment, assets, args.seed)
-        else:
-            record = preflight(deployment, assets_dir=assets, seed=args.seed)
     except (FileNotFoundError, ValueError, ImportError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc)) from exc
+    with running(
+        project.root, name=f"{args.name} ({spec.name})", viewport=scene_text(args.name)
+    ) as run:
+        try:
+            if spec.stack is not None:
+                record = _with_stack(
+                    spec, manifest, deployment, assets, seed=args.seed, run=run
+                )
+            else:
+                record = preflight(
+                    deployment, assets_dir=assets, seed=args.seed, on_step=_stepped(run)
+                )
+        except (
+            FileNotFoundError,
+            ValueError,
+            ImportError,
+            RuntimeError,
+            OSError,
+        ) as exc:
+            raise SystemExit(str(exc)) from exc
+        run.stage(card_line(record))
     for c in record["checks"]:
         print(f"[preflight] {CHECK_MARKS[c['passed']]:>7} {c['name']}: {c['measured']}")
     for block in ("ramp_in", "soft_stop", "their_stop"):

@@ -14,6 +14,7 @@ the record's protocol block names every field that differs.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -155,6 +156,24 @@ def require_same_draw(record: dict[str, Any], what: str) -> None:
         raise ValueError(MIXED_DRAWS.format(what=what, theirs=theirs, ours=DRAW_NOW))
 
 
+# Told after every trial: (trials done, trials planned, that trial's
+# outcome) - how a run says "trial 7 of 20" to the Studio's Running now
+# panel (`mcp_jobs.Tracker.progress`) without the gate knowing the panel.
+TrialProgress = Callable[[int, int, "TrackingOutcome"], None]
+
+
+def _each_trial(
+    outcomes: Iterable[TrackingOutcome], trials: int, on_trial: TrialProgress | None
+) -> list[TrackingOutcome]:
+    """The trials run, in order, each told to `on_trial` as it ends."""
+    done: list[TrackingOutcome] = []
+    for outcome in outcomes:
+        done.append(outcome)
+        if on_trial is not None:
+            on_trial(len(done), trials, outcome)
+    return done
+
+
 def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
     manifest: Manifest,
     driver: GateRuntime,
@@ -164,6 +183,7 @@ def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside
     mirror: GateMirror | None,
     contacts: list[np.ndarray],
     poses: PoseTrack | None = None,
+    on_trial: TrialProgress | None = None,
 ) -> list[TrackingOutcome]:
     """The plane's protocol: seeded held twists, the evaluation's own.
     Public because the attribution sweep (`deploy.attribution`) drives a
@@ -177,18 +197,22 @@ def hold_twists(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside
         protocol["commands"] = (
             f"{COMMANDS_DRAWN}, clipped to ±{limit:g} (the runtime's envelope)"
         )
-    return [
-        run_trial(
-            manifest,
-            driver,
-            c,
-            mirror=mirror,
-            index=i,
-            contacts=contacts,
-            poses=poses,
-        )
-        for i, c in enumerate(commands)
-    ]
+    return _each_trial(
+        (
+            run_trial(
+                manifest,
+                driver,
+                c,
+                mirror=mirror,
+                index=i,
+                contacts=contacts,
+                poses=poses,
+            )
+            for i, c in enumerate(commands)
+        ),
+        len(commands),
+        on_trial,
+    )
 
 
 def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
@@ -201,6 +225,7 @@ def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional insid
     mirror: GateMirror | None,
     contacts: list[np.ndarray],
     poses: PoseTrack | None = None,
+    on_trial: TrialProgress | None = None,
 ) -> list[TrackingOutcome]:
     """A staged scene's protocol: along its course (`deploy.course`),
     judged by arrival; the record says so in every field that differs."""
@@ -215,20 +240,24 @@ def _walk_course(  # noqa: PLR0913, PLR0917 - the gate's shape, positional insid
         protocol["command_limit"] = float(limit)
     if mirror is not None:
         mirror.course(course.path)
-    return [
-        run_course_trial(
-            manifest,
-            driver,
-            course,
-            steering,
-            float(v),
-            mirror=mirror,
-            index=i,
-            contacts=contacts,
-            poses=poses,
-        )
-        for i, v in enumerate(speeds)
-    ]
+    return _each_trial(
+        (
+            run_course_trial(
+                manifest,
+                driver,
+                course,
+                steering,
+                float(v),
+                mirror=mirror,
+                index=i,
+                contacts=contacts,
+                poses=poses,
+            )
+            for i, v in enumerate(speeds)
+        ),
+        len(speeds),
+        on_trial,
+    )
 
 
 def gate(  # noqa: PLR0913 - the gate's own knobs, each named
@@ -243,6 +272,7 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
     open: Opener | None = None,
     narrate: bool = False,
     scene_dir: Path | None = None,
+    on_trial: TrialProgress | None = None,
 ) -> dict[str, Any]:
     """Run the gate under the named runtime and write its record beside
     the manifest; returns the record. `open` replaces the registry's
@@ -295,10 +325,19 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
                 mirror,
                 contacts,
                 poses,
+                on_trial,
             )
             if course is not None
             else hold_twists(
-                manifest, driver, protocol, trials, seed, mirror, contacts, poses
+                manifest,
+                driver,
+                protocol,
+                trials,
+                seed,
+                mirror,
+                contacts,
+                poses,
+                on_trial,
             )
         )
         k = sum(t.success for t in results)

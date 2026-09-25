@@ -1134,13 +1134,11 @@ MIN_FITS_FOR_SPREAD = 2  # a spread needs two fits to disagree (tools/fit-report
 
 def _jobs_root() -> Path:
     """Where the MCP job table lives: the current project's root, else
-    the legacy `pipeline/runs`. The job manager appends `mcp-jobs/`."""
-    from rq_pipeline.project import current_project  # noqa: PLC0415
+    the legacy `pipeline/runs` - the one rule the tools share
+    (`mcp_jobs.default_jobs_root`). The job manager appends `mcp-jobs/`."""
+    from rq_pipeline.mcp_jobs import default_jobs_root  # noqa: PLC0415
 
-    try:
-        return current_project().root
-    except FileNotFoundError:
-        return _runs_root(None)
+    return default_jobs_root()
 
 
 def _runs_root(runs_root: Path | None) -> Path:

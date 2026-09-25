@@ -23,8 +23,9 @@ import json
 import time
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
-from _lab import bootstrap
+from _lab import bootstrap, running
 
 bootstrap()
 
@@ -58,18 +59,43 @@ def main() -> int:
         print(json.dumps(sources(), indent=1))
         return 0
     project = Project(args.project.resolve()).use()
-    if args.standin is not None:
-        state = _standin(project, args)
-    else:
-        given = {"network": args.network, "port": args.port, "basis": args.basis}
-        options = {k: v for k, v in given.items() if v is not None}
-        listener = capture(project, args.name, source=args.source, **options)
-        listener.start(window_s=args.seconds + 60.0)
-        time.sleep(args.seconds)
-        state = listener.stop()
+    with running(project.root, name=f"{args.name} ({args.source})") as run:
+        if args.standin is not None:
+            run.stage(f"recording {args.name} from the stand-in for {args.seconds:g} s")
+            state = _standin(project, args)
+        else:
+            given = {"network": args.network, "port": args.port, "basis": args.basis}
+            options = {k: v for k, v in given.items() if v is not None}
+            listener = capture(project, args.name, source=args.source, **options)
+            listener.start(window_s=args.seconds + LISTEN_MARGIN_S)
+            _listen(run, listener, args.seconds)
+            run.stage(f"ingesting {args.name}")
+            state = listener.stop()
+        run.stage(
+            f"recorded {state.stamp}" if state.stamp else f"failed: {state.error}"
+        )
     write_index(project, index_project(project))
     print(json.dumps(asdict(state), indent=1))
     return 0 if state.stamp else 1
+
+
+# How long the listener's window outlasts the asked-for seconds: the stop
+# ingests while it still listens, never after it closed itself.
+LISTEN_MARGIN_S = 60.0
+# How often the Running now panel hears where a capture is.
+TICK_S = 1.0
+
+
+def _listen(run: Any, listener: Any, seconds: float) -> None:
+    """Wait the capture out, telling the panel each second."""
+    started = time.monotonic()
+    while (elapsed := time.monotonic() - started) < seconds:
+        heard = getattr(getattr(listener, "state", None), "datagrams", None)
+        line = f"listening {elapsed:.0f} of {seconds:.0f} s" + (
+            f", {heard} messages" if heard is not None else ""
+        )
+        run.progress(int(elapsed), int(seconds), "s", line)
+        time.sleep(min(TICK_S, seconds - elapsed))
 
 
 def _standin(project: Project, args: argparse.Namespace) -> object:

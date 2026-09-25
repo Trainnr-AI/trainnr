@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+from typing import Any
 
-from _lab import bootstrap, deployment_args, resolve_deployment
+from _lab import bootstrap, deployment_args, resolve_deployment, running
 
 bootstrap()
 
 from rq_pipeline.deploy.attribution import (  # noqa: E402
+    STREAM,
     SURVIVED,
     attribute,
     knob,
@@ -26,8 +29,10 @@ from rq_pipeline.deploy.attribution import (  # noqa: E402
 )
 from rq_pipeline.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
 from rq_pipeline.deploy.manifest import Key  # noqa: E402
+from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
 from rq_pipeline.project import index_project, write_index  # noqa: E402
 from rq_pipeline.project.cited import cited_certificate  # noqa: E402
+from rq_pipeline.viz import viewer_file  # noqa: E402
 
 
 def main() -> None:
@@ -50,7 +55,43 @@ def main() -> None:
     try:
         project, deployment, manifest, assets = resolve_deployment(args)
         certificate = cited_certificate(project, manifest.raw.get(Key.CERTIFICATE))
-        record = attribute(
+    except (FileNotFoundError, ValueError, ImportError) as exc:
+        raise SystemExit(str(exc)) from exc
+    with running(
+        project.root,
+        name=args.name,
+        viewport=scene_text(args.name),
+        viewer=viewer_file(deployment, STREAM),
+    ) as run:
+        run.stage("the baseline: the passing gate's own trials, untouched")
+        record = _attribute(args, deployment, assets, certificate, run)
+        run.stage(record["sensitivity"])
+    _report(args, project, deployment, assets, record)
+
+
+def _climbed(run: Any) -> Any:
+    """Each knob's ladder, as it lands, told to the Running now panel."""
+
+    def told(done: int, total: int, name: str, rungs: list[Any]) -> None:
+        last = rungs[-1] if rungs else None
+        tail = f": {last.successes}/{last.trials} at its last rung" if last else ""
+        run.progress(
+            done, total, "knobs", f"knob {done} of {total} climbed, {name}{tail}"
+        )
+
+    return told
+
+
+def _attribute(
+    args: argparse.Namespace,
+    deployment: Path,
+    assets: Path,
+    certificate: dict[str, Any] | None,
+    run: Any,
+) -> dict[str, Any]:
+    """The sweep, refused by name as the tool always refused it."""
+    try:
+        return attribute(
             deployment,
             assets_dir=assets,
             certificate=certificate,
@@ -59,9 +100,20 @@ def main() -> None:
             seed=args.seed,
             tolerance=args.tolerance,
             workers=args.workers,
+            on_knob=_climbed(run),
         )
     except (FileNotFoundError, ValueError, ImportError) as exc:
         raise SystemExit(str(exc)) from exc
+
+
+def _report(
+    args: argparse.Namespace,
+    project: Any,
+    deployment: Path,
+    assets: Path,
+    record: dict[str, Any],
+) -> None:
+    """The console's lines, the still, the stream, the reindex."""
     base = record["baseline"]
     print(
         f"[attribution] baseline {base['successes']}/{base['trials']} ci95 "

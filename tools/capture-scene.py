@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, running
 
 bootstrap()
 
@@ -66,18 +66,21 @@ def main() -> None:
         tools = Tools.find(
             brush=args.brush, video=args.source.is_file(), splatter=args.splatter
         )
-        record_path = capture_scene(
-            args.source,
-            project.scenes / args.name,
-            name=args.name,
-            tools=tools,
-            fps=args.fps,
-            steps=args.steps,
-            scale=args.scale,
-            floor_friction=args.floor_friction,
-            device=args.device,
-            lighting=args.lighting,
-        )
+        with running(project.root, name=args.name) as run:
+            run.stage(f"capturing {args.name} from {args.source.name}")
+            record_path = capture_scene(
+                args.source,
+                project.scenes / args.name,
+                name=args.name,
+                tools=tools,
+                fps=args.fps,
+                steps=args.steps,
+                scale=args.scale,
+                floor_friction=args.floor_friction,
+                device=args.device,
+                lighting=args.lighting,
+                on_stage=run.stage,
+            )
     except (MissingToolError, FileNotFoundError, ValueError, RuntimeError) as exc:
         # the scene's own log carries the last word, so the index shows a
         # dead capture as failed and not as work in progress

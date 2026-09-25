@@ -313,3 +313,46 @@ def resolve_deployment(args: Any) -> tuple[Any, Path, Any, Path]:
     deployment = project.folder(DEPLOY_FOLDER) / args.name
     manifest = load_manifest(deployment)
     return project, deployment, manifest, assets_dir_of(manifest)
+
+
+def running(
+    project_root: Path | None,
+    *,
+    name: str = "",
+    viewport: str = "",
+    viewer: Path | str = "",
+) -> Any:
+    """This tool's run in the project's job table while it runs, so the
+    Studio's Running now panel shows it (2026-09-25: a gate from a
+    terminal showed "idle"). The kind is the script's own name - the same
+    word the door that starts it uses. With no project the current one's
+    table, else the pipeline's own (`mcp_jobs.default_jobs_root`, where the
+    doors put theirs). Use as `with running(...) as run:` and tell it
+    `run.stage(...)`, `run.progress(done, total, unit, line)`."""
+    from rq_pipeline.mcp_jobs import (  # noqa: PLC0415
+        default_jobs_root,
+        jobs_dir_of,
+        track,
+    )
+
+    kind = Path(sys.argv[0]).stem
+    root = Path(project_root) if project_root is not None else default_jobs_root()
+    return track(
+        kind,
+        jobs_dir=jobs_dir_of(root),
+        name=name,
+        argv=sys.argv,
+        viewport=viewport,
+        viewer=str(viewer),
+    )
+
+
+def trial_reporter(run: Any, unit: str = "trials") -> Any:
+    """A gate-shaped loop's per-trial callback (`deploy.gate.TrialProgress`)
+    speaking to a `running(...)` run: "trial 7 of 20: tracked"."""
+
+    def told(done: int, total: int, outcome: Any) -> None:
+        word = "tracked" if getattr(outcome, "success", False) else "lost"
+        run.progress(done, total, unit, f"trial {done} of {total}: {word}")
+
+    return told

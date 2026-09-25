@@ -24,7 +24,7 @@ import json
 import os
 from collections import deque
 from collections.abc import Callable, Iterable
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -620,6 +620,12 @@ def certificate_bound(cited: dict[str, Any], name: str) -> tuple[float, float]:
     )
 
 
+# Told as each knob's ladder is climbed: (knobs climbed, knobs in all,
+# that knob's name, its rungs) - how a sweep says "knob 3 of 8: latency"
+# to the Studio's Running now panel (`mcp_jobs.Tracker.progress`).
+KnobProgress = Callable[[int, int, str, "list[Rung]"], None]
+
+
 def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     deployment_dir: Path,
     *,
@@ -633,6 +639,7 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
     workers: int | None = None,
     open: Opener | None = None,
     appliers: dict[str, Applier] | None = None,
+    on_knob: KnobProgress | None = None,
 ) -> dict[str, Any]:
     """Climb every knob's ladder (in `workers` spawned processes, one per
     knob; in this process when 0, or when a fake `open`/`appliers` is
@@ -668,17 +675,26 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
             )
         )
     climbed: dict[str, list[Rung]] = {}
+
+    def done(knob_name: str, rungs: list[Rung]) -> None:
+        climbed[knob_name] = rungs
+        if on_knob is not None:
+            on_knob(len(climbed), len(knobs), knob_name, rungs)
+
     if in_process:
         for k in knobs:
-            climbed[k.name] = climb(sweep, k, open=open, appliers=appliers)
+            done(k.name, climb(sweep, k, open=open, appliers=appliers))
     else:
         import multiprocessing  # noqa: PLC0415
 
         with ProcessPoolExecutor(
             max_workers=count, mp_context=multiprocessing.get_context("spawn")
         ) as pool:
-            for name, rungs in pool.map(_climb_in_worker, [(sweep, k) for k in knobs]):
-                climbed[name] = rungs
+            # as each ladder lands, not in knob order: the panel moves live
+            futures = [pool.submit(_climb_in_worker, (sweep, k)) for k in knobs]
+            for future in as_completed(futures):
+                done(*future.result())
+        climbed = {k.name: climbed[k.name] for k in knobs}  # the knobs' own order
     ranking = rank(climbed, lower)
     floor = cert_rate - tolerance
     record: dict[str, Any] = {

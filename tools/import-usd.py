@@ -19,7 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-from _lab import bootstrap
+from _lab import bootstrap, running
 
 bootstrap()
 
@@ -115,9 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         "grip_options": args.grip_options,
     }
     try:
-        out = onboard(
-            source, args.name, (args.into or robots_dir()) / args.name, options
-        )
+        with running(None, name=args.name) as run:
+            run.stage(f"reading {source.name} with Newton, writing the bundle")
+            out = onboard(
+                source, args.name, (args.into or robots_dir()) / args.name, options
+            )
+            run.stage(f"onboarded {out.get('stamp', args.name)}")
     except (
         FileNotFoundError,
         FileExistsError,

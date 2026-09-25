@@ -841,13 +841,21 @@ def build_proxy(
 # -- the chain ------------------------------------------------------------
 
 
-def _log_line(log: Path, text: str) -> None:
+# Told each stage line as the chain reaches it - the Studio's Running now
+# panel (`mcp_jobs.Tracker.stage`) without the chain knowing the panel.
+StageTold = Callable[[str], None]
+
+
+def _log_line(log: Path, text: str, on_stage: StageTold | None = None) -> None:
     """The chain's own note: into the scene's log, and to stdout for the
-    job's log (`mcp_jobs`), which saw nothing of a capture before."""
+    job's log (`mcp_jobs`), which saw nothing of a capture before; and to
+    `on_stage` when a caller listens."""
     line = f"{CAPTURE_STAGE_PREFIX}{text}"
     print(line, flush=True)
     with log.open("a", encoding="utf-8") as out:
         out.write(f"{line}\n")
+    if on_stage is not None:
+        on_stage(text)
 
 
 def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
@@ -865,6 +873,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
     device: str = UNRECORDED,
     lighting: str = UNRECORDED,
     narrate: bool | None = None,
+    on_stage: StageTold | None = None,
 ) -> Path:
     """A video file or a folder of frames into `out_dir` as a scene
     artifact; returns the record's path. Resumable: each stage's output,
@@ -900,7 +909,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         duration_s=capture.duration_s,
         lighting=lighting,
     )
-    _log_line(log, f"{len(frames)} frames")
+    _log_line(log, f"{len(frames)} frames", on_stage=on_stage)
     if len(frames) < MIN_FRAMES:
         raise ValueError(f"{len(frames)} frames: a capture needs at least {MIN_FRAMES}")
 
@@ -913,6 +922,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         f"COLMAP registered {poses.images_registered}/{poses.images_given} "
         f"frames, {poses.points} points; models of {list(poses.models)} frames, "
         f"model {poses.chosen} used",
+        on_stage=on_stage,
     )
     if poses.images_registered < MIN_FRAMES:
         raise RuntimeError(
@@ -920,7 +930,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
             "frames: too few for a scene"
         )
     dataset = dataset_for_trainer(colmap_dir, frames_dir, poses.chosen)
-    _log_line(log, f"splat by {tools.splatter.title}, {steps} steps")
+    _log_line(log, f"splat by {tools.splatter.title}, {steps} steps", on_stage=on_stage)
     export = train_splat(
         tools,
         dataset,
@@ -943,6 +953,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         log,
         f"aligned: floor {floor.inliers}/{floor.of} visible centres within "
         f"{FLOOR_DISTANCE_M} of the plane",
+        on_stage=on_stage,
     )
 
     proxy_facts, measured, physics = _proxy_stage(

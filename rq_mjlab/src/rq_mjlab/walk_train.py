@@ -38,12 +38,15 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
+from rq_pipeline.envs.rsl_rl_log import FIELD_LINE, ITERATION_LINE
+from rq_pipeline.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
 from rq_pipeline.project.kinds import IDENTITY_FILE
 
 from rq_mjlab.walks import DEFAULT_ROBOT, ROBOTS, Identity, use_project, walk_spec
@@ -56,6 +59,11 @@ DEFAULTS = {
 
 # The saved stream of a training run, inside its folder (docs/76 §10.5).
 TRAIN_STREAM = "train"
+# The job table's word for a training run: the door's own (`train_walk`
+# starts "train-walk"), so a run from a terminal reads the same.
+TRAIN_KIND = "train-walk"
+# rsl_rl's per-iteration reward line, by its name in the log.
+REWARD_FIELD = "Mean reward"
 
 
 def smoke_agent(iterations: int) -> Any:
@@ -111,26 +119,75 @@ def _span(text: str) -> float | str:
 
 class Tee:
     """A stream that writes to the console and to a file, line-buffered
-    so a reader of the file sees an iteration as soon as it is printed."""
+    so a reader of the file sees an iteration as soon as it is printed;
+    with no file, only a listener. `on_line` hears every whole line (the
+    Running now panel's ticker, `TrainingTicker`)."""
 
-    def __init__(self, console: Any, path: Path) -> None:
+    def __init__(
+        self,
+        console: Any,
+        path: Path | None,
+        on_line: Callable[[str], None] | None = None,
+    ) -> None:
         self._console = console
-        self._file = path.open("a", buffering=1, encoding="utf-8", errors="replace")
+        self._file = (
+            None
+            if path is None
+            else path.open("a", buffering=1, encoding="utf-8", errors="replace")
+        )
+        self._on_line = on_line
+        self._pending = ""
 
     def write(self, text: str) -> int:
         self._console.write(text)
-        self._file.write(text)
+        if self._file is not None:
+            self._file.write(text)
+        if self._on_line is not None:
+            self._pending += text
+            *lines, self._pending = self._pending.split("\n")
+            for line in lines:
+                self._on_line(line)
         return len(text)
 
     def flush(self) -> None:
         self._console.flush()
-        self._file.flush()
+        if self._file is not None:
+            self._file.flush()
 
     def isatty(self) -> bool:
         return bool(getattr(self._console, "isatty", lambda: False)())
 
     def fileno(self) -> int:
         return self._console.fileno()
+
+
+class TrainingTicker:
+    """rsl_rl's console, read line by line into the job's progress: the
+    `Learning iteration i/N` banner, then its `Mean reward`. The regexes
+    are the training record's own (`envs.rsl_rl_log`), one truth."""
+
+    def __init__(self, run: Any) -> None:
+        self._run = run
+        self._at: tuple[int, int] | None = None
+
+    def line(self, text: str) -> None:
+        banner = ITERATION_LINE.search(text)
+        if banner is not None:
+            self._at = (int(banner.group(1)), int(banner.group(2)))
+            return
+        field = FIELD_LINE.match(text)
+        if (
+            self._at is not None
+            and field is not None
+            and field.group(1) == REWARD_FIELD
+        ):
+            done, total = self._at
+            self._run.progress(
+                done,
+                total,
+                "iterations",
+                f"iteration {done} of {total}, reward {float(field.group(2)):.1f}",
+            )
 
 
 def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
@@ -293,25 +350,36 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     print(f"[{tag}] identity: {identity}")
     print(f"[{tag}] {envs} envs on {device}, {iterations} iterations")
 
-    env = ManagerBasedRlEnv(cfg, device=device)
-    runner = MjlabOnPolicyRunner(
-        RslRlVecEnvWrapper(env),
-        asdict(agent),
-        log_dir=None if log_dir is None else str(log_dir),
-        device=device,
-    )
-    started = time.perf_counter()
-    runner.learn(num_learning_iterations=iterations)
-    wall = time.perf_counter() - started
-    env_steps = envs * agent.num_steps_per_env * iterations
-    # the rate as run, in the log: what a scene's cameras cost is a
-    # measured number (docs/78 E2), never a guess
-    print(
-        f"[{tag}] {env_steps} env-steps in {wall:.0f} s = {env_steps / wall:.0f} "
-        f"steps/s ({envs} envs x {agent.num_steps_per_env} x {iterations})"
-    )
-    env.close()
-    print(f"[{tag}] done" + (f" - checkpoints in {log_dir}" if log_dir else ""))
+    with track(
+        TRAIN_KIND,
+        jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
+        name=log_dir.name if log_dir is not None else f"{args.robot} {tag}",
+        viewport=VIEWPORT_WALK,
+        viewer="" if log_dir is None else str(viewer_file(log_dir, TRAIN_STREAM)),
+    ) as run:
+        run.stage(f"building {envs} {args.robot} worlds on {device}")
+        env = ManagerBasedRlEnv(cfg, device=device)
+        runner = MjlabOnPolicyRunner(
+            RslRlVecEnvWrapper(env),
+            asdict(agent),
+            log_dir=None if log_dir is None else str(log_dir),
+            device=device,
+        )
+        run.progress(0, iterations, "iterations", f"iteration 0 of {iterations}")
+        sys.stdout = Tee(sys.stdout, None, on_line=TrainingTicker(run).line)
+        started = time.perf_counter()
+        runner.learn(num_learning_iterations=iterations)
+        wall = time.perf_counter() - started
+        env_steps = envs * agent.num_steps_per_env * iterations
+        # the rate as run, in the log: what a scene's cameras cost is a
+        # measured number (docs/78 E2), never a guess
+        print(
+            f"[{tag}] {env_steps} env-steps in {wall:.0f} s = {env_steps / wall:.0f} "
+            f"steps/s ({envs} envs x {agent.num_steps_per_env} x {iterations})"
+        )
+        env.close()
+        run.stage(f"done: {iterations} iterations in {wall:.0f} s")
+        print(f"[{tag}] done" + (f" - checkpoints in {log_dir}" if log_dir else ""))
 
 
 if __name__ == "__main__":
