@@ -153,6 +153,15 @@ pub enum Command {
         #[serde(default)]
         width: Option<u32>,
     },
+    /// Bring a recording to the front of the viewer by its application
+    /// id as the tool that streams it named it (the Sources list's name;
+    /// Rerun migrates it to an entry name the same way on both sides).
+    /// A human's click on a card leaves that card's recording in front,
+    /// and a live twin started after it stayed a row in Sources
+    /// (2026-09-26).
+    Focus {
+        recording: String,
+    },
     Quit,
 }
 
@@ -169,6 +178,7 @@ impl Command {
                 | Command::Panels { .. }
                 | Command::Simulate { .. }
                 | Command::Simulator { .. }
+                | Command::Focus { .. }
         )
     }
 }
@@ -710,6 +720,9 @@ mod tests {
             parse_command(r#"{"verb":"quit"}"#),
             Ok(Command::Quit)
         ));
+        let focus = parse_command(r#"{"verb":"focus","recording":"robotiq-sim-x"}"#)
+            .expect("parses");
+        assert!(matches!(focus, Command::Focus { recording } if recording == "robotiq-sim-x"));
         let err = parse_command(r#"{"verb":"dance"}"#).expect_err("refused");
         assert!(err.starts_with("not a command"), "{err}");
     }

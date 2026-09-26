@@ -67,6 +67,7 @@ VERBS = (
     "simulate",
     "simulator",
     "screenshot",
+    "focus",
     "quit",
 )
 # The rail's page names as the Studio parses them (pages.rs `Section::parse`).

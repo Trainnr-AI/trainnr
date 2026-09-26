@@ -1588,6 +1588,27 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
     return {**answer, **wait_presented(project, artifact, since=since)}
 
 
+def focus_studio_recording(recording: str) -> dict[str, Any]:
+    """Bring a recording to the front of the Studio's viewer by the
+    application id the tool that streams it used (the Sources list's
+    name): the viewport's twin is `robotiq-sim-<scene>`, a training run
+    its stamp, a gate `rq-gate-<runtime>-<deployment>`. A human's click on
+    a card leaves that card in front, and a twin started afterwards stays
+    a row in Sources; this is how an agent turns the viewer back. Returns
+    the acknowledgement and what the viewer then reports as its live
+    recording, so a name that is not there is seen, not assumed."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.control import SETTLE_S, command, state  # noqa: PLC0415
+
+    project = current_project()
+    answer = command(project, "focus", recording=recording)
+    if answer.get("status") != "done":
+        return answer
+    time.sleep(SETTLE_S)
+    live = state(project).get("live") or {}
+    return {**answer, "live_recording": live.get("recording")}
+
+
 def compare_in_studio(a: str, b: str) -> dict[str, Any]:
     """Two artifacts side by side in the viewer, `a` left and `b` right —
     two robots, two recordings, an experiment beside its evaluation."""
@@ -2583,6 +2604,10 @@ def build_server() -> Any:  # noqa: PLR0915
     server.tool(
         description="Two artifacts side by side in the viewer, a left and b right."
     )(compare_in_studio)
+    server.tool(
+        description="Bring a recording to the front of the viewer by the application "
+        "id its tool used (the Sources name): the viewport twin, a run, a gate."
+    )(focus_studio_recording)
     server.tool(
         description="Drive the viewer timeline: cursor (seconds or sequence), "
         "play/pause, speed, time selection, follow, step. Refused if nothing streams."

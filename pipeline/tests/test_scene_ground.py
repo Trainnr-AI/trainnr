@@ -111,6 +111,24 @@ class TheSceneGround(unittest.TestCase):
         self.assertEqual(drawn["gaussians"], 3)
 
 
+@unittest.skipUnless(NUMPY, "needs numpy")
+class TheChaseCamera(unittest.TestCase):
+    def test_it_sits_at_the_offset_and_looks_at_the_target(self) -> None:
+        import numpy as np  # noqa: PLC0415
+
+        from rq_pipeline.viz import CHASE_OFFSET_M, chase_pose  # noqa: PLC0415
+
+        target = np.array([1.0, -2.0, 0.4])
+        position, matrix = chase_pose(target)
+        np.testing.assert_allclose(position, target + np.array(CHASE_OFFSET_M))
+        # RDF: x right, y down, z forward - orthonormal, forward at the target
+        np.testing.assert_allclose(matrix.T @ matrix, np.eye(3), atol=1e-12)
+        forward = (target - position) / np.linalg.norm(target - position)
+        np.testing.assert_allclose(matrix[:, 2], forward, atol=1e-12)
+        self.assertLess(matrix[2, 1], 0.0)  # its "down" points down in the world
+        self.assertAlmostEqual(matrix[2, 0], 0.0)  # its "right" is level
+
+
 def _tool():
     if str(TOOLS) not in sys.path:  # the tools import their `_lab` neighbour
         sys.path.insert(0, str(TOOLS))

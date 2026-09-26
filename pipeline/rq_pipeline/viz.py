@@ -436,3 +436,41 @@ def scene_ground(
             )
             faces = len(triangles)
     return {"gaussians": drawn.count, "of": splats.count, "proxy_faces": faces}
+
+
+# A chase camera over a mirrored robot: an entity the viewer's eye can
+# track (Rerun takes over a tracked CAMERA's pose; a tracked plain entity
+# puts the eye on the entity itself - the view from inside the robot's
+# base, 2026-09-26). Behind, beside and above the robot, looking at it.
+CHASE_PATH = f"{RIG_PATH}/chase"
+CHASE_OFFSET_M = (-2.2, -2.2, 1.3)  # from the robot's base, world axes
+CHASE_WIDTH, CHASE_HEIGHT, CHASE_FOCAL = 640, 480, 500.0
+
+
+def chase_pose(
+    target: Any, offset: Any = CHASE_OFFSET_M, up: Any = (0.0, 0.0, 1.0)
+) -> Any:
+    """Where a chase camera sits (`target + offset`) and its rotation as a
+    3x3 in Rerun's RDF camera frame (x right, y down, z forward), forward
+    along the line to `target`. Returns (position, matrix)."""
+    import numpy as np  # noqa: PLC0415
+
+    target = np.asarray(target, dtype=np.float64)
+    position = target + np.asarray(offset, dtype=np.float64)
+    forward = target - position
+    forward /= np.linalg.norm(forward)
+    right = np.cross(forward, np.asarray(up, dtype=np.float64))
+    right /= np.linalg.norm(right)
+    down = np.cross(forward, right)
+    return position, np.stack([right, down, forward], axis=1)
+
+
+def chase_camera(rr: Any) -> Any:
+    """The chase camera's intrinsics, logged once, static."""
+    return rr.Pinhole(
+        focal_length=CHASE_FOCAL,
+        width=CHASE_WIDTH,
+        height=CHASE_HEIGHT,
+        camera_xyz=rr.ViewCoordinates.RDF,
+        image_plane_distance=0.15,
+    )

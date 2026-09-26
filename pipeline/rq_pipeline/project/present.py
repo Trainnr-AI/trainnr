@@ -64,7 +64,12 @@ if TYPE_CHECKING:
 
 INTENT_FILE = "present.json"
 POLL_S = 0.25
-FLUSH_S = 10.0
+# How long a show waits for the viewer to confirm everything arrived. The
+# viewer is shared with live streams (a training's curves, the viewport's
+# twin at 20 Hz), and behind them a 10 s wait ran out while the show itself
+# had landed: the Studio then said "could not show" over a picture that was
+# there (2026-09-26). The presenter is its own process, so it can wait.
+FLUSH_S = 120.0
 # The channel components drawn per recording: all of them up to this many,
 # so a 14-joint arm plots as fourteen lines and not one unreadable braid.
 MAX_TRACES = 16
@@ -123,7 +128,7 @@ def present(
         shown = presenter(project, artifact, recording)
         shown["viewer_files"] = [str(path) for path in replayed]
         recording.send_blueprint(rrb.Blueprint(shown["layout"]))
-        recording.flush(timeout_sec=FLUSH_S)
+        _flush(recording, stamp)
     finally:
         recording.disconnect()
     return {
@@ -169,7 +174,7 @@ def compare(
         recording.send_blueprint(
             rrb.Blueprint(rrb.Horizontal(*(s["layout"] for s in shown)))
         )
-        recording.flush(timeout_sec=FLUSH_S)
+        _flush(recording, f"{a} vs {b}")
     finally:
         recording.disconnect()
     return {
@@ -1130,6 +1135,20 @@ def _gap_line(g: Any) -> str:
         f"beyond {g.tolerance_m * 100:.0f} cm of any collider · "
         f"{g.hidden_fraction * 100:.1f} % of the proxy unseen"
     )
+
+
+def _flush(recording: Any, what: str) -> None:
+    """Wait for the viewer to take the whole show; past `FLUSH_S` the
+    refusal says what happened - the viewer is busy, what arrived is
+    shown, the rest may be missing - not a bare SDK line."""
+    try:
+        recording.flush(timeout_sec=FLUSH_S)
+    except Exception as why:
+        raise RuntimeError(
+            f"the viewer did not confirm the whole of {what} within {FLUSH_S:g} s "
+            f"(live streams share it; what arrived is shown, the rest may be "
+            f"missing): {why}"
+        ) from why
 
 
 def _obj_mesh(path: Path) -> tuple[Any, Any] | None:

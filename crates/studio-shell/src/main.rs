@@ -433,6 +433,19 @@ impl StudioShell {
 
     /// No scene: the viewport idle and the page back to its rails — the
     /// one way a scene ends, from the button and from the door alike.
+    /// Close the previous viewport twin's recordings before a new one
+    /// streams under the same application id: restarted twice, the viewer
+    /// held two twins of one scene and showed the older (2026-09-26).
+    fn close_twin(&self, scene: &str) {
+        use re_viewer::external::re_log_types::ApplicationId;
+        use re_viewer::external::re_viewer_context::{SystemCommand, SystemCommandSender as _};
+        if let Ok(app) = ApplicationId::try_new(format!("{}{scene}", viewport::TWIN_APP_PREFIX)) {
+            self.rerun_app
+                .command_sender
+                .send_system(SystemCommand::CloseApp(app));
+        }
+    }
+
     fn stop_scene(&mut self) {
         self.viewport = ViewportFeed::idle();
         self.viewport_full = false;
@@ -619,6 +632,20 @@ impl StudioShell {
                 self.shell.show(&artifact);
                 Ok(())
             }
+            Command::Focus { recording } => {
+                use re_viewer::external::re_log_types::ApplicationId;
+                use re_viewer::external::re_viewer_context::{
+                    SystemCommand, SystemCommandSender as _,
+                };
+                // The same migration the SDK applied to the tool's id, so the
+                // raw name resolves to the entry name the viewer holds.
+                let app = ApplicationId::try_new(recording.clone())
+                    .map_err(|e| format!("recording {recording:?}: {e}"))?;
+                self.rerun_app
+                    .command_sender
+                    .send_system(SystemCommand::ActivateApp(app));
+                Ok(())
+            }
             Command::Compare { a, b } => {
                 for stamp in [&a, &b] {
                     if self.shell.model.artifact(stamp).is_none() {
@@ -769,6 +796,7 @@ impl StudioShell {
                                 viewport::DEPLOY_PREFIX
                             ));
                         }
+                        self.close_twin(&name);
                         self.viewport =
                             ViewportFeed::spawn(ui.ctx(), &name, &self.shell.model.project_root);
                         self.shell.section = Section::Live;

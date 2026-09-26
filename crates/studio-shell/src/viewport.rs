@@ -429,6 +429,10 @@ pub const WALK_TASK: &str = "walk";
 /// `tests/test_studio_mirrors.py`). Run by the render stream, in the
 /// pipeline's venv, inside the open project.
 pub const DEPLOY_PREFIX: &str = "deploy:";
+/// The application id the viewport's physics twin streams under, before
+/// the scene's name (`tools/studio-render-stream.py` mirrors it): what the
+/// shell closes before a new viewport starts, so twins never stack.
+pub const TWIN_APP_PREFIX: &str = "robotiq-sim-";
 
 /// Whether the viewport can run a scene by this name: a preview task,
 /// the walk, or a deployment.

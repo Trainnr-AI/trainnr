@@ -54,6 +54,13 @@ class RenderSideCap(unittest.TestCase):
 
 
 class WireTags(unittest.TestCase):
+    def test_the_twin_app_prefix_agrees(self) -> None:
+        """The shell closes the previous twin by this prefix before a new
+        viewport starts; the tool streams under it (2026-09-26)."""
+        py = constant(RENDER_STREAM, r'^TWIN_APP_PREFIX = "([^"]+)"$')
+        rs = constant(VIEWPORT_RS, r'^pub const TWIN_APP_PREFIX: &str = "([^"]+)";$')
+        self.assertEqual(py, rs)
+
     def test_the_pan_tag_and_its_payload_agree(self) -> None:
         # The pan message (WASD/QE, 2026-09-12): the tag number and the
         # three f32 seconds on both sides of the pipe.

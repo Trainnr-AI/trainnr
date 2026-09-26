@@ -250,9 +250,9 @@ RTF_WINDOW_S = 1.0  # the real-time factor the status reports, over this window
 # The last slice of each physics tick is spun, not slept, for accuracy.
 PACE_SPIN_S = 0.0015
 SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
-# Where the twin's eye starts, from the robot's base, under a captured
-# scene: behind and above, close enough that the robot is the picture.
-TWIN_EYE_OFFSET_M = np.array([2.5, -2.5, 1.4])
+# The twin's application id before the scene's name; the shell closes the
+# previous twin under it before a new viewport starts (viewport.rs mirrors it).
+TWIN_APP_PREFIX = "robotiq-sim-"
 
 
 class PhysicsNarrator:
@@ -267,14 +267,16 @@ class PhysicsNarrator:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
         from rq_pipeline.viz import (  # noqa: PLC0415
+            CHASE_PATH,
             VISUAL_ONLY_SKIP_GROUPS,
             RigMirror,
+            chase_camera,
             leave_cleanly_on_term,
             scene_ground,
         )
 
         self.rr = rr
-        rr.init(f"robotiq-sim-{task_name}", spawn=False)
+        rr.init(f"{TWIN_APP_PREFIX}{task_name}", spawn=False)
         rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
         leave_cleanly_on_term(rr)
         # A staged deployment's captured scene: the splat and its proxy go
@@ -334,53 +336,39 @@ class PhysicsNarrator:
             if (model.actuator(a).name or "").startswith(self._narrated)
         ]
         self._scene_shown = scene_dir is not None
+        # under a scene the eye tracks a chase camera over the robot's base
+        self._chase_body = self._free_body(model) if self._scene_shown else None
+        if self._chase_body is not None:
+            rr.log(CHASE_PATH, chase_camera(rr), static=True)
         rr.send_blueprint(self._blueprint(rrb, model))
 
-    def _tracked(self, model: "mujoco.MjModel") -> "tuple[str, np.ndarray] | None":
-        """The robot's base as the twin logs it: the entity of the first
-        mesh on the free joint's body, and where that body starts. None
-        for a scene with no free body or no mesh on it."""
-        from rq_pipeline.viz import RIG_PATH  # noqa: PLC0415
-
+    @staticmethod
+    def _free_body(model: "mujoco.MjModel") -> "int | None":
+        """The robot's base: the free joint's body; None without one."""
         free = [
             j
             for j in range(model.njnt)
             if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
         ]
-        if not free:
-            return None
-        body = int(model.jnt_bodyid[free[0]])
-        for g, name, *_ in self.mirror.meshes:
-            if int(model.geom_bodyid[g]) == body:
-                data = mujoco.MjData(model)
-                if model.nkey:  # a deployment starts from its keyframe, not qpos0
-                    mujoco.mj_resetDataKeyframe(model, data, 0)
-                mujoco.mj_forward(model, data)
-                return f"{RIG_PATH}/{name}", data.xpos[body].copy()
-        return None
+        return int(model.jnt_bodyid[free[0]]) if free else None
 
     def _twin_view(self, rrb: "object", model: "mujoco.MjModel") -> "object":
         """The 3D twin. Under a captured scene the view's bounds are the
         scene's (17 m of garden), which frames a 0.4 m robot as a speck: the
-        eye then orbits the robot's base and follows it, and the collision
-        proxy is left out of the view's contents (Rerun's `overrides` are
-        visualizers; a visibility override did not take, 2026-09-26) — the
-        entity is in the recording, one query edit away, never a blue skin
-        over the splat by default."""
-        from rq_pipeline.viz import SCENE_GROUND_PATH  # noqa: PLC0415
+        eye then tracks the chase camera the twin logs over the robot
+        (`viz.chase_pose`; a tracked plain entity put the eye inside the
+        base), and the collision proxy is left out of the view's contents
+        (Rerun's `overrides` are visualizers; a visibility override did not
+        take, 2026-09-26) — the entity is in the recording, one query edit
+        away, never a blue skin over the splat by default."""
+        from rq_pipeline.viz import CHASE_PATH, SCENE_GROUND_PATH  # noqa: PLC0415
 
+        del model
         if not self._scene_shown:
             return rrb.Spatial3DView(origin="world", name="physics twin")
-        tracked = self._tracked(model)
         eye = None
-        if tracked is not None:
-            entity, base = tracked
-            eye = rrb.EyeControls3D(
-                kind=rrb.Eye3DKind.Orbital,
-                tracking_entity=entity,
-                look_target=base,
-                position=base + TWIN_EYE_OFFSET_M,
-            )
+        if self._chase_body is not None:
+            eye = rrb.EyeControls3D(tracking_entity=CHASE_PATH)
         return rrb.Spatial3DView(
             origin="world",
             name="physics twin",
@@ -432,6 +420,11 @@ class PhysicsNarrator:
         rr = self.rr
         rr.set_time(SIM_TIMELINE, duration=sim_time)
         self.mirror.log(data)
+        if self._chase_body is not None:
+            from rq_pipeline.viz import CHASE_PATH, chase_pose  # noqa: PLC0415
+
+            position, matrix = chase_pose(data.xpos[self._chase_body])
+            rr.log(CHASE_PATH, rr.Transform3D(translation=position, mat3x3=matrix))
         now_series = sim_time - self._last_series >= 1.0 / NARRATE_HZ
         if not now_series:
             if data.ncon:
