@@ -381,3 +381,58 @@ def gaussians(rr: Any, splats: Any) -> Any:
             axis=1,
         ),
     )
+
+
+# A captured scene under a mirrored robot: the splat as the picture's
+# ground and the collision proxy translucent beside it, both under the
+# 3D view every mirror shares (`world`), so the robot stands INSIDE the
+# scene and the physics view stays a toggle in the blueprint. Logged once,
+# static, BEFORE any stream starts: rr.log blocks under back-pressure, and
+# a 100 MiB splat sent beside a live stream jammed the channel ("Flush
+# timed out", 2026-09-26).
+SCENE_GROUND_PATH = "world/scene"
+PROXY_RGBA = (90, 160, 255, 90)  # the presenter's translucent blue
+
+
+def scene_ground(
+    rr: Any, scene_dir: Path | str, *, splats: Any = None, root: str = SCENE_GROUND_PATH
+) -> dict:
+    """Log `scene_dir`'s visible splat at `<root>/splat` and its proxy at
+    `<root>/proxy`; returns what was drawn. `splats` already read (a
+    mirror that also renders cameras from them) saves a second read of a
+    100 MiB file. A scene without its splat file is refused by name (the
+    picture never stands on nothing)."""
+    from rq_pipeline.scenes.obj import read_obj  # noqa: PLC0415
+    from rq_pipeline.scenes.record import PROXY_FILE, SPLAT_FILE  # noqa: PLC0415
+    from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply  # noqa: PLC0415
+
+    scene_dir = Path(scene_dir)
+    splat_file = scene_dir / SPLAT_FILE
+    if splats is None:
+        if not splat_file.is_file():
+            raise FileNotFoundError(
+                f"scene {scene_dir.name} has no {SPLAT_FILE} to stand on"
+            )
+        splats = read_ply(splat_file)
+    drawn = splats.visible(VISIBLE_OPACITY)  # as the viewer and the audit draw it
+    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    rr.log(f"{root}/splat", gaussians(rr, drawn), static=True)
+    faces = 0
+    proxy = scene_dir / PROXY_FILE
+    if proxy.is_file():
+        try:
+            vertices, triangles = read_obj(proxy)
+        except ValueError:  # a proxy with no faces draws nothing
+            vertices = triangles = None
+        if triangles is not None:
+            rr.log(
+                f"{root}/proxy",
+                rr.Mesh3D(
+                    vertex_positions=vertices,
+                    triangle_indices=triangles,
+                    albedo_factor=list(PROXY_RGBA),
+                ),
+                static=True,
+            )
+            faces = len(triangles)
+    return {"gaussians": drawn.count, "of": splats.count, "proxy_faces": faces}

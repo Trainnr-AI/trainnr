@@ -250,20 +250,49 @@ RTF_WINDOW_S = 1.0  # the real-time factor the status reports, over this window
 # The last slice of each physics tick is spun, not slept, for accuracy.
 PACE_SPIN_S = 0.0015
 SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
+# Where the twin's eye starts, from the robot's base, under a captured
+# scene: behind and above, close enough that the robot is the picture.
+TWIN_EYE_OFFSET_M = np.array([2.5, -2.5, 1.4])
 
 
 class PhysicsNarrator:
     """The sim's state into Rerun, per step, on the `sim` timeline."""
 
-    def __init__(self, model: "mujoco.MjModel", task_name: str) -> None:
+    def __init__(
+        self,
+        model: "mujoco.MjModel",
+        task_name: str,
+        scene_dir: "pathlib.Path | None" = None,
+    ) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
-        from rq_pipeline.viz import RigMirror, leave_cleanly_on_term  # noqa: PLC0415
+        from rq_pipeline.viz import (  # noqa: PLC0415
+            VISUAL_ONLY_SKIP_GROUPS,
+            RigMirror,
+            leave_cleanly_on_term,
+            scene_ground,
+        )
 
         self.rr = rr
         rr.init(f"robotiq-sim-{task_name}", spawn=False)
         rr.connect_grpc()  # default 127.0.0.1:9876 — the Studio itself
         leave_cleanly_on_term(rr)
+        # A staged deployment's captured scene: the splat and its proxy go
+        # in FIRST, once, before the twin streams (the channel jams if both
+        # go at once); the robot then walks inside the scene, and the
+        # collision parts (group 3, the grey ground) stay a blueprint toggle
+        # as the proxy entity, never drawn over the splat.
+        skip_groups: tuple[int, ...] = ()
+        if scene_dir is not None:
+            started = time.perf_counter()
+            drawn = scene_ground(rr, scene_dir)
+            print(
+                f"scene ground: {drawn['gaussians']} of {drawn['of']} gaussians, "
+                f"{drawn['proxy_faces']} proxy faces, sent in "
+                f"{time.perf_counter() - started:.1f} s",
+                file=sys.stderr,
+            )
+            skip_groups = VISUAL_ONLY_SKIP_GROUPS
         # Narrate ONE robot even when the scene holds a flock: rr.log
         # BLOCKS when the channel floods, and twenty ducks' series plus
         # 700 mesh transforms per tick froze the whole sim loop inside
@@ -278,7 +307,9 @@ class PhysicsNarrator:
         )
         self._narrated = flock[0] + "/" if len(flock) > 1 else ""
         others = tuple(f"{prefix}/" for prefix in flock[1:])
-        self.mirror = RigMirror(model, model_colors=True, skip_prefixes=others)
+        self.mirror = RigMirror(
+            model, model_colors=True, skip_prefixes=others, skip_groups=skip_groups
+        )
 
         # Hinges and slides get scalar series; a free joint's 7-wide qpos
         # is pose, not a signal, and the mirror already shows it.
@@ -302,9 +333,62 @@ class PhysicsNarrator:
             for a in range(model.nu)
             if (model.actuator(a).name or "").startswith(self._narrated)
         ]
-        rr.send_blueprint(self._blueprint(rrb))
+        self._scene_shown = scene_dir is not None
+        rr.send_blueprint(self._blueprint(rrb, model))
 
-    def _blueprint(self, rrb: "object") -> "object":
+    def _tracked(self, model: "mujoco.MjModel") -> "tuple[str, np.ndarray] | None":
+        """The robot's base as the twin logs it: the entity of the first
+        mesh on the free joint's body, and where that body starts. None
+        for a scene with no free body or no mesh on it."""
+        from rq_pipeline.viz import RIG_PATH  # noqa: PLC0415
+
+        free = [
+            j
+            for j in range(model.njnt)
+            if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
+        ]
+        if not free:
+            return None
+        body = int(model.jnt_bodyid[free[0]])
+        for g, name, *_ in self.mirror.meshes:
+            if int(model.geom_bodyid[g]) == body:
+                data = mujoco.MjData(model)
+                if model.nkey:  # a deployment starts from its keyframe, not qpos0
+                    mujoco.mj_resetDataKeyframe(model, data, 0)
+                mujoco.mj_forward(model, data)
+                return f"{RIG_PATH}/{name}", data.xpos[body].copy()
+        return None
+
+    def _twin_view(self, rrb: "object", model: "mujoco.MjModel") -> "object":
+        """The 3D twin. Under a captured scene the view's bounds are the
+        scene's (17 m of garden), which frames a 0.4 m robot as a speck: the
+        eye then orbits the robot's base and follows it, and the collision
+        proxy is left out of the view's contents (Rerun's `overrides` are
+        visualizers; a visibility override did not take, 2026-09-26) — the
+        entity is in the recording, one query edit away, never a blue skin
+        over the splat by default."""
+        from rq_pipeline.viz import SCENE_GROUND_PATH  # noqa: PLC0415
+
+        if not self._scene_shown:
+            return rrb.Spatial3DView(origin="world", name="physics twin")
+        tracked = self._tracked(model)
+        eye = None
+        if tracked is not None:
+            entity, base = tracked
+            eye = rrb.EyeControls3D(
+                kind=rrb.Eye3DKind.Orbital,
+                tracking_entity=entity,
+                look_target=base,
+                position=base + TWIN_EYE_OFFSET_M,
+            )
+        return rrb.Spatial3DView(
+            origin="world",
+            name="physics twin",
+            contents=["$origin/**", f"- {SCENE_GROUND_PATH}/proxy"],
+            eye_controls=eye,
+        )
+
+    def _blueprint(self, rrb: "object", model: "mujoco.MjModel") -> "object":
         """One curated layout: the twin beside four small-multiple views,
         each a single unit family (positions, velocities, commands,
         forces) so no axis ever mixes rad with N·m."""
@@ -314,7 +398,7 @@ class PhysicsNarrator:
         # filterless contacts view worked — structure beats query.
         return rrb.Blueprint(
             rrb.Horizontal(
-                rrb.Spatial3DView(origin="world", name="physics twin"),
+                self._twin_view(rrb, model),
                 rrb.Vertical(
                     rrb.Horizontal(
                         rrb.TimeSeriesView(
@@ -375,14 +459,45 @@ class PhysicsNarrator:
             rr.log("world/contacts", rr.Clear(recursive=False))
 
 
-def narrator_for(model: "mujoco.MjModel", task_name: str) -> "PhysicsNarrator | None":
+def narrator_for(
+    model: "mujoco.MjModel", task_name: str, scene_dir: "pathlib.Path | None" = None
+) -> "PhysicsNarrator | None":
     if "--no-rerun" in sys.argv:
         return None
     try:
-        return PhysicsNarrator(model, task_name)
+        return PhysicsNarrator(model, task_name, scene_dir)
     except Exception as err:
         print(f"physics narration disabled: {err}", file=sys.stderr)
         return None
+
+
+def staged_scene_dir(opened: object) -> "pathlib.Path | None":
+    """The captured scene a viewport deployment stands on, by the folder
+    its manifest names (`scenes.stage.scene_name_of`); None for a plane
+    deployment or a scene that is not a deployment. A named scene whose
+    folder is missing is said on stderr and the twin goes on without it,
+    as the gate tool does."""
+    from rq_pipeline.project import current_project  # noqa: PLC0415
+    from rq_pipeline.project.locate import Project  # noqa: PLC0415
+    from rq_pipeline.scenes.stage import scene_name_of  # noqa: PLC0415
+
+    context = getattr(opened, "context", None)
+    manifest = getattr(context, "manifest", None)
+    if manifest is None:
+        return None
+    name = scene_name_of(manifest.raw)
+    if name is None:
+        return None
+    project = Project(PROJECT_ROOT) if PROJECT_ROOT is not None else current_project()
+    folder = project.scenes / name
+    if not folder.is_dir():
+        print(
+            f"the deployment stands on scene {name!r} but {folder} is missing: "
+            "the twin shows the physics scene alone",
+            file=sys.stderr,
+        )
+        return None
+    return folder
 
 
 # The task's own offscreen budget is sized to its cameras (1280x720, the
@@ -2158,7 +2273,9 @@ def physics_main(task_name: str, ring_path: str) -> None:
         os._exit(0)
 
     threading.Thread(target=watch_parent, daemon=True).start()
-    pump = PhysicsPump(model, narrator_for(model, task_name), ring)
+    pump = PhysicsPump(
+        model, narrator_for(model, task_name, staged_scene_dir(task)), ring
+    )
     manual: tuple[mujoco.MjData, int] | None = None
     while True:
         try:

@@ -25,12 +25,13 @@ import numpy as np
 from rq_pipeline.deploy.manifest import TWIST_SHORT, Key, Manifest
 from rq_pipeline.viz import (
     MIRROR_HZ,
+    SCENE_GROUND_PATH,
     SIM_TIMELINE,
     STUDIO_ADDRESS,
     VISUAL_ONLY_SKIP_GROUPS,
     RigMirror,
-    gaussians,
     open_stream,
+    scene_ground,
 )
 
 APP_ID = "rq-gate"
@@ -52,7 +53,7 @@ def _rerun() -> Any | None:
     return rr
 
 
-SCENE_PATH = "world/scene/splat"
+SCENE_PATH = f"{SCENE_GROUND_PATH}/splat"  # where scene_ground puts the splat
 NOTES_PATH = "gate/notes"  # the trials log
 COMMAND_PATH = "gate/command"  # the command's axes as series
 VELOCITY_PATH = "gate/velocity"  # the measured planar velocity as series
@@ -151,13 +152,12 @@ class GateMirror:
         them (`scenes.cameras`), else a note saying why not."""
         from rq_pipeline.scenes.cameras import open_cameras  # noqa: PLC0415
         from rq_pipeline.scenes.record import SPLAT_FILE  # noqa: PLC0415
-        from rq_pipeline.scenes.splat import VISIBLE_OPACITY, read_ply  # noqa: PLC0415
+        from rq_pipeline.scenes.splat import read_ply  # noqa: PLC0415
 
         rr = self._rr
         splats = read_ply(Path(scene_dir) / SPLAT_FILE)
-        rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
-        # the visible set, as the viewer and the audit draw it
-        rr.log(SCENE_PATH, gaussians(rr, splats.visible(VISIBLE_OPACITY)), static=True)
+        # the splat and the proxy, once, static (viz.scene_ground)
+        scene_ground(rr, scene_dir, splats=splats)
         names = self._camera_names()
         self._cameras, why = (
             open_cameras(self.model, splats, names=names) if names else (None, "")
