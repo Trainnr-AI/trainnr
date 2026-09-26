@@ -1212,11 +1212,15 @@ def preflight(  # noqa: PLR0913 - the pre-flight's own knobs, each named
     the caller forgot. The dry rollout runs the plain gate's first twists
     at the gate's own seed (`gate_twists`). `manifest` overrides the one
     on disk (a provoked refusal under test)."""
-    from rq_pipeline.deploy.runtime import open_runtime  # noqa: PLC0415
+    from rq_pipeline.deploy.runtime import assets_dir_of, open_runtime  # noqa: PLC0415
 
     manifest = manifest or load_manifest(deployment_dir)
     used_seed, twists_from = gate_twists(deployment_dir, seed)
-    runtime = open_runtime(manifest, assets_dir=assets_dir)
+    runtime = open_runtime(
+        manifest,
+        # None: the cited bundle's meshes, found project-first
+        assets_dir=assets_dir if assets_dir is not None else assets_dir_of(manifest),
+    )
     ctx = Context(
         manifest=manifest,
         runtime=runtime,
@@ -1385,11 +1389,18 @@ def still_at_handover(
     """The robot at the end of the ramp-in window, from lying: the moment
     the policy has the robot alone."""
     try:
-        from rq_pipeline.deploy.runtime import open_runtime  # noqa: PLC0415
+        from rq_pipeline.deploy.runtime import (  # noqa: PLC0415
+            assets_dir_of,
+            open_runtime,
+        )
     except ImportError as missing:
         return {"unrendered": str(missing)}
     manifest = manifest or load_manifest(deployment_dir)
-    runtime = open_runtime(manifest, assets_dir=assets_dir)
+    runtime = open_runtime(
+        manifest,
+        # None: the cited bundle's meshes, found project-first
+        assets_dir=assets_dir if assets_dir is not None else assets_dir_of(manifest),
+    )
     transitions = transitions_of(manifest)
     _lie_down(runtime, transitions)
     guarded = Guarded(runtime, transitions)

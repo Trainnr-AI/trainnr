@@ -36,6 +36,15 @@ def _env(steps: int = 0):
     )
 
 
+try:
+    import rerun as _rerun
+except ImportError:  # pragma: no cover - the clean clone without --extra viz
+    _rerun = None
+
+
+@unittest.skipUnless(
+    _rerun is not None, "viz extra not installed (uv sync --extra viz)"
+)
 class TheRecorder(unittest.TestCase):
     def _term(self, env):
         import rerun as rr  # noqa: PLC0415

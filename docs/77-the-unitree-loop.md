@@ -293,7 +293,7 @@ onboarded into `projects/go2-walk` (the reference's `go2.xml`,
 (`go2-walk@0e7e123a7de7`, span 0.10, flat, 20 s episodes, 40 trials)
 and accepted by the learnability smoke; the train door taking the
 declared task. The box needs what a pod needed: the rq_mjlab venv
-(mjlab 1.6, mujoco-warp, torch with CUDA — `cd rq_mjlab && uv sync`)
+(mjlab 1.6, mujoco-warp, torch with CUDA — `cd rq_mjlab && uv sync --extra viz`; `viz` is the Rerun recorder the Studio watches, and its tests)
 and the project directory (gitignored; copy `projects/go2-walk`, the
 bundle is 24 MB of meshes). Then, with `TRAINNR_PROJECT` set to the
 project, by the door:

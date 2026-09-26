@@ -799,5 +799,23 @@ class TheAssayAndTheContactSites(unittest.TestCase):
         self.assertEqual(cameras.unpack(pixel).tolist(), [[10, 11, 12]])
 
 
+class TheUnmeasuredGap(unittest.TestCase):
+    def test_the_honest_fallback_formats_its_own_method_line(self) -> None:
+        """`unmeasured()` is what a machine without Open3D records; its
+        METHOD text gained `{margin}` in 2026-09-23 and the fallback kept
+        formatting only `{opacity}`: a KeyError instead of a record,
+        masked wherever the scene extra is installed (clean clone,
+        2026-09-27)."""
+        from rq_pipeline.scenes.gap import (  # noqa: PLC0415
+            FOOTPRINT_MARGIN_M,
+            unmeasured,
+        )
+
+        gap = unmeasured("no Open3D")
+        self.assertIn(f"{FOOTPRINT_MARGIN_M:g} m", gap.method)
+        self.assertEqual(gap.note, "no Open3D")
+        self.assertIsNone(gap.chamfer_m)
+
+
 if __name__ == "__main__":
     unittest.main()

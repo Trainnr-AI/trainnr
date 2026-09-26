@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from rq_mjlab.walk_view import (
     fit_of,
@@ -124,7 +125,9 @@ def main() -> None:
     # mjlab's two viewers as they are, drawing a scene's ground too. The
     # native window drew at 0 FPS on the WSLg box's X11 path (2026-09-11,
     # again 2026-09-25); the browser one does not touch that path.
-    viewer = ViserPlayViewer if args.viewer == "viser" else NativeMujocoViewer
+    viewer: type[Any] = (
+        ViserPlayViewer if args.viewer == "viser" else NativeMujocoViewer
+    )
     if args.scene is not None:
         viewer = showing_the_ground(viewer)
     viewer(env, policy).run()

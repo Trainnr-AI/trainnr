@@ -71,7 +71,9 @@ MYPY="mypy==2.3.1"
 step "mypy (pipeline)"         "(cd pipeline && uv run --extra sim --extra mcp --extra deploy --extra viz --with $MYPY mypy rq_pipeline)"
 step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY mypy src/rq_mjlab)"
 step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
-step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run python -m unittest discover -s tests -t .)"
+# The recorder tests need the viz extra (rerun): named here, as the README
+# names it, so a fresh clone runs them rather than skipping them (2026-09-27).
+step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run --extra viz python -m unittest discover -s tests -t .)"
 # The USD door's own tests need Newton (the `usd` extra), which cannot
 # share a venv with `mjx` (uv's conflicts), so the main suite skips them.
 # Skipped, a wrong test sat unrun for a day (the stage-units line,

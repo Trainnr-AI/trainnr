@@ -176,6 +176,17 @@ class Registries(unittest.TestCase):
                     self.assertIsNone(detail["stamp"])
 
 
+# The records these tests fold are `tools/e2e-smoke.py --name smoke`'s own
+# output (`runs/smoke-eval`, gitignored): on a clone that never ran the chain
+# they are absent, and the tests say so instead of failing (2026-09-27).
+SMOKE_EVAL = Path(__file__).resolve().parents[1] / "runs" / "smoke-eval"
+
+
+@unittest.skipUnless(
+    SMOKE_EVAL.is_dir(),
+    f"no {SMOKE_EVAL.relative_to(SMOKE_EVAL.parents[2])}: "
+    "run `tools/e2e-smoke.py --name smoke` first",
+)
 class Evals(unittest.TestCase):
     def test_the_real_smoke_records_fold_with_funnel_and_successes(self) -> None:
         # Against the committed smoke runs — the same records the panel

@@ -196,6 +196,6 @@ def unmeasured(reason: str, *, tolerance_m: float = DEFAULT_TOLERANCE_M) -> Gap:
         visible_samples=0,
         proxy_samples=0,
         footprint_fraction=None,
-        method=METHOD.format(opacity=VISIBLE_OPACITY),
+        method=METHOD.format(opacity=VISIBLE_OPACITY, margin=FOOTPRINT_MARGIN_M),
         note=reason,
     )

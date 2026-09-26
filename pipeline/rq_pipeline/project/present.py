@@ -313,7 +313,7 @@ def _present_recording(
             stride = max(1, -(-len(channel.times) // MAX_ROWS_PER_TRACE))
             if stride > 1:
                 decimated[name] = stride
-            values = values[::stride]
+            rows = values[::stride]
             times = rr.TimeColumn("time", duration=channel.times[::stride])
             for col, label in traces:
                 rr_.log(
@@ -324,7 +324,7 @@ def _present_recording(
                 rr_.send_columns(
                     f"{base}/{label}",
                     indexes=[times],
-                    columns=rr.Scalars.columns(scalars=values[:, col]),
+                    columns=rr.Scalars.columns(scalars=rows[:, col]),
                 )
             views.append(
                 rrb.TimeSeriesView(origin=base, name=f"{name} [{channel.unit}]")

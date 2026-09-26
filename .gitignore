@@ -47,3 +47,5 @@ docs/paper/latex/*.fdb_latexmk
 docs/paper/latex/*.toc
 docs/paper/latex/*.synctex.gz
 .playwright-mcp/
+# the forks' worktrees (claude worktree plugin), never part of the tree
+.claude/worktrees/

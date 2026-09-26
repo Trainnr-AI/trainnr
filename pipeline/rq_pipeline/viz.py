@@ -423,8 +423,8 @@ def scene_ground(
         try:
             vertices, triangles = read_obj(proxy)
         except ValueError:  # a proxy with no faces draws nothing
-            vertices = triangles = None
-        if triangles is not None:
+            pass
+        else:
             rr.log(
                 f"{root}/proxy",
                 rr.Mesh3D(

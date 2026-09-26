@@ -285,7 +285,7 @@ def _try_lock(handle: Any) -> bool:
     byte: True when taken, False when another holder has it, any other
     error raised."""
     try:
-        if os.name == "nt":
+        if sys.platform == "win32":  # a check mypy follows per platform
             import msvcrt  # noqa: PLC0415 - Windows only
 
             handle.seek(0)
@@ -302,7 +302,7 @@ def _try_lock(handle: Any) -> bool:
 
 
 def _unlock(handle: Any) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt  # noqa: PLC0415 - Windows only
 
         handle.seek(0)

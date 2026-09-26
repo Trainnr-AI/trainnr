@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import mujoco
 from mjlab.actuator import BuiltinPositionActuatorCfg
@@ -39,6 +39,7 @@ from mjlab.managers import EventTermCfg, TerminationTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactMatch, ContactSensorCfg, ObjRef, RayCastSensorCfg
 from mjlab.tasks.velocity import mdp
+from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from mjlab.utils.spec_config import CollisionCfg
 from rq_pipeline.bundles.hashing import fields_hash, stamp
@@ -525,7 +526,9 @@ def gentle_scene_commands(cfg: ManagerBasedRlEnvCfg) -> None:
     # (pinned by test_scene_commands), or the stages would key wrong
     stages = scene_command_stages(go2_agent(1).num_steps_per_env)
     term.params[STAGES_KEY] = stages
-    ranges = cfg.commands[COMMAND_TERM].ranges
+    # mjlab types its commands by the base class; the walk's twist is the
+    # velocity command (a stand-in config in tests carries the same field)
+    ranges = cast("UniformVelocityCommandCfg", cfg.commands[COMMAND_TERM]).ranges
     ranges.lin_vel_x = stages[0]["lin_vel_x"]
     ranges.lin_vel_y = stages[0]["lin_vel_y"]
     ranges.ang_vel_z = stages[0]["ang_vel_z"]

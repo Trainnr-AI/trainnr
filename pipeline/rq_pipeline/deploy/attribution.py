@@ -32,7 +32,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -326,8 +326,11 @@ class Delayed:
         self.inner.last_action = np.asarray(action, dtype=np.float32)
 
 
+# The three wrappers below stand in for the runtime: every call they do not
+# name reaches the inner one through `__getattr__`, a structural fact mypy
+# cannot see, so each is returned under the type it serves as.
 def _latency(runtime: Runtime, level: float, _seed: int) -> Runtime:
-    return Delayed(runtime, int(level))
+    return cast("Runtime", Delayed(runtime, int(level)))
 
 
 @dataclass
@@ -373,7 +376,9 @@ JOINT_POS_TERM = "joint_pos"
 
 
 def _joint_pos_noise(runtime: Runtime, level: float, seed: int) -> Runtime:
-    return Noisy(runtime, JOINT_POS_TERM, level, np.random.default_rng(seed))
+    return cast(
+        "Runtime", Noisy(runtime, JOINT_POS_TERM, level, np.random.default_rng(seed))
+    )
 
 
 @dataclass
@@ -410,7 +415,7 @@ class Pushed:
 
 def _push(runtime: Runtime, level: float, seed: int) -> Runtime:
     period = max(1, round(PUSH_PERIOD_S / runtime.step_dt))
-    return Pushed(runtime, level, np.random.default_rng(seed), period)
+    return cast("Runtime", Pushed(runtime, level, np.random.default_rng(seed), period))
 
 
 # The knobs, one table: the sweep, the door's docstring, the drawer and the
@@ -620,7 +625,9 @@ def apply_fit(runtime: Runtime, fit: FitValues, terms: tuple[str, ...]) -> Runti
 def fit_rung_terms(knobs: tuple[Knob, ...]) -> dict[str, tuple[str, ...]]:
     """The fit rungs a sweep runs: one per knob that names a fit term (that
     term alone), then `FIT_ALL` with every term those knobs name."""
-    out = {k.name: (k.fit_term,) for k in knobs if k.fit_term}
+    out: dict[str, tuple[str, ...]] = {
+        k.name: (k.fit_term,) for k in knobs if k.fit_term
+    }
     if out:
         out[FIT_ALL] = tuple(t for terms in out.values() for t in terms)
     return out
@@ -907,10 +914,10 @@ def gate_protocol(
     """The trials and seed the passing gate ran at; one asked for that
     differs is refused by name (a rung would not run the gate's trials)."""
     protocol = base.get("protocol") or {}
-    out = {
-        "trials": int(base.get("trials") or protocol.get("trials")),
-        "seed": int(protocol["seed"]),
-    }
+    trials = base.get("trials") or protocol.get("trials")
+    if trials is None:
+        raise ValueError("the passing gate's record names no trials to run at")
+    out = {"trials": int(trials), "seed": int(protocol["seed"])}
     for field_, ours in asked.items():
         if ours is not None and int(ours) != out[field_]:
             raise ValueError(
@@ -1024,16 +1031,19 @@ def attribute(  # noqa: PLR0913 - the sweep's own knobs, each named
         with ProcessPoolExecutor(
             max_workers=count, mp_context=multiprocessing.get_context("spawn")
         ) as pool:
+            if fit_terms:
+                assert fit is not None  # fit rungs exist only under a fit
             fits = [
                 pool.submit(_fit_in_worker, (sweep, fit, rung_name, terms))
                 for rung_name, terms in fit_terms.items()
+                if fit is not None
             ]
             for future in as_completed(
                 [pool.submit(_climb_in_worker, (sweep, k)) for k in knobs]
             ):
                 landed(*future.result())
-            for future in fits:
-                rung_name, rung = future.result()
+            for fit_future in fits:
+                rung_name, rung = fit_future.result()
                 at_fit[rung_name] = rung
     climbed = {k.name: climbed[k.name] for k in knobs}  # the table's order
     ranking = rank(climbed, sweep.past)
@@ -1233,9 +1243,15 @@ def still_at_cliff(
         return {"unrendered": UNRENDERED.format(why=str(missing))}
     manifest = load_manifest(deployment_dir)
     opener = open if open is not None else runtime_spec(DEFAULT_RUNTIME).open()
-    turned = (appliers or APPLIERS)[name](
-        opener(manifest, assets_dir=assets_dir), level, seed
-    )
+    from rq_pipeline.deploy.runtime import Runtime as PlainRuntime  # noqa: PLC0415
+
+    runtime = opener(manifest, assets_dir=assets_dir)
+    if not isinstance(runtime, PlainRuntime):
+        raise TypeError(
+            "the still renders the plain MuJoCo runtime's model, "
+            f"not {type(runtime).__name__}"
+        )
+    turned = (appliers or APPLIERS)[name](runtime, level, seed)
     out = Path(deployment_dir) / STILL_FILE
     try:
         with stills.renderer(turned.model, stills.CLIFF_CAMERA) as render:

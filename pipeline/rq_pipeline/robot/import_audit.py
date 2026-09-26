@@ -311,7 +311,7 @@ def reader_for(path: Path) -> SourceReader:
 # -- snapshots ---------------------------------------------------------
 
 
-def quat_to_matrix(quat: Sequence[float]) -> np.ndarray:
+def quat_to_matrix(quat: Sequence[float] | np.ndarray) -> np.ndarray:
     """A unit quaternion (w, x, y, z) as a rotation matrix: MuJoCo's own
     `mju_quat2Mat`, the one rotation every module here uses."""
     import mujoco  # noqa: PLC0415 - sim extra

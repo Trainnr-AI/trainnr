@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -116,18 +117,19 @@ class PoseTrack:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         staging = path.with_name(path.name + ".tmp.npz")
-        np.savez_compressed(
-            staging,
-            **{
-                SEGMENTS: np.array(self._segments),
-                SEGMENT: np.array([r[0] for r in self._rows], dtype=np.int32),
-                POSITION: np.stack([r[1] for r in self._rows]),
-                QUATERNION: np.stack([r[2] for r in self._rows]),
-                JOINTS: np.stack([r[3] for r in self._rows]),
-                DT: np.float64(self.dt),
-                JOINT_NAMES: np.array(self.joint_names),
-            },
-        )
+        arrays: dict[str, np.ndarray] = {
+            SEGMENTS: np.array(self._segments),
+            SEGMENT: np.array([r[0] for r in self._rows], dtype=np.int32),
+            POSITION: np.stack([r[1] for r in self._rows]),
+            QUATERNION: np.stack([r[2] for r in self._rows]),
+            JOINTS: np.stack([r[3] for r in self._rows]),
+            DT: np.asarray(self.dt, dtype=np.float64),
+            JOINT_NAMES: np.array(self.joint_names),
+        }
+        # numpy's stub types `**kwds` against its own `allow_pickle: bool`, so an
+        # unpacked dict of arrays is refused by the checker alone
+        savez: Any = np.savez_compressed
+        savez(staging, **arrays)
         staging.replace(path)
         return path
 

@@ -289,9 +289,9 @@ def simulate(  # noqa: PLR0913, PLR0915 - the study's axes, each a dataclass; on
     if corruption is not None:
         rng = np.random.default_rng(corruption.seed)
         step = 2 * np.pi / corruption.encoder_counts
-        position = np.round(position / step) * step
-        velocity = np.gradient(position, 1.0 / servo.control_hz, axis=0)
-        torque = torque + rng.normal(0.0, corruption.torque_noise_nm, torque.shape)
+        position[...] = np.round(position / step) * step
+        velocity[...] = np.gradient(position, 1.0 / servo.control_hz, axis=0)
+        torque[...] += rng.normal(0.0, corruption.torque_noise_nm, torque.shape)
 
     channels = {
         JOINT_POSITION: Channel(JOINT_POSITION, times, position, "rad", joints),
