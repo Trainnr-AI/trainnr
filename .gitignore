@@ -49,3 +49,6 @@ docs/paper/latex/*.synctex.gz
 .playwright-mcp/
 # the forks' worktrees (claude worktree plugin), never part of the tree
 .claude/worktrees/
+
+# The Studio log the launch line redirects to when started by hand.
+scratchpad/
