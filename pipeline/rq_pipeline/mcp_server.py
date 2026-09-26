@@ -1504,16 +1504,23 @@ def describe_studio() -> dict[str, Any]:
 
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import state  # noqa: PLC0415
-    from rq_pipeline.project.locate import INDEX_DIR  # noqa: PLC0415
 
     project = current_project()
     out = state(project)
-    status = project.root / INDEX_DIR / "present-status.json"
+    from rq_pipeline.project.control import present_status_path  # noqa: PLC0415
+
+    status = present_status_path(project)
     if status.is_file():
         try:
-            out["presenter"] = json.loads(status.read_text(encoding="utf-8"))
+            presenter = json.loads(status.read_text(encoding="utf-8"))
         except ValueError:
-            out["presenter"] = {"error": "unreadable present-status.json"}
+            presenter = {"error": "unreadable present-status.json"}
+        # The answer is the last one written, not this moment's: its age
+        # says how stale it is (a status from an hour ago read as the
+        # presenter's current word until 2026-09-27).
+        written = float(presenter.get("t") or status.stat().st_mtime)
+        presenter["age_s"] = round(time.time() - written, 1)
+        out["presenter"] = presenter
     return out
 
 
@@ -1606,7 +1613,29 @@ def focus_studio_recording(recording: str) -> dict[str, Any]:
         return answer
     time.sleep(SETTLE_S)
     live = state(project).get("live") or {}
-    return {**answer, "live_recording": live.get("recording")}
+    now_live = live.get("recording")
+    if not recording_matches(recording, now_live):
+        return {
+            **answer,
+            "status": "not shown",
+            "reason": f"the viewer's live recording is {now_live!r}, not "
+            f"{recording!r}: no recording of that name is streaming (the "
+            "Sources list has the names)",
+            "live_recording": now_live,
+        }
+    return {**answer, "live_recording": now_live}
+
+
+def recording_matches(asked: str, live: str | None) -> bool:
+    """Whether the viewer's live application id is the one asked for: the
+    SDK folds a stamp's `@` and other punctuation into `-` when it
+    migrates an application id, so the comparison is on the letters."""
+    import re  # noqa: PLC0415
+
+    if not live:
+        return False
+    fold = lambda s: re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")  # noqa: E731
+    return fold(live).startswith(fold(asked))
 
 
 def compare_in_studio(a: str, b: str) -> dict[str, Any]:

@@ -203,6 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shot: None,
                 last_navigation: None,
                 seen_recording: false,
+            activated_shown: None,
                 viewport_full: false,
                 closing: false,
             }))
@@ -231,6 +232,8 @@ struct StudioShell {
     /// Whether a recording was loaded last frame — a fresh arrival
     /// switches the page to Live once, without trapping the user there.
     seen_recording: bool,
+    /// The presenter's last `shown` we brought to the front.
+    activated_shown: Option<String>,
     /// The viewport alone on the Live page: no rail, no viewer panels,
     /// the picture and its transport bar (the `f` key; Escape leaves).
     viewport_full: bool,
@@ -326,6 +329,28 @@ impl eframe::App for StudioShell {
             self.shell.show_requested = false;
         }
         self.seen_recording = has_recording;
+        // The presenter's freshly landed recording comes to the front: the
+        // viewer keeps the active one otherwise, and a second Show (a
+        // batch after a dataset) streamed unseen behind it (2026-09-27).
+        let landed = self
+            .shell
+            .model
+            .present_status
+            .as_ref()
+            .and_then(|status| status.shown.clone());
+        if landed.is_some() && landed != self.activated_shown {
+            use re_viewer::external::re_log_types::ApplicationId;
+            use re_viewer::external::re_viewer_context::{SystemCommand, SystemCommandSender as _};
+            if let Some(app) = landed
+                .as_deref()
+                .and_then(|id| ApplicationId::try_new(control::entry_name(id)).ok())
+            {
+                self.rerun_app
+                    .command_sender
+                    .send_system(SystemCommand::ActivateApp(app));
+            }
+            self.activated_shown = landed;
+        }
         // A deployment played or replayed from its drawer: the viewport
         // runs it and the page turns to it.
         if let Some(scene) = self.shell.scene_request.take() {
@@ -630,6 +655,9 @@ impl StudioShell {
                     return Err(format!("no artifact {artifact:?} in this project"));
                 }
                 self.shell.show(&artifact);
+                if let Some(shown) = self.shell.shown.take() {
+                    self.control.event(Event::show(BY_AGENT).of_artifact(shown));
+                }
                 Ok(())
             }
             Command::Focus { recording } => {
@@ -639,7 +667,7 @@ impl StudioShell {
                 };
                 // The same migration the SDK applied to the tool's id, so the
                 // raw name resolves to the entry name the viewer holds.
-                let app = ApplicationId::try_new(recording.clone())
+                let app = ApplicationId::try_new(control::entry_name(&recording))
                     .map_err(|e| format!("recording {recording:?}: {e}"))?;
                 self.rerun_app
                     .command_sender
@@ -653,6 +681,9 @@ impl StudioShell {
                     }
                 }
                 self.shell.compare(&a, &b);
+                if let Some(shown) = self.shell.shown.take() {
+                    self.control.event(Event::show(BY_AGENT).of_artifact(shown));
+                }
                 Ok(())
             }
             Command::Time {
@@ -693,6 +724,19 @@ impl StudioShell {
                         .recording_db()
                         .and_then(|db| db.timelines().get(&n).map(|t| t.typ()))
                 });
+                if let (Some(n), None) = (name, typ) {
+                    // A timeline the recording has not got: named, not acked
+                    // as done and left on the old one (2026-09-27).
+                    let known: Vec<String> = self
+                        .rerun_app
+                        .recording_db()
+                        .map(|db| db.timelines().keys().map(|k| k.to_string()).collect())
+                        .unwrap_or_default();
+                    return Err(format!(
+                        "no timeline {n:?} in the recording; it has {}",
+                        if known.is_empty() { "none".to_owned() } else { known.join(", ") }
+                    ));
+                }
                 let temporal = !matches!(typ, Some(TimeType::Sequence));
                 if let Some(secs) = seconds {
                     if !temporal {
@@ -1243,6 +1287,7 @@ impl StudioShell {
                 render_ms: s.render_ms,
                 camera: s.camera.clone(),
             }),
+            moved_to: None,
         };
         self.control.record_state(state);
     }

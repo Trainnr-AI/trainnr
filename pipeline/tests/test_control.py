@@ -128,6 +128,56 @@ class State(unittest.TestCase):
             self.assertEqual(current["section"], "robots")
             self.assertLess(current["heartbeat_age_s"], 1.0)
 
+    def test_a_studio_that_moved_is_found_through_its_pointer(self) -> None:
+        from rq_pipeline.project.control import home  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old = create_project(Path(tmp) / "old", "old")
+            new = create_project(Path(tmp) / "new", "new")
+            # The pointer the switch left behind: a fresh heartbeat and a
+            # live pid, yet never alive on its own.
+            _write_state(old, moved_to=str(new.root))
+            self.assertFalse(state(old)["alive"])
+            self.assertIn("moved from", state(old)["reason"])
+            _write_state(new, section="deployments")
+            found = state(old)
+            self.assertTrue(found["alive"])
+            self.assertTrue(found["elsewhere"])
+            self.assertEqual(found["asked"], str(old.root))
+            self.assertEqual(found["project"], str(new.root))
+            self.assertEqual(found["section"], "deployments")
+            self.assertEqual(home(old).root, new.root)
+            self.assertNotIn("elsewhere", state(new))
+            # A command about the old project's artifacts is refused with
+            # the door that brings the window back; a page or a screenshot
+            # goes where the Studio is.
+            answer = command(old, "show", artifact="a@000000000000")
+            self.assertEqual(answer["status"], "refused")
+            self.assertIn("open_in_studio(project=", answer["reason"])
+            answer = command(old, "open", artifact="a@000000000000")
+            self.assertEqual(answer["status"], "refused")
+            self.assertEqual(list(commands_dir(new).glob("*.json")), [])
+            answer = command(old, "open", section="robots", timeout_s=0.05)
+            self.assertEqual(answer["status"], "no answer")
+            self.assertEqual(answer["project"], str(new.root))
+            self.assertEqual(len(list(commands_dir(new).glob("*-open.json"))), 1)
+            self.assertFalse(commands_dir(old).exists())
+            # Launching on the old project moves the running window.
+            answer = launch(old)
+            self.assertEqual(answer["status"], "failed")  # nobody answered
+            self.assertEqual(answer["switched_from"], str(new.root))
+            sent = sorted(commands_dir(new).glob("*-open.json"))
+            self.assertEqual(len(sent), 2)
+            self.assertEqual(json.loads(sent[-1].read_text())["project"], str(old.root))
+
+    def test_a_pointer_ring_ends_dead_not_forever(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            a = create_project(Path(tmp) / "a", "a")
+            b = create_project(Path(tmp) / "b", "b")
+            _write_state(a, moved_to=str(b.root))
+            _write_state(b, moved_to=str(a.root))
+            self.assertFalse(state(a)["alive"])
+
     def test_a_rebuilt_binary_is_named_and_a_current_or_vanished_one_is_not(
         self,
     ) -> None:
@@ -314,6 +364,48 @@ class Lifecycle(unittest.TestCase):
                 wait_presented(project, "a@1", since=since, timeout_s=0.3)["status"],
                 "pending",
             )
+            # Taken up but not landed at the timeout: presenting, not pending.
+            path.write_text(_json.dumps({"presenting": "a@1", "t": since + 1}))
+            answer = wait_presented(project, "a@1", since=since, timeout_s=0.3)
+            self.assertEqual(answer["status"], "presenting")
+            self.assertIn("describe_studio", answer["reason"])
+
+    def test_a_show_requested_during_a_presentation_is_kept(self) -> None:
+        """The presenter claims the intent file by rename before it streams;
+        a request written meanwhile is a new file, served next (2026-09-27)."""
+        import json as _json  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from rq_pipeline.project import present as pr  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            intent = pr.intent_path(project)
+            intent.parent.mkdir(parents=True, exist_ok=True)
+            intent.write_text(_json.dumps({"stamp": "first@1"}))
+            shown: list[str] = []
+
+            def slow_present(project_, stamp):
+                shown.append(stamp)
+                if len(shown) == 1:  # the Studio asks for another meanwhile
+                    intent.write_text(_json.dumps({"stamp": "second@2"}))
+                self.assertEqual(status()["presenting"], stamp)
+
+            def status():
+                return _json.loads(pr.present_status_path(project).read_text())
+
+            with (
+                mock.patch.object(pr, "present", slow_present),
+                mock.patch.object(pr, "refresh_project", lambda p: 0, create=True),
+            ):
+                pr.serve(project, once=True)
+                self.assertEqual(shown, ["first@1"])
+                self.assertEqual(status()["shown"], "first@1")
+                self.assertTrue(intent.is_file(), "the second request survived")
+                pr.serve(project, once=True)
+            self.assertEqual(shown, ["first@1", "second@2"])
+            self.assertFalse(intent.is_file())
+            self.assertFalse(intent.with_name(intent.name + pr.CLAIMED_SUFFIX).exists())
 
     def test_the_page_names_are_the_rails(self) -> None:
         self.assertIn("evaluations", SECTIONS)

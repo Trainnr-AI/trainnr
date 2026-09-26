@@ -32,6 +32,23 @@ MIRROR_HZ = 20
 # crates/studio-shell/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
 
+# What rerun 0.36 lets an application id (an "entry name") contain: ASCII
+# letters and digits, and these. A stamp's `@` is not among them, and the
+# viewer "migrated" every presenter recording with a warning toast
+# until 2026-09-27; the id is folded here instead, once for every stream.
+ENTRY_NAME_EXTRA = "_-. []:"
+ENTRY_NAME_MAX = 180
+
+
+def entry_name(name: str) -> str:
+    """`name` as a rerun application id: every character rerun refuses
+    becomes `-`, and the result is cut at rerun's length limit."""
+    folded = "".join(
+        c if (c.isascii() and c.isalnum()) or c in ENTRY_NAME_EXTRA else "-"
+        for c in name
+    )
+    return folded[:ENTRY_NAME_MAX]
+
 
 def _host_port(address: str) -> tuple[str, int]:
     """The host and port an address names, for a socket."""

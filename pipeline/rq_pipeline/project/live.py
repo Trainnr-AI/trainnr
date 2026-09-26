@@ -79,11 +79,33 @@ def stale(folder: Path) -> bool:
     return any(p.stat().st_mtime > written for p in _sources(folder))
 
 
-def run_status(folder: Path, text: str, *, now: float | None = None) -> str:
+def reached_its_last_iteration(record: dict[str, Any] | None) -> bool:
+    """Whether the record logged every iteration it was asked for: a run
+    whose trainer crashed at teardown (an EGL error after the last
+    iteration, go2-c2 on 2026-09-12) never printed its done line, yet it
+    finished."""
+    if not record:
+        return False
+    asked, logged = record.get("iterations"), record.get("iterations_logged")
+    return (
+        isinstance(asked, int)
+        and isinstance(logged, int)
+        and asked > 0
+        and logged >= asked
+    )
+
+
+def run_status(
+    folder: Path,
+    text: str,
+    *,
+    now: float | None = None,
+    record: dict[str, Any] | None = None,
+) -> str:
     """What the folder says about the run: `done` on the trainer's last
-    line, `running` while a source was written to within `WRITING_S`,
-    else `unrecorded`."""
-    if DONE_MARK in text[-DONE_TAIL_CHARS:]:
+    line or on its last iteration logged, `running` while a source was
+    written to within `WRITING_S`, else `unrecorded`."""
+    if DONE_MARK in text[-DONE_TAIL_CHARS:] or reached_its_last_iteration(record):
         return STATUS_DONE
     now = time.time() if now is None else now
     if any(now - p.stat().st_mtime < WRITING_S for p in _sources(folder)):
@@ -105,14 +127,35 @@ def refresh_training(folder: Path) -> dict[str, Any] | None:
     if record is None:
         return None
     out = record.to_json()
-    out["status"] = run_status(folder, text)
+    out["status"] = run_status(folder, text, record=out)
     write_json(folder / TRAINING_FILE, out)
     return out
 
 
+def left_running(folder: Path, *, now: float | None = None) -> bool:
+    """A record that says `running` while no source has been written to
+    for `WRITING_S`: the run ended without its done line, and the record
+    would say `running` forever (go2-c2, seen 2026-09-27)."""
+    path = folder / TRAINING_FILE
+    if not path.is_file():
+        return False
+    try:
+        status = read_json(path).get("status")
+    except (OSError, ValueError):
+        return False
+    if status != STATUS_RUNNING:
+        return False
+    now = time.time() if now is None else now
+    return all(now - p.stat().st_mtime >= WRITING_S for p in _sources(folder))
+
+
 def refresh_project(project: Project) -> list[Path]:
     """Refresh every stale run in the project; the folders refreshed."""
-    return [f for f in run_folders(project) if stale(f) and refresh_training(f)]
+    return [
+        f
+        for f in run_folders(project)
+        if (stale(f) or left_running(f)) and refresh_training(f)
+    ]
 
 
 def verdict_files(project: Project) -> list[Path]:

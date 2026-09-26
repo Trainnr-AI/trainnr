@@ -240,6 +240,12 @@ pub struct StudioState {
     /// The window's content size in logical points and its pixel ratio,
     /// so a capture's pixels can be read back as layout.
     pub window: Option<WindowState>,
+    /// Set only in the pointer a project switch leaves behind in the old
+    /// project's state file: the root the Studio moved to, so a door
+    /// called under the old project finds the live window there instead
+    /// of reading a stale heartbeat as a dead Studio (2026-09-27).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved_to: Option<String>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -428,12 +434,24 @@ impl Control {
         control
     }
 
-    /// A project switch: the commands directory moves with it.
+    /// A project switch: the commands directory moves with it, and the
+    /// old project's state file becomes a pointer to the new root (the
+    /// last state written there, `moved_to` set), never a stale
+    /// heartbeat.
     pub fn set_root(&mut self, root: PathBuf) {
         if root != self.root {
+            if let Some(mut last) = self.last_state.take() {
+                last.moved_to = Some(root.display().to_string());
+                last.heartbeat = now_epoch();
+                if let Err(e) = write_atomic(
+                    &self.root.join(STATE_RELATIVE),
+                    &serde_json::to_string(&last).unwrap_or_default(),
+                ) {
+                    eprintln!("studio: cannot leave a pointer in {STATE_RELATIVE}: {e}");
+                }
+            }
             self.root = root;
             self.seen.clear();
-            self.last_state = None;
             self.forget_answered();
         }
     }
@@ -668,6 +686,29 @@ fn discrete(state: &StudioState) -> impl PartialEq + '_ {
 
 /// Write a file in one replace: a reader never sees a half-written
 /// state, ack or intent. The one such routine in the crate.
+/// What rerun 0.36 lets an application id contain besides ASCII letters
+/// and digits; mirrored from `rq_pipeline/viz.py` (`ENTRY_NAME_EXTRA`),
+/// which folds every stream's id the same way before it is sent.
+const ENTRY_NAME_EXTRA: &str = "_-. []:";
+const ENTRY_NAME_MAX: usize = 180;
+
+/// A stamp or a tool's name as the viewer holds it: every character rerun
+/// refuses became `-` on the way in (a stamp's `@`), so the same folding
+/// here finds the recording; the raw name drew a "requires migration"
+/// toast and then "no recording for it" (2026-09-27).
+pub fn entry_name(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || ENTRY_NAME_EXTRA.contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
+        .take(ENTRY_NAME_MAX)
+        .collect()
+}
+
 pub fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -750,6 +791,14 @@ mod tests {
     }
 
     #[test]
+    fn entry_names_fold_what_rerun_refuses() {
+        assert_eq!(entry_name("go2-c2@4dc757293b97"), "go2-c2-4dc757293b97");
+        assert_eq!(entry_name("a@1 vs b@2"), "a-1 vs b-2");
+        assert_eq!(entry_name("robotiq-sim-deploy:go2-c2"), "robotiq-sim-deploy:go2-c2");
+        assert_eq!(entry_name(&"x".repeat(200)).len(), ENTRY_NAME_MAX);
+    }
+
+    #[test]
     fn state_is_written_on_change_and_events_append() {
         let root = temp_root("state");
         let mut control = Control::new(root.clone());
@@ -769,12 +818,14 @@ mod tests {
             viewport_fps: None,
             simulator: None,
             window: None,
+            moved_to: None,
         };
         control.record_state(state.clone());
         let text = std::fs::read_to_string(root.join(STATE_RELATIVE)).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed["section"], "overview");
         assert!(parsed["heartbeat"].as_f64().unwrap() > 0.0);
+        assert!(parsed.get("moved_to").is_none(), "a live state carries no pointer");
         control.event(Event::select(BY_USER).of_artifact("a@000000000000".into()));
         control.event(Event::open(BY_AGENT).in_section("robots".into()));
         let lines: Vec<String> = std::fs::read_to_string(root.join(EVENTS_RELATIVE))
@@ -784,6 +835,16 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("\"kind\":\"select\""));
+        // A project switch leaves a pointer behind in the old project.
+        let other = temp_root("state-other");
+        control.set_root(other.clone());
+        let text = std::fs::read_to_string(root.join(STATE_RELATIVE)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(parsed["moved_to"], other.display().to_string());
+        assert_eq!(parsed["pid"], 1);
+        control.record_state(state.clone());
+        assert!(other.join(STATE_RELATIVE).is_file());
+        let _ = std::fs::remove_dir_all(other);
         let _ = std::fs::remove_dir_all(root);
     }
 

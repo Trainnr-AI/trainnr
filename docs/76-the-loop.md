@@ -597,8 +597,8 @@ mirrored between `pipeline/rq_pipeline/project/control.py` and
 | record | direction | shape | cadence |
 |---|---|---|---|
 | `commands/<id>.json` | agent → Studio | `{"schema": "trainnr-command/1", "id", "verb", …args}`; the id is the send time in nanoseconds plus the verb, so a directory listing is the session in order | the Studio reads the directory at 20 Hz and answers each with `<id>.ack.json`: `done`, `refused` (with the reason) or `failed`; an unparseable file is refused, never dropped; the last 200 are kept |
-| `studio-state.json` | Studio → agent | `{"schema": "trainnr-studio-state/1", "pid", "heartbeat", "project", "project_name", "section", "selected", "live": {"recording", "timeline", "seconds" or "sequence"}, "presenter_running", "jobs_running"}` | on every change, and at least once a second; a heartbeat older than 3 s, or a dead pid, is a dead Studio |
-| `events.jsonl` | Studio → agent | one line per human action: `open` (a page, a project), `select` / `deselect` (a card), `show` (the viewer button), `time` (a scrub, reported once the cursor rests 250 ms and only when no command of ours moved it); each carries `t` in epoch nanoseconds and `by: user` or `by: agent` | appended, never rewritten |
+| `studio-state.json` | Studio → agent | `{"schema": "trainnr-studio-state/1", "pid", "heartbeat", "project", "project_name", "section", "selected", "live": {"recording", "timeline", "seconds" or "sequence"}, "presenter_running", "jobs_running"}`; after a project switch the old project's file is a pointer, `{…, "moved_to": "<new root>"}` | on every change, and at least once a second; a heartbeat older than 3 s, or a dead pid, is a dead Studio; a pointer is followed to the live one |
+| `events.jsonl` | Studio → agent | one line per human action: `open` (a page, a project), `select` / `deselect` (a card), `show` (the viewer button), `time` (a scrub, reported once the cursor rests 250 ms and only when no command of ours moved it); each carries `t` in epoch nanoseconds and `by: user`, `by: agent` (a door) or `by: studio` (the window's own move) | appended, never rewritten |
 
 The verbs, and the MCP door over each (`pipeline/rq_pipeline/mcp_server.py`):
 
@@ -945,6 +945,32 @@ ratio per trial, and a reading (A6, 2026-09-11); a drift check as each
 parameter's shift against its reference and a reading (A7, 2026-09-13).
 Only a fit record, which rides inside its bundle, has no presentation of
 its own (tested by name in `tests/test_present.py`).
+
+*2026-09-27, after the end-to-end review:* (1) a Studio that switches
+project leaves a pointer in the old project's `studio-state.json`
+(`moved_to`, the new root; never a live heartbeat), and `control.state`
+follows it: a door called under the old project sees `alive: true`,
+`elsewhere: true`, `asked` (the project it was called under) and
+`project` (where the window is). Page, time, screenshot, focus and quit
+commands are routed there; `show`, `compare`, `simulate` and an `open` of
+an artifact are refused with the remedy (`open_in_studio(project=…)`),
+and `launch_studio` under the old project moves the window instead of
+refusing on the port. (2) The presenter claims `present.json` by renaming
+it to `present.json.busy` before it streams, so a show asked for during
+a long presentation is a new file, served next, not deleted with the one
+before; it writes `{"presenting": stamp}` when it takes a request up, and
+`show_in_studio` answers `presenting` (taken up, still streaming at the
+20 s timeout; `describe_studio` reports `presenter.shown` when it lands,
+with `presenter.age_s`) as distinct from `pending` (nobody answered).
+(3) A show or compare by a door is logged `by: agent`; `by: studio` marks
+the window's own moves (the turn to Live when a recording arrives).
+(4) `set_studio_time` refuses a timeline the recording has not got, naming
+the ones it has; `focus_studio_recording` answers `not shown` when the
+live recording after the command is not the one asked for. (5) The
+recording the presenter lands is brought to the front (`ActivateApp`),
+so a second show is seen, not streamed behind the first. (6) Application
+ids are folded to rerun's entry-name alphabet (`viz.entry_name`: a
+stamp's `@` becomes `-`), which ends the "requires migration" toast.
 
 Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left

@@ -10,6 +10,9 @@ use egui_extras::{Column, TableBuilder};
 use re_ui::{DesignTokens, TableStyle, UiExt as _};
 use serde::Deserialize;
 
+/// What an empty table section says instead of a header over no rows.
+pub const EMPTY_TABLE: &str = "No rows recorded.";
+
 use crate::model::{render_value, schema_compatible, UNRECORDED};
 use crate::widgets::card;
 
@@ -106,7 +109,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
                         .text_style(DesignTokens::welcome_screen_example_title())
                         .strong(),
                 );
-                if is_table {
+                if is_table && !section.rows.is_empty() {
                     ui.label(
                         egui::RichText::new(format!("{} rows", section.rows.len()))
                             .color(ui.visuals().weak_text_color()),
@@ -123,6 +126,12 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
             });
             ui.add_space(6.0);
             match section.kind.as_str() {
+                "table" if section.rows.is_empty() => {
+                    // No header over nothing: the fact is the emptiness.
+                    ui.label(
+                        egui::RichText::new(EMPTY_TABLE).color(ui.visuals().weak_text_color()),
+                    );
+                }
                 "table" => {
                     if table_preview(ui, section, i) {
                         explore = Some(section.clone());

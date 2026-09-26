@@ -506,3 +506,25 @@ class TaskDoors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheFocusDoor(unittest.TestCase):
+    def test_the_live_name_is_matched_on_its_letters(self) -> None:
+        """The SDK folds a stamp's `@` into `-` and appends the recording
+        id; a name that is not streaming is seen, not acked (2026-09-27)."""
+        from rq_pipeline.mcp_server import recording_matches  # noqa: PLC0415
+
+        stamp = "go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16@a95789ca057b"
+        self.assertTrue(
+            recording_matches(
+                stamp,
+                "go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16-a95789ca057bf66d",
+            )
+        )
+        self.assertTrue(
+            recording_matches("robotiq-sim-deploy:go2-c2", "robotiq-sim-deploy-go2-c2")
+        )
+        self.assertFalse(
+            recording_matches("no-such-recording", "robotiq-sim-deploy-go2-c2")
+        )
+        self.assertFalse(recording_matches("x", None))

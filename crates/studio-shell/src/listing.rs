@@ -66,6 +66,7 @@ const POLICY_CITE: &str = "policy";
 const MIN_MATRIX_CONDITIONS: usize = 2;
 const MATRIX_CELL: f32 = 96.0;
 const MATRIX_ROW_LABEL: f32 = 200.0;
+const MATRIX_HEADER_LINES: f32 = 6.0;
 
 fn view_id(section: Section) -> egui::Id {
     egui::Id::new(("trainnr.listing.view", section.slug()))
@@ -370,6 +371,7 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
     let tokens = ui.tokens();
     let style = TableStyle::Dense;
     let row_h = tokens.table_row_height(style) + 10.0;
+    let small_h = ui.text_style_height(&egui::TextStyle::Small);
     let hue = tokens.highlight_color;
     let height = listing_height(ui);
     // Wide matrices scroll sideways inside their own box; the page never does.
@@ -388,15 +390,19 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
                 builder = builder.column(Column::initial(MATRIX_CELL).at_least(72.0).clip(true));
             }
             builder
-                .header(row_h + 8.0, |mut header| {
+                // A condition's name is a sentence ("CROSS-evaluation: trained
+                // in the fit, judged in declared; law DR …"): it wraps over
+                // MATRIX_HEADER_LINES small lines rather than truncating to
+                // its first word; the whole of it is on hover.
+                .header(small_h * MATRIX_HEADER_LINES + 8.0, |mut header| {
                     header.col(|ui| {
                         ui.label(egui::RichText::new("policy").strong());
                     });
                     for condition in &conditions {
                         header.col(|ui| {
                             ui.add(
-                                egui::Label::new(egui::RichText::new(condition).strong())
-                                    .truncate(),
+                                egui::Label::new(egui::RichText::new(condition).strong().small())
+                                    .wrap(),
                             )
                             .on_hover_text(condition);
                         });

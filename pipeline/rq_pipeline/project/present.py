@@ -23,6 +23,7 @@ index; headless callers use the function directly.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from collections.abc import Callable
@@ -56,13 +57,18 @@ from rq_pipeline.project.kinds import (
     Kind,
 )
 from rq_pipeline.project.locate import INDEX_DIR, Project
-from rq_pipeline.viz import gaussians, viewer_files
+from rq_pipeline.viz import entry_name, gaussians, viewer_files
 
 if TYPE_CHECKING:
     import rerun as rr
     from rerun.blueprint import Container, View
 
 INTENT_FILE = "present.json"
+# The intent the presenter is on, renamed away from INTENT_FILE the moment
+# it is read: a show requested while a big scene streams (up to FLUSH_S)
+# lands in a fresh INTENT_FILE and is served next, not deleted with the
+# one before it (2026-09-27).
+CLAIMED_SUFFIX = ".busy"
 POLL_S = 0.25
 # How long a show waits for the viewer to confirm everything arrived. The
 # viewer is shared with live streams (a training's curves, the viewport's
@@ -115,7 +121,7 @@ def present(
     # same recording instead of stacking a new copy in the viewer's
     # source list (four copies of one robot, seen 2026-09-09).
     recording = rr.RecordingStream(
-        application_id=stamp, recording_id=_recording_id(stamp)
+        application_id=entry_name(stamp), recording_id=_recording_id(stamp)
     )
     recording.connect_grpc(STUDIO_ADDRESS)
     try:
@@ -162,7 +168,8 @@ def compare(
             raise ValueError(f"nothing to show for a {kind.value} yet")
         halves.append((side, artifact, kind, presenter))
     recording = rr.RecordingStream(
-        application_id=f"{a} vs {b}", recording_id=_recording_id(f"{a} vs {b}")
+        application_id=entry_name(f"{a} vs {b}"),
+        recording_id=_recording_id(f"{a} vs {b}"),
     )
     recording.connect_grpc(STUDIO_ADDRESS)
     shown = []
@@ -201,6 +208,7 @@ def serve(project: Project, *, once: bool = False) -> None:
     )
 
     path = intent_path(project)
+    claimed = path.with_name(path.name + CLAIMED_SUFFIX)
     last_live = 0.0
     while True:
         if time.time() - last_live >= LIVE_REFRESH_S:
@@ -211,22 +219,29 @@ def serve(project: Project, *, once: bool = False) -> None:
                     write_index(project, index_project(project))
             except Exception as why:  # a broken log must not kill the presenter
                 _write_status(project, {"live_error": str(why)})
-        if path.is_file():
+        if path.is_file() and not claimed.is_file():
+            # Claimed by rename: a request written from here on is a new
+            # file, kept for the next turn of the loop.
+            with contextlib.suppress(OSError):
+                path.replace(claimed)
+        if claimed.is_file():
             stamp: str | None = None
             try:
-                intent = json.loads(path.read_text(encoding="utf-8"))
+                intent = json.loads(claimed.read_text(encoding="utf-8"))
                 stamp = intent.get("stamp")
                 stamps = intent.get("stamps") or []
                 if len(stamps) == PAIR:
                     stamp = " vs ".join(stamps)
+                    _write_status(project, {"presenting": stamp})
                     compare(project, *stamps)
                 elif stamp:
+                    _write_status(project, {"presenting": stamp})
                     present(project, stamp)
             except Exception as why:  # a bad intent must not kill the presenter
                 _write_status(project, {"error": str(why), "stamp": stamp})
             else:
                 _write_status(project, {"shown": stamp})
-            path.unlink(missing_ok=True)
+            claimed.unlink(missing_ok=True)
             if once:
                 return
         time.sleep(POLL_S)
@@ -410,6 +425,26 @@ def _present_run(
     }
 
 
+# The series every reader looks at first, one tile each across the top;
+# the rest of a trainer's 30-odd terms go in tabs by group underneath
+# (13 tiles in one grid were unreadable, 2026-09-27).
+HEADLINE_CURVES = ("reward", "episode_length", "steps_per_second", "value_loss")
+
+
+def curve_layout(views: list[Any]) -> Any:
+    """The run's curves: the headline series side by side, the term
+    groups as tabs below; a run with only one kind of view gets that."""
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    headline = [v for v in views if v.name in HEADLINE_CURVES]
+    rest = [v for v in views if v.name not in HEADLINE_CURVES]
+    if not headline:
+        return rrb.Tabs(*rest)
+    if not rest:
+        return rrb.Horizontal(*headline)
+    return rrb.Vertical(rrb.Horizontal(*headline), rrb.Tabs(*rest), row_shares=[1, 1])
+
+
 def _present_rl_run(
     artifact: Artifact, folder: Path, rr_: rr.RecordingStream, root: str
 ) -> Shown:
@@ -462,7 +497,9 @@ def _present_rl_run(
         for name, members in curve_groups(columns).items()
     ]
     curves: Container | View = (
-        rrb.Grid(*views) if views else rrb.TextDocumentView(origin=f"{root}/manifest")
+        curve_layout(views)
+        if views
+        else rrb.TextDocumentView(origin=f"{root}/manifest")
     )
     top = (
         rrb.Horizontal(
@@ -822,7 +859,11 @@ def _present_certificate(
                 f"exact 95 % interval **[{interval[0]:.2f}, {interval[1]:.2f}]**"
             )
         if funnel:
-            lines += ["", "funnel:"] + [f"- {name}: {v}" for name, v in funnel.items()]
+            # A bar chart has no category labels: the reading names the
+            # bars left to right, in the order they were logged.
+            lines += ["", "funnel (the bars, left to right):"] + [
+                f"{i}. {name}: {v}" for i, (name, v) in enumerate(funnel.items(), 1)
+            ]
         lines += ["", "inputs:"] + [
             f"- {key}: `{cert.get(key)}`"
             for key in ("robot", "task", "policy", "source", "instrument", "protocol")

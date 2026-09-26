@@ -49,6 +49,10 @@ STUDIO_ENV = "TRAINNR_STUDIO"  # a built Studio binary, when not in the repo
 SCHEMA = "trainnr-command/1"
 
 STALE_S = 3.0  # a heartbeat older than this is a Studio that died
+# The pointer a project switch leaves in the old project's state file
+# (control.rs `StudioState::moved_to`), and how many it is followed through.
+MOVED_TO = "moved_to"
+MOVED_HOPS = 8
 ACK_TIMEOUT_S = 3.0
 SCREENSHOT_TIMEOUT_S = 6.0  # a capture waits for a frame, then encodes
 SCREENSHOT_WIDTH = 1600
@@ -110,14 +114,15 @@ def events_path(project: Project) -> Path:
 # -- the state and the events (Studio -> agent) --------------------------------
 
 
-def state(project: Project) -> dict[str, Any]:
-    """What the Studio shows, plus `alive`: a fresh heartbeat from a live pid."""
-    path = state_path(project)
+def _read_state(root: Path) -> dict[str, Any]:
+    """One project's state file, judged on its own: `alive` from a fresh
+    heartbeat and a live pid; a pointer (`moved_to`) is never alive."""
+    path = root / INDEX_DIR / STATE_FILE
     if not path.is_file():
         return {
             "alive": False,
-            "reason": f"no Studio has run on {project.root}",
-            "project": str(project.root),
+            "reason": f"no Studio has run on {root}",
+            "project": str(root),
         }
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -132,7 +137,7 @@ def state(project: Project) -> dict[str, Any]:
         }
     pid = int(raw.get("pid") or 0)
     age = time.time() - float(raw.get("heartbeat") or 0.0)
-    alive = pid > 0 and pid_alive(pid) and age < STALE_S
+    alive = pid > 0 and pid_alive(pid) and age < STALE_S and not raw.get(MOVED_TO)
     raw["alive"] = alive
     raw["heartbeat_age_s"] = round(age, 3)
     if alive:
@@ -146,6 +151,47 @@ def state(project: Project) -> dict[str, Any]:
             else f"heartbeat is {age:.1f} s old (stale past {STALE_S:g} s)"
         )
     return raw
+
+
+def state(project: Project) -> dict[str, Any]:
+    """What the Studio shows, plus `alive`: a fresh heartbeat from a live
+    pid. A Studio that switched to another project leaves a pointer
+    behind (`moved_to`); it is followed, and the live state comes back
+    with `elsewhere: True` and `asked` naming the project this was called
+    under, so a door called under the old project finds the window
+    instead of reading it as dead (2026-09-27)."""
+    root = project.root
+    seen: set[str] = set()
+    current = _read_state(root)
+    while (
+        current.get(MOVED_TO)
+        and pid_alive(int(current.get("pid") or 0))
+        and len(seen) < MOVED_HOPS
+    ):
+        target = str(current[MOVED_TO])
+        if target in seen:
+            break
+        seen.add(target)
+        current = _read_state(Path(target))
+    if seen:
+        if current.get("alive"):
+            current["elsewhere"] = True
+            current["asked"] = str(root)
+        else:
+            current["reason"] = (
+                f"the Studio moved from {root} to {current.get('project')}: "
+                f"{current.get('reason')}"
+            )
+    return current
+
+
+def home(project: Project) -> Project:
+    """The project the live Studio is on: `project` itself, or the one its
+    pointer leads to."""
+    found = state(project)
+    if found.get("alive") and found.get("elsewhere"):
+        return Project(Path(str(found["project"])))
+    return project
 
 
 def events(
@@ -212,11 +258,29 @@ def wait(
     }
 
 
+# Commands about the open project's own artifacts: sent to a Studio that
+# sits on another project they would name stamps its index has not got.
+PROJECT_BOUND = frozenset({"show", "compare", "simulate"})
+
+
+def bound_elsewhere(verb: str, args: dict[str, Any]) -> bool:
+    """Whether `verb` with `args` only makes sense on the project it was
+    called under: a show, a compare, a simulate, or an open of an artifact
+    that does not also name a project to switch to."""
+    if verb in PROJECT_BOUND:
+        return True
+    opens_artifact = verb == "open" and args.get("artifact") is not None
+    return opens_artifact and not args.get("project")
+
+
 def command(
     project: Project, verb: str, /, timeout_s: float = ACK_TIMEOUT_S, **args: Any
 ) -> dict[str, Any]:
     """Send a command to a live Studio and wait for its answer. Refuses by
-    name when no Studio is alive on the project."""
+    name when no Studio is alive on the project. A Studio that moved to
+    another project answers page, time, screenshot and quit commands from
+    there; one about this project's artifacts is refused with the door
+    that brings the window back."""
     current = state(project)
     if not current.get("alive"):
         return {
@@ -224,9 +288,23 @@ def command(
             "reason": f"no Studio is running on {project.root}: "
             f"{current.get('reason')}; launch_studio first",
         }
-    cid = send(project, verb, **args)
-    answer = wait(project, cid, timeout_s=timeout_s)
+    target = project
+    if current.get("elsewhere"):
+        where = str(current.get("project"))
+        if bound_elsewhere(verb, args):
+            return {
+                "status": "refused",
+                "reason": f"the Studio (pid {current.get('pid')}) is open on {where}, "
+                f"not {project.root}; open_in_studio(project={str(project.root)!r}) "
+                "first",
+                "project": where,
+            }
+        target = Project(Path(where))
+    cid = send(target, verb, **args)
+    answer = wait(target, cid, timeout_s=timeout_s)
     answer["command"] = cid
+    if target is not project:
+        answer["project"] = str(target.root)
     return answer
 
 
@@ -267,10 +345,13 @@ def wait_presented(
 ) -> dict[str, Any]:
     """The presenter's answer for `stamp` written after `since` (a wall
     clock reading taken before the request): `shown`, or `failed` with
-    the reason; `pending` when none came within the timeout (a big scene
-    still streaming, or no presenter running)."""
+    the reason; `presenting` when the presenter has taken it up but a big
+    scene is still streaming at the timeout (it flushes for up to
+    `present.FLUSH_S`; `describe_studio` reports the outcome); `pending`
+    when no presenter answered at all."""
     deadline = time.monotonic() + timeout_s
     path = present_status_path(project)
+    taken_up = False
     while time.monotonic() < deadline:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -284,9 +365,18 @@ def wait_presented(
                     }
                 if raw.get("shown") == stamp:
                     return {"status": "shown", "artifact": stamp}
+                taken_up = taken_up or raw.get("presenting") == stamp
         except (OSError, ValueError):
             pass
         time.sleep(PRESENT_POLL_S)
+    if taken_up:
+        return {
+            "status": "presenting",
+            "reason": f"the presenter is still streaming {stamp} after "
+            f"{timeout_s:g} s (a big scene flushes for minutes); describe_studio "
+            "reports `presenter.shown` when it lands",
+            "artifact": stamp,
+        }
     return {
         "status": "pending",
         "reason": f"no answer from the presenter within {timeout_s:g} s",
@@ -375,6 +465,26 @@ def viewer_port_free(port: int | None = None) -> bool:
 _LAUNCHED: dict[int, subprocess.Popen] = {}
 
 
+def _already_running(project: Project, current: dict[str, Any]) -> dict[str, Any]:
+    """launch() on a live Studio: one on another project is moved here
+    (one window at a time: the viewer's port); one on this project is
+    refused, with a rebuilt binary named."""
+    if current.get("elsewhere"):
+        moved = command(project, "open", project=str(project.root))
+        moved["pid"] = current.get("pid")
+        moved["switched_from"] = current.get("project")
+        if moved.get("status") != "done":
+            moved["status"] = "failed"
+        return moved
+    stale = current.get("stale_binary")
+    return {
+        "status": "refused",
+        "reason": f"a Studio (pid {current.get('pid')}) already runs "
+        f"on {project.root}" + (f"; {stale}" if stale else ""),
+        "pid": current.get("pid"),
+    }
+
+
 def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     """Start the Studio on the project; wait for its first heartbeat.
     Waits for the viewer's port first: a window quit a moment ago can
@@ -383,13 +493,7 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     seen 2026-09-09)."""
     current = state(project)
     if current.get("alive"):
-        stale = current.get("stale_binary")
-        return {
-            "status": "refused",
-            "reason": f"a Studio (pid {current.get('pid')}) already runs "
-            f"on {project.root}" + (f"; {stale}" if stale else ""),
-            "pid": current.get("pid"),
-        }
+        return _already_running(project, current)
     binary = binary or studio_binary()
     if binary is None or not binary.is_file():
         return {

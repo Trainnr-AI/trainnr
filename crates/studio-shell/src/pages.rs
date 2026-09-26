@@ -1508,20 +1508,13 @@ fn detail(
                 ui.add_space(16.0);
             }
             ui.vertical(|ui| {
+                // The buttons take their width first, from the right; the
+                // name truncates into what is left, so a long stamp never
+                // runs under "Show in viewer" (2026-09-27).
                 ui.horizontal(|ui| {
-                    icon_at(
-                        ui,
-                        Section::icon_for(&artifact.kind),
-                        18.0,
-                        ui.tokens().label_button_icon_color,
-                    );
-                    ui.label(
-                        egui::RichText::new(name)
-                            .text_style(DesignTokens::welcome_screen_h2())
-                            .strong(),
-                    );
-                    tag(ui, kind_word(&artifact.kind));
+                    ui.set_width(ui.available_width());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut buttons = |ui: &mut egui::Ui| {
                         // The artifact as itself: a robot in 3D, a recording as
                         // plots, a run's curves, a certificate's funnel — in the
                         // viewer, via the presenter (docs/76 §5.2).
@@ -1557,6 +1550,27 @@ fn detail(
                                 nav.scene = Some(live.clone());
                             }
                         }
+                        };
+                        buttons(ui);
+                        ui.add_space(6.0);
+                        tag(ui, kind_word(&artifact.kind));
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            icon_at(
+                                ui,
+                                Section::icon_for(&artifact.kind),
+                                18.0,
+                                ui.tokens().label_button_icon_color,
+                            );
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(name)
+                                        .text_style(DesignTokens::welcome_screen_h2())
+                                        .strong(),
+                                )
+                                .truncate(),
+                            )
+                            .on_hover_text(name);
+                        });
                     });
                 });
                 ui.horizontal(|ui| {

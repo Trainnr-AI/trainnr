@@ -64,6 +64,7 @@ from rq_pipeline.project.index import (
     Artifact,
     ProjectIndex,
     interval_of,
+    interval_text,
     ratio_of,
 )
 from rq_pipeline.project.kinds import (
@@ -262,9 +263,11 @@ def _rng(lo: Any, hi: Any) -> str:
 
 
 def _interval(record: dict[str, Any]) -> str:
-    """The record's exact interval as `[lo, hi]`, or `unrecorded`."""
+    """The record's exact interval as the card says it (`interval_text`,
+    one formatter: the drawer said [0.9119, 1] under a card's [0.91,
+    1.00] until 2026-09-27), or `unrecorded`."""
     interval = interval_of(record)
-    return _rng(*interval) if interval is not None else UNRECORDED
+    return interval_text(*interval) if interval is not None else UNRECORDED
 
 
 # -- robot (Asset) ---------------------------------------------------------------

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -214,3 +215,39 @@ class TheStatusWord(unittest.TestCase):
         self.assertEqual(run_status(run, text, now=now), "running")
         self.assertEqual(run_status(run, text, now=now + WRITING_S + 1), "unrecorded")
         self.assertEqual(run_status(run, text + "[g3] done\n", now=now + 1e6), "done")
+
+    def test_a_run_that_logged_its_last_iteration_is_done_without_the_line(
+        self,
+    ) -> None:
+        """go2-c2's trainer crashed at teardown after iteration 1,500 of
+        1,500: no done line, yet finished; and its record, left saying
+        `running`, is picked up by the refresh once its sources are old
+        (2026-09-27)."""
+        from rq_pipeline.project.live import (  # noqa: PLC0415
+            left_running,
+            reached_its_last_iteration,
+        )
+
+        self.assertTrue(
+            reached_its_last_iteration({"iterations": 1500, "iterations_logged": 1500})
+        )
+        self.assertFalse(
+            reached_its_last_iteration({"iterations": 1500, "iterations_logged": 1499})
+        )
+        self.assertFalse(reached_its_last_iteration({"iterations": 0}))
+        self.assertFalse(reached_its_last_iteration(None))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run"
+            run.mkdir()
+            log = run / "train.log"
+            log.write_text("x\n")
+            now = time.time()
+            record = {"iterations": 10, "iterations_logged": 10}
+            self.assertEqual(run_status(run, "x", now=now, record=record), "done")
+            from rq_pipeline.project.files import write_json  # noqa: PLC0415
+
+            write_json(run / "training.json", {**record, "status": "running"})
+            self.assertFalse(left_running(run, now=now), "its log is still fresh")
+            self.assertTrue(left_running(run, now=now + WRITING_S + 1))
+            write_json(run / "training.json", {**record, "status": "done"})
+            self.assertFalse(left_running(run, now=now + WRITING_S + 1))
