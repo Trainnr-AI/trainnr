@@ -1753,7 +1753,7 @@ def set_studio_panels(
     )
 
 
-def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
+def simulate_in_studio(task: str | None = None) -> dict[str, Any] | Refusal:
     """Run a scene in the Studio's MuJoCo viewport — a preview scene by a
     task's name (`describe_tasks`; the viewport's own list is what the
     Simulator page offers), `walk:<robot>` for the newest trained walk
@@ -1768,7 +1768,26 @@ def simulate_in_studio(task: str | None = None) -> dict[str, Any]:
     from rq_pipeline.project import current_project  # noqa: PLC0415
     from rq_pipeline.project.control import command  # noqa: PLC0415
 
-    return command(current_project(), "simulate", task=task)
+    project = current_project()
+    if task and task.startswith(DEPLOY_SCENE_PREFIX):
+        # Refused here by name: the viewport accepted any deploy:<name> and
+        # its process died on FileNotFoundError behind a banner (2026-09-28).
+        name = task[len(DEPLOY_SCENE_PREFIX) :].split(":", 1)[0]
+        folder = project.folder(DEPLOY_FOLDER)
+        have = (
+            sorted(p.name for p in folder.iterdir() if p.is_dir())
+            if folder.is_dir()
+            else []
+        )
+        if name not in have:
+            return refusal(
+                f"no deployment {name!r} in this project; it has "
+                + (", ".join(have) if have else "none")
+            )
+    return command(project, "simulate", task=task)
+
+
+DEPLOY_SCENE_PREFIX = "deploy:"  # viewport.rs `DEPLOY_PREFIX`
 
 
 # One door, one simulate section: every knob of simulate's Simulation panel.

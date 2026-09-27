@@ -283,8 +283,8 @@ class Indexing(unittest.TestCase):
             self.assertEqual(out.parent.name, "robotiq--kitting")
             index = index_project(project)
             task = index.by_kind(Kind.TASK)[0]
-            self.assertEqual(task.summary["stamp"], "kitting@aaaaaaaaaaaa")
-            self.assertEqual(task.summary["kind"], "registered")
+            self.assertEqual(task.summary["template"], "kitting")
+            self.assertEqual(task.summary["acceptance"], "unreviewed")
             self.assertIn(
                 "environment defined", {s.name for s in index.states if s.present}
             )

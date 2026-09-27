@@ -667,8 +667,9 @@ impl ViewportFeed {
 
         if self.stream_ended.load(Ordering::Relaxed) {
             ui.error_label(
-                "The MuJoCo render stream ended — the frame below is the last one \
-                 received. Restart the app; the cause is in its terminal output.",
+                "The simulator process for this scene exited; the frame below is its \
+                 last. Its output is in the project's .index/studio.log. Pick the \
+                 scene again to restart it.",
             );
         }
 

@@ -596,6 +596,7 @@ impl StudioShell {
             } => {
                 // A move by the agent closes the palette; a search opens it.
                 self.shell.palette = search.map(|q| crate::palette::Palette::open(Some(q)));
+                let switching = project.is_some();
                 if let Some(root) = project {
                     let root = std::path::PathBuf::from(root);
                     if !root.join(model::MANIFEST_FILE).is_file() {
@@ -612,6 +613,9 @@ impl StudioShell {
                 if let Some(name) = section {
                     let page =
                         Section::parse(&name).ok_or_else(|| format!("no page named {name:?}"))?;
+                    if switching {
+                        self.shell.switch_section = Some(page); // after the switch lands
+                    }
                     self.shell.section = page;
                     self.shell.selected = None;
                     self.shell.entered = true;

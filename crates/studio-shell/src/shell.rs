@@ -28,6 +28,10 @@ pub struct Shell {
     pub selected: Option<String>,
     /// A project the user picked; applied at the top of the next frame.
     switch_to: Option<std::path::PathBuf>,
+    /// The page to land on after the switch, when the command named one
+    /// (`open_in_studio(project=…, section=…)` landed on Overview until
+    /// 2026-09-28).
+    pub switch_section: Option<Section>,
     /// The presenter process for the open project (`tools/studio-present.py`),
     /// spawned on first Show and killed with the shell or on a project switch.
     presenter: Option<std::process::Child>,
@@ -87,6 +91,7 @@ impl Shell {
             section: Section::Overview,
             selected: None,
             switch_to: None,
+            switch_section: None,
             presenter: None,
             show_requested: false,
             scene_request: None,
@@ -346,7 +351,7 @@ impl Shell {
                             ui.label(
                                 egui::RichText::new(count.to_string())
                                     .small()
-                                    .color(ui.visuals().weak_text_color()),
+                                    .color(ui.visuals().text_color()),
                             );
                         });
                     }
@@ -464,7 +469,7 @@ impl Shell {
             self.kill_presenter();
             self.model.switch(root);
             self.selected = None;
-            self.section = Section::Overview;
+            self.section = self.switch_section.take().unwrap_or(Section::Overview);
             self.entered = true;
             self.open_project();
         }

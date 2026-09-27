@@ -111,7 +111,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
                 );
                 if is_table && !section.rows.is_empty() {
                     ui.label(
-                        egui::RichText::new(format!("{} rows", section.rows.len()))
+                        egui::RichText::new(crate::widgets::count_word(section.rows.len(), "row"))
                             .color(ui.visuals().weak_text_color()),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -239,7 +239,7 @@ fn table_preview(ui: &mut egui::Ui, section: &Section, idx: usize) -> bool {
         let hidden = section.rows.len().saturating_sub(shown);
         ui.add_space(4.0);
         let label = if hidden > 0 {
-            format!("Explore all {} rows", section.rows.len())
+            format!("Explore all {}", crate::widgets::count_word(section.rows.len(), "row"))
         } else {
             "Explore".to_owned()
         };
@@ -429,9 +429,9 @@ pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
             );
             ui.label(
                 egui::RichText::new(if view.filter.trim().is_empty() {
-                    format!("{total} rows")
+                    crate::widgets::count_word(total, "row")
                 } else {
-                    format!("{matching} of {total} rows")
+                    format!("{matching} of {}", crate::widgets::count_word(total, "row"))
                 })
                 .color(ui.visuals().weak_text_color()),
             );

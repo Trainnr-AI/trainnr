@@ -302,7 +302,7 @@ impl Section {
             Self::Deployments => "No deployments yet. Export a deployment manifest and pass the sim-to-sim check.",
             Self::Monitoring => "Nothing monitored yet. Record fresh telemetry and check for parameter drift.",
             Self::Findings => "No findings yet. A finding is a recorded result with its commit, command line and simulator build.",
-            Self::Projects => "No projects yet. Ask your agent to run `create_project`.",
+            Self::Projects => "No projects yet. Ask your agent to create one.",
             Self::Overview | Self::Live => "",
         }
     }
@@ -572,8 +572,7 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
         ui.add_space(4.0);
         weak_body(
             ui,
-            "One directory per effort under projects/. Your agent makes one with `create_project` \
-             and points every tool at it with TRAINNR_PROJECT.",
+            "One project per robot effort. Ask your agent to create one, or open one below.",
         );
         ui.add_space(20.0);
         if list.is_empty() {
@@ -600,7 +599,7 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
                         "not indexed yet".to_owned()
                     };
                     let footer = (!project.indexed.is_empty())
-                        .then(|| format!("indexed {}", short_time(&project.indexed)));
+                        .then(|| format!("updated {}", short_time(&project.indexed)));
                     let response = picture_card(
                         ui,
                         width,
@@ -648,7 +647,7 @@ pub fn overview(
         ui.add_space(2.0);
         ui.horizontal(|ui| {
             weak_body(ui, &index.root);
-            weak_body(ui, format!("· indexed {}", short_time(&index.indexed)));
+            weak_body(ui, format!("· updated {}", short_time(&index.indexed)));
         });
         ui.add_space(24.0);
 
@@ -958,7 +957,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 });
             }
             None => {
-                ui.success_label("Every stage proved — the loop is closed.");
+                ui.success_label("All stages complete.");
             }
         }
     });
@@ -1015,11 +1014,17 @@ fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<(Section, Option
                                     .text_style(DesignTokens::welcome_screen_h1())
                                     .strong(),
                             );
-                            ui.label(
-                                egui::RichText::new(caption)
-                                    .text_style(DesignTokens::welcome_screen_tag())
-                                    .color(ui.visuals().weak_text_color()),
-                            );
+                            // One line, cut with an ellipsis: an evaluation's
+                            // generated name wrapped the card until 2026-09-28.
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&caption)
+                                        .text_style(DesignTokens::welcome_screen_tag())
+                                        .color(ui.visuals().weak_text_color()),
+                                )
+                                .truncate(),
+                            )
+                            .on_hover_text(&caption);
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                             let tint = ui.tokens().label_button_icon_color;
@@ -1044,10 +1049,13 @@ fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<(Section, Option
     });
 }
 
+/// The newest artifact of a kind, by name: what a KPI card shows under
+/// its count (it showed the oldest until 2026-09-28).
 fn first_name(index: &Index, kind: &str) -> Option<String> {
     index
         .by_kind(kind)
-        .first()
+        .into_iter()
+        .max_by(|a, b| a.updated.cmp(&b.updated))
         .map(|a| split_stamp(&a.stamp).0.to_owned())
 }
 
@@ -1716,7 +1724,7 @@ fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav)
 }
 
 /// How many links a "Used by" row shows before folding.
-const USED_BY_SHOWN: usize = 12;
+const USED_BY_SHOWN: usize = 4;
 
 /// A two-column key/value grid of an artifact's summary (the cites have
 /// their own grid, `lineage_grid`, whose values are links).

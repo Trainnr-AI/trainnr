@@ -441,7 +441,7 @@ def _render_certificate(
         draw.ellipse([px - 9, y - 2, px + 9, y + 16], fill=(236, 238, 242))
         draw.text(
             (x0, y + 26),
-            f"exact 95 % interval [{lo:.2f}, {hi:.2f}]",
+            f"95% CI [{lo:.2f}, {hi:.2f}]",
             fill=(160, 166, 178),
             font=tiny,
         )
@@ -486,9 +486,19 @@ def _render_finding(
         y = 90
         step = max(44, min(70, (height - 120) // max(1, len(rows))))
         for name, k, n in rows[:6]:
-            draw.text((48, y), name, fill=(236, 238, 242), font=_font(26))
+            # The label has its own column: an arm's name longer than it
+            # ran under its bar ("expert-band-g", 2026-09-28).
+            label = (
+                name
+                if len(name) <= ARM_LABEL_CHARS
+                else name[: ARM_LABEL_CHARS - 1] + "…"
+            )
+            draw.text((48, y), label, fill=(236, 238, 242), font=_font(26))
             _bars(
-                draw, (220, y + 4, width - 340, 24), k / n if n else 0, (88, 166, 255)
+                draw,
+                (ARM_BAR_X, y + 4, width - ARM_BAR_X - 120, 24),
+                k / n if n else 0,
+                (88, 166, 255),
             )
             draw.text(
                 (width - 112, y), f"{k}/{n}", fill=(236, 238, 242), font=_font(24)
@@ -506,6 +516,8 @@ def _render_finding(
     return _save_pil(image, out)
 
 
+ARM_LABEL_CHARS = 18  # an arm's name in a finding card's label column
+ARM_BAR_X = 300  # where its bar starts
 HEADLINE_CHARS = 34  # characters per line at the headline size
 HEADLINE_LINES = 6
 HEADLINE_PT = 34
@@ -584,8 +596,8 @@ def _render_drift(
     draw.text((48, 36), word, fill=ink, font=big)
     draw.text(
         (48, 128),
-        f"{len(d.left)} left · {len(d.unresolved)} unresolved · "
-        f"{d.references} reference record(s)",
+        f"{len(d.left)} out of interval · {len(d.unresolved)} undetermined · "
+        f"{d.references} reference fit{'s' if d.references != 1 else ''}",
         fill=(160, 166, 178),
         font=small,
     )
@@ -593,8 +605,18 @@ def _render_drift(
     if not judged:
         return _save_pil(image, out)
     x0, x1, y = 48, width - 48, 190
-    row = max(28, min(56, (height - y - 24) // len(judged)))
-    for p in judged:
+    # A row holds its label above its bar: never squeezed under DRIFT_ROW_PX,
+    # so the labels stay off the bars; the rows past the bottom are counted.
+    row = max(DRIFT_ROW_PX, min(56, (height - y - 24) // len(judged)))
+    fits = max(1, (height - y - 24) // row)
+    if len(judged) > fits:
+        draw.text(
+            (x0, height - 30),
+            f"… and {len(judged) - fits} more parameters",
+            fill=(160, 166, 178),
+            font=tiny,
+        )
+    for p in judged[:fits]:
         ref = _finite_pair(p.reference_lower, p.reference_upper)
         fresh = _finite_pair(p.fresh_lower, p.fresh_upper)
         ends = [v for pair in (ref, fresh) if pair for v in pair]
@@ -622,6 +644,7 @@ def _render_drift(
     return _save_pil(image, out)
 
 
+DRIFT_ROW_PX = 40  # a label line and its bar
 TILE_SPLATS = 60_000  # points a tile draws; more is invisible at its size
 
 
@@ -758,7 +781,11 @@ def _copy_scaled(frame: Path, out: Path) -> bool:
         from PIL import Image  # noqa: PLC0415
     except ImportError:
         return False
+    from PIL import ImageOps  # noqa: PLC0415
+
     with Image.open(frame) as opened:
         image = opened.convert("RGB")
-    image.thumbnail(PREVIEW_SIZE)
+    # Cover the card, cropped at the edges, never letterboxed: a 4:3 still
+    # sat in the 337:250 card with a black band above it (2026-09-28).
+    image = ImageOps.fit(image, PREVIEW_SIZE, method=Image.Resampling.LANCZOS)
     return _save_pil(image, out)

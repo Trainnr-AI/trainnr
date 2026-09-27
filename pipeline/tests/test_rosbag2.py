@@ -392,7 +392,9 @@ class TheProvenance(unittest.TestCase):
         recording = index.by_kind(Kind.RECORDING)[0]
         self.assertEqual(recording.summary["basis"], BASIS_PUBLIC)
         self.assertEqual(recording.summary["robot"], "go2")
-        self.assertAlmostEqual(recording.summary["rate_hz"], RATE_HZ, delta=1)
+        self.assertAlmostEqual(
+            float(recording.summary["rate"].split()[0]), RATE_HZ, delta=1
+        )
 
     def test_the_operators_own_recording_wears_no_word_on_the_chip(self) -> None:
         """A bag says nothing about whose robot it was; the operator who

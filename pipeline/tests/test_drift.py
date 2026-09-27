@@ -310,13 +310,13 @@ class TheWholePath(unittest.TestCase):
         index = index_project(project)
         card = next(a for a in index.artifacts if a.kind == "drift")
         self.assertEqual(card.summary["verdict"], "drifted")
-        self.assertIn("left_gear_per_damp", card.summary["left"])
+        self.assertIn("left_gear_per_damp", card.summary["out of interval"])
         self.assertEqual(card.cites["robot"], robot)
         self.assertEqual(card.cites["recording"], worn["stamp"])
         sections = _drift(project, record_path.parent, card)
         self.assertEqual(sections[0]["title"], "Drift check")
         rows = {r[0]: r[1] for r in sections[1]["rows"]}
-        self.assertEqual(rows["left_gear_per_damp"], LEFT)
+        self.assertEqual(rows["left_gear_per_damp"], "out of interval")
         tile = tmp / "tile.png"
         self.assertTrue(_render_drift(project, record_path.parent, tile, {}))
         self.assertTrue(tile.is_file())

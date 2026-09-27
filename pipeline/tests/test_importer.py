@@ -92,7 +92,7 @@ class Experiment(unittest.TestCase):
             cert = index.by_kind(Kind.CERTIFICATE)[0]
             self.assertEqual(cert.cites["policy"], out["policy"])
             self.assertEqual(cert.summary["success"], "3 / 4")
-            self.assertEqual(cert.summary["interval"], "[0.19, 0.99]")
+            self.assertEqual(cert.summary["95% CI"], "[0.19, 0.99]")
             states = {s.name: s.present for s in index.states}
             self.assertTrue(states["policy trained"] and states["policy evaluated"])
             with self.assertRaises(FileExistsError):

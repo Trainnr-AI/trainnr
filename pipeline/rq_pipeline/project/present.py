@@ -855,9 +855,7 @@ def _present_certificate(
             lines.append(f"**{ratio_of(cert)}** trials succeeded")
         interval = interval_of(cert)
         if interval is not None:
-            lines.append(
-                f"exact 95 % interval **[{interval[0]:.2f}, {interval[1]:.2f}]**"
-            )
+            lines.append(f"95% CI **[{interval[0]:.2f}, {interval[1]:.2f}]**")
         if funnel:
             # A bar chart has no category labels: the reading names the
             # bars left to right, in the order they were logged.
@@ -935,7 +933,7 @@ def _present_deploy(
                 f"- gate in {GATE_INSTRUMENTS[runtime]} **{gate_word(g)}**: "
                 f"{ratio_of(g)} trials"
                 + (
-                    f", exact 95 % interval **[{interval[0]:.2f}, {interval[1]:.2f}]**"
+                    f", 95% CI **[{interval[0]:.2f}, {interval[1]:.2f}]**"
                     if interval is not None
                     else ""
                 )

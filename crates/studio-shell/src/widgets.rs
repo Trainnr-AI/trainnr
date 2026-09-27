@@ -12,6 +12,15 @@ pub const CARD_RADIUS: f32 = 8.0;
 pub const CARD_INNER_MARGIN: i8 = 14;
 /// Rerun's example-card thumbnail aspect (337 × 250).
 pub const THUMBNAIL_ASPECT: f32 = 337.0 / 250.0;
+
+/// "1 row", "13 rows": a count with its noun, never "1 rows".
+pub fn count_word(n: usize, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
 const THUMBNAIL_RADIUS: u8 = 8;
 
 /// An icon painted at `size` points — Rerun's icons are SVG, so this is

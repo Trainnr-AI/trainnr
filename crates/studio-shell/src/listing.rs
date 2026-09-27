@@ -47,7 +47,7 @@ impl View {
 }
 
 /// At most this many summary columns; the drawer holds the rest.
-const MAX_SUMMARY_COLUMNS: usize = 6;
+const MAX_SUMMARY_COLUMNS: usize = 5;
 const NAME_COLUMN: f32 = 240.0;
 const UPDATED_COLUMN: f32 = 110.0;
 /// A listing fills the window below the heading, never less than this.
@@ -60,13 +60,13 @@ fn listing_height(ui: &egui::Ui) -> f32 {
 }
 /// The summary key the matrix reads for its columns and its cells
 /// (`rq_pipeline/project/index.py`, `_summary_certificate`).
-const CONDITION_KEY: &str = "judged at";
+const CONDITION_KEY: &str = "condition";
 const SUCCESS_KEY: &str = "success";
 const POLICY_CITE: &str = "policy";
 const MIN_MATRIX_CONDITIONS: usize = 2;
 const MATRIX_CELL: f32 = 96.0;
 const MATRIX_ROW_LABEL: f32 = 200.0;
-const MATRIX_HEADER_LINES: f32 = 6.0;
+const MATRIX_HEADER_LINES: f32 = 3.0;
 
 fn view_id(section: Section) -> egui::Id {
     egui::Id::new(("trainnr.listing.view", section.slug()))
@@ -210,9 +210,9 @@ pub fn table(
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(if needle.is_empty() {
-                format!("{} rows", rows.len())
+                crate::widgets::count_word(rows.len(), "row")
             } else {
-                format!("{} of {} rows", shown.len(), rows.len())
+                format!("{} of {}", shown.len(), crate::widgets::count_word(rows.len(), "row"))
             })
             .color(ui.visuals().weak_text_color()),
         );
@@ -495,12 +495,12 @@ mod tests {
     fn a_matrix_needs_two_conditions_and_reads_its_cells() {
         let a = artifact(
             "p1-fit@1",
-            serde_json::json!({"success": "19 / 40", "judged at": "at the fit"}),
+            serde_json::json!({"success": "19 / 40", "condition": "at the fit"}),
             serde_json::json!({"policy": "p1@a"}),
         );
         let b = artifact(
             "p1-x0.7@2",
-            serde_json::json!({"success": "0 / 40", "judged at": "fit x 0.7"}),
+            serde_json::json!({"success": "0 / 40", "condition": "fit x 0.7"}),
             serde_json::json!({"policy": "p1@a"}),
         );
         assert!(!matrix_available(&[&a]));

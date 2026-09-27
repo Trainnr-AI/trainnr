@@ -399,7 +399,7 @@ class Ingest(unittest.TestCase):
             index = index_project(project)
             rec = index.by_kind(Kind.RECORDING)[0]
             self.assertEqual(rec.stamp, record["stamp"])
-            self.assertEqual(rec.summary["adapter"], "mcap")
+            self.assertEqual(rec.summary["format"], "mcap")
             self.assertEqual(rec.summary["channels"], len(record["channels"]))
             self.assertIn(
                 "telemetry recorded", {s.name for s in index.states if s.present}

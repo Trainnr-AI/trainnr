@@ -54,7 +54,20 @@ pub const UNRECORDED: &str = "unrecorded";
 /// Summary keys never shown as a fact or a table column: the index's own
 /// bookkeeping (`project/index.py::HIDDEN_SUMMARY_KEYS`, pinned by
 /// `tests/test_studio_mirrors.py`).
-pub const HIDDEN_KEYS: &[&str] = &["files", "fit_bases", "viewport"];
+pub const HIDDEN_KEYS: &[&str] = &[
+    "files",
+    "fit_bases",
+    "viewport",
+    "headline",
+    "learning",
+    "basis",
+    "trained under",
+    "out of interval count",
+    "undetermined count",
+];
+/// The card's one line, written by the index (`project/index.py`
+/// `HEADLINE_KEY`): shown alone when present, never a table column.
+pub const HEADLINE_KEY: &str = "headline";
 
 /// A deployment's viewport scenes in its summary, as [label, scene]
 /// pairs, live first (`deploy/viewport_source.py::VIEWPORT_KEY`, pinned
@@ -679,7 +692,7 @@ impl Model {
                     )
                 } else {
                     format!(
-                        "No project at {}.\nAsk your agent to run `create_project`, \
+                        "No project at {}.\nAsk your agent to create a project there, \
                          or set {PROJECT_ENV} to a project directory.",
                         self.project_root.display()
                     )
@@ -725,6 +738,11 @@ pub fn split_stamp(stamp: &str) -> (&str, &str) {
 
 /// A one-line gloss of an artifact's summary for a table row.
 pub fn summary_line(summary: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    if let Some(line) = summary.get(HEADLINE_KEY).and_then(|v| v.as_str()) {
+        if !line.is_empty() {
+            return Some(line.to_owned());
+        }
+    }
     let parts: Vec<String> = summary
         .iter()
         .filter(|(k, _)| !HIDDEN_KEYS.contains(&k.as_str()))

@@ -332,7 +332,7 @@ class TheDrawerAndTheCard(unittest.TestCase):
             onboard(source, "fixture", destination)
             summary = _summary_robot(destination)
             section = _importer_audit(destination)
-        self.assertIn("explained", summary["importer changed"])
+        self.assertIn("explained", summary["audit"])
         self.assertEqual(section["title"], AUDIT_TITLE)
         self.assertEqual(section["kind"], "table")
         self.assertTrue(any(row[0] == audit.BODY_MISSING for row in section["rows"]))

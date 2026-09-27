@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import math
 import os
+import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -446,11 +447,80 @@ _CITE_READERS: dict[Kind, CiteReader] = {
 }
 
 
+HEADLINE_KEY = "headline"  # the card's one line; a table column never
+# The words a card uses: what a person at Weights & Biases, Isaac Lab or
+# LeRobot would read without a glossary (2026-09-28).
+SEP = " · "
+
+
 def _summary(kind: Kind, path: Path) -> dict[str, Any]:
     """A few glanceable facts for the Studio's list rows — never the
-    whole record; the detail view reads the artifact itself."""
+    whole record; the detail view reads the artifact itself. The first
+    key is `headline`: the card's one line, in plain words; the rest are
+    the table's columns."""
     reader = _SUMMARY_READERS.get(kind)
-    return reader(path) if reader is not None else {}
+    out = reader(path) if reader is not None else {}
+    headline = _headline(kind, out)
+    return {HEADLINE_KEY: headline, **out} if headline else out
+
+
+def _join(*parts: object) -> str:
+    return SEP.join(str(x) for x in parts if x not in (None, "", UNRECORDED))
+
+
+def _headline(kind: Kind, s: dict[str, Any]) -> str:  # noqa: PLR0911 - one line per kind
+    """The card's line from the summary's facts."""
+    if kind is Kind.RUN:
+        iterations = s.get("iterations")
+        return _join(
+            s.get("learning") if s.get("learning") == "imitation" else "PPO",
+            f"{iterations:,} iterations" if isinstance(iterations, int) else None,
+            f"reward {s['final reward']}" if "final reward" in s else None,
+            s.get("progress") or s.get("status"),
+        )
+    if kind is Kind.CERTIFICATE:
+        trials = f"{s['trials']} trials" if "trials" in s else None
+        return _join(s.get("condition"), trials)
+    if kind is Kind.POLICY:
+        return _join(
+            s.get("checkpoint"),
+            f"from {s['run']}" if s.get("run") else None,
+            s.get("randomization"),
+        )
+    if kind is Kind.DEPLOY:
+        preflight = s.get(PREFLIGHT_SUMMARY_KEY)
+        return _join(
+            f"gate {s['gate']}" if s.get("gate") else None,
+            f"pre-flight {preflight}" if preflight else None,
+            f"on {s['scene']}" if s.get("scene") else None,
+        )
+    if kind is Kind.DRIFT:
+        n_out = s.get("out of interval count", 0)
+        n_und = s.get("undetermined count", 0)
+        return _join(
+            s.get("verdict"),
+            f"{n_out} out of interval" if n_out else None,
+            f"{n_und} undetermined" if n_und else None,
+        )
+    if kind is Kind.SCENE:
+        splats = s.get("splats")
+        return _join(
+            "Gaussian splat",
+            f"{splats:,} points" if isinstance(splats, int) else None,
+            f"gap p95 {s['gap p95']}" if s.get("gap p95") else None,
+        )
+    if kind is Kind.RECORDING:
+        channels = f"{s['channels']} channels" if "channels" in s else None
+        return _join(s.get("duration"), s.get("rate"), channels, s.get("origin"))
+    if kind is Kind.ROBOT:
+        return _join(
+            f"{s['joints']} joints" if "joints" in s else None,
+            f"{s['dof']} DoF" if "dof" in s else None,
+            s.get("format"),
+        )
+    if kind is Kind.TASK:
+        return _join(s.get("template"), s.get("robot"), s.get("acceptance"))
+    return ""
 
 
 def _take(raw: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
@@ -463,6 +533,7 @@ def _summary_run(path: Path) -> dict[str, Any]:
         return {"learning": "imitation", **_take(run, ("policy", "steps", "started"))}
     training = _read(path / TRAINING_FILE)
     ident = _read(path / IDENTITY_FILE)
+    # `learning` stays for the loop kind (`_loop_of_runs`); the table hides it.
     out: dict[str, Any] = {"learning": "reinforcement"}
     if training:
         out["iterations"] = training.get("iterations_logged") or UNRECORDED
@@ -478,11 +549,26 @@ def _summary_run(path: Path) -> dict[str, Any]:
                 out["progress"] = f"{logged} of {planned} iterations"
     basis = ident.get("dr_basis") or ""
     if basis:
-        out["randomization"] = _basis_name(basis)
+        out["randomization"] = randomization_label(basis)
     out.update(_trained_under(ident))
     if "seed" in ident:
         out["seed"] = ident["seed"]
     return out
+
+
+def randomization_label(basis: str) -> str:
+    """The domain-randomization basis in a few words, as a column reads:
+    `declared ±10 %` for a span around the vendor's constants, `fit
+    0ad6202797c5` for a measured fit's intervals; the whole sentence
+    stays in the record."""
+    head = basis.split(":", 1)[0].split(" (", 1)[0].strip()
+    fit = re.search(r"fit@([0-9a-f]{6,})", basis)
+    if fit:
+        return f"fit {fit.group(1)}"
+    scale = re.search(r"±\s*([0-9.]+)\s*scale", head)
+    if head.startswith("declared") and scale:
+        return f"declared ±{float(scale.group(1)) * 100:g} %"
+    return head
 
 
 TRAINED_UNDER_KEY = "trained under"  # the card's word for a run's fit
@@ -500,18 +586,40 @@ def _trained_under(identity: dict[str, Any]) -> dict[str, str]:
 
 def _summary_recording(path: Path) -> dict[str, Any]:
     raw = _read(path / RECORDING_FILE)
-    out = _take(raw, ("adapter", "source", "duration_s", "collection"))
+    out: dict[str, Any] = {}
+    duration = raw.get("duration_s")
+    if isinstance(duration, (int, float)):
+        out["duration"] = duration_text(float(duration))
+    rate = _measured_rate(raw)
+    if rate is not None:
+        out["rate"] = f"{rate:g} Hz"
     if "channels" in raw:
         out["channels"] = len(raw["channels"])
+    if raw.get("adapter"):
+        out["format"] = raw["adapter"]
+    if raw.get("collection"):
+        out["collection"] = raw["collection"]
     basis = raw.get("basis") or BASIS_UNKNOWN
     if basis != BASIS_OWN:
         # Whose robot: a public log names it; the operator's own says nothing.
-        out[BASIS_KEY] = basis
+        out[BASIS_KEY] = basis  # the loop map's chip reads it; the table hides it
+        out["origin"] = basis
         out.update(_take(raw.get("provenance") or {}, ("robot", "licence")))
-    rate = _measured_rate(raw)
-    if rate is not None:
-        out["rate_hz"] = rate
+    if raw.get("source"):
+        out["source"] = raw["source"]
     return out
+
+
+def duration_text(seconds: float) -> str:
+    """`24 s`, `12 min`, `1 h 05 min`: the way a recording's length is read."""
+    if seconds < 10:  # noqa: PLR2004 - a short clip keeps its tenths
+        return f"{seconds:.1f} s"
+    if seconds < 120:  # noqa: PLR2004 - under two minutes stays in seconds
+        return f"{seconds:.0f} s"
+    minutes = round(seconds / 60)
+    if minutes < 60:  # noqa: PLR2004
+        return f"{minutes} min"
+    return f"{minutes // 60} h {minutes % 60:02d} min"
 
 
 def _measured_rate(raw: dict[str, Any]) -> float | None:
@@ -528,18 +636,50 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     # The envelope first: the card's subtitle is cut short, and the
     # envelope is what tells two judgments of one checkpoint apart.
-    commands = describe_twist((c.get("protocol") or {}).get("commands"))
-    if commands:
-        out["commands"] = commands
+    protocol = c.get("protocol") or {}
+    judged = protocol.get("judged_at")
+    out["condition"] = condition_label(judged, path.name, protocol.get("delay"))
     if "successes" in c and "trials" in c:
         out["success"] = ratio_of(c)
+        out["trials"] = c["trials"]
     interval = interval_of(c)
     if interval is not None:
-        out["interval"] = f"[{interval[0]:.2f}, {interval[1]:.2f}]"
-    judged = (c.get("protocol") or {}).get("judged_at")
-    if judged:
-        out["judged at"] = judged
+        out["95% CI"] = f"[{interval[0]:.2f}, {interval[1]:.2f}]"
+    commands = describe_twist(protocol.get("commands"))
+    if commands:
+        out["commands"] = commands
     return out
+
+
+# What a judgment's condition says on a card, a column and the matrix's
+# header: the world and the perturbation in a few words. The recorded
+# sentence (`judged_at`) stays in the drawer's Protocol section.
+NOMINAL_CONDITION = "nominal"
+
+
+def condition_label(judged: object, name: str = "", delay: object = None) -> str:
+    """`judged_at` folded to a few words: `in fit world`, `cross-eval →
+    declared world`, `kp x0.8`, `delay 2 ticks`; joined with ` · `."""
+    text = str(judged or "")
+    parts: list[str] = []
+    cross = re.match(r"CROSS-evaluation: trained in ([^,]+), judged in ([^;]+)", text)
+    if cross:
+        world = "fit" if cross.group(2).startswith("fit") else "declared"
+        parts.append(f"cross-eval → {world} world")
+    elif re.search(r"law DR: fit", text):
+        parts.append("in fit world")
+    elif re.search(r"law DR: declared", text):
+        parts.append("in declared world")
+    knob = re.search(r"(kp|kd|armature) at fit x ([0-9.]+)", text)
+    if knob:
+        parts.append(f"{knob.group(1)} x{knob.group(2)}")
+    ticks = delay if isinstance(delay, int) else None
+    if ticks is None:
+        m = re.search(r"-delay-(\d+)-", name)
+        ticks = int(m.group(1)) if m else None
+    if ticks:
+        parts.append(f"delay {ticks} tick{'s' if ticks != 1 else ''}")
+    return SEP.join(parts) if parts else NOMINAL_CONDITION
 
 
 def _basis_name(basis: str) -> str:
@@ -553,10 +693,13 @@ def _summary_policy(path: Path) -> dict[str, Any]:
     if manifest:
         basis = manifest.get("dr_basis") or ""
         iterations = manifest.get("iterations")
-        out: dict[str, Any] = {
-            "iterations": UNRECORDED if iterations is None else iterations
-        }
-        out["randomization"] = _basis_name(basis) if basis else UNRECORDED
+        out: dict[str, Any] = {}
+        if manifest.get("checkpoint"):
+            out["checkpoint"] = manifest["checkpoint"]
+        if manifest.get("run"):
+            out["run"] = manifest["run"]
+        out["iterations"] = UNRECORDED if iterations is None else iterations
+        out["randomization"] = randomization_label(basis) if basis else UNRECORDED
         out.update(_trained_under(manifest))
         out["format"] = manifest.get("format", "")
         return out
@@ -675,7 +818,15 @@ DATE_CHARS = len("2026-09-04")
 
 
 def _summary_task(path: Path) -> dict[str, Any]:
-    out = _take(_read(path / TASK_FILE), ("task_id", "stamp", "kind"))
+    raw = _read(path / TASK_FILE)
+    out: dict[str, Any] = {}
+    if raw.get("task_id"):
+        out["template"] = str(raw["task_id"]).split("/", 1)[-1]
+    spec_raw = raw.get("spec")
+    spec: dict[str, Any] = spec_raw if isinstance(spec_raw, dict) else {}
+    robot = raw.get("robot") or spec.get("robot") or raw.get("rig")
+    if robot:
+        out["robot"] = robot
     verdict = _read(path / ACCEPTANCE_FILE)
     out["acceptance"] = (
         (ACCEPTED if verdict.get("accepted") else REJECTED) if verdict else UNREVIEWED
@@ -762,11 +913,13 @@ def _summary_drift(path: Path) -> dict[str, Any]:
     left = list(d.get("left") or [])
     unresolved = list(d.get("unresolved") or [])
     out: dict[str, Any] = {"verdict": verdict_word(bool(d.get("drifted")))}
+    out["out of interval count"] = len(left)
+    out["undetermined count"] = len(unresolved)
     if left:
-        out["left"] = ", ".join(left)
+        out["out of interval"] = ", ".join(left)
     if unresolved:
-        out["unresolved"] = ", ".join(unresolved)
-    out["references"] = len(d.get("fit") or [])
+        out["undetermined"] = ", ".join(unresolved)
+    out["reference fits"] = len(d.get("fit") or [])
     return out
 
 
@@ -804,16 +957,35 @@ def _summary_robot(p: Path) -> dict[str, Any]:
         "files": sorted(e.name for e in p.iterdir() if not e.name.startswith(".")),
         "fit_bases": fit_bases(p / FITS_DIR),
     }
+    bundle = _read(p / BUNDLE_FILE)
+    census = bundle.get("census") or {}
+    if isinstance(census.get("joints"), int):
+        out["joints"] = census["joints"]
+    if isinstance(census.get("dofs"), int):
+        out["dof"] = census["dofs"]
+    model_file = bundle.get("model_file") or ""
+    if model_file:
+        out["format"] = "MJCF" if str(model_file).endswith(".xml") else "USD"
     audit = read_audit(p)
     if audit and audit.get("summary"):
-        out["importer changed"] = audit["summary"]
+        out["audit"] = audit["summary"]
     return out
 
 
 # The summary facts every row carries for the index's own use and no card
 # shows (`model.rs::HIDDEN_KEYS`, pinned by test_studio_mirrors).
-HIDDEN_SUMMARY_KEYS = ("files", "fit_bases", VIEWPORT_KEY)
 BASIS_KEY = "basis"
+HIDDEN_SUMMARY_KEYS = (
+    "files",
+    "fit_bases",
+    VIEWPORT_KEY,
+    HEADLINE_KEY,
+    "learning",
+    BASIS_KEY,
+    TRAINED_UNDER_KEY,  # the randomization column says fit or declared already
+    "out of interval count",
+    "undetermined count",
+)
 
 
 def _summary_fit(p: Path) -> dict[str, Any]:

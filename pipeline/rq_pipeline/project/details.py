@@ -255,7 +255,12 @@ def _f(x: Any, digits: int = 4) -> Any:
         return 0
     if v.is_integer() and isinstance(x, (int, float)) and not isinstance(x, bool):
         return int(v)  # 8000, not 8000.0
-    return round(v, digits) if abs(v) >= SMALL else float(f"{v:.3g}")
+    if abs(v) >= SMALL:
+        return round(v, digits)
+    # A tiny value in three significant figures, and never a float whose
+    # repr carries binary noise (1.1199999999999999e-23 read as a number
+    # in a drift drawer until 2026-09-28): the string is the value shown.
+    return f"{v:.3g}"
 
 
 def _rng(lo: Any, hi: Any) -> str:
@@ -357,7 +362,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             ("geoms", m.ngeom),
             ("meshes", m.nmesh),
             ("keyframes", m.nkey),
-            ("total mass (kg)", _f(float(np.sum(m.body_mass[1:])), 4)),
+            ("total mass (kg)", round(float(np.sum(m.body_mass[1:])), 2)),
             ("timestep (s)", _f(m.opt.timestep, 5)),
             (
                 "integrator",
@@ -1106,7 +1111,7 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
             [
                 ("version", artifact.stamp),
                 ("success rate", ratio_of(c)),
-                ("95% confidence interval (exact)", _interval(c)),
+                ("95% CI (exact)", _interval(c)),
                 ("policy", c.get("policy", "")),
                 ("robot asset", c.get("robot", c.get("identity", {}).get("robot", ""))),
                 ("environment", c.get("task", c.get("source", ""))),
@@ -1266,7 +1271,7 @@ def attribution_table(record: dict[str, Any]) -> Section:
     cert = record.get("certificate") or {}
     return _table(
         "What would break it first (one knob turned at a time)",
-        ["knob", "what is turned", "cliff", "rungs (k/n, exact 95 % interval)"],
+        ["knob", "what is turned", "cliff", "rungs (k/n, 95% CI)"],
         rows,
         note=(
             f"{marked_sensitivity(record)}; baseline {ratio_of(base)} at this "
@@ -1668,6 +1673,16 @@ def _finding(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     return sections
 
 
+# The drift verdicts as a person reads them; the record keeps the
+# method's own words (`fleet.drift.VERDICTS`).
+DRIFT_WORDS = {
+    "within": "within interval",
+    "left": "out of interval",
+    "unresolved": "undetermined",
+    "anchored": "fixed",
+}
+
+
 def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
     """A drift check: the verdict and what to do, then every parameter's
     fresh interval beside the reference it was judged against."""
@@ -1688,8 +1703,8 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
             [
                 ("version", artifact.stamp),
                 ("verdict", verdict_word(d.drifted)),
-                ("parameters that left", ", ".join(d.left) or "none"),
-                ("unresolved", ", ".join(d.unresolved) or "none"),
+                ("out of interval", ", ".join(d.left) or "none"),
+                ("undetermined", ", ".join(d.unresolved) or "none"),
                 ("recommendation", d.recommendation),
                 ("method", d.method),
                 ("reference", f"{d.references} fit record(s): {', '.join(d.fit)}"),
@@ -1717,7 +1732,7 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
             [
                 [
                     p.name,
-                    p.verdict,
+                    DRIFT_WORDS.get(p.verdict, p.verdict),
                     interval_text(p.reference_lower, p.reference_upper),
                     _f(p.fresh_estimate)
                     if p.fresh_estimate is not None
@@ -1729,9 +1744,9 @@ def _drift(_project: Project, root: Path, artifact: Artifact) -> list[Section]:
                 ]
                 for p in d.parameters
             ],
-            note="within: overlaps the reference; left: pinned and outside it; "
-            "unresolved: not pinned by this recording; anchored: fixed by the "
-            "method, never judged.",
+            note="within interval: the fresh interval overlaps the reference; "
+            "out of interval: pinned and outside it; undetermined: not pinned "
+            "by this recording; fixed: held by the method, never judged.",
         ),
     ]
     return sections
