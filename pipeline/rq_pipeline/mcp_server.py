@@ -1,17 +1,21 @@
-"""The instrument's MCP surface: what this repo measures, as queryable tools.
+"""The instrument's MCP surface: the doors an agent works the loop through.
 
-Any MCP client — the Studio's agent panel first, Claude Code in a
-terminal equally — gets the same read-only window: the robot bundles
-with their hash identity and fit verdicts, the provenance-gated actuator
-library, the task and engine registries, and the run manifests. Reading
-through the repo's public seams (`bundles`, `actuator_library`, the two
-registries), never around them, so the answers an agent gets are the
-same ones the pipeline itself acts on.
+Any MCP client — Claude Code from `.mcp.json` at the repo root, or any
+other — gets the same doors: DESCRIBE (read-only windows through the
+repo's public seams: bundles with their hash identity and fit verdicts,
+the actuator library, the task and engine registries, projects and their
+artifacts), ACT (thin doors that spawn the CLI owning the work as a
+background job and hand back a handle: onboard, ingest, identify, train,
+evaluate, export, gate, pre-flight, attribute, capture a scene) and the
+STUDIO doors (open, show, compare, time, simulate, screenshot). Reading
+and acting through the repo's public seams, never around them, so the
+answers an agent gets are the same ones the pipeline itself acts on.
 
 Two kinds of tools (docs/64 §3): the DESCRIBE family — read-only
 windows through the repo's public seams — and, since S2, the ACT
 family (`rq_pipeline.mcp_actions`): thin doors that spawn the CLI
 owning the work as a background job and hand back a handle
+
 (`job_status` polls, artifacts land under `runs/` as always). The
 agent lives in the developer's own tool; these tools are how it
 generates data, trains, evaluates and opens the Studio.
@@ -28,8 +32,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -488,6 +493,33 @@ def _no_single_walk(root: Path | None) -> str:
     )
 
 
+CHECKPOINT_GLOB = "model_*.pt"
+
+
+def checkpoint_missing(checkpoint: str, root: Path | None) -> str | None:
+    """Why `checkpoint` cannot be evaluated, or None: a file path (absolute,
+    or `run/model_N.pt` under the project's runs) that is not there is
+    refused here naming the checkpoints its run folder holds, instead of
+    a job that dies on FileNotFoundError twelve seconds later
+    (2026-09-28)."""
+    path = Path(checkpoint).expanduser()
+    if not path.is_absolute() and root is not None:
+        # `c0/model_1.pt` and `runs/c0/model_1.pt` name the same file
+        under = path.parts[0] == RUNS_FOLDER
+        path = root / path if under else root / RUNS_FOLDER / path
+    if path.is_file():
+        return None
+    folder = path.parent
+    if folder.is_dir():
+        have = sorted(
+            (q.name for q in folder.glob(CHECKPOINT_GLOB)),
+            key=lambda n: int(re.sub(r"\D", "", n) or 0),
+        )
+        held = ", ".join(have) if have else "no checkpoints"
+        return f"no checkpoint {path.name!r} in {folder}: it holds {held}"
+    return f"no checkpoint {checkpoint!r}: {folder} is not a run folder"
+
+
 def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each named
     checkpoint: str,
     trials: int = 40,
@@ -519,6 +551,9 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     from rq_pipeline.mcp_jobs import JobManager  # noqa: PLC0415
 
     root = _project_root_if_any()
+    missing = checkpoint_missing(checkpoint, root)
+    if missing:
+        return refusal(missing)
     if robot is None:
         walk = _the_project_walk(root)
         if walk is None:
@@ -583,6 +618,7 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
         return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
     if (project.folder(DEPLOY_FOLDER) / name).exists():
         return refusal(f"deployment {name!r} already exists")
+    refresh_records(project)  # an evaluation judged a moment ago counts
     index = index_project(project)
     run_art = next(
         (
@@ -1289,10 +1325,26 @@ def describe_project(refresh: bool = True) -> dict[str, Any]:
 
     project = current_project()
     if refresh or not project.index_path.is_file():
+        # A verdict just judged, a run just finished: brought in now, not
+        # on the presenter's next 15 s tick (an agent that evaluated and
+        # asked at once saw no evaluation, 2026-09-28).
+        refresh_records(project)
         # write_index renders previews and records their paths; return
         # what was WRITTEN, so the agent sees the same index the Studio does.
         write_index(project, index_project(project))
     return dict(json.loads(project.index_path.read_text(encoding="utf-8")))
+
+
+def refresh_records(project: Any) -> None:
+    """Every training record and walk verdict in the project's run folders
+    turned into its artifacts (the presenter's own refresh, run now)."""
+    from rq_pipeline.project.live import (  # noqa: PLC0415
+        refresh_project,
+        refresh_verdicts,
+    )
+
+    refresh_project(project)
+    refresh_verdicts(project)
 
 
 def list_project_dirs() -> list[dict[str, Any]]:
@@ -1912,18 +1964,40 @@ def list_ledger_findings(prefix: str = "") -> list[dict[str, str]]:
 # -- system identification (stage ②, the door: docs/76 §6) ----------------------
 
 
+def pick_artifact(
+    artifacts: Sequence[Any], stamp: str, kind: str | None, where: str
+) -> Any:
+    """The artifact `stamp` names among `artifacts`: by its full version
+    (`go2@e5aa641994fc`), or by bare name (`go2`) when exactly one artifact
+    (of `kind`, when given) carries that name — what an agent says right
+    after `onboard_robot` answered with the version (refused as "no
+    artifact 'go2'" until 2026-09-28). Several of one name are refused
+    naming every version; a wrong kind is refused by name."""
+    exact = next((a for a in artifacts if a.stamp == stamp), None)
+    if exact is None and "@" not in stamp:
+        same_name = [
+            a
+            for a in artifacts
+            if a.stamp.rsplit("@", 1)[0] == stamp and (kind is None or a.kind == kind)
+        ]
+        if len(same_name) == 1:
+            exact = same_name[0]
+        elif same_name:
+            versions = ", ".join(a.stamp for a in same_name)
+            raise KeyError(f"{len(same_name)} artifacts named {stamp!r}: {versions}")
+    if exact is None:
+        raise KeyError(f"no artifact {stamp!r} in {where}")
+    if kind is not None and exact.kind != kind:
+        raise ValueError(f"{exact.stamp} is a {exact.kind}, not a {kind}")
+    return exact
+
+
 def _project_artifact(stamp: str, kind: str) -> Any:
     from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
 
     project = current_project()
-    artifact = next(
-        (a for a in index_project(project).artifacts if a.stamp == stamp), None
-    )
-    if artifact is None:
-        raise KeyError(f"no artifact {stamp!r} in {project.root}")
-    if artifact.kind != kind:
-        raise ValueError(f"{stamp} is a {artifact.kind}, not a {kind}")
-    return project, artifact
+    artifacts = index_project(project).artifacts
+    return project, pick_artifact(artifacts, stamp, kind, str(project.root))
 
 
 def list_identification_methods() -> list[dict[str, str]]:
@@ -1960,6 +2034,9 @@ def identify_system(
     try:
         project, bundle = _project_artifact(robot, "robot")
         _, rec = _project_artifact(recording, "recording")
+        # Cited by version from here on, whatever name the agent used: a
+        # drift record that cited "go2" showed robot "unrecorded" (2026-09-28).
+        robot, recording = bundle.stamp, rec.stamp
         bundle_dir = project.root / bundle.path
         recording_dir = project.root / rec.path
         entry = resolve(method) if method else detect(bundle_dir, recording_dir)
@@ -2067,6 +2144,9 @@ def check_drift(
     try:
         project, bundle = _project_artifact(robot, "robot")
         _, rec = _project_artifact(recording, "recording")
+        # Cited by version from here on, whatever name the agent used: a
+        # drift record that cited "go2" showed robot "unrecorded" (2026-09-28).
+        robot, recording = bundle.stamp, rec.stamp
         bundle_dir = project.root / bundle.path
         recording_dir = project.root / rec.path
         check_name = plain_name(
@@ -2315,12 +2395,8 @@ def _any_project_artifact(stamp: str) -> Any:
     from rq_pipeline.project import current_project, index_project  # noqa: PLC0415
 
     project = current_project()
-    artifact = next(
-        (a for a in index_project(project).artifacts if a.stamp == stamp), None
-    )
-    if artifact is None:
-        raise KeyError(f"no artifact {stamp!r} in {project.root}")
-    return project, artifact
+    artifacts = index_project(project).artifacts
+    return project, pick_artifact(artifacts, stamp, None, str(project.root))
 
 
 def describe_identification(robot: str) -> dict[str, Any] | Refusal:
@@ -2757,10 +2833,6 @@ def build_server() -> Any:  # noqa: PLR0915
         "chained IK, kept by the task's success criterion, streamed to the Studio. "
         "Job handle."
     )(actions.generate_planned_demos)
-    server.tool(
-        description="Launch the Studio (release build); anything speaking the "
-        "Rerun SDK streams into it on :9876."
-    )(actions.open_studio)
     server.tool(
         description="Onboard a robot: an MJCF directory, or a USD asset read by "
         "Newton, becomes a hash-stamped bundle under robots/, compiled once as "

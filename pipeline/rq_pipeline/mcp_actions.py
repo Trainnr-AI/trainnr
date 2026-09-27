@@ -38,7 +38,6 @@ from rq_pipeline.paths import train_python
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIPELINE_DIR = REPO_ROOT / "pipeline"
 RQ_MJLAB_DIR = REPO_ROOT / "rq_mjlab"
-STUDIO_DIR = REPO_ROOT / "crates" / "studio-shell"
 TOOLS_DIR = REPO_ROOT / "tools"
 
 
@@ -722,18 +721,6 @@ class Actions:
             *_given("--as", recording_name),
         ]
         return self.jobs.start("ingest-public-log", argv, PIPELINE_DIR)
-
-    def open_studio(self) -> JobHandle:
-        """Launch the Studio (release build — the debug viewer's slow
-        ingest is a measured hazard). Everything that speaks the Rerun
-        SDK streams into its window on :9876."""
-        argv = ["cargo", "run", "--release"]
-        if self.env_file is not None:
-            # WSLg: the embedded viewer re-asserts client-drawn chrome
-            # under Wayland; unsetting the display var restores the
-            # window frame (docs/07 2026-09-01).
-            argv = ["env", "-u", "WAYLAND_DISPLAY", *argv]
-        return self.jobs.start("studio", argv, STUDIO_DIR)
 
     # -- onboarding ----------------------------------------------------
 

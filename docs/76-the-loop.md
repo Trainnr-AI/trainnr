@@ -972,6 +972,16 @@ so a second show is seen, not streamed behind the first. (6) Application
 ids are folded to rerun's entry-name alphabet (`viz.entry_name`: a
 stamp's `@` becomes `-`), which ends the "requires migration" toast.
 
+*2026-09-28, the stranger test (docs/07):* every door that takes an
+artifact by version also takes its bare name when the project holds one
+artifact of that name and kind (`pick_artifact`; several are refused
+naming each version); `evaluate_walk` refuses a checkpoint that is not
+on disk naming the ones its run holds; `describe_project` and
+`export_deployment` bring a verdict judged a moment ago into the index
+themselves (`refresh_records`), not on the presenter's next tick;
+`open_studio` (a cargo job) is retired — `launch_studio` is the one door;
+a page's automatic selection of its lone artifact is logged `by: studio`.
+
 Tried and dropped the same day: a `window` verb to resize the Studio so
 a capture could show a whole page. On macOS a programmatic resize left
 the render surface at the old size, so every later capture came out

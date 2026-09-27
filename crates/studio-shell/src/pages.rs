@@ -424,6 +424,10 @@ pub struct Nav {
     /// A viewport scene asked for from the drawer (a deployment played or
     /// replayed in the Studio's own MuJoCo viewport).
     pub scene: Option<String>,
+    /// The page opened its lone artifact's drawer on arrival: the Studio's
+    /// own move, logged as such rather than as the human's click
+    /// (the feed said "you selected go2-walk" for it until 2026-09-28).
+    pub auto_selected: bool,
 }
 
 struct CardText<'a> {
@@ -938,7 +942,10 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
         ui.add_space(10.0);
         match &index.next_move {
             Some(next) => {
-                ui.horizontal(|ui| {
+                // The move is a sentence naming doors and formats: it wraps
+                // inside the card instead of widening the whole page past
+                // the window (seen on a fresh project, 2026-09-28).
+                ui.horizontal_wrapped(|ui| {
                     ui.label(
                         egui::RichText::new("Next")
                             .text_style(DesignTokens::welcome_screen_body())
@@ -1315,6 +1322,7 @@ pub fn section(
         // arrival (a click still closes it).
         if entered && selected.is_none() && rows.len() == 1 {
             *selected = Some(rows[0].stamp.clone());
+            nav.auto_selected = true;
         }
         let mut scroll = scroll_to_detail;
         let mut drawer = Drawer { show, explore, nav };

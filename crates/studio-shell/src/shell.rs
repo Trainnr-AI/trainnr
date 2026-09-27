@@ -37,6 +37,9 @@ pub struct Shell {
     /// A viewport scene the drawer asked for (a deployment played or
     /// replayed), taken by the frame loop that owns the viewport.
     pub scene_request: Option<String>,
+    /// This frame's selection was the page's own (a lone artifact on
+    /// arrival), not a click: `report` logs it by the Studio.
+    pub auto_selected: bool,
     /// What was last sent to the viewer (a version, or `a vs b`), taken
     /// by the frame loop to log the event.
     pub shown: Option<String>,
@@ -87,6 +90,7 @@ impl Shell {
             presenter: None,
             show_requested: false,
             scene_request: None,
+            auto_selected: false,
             shown: None,
             last_shown: None,
             table: None,
@@ -430,6 +434,9 @@ impl Shell {
                 }
                 if let Some(scene) = nav.scene.take() {
                     self.scene_request = Some(scene);
+                }
+                if nav.auto_selected {
+                    self.auto_selected = true;
                 }
                 if nav.back {
                     if let Some((section, selected)) = self.history.pop() {

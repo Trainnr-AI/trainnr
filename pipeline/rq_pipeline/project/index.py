@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from rq_pipeline.bundles.basis import BASES, BASIS_OWN, BASIS_UNKNOWN
+from rq_pipeline.bundles.bundle import BUNDLE_FILE
 from rq_pipeline.bundles.hashing import is_stamp
 from rq_pipeline.collect.provenance import PROVENANCE_FILE
 from rq_pipeline.deploy.attribution import (
@@ -635,6 +636,15 @@ def _own_date(kind: Kind, path: Path) -> str | None:
         created = _read(path / marker).get("created_utc")
         if isinstance(created, str) and created:
             return created
+    if kind is Kind.ROBOT:
+        # Onboarding copies the source tree with its dates; the bundle
+        # record is written at onboarding, so its time is when the robot
+        # joined (a robot onboarded today read "added 2026-09-10" before
+        # 2026-09-28).
+        record = path / BUNDLE_FILE
+        if record.is_file():
+            with contextlib.suppress(OSError):
+                return _iso(record.stat().st_mtime)
     return None
 
 

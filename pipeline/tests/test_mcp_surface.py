@@ -528,3 +528,50 @@ class TheFocusDoor(unittest.TestCase):
             recording_matches("no-such-recording", "robotiq-sim-deploy-go2-c2")
         )
         self.assertFalse(recording_matches("x", None))
+
+
+class ArtifactsByName(unittest.TestCase):
+    def test_a_bare_name_resolves_when_it_is_the_only_one(self) -> None:
+        """`identify_system("go2", …)` right after `onboard_robot` answered
+        `go2@e5aa641994fc` was refused as "no artifact 'go2'" (2026-09-28)."""
+        from types import SimpleNamespace as A  # noqa: PLC0415
+
+        from rq_pipeline.mcp_server import pick_artifact  # noqa: PLC0415
+
+        go2 = A(stamp="go2@e5aa641994fc", kind="robot")
+        chirp = A(stamp="go2@f7f50914a129", kind="recording")
+        arts = [go2, chirp, A(stamp="go2-c1@1111", kind="run")]
+        self.assertIs(pick_artifact(arts, "go2@e5aa641994fc", "robot", "p"), go2)
+        self.assertIs(pick_artifact(arts, "go2", "robot", "p"), go2)
+        self.assertIs(pick_artifact(arts, "go2", "recording", "p"), chirp)
+        with self.assertRaisesRegex(KeyError, "2 artifacts named 'go2'.*e5aa641994fc"):
+            pick_artifact(arts, "go2", None, "p")
+        with self.assertRaisesRegex(KeyError, "no artifact 'go1' in p"):
+            pick_artifact(arts, "go1", "robot", "p")
+        with self.assertRaisesRegex(ValueError, "is a recording, not a robot"):
+            pick_artifact(arts, "go2@f7f50914a129", "robot", "p")
+        # a bare name never matches a different kind
+        with self.assertRaisesRegex(KeyError, "no artifact 'go2-c1'"):
+            pick_artifact(arts, "go2-c1", "robot", "p")
+
+
+class TheCheckpointCheck(unittest.TestCase):
+    def test_a_missing_checkpoint_is_refused_naming_the_ones_there(self) -> None:
+        from rq_pipeline.mcp_server import checkpoint_missing  # noqa: PLC0415
+        from rq_pipeline.project.locate import RUNS_FOLDER  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / RUNS_FOLDER / "c0"
+            run.mkdir(parents=True)
+            for n in (0, 50, 100, 149):
+                (run / f"model_{n}.pt").write_bytes(b"x")
+            self.assertIsNone(checkpoint_missing(str(run / "model_149.pt"), None))
+            self.assertIsNone(checkpoint_missing("c0/model_149.pt", Path(tmp)))
+            why = checkpoint_missing("c0/model_150.pt", Path(tmp))
+            self.assertIn("no checkpoint 'model_150.pt'", why)
+            self.assertTrue(
+                why.endswith("model_0.pt, model_50.pt, model_100.pt, model_149.pt")
+            )
+            self.assertIn(
+                "is not a run folder", checkpoint_missing("nope/model_1.pt", Path(tmp))
+            )

@@ -231,7 +231,7 @@ These are the ones that cost real time and are worth not rediscovering:
 The Studio is the window, not the workflow. The workflow is the MCP
 surface (docs/64 §3) and the loop it walks (docs/76). The app's jobs:
 
-- **Launched by a tool.** `open_studio` starts it; anything speaking the
+- **Launched by a tool.** `launch_studio` starts it (`open_studio` until 2026-09-28: a second door that built with cargo); anything speaking the
   Rerun SDK then streams in.
 - **Pointed at an artifact.** `open_in_studio` and `show_in_studio`
   (since 2026-09-09) open a page or a named artifact and replay its

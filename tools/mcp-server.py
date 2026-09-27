@@ -2,7 +2,7 @@
 
     cd pipeline && uv run --extra sim --extra mcp python ../tools/mcp-server.py
 
-Read-only tools over the repo's public seams — bundles with their hash
+The doors an agent works the loop through: describe (bundles with their hash
 identity and fit verdicts, the actuator library, the task and engine
 registries, run manifests. Any MCP client connects the same way: the
 Studio's agent panel hands this command to its ACP session, a Claude

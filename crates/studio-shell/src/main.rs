@@ -358,6 +358,7 @@ impl eframe::App for StudioShell {
             if self.shell.section != Section::Live {
                 self.control
                     .event(Event::open(BY_USER).in_section(Section::Live.slug()));
+                self.before.0 = Section::Live; // said once, not again by the diff
             }
             self.shell.section = Section::Live;
         }
@@ -843,6 +844,10 @@ impl StudioShell {
                         self.close_twin(&name);
                         self.viewport =
                             ViewportFeed::spawn(ui.ctx(), &name, &self.shell.model.project_root);
+                        if self.shell.section != Section::Live {
+                            self.control
+                                .event(Event::open(BY_AGENT).in_section(Section::Live.slug()));
+                        }
                         self.shell.section = Section::Live;
                     }
                     None => self.stop_scene(),
@@ -1245,12 +1250,19 @@ impl StudioShell {
                 .event(Event::open(BY_USER).in_section(self.shell.section.slug()));
         }
         if self.shell.selected != selected_before {
+            let by = if std::mem::take(&mut self.shell.auto_selected) {
+                BY_STUDIO
+            } else {
+                BY_USER
+            };
             match &self.shell.selected {
                 Some(stamp) => self
                     .control
-                    .event(Event::select(BY_USER).of_artifact(stamp.clone())),
-                None => self.control.event(Event::deselect(BY_USER)),
+                    .event(Event::select(by).of_artifact(stamp.clone())),
+                None => self.control.event(Event::deselect(by)),
             }
+        } else {
+            self.shell.auto_selected = false;
         }
         if let Some(shown) = self.shell.shown.take() {
             self.control.event(Event::show(BY_USER).of_artifact(shown));

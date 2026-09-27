@@ -171,7 +171,17 @@ class TheWalkDoors(unittest.TestCase):
             self.assertIn("ghost", out["reason"])
 
     def test_evaluate_walk_names_the_declared_walks_robot(self) -> None:
-        with project_with("microduck-walk") as (_, spawned):
+        with project_with("microduck-walk") as (project, spawned):
+            # A checkpoint that is not there is refused before any job
+            # spawns, naming the ones the run holds (2026-09-28).
+            (project.root / "runs" / "x").mkdir(parents=True)
+            (project.root / "runs" / "x" / "model_0.pt").write_bytes(b"x")
+            out = server.evaluate_walk("runs/x/model_1.pt", trials=2)
+            self.assertEqual(out["status"], "refused")
+            self.assertIn("no checkpoint 'model_1.pt'", out["reason"])
+            self.assertIn("model_0.pt", out["reason"])
+            self.assertEqual(spawned.calls, [])
+            (project.root / "runs" / "x" / "model_1.pt").write_bytes(b"x")
             server.evaluate_walk("runs/x/model_1.pt", trials=2)
             [argv] = spawned.calls
             self.assertEqual(argv[argv.index("-m") + 1], "rq_mjlab.walk_verdict")

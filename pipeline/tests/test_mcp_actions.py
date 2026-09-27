@@ -15,7 +15,6 @@ from tempfile import TemporaryDirectory
 from rq_pipeline.mcp_actions import (
     PIPELINE_DIR,
     RQ_MJLAB_DIR,
-    STUDIO_DIR,
     TOOLS_DIR,
     TRAIN_PYTHON,
     UNITREE_REFERENCE_DEFAULT,
@@ -297,13 +296,6 @@ class TheDoors(unittest.TestCase):
             os.environ.pop(UNITREE_REFERENCE_ENV, None)
         self.assertEqual(unitree_reference(), UNITREE_REFERENCE_DEFAULT.expanduser())
 
-    def test_the_studio_launches_release_in_its_crate(self) -> None:
-        with harness() as (actions, spawner):
-            actions.open_studio()
-            [(argv, cwd)] = spawner.calls
-            self.assertEqual(argv, ["cargo", "run", "--release"])
-            self.assertEqual(cwd, STUDIO_DIR)
-
 
 class TheStudentEvaluation(unittest.TestCase):
     def test_a_student_rides_the_same_door_with_its_horizon(self) -> None:
@@ -422,7 +414,7 @@ class TheWalkDemosDoor(unittest.TestCase):
 class TheJobLifecycle(unittest.TestCase):
     def test_status_reports_done_with_the_log_tail(self) -> None:
         with harness() as (actions, _spawner):
-            handle = actions.open_studio()
+            handle = actions.train_walk(robot="microduck")
             # The fake process exits 0 instantly; join the watcher rather
             # than poll (a poll saw "ended (unrecorded)" first whenever
             # the fake pid was dead on the box, 2026-09-02).
@@ -433,14 +425,14 @@ class TheJobLifecycle(unittest.TestCase):
 
     def test_an_unknown_job_is_refused_naming_the_known(self) -> None:
         with harness() as (actions, _spawner):
-            actions.open_studio()
+            actions.train_walk(robot="microduck")
             with self.assertRaises(KeyError) as ctx:
                 actions.job_status("nope-123")
-            self.assertIn("studio-", str(ctx.exception))
+            self.assertIn("train-walk-", str(ctx.exception))
 
     def test_list_is_newest_first(self) -> None:
         with harness() as (actions, _spawner):
-            first = actions.open_studio()
+            first = actions.train_walk(robot="microduck")
             second = actions.train_walk(robot="microduck")
             listed = actions.list_jobs()
             self.assertEqual(
@@ -483,19 +475,12 @@ class TheLaunchEnvironment(unittest.TestCase):
             [(argv, _)] = spawner.calls
             self.assertEqual(argv[:2], [str(WSL_RUN), str(TRAIN_PYTHON)])
 
-    def test_the_studio_drops_the_wayland_display_on_that_box(self) -> None:
-        with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
-            actions.open_studio()
-            [(argv, _)] = spawner.calls
-            self.assertEqual(
-                argv, ["env", "-u", "WAYLAND_DISPLAY", "cargo", "run", "--release"]
-            )
-
     def test_without_an_env_file_nothing_is_wrapped(self) -> None:
         with harness() as (actions, spawner):
-            actions.open_studio()
+            actions.train_walk(robot="microduck")
             [(argv, _)] = spawner.calls
-            self.assertEqual(argv, ["cargo", "run", "--release"])
+            self.assertNotEqual(argv[0], "env")
+            self.assertNotIn("--env-file", argv)
 
 
 class ThePreviewDoor(unittest.TestCase):
