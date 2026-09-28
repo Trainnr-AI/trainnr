@@ -61,6 +61,18 @@ MIN_CURVE_POINTS = 2  # a line needs two
 # The preview palette, named once: the ground, the series in order, the
 # faint reference line, the text.
 GROUND = (24, 26, 31)
+# The card is drawn at PREVIEW_SIZE and shown at about half that (a 337 pt
+# card), so a size here is roughly twice what the eye gets: 28 px is the
+# floor for anything a person must read (2026-09-28, after the drift card
+# "how is this legible"). One number, one bar, at most three short lines.
+PT_DISPLAY = 110  # the one number a card leads with
+PT_WORD = 84  # a verdict word
+PT_TITLE = 56  # a card's headline sentence
+PT_BODY = 34  # a line the eye reads
+PT_LABEL = 30  # a bar's label or a legend
+CARD_MARGIN = 48
+BAR_H = 26
+ROW_STEP = 56  # a labelled bar row
 SERIES = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
 REFERENCE_LINE = (60, 64, 72)
 TEXT = (200, 205, 215)
@@ -281,12 +293,13 @@ def _render_training_curve(source: Path, out: Path) -> bool:
     image = Image.new("RGB", PREVIEW_SIZE, GROUND)
     draw = ImageDraw.Draw(image)
     _plot_lines(draw, [points], zero_line=True)
-    draw.text(
-        (PLOT_MARGIN, 10),
-        f"reward {points[-1][1]:.1f}",
-        fill=TEXT,
-        font=_font(22),
-    )
+    # The label sits on a patch of ground so a curve that peaks early
+    # never runs through it (go2-garden-c1, 2026-09-28).
+    label = f"reward {points[-1][1]:.1f}"
+    font = _font(PT_BODY)
+    left, top, right, bottom = draw.textbbox((PLOT_MARGIN, 14), label, font=font)
+    draw.rectangle([left - 10, top - 6, right + 10, bottom + 6], fill=GROUND)
+    draw.text((PLOT_MARGIN, 14), label, fill=TEXT, font=font)
     return _save_pil(image, out)
 
 
@@ -420,44 +433,42 @@ def _render_certificate(
     width, height = PREVIEW_SIZE
     image = Image.new("RGB", (width, height), GROUND)
     draw = ImageDraw.Draw(image)
-    big = _font(96)
-    small = _font(30)
-    tiny = _font(24)
+    big, body, label = _font(PT_DISPLAY), _font(PT_BODY), _font(PT_LABEL)
     rate = k / n
-    draw.text((48, 40), f"{k} / {n}", fill=(236, 238, 242), font=big)
-    draw.text((48, 150), f"{rate:.0%} success", fill=(160, 166, 178), font=small)
+    x0, x1 = CARD_MARGIN, width - CARD_MARGIN
+    draw.text((x0, 28), f"{k} / {n}", fill=TEXT_BRIGHT, font=big)
+    draw.text((x0, 152), f"{rate:.0%} success", fill=TEXT_DIM, font=body)
     interval = interval_of(c)
     if interval is not None:
-        x0, x1 = 48, width - 48
-        y = 230
-        draw.rounded_rectangle([x0, y, x1, y + 14], radius=7, fill=(44, 48, 56))
+        y = 224
+        draw.rounded_rectangle([x0, y, x1, y + 16], radius=8, fill=(44, 48, 56))
         lo, hi = interval
         draw.rounded_rectangle(
-            [x0 + int((x1 - x0) * lo), y - 2, x0 + int((x1 - x0) * hi), y + 16],
-            radius=8,
+            [x0 + int((x1 - x0) * lo), y - 3, x0 + int((x1 - x0) * hi), y + 19],
+            radius=9,
             fill=(88, 166, 255),
         )
         px = x0 + int((x1 - x0) * rate)
-        draw.ellipse([px - 9, y - 2, px + 9, y + 16], fill=(236, 238, 242))
+        draw.ellipse([px - 10, y - 3, px + 10, y + 19], fill=TEXT_BRIGHT)
         draw.text(
-            (x0, y + 26),
-            f"95% CI [{lo:.2f}, {hi:.2f}]",
-            fill=(160, 166, 178),
-            font=tiny,
+            (x0, y + 30), f"95% CI [{lo:.2f}, {hi:.2f}]", fill=TEXT_DIM, font=label
         )
     funnel = c.get("funnel") or {}
-    if funnel:
-        y = 320
-        top = max(v for v in funnel.values() if isinstance(v, (int, float))) or 1
-        for name, value in funnel.items():
-            if not isinstance(value, (int, float)):
-                continue
-            draw.text((48, y), f"{name}", fill=(160, 166, 178), font=tiny)
-            _bars(draw, (200, y + 4, width - 248, 22), value / top, (70, 200, 110))
-            draw.text(
-                (width - 44 - 60, y), f"{int(value)}", fill=(236, 238, 242), font=tiny
+    rows = [(k_, v) for k_, v in funnel.items() if isinstance(v, (int, float))]
+    if rows:
+        y = 316
+        top = max(v for _, v in rows) or 1
+        bar_x = x0 + 190
+        for name, value in rows[:3]:
+            draw.text((x0, y), name, fill=TEXT_DIM, font=label)
+            _bars(
+                draw,
+                (bar_x, y + 6, x1 - bar_x - 96, BAR_H),
+                value / top,
+                (70, 200, 110),
             )
-            y += 44
+            draw.text((x1 - 84, y), f"{int(value)}", fill=TEXT_BRIGHT, font=label)
+            y += ROW_STEP
     return _save_pil(image, out)
 
 
@@ -482,28 +493,28 @@ def _render_finding(
             if isinstance(arm, dict) and "successes" in arm and "trials" in arm:
                 rows.append((name, arm["successes"], arm["trials"]))
     if rows:
-        draw.text((48, 32), raw.get("id", ""), fill=(160, 166, 178), font=_font(24))
-        y = 90
-        step = max(44, min(70, (height - 120) // max(1, len(rows))))
-        for name, k, n in rows[:6]:
+        x0, x1 = CARD_MARGIN, width - CARD_MARGIN
+        body, label = _font(PT_BODY), _font(PT_LABEL)
+        draw.text(
+            (x0, 28), _cut(str(raw.get("id", "")), ID_CHARS), fill=TEXT_DIM, font=label
+        )
+        y = 92
+        for name, k, n in rows[:ARM_ROWS]:
             # The label has its own column: an arm's name longer than it
             # ran under its bar ("expert-band-g", 2026-09-28).
-            label = (
-                name
-                if len(name) <= ARM_LABEL_CHARS
-                else name[: ARM_LABEL_CHARS - 1] + "…"
-            )
-            draw.text((48, y), label, fill=(236, 238, 242), font=_font(26))
+            draw.text((x0, y), _cut(name, ARM_LABEL_CHARS), fill=TEXT_BRIGHT, font=body)
             _bars(
                 draw,
-                (ARM_BAR_X, y + 4, width - ARM_BAR_X - 120, 24),
+                (ARM_BAR_X, y + 8, x1 - ARM_BAR_X - 112, BAR_H),
                 k / n if n else 0,
                 (88, 166, 255),
             )
+            draw.text((x1 - 100, y), f"{k}/{n}", fill=TEXT_BRIGHT, font=body)
+            y += ROW_STEP + 6
+        if len(rows) > ARM_ROWS:
             draw.text(
-                (width - 112, y), f"{k}/{n}", fill=(236, 238, 242), font=_font(24)
+                (x0, y), f"+{len(rows) - ARM_ROWS} more", fill=TEXT_DIM, font=label
             )
-            y += step
         return _save_pil(image, out)
     # A claim with no numbers to draw: its first sentence, large — the
     # headline — under the record's id; the rest waits in the drawer.
@@ -516,17 +527,24 @@ def _render_finding(
     return _save_pil(image, out)
 
 
-ARM_LABEL_CHARS = 18  # an arm's name in a finding card's label column
+ARM_LABEL_CHARS = 13  # an arm's name in a finding card's label column
 ARM_BAR_X = 300  # where its bar starts
-HEADLINE_CHARS = 34  # characters per line at the headline size
-HEADLINE_LINES = 6
-HEADLINE_PT = 34
-HEADLINE_LEADING = 52
-HEADLINE_TOP = 96
-CARD_ORIGIN = (48, 32)  # where a card's small label starts
-CARD_LABEL_PT = 24
+ARM_ROWS = 4  # bars a card holds; the rest is "+N more"
+ID_CHARS = 34  # a record's id on one label line
+HEADLINE_CHARS = 28  # characters per line at the headline size
+HEADLINE_LINES = 5
+HEADLINE_PT = 40
+HEADLINE_LEADING = 58
+HEADLINE_TOP = 92
+CARD_ORIGIN = (CARD_MARGIN, 28)  # where a card's small label starts
+CARD_LABEL_PT = PT_LABEL
 TEXT_DIM = (160, 166, 178)
 TEXT_BRIGHT = (236, 238, 242)
+
+
+def _cut(text: str, chars: int) -> str:
+    """`text` on one line of `chars`, cut with an ellipsis."""
+    return text if len(text) <= chars else text[: chars - 1] + "…"
 
 
 def _first_sentence(text: str) -> str:
@@ -568,9 +586,10 @@ def _finite_pair(lo: float | None, hi: float | None) -> tuple[float, float] | No
 def _render_drift(
     _project: Project, source: Path, out: Path, _summary: dict[str, Any]
 ) -> bool:
-    """A drift check at a glance: the word large, then a row per judged
-    parameter — the reference interval as a grey bar, the fresh interval
-    over it, red when it left."""
+    """A drift check at a glance: the verdict word, one bar of the judged
+    parameters split into out of interval, within and undetermined (each
+    counted in the legend), then the names that left. Per-parameter bars
+    drawn to their own scales said nothing at card size (2026-09-28)."""
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
@@ -579,6 +598,8 @@ def _render_drift(
         ANCHORED,
         DRIFT_FILE,
         LEFT,
+        UNRESOLVED,
+        WITHIN,
         load_drift_record,
         verdict_word,
     )
@@ -590,61 +611,70 @@ def _render_drift(
     width, height = PREVIEW_SIZE
     image = Image.new("RGB", (width, height), GROUND)
     draw = ImageDraw.Draw(image)
-    big, small, tiny = _font(72), _font(28), _font(22)
-    word = verdict_word(d.drifted)
-    ink = (255, 107, 107) if d.drifted else (236, 238, 242)
-    draw.text((48, 36), word, fill=ink, font=big)
-    draw.text(
-        (48, 128),
-        f"{len(d.left)} out of interval · {len(d.unresolved)} undetermined · "
-        f"{d.references} reference fit{'s' if d.references != 1 else ''}",
-        fill=(160, 166, 178),
-        font=small,
-    )
+    word, body, label = _font(PT_WORD), _font(PT_BODY), _font(PT_LABEL)
+    x0, x1 = CARD_MARGIN, width - CARD_MARGIN
+    ink = DRIFT_RED if d.drifted else TEXT_BRIGHT
+    draw.text((x0, 24), verdict_word(d.drifted), fill=ink, font=word)
     judged = [p for p in d.parameters if p.verdict != ANCHORED]
-    if not judged:
+    counts = {
+        LEFT: sum(p.verdict == LEFT for p in judged),
+        WITHIN: sum(p.verdict == WITHIN for p in judged),
+        UNRESOLVED: sum(p.verdict == UNRESOLVED for p in judged),
+    }
+    total = sum(counts.values())
+    if not total:
+        draw.text((x0, 150), "no parameter judged", fill=TEXT_DIM, font=body)
         return _save_pil(image, out)
-    x0, x1, y = 48, width - 48, 190
-    # A row holds its label above its bar: never squeezed under DRIFT_ROW_PX,
-    # so the labels stay off the bars; the rows past the bottom are counted.
-    row = max(DRIFT_ROW_PX, min(56, (height - y - 24) // len(judged)))
-    fits = max(1, (height - y - 24) // row)
-    if len(judged) > fits:
+    # One bar: the judged parameters as shares, in the legend's order.
+    y = 150
+    x = x0
+    for key, colour in DRIFT_COLOURS:
+        share = counts[key] / total
+        w = int((x1 - x0) * share)
+        if w:
+            draw.rectangle([x, y, x + w, y + BAR_H], fill=colour)
+            x += w
+    y += BAR_H + 22
+    for key, colour in DRIFT_COLOURS:
+        draw.rectangle([x0, y + 8, x0 + 18, y + 26], fill=colour)
         draw.text(
-            (x0, height - 30),
-            f"… and {len(judged) - fits} more parameters",
-            fill=(160, 166, 178),
-            font=tiny,
+            (x0 + 32, y),
+            f"{counts[key]} {DRIFT_LEGEND[key]}",
+            fill=TEXT_DIM,
+            font=label,
         )
-    for p in judged[:fits]:
-        ref = _finite_pair(p.reference_lower, p.reference_upper)
-        fresh = _finite_pair(p.fresh_lower, p.fresh_upper)
-        ends = [v for pair in (ref, fresh) if pair for v in pair]
-        if not ends:
-            y += row
-            continue  # nothing known to draw: the row keeps its place
-        lo, hi = min(ends), max(ends)
-        span = (hi - lo) or 1.0
-
-        def px(v: float, lo: float = lo, span: float = span) -> int:
-            return x0 + int((x1 - x0) * (v - lo) / span)
-
-        draw.text((x0, y), p.name, fill=(160, 166, 178), font=tiny)
-        bar = y + 24
-        if ref:
-            draw.rounded_rectangle(
-                [px(ref[0]), bar, px(ref[1]), bar + 8], radius=4, fill=(70, 74, 84)
+        y += 40
+    # Who left, by name: the reason the card is red.
+    if d.left:
+        y += 8
+        for name in d.left[:DRIFT_NAMES]:
+            draw.text(
+                (x0, y), _cut(name, DRIFT_NAME_CHARS), fill=TEXT_BRIGHT, font=body
             )
-        if fresh:
-            fill = (255, 107, 107) if p.verdict == LEFT else (88, 166, 255)
-            draw.rounded_rectangle(
-                [px(fresh[0]), bar - 3, px(fresh[1]), bar + 11], radius=5, fill=fill
+            y += 42
+        if len(d.left) > DRIFT_NAMES:
+            draw.text(
+                (x0, y), f"+{len(d.left) - DRIFT_NAMES} more", fill=TEXT_DIM, font=label
             )
-        y += row
     return _save_pil(image, out)
 
 
-DRIFT_ROW_PX = 40  # a label line and its bar
+DRIFT_RED = (255, 107, 107)
+DRIFT_BLUE = (88, 166, 255)
+DRIFT_GREY = (70, 74, 84)
+# The stacked bar's segments and legend, in order (`fleet.drift` words).
+DRIFT_COLOURS = (
+    ("left", DRIFT_RED),
+    ("within", DRIFT_BLUE),
+    ("unresolved", DRIFT_GREY),
+)
+DRIFT_LEGEND = {
+    "left": "out of interval",
+    "within": "within interval",
+    "unresolved": "undetermined",
+}
+DRIFT_NAMES = 2  # names that left, on the card
+DRIFT_NAME_CHARS = 30
 TILE_SPLATS = 60_000  # points a tile draws; more is invisible at its size
 
 
@@ -705,7 +735,7 @@ def _render_scene(
     if pts.shape[0] > TILE_SPLATS:
         pick = np.random.default_rng(0).choice(pts.shape[0], TILE_SPLATS, replace=False)
         pts, cols = pts[pick], cols[pick]
-    margin, top = 24, 112  # below the two text lines
+    margin, top = 24, 140  # below the two text lines
     sx, sy = (width - 2 * margin) / span[0], (height - top - margin) / span[1]
     scale = min(sx, sy)
     px = (margin + (pts[:, 0] - lo[0]) * scale).astype(int)
@@ -730,15 +760,17 @@ def _render_scene(
     )
     # The headline's descenders reach ~y=72 at 48 px; the subtitle sits
     # below them (measured on the first scene tile, 2026-09-22).
-    draw.text((48, 24), head, fill=(236, 238, 242), font=_font(48))
-    draw.text(
-        (48, 84),
-        f"{s.splat.get('count', '?')} gaussians · {s.proxy.get('faces', '?')} "
-        f"proxy faces · {s.source}",
-        fill=(160, 166, 178),
-        font=_font(22),
-    )
+    _scene_caption(draw, head, s.splat.get("count"))
     return _save_pil(image, out)
+
+
+def _scene_caption(draw: ImageDraw, head: str, count: object) -> None:
+    """The gap's number as the title, the gaussian count under it."""
+    draw.text((CARD_MARGIN, 24), head, fill=TEXT_BRIGHT, font=_font(PT_TITLE))
+    gaussians = (
+        f"{count:,} gaussians" if isinstance(count, int) else "gaussians uncounted"
+    )
+    draw.text((CARD_MARGIN, 92), gaussians, fill=TEXT_DIM, font=_font(PT_LABEL))
 
 
 _RENDERERS: dict[str, Renderer] = {
