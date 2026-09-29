@@ -1,0 +1,65 @@
+{
+ "id": "go2-walks-the-captured-garden-2026-09-23",
+ "claim": "A plane-trained Go2 policy walks a captured real space under full physics: go2-c2 (38/40 on the trained plane), staged on the Mip-NeRF 360 garden captured through the chain (185 stills, COLMAP poses, a 6,674,386-gaussian splat, a declared scale of 0.56 m per unit, the ground as a heightfield and the overhangs as convex parts), completes the operator's six-waypoint course around the table 6/6 [0.541, 1.000] at 0.60-0.80 m/s with no fall, reaching every waypoint within 0.3 m inside the budget; the contact-site gap between the surface the splat shows and the proxy the feet touch is 0.7 cm chamfer, 2.5 cm at the 95th percentile.",
+ "date": "2026-09-23",
+ "repo_commit": "ffeea89",
+ "argv": [
+  "stage_deployment('go2-c2-deploy', scene='mipnerf-garden', name='go2-c2-garden-loop')",
+  "gate_deployment('go2-c2-garden-loop', trials=6, seed=1000)  # the course gate: a staged scene is judged along its course"
+ ],
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the course gate (deploy/course.py)",
+ "outcome": {
+  "arms": {
+   "go2-c2 on the garden course": {
+    "successes": 6,
+    "trials": 6,
+    "ci95": [
+     0.5407,
+     1.0
+    ],
+    "reached": "6 of 6 waypoints in every trial",
+    "speeds_mps": [
+     0.76,
+     0.8,
+     0.74,
+     0.6,
+     0.76,
+     0.6
+    ]
+   }
+  },
+  "course": {
+   "waypoints": 6,
+   "length_m": 9.514,
+   "reach_m": 0.3
+  },
+  "contact_site_gap": {
+   "chamfer_m": 0.0069,
+   "p95_m": 0.0253,
+   "beyond_2cm_fraction": 0.0954
+  },
+  "scene": {
+   "stills": 185,
+   "gaussians": 6674386,
+   "scale_m_per_unit": 0.56,
+   "chain_minutes": 58
+  }
+ },
+ "inputs": {
+  "policy": "go2-c2-model_1499@99b1655e2cec",
+  "scene": "mipnerf-garden@f9cf12b0f25a",
+  "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f"
+ },
+ "artifacts": {
+  "gate": "docs/artifacts/go2/deploy/go2-c2-garden-loop/gate.json",
+  "scene": "projects/go2-walk/scenes/mipnerf-garden (the WSL box; projects/ is not tracked)",
+  "figure": "docs/figures/viewport-deploy/garden-twin-in-splat-2026-09-26.png"
+ },
+ "protocol": "docs/e2e-research/78-market-gap-2026-09.md §8.9; docs/07-progress-log.md 2026-09-23 late",
+ "caveats": [
+  "Six trials: enough to say the course is walked, not a rate; the interval's lower bound is 0.54.",
+  "The policy never saw the garden in training: this is 'test in a copy of your space', not 'train in it' (the garden-trained walker of scene-walk-garden-2026-09-25 tracks 3/40).",
+  "The scale is declared by the operator from a known object, not measured by the capture; the gap is measured on the visible surface, and the 93 % of the proxy the capture never saw is unmeasured (capture-chain-synthetic-2026-09-23).",
+  "The course gate reports its rate and judges nothing against the plane certificate: another protocol."
+ ]
+}

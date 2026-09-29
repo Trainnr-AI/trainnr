@@ -1,0 +1,31 @@
+arm,group,episodes,successes,trials,rate,ci_low,ci_high
+go2-c2-s1001 in the fitted world,go2-c2-s1001 in the fitted world,,39,40,0.975,0.868,0.999
+"go2-c2-s1001 in the fitted world, 2 ticks late","go2-c2-s1001 in the fitted world, 2 ticks late",,4,40,0.1,0.028,0.237
+"go2-c2-s1001 in the fitted world, 3 ticks late","go2-c2-s1001 in the fitted world, 3 ticks late",,0,40,0.0,0.0,0.088
+go2-c2-s1001 in the declared world,go2-c2-s1001 in the declared world,,38,40,0.95,0.831,0.994
+"go2-c2-s1001 in the declared world, 2 ticks late","go2-c2-s1001 in the declared world, 2 ticks late",,9,40,0.225,0.108,0.385
+"go2-c2-s1001 in the declared world, 3 ticks late","go2-c2-s1001 in the declared world, 3 ticks late",,1,40,0.025,0.001,0.132
+go2-c2-s1002 in the fitted world,go2-c2-s1002 in the fitted world,,39,40,0.975,0.868,0.999
+"go2-c2-s1002 in the fitted world, 2 ticks late","go2-c2-s1002 in the fitted world, 2 ticks late",,0,40,0.0,0.0,0.088
+"go2-c2-s1002 in the fitted world, 3 ticks late","go2-c2-s1002 in the fitted world, 3 ticks late",,0,40,0.0,0.0,0.088
+go2-c2-s1002 in the declared world,go2-c2-s1002 in the declared world,,38,40,0.95,0.831,0.994
+"go2-c2-s1002 in the declared world, 2 ticks late","go2-c2-s1002 in the declared world, 2 ticks late",,8,40,0.2,0.091,0.356
+"go2-c2-s1002 in the declared world, 3 ticks late","go2-c2-s1002 in the declared world, 3 ticks late",,1,40,0.025,0.001,0.132
+go2-c3-fit-s1001 in the declared world,go2-c3-fit-s1001 in the declared world,,39,40,0.975,0.868,0.999
+"go2-c3-fit-s1001 in the declared world, 2 ticks late","go2-c3-fit-s1001 in the declared world, 2 ticks late",,2,40,0.05,0.006,0.169
+"go2-c3-fit-s1001 in the declared world, 3 ticks late","go2-c3-fit-s1001 in the declared world, 3 ticks late",,0,40,0.0,0.0,0.088
+go2-c3-fit-s1001 in the fitted world,go2-c3-fit-s1001 in the fitted world,,39,40,0.975,0.868,0.999
+"go2-c3-fit-s1001 in the fitted world, 2 ticks late","go2-c3-fit-s1001 in the fitted world, 2 ticks late",,16,40,0.4,0.249,0.567
+"go2-c3-fit-s1001 in the fitted world, 3 ticks late","go2-c3-fit-s1001 in the fitted world, 3 ticks late",,3,40,0.075,0.016,0.204
+go2-c3-fit-s1002 in the declared world,go2-c3-fit-s1002 in the declared world,,39,40,0.975,0.868,0.999
+"go2-c3-fit-s1002 in the declared world, 2 ticks late","go2-c3-fit-s1002 in the declared world, 2 ticks late",,0,40,0.0,0.0,0.088
+"go2-c3-fit-s1002 in the declared world, 3 ticks late","go2-c3-fit-s1002 in the declared world, 3 ticks late",,0,40,0.0,0.0,0.088
+go2-c3-fit-s1002 in the fitted world,go2-c3-fit-s1002 in the fitted world,,40,40,1.0,0.912,1.0
+"go2-c3-fit-s1002 in the fitted world, 2 ticks late","go2-c3-fit-s1002 in the fitted world, 2 ticks late",,13,40,0.325,0.186,0.491
+"go2-c3-fit-s1002 in the fitted world, 3 ticks late","go2-c3-fit-s1002 in the fitted world, 3 ticks late",,0,40,0.0,0.0,0.088
+go2-c4-fit-lag in the declared world,go2-c4-fit-lag in the declared world,,26,40,0.65,0.483,0.794
+"go2-c4-fit-lag in the declared world, 2 ticks late","go2-c4-fit-lag in the declared world, 2 ticks late",,17,40,0.425,0.27,0.591
+"go2-c4-fit-lag in the declared world, 3 ticks late","go2-c4-fit-lag in the declared world, 3 ticks late",,6,40,0.15,0.057,0.298
+go2-c4-fit-lag in the fitted world,go2-c4-fit-lag in the fitted world,,22,40,0.55,0.385,0.707
+"go2-c4-fit-lag in the fitted world, 2 ticks late","go2-c4-fit-lag in the fitted world, 2 ticks late",,13,40,0.325,0.186,0.491
+"go2-c4-fit-lag in the fitted world, 3 ticks late","go2-c4-fit-lag in the fitted world, 3 ticks late",,5,40,0.125,0.042,0.268

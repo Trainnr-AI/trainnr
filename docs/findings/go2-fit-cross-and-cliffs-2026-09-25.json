@@ -135,7 +135,11 @@
  ],
  "artifacts": {
   "verdicts": "projects/go2-walk/runs/{go2-c2,go2-c3-fit}/verdict/ (the WSL box; projects/ is not tracked)",
-  "studio": "the Evaluations page shows every cell as a card (screenshots in projects/go2-walk/.index/screenshots/)"
+  "studio": "the Evaluations page shows every cell as a card (screenshots in projects/go2-walk/.index/screenshots/)",
+  "figure.svg": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.svg",
+  "figure.pdf": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.pdf",
+  "figure.png": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.png",
+  "figure.csv": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.csv"
  },
  "protocol": "docs/07-progress-log.md 2026-09-25 evening entries"
 }

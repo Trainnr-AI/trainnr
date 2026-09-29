@@ -1,0 +1,35 @@
+{
+ "schema": "trainnr-evaluation/1",
+ "source": "go2-walk@83d8a180bfda",
+ "policy": "go2-c1-model_1400@85a5b27bc927",
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_floor_mps": 0.1,
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "judged_at": "law DR: declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants"
+ },
+ "identity": {
+  "robot": "go2@5003bf617b5f",
+  "actuator": "unitree-go2-declared-pd@3b68245f8d2a",
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "trained_dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "seed": 42
+ },
+ "funnel": {
+  "survived": 40,
+  "tracked": 40
+ },
+ "successes": 40,
+ "trials": 40,
+ "ci95": [
+  0.9119,
+  1.0
+ ],
+ "median_err_ratio": 0.2496,
+ "robot": "go2@5003bf617b5f",
+ "task": "go2-walk@83d8a180bfda",
+ "run": "go2-c1@c42cf6821703"
+}

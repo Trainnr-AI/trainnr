@@ -1,0 +1,59 @@
+{
+ "id": "go2-c1-first-certified-walker-2026-09-11",
+ "claim": "The first certified Go2 walker: go2-c1, mjlab's velocity task on Unitree's go2.xml with the declared actuator constants, 8,000 PPO iterations over 4,096 worlds, certified at its trained command envelope on 40 seed-matched trials at two checkpoints: model_1400 walks 40/40 [0.912, 1.000] and model_7999 walks 40/40 [0.912, 1.000], median tracking-error ratios 0.25 and 0.20 against the 0.5 bound, no falls.",
+ "date": "2026-09-11",
+ "repo_commit": "8150ce4",
+ "argv": [
+  "train_walk(agent='g3', task='go2-flat', name='go2-c1', seed=42)",
+  "evaluate_walk('runs/go2-c1/model_1400.pt', trials=40, seed=1000, robot='go2')",
+  "evaluate_walk('runs/go2-c1/model_7999.pt', trials=40, seed=1000, robot='go2')"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)",
+ "outcome": {
+  "arms": {
+   "go2-c1 model_1400, declared world": {
+    "successes": 40,
+    "trials": 40,
+    "ci95": [
+     0.9119,
+     1.0
+    ],
+    "median_err_ratio": 0.25,
+    "survived": 40,
+    "tracked": 40
+   },
+   "go2-c1 model_7999, declared world": {
+    "successes": 40,
+    "trials": 40,
+    "ci95": [
+     0.9119,
+     1.0
+    ],
+    "median_err_ratio": 0.2,
+    "survived": 40,
+    "tracked": 40
+   }
+  },
+  "training": {
+   "iterations": 8000,
+   "envs": 4096,
+   "final_reward": 74.0,
+   "seed": 42
+  }
+ },
+ "inputs": {
+  "robot": "go2@5003bf617b5f",
+  "task": "go2-flat"
+ },
+ "artifacts": {
+  "certificates": "docs/artifacts/go2/certificates/go2-c1-model_{1400,7999}-cuda-seed1000-n40-p4bcbca/certificate.json",
+  "records": "docs/artifacts/go2/certificates/go2-c1-records-cuda.jsonl",
+  "run": "projects/go2-walk/runs/go2-c1 (the WSL box; projects/ is not tracked)"
+ },
+ "protocol": "docs/77-the-unitree-loop.md §3; docs/07-progress-log.md 2026-09-10 and 2026-09-11 evening",
+ "caveats": [
+  "Simulation only, on the vendor's declared constants: no robot was measured for this walker.",
+  "The certificate judges the trained command envelope (up to 1 m/s forward), where a 40/40 says the policy is at the ceiling of this protocol, not that it is the best walker.",
+  "One seed; go2-c2 (1,500 iterations, the deployable actor) is the recipe the later studies replicate."
+ ]
+}

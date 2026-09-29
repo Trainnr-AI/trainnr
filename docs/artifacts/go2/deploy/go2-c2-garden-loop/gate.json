@@ -1,0 +1,155 @@
+{
+ "schema": "trainnr-gate/1",
+ "runtime": "mujoco",
+ "deployment": "go2 policy model_1499 on mipnerf-garden",
+ "policy": "go2-c2-model_1499@99b1655e2cec",
+ "protocol": {
+  "trials": 6,
+  "seed": 1000,
+  "criterion": "survived and finished the course within its budget",
+  "err_ratio_bound": 0.5,
+  "err_floor_mps": 0.1,
+  "runtime": "plain MuJoCo + onnxruntime, driven by the manifest alone",
+  "instrument": "mujoco-3.11.0",
+  "commands": "forward along the scene's course, steered to the next waypoint",
+  "course": {
+   "waypoints": 6,
+   "length_m": 9.514,
+   "reach_m": 0.3,
+   "slack": 2.0,
+   "speed_fraction": 0.5
+  },
+  "steer": {
+   "gain": 0.5,
+   "yaw_rate": [
+    -0.5,
+    0.5
+   ],
+   "basis": "the protocol's own: the manifest names none",
+   "law": "yaw rate = clip(gain * wrap(heading to the waypoint - yaw), yaw-rate range); forward = speed * max(cos(that error), 0)"
+  }
+ },
+ "successes": 6,
+ "trials": 6,
+ "ci95": [
+  0.5407,
+  1.0
+ ],
+ "records": [
+  {
+   "steps": 975,
+   "fell": false,
+   "mean_err": 0.27661772647229765,
+   "mean_cmd": 0.6626990287120526,
+   "speed": 0.7606928689875314,
+   "reached": 6,
+   "of": 6,
+   "seconds": 19.5,
+   "budget_s": 25.012811542196943,
+   "err_ratio": 0.4174107920603125,
+   "success": true,
+   "finished": true
+  },
+  {
+   "steps": 926,
+   "fell": false,
+   "mean_err": 0.2837059569178223,
+   "mean_cmd": 0.6906716380083278,
+   "speed": 0.8019209235031648,
+   "reached": 6,
+   "of": 6,
+   "seconds": 18.52,
+   "budget_s": 23.726862357399433,
+   "err_ratio": 0.4107682164797413,
+   "success": true,
+   "finished": true
+  },
+  {
+   "steps": 976,
+   "fell": false,
+   "mean_err": 0.26001789944656856,
+   "mean_cmd": 0.6432257163506306,
+   "speed": 0.7354708986611269,
+   "reached": 6,
+   "of": 6,
+   "seconds": 19.52,
+   "budget_s": 25.870591763883073,
+   "err_ratio": 0.4042405221634973,
+   "success": true,
+   "finished": true
+  },
+  {
+   "steps": 1292,
+   "fell": false,
+   "mean_err": 0.2528500118078374,
+   "mean_cmd": 0.5428595138431149,
+   "speed": 0.6016239712723395,
+   "reached": 6,
+   "of": 6,
+   "seconds": 25.84,
+   "budget_s": 31.626178945694264,
+   "err_ratio": 0.46577430322223373,
+   "success": true,
+   "finished": true
+  },
+  {
+   "steps": 955,
+   "fell": false,
+   "mean_err": 0.2693827116584953,
+   "mean_cmd": 0.665738886126673,
+   "speed": 0.7643795128100264,
+   "reached": 6,
+   "of": 6,
+   "seconds": 19.1,
+   "budget_s": 24.892173396341523,
+   "err_ratio": 0.4046371892526625,
+   "success": true,
+   "finished": true
+  },
+  {
+   "steps": 1284,
+   "fell": false,
+   "mean_err": 0.24379531190984174,
+   "mean_cmd": 0.537658168589029,
+   "speed": 0.5955181400403944,
+   "reached": 6,
+   "of": 6,
+   "seconds": 25.68,
+   "budget_s": 31.95044129501683,
+   "err_ratio": 0.453439241050929,
+   "success": true,
+   "finished": true
+  }
+ ],
+ "judged": "2026-09-23T16:41:21+00:00",
+ "verdict": {
+  "passed": null,
+  "rule": "the cited evaluation judged held twists on the trained plane; a course gate on a captured scene is another protocol, so it reports its rate and judges nothing against it"
+ },
+ "contacts": {
+  "file": "contacts-mujoco.npy",
+  "points": 59469,
+  "site_gap": {
+   "chamfer_m": 0.0069,
+   "p95_m": 0.0253,
+   "beyond_tolerance_fraction": 0.09539,
+   "hidden_fraction": 0.00344,
+   "tolerance_m": 0.02,
+   "visible_samples": 147771,
+   "proxy_samples": 291,
+   "method": "visible gaussian centres (opacity >= 0.5) inside the proxy's extent grown by 0.5 m, to the proxy surface by Open3D ray casting; proxy surface samples to the nearest visible centre anywhere by k-d tree; distances in metres; scoped to the 2000 contact sites' 0.1 m surroundings instead of the proxy's footprint (docs/78 \u00a74.1: the gap where the task touches)",
+   "footprint_fraction": 0.06372,
+   "note": "",
+   "radius_m": 0.1
+  }
+ },
+ "certificate": {
+  "stamp": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f",
+  "successes": 38,
+  "trials": 40,
+  "ci95": [
+   0.8308,
+   0.9939
+  ]
+ }
+}

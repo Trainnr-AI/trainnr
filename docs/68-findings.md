@@ -90,6 +90,59 @@ not this page.
   - A cross record is never the policy's certificate; judged_at and judged_in_fit name the world.
   - n=40 per cell: 'no difference' at the easy rung means the intervals overlap, not that the policies are equal.
 
+## go2-c3-fit-deployment-2026-09-25
+
+**The fit-trained Go2 policy through the deployment stage: exported with its manifest, go2-c3-fit-deploy passes the plain-MuJoCo gate 18/20 [0.683, 0.988] against its 40/40 certificate (floor 0.90 under the gate's 0.10 tolerance), passes pre-flight 7/7, and its attribution under the gate's own cliff rule ranks kp 0.8x first (16/20) and kd 2x second (17/20); latency falls at 2 ticks (2/20, 1 tick 19/20), payload holds to 2 kg (17/20), added joint friction falls at 0.25 N*m (17/20), tilt holds to 8 deg (14/20): the same rungs go2-c2 falls at, at a harness that reads the fit-trained policy's 2-tick margin as 2/20 where the certificate harness reads 18/40.**
+
+- date: 2026-09-25 · commit: `aad9f8c`
+- instrument: `plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the paired per-trial draw (per-trial/2)`
+- command: `export_deployment(run='go2-c3-fit', checkpoint='model_1499.pt', name='go2-c3-fit-deploy') gate_deployment('go2-c3-fit-deploy', trials=20, seed=1000) preflight_deployment('go2-c3-fit-deploy') attribute_deployment('go2-c3-fit-deploy')`
+- protocol: docs/77-the-unitree-loop.md §9-§10 (the gate, the attribution ladder, pre-flight)
+- inputs:
+  - policy: go2-c3-fit-model_1499@83121bfc0e6c
+  - certificate: go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8@790e012f4962
+  - robot: go2@5003bf617b5f
+- outcome:
+  - arms: {'gate, plain MuJoCo (baseline)': {'successes': 18, 'trials': 20, 'ci95': [0.683, 0.9877]}, 'latency 1 tick': {'successes': 19, 'trials': 20, 'ci95': [0.7513, 0.9987]}, 'latency 2 ticks': {'successes': 2, 'trials': 20, 'ci95': [0.0123, 0.317]}, 'kp 0.8x': {'successes': 16, 'trials': 20, 'ci95': [0.5634, 0.9427]}, 'kd 2x': {'successes': 17, 'trials': 20, 'ci95': [0.6211, 0.9679]}, 'payload 2 kg': {'successes': 17, 'trials': 20, 'ci95': [0.6211, 0.9679]}, 'joint friction 0.25 N*m': {'successes': 17, 'trials': 20, 'ci95': [0.6211, 0.9679]}, 'tilt 8 deg': {'successes': 14, 'trials': 20, 'ci95': [0.4572, 0.8811]}}
+  - preflight: {'passed': 7, 'of': 7}
+  - gate_verdict: {'passed': True, 'tolerance': 0.1, 'gate_rate': 0.9, 'certificate_rate': 1.0}
+  - sensitivity: most sensitive to kp 0.8 x, then kd 2 x
+  - cliff_rule: tolerance/1
+- artifacts:
+  - gate: docs/artifacts/go2/deploy/go2-c3-fit-deploy/gate.json
+  - preflight: docs/artifacts/go2/deploy/go2-c3-fit-deploy/preflight.json
+  - attribution: docs/artifacts/go2/deploy/go2-c3-fit-deploy/attribution.json
+  - manifest: docs/artifacts/go2/deploy/go2-c3-fit-deploy/deploy.json
+- caveats:
+  - Simulation only: the gate, the ladder and the pre-flight run in plain MuJoCo; the DDS runtime was not swept for this policy.
+  - 20 trials a rung: the tolerance rule's margin is one to three trials, and 'falls at' names the first rung under the floor, not an effect size.
+  - Two harnesses read the 2-tick delay margin differently (2/20 here at 20 trials in the gate's runtime; 18/40 in the certificate harness in the fitted world): both stand, and the paper states which it quotes.
+
+## go2-c3-fit-certificate-2026-09-25
+
+**go2-c2's recipe trained on a measured joints fit instead of the declared constants: go2-c3-fit (fit@0ad6202797c5, a public log's Go2 identified from IIT's in-air chirp, 31/36 terms randomized over their bootstrap intervals and the 5 unpinned over ±0.5 of the estimate; gains at the declared ±10 %) trains 1,500 PPO iterations in 35 min to a final mean reward of 84.2 and certifies in the fitted world 40/40 [0.912, 1.000], median tracking-error ratio 0.26, against go2-c2's 38/40 [0.831, 0.994] on the declared constants: at the easy rung the fit costs nothing and buys nothing measurable.**
+
+- date: 2026-09-25 · commit: `aad9f8c`
+- instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)`
+- command: `train_walk(agent='g3', robot='go2', name='go2-c3-fit', iterations=1500, envs=4096, fit='fit@0ad6202797c5') evaluate_walk('runs/go2-c3-fit/model_1499.pt', trials=40, seed=1000, robot='go2')`
+- protocol: docs/07-progress-log.md 2026-09-25 afternoon (the fit chain) and evening
+- inputs:
+  - robot: go2@5003bf617b5f
+  - fit: fit@0ad6202797c5
+  - recording: iit-go2-chirp@f7f50914a129
+  - fit_basis: public log
+- outcome:
+  - arms: {'go2-c3-fit model_1499, fitted world': {'successes': 40, 'trials': 40, 'ci95': [0.9119, 1.0], 'median_err_ratio': 0.2552, 'survived': 40, 'tracked': 40}, 'go2-c2 model_1499, declared world (reference)': {'successes': 38, 'trials': 40, 'ci95': [0.8308, 0.9939], 'median_err_ratio': 0.2727, 'survived': 40, 'tracked': 38}}
+  - training: {'iterations': 1500, 'envs': 4096, 'wall_s': 2097, 'final_reward': 84.15, 'best_reward': 85.31}
+- artifacts:
+  - certificate: docs/artifacts/go2/certificates/go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8/certificate.json
+  - records: docs/artifacts/go2/certificates/go2-c3-fit-records-cuda.jsonl
+  - run: projects/go2-walk/runs/go2-c3-fit (the WSL box; projects/ is not tracked)
+- caveats:
+  - Simulation only; the fit is another laboratory's Go2 (IIT's public chirp, torque taken as the PD command), not the operator's robot.
+  - One seed here; two more seeds per recipe are in go2-fit-delay-margin-replicated-2026-09-26.
+  - The two certificates are judged in different worlds (each policy's own); the cross-evaluation record judges each in the other's.
+
 ## gate-attribution-fit-knobs-go2-c2-2026-09-25
 
 **Under the gate's own rule and the paired draw, go2-c2 (trained on the Go2's DECLARED joints: armature 0.01/0.02, no joint damping or friction) still passes with a real Go2's MEASURED joints set in: at the IIT chirp fit's armature, damping and Coulomb friction together it tracks 17/20 [0.621, 0.968], exactly at the gate's floor of 0.85 (certificate 38/40 minus 0.10), so it holds - by no margin. Alone, the fit's friction costs one trial (17/20), damping none (18/20), armature none (19/20). The ladders say where the margin runs out: added joint friction falls at 1 N*m (15/20), inside the fit's own 0.10-1.33 N*m span; armature survives 4x and damping 0.5 N*m*s/rad. First by the rung they fall at: kp 0.8x (15/20) and kd 2x (16/20), then latency 2 ticks (0/20, the only collapse), payload 6 kg, tilt 8 deg, push 2 m/s; friction scaled to 0.2x and encoder noise survive.**
@@ -318,6 +371,33 @@ not this page.
   - A fallen trunk's contact with the heightfield is truncated at 50 prisms on mujoco_warp; it still stops the fall (50 prisms is most of the trunk's footprint at 5 cm), and the print that would say so per step is off.
   - The plane's rate is E0's smoke by the job's clock (27 s wall for the whole job); the scene rates are the trainer's own print over learn() only, so the plane's figure is a lower bound.
 
+## go2-walks-the-captured-garden-2026-09-23
+
+**A plane-trained Go2 policy walks a captured real space under full physics: go2-c2 (38/40 on the trained plane), staged on the Mip-NeRF 360 garden captured through the chain (185 stills, COLMAP poses, a 6,674,386-gaussian splat, a declared scale of 0.56 m per unit, the ground as a heightfield and the overhangs as convex parts), completes the operator's six-waypoint course around the table 6/6 [0.541, 1.000] at 0.60-0.80 m/s with no fall, reaching every waypoint within 0.3 m inside the budget; the contact-site gap between the surface the splat shows and the proxy the feet touch is 0.7 cm chamfer, 2.5 cm at the 95th percentile.**
+
+- date: 2026-09-23 · commit: `ffeea89`
+- instrument: `plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the course gate (deploy/course.py)`
+- command: `stage_deployment('go2-c2-deploy', scene='mipnerf-garden', name='go2-c2-garden-loop') gate_deployment('go2-c2-garden-loop', trials=6, seed=1000)  # the course gate: a staged scene is judged along its course`
+- protocol: docs/e2e-research/78-market-gap-2026-09.md §8.9; docs/07-progress-log.md 2026-09-23 late
+- inputs:
+  - policy: go2-c2-model_1499@99b1655e2cec
+  - scene: mipnerf-garden@f9cf12b0f25a
+  - certificate: go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f
+- outcome:
+  - arms: {'go2-c2 on the garden course': {'successes': 6, 'trials': 6, 'ci95': [0.5407, 1.0], 'reached': '6 of 6 waypoints in every trial', 'speeds_mps': [0.76, 0.8, 0.74, 0.6, 0.76, 0.6]}}
+  - course: {'waypoints': 6, 'length_m': 9.514, 'reach_m': 0.3}
+  - contact_site_gap: {'chamfer_m': 0.0069, 'p95_m': 0.0253, 'beyond_2cm_fraction': 0.0954}
+  - scene: {'stills': 185, 'gaussians': 6674386, 'scale_m_per_unit': 0.56, 'chain_minutes': 58}
+- artifacts:
+  - gate: docs/artifacts/go2/deploy/go2-c2-garden-loop/gate.json
+  - scene: projects/go2-walk/scenes/mipnerf-garden (the WSL box; projects/ is not tracked)
+  - figure: docs/figures/viewport-deploy/garden-twin-in-splat-2026-09-26.png
+- caveats:
+  - Six trials: enough to say the course is walked, not a rate; the interval's lower bound is 0.54.
+  - The policy never saw the garden in training: this is 'test in a copy of your space', not 'train in it' (the garden-trained walker of scene-walk-garden-2026-09-25 tracks 3/40).
+  - The scale is declared by the operator from a known object, not measured by the capture; the gap is measured on the visible surface, and the 93 % of the proxy the capture never saw is unmeasured (capture-chain-synthetic-2026-09-23).
+  - The course gate reports its rate and judges nothing against the plane certificate: another protocol.
+
 ## capture-chain-synthetic-2026-09-23
 
 **The capture chain (ffmpeg, COLMAP 4.2.0 CPU, Brush 0.3.0 on Metal, the floor-plane alignment, the top-surface proxy) measured against a scene whose truth is known: a synthetic phone walk rendered from Neverwhere's hurdle_226_blue_carpet_v3 splat by mujoco_warp 3.13's ray tracer, then captured back. A loose walk (72 frames at 640x480, an ellipse 10 x 6.4 m across the course at 1.5 m) carried the camera through the capture's fringe, where frames hold 0-3 features; COLMAP registered 19 of 72 frames in two models (19 and 20 frames), and 4,000 Brush steps gave 12,937 gaussians (3,216 visible) - yet the poses were already right: camera centres 0.18 cm mean, 0.59 cm max from the truth after a similarity fit, the fitted floor 0.58 deg from level, the scale 0.435 m per COLMAP unit. A tight walk (96 frames, an ellipse 6.8 x 4.4 m at 1.3 m, looking at the course) registered 93 of 96 frames in one model with 16,477 points; 30,000 Brush steps (26.4 min for the whole chain on an M1 Pro) gave 209,571 gaussians, 34,785 visible; the poses within 5 mm (camera centres 0.51 cm mean, 1.35 cm max; floor 0.12 deg; scale 0.770 m per unit); the captured visible centres inside the course footprint (32,641 against the original's 357,903) a median 1.72 cm from the original's (95th percentile 7.98 cm), the original's a median 3.56 cm from the captured (13.07 cm), chamfer 3.95 cm; the first hurdle's top 30.1 cm against the collision mesh's 29.1 cm and the floor at x=0 -1.5 cm against -1.0. Coverage is what the chain did not give: a tenth of the original's density, so the top-surface proxy (25,017 cells seen, 40,199 filled from neighbours, 65,216 kept) has holes - along the course line only 4 of 29 samples meet a captured surface; where both surfaces exist the height error is a median 0.78 cm, 95th percentile 20 cm; against the original collision mesh the captured proxy's samples sit a median 6.9 cm away (95th percentile 35 cm) and the original's a median 4.75 cm (68 cm). The record's own gap on the tight capture, needing no truth, says the same: chamfer 7.8 cm, 95th percentile 23.7 cm, 24 % of the visible surface beyond 2 cm of the proxy, 93 % of the proxy unseen.**
@@ -538,6 +618,29 @@ not this page.
   - The two gates are not a like-for-like pair: they draw their own seeded commands, and the DDS gate clips to what a gamepad stick can reach (1 m/s, 1 rad/s) whatever the manifest's ranges say.
   - n is 20 per gate; the interval is the claim, not the point estimate.
   - Recorded on the WSL box and transcribed here on the Mac from the box's own run and its documented records (docs/77 §7). The gate JSONs that back every number live on the box because projects/ is not tracked; this record was not recomputed on the Mac, and the fields it could not read there say so rather than guess.
+
+## go2-c1-first-certified-walker-2026-09-11
+
+**The first certified Go2 walker: go2-c1, mjlab's velocity task on Unitree's go2.xml with the declared actuator constants, 8,000 PPO iterations over 4,096 worlds, certified at its trained command envelope on 40 seed-matched trials at two checkpoints: model_1400 walks 40/40 [0.912, 1.000] and model_7999 walks 40/40 [0.912, 1.000], median tracking-error ratios 0.25 and 0.20 against the 0.5 bound, no falls.**
+
+- date: 2026-09-11 · commit: `8150ce4`
+- instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)`
+- command: `train_walk(agent='g3', task='go2-flat', name='go2-c1', seed=42) evaluate_walk('runs/go2-c1/model_1400.pt', trials=40, seed=1000, robot='go2') evaluate_walk('runs/go2-c1/model_7999.pt', trials=40, seed=1000, robot='go2')`
+- protocol: docs/77-the-unitree-loop.md §3; docs/07-progress-log.md 2026-09-10 and 2026-09-11 evening
+- inputs:
+  - robot: go2@5003bf617b5f
+  - task: go2-flat
+- outcome:
+  - arms: {'go2-c1 model_1400, declared world': {'successes': 40, 'trials': 40, 'ci95': [0.9119, 1.0], 'median_err_ratio': 0.25, 'survived': 40, 'tracked': 40}, 'go2-c1 model_7999, declared world': {'successes': 40, 'trials': 40, 'ci95': [0.9119, 1.0], 'median_err_ratio': 0.2, 'survived': 40, 'tracked': 40}}
+  - training: {'iterations': 8000, 'envs': 4096, 'final_reward': 74.0, 'seed': 42}
+- artifacts:
+  - certificates: docs/artifacts/go2/certificates/go2-c1-model_{1400,7999}-cuda-seed1000-n40-p4bcbca/certificate.json
+  - records: docs/artifacts/go2/certificates/go2-c1-records-cuda.jsonl
+  - run: projects/go2-walk/runs/go2-c1 (the WSL box; projects/ is not tracked)
+- caveats:
+  - Simulation only, on the vendor's declared constants: no robot was measured for this walker.
+  - The certificate judges the trained command envelope (up to 1 m/s forward), where a 40/40 says the policy is at the ceiling of this protocol, not that it is the best walker.
+  - One seed; go2-c2 (1,500 iterations, the deployable actor) is the recipe the later studies replicate.
 
 ## studio-viewport-two-process-2026-09-09
 

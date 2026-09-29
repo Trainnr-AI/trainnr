@@ -362,7 +362,11 @@
  ],
  "artifacts": {
   "verdicts": "projects/go2-walk/runs/<run>/verdict/ (the WSL box; projects/ is not tracked)",
-  "log": "the batch driver's log (scratchpad, not tracked)"
+  "log": "the batch driver's log (scratchpad, not tracked)",
+  "figure.svg": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.svg",
+  "figure.pdf": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.pdf",
+  "figure.png": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.png",
+  "figure.csv": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.csv"
  },
  "protocol": "docs/07-progress-log.md 2026-09-26 night"
 }

@@ -1,0 +1,110 @@
+{
+ "id": "go2-c3-fit-deployment-2026-09-25",
+ "claim": "The fit-trained Go2 policy through the deployment stage: exported with its manifest, go2-c3-fit-deploy passes the plain-MuJoCo gate 18/20 [0.683, 0.988] against its 40/40 certificate (floor 0.90 under the gate's 0.10 tolerance), passes pre-flight 7/7, and its attribution under the gate's own cliff rule ranks kp 0.8x first (16/20) and kd 2x second (17/20); latency falls at 2 ticks (2/20, 1 tick 19/20), payload holds to 2 kg (17/20), added joint friction falls at 0.25 N*m (17/20), tilt holds to 8 deg (14/20): the same rungs go2-c2 falls at, at a harness that reads the fit-trained policy's 2-tick margin as 2/20 where the certificate harness reads 18/40.",
+ "date": "2026-09-25",
+ "repo_commit": "aad9f8c",
+ "argv": [
+  "export_deployment(run='go2-c3-fit', checkpoint='model_1499.pt', name='go2-c3-fit-deploy')",
+  "gate_deployment('go2-c3-fit-deploy', trials=20, seed=1000)",
+  "preflight_deployment('go2-c3-fit-deploy')",
+  "attribute_deployment('go2-c3-fit-deploy')"
+ ],
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the paired per-trial draw (per-trial/2)",
+ "outcome": {
+  "arms": {
+   "gate, plain MuJoCo (baseline)": {
+    "successes": 18,
+    "trials": 20,
+    "ci95": [
+     0.683,
+     0.9877
+    ]
+   },
+   "latency 1 tick": {
+    "successes": 19,
+    "trials": 20,
+    "ci95": [
+     0.7513,
+     0.9987
+    ]
+   },
+   "latency 2 ticks": {
+    "successes": 2,
+    "trials": 20,
+    "ci95": [
+     0.0123,
+     0.317
+    ]
+   },
+   "kp 0.8x": {
+    "successes": 16,
+    "trials": 20,
+    "ci95": [
+     0.5634,
+     0.9427
+    ]
+   },
+   "kd 2x": {
+    "successes": 17,
+    "trials": 20,
+    "ci95": [
+     0.6211,
+     0.9679
+    ]
+   },
+   "payload 2 kg": {
+    "successes": 17,
+    "trials": 20,
+    "ci95": [
+     0.6211,
+     0.9679
+    ]
+   },
+   "joint friction 0.25 N*m": {
+    "successes": 17,
+    "trials": 20,
+    "ci95": [
+     0.6211,
+     0.9679
+    ]
+   },
+   "tilt 8 deg": {
+    "successes": 14,
+    "trials": 20,
+    "ci95": [
+     0.4572,
+     0.8811
+    ]
+   }
+  },
+  "preflight": {
+   "passed": 7,
+   "of": 7
+  },
+  "gate_verdict": {
+   "passed": true,
+   "tolerance": 0.1,
+   "gate_rate": 0.9,
+   "certificate_rate": 1.0
+  },
+  "sensitivity": "most sensitive to kp 0.8 x, then kd 2 x",
+  "cliff_rule": "tolerance/1"
+ },
+ "inputs": {
+  "policy": "go2-c3-fit-model_1499@83121bfc0e6c",
+  "certificate": "go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8@790e012f4962",
+  "robot": "go2@5003bf617b5f"
+ },
+ "artifacts": {
+  "gate": "docs/artifacts/go2/deploy/go2-c3-fit-deploy/gate.json",
+  "preflight": "docs/artifacts/go2/deploy/go2-c3-fit-deploy/preflight.json",
+  "attribution": "docs/artifacts/go2/deploy/go2-c3-fit-deploy/attribution.json",
+  "manifest": "docs/artifacts/go2/deploy/go2-c3-fit-deploy/deploy.json"
+ },
+ "protocol": "docs/77-the-unitree-loop.md §9-§10 (the gate, the attribution ladder, pre-flight)",
+ "caveats": [
+  "Simulation only: the gate, the ladder and the pre-flight run in plain MuJoCo; the DDS runtime was not swept for this policy.",
+  "20 trials a rung: the tolerance rule's margin is one to three trials, and 'falls at' names the first rung under the floor, not an effect size.",
+  "Two harnesses read the 2-tick delay margin differently (2/20 here at 20 trials in the gate's runtime; 18/40 in the certificate harness in the fitted world): both stand, and the paper states which it quotes."
+ ]
+}

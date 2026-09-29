@@ -1,0 +1,13 @@
+arm,group,episodes,successes,trials,rate,ci_low,ci_high
+"go2-c2 declared world (own, certificate)","go2-c2 declared world (own, certificate)",,38,40,0.95,0.8308,0.9939
+go2-c2 in the fitted world (cross),go2-c2 in the fitted world (cross),,39,40,0.975,0.8684,0.9994
+"go2-c3-fit fitted world (own, certificate)","go2-c3-fit fitted world (own, certificate)",,40,40,1.0,0.9119,1.0
+go2-c3-fit in the declared world (cross),go2-c3-fit in the declared world (cross),,39,40,0.975,0.8684,0.9994
+"go2-c2 declared world, kp x0.8","go2-c2 declared world, kp x0.8",,35,40,0.875,0.732,0.9581
+"go2-c2 fitted world, kp x0.8","go2-c2 fitted world, kp x0.8",,26,40,0.65,0.4832,0.7937
+"go2-c3-fit declared world, kp x0.8","go2-c3-fit declared world, kp x0.8",,37,40,0.925,0.7961,0.9843
+"go2-c3-fit fitted world, kp x0.8","go2-c3-fit fitted world, kp x0.8",,33,40,0.825,0.6722,0.9266
+"go2-c2 declared world, delay 2 ticks","go2-c2 declared world, delay 2 ticks",,5,40,0.125,0.0419,0.268
+"go2-c2 fitted world, delay 2 ticks","go2-c2 fitted world, delay 2 ticks",,0,40,0.0,0.0,0.0881
+"go2-c3-fit declared world, delay 2 ticks","go2-c3-fit declared world, delay 2 ticks",,1,40,0.025,0.0006,0.1316
+"go2-c3-fit fitted world, delay 2 ticks","go2-c3-fit fitted world, delay 2 ticks",,18,40,0.45,0.2926,0.6151

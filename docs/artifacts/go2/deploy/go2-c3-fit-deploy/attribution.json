@@ -1,0 +1,893 @@
+{
+ "schema": "trainnr-attribution/1",
+ "deployment": "go2 policy model_1499",
+ "policy": "go2-c3-fit-model_1499@83121bfc0e6c",
+ "runtime": "mujoco",
+ "base_gate": {
+  "successes": 18,
+  "trials": 20,
+  "ci95": [
+   0.683,
+   0.9877
+  ],
+  "judged": "2026-09-25T12:40:04+00:00"
+ },
+ "certificate": {
+  "stamp": "go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8@790e012f4962",
+  "successes": 40,
+  "trials": 40,
+  "ci95": [
+   0.9119,
+   1.0
+  ],
+  "lower": 0.9119,
+  "floor": 0.9
+ },
+ "protocol": {
+  "trials": 20,
+  "seed": 1000,
+  "draw": "per-trial/2",
+  "tolerance": 0.1,
+  "cliff_rule": "tolerance/1",
+  "rule": "a rung is past the cliff when its tracked rate falls more than the gate's tolerance under the certificate's rate - the rule the gate passes a deployment by; the ladder stops there",
+  "workers": 15
+ },
+ "baseline": {
+  "level": 1.0,
+  "successes": 18,
+  "trials": 20,
+  "mean_err_ratio": 0.1786,
+  "replay": {
+   "trial": 0,
+   "outcome": "survived, did not track"
+  },
+  "ci95": [
+   0.683,
+   0.9877
+  ],
+  "rate": 0.9,
+  "within_tolerance": true,
+  "above_lower_bound": false
+ },
+ "knobs": [
+  {
+   "name": "latency",
+   "unit": "ticks",
+   "describe": "actions applied this many control ticks late",
+   "source": "the walk's own budget finding (walk-latency-budget-2026-09-05); rungs declared (ours)",
+   "ladder": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rungs": [
+    {
+     "level": 1.0,
+     "successes": 19,
+     "trials": 20,
+     "mean_err_ratio": 0.1908,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "rate": 0.95,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 2.0,
+     "successes": 2,
+     "trials": 20,
+     "mean_err_ratio": 0.6917,
+     "replay": {
+      "trial": 1,
+      "outcome": "fell"
+     },
+     "ci95": [
+      0.0123,
+      0.317
+     ],
+     "rate": 0.1,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 2.0,
+    "rung": 2
+   }
+  },
+  {
+   "name": "friction",
+   "unit": "x",
+   "describe": "every geom's sliding friction scaled",
+   "source": "unitree_rl_mjlab velocity_env_cfg.py DR table (friction (0.3, 1.6), base CoM, pushes 5-6 s), read 2026-09-24; rungs below its floor declared (ours)",
+   "ladder": [
+    0.8,
+    0.6,
+    0.4,
+    0.3,
+    0.2
+   ],
+   "rungs": [
+    {
+     "level": 0.8,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.1696,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.6,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.1579,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.4,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.157,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.3,
+     "successes": 19,
+     "trials": 20,
+     "mean_err_ratio": 0.2035,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "rate": 0.95,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.2,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.309,
+     "replay": {
+      "trial": 15,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": null
+  },
+  {
+   "name": "payload",
+   "unit": "kg",
+   "describe": "mass added to the base, inertia in proportion",
+   "source": "declared (ours): bracketing the field's base-mass randomization, carried as a payload",
+   "ladder": [
+    1,
+    2,
+    4,
+    6,
+    8
+   ],
+   "rungs": [
+    {
+     "level": 1.0,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2014,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 2.0,
+     "successes": 17,
+     "trials": 20,
+     "mean_err_ratio": 0.2274,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.6211,
+      0.9679
+     ],
+     "rate": 0.85,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 2.0,
+    "rung": 2
+   }
+  },
+  {
+   "name": "kp",
+   "unit": "x",
+   "describe": "the servos' stiffness scaled",
+   "source": "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; docs/e2e-research/78 \u00a71); rungs declared (ours)",
+   "ladder": [
+    0.8,
+    0.6,
+    0.4,
+    0.3
+   ],
+   "rungs": [
+    {
+     "level": 0.8,
+     "successes": 16,
+     "trials": 20,
+     "mean_err_ratio": 0.3735,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.5634,
+      0.9427
+     ],
+     "rate": 0.8,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 0.8,
+    "rung": 1
+   }
+  },
+  {
+   "name": "kd",
+   "unit": "x",
+   "describe": "the servos' damping scaled",
+   "source": "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; docs/e2e-research/78 \u00a71); rungs declared (ours)",
+   "ladder": [
+    2,
+    4,
+    8,
+    16
+   ],
+   "rungs": [
+    {
+     "level": 2.0,
+     "successes": 17,
+     "trials": 20,
+     "mean_err_ratio": 0.4274,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.6211,
+      0.9679
+     ],
+     "rate": 0.85,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 2.0,
+    "rung": 1
+   }
+  },
+  {
+   "name": "joint_pos_noise",
+   "unit": "rad",
+   "describe": "gaussian noise on the joint position term",
+   "source": "the training's own observation noise (unitree_rl_mjlab velocity_env_cfg.py joint_pos Unoise \u00b10.01, read 2026-09-24); rungs past it declared (ours)",
+   "ladder": [
+    0.01,
+    0.02,
+    0.05,
+    0.1
+   ],
+   "rungs": [
+    {
+     "level": 0.01,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.1799,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.02,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.1838,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.05,
+     "successes": 17,
+     "trials": 20,
+     "mean_err_ratio": 0.2164,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.6211,
+      0.9679
+     ],
+     "rate": 0.85,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 0.05,
+    "rung": 3
+   }
+  },
+  {
+   "name": "tilt",
+   "unit": "deg",
+   "describe": "gravity pitched: a slope believed flat",
+   "source": "declared (ours): the slopes a plane-trained policy meets outdoors",
+   "ladder": [
+    3,
+    5,
+    8,
+    12,
+    15
+   ],
+   "rungs": [
+    {
+     "level": 3.0,
+     "successes": 19,
+     "trials": 20,
+     "mean_err_ratio": 0.2264,
+     "replay": {
+      "trial": 15,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.7513,
+      0.9987
+     ],
+     "rate": 0.95,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 5.0,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.3286,
+     "replay": {
+      "trial": 15,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 8.0,
+     "successes": 14,
+     "trials": 20,
+     "mean_err_ratio": 0.5299,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.4572,
+      0.8811
+     ],
+     "rate": 0.7,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 8.0,
+    "rung": 3
+   }
+  },
+  {
+   "name": "push",
+   "unit": "m/s",
+   "describe": "the base shoved every 4 s",
+   "source": "unitree_rl_mjlab velocity_env_cfg.py DR table (friction (0.3, 1.6), base CoM, pushes 5-6 s), read 2026-09-24; speeds declared (ours)",
+   "ladder": [
+    0.5,
+    1.0,
+    1.5,
+    2.0
+   ],
+   "rungs": [
+    {
+     "level": 0.5,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2056,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 1.0,
+     "successes": 17,
+     "trials": 20,
+     "mean_err_ratio": 0.254,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.6211,
+      0.9679
+     ],
+     "rate": 0.85,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 1.0,
+    "rung": 2
+   }
+  },
+  {
+   "name": "armature",
+   "unit": "x",
+   "describe": "every joint's armature scaled",
+   "source": "the legged-joints fit of a real Go2's in-air chirp (IIT, public log; finding go2-legged-fit-public-logs-2026-09-24): armature 0.019-0.039 kg*m^2, about 2x the declared 0.01/0.02; rungs declared (ours) around it",
+   "ladder": [
+    1.5,
+    2.0,
+    3.0,
+    4.0
+   ],
+   "rungs": [
+    {
+     "level": 1.5,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.1977,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 2.0,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2193,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 3.0,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2633,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 4.0,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.3037,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": null
+  },
+  {
+   "name": "joint_damping",
+   "unit": "N*m*s/rad",
+   "describe": "viscous damping added on every joint",
+   "source": "the legged-joints fit of a real Go2's in-air chirp (IIT, public log; finding go2-legged-fit-public-logs-2026-09-24): damping 0.15-0.26 N*m*s/rad where the declared model has none; rungs declared (ours) around it",
+   "ladder": [
+    0.1,
+    0.2,
+    0.3,
+    0.5
+   ],
+   "rungs": [
+    {
+     "level": 0.1,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2087,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.2,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.2364,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.3,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.263,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    },
+    {
+     "level": 0.5,
+     "successes": 18,
+     "trials": 20,
+     "mean_err_ratio": 0.3118,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.683,
+      0.9877
+     ],
+     "rate": 0.9,
+     "within_tolerance": true,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": null
+  },
+  {
+   "name": "joint_friction",
+   "unit": "N*m",
+   "describe": "Coulomb friction added on every joint",
+   "source": "the legged-joints fit of a real Go2's in-air chirp (IIT, public log; finding go2-legged-fit-public-logs-2026-09-24): frictionloss 0.10-1.33 N*m where the declared model has none; rungs declared (ours) around it",
+   "ladder": [
+    0.25,
+    0.5,
+    1.0,
+    1.5
+   ],
+   "rungs": [
+    {
+     "level": 0.25,
+     "successes": 17,
+     "trials": 20,
+     "mean_err_ratio": 0.2334,
+     "replay": {
+      "trial": 0,
+      "outcome": "survived, did not track"
+     },
+     "ci95": [
+      0.6211,
+      0.9679
+     ],
+     "rate": 0.85,
+     "within_tolerance": false,
+     "above_lower_bound": false
+    }
+   ],
+   "cliff": {
+    "level": 0.25,
+    "rung": 1
+   }
+  }
+ ],
+ "ranking": [
+  {
+   "name": "kp",
+   "cliff": 0.8
+  },
+  {
+   "name": "kd",
+   "cliff": 2.0
+  },
+  {
+   "name": "joint_friction",
+   "cliff": 0.25
+  },
+  {
+   "name": "latency",
+   "cliff": 2.0
+  },
+  {
+   "name": "payload",
+   "cliff": 2.0
+  },
+  {
+   "name": "push",
+   "cliff": 1.0
+  },
+  {
+   "name": "tilt",
+   "cliff": 8.0
+  },
+  {
+   "name": "joint_pos_noise",
+   "cliff": 0.05
+  },
+  {
+   "name": "friction",
+   "cliff": null
+  },
+  {
+   "name": "armature",
+   "cliff": null
+  },
+  {
+   "name": "joint_damping",
+   "cliff": null
+  }
+ ],
+ "sensitivity": "most sensitive to kp 0.8 x, then kd 2 x",
+ "judged": "2026-09-25T12:40:56+00:00",
+ "fit": {
+  "source": "iit-go2-chirp@f7f50914a129.json",
+  "basis": "public log",
+  "label": "at the fit",
+  "spans": {
+   "armature": [
+    0.01919827373451518,
+    0.03879811929152818
+   ],
+   "damping": [
+    0.15128803771364824,
+    0.26445676679362995
+   ],
+   "frictionloss": [
+    0.1027250034639242,
+    1.3262429074785795
+   ]
+  },
+  "rungs": [
+   {
+    "name": "armature",
+    "terms": [
+     "armature"
+    ],
+    "past_cliff": false,
+    "level": 1.0,
+    "successes": 18,
+    "trials": 20,
+    "mean_err_ratio": 0.1786,
+    "replay": {
+     "trial": 0,
+     "outcome": "survived, did not track"
+    },
+    "ci95": [
+     0.683,
+     0.9877
+    ],
+    "rate": 0.9,
+    "within_tolerance": true,
+    "above_lower_bound": false
+   },
+   {
+    "name": "joint_damping",
+    "terms": [
+     "damping"
+    ],
+    "past_cliff": false,
+    "level": 1.0,
+    "successes": 18,
+    "trials": 20,
+    "mean_err_ratio": 0.1786,
+    "replay": {
+     "trial": 0,
+     "outcome": "survived, did not track"
+    },
+    "ci95": [
+     0.683,
+     0.9877
+    ],
+    "rate": 0.9,
+    "within_tolerance": true,
+    "above_lower_bound": false
+   },
+   {
+    "name": "joint_friction",
+    "terms": [
+     "frictionloss"
+    ],
+    "past_cliff": false,
+    "level": 1.0,
+    "successes": 18,
+    "trials": 20,
+    "mean_err_ratio": 0.1786,
+    "replay": {
+     "trial": 0,
+     "outcome": "survived, did not track"
+    },
+    "ci95": [
+     0.683,
+     0.9877
+    ],
+    "rate": 0.9,
+    "within_tolerance": true,
+    "above_lower_bound": false
+   },
+   {
+    "name": "fit",
+    "terms": [
+     "armature",
+     "damping",
+     "frictionloss"
+    ],
+    "past_cliff": false,
+    "level": 1.0,
+    "successes": 18,
+    "trials": 20,
+    "mean_err_ratio": 0.1786,
+    "replay": {
+     "trial": 0,
+     "outcome": "survived, did not track"
+    },
+    "ci95": [
+     0.683,
+     0.9877
+    ],
+    "rate": 0.9,
+    "within_tolerance": true,
+    "above_lower_bound": false
+   }
+  ]
+ },
+ "replay": {
+  "poses": ".viewer/attribution-poses.npz",
+  "segments": 32
+ },
+ "still": {
+  "file": "attribution-cliff.png",
+  "knob": "kp",
+  "level": 0.8,
+  "trial": 0,
+  "tick": 1000,
+  "fell": false
+ }
+}

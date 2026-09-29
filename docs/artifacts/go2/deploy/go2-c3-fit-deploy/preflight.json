@@ -1,0 +1,210 @@
+{
+ "schema": "trainnr-preflight/1",
+ "deployment": "go2 policy model_1499",
+ "policy": "go2-c3-fit-model_1499@83121bfc0e6c",
+ "basis": "simulation",
+ "stand_in": false,
+ "state_from": "plain MuJoCo (a simulation)",
+ "checks": [
+  {
+   "name": "policy widths",
+   "passed": true,
+   "measured": "policy takes 47, gives 12",
+   "limit": "manifest's observations sum to 47, 12 joints",
+   "detail": ""
+  },
+  {
+   "name": "joint order",
+   "passed": true,
+   "measured": "12/12 actions land on their joint",
+   "limit": "every action on the actuator of its own joint",
+   "detail": ""
+  },
+  {
+   "name": "gains",
+   "passed": true,
+   "measured": "0 disagreements (scene)",
+   "limit": "equal to the trained kp and kd within 1e-06",
+   "detail": ""
+  },
+  {
+   "name": "targets within the joints' ranges",
+   "passed": true,
+   "measured": "worst 0.000 rad past range (-) over 4000 ticks",
+   "limit": "at most 0.35 rad past a joint's range",
+   "detail": "dry rollout: 4 held twists (the mujoco gate's first 4, its seed 1000), 3 tracked"
+  },
+  {
+   "name": "torques within the actuators' ranges",
+   "passed": true,
+   "measured": "peak demand 0.59x the force range (RL_calf_joint); at the range 0.0% of ticks",
+   "limit": "peak at most 2x, at the range at most 25% of ticks",
+   "detail": ""
+  },
+  {
+   "name": "control rate",
+   "passed": true,
+   "measured": "observe + infer p99 0.24 ms per tick",
+   "limit": "within 50% of the 20 ms period",
+   "detail": "measured on this machine; the robot's computer is measured on the day"
+  },
+  {
+   "name": "robot state before handover",
+   "passed": true,
+   "measured": "tilt 0.000 rad, joints 0.000 rad/s, gyro 0.000 rad/s",
+   "limit": "the SDK's watchdogs untripped; every joint under 0.5 rad/s",
+   "detail": "read from plain MuJoCo (a simulation); not reported there: winding_temperature, casing_temperature, battery"
+  }
+ ],
+ "passed": true,
+ "verdict": "passed 7/7",
+ "margins": {
+  "target_past_range_rad": 0.35,
+  "torque_demand_ratio": 2.0,
+  "saturated_share": 0.25,
+  "gain_rel_tol": 1e-06,
+  "compute_share": 0.5,
+  "at_rest_rad_s": 0.5,
+  "dry_trials": 4
+ },
+ "margins_source": "declared (ours): pipeline/rq_pipeline/deploy/preflight.py Margins",
+ "transitions": {
+  "ramp_in_s": 1.0,
+  "soft_stop_s": 1.0,
+  "damping_kd": 3.0
+ },
+ "transitions_source": "windows declared (ours); damping_kd is Unitree's Passive state's kd (unitree_rl_mjlab deploy/robots/go2/config/config.yaml, Passive)",
+ "dry_rollout": {
+  "seed": 1000,
+  "twists": "the mujoco gate's first 4, its seed 1000",
+  "draw": "per-trial/2"
+ },
+ "watchdogs": {
+  "source": "unitree_sdk2 @ 9754cd1: include/unitree/robot/h2/common/terminations.hpp (the same in g1/), the H2/G1 defaults, read 2026-09-24; shipped as examples that print, and no deploy repo wires them",
+  "limits": [
+   {
+    "name": "tilt",
+    "limit": 1.0,
+    "unit": "rad",
+    "sdk_function": "bad_orientation",
+    "describe": "the body's down from gravity",
+    "reading": "tilt_rad",
+    "trips_below": false,
+    "enforced_by": null
+   },
+   {
+    "name": "joint_velocity",
+    "limit": 10.0,
+    "unit": "rad/s",
+    "sdk_function": "joint_vel_out_of_limit",
+    "describe": "any joint",
+    "reading": "max_joint_velocity",
+    "trips_below": false,
+    "enforced_by": null
+   },
+   {
+    "name": "angular_velocity",
+    "limit": 6.0,
+    "unit": "rad/s",
+    "sdk_function": "ang_vel_out_of_limit",
+    "describe": "the gyro",
+    "reading": "max_angular_velocity",
+    "trips_below": false,
+    "enforced_by": null
+   },
+   {
+    "name": "winding_temperature",
+    "limit": 120.0,
+    "unit": "degC",
+    "sdk_function": "motor_winding_overheat",
+    "describe": "any motor's winding",
+    "reading": "max_winding_temperature",
+    "trips_below": false,
+    "enforced_by": null
+   },
+   {
+    "name": "casing_temperature",
+    "limit": 85.0,
+    "unit": "degC",
+    "sdk_function": "motor_casing_overheat",
+    "describe": "any motor",
+    "reading": "max_casing_temperature",
+    "trips_below": false,
+    "enforced_by": null
+   },
+   {
+    "name": "battery",
+    "limit": 20.0,
+    "unit": "%",
+    "sdk_function": "low_battery",
+    "describe": "state of charge (below trips)",
+    "reading": "battery_percent",
+    "trips_below": true,
+    "enforced_by": null
+   },
+   {
+    "name": "link_lost",
+    "limit": 1000.0,
+    "unit": "ms",
+    "sdk_function": "lost_connection",
+    "describe": "no LowState for",
+    "reading": null,
+    "trips_below": false,
+    "enforced_by": "enforced by the read timeout (dds_runtime.STATE_TIMEOUT_MS)"
+   }
+  ]
+ },
+ "judged": "2026-09-25T12:40:10+00:00",
+ "ramp_in": {
+  "window_s": 1.0,
+  "from": "lying (Unitree's FixStand first key pose), in damping",
+  "with ramp": {
+   "max_target_step_rad": 0.0572,
+   "first_tick_target_step_rad": 0.0187,
+   "max_force_step_nm": 1.2401,
+   "stood": true,
+   "height_m": 0.2911
+  },
+  "without ramp": {
+   "max_target_step_rad": 0.9352,
+   "first_tick_target_step_rad": 0.9352,
+   "max_force_step_nm": 33.1701,
+   "stood": true,
+   "height_m": 0.2907
+  }
+ },
+ "soft_stop": {
+  "window_s": 1.0,
+  "ends_in": "kp 0, kd 3 (Unitree's Passive)",
+  "while": "walking at 0.5 m/s, stopped at 2 s, watched 2 s",
+  "soft": {
+   "describe": "gains blended to damping over the window, pose held",
+   "max_force_step_nm": 11.6243,
+   "seconds_to_damping": 1.0,
+   "max_body_fall_mps": 0.2854,
+   "max_joint_speed_rad_s": 1.9725,
+   "end_height_m": 0.1029
+  },
+  "damping at once": {
+   "describe": "kp to 0 and kd to damping in one tick",
+   "max_force_step_nm": 11.6859,
+   "seconds_to_damping": 0.02,
+   "max_body_fall_mps": 0.2439,
+   "max_joint_speed_rad_s": 1.7843,
+   "end_height_m": 0.0911
+  },
+  "zeroed": {
+   "describe": "kp and kd to 0 in one tick: the limp motor unitree_rl_lab #147 reports",
+   "max_force_step_nm": 12.6326,
+   "seconds_to_damping": 0.02,
+   "max_body_fall_mps": 1.1353,
+   "max_joint_speed_rad_s": 7.7966,
+   "end_height_m": 0.0769
+  }
+ },
+ "still": {
+  "file": "preflight-handover.png",
+  "tick": 50
+ },
+ "poses": ".viewer/preflight-poses.npz"
+}

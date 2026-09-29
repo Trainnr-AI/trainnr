@@ -1,0 +1,307 @@
+{
+ "schema": "trainnr-gate/1",
+ "runtime": "mujoco",
+ "deployment": "go2 policy model_1499",
+ "policy": "go2-c3-fit-model_1499@83121bfc0e6c",
+ "protocol": {
+  "trials": 20,
+  "seed": 1000,
+  "draw": "per-trial/2",
+  "criterion": "survived and err_ratio<0.5",
+  "err_ratio_bound": 0.5,
+  "err_floor_mps": 0.1,
+  "runtime": "plain MuJoCo + onnxruntime, driven by the manifest alone",
+  "instrument": "mujoco-3.11.0",
+  "commands": "held per episode, drawn in the manifest's twist ranges"
+ },
+ "successes": 18,
+ "trials": 20,
+ "ci95": [
+  0.683,
+  0.9877
+ ],
+ "records": [
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.1747905484749044,
+   "mean_cmd": 0.21204225030331905,
+   "command": [
+    0.042771475950125426,
+    0.20768369401265918,
+    -0.02905820267774606
+   ],
+   "err_ratio": 0.8243194373992571,
+   "success": false
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.07087791130568838,
+   "mean_cmd": 0.9255370112172174,
+   "command": [
+    0.3412361703718976,
+    -0.8603351876814271,
+    -0.1754841987914909
+   ],
+   "err_ratio": 0.07658031007584828,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.1130663651986409,
+   "mean_cmd": 0.8260961538363661,
+   "command": [
+    0.02955218994610065,
+    0.8255673948579878,
+    -0.16632306388367857
+   ],
+   "err_ratio": 0.13686828666803982,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.06286317756247344,
+   "mean_cmd": 0.8733011246559886,
+   "command": [
+    0.2975855381183461,
+    -0.821034531446885,
+    -0.44390262157053917
+   ],
+   "err_ratio": 0.07198339242633696,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.09185298037063258,
+   "mean_cmd": 1.007070017480005,
+   "command": [
+    -0.9334951899078829,
+    0.3778581089853488,
+    0.036638245636737454
+   ],
+   "err_ratio": 0.09120813724598478,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.08815246440900196,
+   "mean_cmd": 0.4281432891107794,
+   "command": [
+    -0.10006425351905501,
+    -0.4162857446253416,
+    -0.3335008726195883
+   ],
+   "err_ratio": 0.2058947708653517,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.06373030029279095,
+   "mean_cmd": 0.7224413718614315,
+   "command": [
+    -0.487178146525749,
+    0.5334594542462914,
+    -0.14822014229181601
+   ],
+   "err_ratio": 0.088215186415175,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.07952078433134403,
+   "mean_cmd": 0.9292196984645529,
+   "command": [
+    -0.5706963848893358,
+    0.733317723970206,
+    0.4538599625094464
+   ],
+   "err_ratio": 0.08557802257393442,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.10033022678577902,
+   "mean_cmd": 1.250510625412289,
+   "command": [
+    -0.8203267249192205,
+    0.9438436780803969,
+    0.23394699798081597
+   ],
+   "err_ratio": 0.08023140687245299,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.13951587626613435,
+   "mean_cmd": 1.2591862175379636,
+   "command": [
+    0.79046993026699,
+    0.9801567322532247,
+    0.3424599434944755
+   ],
+   "err_ratio": 0.11079844610984081,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.06393452412709061,
+   "mean_cmd": 0.868064131117849,
+   "command": [
+    0.8133538397186746,
+    0.3032999623281445,
+    0.29826534193354304
+   ],
+   "err_ratio": 0.07365184418432193,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.0827286851029596,
+   "mean_cmd": 0.998064880294556,
+   "command": [
+    -0.905289775836531,
+    0.4202189037194908,
+    -0.09512721311632732
+   ],
+   "err_ratio": 0.082889085405494,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.07482082272347855,
+   "mean_cmd": 0.4588241016544422,
+   "command": [
+    0.08721564635928725,
+    -0.45045864104169997,
+    -0.3162941270016304
+   ],
+   "err_ratio": 0.1630708205032981,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.06205793111321961,
+   "mean_cmd": 0.5175933763243417,
+   "command": [
+    -0.28767236979969946,
+    -0.4302877070852298,
+    -0.22059830009440273
+   ],
+   "err_ratio": 0.11989707355592587,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.11004238240595007,
+   "mean_cmd": 1.1757987281102937,
+   "command": [
+    0.8802742299855766,
+    -0.7794997941302286,
+    -0.19857873394741432
+   ],
+   "err_ratio": 0.09358947222438885,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.05651323177816809,
+   "mean_cmd": 0.08014974659075308,
+   "command": [
+    0.08013245793914181,
+    0.0016646510726057162,
+    0.28542274965081815
+   ],
+   "err_ratio": 0.5651323177816808,
+   "success": false
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.07916046926452025,
+   "mean_cmd": 1.0245842741309177,
+   "command": [
+    -0.7872532972742301,
+    0.6557478026857946,
+    -0.3674383963222636
+   ],
+   "err_ratio": 0.0772610621333872,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.08450465383291737,
+   "mean_cmd": 1.044476745423934,
+   "command": [
+    -0.9473769263754348,
+    -0.4397824815778746,
+    0.3442683694561728
+   ],
+   "err_ratio": 0.08090620897320071,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.10955036446599058,
+   "mean_cmd": 0.7570227263277872,
+   "command": [
+    -0.1696613159112177,
+    0.7377658477186477,
+    -0.451262196030078
+   ],
+   "err_ratio": 0.14471212112403056,
+   "success": true
+  },
+  {
+   "steps": 1000,
+   "fell": false,
+   "mean_err": 0.11616715446464568,
+   "mean_cmd": 0.29043059979176766,
+   "command": [
+    0.16770750416004998,
+    -0.23711627178204298,
+    0.1816566856253965
+   ],
+   "err_ratio": 0.3999824899577901,
+   "success": true
+  }
+ ],
+ "judged": "2026-09-25T12:40:04+00:00",
+ "verdict": {
+  "passed": true,
+  "tolerance": 0.1,
+  "rule": "the gate's success rate is at least the evaluation's minus the tolerance",
+  "gate_rate": 0.9,
+  "certificate_rate": 1.0
+ },
+ "contacts": {
+  "file": "contacts-mujoco.npy",
+  "points": 43322
+ },
+ "poses": ".viewer/gate-mujoco-poses.npz",
+ "certificate": {
+  "stamp": "go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8@790e012f4962",
+  "successes": 40,
+  "trials": 40,
+  "ci95": [
+   0.9119,
+   1.0
+  ]
+ }
+}

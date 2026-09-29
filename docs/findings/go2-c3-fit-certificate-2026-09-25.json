@@ -1,0 +1,61 @@
+{
+ "id": "go2-c3-fit-certificate-2026-09-25",
+ "claim": "go2-c2's recipe trained on a measured joints fit instead of the declared constants: go2-c3-fit (fit@0ad6202797c5, a public log's Go2 identified from IIT's in-air chirp, 31/36 terms randomized over their bootstrap intervals and the 5 unpinned over ±0.5 of the estimate; gains at the declared ±10 %) trains 1,500 PPO iterations in 35 min to a final mean reward of 84.2 and certifies in the fitted world 40/40 [0.912, 1.000], median tracking-error ratio 0.26, against go2-c2's 38/40 [0.831, 0.994] on the declared constants: at the easy rung the fit costs nothing and buys nothing measurable.",
+ "date": "2026-09-25",
+ "repo_commit": "aad9f8c",
+ "argv": [
+  "train_walk(agent='g3', robot='go2', name='go2-c3-fit', iterations=1500, envs=4096, fit='fit@0ad6202797c5')",
+  "evaluate_walk('runs/go2-c3-fit/model_1499.pt', trials=40, seed=1000, robot='go2')"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)",
+ "outcome": {
+  "arms": {
+   "go2-c3-fit model_1499, fitted world": {
+    "successes": 40,
+    "trials": 40,
+    "ci95": [
+     0.9119,
+     1.0
+    ],
+    "median_err_ratio": 0.2552,
+    "survived": 40,
+    "tracked": 40
+   },
+   "go2-c2 model_1499, declared world (reference)": {
+    "successes": 38,
+    "trials": 40,
+    "ci95": [
+     0.8308,
+     0.9939
+    ],
+    "median_err_ratio": 0.2727,
+    "survived": 40,
+    "tracked": 38
+   }
+  },
+  "training": {
+   "iterations": 1500,
+   "envs": 4096,
+   "wall_s": 2097,
+   "final_reward": 84.15,
+   "best_reward": 85.31
+  }
+ },
+ "inputs": {
+  "robot": "go2@5003bf617b5f",
+  "fit": "fit@0ad6202797c5",
+  "recording": "iit-go2-chirp@f7f50914a129",
+  "fit_basis": "public log"
+ },
+ "artifacts": {
+  "certificate": "docs/artifacts/go2/certificates/go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8/certificate.json",
+  "records": "docs/artifacts/go2/certificates/go2-c3-fit-records-cuda.jsonl",
+  "run": "projects/go2-walk/runs/go2-c3-fit (the WSL box; projects/ is not tracked)"
+ },
+ "protocol": "docs/07-progress-log.md 2026-09-25 afternoon (the fit chain) and evening",
+ "caveats": [
+  "Simulation only; the fit is another laboratory's Go2 (IIT's public chirp, torque taken as the PD command), not the operator's robot.",
+  "One seed here; two more seeds per recipe are in go2-fit-delay-margin-replicated-2026-09-26.",
+  "The two certificates are judged in different worlds (each policy's own); the cross-evaluation record judges each in the other's."
+ ]
+}
