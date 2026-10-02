@@ -444,6 +444,9 @@ impl eframe::App for StudioShell {
                     });
                 });
                 self.shell.overlays(ui.ctx());
+                if chrome::custom_chrome() {
+                    chrome::window_border(ui.ctx(), theme::palette(ui).edge);
+                }
                 self.report(ui);
                 return;
             }
@@ -483,6 +486,9 @@ impl eframe::App for StudioShell {
             egui::CentralPanel::default().show(ui, |ui| self.shell.page(ui));
         }
         self.shell.overlays(ui.ctx());
+        if chrome::custom_chrome() {
+            chrome::window_border(ui.ctx(), theme::palette(ui).edge);
+        }
         self.report(ui);
     }
 }

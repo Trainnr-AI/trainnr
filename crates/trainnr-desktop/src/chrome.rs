@@ -156,3 +156,20 @@ pub fn keep_on_screen(ctx: &egui::Context, wslg: bool) {
         ctx.send_viewport_cmd(ViewportCommand::OuterPosition(wanted));
     }
 }
+
+/// The window's edge: one line around the whole content, on top of
+/// everything, where the app draws its own chrome and the system puts no
+/// frame (2026-10-03, "no app borders on the left right").
+pub fn window_border(ctx: &egui::Context, color: egui::Color32) {
+    let rect = ctx.content_rect();
+    ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("window-border"),
+    ))
+    .rect_stroke(
+        rect,
+        0.0,
+        egui::Stroke::new(1.0, color),
+        egui::StrokeKind::Inside,
+    );
+}
