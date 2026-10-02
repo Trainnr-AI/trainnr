@@ -33,10 +33,14 @@ jobs:
     # honest.
     env:
       CARGO_TERM_COLOR: never
+      # MuJoCo renders headless through Mesa's EGL on the runner, as the
+      # box does (trainnr/wsl.env); through GLFW with no display the process
+      # aborts (exit 134, the fourth public run of 2026-10-02).
+      MUJOCO_GL: egl
     steps:
       - uses: actions/checkout@v4
-      - name: system libraries for the desktop crate (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input)
-        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev
+      - name: system libraries (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input; Mesa's EGL and software GL for MuJoCo's renderer)
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev libegl1 libgl1-mesa-dri libgles2 libosmesa6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
