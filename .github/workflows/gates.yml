@@ -69,14 +69,28 @@ jobs:
         run: cargo test -q
         working-directory: crates/trainnr-desktop
 
+      # The Python half mirrors tools/verify.sh: the suites need the sim,
+      # mcp, deploy and viz extras (the "dependency-free core" of August
+      # is long gone: the first public run of 2026-10-02 found 40 modules
+      # that import mujoco, gymnasium or scipy). The mjlab trainer and the
+      # USD door pull torch and Newton, so they run weekly below.
       - name: ruff format (trainnr)
         run: uvx ruff format --check .
         working-directory: trainnr
       - name: ruff lint (trainnr)
         run: uvx ruff check .
         working-directory: trainnr
-      - name: python tests (trainnr, dependency-free core)
-        run: uv run python -m unittest discover -s tests
+      - name: ruff format + lint (tools)
+        run: uvx ruff format --check ../tools && uvx ruff check ../tools
+        working-directory: trainnr
+      - name: ruff lint (trainnr-mjlab)
+        run: uvx ruff check src tests
+        working-directory: trainnr-mjlab
+      - name: mypy (trainnr)
+        run: uv run --extra sim --extra mcp --extra deploy --extra viz --with mypy==2.3.1 mypy trainnr
+        working-directory: trainnr
+      - name: python tests (trainnr)
+        run: uv run --extra sim --extra mcp --extra deploy --extra viz python -m unittest discover -s tests
         working-directory: trainnr
 
   extras-weekly:
@@ -92,6 +106,21 @@ jobs:
         # train extra's marker is satisfied.
         run: |
           uv python install 3.12
-          uv sync --python 3.12 --extra sim --extra train
+          uv sync --python 3.12 --extra sim --extra mcp --extra deploy --extra viz --extra train
           uv run --python 3.12 python -m unittest discover -s tests -v
+        working-directory: trainnr
+      - name: mypy + python tests (trainnr-mjlab)
+        # The mjlab trainer: torch and mujoco-warp, so weekly.
+        run: |
+          uv sync --extra viz
+          uv run --extra viz --with mypy==2.3.1 mypy src/trainnr_mjlab
+          uv run --extra viz python -m unittest discover -s tests -t .
+        working-directory: trainnr-mjlab
+      - name: python tests (USD import, Newton)
+        # Its own environment: Newton cannot share a venv with mjx (docs/07
+        # 2026-09-25); a skip fails the step, as in tools/verify.sh.
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv-usd uv sync --extra usd --extra sim --extra gpu
+          TRAINNR_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee usd.log
+          grep -x OK usd.log
         working-directory: trainnr
