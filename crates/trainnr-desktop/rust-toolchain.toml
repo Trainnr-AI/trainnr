@@ -1,0 +1,9 @@
+# The Rust toolchain is part of the artifact, pinned like MuJoCo is.
+# 1.97.1 stable is the compiler the full gate last ran green on (the Mac,
+# 2026-08-27). The pin sat at the repository root until the rig's crates
+# and firmware moved to their own repository (2026-10-02) and this crate
+# became the only one; the chip targets went with them. rustup installs
+# this toolchain on the first cargo invocation here.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy", "rust-src"]

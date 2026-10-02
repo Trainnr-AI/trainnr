@@ -18,11 +18,11 @@ and the shared MuJoCo→Rerun mirror lives in `trainnr/trainnr/viz.py`; neither 
 
 | Tool | What it proves |
 |---|---|
-| `verify.sh` | Everything, one command: Rust fmt/clippy/tests, doc and unsafe gates, the Python pipeline (ruff + unit suite), every firmware variant, wire replays, the emulator HIL. `--serial <port>` adds real silicon |
+| `verify.sh` | Everything, one command: the desktop crate's fmt/clippy/tests, the doc, layer and unsafe gates, the Python packages (ruff, mypy, both unit suites), the USD import suite. The firmware, emulator and wire-replay steps moved with the rig to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig) (2026-10-02). `--serial <port>` adds real silicon |
 | `check-docs.py` | No doc names code that no longer exists |
 | `install-brush.py` | Brush's release binary for this machine (macOS arm64, Linux x86_64, Windows x86_64) into a user bin directory, its SHA-256 checked, no root: the splat trainer the capture chain runs |
 | `install-gsplat.py` | gsplat, the capture chain's CUDA splat trainer, into the train environment with CUDA's compiler wheels pinned to torch's build, its kernels built once; Linux and Windows, no system toolkit (a Mac uses Brush) |
-| `check-unsafe-gates.py` | `unsafe` stays forbidden in every crate |
+| `check-unsafe-gates.py` | `unsafe` stays forbidden in every crate's manifest (one crate since the rig left) |
 | `coverage.sh` | Rust line coverage |
 | `loc-report.py` | Line counts by area |
 
@@ -33,9 +33,12 @@ and the shared MuJoCo→Rerun mirror lives in `trainnr/trainnr/viz.py`; neither 
 | `rig-rerun.py` | THE session viewer: live wire → Rerun dashboard + MuJoCo twin |
 | `udp-wire-bridge.py` | WiFi telemetry (UDP 9870) → the same `.wire` stream the USB path writes |
 | `replay-errand.py` | A recorded `.wire` session through the same viewers, offline |
-| `build-robot.sh`, `build-pico2.sh` | Firmware images (RP2040 / RP2350 + feature variants) |
-| `sim-*.sh`, `setup-emulator.sh` | The rp2040js emulator harness and per-peripheral smoke runs |
-| `sim-errand.py`, `sim-hil.sh` | The errand mission in pure sim / HIL against the emulator |
+| `sim-errand.py` | The errand mission in pure sim (the firmware's hand-mirror; a test holds the two together) |
+
+The firmware builds, the rp2040js emulator harness, the HIL runs and the
+wire replays against the Rust crates moved with the crates to the rig
+archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
+2026-10-02; that repository's own `tools/verify.sh` runs them.
 
 ## Sim sessions (no hardware)
 
@@ -87,9 +90,7 @@ and the shared MuJoCo→Rerun mirror lives in `trainnr/trainnr/viz.py`; neither 
 | `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `trainnr/trainnr/viz.py`). `running(project_root, name=, viewport=, viewer=)` puts a tool's run in the project's job table while it runs (`trainnr.mcp_jobs.track`), so the Studio's Running now panel shows its stage and progress; `trial_reporter(run)` is the gate's per-trial line |
 
 Running now: `gate-deployment.py`, `attribute-deployment.py`, `preflight-deployment.py`, `capture-telemetry.py`, `public-log.py` (ingest), `import-usd.py`, `capture-scene.py` and trainnr_mjlab's `walk_train` each enter `<project>/mcp-jobs/` with a `.status` beside the record (stage, `done/total unit`). A run started by an agent sets `TRAINNR_RUN_SOURCE=agent`; a door's own job is adopted, never listed twice (docs/35 §5).
-| `_firmware.sh` | `build_uf2 <crate>`: asks cargo where a firmware binary landed, sourced by the `sim-*.sh` scripts |
 | `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL box's GPU routing in one file |
-| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (fmt, clippy, docs, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
-| `harness/*.ts`, `patches/` | The rp2040js emulator harnesses and the patch `setup-emulator.sh` applies |
+| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (the desktop crate's fmt/clippy/tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
 | `.ruff.toml` | Extends the pipeline's lint contract to `tools/`, with the per-file exceptions and their reasons |
 

@@ -42,27 +42,35 @@ jobs:
       CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
-      - name: system libraries (hil-host's serialport needs libudev)
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: system libraries (eframe's X11, xkbcommon and GTK links, for the desktop crate)
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/trainnr-desktop
       - uses: astral-sh/setup-uv@v5
 
-      - name: formatting
-        run: cargo fmt --all --check
-      - name: clippy (no errors)
+      # The desktop app is the one Rust crate (the rig's crates and firmware
+      # moved to their own repository on 2026-10-02); it is its own
+      # workspace, so cargo runs inside it.
+      - name: formatting (trainnr-desktop)
+        run: cargo fmt --check
+        working-directory: crates/trainnr-desktop
+      - name: clippy (trainnr-desktop, no errors)
         # Same bar as the hook: errors block, warnings do not (yet).
-        run: "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
-      - name: unsafe still forbidden everywhere
+        run: "! cargo clippy -q --all-targets 2>&1 | grep -qE '^error'"
+        working-directory: crates/trainnr-desktop
+      - name: unsafe still forbidden
         run: python3 tools/check-unsafe-gates.py
       - name: docs describe real code
         run: python3 tools/check-docs.py
       - name: package layers (docs/80)
         run: python3 tools/check-layers.py
-      - name: cargo test
-        run: cargo test -q --workspace
+      - name: cargo test (trainnr-desktop)
+        run: cargo test -q
+        working-directory: crates/trainnr-desktop
 
       - name: ruff format (trainnr)
         run: uvx ruff format --check .

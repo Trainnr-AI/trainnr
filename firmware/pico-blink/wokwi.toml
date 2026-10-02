@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = "target/thumbv6m-none-eabi/release/pico-blink"
-elf = "target/thumbv6m-none-eabi/release/pico-blink"

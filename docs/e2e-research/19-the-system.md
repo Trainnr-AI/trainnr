@@ -1,5 +1,9 @@
 # The end-to-end system: from this repo to a robot fleet
 
+> **Archived code.** The Rust crates, firmware and emulator tools this page
+> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
+> on 2026-10-02; the paths below are relative to that repository.
+
 Research date: **2026-08-08**. Context: what a commercial mobile-manipulator
 pilot actually requires end to end — data gathering, data generation,
 simulation, sim training, real training, app, deployment, telemetry — and
