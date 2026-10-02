@@ -212,8 +212,10 @@ profile under `tools/export/`), with the plugin manifest and the MCP
 Registry `server.json` beside them; 4 landed (the extraction commit, and
 the archive built with history by `tools/export/rig/build-rig-archive.sh`:
 177 commits, 195 files, the crates' tests and a firmware build green);
-5 run (`tools/export/public-export.sh`: 892 commits, no private path in
-any of them; the cold-clone gate in docs/07). The push awaits the operator.*
+5 done: pushed 2026-10-02 to `Trainnr-AI/trainnr` (901 commits from the
+filtered export, cold gate 16 of 16), `Trainnr-AI/rig` (archived) and
+`Trainnr-AI/.github` (the profile). The checkout keeps its private remote;
+the public repository is pushed only from the export.*
 
 1. This document decided (the Desktop name, the robots split timing, the
    logs), then written into docs/64 and docs/70 as the standing decision.

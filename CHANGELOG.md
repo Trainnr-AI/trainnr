@@ -6,6 +6,8 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
+
 ### Changed
 
 - The project is now **trainnr** (packages `trainnr` and `trainnr-mjlab`,
