@@ -90,6 +90,7 @@ the rule both Rerun and goose follow.
 | **`trainnr-cloud`** (private) | the control plane of docs/64: registry, scheduler, orgs, billing | Closed by decision; different owners and cadence. |
 | **`trainnr-www`** (private or public) | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Vercel deploys; a designer's repo. |
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
+| **`trainnr-identified-dr`** (public; one repository per paper, docs/81) | the manuscript, its LaTeX, figures, the per-trial artifacts with their history, a frozen snapshot of the finding records it cites, the paper build tools; depends on `trainnr` at a pinned commit | A paper freezes at submission and is cited by DOI; its evidence is most of the product history's weight (docs/80 §8). |
 | **`rig`** (public archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
