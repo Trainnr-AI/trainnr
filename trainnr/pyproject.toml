@@ -136,7 +136,7 @@ usd = "trainnr.robot.usd_import"
 drivetrain-ratio = "trainnr.robot.methods:DrivetrainRatio"
 
 [tool.setuptools.packages.find]
-include = ["trainnr*", "rq_pipeline"]
+include = ["trainnr*"]
 
 [tool.setuptools.package-data]
 # PEP 561: the package's own annotations are its types for whoever

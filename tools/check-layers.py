@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYERS: dict[str, tuple[Path, frozenset[str]]] = {
     "L0 trainnr": (
         ROOT / "trainnr" / "trainnr",
-        frozenset({"trainnr_mjlab", "rq_mjlab", "trainnr_desktop", "mjlab"}),
+        frozenset({"trainnr_mjlab", "trainnr_desktop", "mjlab"}),
     ),
     "L1 trainnr-mjlab": (
         ROOT / "trainnr-mjlab" / "src" / "trainnr_mjlab",

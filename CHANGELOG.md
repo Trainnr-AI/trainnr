@@ -11,8 +11,8 @@ All notable changes to trainnr. The format follows
 - The project is now **trainnr** (packages `trainnr` and `trainnr-mjlab`,
   the desktop app `trainnr-desktop`, the `trainnr` command, environment
   variables `TRAINNR_*`, task ids `trainnr/<task>`). The old import names
-  `rq_pipeline` and `rq_mjlab` and the task namespace `robotiq/` still
-  resolve, with a deprecation warning, until the next release.
+  and the old task namespace are gone; nothing outside this repository
+  ever used them.
 
 ### Removed
 

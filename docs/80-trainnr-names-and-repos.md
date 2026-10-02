@@ -139,21 +139,21 @@ Rules:
 
 | Identifier | Now | Becomes | Kind of change |
 |---|---|---|---|
-| PyPI / import | `trainnr` / `trainnr` | `trainnr` / `trainnr` | compat shim `trainnr` for one release, then gone |
-| PyPI / import | `trainnr-mjlab` / `trainnr_mjlab` | `trainnr-mjlab` / `trainnr_mjlab` | same |
-| entry-point groups | `trainnr.tasks` … | `trainnr.tasks` … | both sides in-tree |
-| MCP server | `trainnr` (`.mcp.json`, `name=`) | `trainnr` | agents' tool prefix changes |
-| Desktop crate / binary | `trainnr-desktop` | `trainnr-desktop` | launch path, `$TRAINNR_DESKTOP` |
-| app id / eframe name | `ai.trainnr.desktop` / "trainnr Desktop" | `ai.trainnr.desktop` / "trainnr Desktop" | resets the app's persisted window state once |
-| gym / task namespace | `trainnr/<task>` | `trainnr/<task>` | `trainnr/` accepted as a legacy alias; no stamp moves (the stamp hashes the bare name) |
-| LeRobot env type | `--env.type=trainnr` | `--env.type=trainnr` | |
-| the module named after the old brand (`envs/gymnasium_env.py`) | | a module named for what it holds (the gym environments) | |
-| Rerun app ids | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-instrument` | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-actuators` | replays of old streams keep their old ids; the cloud feed's uuid5 seed changes (new recording ids) |
-| env vars | `TRAINNR_*` (19), `TRAINNR_*` (2) | `TRAINNR_*` | documented in one page |
+| PyPI / import | `rq-pipeline` / `rq_pipeline` | `trainnr` / `trainnr` | no shim: nothing outside this repository ever imported it (decided 2026-10-02, after the rename landed) |
+| PyPI / import | `rq-mjlab` / `rq_mjlab` | `trainnr-mjlab` / `trainnr_mjlab` | same |
+| entry-point groups | `rq_pipeline.tasks` … | `trainnr.tasks` … | both sides in-tree |
+| MCP server | `robotiq` (`.mcp.json`, `name=`) | `trainnr` | agents' tool prefix changes |
+| Desktop crate / binary | `studio-shell` | `trainnr-desktop` | launch path, `$TRAINNR_DESKTOP` |
+| app id / eframe name | `robotiq_studio` / "robotiq studio" | `ai.trainnr.desktop` / "trainnr Desktop" | resets the app's persisted window state once |
+| gym / task namespace | `robotiq/<task>` | `trainnr/<task>` | no alias: the only `robotiq/` task ids were twelve files in local, untracked projects, rewritten; no stamp moves (the stamp hashes the bare name) |
+| LeRobot env type | `--env.type=robotiq` | `--env.type=trainnr` | |
+| the module named after the old brand (envs/robotiq.py, since removed) | | a module named for what it holds (the gym environments) | |
+| Rerun app ids | `robotiq-sim-`, `rq-gate`, `rq-press`, `rq-walk-*`, `rq-reward-preview`, `robotiq-walk-worlds`, `robotiq-instrument` | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-actuators` | replays of old streams keep their old ids; the cloud feed's uuid5 seed changes (new recording ids) |
+| env vars | `RQ_*` (19), `ROBOTIQ_*` (2) | `TRAINNR_*` | documented in one page |
 | dataset ids | `rq-pipeline/rig`, `rq-pipeline/aloha2-kitting` | frozen for existing datasets; new defaults `trainnr/<name>` | |
-| user agents | `trainnr/cloud-gpu` | `trainnr/<version>` | |
+| user agents | `rq-pipeline/cloud-gpu` | `trainnr/<version>` | |
 | actor word | `by: studio` | `by: desktop` | the event log's word |
-| the old rig's ids | `trainnr_hil`, `trainnr_rig`, … | untouched; they leave with the rig | |
+| the old rig's ids | `robotiq_hil`, `robotiq_rig`, … | untouched; they leave with the rig | |
 
 **The one identifier that keeps the old word**: the bundle schema string
 `robotiq-actuator-bundle/1`. It is hashed into every actuator model's stamp
@@ -209,8 +209,10 @@ any of them; the cold-clone gate in docs/07). The push awaits the operator.*
 1. This document decided (the Desktop name, the robots split timing, the
    logs), then written into docs/64 and docs/70 as the standing decision.
 2. The rename, one commit: directories, packages, entry points, the MCP
-   server, the Desktop, the ids, the env vars, the docs; compat shims for
-   the two import names and the task namespace; the layer check added.
+   server, the Desktop, the ids, the env vars, the docs; the layer check
+   added. (The compat shims for the two import names and the task
+   namespace were added and then removed the same day: nothing outside
+   this repository ever used the old names.)
 3. Governance files, NOTICE, README, CITATION; the org profile.
 4. The rig extracted to its own repository with history.
 5. The export script and the cold-clone run; then the first push.

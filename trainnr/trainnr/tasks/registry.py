@@ -25,9 +25,6 @@ from typing import Any
 from trainnr.plugins import load_group
 
 BUILTIN_NAMESPACE = "trainnr"
-# The namespace before the rename (2026-10-02): a task.json or a gym id
-# written under it still resolves; new ids are never written with it.
-LEGACY_NAMESPACES = ("robotiq",)
 ENTRY_POINT_GROUP = "trainnr.tasks"
 # The modules that register the built-in tasks; imported by `tasks()` so
 # a checkout works before its entry points are installed.
@@ -137,9 +134,4 @@ def resolve(task: str) -> TaskEntry:
     builtin = f"{BUILTIN_NAMESPACE}/{task}"
     if builtin in known:
         return known[builtin]
-    for old in LEGACY_NAMESPACES:
-        if task.startswith(old + "/"):
-            renamed = f"{BUILTIN_NAMESPACE}/{task[len(old) + 1 :]}"
-            if renamed in known:
-                return known[renamed]
     raise KeyError(f"no task {task!r}; the registry knows {sorted(known)}")
