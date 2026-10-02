@@ -64,6 +64,10 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
+/// A frame slower than this halves the simulation's picture; faster than
+/// `FAST_FRAME_MS` restores it (viewport.rs::set_render_scale).
+const SLOW_FRAME_MS: f32 = 150.0;
+const FAST_FRAME_MS: f32 = 60.0;
 /// The picker row alone, when no scene runs above a streaming viewer.
 const VIEWPORT_PICKER_HEIGHT: f32 = 34.0;
 /// The standard Rerun SDK port on every interface: anything calling
@@ -522,6 +526,14 @@ impl StudioShell {
                 let deployments = self.shell.model.deploy_scenes();
                 action = simulator::transport(ui, &mut self.viewport, &deployments);
             });
+        if let Some(ms) = self.frames.mean_ms() {
+            let scale = self.viewport.render_scale();
+            if ms > SLOW_FRAME_MS && scale > 0.5 {
+                self.viewport.set_render_scale(0.5);
+            } else if ms < FAST_FRAME_MS && scale < 1.0 {
+                self.viewport.set_render_scale(1.0);
+            }
+        }
         let picture = self.viewport.show(ui);
         if let Some(picture) = picture {
             simulator::overlays(ui.ctx(), picture, &mut self.viewport);

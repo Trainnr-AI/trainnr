@@ -242,6 +242,13 @@ These are the ones that cost real time and are worth not rediscovering:
 - **The renderer needs its GL environment.** A spawn without it landed on
   llvmpipe at about 3 fps and 299 % CPU; the Linux launch now carries the
   EGL and driver variables explicitly (2026-09-01).
+- **The window needs it too.** Mesa's Vulkan-over-Direct3D layer finds
+  the GPU only with the WSL library directory on the loader path, read
+  at process start; a launch through the door without it drew a frame in
+  half a second on a software fallback, with the simulation at 254 %
+  CPU. The door's launcher sets it under WSL now, as the documented
+  launch line always did; measured 2026-10-03: 11 fps streaming against
+  2, the simulation at 75 % (`control.wsl_gpu_environment`).
 - **Anything streaming in budgets its entity count, not just its rate.**
   Twenty ducks' worth of series plus seven hundred mesh transforms per
   tick wedged the log channel — the Rerun SDK blocks under backpressure.

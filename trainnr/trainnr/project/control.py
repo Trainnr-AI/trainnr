@@ -486,6 +486,40 @@ def _already_running(project: Project, current: dict[str, Any]) -> dict[str, Any
     }
 
 
+# Under WSL the window's own graphics go through Mesa's Vulkan-over-Direct3D
+# layer, which finds the GPU only with the WSL library directory on the
+# loader path (and MuJoCo's EGL only with the d3d12 Gallium driver). The
+# documented launch line (`trainnr/wsl.env`) sets both; a launch through
+# this door did not, and the window drew a frame in half a second on a
+# software fallback (2026-10-03, "I know we fixed the mujoco smoothness").
+# The loader reads the path at process start, so the launcher sets it.
+WSL_LIB_DIR = "/usr/lib/wsl/lib"
+WSL_GALLIUM_DRIVER = "d3d12"
+
+
+def on_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def wsl_gpu_environment(env: dict[str, str]) -> dict[str, str]:
+    """The environment with the WSL GPU libraries first on the loader path
+    and the Direct3D Gallium driver named, when this is WSL and the
+    directory exists; unchanged elsewhere, and never overriding a driver
+    the caller chose."""
+    if not on_wsl() or not Path(WSL_LIB_DIR).is_dir():
+        return env
+    env.setdefault("GALLIUM_DRIVER", WSL_GALLIUM_DRIVER)
+    existing = env.get("LD_LIBRARY_PATH", "")
+    if WSL_LIB_DIR not in existing.split(":"):
+        env["LD_LIBRARY_PATH"] = (
+            f"{WSL_LIB_DIR}:{existing}" if existing else WSL_LIB_DIR
+        )
+    return env
+
+
 def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     """Start the Studio on the project; wait for its first heartbeat.
     Waits for the viewer's port first: a window quit a moment ago can
@@ -517,7 +551,7 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
         }
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
+    env = wsl_gpu_environment(dict(os.environ))
     env[PROJECT_ENV] = str(project.root)
     with log.open("ab") as sink:
         child = subprocess.Popen(

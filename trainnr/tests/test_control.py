@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from trainnr.project import create_project
+from trainnr.project import control, create_project
 from trainnr.project.control import (
     KEEP_COMMANDS,
     SCHEMA,
@@ -414,3 +414,25 @@ class Lifecycle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WslGpuEnvironment(unittest.TestCase):
+    def test_wsl_puts_the_gpu_libraries_first_and_keeps_the_callers_driver(
+        self,
+    ) -> None:
+        with (
+            mock.patch.object(control, "on_wsl", return_value=True),
+            mock.patch("pathlib.Path.is_dir", return_value=True),
+        ):
+            env = control.wsl_gpu_environment({"LD_LIBRARY_PATH": "/opt/cuda/lib"})
+            self.assertEqual(env["LD_LIBRARY_PATH"], "/usr/lib/wsl/lib:/opt/cuda/lib")
+            self.assertEqual(env["GALLIUM_DRIVER"], "d3d12")
+            env = control.wsl_gpu_environment(
+                {"LD_LIBRARY_PATH": "/usr/lib/wsl/lib:/x", "GALLIUM_DRIVER": "llvmpipe"}
+            )
+            self.assertEqual(env["LD_LIBRARY_PATH"], "/usr/lib/wsl/lib:/x")
+            self.assertEqual(env["GALLIUM_DRIVER"], "llvmpipe")
+
+    def test_elsewhere_the_environment_is_untouched(self) -> None:
+        with mock.patch.object(control, "on_wsl", return_value=False):
+            self.assertEqual(control.wsl_gpu_environment({"A": "b"}), {"A": "b"})

@@ -233,6 +233,10 @@ pub struct ViewportFeed {
     sent_size: (u32, u32),
     /// When the last size change went out — see `RESIZE_DEBOUNCE`.
     last_resize_sent: Option<std::time::Instant>,
+    /// The fraction of the panel's pixels the simulation renders: 1.0, or
+    /// 0.5 when a frame of this window costs too much (see
+    /// `set_render_scale`); egui stretches the picture to the panel.
+    render_scale: f32,
     /// A Ctrl+drag perturbation is in flight (select sent, release owed).
     perturbing: bool,
     /// Set by the reader thread when the frame stream ends. A dead
@@ -456,6 +460,7 @@ impl ViewportFeed {
             spawn_error: None,
             sent_size: INITIAL_RENDER_SIZE,
             last_resize_sent: None,
+            render_scale: 1.0,
             perturbing: false,
             stream_ended: Arc::new(AtomicBool::new(false)),
             task: None,
@@ -588,6 +593,7 @@ impl ViewportFeed {
                     spawn_error: None,
                     sent_size: INITIAL_RENDER_SIZE,
                     last_resize_sent: None,
+                    render_scale: 1.0,
                     perturbing: false,
                     stream_ended,
                     task: Some(task_name.to_owned()),
@@ -618,6 +624,20 @@ impl ViewportFeed {
         let mut feed = Self::idle();
         feed.spawn_error = Some(message);
         feed
+    }
+
+    /// Render at a fraction of the panel's pixels. The window's own frame
+    /// time decides (main.rs): past 150 ms a frame the simulation draws
+    /// at half size and egui stretches it, under 60 ms it draws at full
+    /// size again; between, the last choice holds. On WSLg's graphics
+    /// layer the cost of a frame is the pixels it carries (2026-10-03:
+    /// 435 ms a frame at full size with a scene streaming).
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.render_scale = scale;
+    }
+
+    pub fn render_scale(&self) -> f32 {
+        self.render_scale
     }
 
     /// Draws the newest frame into `ui`, or a placeholder/error message
@@ -764,7 +784,7 @@ impl ViewportFeed {
         // let egui upscale the difference — visibly soft next to the
         // Rerun viewer beside it.
         let pixels_per_point = ui.ctx().pixels_per_point();
-        let want = render_size(available * pixels_per_point);
+        let want = render_size(available * pixels_per_point * self.render_scale);
         let size_changed = want != self.sent_size;
         let resize_ripe = self
             .last_resize_sent
