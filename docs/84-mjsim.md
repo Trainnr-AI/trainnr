@@ -1,15 +1,23 @@
-# 84 — The MuJoCo viewport as its own package
+# 84 — mjsim: the MuJoCo simulator window as its own package
 
 *2026-10-03. Prakhar: "can we keep the mujoco viewer as a separate module
 repo that can be just imported into the app and it can be built and
-improved separately as a package." docs/80 §3's rule is satellites only
-where the lifecycle differs; the viewport's does: a MuJoCo viewport
-widget for egui apps, with a simulation streaming into it from a Python
-process, is useful to any egui app and to any MuJoCo user, and it moves
-on its own cadence (rendering, the drawer, the follow rules, the ring).
-This is the plan; nothing is cut yet.*
+improved separately as a package", and on the name: "I am not liking the
+term viewport, we can name it mjsim, mjlab, mujoco, etc." `mjlab` is
+mujocolab's trainer, which we depend on and cite; `mujoco` is
+DeepMind's; `mjsim` is free on PyPI, crates.io and the organisation
+(checked 2026-10-03), so **mjsim** it is: the repository
+`Trainnr-AI/mjsim`, the crate `mjsim`, the package `mjsim`, the module
+`mjsim`. docs/80 §3's rule is satellites only where the lifecycle
+differs; this one's does: a MuJoCo simulator window for egui apps, with
+the simulation streaming into it from a Python process, is useful to any
+egui app and to any MuJoCo user, and it moves on its own cadence
+(rendering, the drawer, the follow rules, the ring). In prose it is "the
+simulator" (the page already says so); "viewport" leaves the vocabulary
+with the extraction, and the heartbeat's `viewport_*` fields with the
+next schema version. This is the plan; nothing is cut yet.*
 
-## 1. What the viewport is today
+## 1. What mjsim is today
 
 Two halves and a wire between them.
 
@@ -26,21 +34,20 @@ list it offers comes in as an argument.
 
 ## 2. The cut
 
-- **`trainnr-viewport`**, one repository, two packages with one version:
-  - the Rust crate `trainnr-viewport`: `Viewport` (the reader and the
-    picture), `transport`, `overlays`, `drawer`, `shortcuts`, the
+- **`mjsim`**, one repository, two packages with one version:
+  - the Rust crate `mjsim`: `Simulator` (the reader and the picture), `transport`, `overlays`, `drawer`, `shortcuts`, the
     `Action` enum, and a `Launcher` trait the app implements to start
     the stream (so the crate spawns nothing itself and the app keeps its
     process rules); the ring and token protocol as a documented module
     with its version constant.
-  - the Python package `trainnr-viewport` (`import trainnr_viewport`):
+  - the Python package `mjsim` (`import mjsim`):
     the stream as a library (`Stream(scene, size, shm, physics)`), the
     ring writer, the status writer, and a `__main__` that is today's
     script; scenes arrive through a small protocol (`SceneSource`: build
     a model, step, the policy if any) that `trainnr` implements, so the
     package depends on mujoco and numpy only and `trainnr` depends on it,
     not the other way round. The mirror into Rerun stays in `trainnr`
-    (it is the loop's, not the viewport's).
+    (it is the loop's, not the simulator window's).
 - **The app** (`crates/trainnr-desktop`) depends on the crate by version
   and on the Python package through `trainnr`'s own dependency; the
   Simulator page keeps its layout, the empty-state card and the
@@ -48,8 +55,7 @@ list it offers comes in as an argument.
 - **The contract that must not move without a version bump**: the ring
   layout, the two tokens, the status JSON, the stdin command lines, the
   `--shm`/`--physics`/`--project` arguments. They become
-  `trainnr_viewport.protocol` on one side and `trainnr_viewport::protocol`
-  on the other, with the same `PROTOCOL = 1` and a test on each side
+  `mjsim.protocol` on one side and `mjsim::protocol` on the other, with the same `PROTOCOL = 1` and a test on each side
   that reads the other's fixture.
 
 ## 3. What it buys, what it costs
@@ -68,10 +74,10 @@ and naming the contract that exists already.
 1. Name the contract in place: `protocol` modules on both sides inside
    the monorepo, with the cross-fixture tests; the `Launcher` trait and
    the `SceneSource` protocol; the widget stops reaching into `spawn.rs`.
-2. Move: the crate under `crates/trainnr-viewport` and the package under
-   `trainnr-viewport/` in the monorepo first (a path dependency), the
+2. Move: the crate under `crates/mjsim` and the package under `mjsim/`
+   in the monorepo first (a path dependency), the
    desktop and `trainnr` consuming them; every gate green.
-3. Extract: the repository `Trainnr-AI/trainnr-viewport` with the files'
+3. Extract: the repository `Trainnr-AI/mjsim` with the files'
    history (the rig recipe, `tools/export/rig/`), the monorepo switching
    to a versioned dependency; the demo app and its README.
 4. Release with the first tag; the desktop pins it.
