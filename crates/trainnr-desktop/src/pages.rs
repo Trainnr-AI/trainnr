@@ -1531,41 +1531,41 @@ fn detail(
                     ui.set_width(ui.available_width());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let mut buttons = |ui: &mut egui::Ui| {
-                        // The artifact as itself: a robot in 3D, a recording as
-                        // plots, a run's curves, a certificate's funnel — in the
-                        // viewer, via the presenter (docs/76 §5.2).
-                        if ui
-                            .primary_button(("▶", " Show in viewer"))
-                            .on_hover_text("Stream this artifact into the Live view")
-                            .clicked()
-                        {
-                            show = true;
-                        }
-                        // A deployment in the MuJoCo viewport: live, or a
-                        // gate trial / pre-flight segment replayed.
-                        let scenes = crate::model::viewport_scenes(artifact);
-                        if let Some(((_, live), replays)) = scenes.split_first() {
-                            if !replays.is_empty() {
-                                ui.menu_button("Replay in viewport", |ui| {
-                                    for (label, scene) in replays {
-                                        if ui.button(label).clicked() {
-                                            nav.scene = Some(scene.clone());
-                                            ui.close();
-                                        }
-                                    }
-                                });
-                            }
+                            // The artifact as itself: a robot in 3D, a recording as
+                            // plots, a run's curves, a certificate's funnel — in the
+                            // viewer, via the presenter (docs/76 §5.2).
                             if ui
-                                .button("Play in viewport")
-                                .on_hover_text(
-                                    "The exported policy live in the Simulator's MuJoCo \
-                                     viewport: drive it with WASD",
-                                )
+                                .primary_button(("▶", " Show in viewer"))
+                                .on_hover_text("Stream this artifact into the Live view")
                                 .clicked()
                             {
-                                nav.scene = Some(live.clone());
+                                show = true;
                             }
-                        }
+                            // A deployment in the MuJoCo viewport: live, or a
+                            // gate trial / pre-flight segment replayed.
+                            let scenes = crate::model::viewport_scenes(artifact);
+                            if let Some(((_, live), replays)) = scenes.split_first() {
+                                if !replays.is_empty() {
+                                    ui.menu_button("Replay in viewport", |ui| {
+                                        for (label, scene) in replays {
+                                            if ui.button(label).clicked() {
+                                                nav.scene = Some(scene.clone());
+                                                ui.close();
+                                            }
+                                        }
+                                    });
+                                }
+                                if ui
+                                    .button("Play in viewport")
+                                    .on_hover_text(
+                                        "The exported policy live in the Simulator's MuJoCo \
+                                     viewport: drive it with WASD",
+                                    )
+                                    .clicked()
+                                {
+                                    nav.scene = Some(live.clone());
+                                }
+                            }
                         };
                         buttons(ui);
                         ui.add_space(6.0);

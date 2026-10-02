@@ -212,7 +212,11 @@ pub fn table(
             egui::RichText::new(if needle.is_empty() {
                 crate::widgets::count_word(rows.len(), "row")
             } else {
-                format!("{} of {}", shown.len(), crate::widgets::count_word(rows.len(), "row"))
+                format!(
+                    "{} of {}",
+                    shown.len(),
+                    crate::widgets::count_word(rows.len(), "row")
+                )
             })
             .color(ui.visuals().weak_text_color()),
         );

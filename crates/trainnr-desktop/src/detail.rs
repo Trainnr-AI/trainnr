@@ -239,7 +239,10 @@ fn table_preview(ui: &mut egui::Ui, section: &Section, idx: usize) -> bool {
         let hidden = section.rows.len().saturating_sub(shown);
         ui.add_space(4.0);
         let label = if hidden > 0 {
-            format!("Explore all {}", crate::widgets::count_word(section.rows.len(), "row"))
+            format!(
+                "Explore all {}",
+                crate::widgets::count_word(section.rows.len(), "row")
+            )
         } else {
             "Explore".to_owned()
         };

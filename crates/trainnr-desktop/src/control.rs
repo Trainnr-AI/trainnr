@@ -761,8 +761,8 @@ mod tests {
             parse_command(r#"{"verb":"quit"}"#),
             Ok(Command::Quit)
         ));
-        let focus = parse_command(r#"{"verb":"focus","recording":"trainnr-sim-x"}"#)
-            .expect("parses");
+        let focus =
+            parse_command(r#"{"verb":"focus","recording":"trainnr-sim-x"}"#).expect("parses");
         assert!(matches!(focus, Command::Focus { recording } if recording == "trainnr-sim-x"));
         let err = parse_command(r#"{"verb":"dance"}"#).expect_err("refused");
         assert!(err.starts_with("not a command"), "{err}");
@@ -794,7 +794,10 @@ mod tests {
     fn entry_names_fold_what_rerun_refuses() {
         assert_eq!(entry_name("go2-c2@4dc757293b97"), "go2-c2-4dc757293b97");
         assert_eq!(entry_name("a@1 vs b@2"), "a-1 vs b-2");
-        assert_eq!(entry_name("trainnr-sim-deploy:go2-c2"), "trainnr-sim-deploy:go2-c2");
+        assert_eq!(
+            entry_name("trainnr-sim-deploy:go2-c2"),
+            "trainnr-sim-deploy:go2-c2"
+        );
         assert_eq!(entry_name(&"x".repeat(200)).len(), ENTRY_NAME_MAX);
     }
 
@@ -825,7 +828,10 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed["section"], "overview");
         assert!(parsed["heartbeat"].as_f64().unwrap() > 0.0);
-        assert!(parsed.get("moved_to").is_none(), "a live state carries no pointer");
+        assert!(
+            parsed.get("moved_to").is_none(),
+            "a live state carries no pointer"
+        );
         control.event(Event::select(BY_USER).of_artifact("a@000000000000".into()));
         control.event(Event::open(BY_AGENT).in_section("robots".into()));
         let lines: Vec<String> = std::fs::read_to_string(root.join(EVENTS_RELATIVE))

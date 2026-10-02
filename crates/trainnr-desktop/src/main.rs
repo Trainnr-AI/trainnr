@@ -203,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shot: None,
                 last_navigation: None,
                 seen_recording: false,
-            activated_shown: None,
+                activated_shown: None,
                 viewport_full: false,
                 closing: false,
             }))
@@ -739,7 +739,11 @@ impl StudioShell {
                         .unwrap_or_default();
                     return Err(format!(
                         "no timeline {n:?} in the recording; it has {}",
-                        if known.is_empty() { "none".to_owned() } else { known.join(", ") }
+                        if known.is_empty() {
+                            "none".to_owned()
+                        } else {
+                            known.join(", ")
+                        }
                     ));
                 }
                 let temporal = !matches!(typ, Some(TimeType::Sequence));
