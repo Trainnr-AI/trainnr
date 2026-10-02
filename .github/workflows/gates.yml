@@ -52,8 +52,12 @@ jobs:
         run: cargo fmt --check
         working-directory: crates/trainnr-desktop
       - name: clippy (trainnr-desktop, no errors)
-        # Same bar as the hook: errors block, warnings do not (yet).
-        run: "! cargo clippy -q --all-targets 2>&1 | grep -qE '^error'"
+        # Same bar as the hook: errors block, warnings do not (yet). The
+        # output is kept and shown, so a failure on the runner says why
+        # (the first public run of 2026-10-02 failed silently).
+        run: |
+          cargo clippy -q --all-targets 2>&1 | tee clippy.log | tail -60
+          ! grep -qE '^error' clippy.log
         working-directory: crates/trainnr-desktop
       - name: unsafe still forbidden
         run: python3 tools/check-unsafe-gates.py
