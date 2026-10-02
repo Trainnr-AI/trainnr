@@ -443,25 +443,23 @@ impl eframe::App for StudioShell {
                 self.report(ui);
                 return;
             }
-            egui::Panel::top(if active {
-                "sim_viewport"
+            // Two panels on purpose: egui remembers a panel's size by id
+            // (and persists it), so the picker row never inherits the
+            // picture's height, nor a band an older build left behind
+            // (2026-10-03, "why do we have this space").
+            let panel = if active {
+                egui::Panel::top("sim_viewport")
+                    .resizable(true)
+                    .default_size(VIEWPORT_DEFAULT_HEIGHT)
+                    .min_size(VIEWPORT_MIN_HEIGHT)
             } else {
-                "sim_viewport_idle"
-            })
-            .resizable(active)
-            .default_size(if active {
-                VIEWPORT_DEFAULT_HEIGHT
-            } else {
-                VIEWPORT_PICKER_HEIGHT
-            })
-            .min_size(if active {
-                VIEWPORT_MIN_HEIGHT
-            } else {
-                VIEWPORT_PICKER_HEIGHT
-            })
-            .show(ui, |ui| self.viewport_body(ui));
+                egui::Panel::top("sim_scene_picker")
+                    .resizable(false)
+                    .exact_size(VIEWPORT_PICKER_HEIGHT)
+            };
+            panel.show(ui, |ui| self.viewport_body(ui));
             if has_recording {
-                self.rerun_app.ui(ui, frame);
+                self.viewer_ui(ui, frame);
             } else {
                 // A scene runs and nothing streams yet: the viewport above is
                 // the page; the viewer takes this space when a recording
@@ -494,8 +492,27 @@ impl StudioShell {
         if !self.viewport.is_active() {
             // No scene: the row is the picker and nothing else; no idle
             // placeholder above it (2026-10-02, "too many border lines").
+            // Drawn in a foreground area over the panel's own rect: the
+            // viewer below paints its hidden top bar into this region
+            // (`viewer_ui`), and the row must win both paint and input.
+            let rect = ui.max_rect();
+            let palette = crate::theme::palette(ui);
             let deployments = self.shell.model.deploy_scenes();
-            action = simulator::transport(ui, &mut self.viewport, &deployments);
+            let viewport = &mut self.viewport;
+            let inner = egui::Area::new(ui.id().with("scene-picker-row"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(rect.min)
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::new()
+                        .fill(palette.canvas)
+                        .inner_margin(egui::Margin::symmetric(8, 4))
+                        .show(ui, |ui| {
+                            ui.set_width(rect.width() - 16.0);
+                            simulator::transport(ui, viewport, &deployments)
+                        })
+                        .inner
+                });
+            action = inner.inner;
             self.spawn_or_stop(ui, action);
             return;
         }
@@ -530,6 +547,23 @@ impl StudioShell {
             }
             None => {}
         }
+    }
+
+    /// The embedded viewer, with its own top bar out of sight. The viewer
+    /// keeps that bar's full height even when its content is hidden
+    /// (`exact_size` on its panel; the content is what the override
+    /// hides), which left a blank band above every recording (2026-10-03,
+    /// "why do we have this space"). So the viewer draws into a child
+    /// area that begins one bar height above the visible region, clipped
+    /// to it: the bar lands out of sight, the rest fills the space.
+    fn viewer_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        use re_ui::ContextExt as _;
+        let hidden = ui.ctx().top_bar_style(frame, false).height;
+        let rect = ui.available_rect_before_wrap();
+        let above = egui::Rect::from_min_max(egui::pos2(rect.min.x, rect.min.y - hidden), rect.max);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(above));
+        child.set_clip_rect(rect);
+        eframe::App::ui(&mut self.rerun_app, &mut child, frame);
     }
 
     /// No scene: the viewport idle and the page back to its rails — the
