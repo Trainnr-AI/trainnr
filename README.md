@@ -30,14 +30,15 @@ result in this repository claims a real deployment yet.
 The measurements behind the method are the paper:
 [*How Wide a Span, and What Does Identification Buy?*](docs/paper/manuscript.md)
 (draft v3; every number in it resolves to a record under
-[`docs/findings/`](docs/findings/)). The positioning, with evidence per
-claim, is [`docs/33-what-we-say.md`](docs/33-what-we-say.md).
+[`docs/findings/`](docs/findings/)). Every claim in this file rests on a
+record under [`docs/findings/`](docs/findings/) or a dated read of a primary
+source under [`docs/e2e-research/`](docs/e2e-research/).
 
 ## One turn, on a Unitree Go2, in one conversation
 
 With the plugin installed, this is the loop an agent walks through the MCP
-tools, as a new user's agent did on 2026-09-28
-([the record](docs/07-progress-log.md)):
+tools, as a first-time user's agent did on 2026-09-28, end to end in one
+session:
 
 | Stage | Tool | What it leaves behind |
 |---|---|---|
@@ -120,7 +121,7 @@ identity is `name@hash` everywhere; nothing is nameable without its hash.
 ## Why the verdicts can be trusted
 
 The instrument was tested on itself and the misses are on the record
-([`docs/07`](docs/07-progress-log.md)): a fit that converged to twice the
+([`docs/68-findings.md`](docs/68-findings.md)): a fit that converged to twice the
 truth with a tight interval until its anchor was audited, which is why a fit
 record without an anchor statement is refused; a timestamp convention that
 biased a fit, caught three more times afterwards, which is why truth
@@ -136,8 +137,7 @@ sign-off, the gates, where decisions are written),
 [`SECURITY.md`](SECURITY.md), [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md),
 [`GOVERNANCE.md`](GOVERNANCE.md), [`CITATION.cff`](CITATION.cff). The 2025–26
 rig that this toolchain grew up on lives in its own archive,
-[`Trainnr-AI/rig`](https://github.com/Trainnr-AI/rig); its tour is
-[`docs/27-rig-tour.md`](docs/27-rig-tour.md).
+[`Trainnr-AI/rig`](https://github.com/Trainnr-AI/rig).
 
 [FSL-1.1-ALv2](LICENSE): any use other than a competing product or service, and each version under Apache-2.0 two years after it is made available. Third-party material is listed in [`NOTICE`](NOTICE).
 "Robotiq" in `robots/robotiq-2f85-isaac` is Robotiq Inc.'s gripper; trainnr

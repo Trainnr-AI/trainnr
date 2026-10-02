@@ -12,8 +12,8 @@ version of every rule below is in `docs/`.
 - **Read the decision documents** that touch your area:
   `docs/80-trainnr-names-and-repos.md` (names, repositories, layers),
   `docs/22-pipeline-architecture.md` (the codebase map and its contracts),
-  `docs/64` (the MCP surface), and the progress log `docs/07` for recent
-  history. A decision that is not in `docs/` has not been made; if your
+  `docs/76-the-loop.md` (the contract, the state machine and the tool
+  families), and `CHANGELOG.md` for recent history. A decision that is not in `docs/` has not been made; if your
   change makes one, write it there in the same pull request.
 
 ## Setting up
@@ -46,8 +46,9 @@ it.
 - **One changelog line** under *Unreleased* in `CHANGELOG.md` for anything a
   user would notice.
 - **Docs in the same commit.** A changed contract changes its document; a
-  gotcha you hit goes into `docs/07-progress-log.md`; a new result is a
-  record under `docs/findings/`, never a number typed into prose.
+  gotcha you hit goes into the pull request and, if it will bite again,
+  into the document it belongs to; a new result is a record under
+  `docs/findings/`, never a number typed into prose.
 - **Names** follow the industry's vocabulary (evaluation, dataset,
   experiment, deployment, gate), not house words. Nothing is named
   `robotiq` except the vendor's gripper and the frozen bundle schema string
