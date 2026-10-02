@@ -55,3 +55,9 @@ scratchpad/
 
 # The maintainers private session notes: never tracked again (filtered from history at the public export).
 claude-sync/
+
+# uv build / setuptools output
+trainnr/build/
+trainnr/dist/
+trainnr-mjlab/build/
+trainnr-mjlab/dist/

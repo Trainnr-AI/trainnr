@@ -1,0 +1,78 @@
+trainnr
+Copyright 2026 Trainnr AI and the trainnr authors
+
+This product is licensed under the Functional Source License, Version 1.1,
+ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
+competing product or service is allowed, and each version is also licensed
+under the Apache License, Version 2.0 from the second anniversary of the
+day it is made available. The third-party material below keeps its own
+licence; the text of the Apache License, Version 2.0 is in LICENSE-APACHE.
+
+It includes or builds on the following third-party material. Robot and
+actuator bundles carry the upstream LICENSE file and a README naming the
+repository, commit and date; the upstream files are byte-identical and our
+wrappers add sensors or metadata only.
+
+Robot models redistributed under robots/
+
+- MuJoCo Menagerie (Google DeepMind): the ALOHA 2 model under
+  robots/aloha2-nominal/ (BSD-3-Clause, upstream commit da76818e) and the
+  SO-101 / SO-ARM100 model under robots/so101-nominal/ (Apache-2.0).
+- microduck (Pollen Robotics, microduck_rl, branch develop at d424a0c8,
+  Apache-2.0): robot_walk.xml and the 38 meshes it references, under
+  robots/microduck/.
+- Robotiq 2F-85 (Robotiq Inc., robotiq/isaacsim_assets at 6d992b6,
+  CC-BY-4.0): the USD asset imported through Newton into the MuJoCo bundle
+  under robots/robotiq-2f85-isaac/. "Robotiq" is Robotiq Inc.'s name; this
+  project is not affiliated with Robotiq. The bundle schema string
+  `robotiq-actuator-bundle/1` is a frozen format identifier, not a claim.
+- Unitree Go2 (Unitree Robotics, unitreerobotics/unitree_rl_mjlab,
+  Apache-2.0): go2.xml and its meshes, fetched into a project's bundle by
+  the onboarding step; the declared actuator constants in
+  trainnr-mjlab/src/trainnr_mjlab/go2_walk.py are read from the same
+  repository (go2_constants.py at 1425b15) and cited there.
+
+Actuator models under robots/actuators/
+
+- BAM (Rhoban; Duclusaud, Passault, Padois, Ly, ICRA 2025; Apache-2.0):
+  the fitted actuator parameters for the Dynamixel MX-64, MX-106, XL-320,
+  XL-330, the Feetech STS3215, the Waveshare ST3025 and the eRob 80 series,
+  each wrapped with a PROVENANCE.json naming the source, the citation and
+  the licence. The xl330-refit bundle carries numbers fitted by us on BAM's
+  published bench logs, whose own licence is unstated on their bucket; the
+  logs are not redistributed.
+
+Datasets and scenes used for the published results (not redistributed)
+
+- Public Unitree Go2 telemetry: YibinWu/leg-odometry (release test_v1.0),
+  DFKI's field recording on Zenodo (record 19336009) and IIT's in-air log.
+  The registry trainnr/trainnr/robots/public_logs.py records each log's
+  licence state (unlabelled where the publisher states none); only
+  measurements derived from them are kept here.
+- Mip-NeRF 360 (Barron et al., CVPR 2022): the garden capture's 185 stills,
+  taken from nvs-bench/mipnerf360 on Hugging Face into a local project under
+  the dataset's own terms; the repository keeps one rendering of the twin
+  in that scene and the evaluation rows.
+- Neverwhere (MIT): the Go1 parkour scenes imported into a local project
+  for the see-versus-touch gap measurement; the repository keeps the
+  numbers.
+
+Software used as dependencies (no source copied)
+
+- MuJoCo and MuJoCo Warp (Google DeepMind, Apache-2.0); mjlab (mujocolab,
+  Apache-2.0); rsl_rl (ETH Zurich Robotic Systems Lab, BSD-3-Clause);
+  Gymnasium (Farama Foundation, MIT); LeRobot (Hugging Face, Apache-2.0;
+  trainnr/trainnr/envs/lerobot_plugin.py implements its EnvConfig
+  interface); gym-aloha / ACT (Tony Z. Zhao et al.; Apache-2.0 / MIT): the
+  transfer-cube task in trainnr/trainnr/tasks/aloha2.py follows the
+  original simulator's conventions so released checkpoints see the scene
+  they were trained on.
+- Rerun (Rerun Technologies, MIT OR Apache-2.0): the Python SDK, and the
+  viewer embedded in the desktop app through the re_viewer and re_ui
+  crates; egui and eframe (emilk, MIT OR Apache-2.0).
+- Newton (NVIDIA, Apache-2.0) and OpenUSD (Pixar, Apache-2.0 with the
+  Tomorrow Open Source Technology notice): the USD import door.
+- gsplat (Apache-2.0), COLMAP (BSD-3-Clause, a system install) and Open3D
+  (MIT): the scene capture chain.
+- The NeurIPS 2023 LaTeX style (neurips_2023.sty, the NeurIPS Foundation),
+  beside the paper's generated main.tex, for the preprint's layout only.

@@ -55,7 +55,7 @@ failure, not a guess).
 - Working examples to copy: `tools/studio-instrument-view.py` (evals,
   fits, friction curves), `tools/studio-render-stream.py` (a MuJoCo
   loop narrating joints/actuators/contacts live),
-  `tools/rig-rerun.py`, `tools/train-watch.py`.
+  `tools/train-watch.py`.
 - The proven visual grammar (what reads well, what wedged the viewer):
   `docs/e2e-research/55-rerun-viz-catalog.md`. Two hard rules from it:
   one recording per clock (never mix timelines in one recording), and

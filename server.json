@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.trainnr-ai/trainnr",
+  "description": "Identify, train, evaluate, gate and monitor robot policies: the trainnr pipeline as MCP tools over stdio.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Trainnr-AI/trainnr",
+    "source": "github"
+  },
+  "websiteUrl": "https://trainnr.ai",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "trainnr",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "uvx",
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "TRAINNR_PROJECT",
+          "description": "The project directory to open (optional; the server otherwise opens the last project).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "name": "trainnr",
+  "displayName": "trainnr",
+  "version": "0.1.0",
+  "description": "The real-to-sim-to-real pipeline for robot policies: identify the robot from its own telemetry, train on the identified model, evaluate with exact intervals, gate the deployment, watch for drift. One MCP server, seven agents and two skills.",
+  "author": {
+    "name": "Trainnr AI",
+    "url": "https://trainnr.ai"
+  },
+  "homepage": "https://trainnr.ai",
+  "repository": "https://github.com/Trainnr-AI/trainnr",
+  "license": "FSL-1.1-ALv2",
+  "keywords": [
+    "robotics",
+    "simulation",
+    "mujoco",
+    "mjlab",
+    "reinforcement-learning",
+    "sim-to-real",
+    "system-identification",
+    "mcp"
+  ],
+  "skills": "./.claude/skills",
+  "agents": [
+    "./.claude/agents/data-generator.md",
+    "./.claude/agents/deploy-engineer.md",
+    "./.claude/agents/evaluator.md",
+    "./.claude/agents/policy-trainer.md",
+    "./.claude/agents/robot-onboarding.md",
+    "./.claude/agents/system-identification.md",
+    "./.claude/agents/task-designer.md"
+  ],
+  "mcpServers": {
+    "trainnr": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}/trainnr",
+        "--extra",
+        "sim",
+        "--extra",
+        "mcp",
+        "trainnr",
+        "mcp"
+      ]
+    }
+  }
+}

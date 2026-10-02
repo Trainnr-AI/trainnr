@@ -14,7 +14,7 @@ span). Every run writes `datasheet.md` beside the batch.
 
 ## MCP doors (any agent, docs/64 stage 1)
 
-With the rq MCP server connected, the same work is tool calls:
+With the trainnr MCP server connected, the same work is tool calls:
 `generate_kitting_demos(episodes, seed, out)` → job handle;
 `multiply_demos(seeds_dir, out, ...)` (GPU box);
 `run_chain(name, scale, ...)` — the whole generate→train→evaluate chain;

@@ -26,7 +26,7 @@ Rules this repo will hold you to:
 - MuJoCo is pinned `~=3.11.0` — a model that only compiles on newer
   MuJoCo is a finding to report, not a reason to bump the pin.
 - Verify by compiling: `task.spec.compile()` or a viewer launch, and
-  confirm the census (`mcp__robotiq__describe_bundles` or
+  confirm the census (`mcp__trainnr__describe_bundles` or
   `trainnr.mcp_server.describe_bundles`) sees the new bundle with a
   stamp before calling the job done.
 
@@ -50,7 +50,7 @@ failure, not a guess).
 - Working examples to copy: `tools/studio-instrument-view.py` (evals,
   fits, friction curves), `tools/studio-render-stream.py` (a MuJoCo
   loop narrating joints/actuators/contacts live),
-  `tools/rig-rerun.py`, `tools/train-watch.py`.
+  `tools/train-watch.py`.
 - The proven visual grammar (what reads well, what wedged the viewer):
   `docs/e2e-research/55-rerun-viz-catalog.md`. Two hard rules from it:
   one recording per clock (never mix timelines in one recording), and

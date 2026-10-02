@@ -1,5 +1,7 @@
 # trainnr
 
+<!-- mcp-name: io.github.trainnr-ai/trainnr -->
+
 Train, validate and serve robot policies **with numbers you can sign**:
 identified dynamics, gated simulation, confidence intervals on everything.
 

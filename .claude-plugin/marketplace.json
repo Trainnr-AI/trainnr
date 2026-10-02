@@ -1,0 +1,31 @@
+{
+  "name": "trainnr",
+  "owner": {
+    "name": "Trainnr AI",
+    "url": "https://trainnr.ai"
+  },
+  "metadata": {
+    "description": "Trainnr AI's plugins for coding agents.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "trainnr",
+      "source": "./",
+      "description": "The trainnr MCP server, agents and skills: identify, train, evaluate, gate and monitor robot policies from your coding agent.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Trainnr AI"
+      },
+      "homepage": "https://trainnr.ai",
+      "repository": "https://github.com/Trainnr-AI/trainnr",
+      "license": "FSL-1.1-ALv2",
+      "keywords": [
+        "robotics",
+        "mcp",
+        "simulation"
+      ],
+      "category": "development"
+    }
+  ]
+}
