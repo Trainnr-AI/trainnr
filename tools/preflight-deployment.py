@@ -25,8 +25,8 @@ from _lab import bootstrap, deployment_args, resolve_deployment, running
 
 bootstrap()
 
-from rq_pipeline.bundles.basis import BASIS_OWN, BASIS_SIMULATION  # noqa: E402
-from rq_pipeline.deploy.preflight import (  # noqa: E402
+from trainnr.bundles.basis import BASIS_OWN, BASIS_SIMULATION  # noqa: E402
+from trainnr.deploy.preflight import (  # noqa: E402
     CHECK_MARKS,
     POSES_TRACK,
     PREFLIGHT_FILE,
@@ -41,9 +41,9 @@ from rq_pipeline.deploy.preflight import (  # noqa: E402
     walk_command,
     write_record,
 )
-from rq_pipeline.deploy.runtimes import runtime_spec  # noqa: E402
-from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
-from rq_pipeline.project import index_project, write_index  # noqa: E402
+from trainnr.deploy.runtimes import runtime_spec  # noqa: E402
+from trainnr.deploy.viewport_source import scene_text  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
 
 CTRL_C = "Ctrl-C"
 

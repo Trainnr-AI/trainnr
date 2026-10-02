@@ -23,7 +23,7 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 ## 0. What the Studio is
 
-One native desktop application, `crates/studio-shell`, about 1,200 lines
+One native desktop application, `crates/trainnr-desktop`, about 1,200 lines
 of Rust in three files. It is an [eframe](https://github.com/emilk/egui)
 app (eframe = the application harness for the egui immediate-mode GUI
 library) that does two things:
@@ -44,8 +44,8 @@ behind a `code` button. That is the whole app. There is **no chat panel**
 — see §2.
 
 The single ingest address has one definition, `STUDIO_ADDRESS` in
-`pipeline/rq_pipeline/viz.py`, mirrored against the Rust bind string by a
-test (`pipeline/tests/test_studio_mirrors.py`) so the two halves cannot
+`trainnr/trainnr/viz.py`, mirrored against the Rust bind string by a
+test (`trainnr/tests/test_studio_mirrors.py`) so the two halves cannot
 drift apart silently.
 
 ## 1. Superseded: GPUI as the shell (decided 2026-08-30, reversed the same day)
@@ -84,7 +84,7 @@ removed in S1 along with about a thousand lines and the ACP dependency.
 they trust and pay for. Embedding one makes us a worse IDE instead of a
 better instrument. The agent lives in the developer's own tool — Claude
 Code in a terminal, Cursor, VS Code, Claude Desktop — and reaches this
-repo through the MCP server (`pipeline/rq_pipeline/mcp_server.py`). The
+repo through the MCP server (`trainnr/trainnr/mcp_server.py`). The
 Studio is what that agent *opens* to show a human something.
 
 The ACP work stays in git history deliberately; it taught the protocol,

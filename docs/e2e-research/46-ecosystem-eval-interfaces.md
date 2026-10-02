@@ -5,8 +5,8 @@ current `main`/`master` code of each repository fetched raw from GitHub, plus tw
 Hugging Face pages. Every claim is cited as `path:Lnn` — path inside that
 repository, line number as the fetch reported it (approximate, ±5) — with a
 short quote. Where a fetch failed or a grep found nothing, that is stated.
-Nothing from memory. Mapped against `pipeline/rq_pipeline/evaluate/harness.py`,
-`pipeline/rq_pipeline/evaluate/vision.py` and docs/30 §7 (Arena is covered
+Nothing from memory. Mapped against `trainnr/trainnr/evaluate/harness.py`,
+`trainnr/trainnr/evaluate/vision.py` and docs/30 §7 (Arena is covered
 there and in e2e-research/39–44; not repeated).*
 
 Terms, defined once. An **environment** (env) is the simulated task as code: it
@@ -215,7 +215,7 @@ The smallest task interface all six can drive, as exact names:
 1. **A `gym.Env` subclass, Gymnasium ≥1.1 semantics**: `reset(*, seed=None, options=None) -> (obs, info)`,
    `step(action) -> (obs, reward, terminated, truncated, info)`, `observation_space: spaces.Dict`,
    `action_space: spaces.Box`, `metadata = {"render_fps": <control Hz>, "autoreset_mode": AutoresetMode.NEXT_STEP}`;
-   registered `gym.register(id="robotiq/<task>-v0", entry_point=..., max_episode_steps=protocol.steps)`.
+   registered `gym.register(id="trainnr/<task>-v0", entry_point=..., max_episode_steps=protocol.steps)`.
 2. **One observation dict, three things, renamed at the adapter**:
    `{"pixels": {"<cam>": uint8 (H,W,3)}, "agent_pos": float32 (state_width,), "task": str}` — LeRobot's raw form
    (`preprocess_observation` maps it to `observation.images.<cam>` / `observation.state`); GR00T's
@@ -226,7 +226,7 @@ The smallest task interface all six can drive, as exact names:
    `"task"`) and `info["is_success"] = bool` (LeRobot), same value; `terminated` stays the MDP end and
    `truncated` the step cap — never `done = success` (LIBERO/openpi conflate them; Gymnasium's text forbids it).
 4. **Paired starts through the standard door**: `reset(seed=trial)` calls `protocol.perturb(trial, home)`
-   (`pipeline/rq_pipeline/evaluate/harness.py:65`), so seed *k* is start *k* for every policy; plus
+   (`trainnr/trainnr/evaluate/harness.py:65`), so seed *k* is start *k* for every policy; plus
    `get_state()` / `reset_to(state)` (robomimic; LIBERO's `set_init_state`) for exact replay.
 5. **Hub form**: *env.py* with `make_env(n_envs=1, use_async_envs=False, cfg=None)` returning
    `gym.vector.SyncVectorEnv` of item 1 (the spec's "most common" return); `requirements.txt`; pinned `@<commit>`.
@@ -234,7 +234,7 @@ The smallest task interface all six can drive, as exact names:
    sum_reward, max_reward, episode_length, policy, task, perturb_hash, bundle, protocol}` and
    `aggregated = {pc_success, successes, trials, ...}` — a superset of LeRobot's keys, robomimic's `Horizon` /
    `Num_Success`, GR00T's `episode_lengths`, and docs/30 §7's `EpisodeRecord`. `SimScore(successes, trials)`
-   (`pipeline/rq_pipeline/evaluate/harness.py:80`) becomes a fold over it.
+   (`trainnr/trainnr/evaluate/harness.py:80`) becomes a fold over it.
 
 ## 4. What none of them provides
 
@@ -252,7 +252,7 @@ The smallest task interface all six can drive, as exact names:
 - **No stamp of what was evaluated**: versions live in the gym id suffix (`-v0`) and the hub revision; no
   artifact hashes dynamics, protocol or adapter. `perturb_hash` / `bundle` / `protocol` in item 6 are ours alone.
 - **No census gate**: LeRobot sets `disable_env_checker: bool = True`; nothing checks the model loaded with
-  its actuators, sensors and cameras before episodes are spent (`pipeline/rq_pipeline/evaluate/harness.py:125-132` does).
+  its actuators, sensors and cameras before episodes are spent (`trainnr/trainnr/evaluate/harness.py:125-132` does).
 - **Success conflated with termination** in LIBERO and openpi; robomimic and Gymnasium keep them apart.
 
 ## 5. Open questions
@@ -269,4 +269,4 @@ The smallest task interface all six can drive, as exact names:
    `reward = float(success)` (robomimic's sparse convention; LIBERO's `reward = 1.0 if success`) or 0?
 5. **Hub publishing of a MuJoCo bundle**: the spec allows only `requirements.txt`; assets and the adapter
    hash must ride in the repo. Does `@<commit>` suffice as the `source@hash` stamp `score_policies` demands
-   (`pipeline/rq_pipeline/evaluate/harness.py:120-124`), or do we hash the tree ourselves?
+   (`trainnr/trainnr/evaluate/harness.py:120-124`), or do we hash the tree ourselves?

@@ -1,4 +1,4 @@
-// robotiq H3 harness: drives a virtual quadrature encoder on GP16/GP17
+// trainnr H3 harness: drives a virtual quadrature encoder on GP16/GP17
 // and compares the firmware's decoded count against ground truth.
 //
 // The script deliberately ramps the wheel speed past what a 10 kHz polling

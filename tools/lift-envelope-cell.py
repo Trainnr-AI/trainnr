@@ -2,15 +2,15 @@
 scale, N study-jitter trials, one process per cell (repeated MjSpec compiles
 in one process segfault, 2026-09-04). Prints `d<damping> g<gain> k/N`.
 
-    cd pipeline && uv run --extra sim python ../tools/lift-envelope-cell.py 1.0 0.4 [t…
+    cd trainnr && uv run --extra sim python ../tools/lift-envelope-cell.py 1.0 0.4 [t…
 """
 
 import sys
 
 import numpy as np
-from rq_pipeline.physics.mujoco_backend import MuJoCoBackend, keyframe_state
-from rq_pipeline.physics.servo_dr import scale_servo_dynamics
-from rq_pipeline.tasks.so101 import build_lift_study, scripted_pick
+from trainnr.physics.mujoco_backend import MuJoCoBackend, keyframe_state
+from trainnr.physics.servo_dr import scale_servo_dynamics
+from trainnr.tasks.so101 import build_lift_study, scripted_pick
 
 d, g = float(sys.argv[1]), float(sys.argv[2])
 ARGV_TRIALS = 3  # position of the optional trials argument

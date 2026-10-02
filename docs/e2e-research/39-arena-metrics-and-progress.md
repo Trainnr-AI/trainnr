@@ -6,9 +6,9 @@ Every claim cites `<repo path>:<line>`, the line in that bundle
 (*scratchpad/arena.md*), with the bundle's text quoted; nothing is filled
 from memory of Isaac Lab in general. The field: how Arena decides an
 episode succeeded, scores partial progress, records episodes, and judges
-multi-stage tasks — mapped against our harness (`rq_pipeline/evaluate/`),
-task referees (`rq_pipeline/tasks/aloha2/kitting.py`) and the certificate
-(`rq_pipeline/stats/`, `evaluate/certificate.py`).*
+multi-stage tasks — mapped against our harness (`trainnr/evaluate/`),
+task referees (`trainnr/tasks/aloha2/kitting.py`) and the certificate
+(`trainnr/stats/`, `evaluate/certificate.py`).*
 
 ---
 

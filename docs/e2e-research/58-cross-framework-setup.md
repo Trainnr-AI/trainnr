@@ -5,7 +5,7 @@
 ([57](57-bam-source-and-microduck.md)), and Isaac Lab Arena
 ([59](59-arena-composition-and-datagen.md), extending 39–46).
 Everything cited is evidence from those reads; design decisions are
-marked as such. Supersedes the narrower "rq_mjlab bridge" sketch
+marked as such. Supersedes the narrower "trainnr_mjlab bridge" sketch
 discussed after 56 — the later reads showed the bridge half-exists and
 the real gap is one level up. §7–§8 (Arena, and the synthetic-data
 segue) added the same day the Arena read landed.*
@@ -26,10 +26,10 @@ wall, their validation MAE not thrown away, contributions checked by
 more than an eyeball. Pollen-class users' wants: 57 §5 verbatim.
 
 Three parties, each missing what another has, all Apache-2.0. So the
-setup is NOT a robotiq framework that others import — it is **three
+setup is NOT a trainnr framework that others import — it is **three
 neutral, versioned artifacts plus the tools that produce, validate and
 consume them**, each solving one party's named pain, each usable
-without adopting anything else of ours. robotiq's business sits behind
+without adopting anything else of ours. trainnr's business sits behind
 them (identification as a service, certification, the Studio), not
 inside them.
 
@@ -61,19 +61,19 @@ inner object:
   FAILS LOUDLY (their loader silently ignores unknown keys; their key
   sets differ per motor).
 
-Producer: `rq-bundle wrap` over a `bam.fit` output directory;
-`rq-bundle verify` recomputes metrics and checks integrity. Adoption
+Producer: `trainnr-bundle wrap` over a `bam.fit` output directory;
+`trainnr-bundle verify` recomputes metrics and checks integrity. Adoption
 path: usable by anyone with a BAM fit today; a natural PR to Rhoban
 (it preserves data they already compute); the artifact our own M1–M6
 library re-publishes in. *(SHIPPED 2026-08-31 as
-`rq_pipeline/robot/actuator_bundle.py` + `tools/actuator-bundle.py` +
+`trainnr/robot/actuator_bundle.py` + `tools/actuator-bundle.py` +
 the 48 committed bundles under `robots/actuator-bundles/` — 6 rail
 flags and 9 floor flags found in BAM's published fits on day one;
 metrics/uncertainty sections await re-fitting from logs.)*
 
 ## 2. Artifact two: the maintained mjlab consumer
 
-*(design)* `rq_mjlab` — a dependent package (the plugin pattern their
+*(design)* `trainnr_mjlab` — a dependent package (the plugin pattern their
 registry already supports; no fork) that:
 
 - **ports the ~30-line BAM kernel to CURRENT mjlab** and keeps it
@@ -119,7 +119,7 @@ the robot side a runtime refuses to start when its flags contradict
 the manifest.
 
 Above the manifest sits what stays entirely ours: **certification**.
-Policies trained anywhere (mjlab via `rq_mjlab`, LeRobot, openpi) come
+Policies trained anywhere (mjlab via `trainnr_mjlab`, LeRobot, openpi) come
 back through the ONNX adapter into our evaluator — stamped tasks,
 paired trials, milestone funnels, both instruments, intervals,
 refusal semantics. Train anywhere; the certificate comes from us.
@@ -132,16 +132,16 @@ to our stats layer's declared alpha/delta.
 |---|---|---|
 | mjlab core | the DR no-op linter; the RecorderTerm; nightly gates on their own harness | their recurring staleness-bug class; an empty API; a chart that asserts nothing (56) |
 | Rhoban/BAM | the bundle envelope (preserves the MAE they discard); the current-mjlab kernel | zero tests, no schema, a dead version wall (57 §3–4) |
-| Pollen-class users | bundles + `rq_mjlab` + manifests | all of 57 §5 — they already built a worse version of each by hand |
+| Pollen-class users | bundles + `trainnr_mjlab` + manifests | all of 57 §5 — they already built a worse version of each by hand |
 | Arena/NVIDIA | certified bundles for their hand-entered gains; the manifest; certification behind their eval | their README asks for "sim-to-real validated evaluation methods"; `sysid` = 0 hits in 992 files ([59](59-arena-composition-and-datagen.md) §4) |
-| robotiq | owns the spec, the tools, the certification authority, the Studio view of all of it | the wedge: nobody else measures, and now the measurement has a portable artifact |
+| trainnr | owns the spec, the tools, the certification authority, the Studio view of all of it | the wedge: nobody else measures, and now the measurement has a portable artifact |
 
 Nothing requires anyone to adopt anything else; every piece is
 additive to their existing repos; everything is Apache-2.0. That is
 the property that makes it adoptable by the people who built the
 frameworks — it reads as ecosystem infrastructure, not a land grab.
 
-## 5. What robotiq keeps proprietary-by-competence
+## 5. What trainnr keeps proprietary-by-competence
 
 Not by license — by being the only ones who can do it: the
 identification service (bench + protocol + the fits themselves), the
@@ -153,7 +153,7 @@ for the service that produces trustworthy ones.
 
 ## 6. Sequencing, with gates
 
-1. **Bundle spec + `rq-bundle wrap/verify`** over our existing vendored
+1. **Bundle spec + `trainnr-bundle wrap/verify`** over our existing vendored
    BAM fits (no GPU needed; pure Python; can start now).
 2. **Kernel port to mjlab 1.6** + the refusing ActuatorCfg + auto
    event registration (needs the GPU box; the former
@@ -246,12 +246,12 @@ from zero. Borrow, with sources:
 
 ## 9. The dialect rule: whose conventions win where *(standing, 2026-08-31)*
 
-The operator's rule: the product must hold robotiq's coding standards
+The operator's rule: the product must hold trainnr's coding standards
 AND read as native in each host's dialect. The boundary principle —
 **at every interface we speak THEIR language; inside the core we keep
 ours** — resolved per artifact, from the idioms the reads measured:
 
-- **`rq_mjlab` is written in mjlab's dialect** (56): `*Cfg`
+- **`trainnr_mjlab` is written in mjlab's dialect** (56): `*Cfg`
   dataclasses, `entity_name` (their deliberate rename), the
   `edit_spec → initialize → compute` actuator lifecycle verbatim, the
   `param_names` fusion contract, tyro-compatible flags with explicit
@@ -284,7 +284,7 @@ theirs; discipline is ours.
 
 ## 10. What changed since 56 §7
 
-56 rejected "adoption as substrate" and proposed a bridge robotiq
+56 rejected "adoption as substrate" and proposed a bridge trainnr
 would build alone. 57 showed the bridge half-exists (Rhoban's
 `bam.mjlab`) and is production-used (Pollen). 59 showed the third pole
 has the same absent layer and asks for it by name. The design

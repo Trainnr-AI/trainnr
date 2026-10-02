@@ -1,10 +1,10 @@
 """The fetch loop: a cube on the floor, and a robot that goes and gets it.
 
-Run from pipeline/ (needs the sim extra and macOS's mjpython):
+Run from trainnr/ (needs the sim extra and macOS's mjpython):
 
-    cd pipeline && uv run mjpython ../tools/show-rig.py        # fetch demo
-    cd pipeline && uv run mjpython ../tools/show-rig.py car    # car alone
-    cd pipeline && uv run mjpython ../tools/show-rig.py arm    # arm alone
+    cd trainnr && uv run mjpython ../tools/show-rig.py        # fetch demo
+    cd trainnr && uv run mjpython ../tools/show-rig.py car    # car alone
+    cd trainnr && uv run mjpython ../tools/show-rig.py arm    # arm alone
 
 Cycle: SEEK the cube (bearing control) -> CREEP onto it (pulsed inchworm
 with lateral servo, +-4 mm; retreats and retries on a lateral miss) ->
@@ -20,7 +20,7 @@ import time
 import mujoco
 import mujoco.viewer
 import numpy as np
-from rq_pipeline.tasks.components import (
+from trainnr.tasks.components import (
     CROUCH_POSE,
     GROUND_GRASP_POINT,
     GROUND_HOLDUP,
@@ -29,7 +29,7 @@ from rq_pipeline.tasks.components import (
     add_floor_cube,
     compose,
 )
-from rq_pipeline.tasks.scene import NominalOptions
+from trainnr.tasks.scene import NominalOptions
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "both"
 scene = compose(car=mode in ("car", "both"), arm=mode in ("arm", "both"))

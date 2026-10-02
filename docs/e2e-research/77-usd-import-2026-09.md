@@ -3,7 +3,7 @@
 Research date: **2026-09-24** (the box, past midnight). The question
 Prakhar asked after the second standards review: *"can we use these
 kind of assets directly with our studio without changing anything?"*
-(robotiq/isaacsim_assets), and then: *"lets research more on this USD
+(trainnr/isaacsim_assets), and then: *"lets research more on this USD
 thing and how can we make it easily importable in our app with native
 USD support with Newton and WARP and everything"*.
 
@@ -73,7 +73,7 @@ five-bar finger linkage) and cannot live in a tree.
   render-frames-to-USD *exporter* for Omniverse and Blender; it writes
   no physics and reads no USD.
 
-## 2. The asset (robotiq/isaacsim_assets, read at the tip 6d992b6, 2026-09-23)
+## 2. The asset (trainnr/isaacsim_assets, read at the tip 6d992b6, 2026-09-23)
 
 One gripper: `grippers/Robotiq_2F_85/Robotiq_2F_85.usda` with parts,
 payloads, materials and a `newton/` folder. Licence in the package:
@@ -178,7 +178,7 @@ Hulls are what the stills show, because hulls are all the solver wrote.
 
 ### 4.1 Built: the bundle (2026-09-24, branch `usd-bundle-2026-09-24`)
 
-Every item above is now the writer's (`pipeline/rq_pipeline/robot/usd_import.py`)
+Every item above is now the writer's (`trainnr/trainnr/robot/usd_import.py`)
 and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
 `robotiq-2f85-isaac@3ec025e4cd56` at first, `@e1bc2cbba31f` once the
 importer audit landed on its record the same evening, and `@a2b73f6d43bc` once
@@ -187,7 +187,7 @@ since the mimic carries its authored softness (the same night); 3.0 MB,
 deterministic: the scratch run and the library run gave the same stamp). Written on the box in
 2.9 s once Warp's kernels are cached, through the pinned venv (newton
 1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
-mujoco-warp 3.11.0), and pinned by `pipeline/tests/test_usd_import.py`:
+mujoco-warp 3.11.0), and pinned by `trainnr/tests/test_usd_import.py`:
 
 | The bundle | Measured |
 |---|---|
@@ -225,7 +225,7 @@ What building it found, beyond §4's list:
   takes `newton[importers]` only and the `gpu` extra keeps supplying
   mujoco-warp. Newton needs warp-lang 1.17 and `mujoco-mjx[warp]`
   3.11.0 locks warp-lang 1.14: the `usd` and `mjx` extras are declared
-  mutually exclusive in `pipeline/pyproject.toml` (uv's `conflicts`).
+  mutually exclusive in `trainnr/pyproject.toml` (uv's `conflicts`).
 - **The solver step runs CPU-only.** Without a visible CUDA driver Warp
   reports only the cpu device and the bridge still writes the MJCF; the
   Mac question is answered for the solver, and open only for whether
@@ -256,8 +256,8 @@ What building it found, beyond §4's list:
 | Decision | Rejected | Why |
 |---|---|---|
 | Newton reads, Newton's MuJoCo bridge writes the MjSpec; **our module is the bundle writer around the MjSpec** and the test that the bundle matches the USD | our own UsdPhysics reader and MJCF writer from pxr | additive over libraries; Newton's importer is the one every USD-native engine will keep current (the Newton schema is MuJoCo's own since 3.12); the MjSpec is the seam we already own for variants and sensors |
-| The USD door is a second **source kind** of the existing onboarding (`onboard_robot` in `pipeline/rq_pipeline/mcp_actions.py` took an MJCF path until 2026-09-24): suffix → reader, a registry, not an if/elif | a separate "import USD" tool | one door, one record, one stamp; the Studio's onboarding card gains a file type, nothing else |
-| `usd` extra = `newton[importers]` pinned to the release measured against our mujoco (1.6.0 today), mujoco-warp from the `gpu` extra | `newton[importers,sim]`; a loose floor | Newton's release declares mujoco 3.12 while the bridge measured right on 3.11.0; a floor would drag the engine (the 3.12 incident in `pipeline/pyproject.toml`) |
+| The USD door is a second **source kind** of the existing onboarding (`onboard_robot` in `trainnr/trainnr/mcp_actions.py` took an MJCF path until 2026-09-24): suffix → reader, a registry, not an if/elif | a separate "import USD" tool | one door, one record, one stamp; the Studio's onboarding card gains a file type, nothing else |
+| `usd` extra = `newton[importers]` pinned to the release measured against our mujoco (1.6.0 today), mujoco-warp from the `gpu` extra | `newton[importers,sim]`; a loose floor | Newton's release declares mujoco 3.12 while the bridge measured right on 3.11.0; a floor would drag the engine (the 3.12 incident in `trainnr/pyproject.toml`) |
 | Provenance in the bundle record: repository, commit, file, variant selections, licence, newton and usd-core versions, `mesh_maxhullvert` | a README line | the record is inside the stamp; a re-import from a moved tip changes the stamp by itself |
 | The test compares the compiled bundle to a fresh pxr read of the USD: joint ranges, masses, inertias where real, drive gains, equality count, actuator force range | trusting Newton's return | the test is the product's word; it also catches the next Newton release silently changing a unit |
 | Visual meshes as OBJ files under `assets/`, collision as hulls | inline vertex arrays | every bundle references files; a 31k-vertex base inline is a 3 MB XML nobody can diff |
@@ -267,16 +267,16 @@ days, as planned with these differences: the `usd` extra is
 `newton[importers]` beside `gpu`, not `newton[importers,sim]` (§4.1,
 the 3.12 declaration); the root is `fixed` or `free` (a fixed root
 attaches under an arm as it is, so `--attach` is not a third kind); the
-door's registry lives in `pipeline/rq_pipeline/robot/onboarding.py`
+door's registry lives in `trainnr/trainnr/robot/onboarding.py`
 (MJCF and USD as `@model_source`s by suffix, third formats through the
-`rq_pipeline.model_sources` entry-point group) and `onboard_robot` in
-`pipeline/rq_pipeline/mcp_server.py` takes `variants` and `root`; a
+`trainnr.model_sources` entry-point group) and `onboard_robot` in
+`trainnr/trainnr/mcp_server.py` takes `variants` and `root`; a
 public asset is fetched at a pinned commit by
-`pipeline/rq_pipeline/robot/asset_fetch.py` (Git LFS aware, the
+`trainnr/trainnr/robot/asset_fetch.py` (Git LFS aware, the
 empty-file refusal) and `tools/import-usd.py --fetch`; the schema
 registry refusal was not planned. The plan as written:
 
-1. **Day 1 — the reader and the test first.** *rq_pipeline/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
+1. **Day 1 — the reader and the test first.** *trainnr/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
 2. **Day 2 — the bundle writer and the door.** Leaf names, mesh files, `ctrlrange` from the driven joint's range, the sensor block, a `home` key, `--free`/`--attach` root, the record with provenance, README with the CC BY line and the runtime options Robotiq recommends as a declared `<option>`. The onboarding registry gains `.usd|.usda|.usdc|.usdz`; `onboard_robot` in the Studio's MCP surface names the variant selections in its arguments; a missing `newton` refuses with the install line per OS.
 3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, docs/07, a docs/33 row, tools/README rows, this document's §4 replaced by the bundle's numbers.
 
@@ -289,9 +289,9 @@ explanations for the documented conversions and MuJoCo's loader losses
 at the running build; an unexplained change is refused by name. The
 2F-85 audits at 7 explained, 0 unexplained: every mass, centre of mass,
 inertia tensor and joint parameter equals the USD layer, which is the
-§4 test generalised to every format (`pipeline/rq_pipeline/robot/import_audit.py`,
-`pipeline/tests/test_import_audit.py`, `tools/audit-bundle.py`). The
-URDF door came with it (`pipeline/rq_pipeline/robot/urdf_import.py`).
+§4 test generalised to every format (`trainnr/trainnr/robot/import_audit.py`,
+`trainnr/tests/test_import_audit.py`, `tools/audit-bundle.py`). The
+URDF door came with it (`trainnr/trainnr/robot/urdf_import.py`).
 
 Risks, each with its fallback: Newton's next release moves the mujoco
 pin before we do (the extra pins Newton; the import is offline work,
@@ -330,7 +330,7 @@ Primary, read at the code on 2026-09-24: newton-physics/newton main
 main (`CMakeLists.txt`, `plugin/usd_decoder/usd_decoder.cc`,
 `doc/OpenUSD/*.rst`, `doc/changelog.rst`, `python/mujoco/usd/`);
 mujoco_warp *io.py*; mjlab `faq.rst`, `entity.py`; Menagerie
-`robotiq_2f85/2f85.xml` + README; robotiq/isaacsim_assets at 6d992b6
+`robotiq_2f85/2f85.xml` + README; trainnr/isaacsim_assets at 6d992b6
 (every layer, both variant sets, `PACKAGE-LICENSES/LICENSE`); Isaac
 Lab `converters/`; Isaac Sim `isaacsim.asset.exporter.urdf`
 (*joint_reader.py*, *urdf_writer.py*) and

@@ -1,6 +1,6 @@
 """The rented card's training, live in the Studio window.
 
-    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \\
+    cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \\
         python ../tools/studio-cloud-feed.py <ssh-door> <remote-log> \\
         [--name cloud] [--every 2]
 
@@ -35,13 +35,13 @@ from _lab import bootstrap
 
 bootstrap()
 
-from rq_pipeline.cloud.provider import SshEndpoint  # noqa: E402
-from rq_pipeline.cloud.transfer import ssh_argv  # noqa: E402
-from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+from trainnr.cloud.provider import SshEndpoint  # noqa: E402
+from trainnr.cloud.transfer import ssh_argv  # noqa: E402
+from trainnr.envs.lerobot_train_log import (  # noqa: E402
     METRIC_NAMES,
     parse_train_line,
 )
-from rq_pipeline.viz import STUDIO_ADDRESS  # noqa: E402
+from trainnr.viz import STUDIO_ADDRESS  # noqa: E402
 
 SEEN_LINES_CAP = 20000
 
@@ -725,7 +725,7 @@ def recording_id_for(door: str, log: str) -> str:
     """The recording a (machine, log) pair always streams into."""
     import uuid  # noqa: PLC0415
 
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rq-feed://{door}/{log}"))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"trainnr-feed://{door}/{log}"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -770,7 +770,7 @@ def main() -> int:
     # copies of the same campaign (the operator's screenshot,
     # 2026-09-03, showed the pre-fix recording beside the live one).
     rr.init(
-        f"rq-{args.name}-feed",
+        f"trainnr-{args.name}-feed",
         recording_id=recording_id_for(args.door, args.log),
         spawn=False,
     )

@@ -1,4 +1,4 @@
-// robotiq Level-1 proof: drive TWO virtual quadrature encoders and compare
+// trainnr Level-1 proof: drive TWO virtual quadrature encoders and compare
 // the pose the FIRMWARE computes (using sim-core's Odometry, on emulated
 // ARM) against ground truth computed here in TypeScript.
 //

@@ -27,10 +27,10 @@ from _lab import REPO, bootstrap
 
 bootstrap()
 
-from rq_pipeline.evaluate.figures import render  # noqa: E402
-from rq_pipeline.evaluate.findings import Finding, repo_commit, today  # noqa: E402
-from rq_pipeline.evaluate.records import read_records  # noqa: E402
-from rq_pipeline.stats.effects import main_effect  # noqa: E402
+from trainnr.evaluate.figures import render  # noqa: E402
+from trainnr.evaluate.findings import Finding, repo_commit, today  # noqa: E402
+from trainnr.evaluate.records import read_records  # noqa: E402
+from trainnr.stats.effects import main_effect  # noqa: E402
 
 AT_FIT = "walk-verdict-at-fit-cuda.json"
 OWN_DR = "walk-verdict-cuda.json"
@@ -85,7 +85,7 @@ def fold(
 ) -> dict[str, Any]:
     """The at-fit certificates as arms, the own-DR ones beside them, and
     the paired effects between arms."""
-    from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
+    from trainnr.stats.intervals import clopper_pearson  # noqa: PLC0415
 
     result: dict[str, Any] = {
         "arms": {},

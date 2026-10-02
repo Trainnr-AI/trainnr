@@ -1,7 +1,7 @@
 """Many worlds: N ALOHA 2 rigs in a grid, each with its own start and its
 own dynamics, stepping together in both viewers.
 
-    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \
+    cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python \
         ../tools/show-many.py --worlds 16 --dr 0.3
 
 The Isaac-Lab picture on the MuJoCo stack: the bundle's transfer-cube
@@ -40,7 +40,7 @@ from _lab import (
 )
 
 bootstrap()
-from rq_pipeline.tasks.aloha2 import (  # noqa: E402
+from trainnr.tasks.aloha2 import (  # noqa: E402
     ACT_SIM_LOOK,
     CUBE_HALF,
     CUBE_HOME,
@@ -52,14 +52,14 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     build_transfer_cube,
     ctrl_from_act_sim_action,
 )
-from rq_pipeline.tasks.scene import (  # noqa: E402
+from trainnr.tasks.scene import (  # noqa: E402
     GeomGroup,
     NominalOptions,
     grid_of,
     pin_nominal_options,
     set_render_budget,
 )
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 NEUTRAL_QPOS = [0, -0.96, 1.16, 0, -0.3, 0, 0.0084, 0.0084] * 2
 LIFTED_M = 0.05  # cube centre 3 cm above resting counts as lifted
@@ -156,7 +156,7 @@ def main() -> None:
     actions = load_demo_actions(args.dataset, args.episode)
     ctrl_per_step = [ctrl_from_act_sim_action(a) for a in actions]
 
-    rr_session(f"robotiq-many-{args.worlds}", mode="spawn")
+    rr_session(f"trainnr-many-{args.worlds}", mode="spawn")
     mirror = RigMirror(
         model, model_colors=True, skip_groups=(GeomGroup.COLLISION, GeomGroup.HIDDEN)
     )

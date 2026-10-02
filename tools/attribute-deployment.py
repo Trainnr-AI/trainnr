@@ -18,7 +18,7 @@ from _lab import bootstrap, deployment_args, resolve_deployment, running
 
 bootstrap()
 
-from rq_pipeline.deploy.attribution import (  # noqa: E402
+from trainnr.deploy.attribution import (  # noqa: E402
     STREAM,
     SURVIVED,
     attribute,
@@ -30,12 +30,12 @@ from rq_pipeline.deploy.attribution import (  # noqa: E402
     still_at_cliff,
     write_attribution,
 )
-from rq_pipeline.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
-from rq_pipeline.deploy.manifest import Key  # noqa: E402
-from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.cited import cited_certificate  # noqa: E402
-from rq_pipeline.viz import viewer_file  # noqa: E402
+from trainnr.deploy.gate import DEFAULT_TOLERANCE  # noqa: E402
+from trainnr.deploy.manifest import Key  # noqa: E402
+from trainnr.deploy.viewport_source import scene_text  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.cited import cited_certificate  # noqa: E402
+from trainnr.viz import viewer_file  # noqa: E402
 
 
 def main() -> None:

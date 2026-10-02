@@ -144,7 +144,7 @@ identification on a hobby-servo arm.** The identify-first-randomise-second
 position is still open — but the ecosystem is circling it, so it is a head
 start measured in months, not years.
 
-### What `robotiq` already has, and the one thing that blocks it
+### What `trainnr` already has, and the one thing that blocks it
 
 The audit finding: **the repo already logs the exact input/output pair system
 identification needs.** From `crates/hil-protocol/src/lib.rs`, every 20 ms tick

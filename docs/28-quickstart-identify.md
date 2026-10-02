@@ -10,7 +10,7 @@ log. Rig owners have a shorter path — see the end.*
 One prerequisite: [uv](https://docs.astral.sh/uv/).
 
 ```sh
-cd pipeline && uv sync --extra sim     # mujoco[sysid] and friends
+cd trainnr && uv sync --extra sim     # mujoco[sysid] and friends
 ```
 
 (Rust and the Pico toolchain are only for this repo's own rig — you
@@ -37,7 +37,7 @@ and a `model.xml`. Copy
 ## 2. Get your data in
 
 The fit consumes three row-aligned arrays
-(`rq_pipeline.robot.identify.ExcitationData`): `times` (seconds,
+(`trainnr.robot.identify.ExcitationData`): `times` (seconds,
 strictly increasing), `controls` (your model's actuator units, one
 column per actuator), `measurements` (your model's sensor outputs, one
 column per sensor). The run must start at rest at the model's home
@@ -46,7 +46,7 @@ state — trim anything recorded mid-motion.
 From any logger's CSV:
 
 ```python
-from rq_pipeline.collect.csv_data import excitation_from_csv
+from trainnr.collect.csv_data import excitation_from_csv
 
 data = excitation_from_csv(
     "run-1.csv", time="t", controls=["duty"], measurements=["angle_rad"]
@@ -63,7 +63,7 @@ signal if your bus has one, and never fit against a derived channel.
 
 One `ParameterSpec` per parameter: bounds, and a named modifier that
 writes the value into the MjSpec (see
-[`rq_pipeline/robot/drivetrain_fit.py`](../pipeline/rq_pipeline/robot/drivetrain_fit.py)
+[`trainnr/robot/drivetrain_fit.py`](../trainnr/trainnr/robot/drivetrain_fit.py)
 for a worked, committed example). Two protocol rules that cost this
 repo real sessions:
 
@@ -82,9 +82,9 @@ repo real sessions:
 ## 4. Fit, record, repeat
 
 ```python
-from rq_pipeline.bundles.hashing import stamp
-from rq_pipeline.robot.identify import identify
-from rq_pipeline.robot.fit_record import write_fit_record, write_spread_record
+from trainnr.bundles.hashing import stamp
+from trainnr.robot.identify import identify
+from trainnr.robot.fit_record import write_fit_record, write_spread_record
 
 result = identify(model_xml, data, parameter_specs)
 print(result.summary())                    # pinned / NOT PINNED, per parameter

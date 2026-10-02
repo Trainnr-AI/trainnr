@@ -33,13 +33,13 @@ from _lab import bootstrap
 
 bootstrap()
 
-from rq_pipeline.bundles.bundle import (  # noqa: E402
+from trainnr.bundles.bundle import (  # noqa: E402
     migrate_audit,
     model_file_of,
     write_audit,
 )
-from rq_pipeline.bundles.hashing import stamp  # noqa: E402
-from rq_pipeline.robot.import_audit import audit_bundle  # noqa: E402
+from trainnr.bundles.hashing import stamp  # noqa: E402
+from trainnr.robot.import_audit import audit_bundle  # noqa: E402
 
 
 def parse_variant(text: str) -> tuple[str, str]:

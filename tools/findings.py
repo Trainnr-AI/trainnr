@@ -13,7 +13,7 @@ from _lab import REPO, bootstrap
 
 bootstrap()
 
-from rq_pipeline.evaluate.findings import load_findings, render_ledger  # noqa: E402
+from trainnr.evaluate.findings import load_findings, render_ledger  # noqa: E402
 
 LEDGER = REPO / "docs" / "68-findings.md"
 

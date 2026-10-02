@@ -82,7 +82,7 @@ Total essential ≈ 1,470 lines, and none of it changes shape.
 
 ## 4. What to build (about 300 lines, three files)
 
-**4.1 The env — `rq_pipeline/envs/lerobot` (~220 code lines).** One
+**4.1 The env — `trainnr/envs/lerobot` (~220 code lines).** One
 class per rig, not per task: `RobotiqEnv(task, ...)` where `task` is
 the existing `build_transfer_cube()` / `build_kitting()` result.
 
@@ -111,7 +111,7 @@ the existing `build_transfer_cube()` / `build_kitting()` result.
 - The census gate runs in `__init__`; an unstamped `source` is refused
   there too — the same rules `score_policies` enforces today, moved to
   where the env is born.
-- `RobotiqEnvConfig(EnvConfig)` registered as `robotiq_aloha2`:
+- `RobotiqEnvConfig(EnvConfig)` registered as `trainnr_aloha2`:
   `features`, `features_map` (`agent_pos → observation.state`,
   `pixels/top → observation.images.top`), `create_envs` building
   `SyncVectorEnv`/`AsyncVectorEnv` over `partial(RobotiqEnv, ...)`, and
@@ -204,7 +204,7 @@ collapse to one each.
    two policies at `seed=1000..1003` start from identical states
    (pairing); `is_success` reaches `final_info` under `SAME_STEP`.
 3. **`lerobot-eval` end to end** on the T5 checkpoint
-   (`--env.type=robotiq_aloha2 --env.discover_packages_path=rq_pipeline.envs.lerobot --seed=1000 --eval.n_episodes=4`)
+   (`--env.type=trainnr_aloha2 --env.discover_packages_path=trainnr.envs.lerobot --seed=1000 --eval.n_episodes=4`)
    — must reproduce this afternoon's 0/4, and write `eval_info.json`.
 4. **Records + fold** — `score_policies` becomes the fold; `certify()`
    unchanged; the Gate A dry run passes on records; the §6 fixes land
@@ -225,23 +225,23 @@ needed for step 3's checkpoint.
   hand-rolled inner loop. A pin: the Stepper reproduces
   `closed_loop_rollout` bit for bit on the pendulum, including the short
   last tick. Existing sim tests unchanged and green.
-- **Step 2, the env**: `rq_pipeline/envs/robotiq.py` (`RobotiqEnv`,
-  `TASKS`, `make_env`, `gym.register("robotiq/<task>-v0")`) and
-  `rq_pipeline/envs/lerobot_plugin.py` (`RobotiqEnvConfig`, registered
-  as `robotiq`). gymnasium joined the `sim` extra. Pinned: gymnasium's
+- **Step 2, the env**: `trainnr/envs/gymnasium_env.py` (`RobotiqEnv`,
+  `TASKS`, `make_env`, `gym.register("trainnr/<task>-v0")`) and
+  `trainnr/envs/lerobot_plugin.py` (`RobotiqEnvConfig`, registered
+  as `trainnr`). gymnasium joined the `sim` extra. Pinned: gymnasium's
   own `check_env`; the raw observation shape; seed = trial pairing;
   truncation with the verdict under both names; the unstamped source
   refused; and, in the train venv, LeRobot's `make_env` +
   `preprocess_observation` producing `observation.state` (1, 14) and
   `observation.images.top` (1, 3, 480, 640).
-- **Step 3, the acceptance run**: `lerobot-eval --env.type=robotiq
-  --env.task=kitting --env.discover_packages_path=rq_pipeline.envs
+- **Step 3, the acceptance run**: `lerobot-eval --env.type=trainnr
+  --env.task=kitting --env.discover_packages_path=trainnr.envs
   --policy.path=<T5 checkpoint> --seed=1000 --eval.n_episodes=4` →
   **0/4, the harness's verdict reproduced**, 78 s per episode (the
   harness took 73), an mp4 per episode, `eval_info.json` written.
 - Three facts learned on the way, now in the code's docstrings:
   `discover_packages_path` takes a *package* (it walks `__path__`), so
-  the flag is `rq_pipeline.envs`; LeRobot 0.6.1's `eval_info.json`
+  the flag is `trainnr.envs`; LeRobot 0.6.1's `eval_info.json`
   carries `per_task[].metrics.successes` as a list in episode order and
   **no per-episode seed** — the fold (step 4) derives `seed + i` from
   the order and writes our own record; and the WSL box's D3D12 renderer
@@ -294,13 +294,13 @@ needed for step 3's checkpoint.
   walks all four; a limp policy leaves an empty chain. 196 sim tests.
 - **The `Task` unification (§6)**: one frozen `Task(name, spec,
   protocol, cameras, state_width, instruction, target)` in
-  `rq_pipeline/tasks/task.py`, validated on construction (a positive
+  `trainnr/tasks/task.py`, validated on construction (a positive
   state width, a non-empty instruction, at least one camera) replaces
   `SO101Task` and `ALOHA2Task`; every builder states its rig's jointpos
   block and its sentence, and `RobotiqEnv(task, source=…)` reads them
   instead of taking them as keyword arguments. `KITTING_INSTRUCTION` is
   one string read by the exporter and the task. All six tasks — the
-  four SO-101 and the two ALOHA 2 — register as `robotiq/<task>-v0` on
+  four SO-101 and the two ALOHA 2 — register as `trainnr/<task>-v0` on
   their own bundles' stamps. 199 sim tests.
 - **The variation schema and the sensitivity table** (docs/30 §7 row
   41): `evaluate/variations.py` — `Variation(host, name, sampler,
@@ -341,7 +341,7 @@ day's code against it (hardcoding/portability/OSS hygiene; DRY and
 constants; modularity and layering), and their findings were folded
 into two batches the same night. What changed:
 
-- **Layering, written down and enforced.** `rq_pipeline/protocol.py`
+- **Layering, written down and enforced.** `trainnr/protocol.py`
   holds the vocabulary every layer shares (`EpisodeProtocol`,
   `Milestone`, `CameraSpec`, `events_for`, `protocol_fields`); the
   chain `stats ← bundles, protocol, robot.model_checks ← evaluate ←
@@ -353,7 +353,7 @@ into two batches the same night. What changed:
   importing `collect` (placed a tier up).
 - **Registries where there were tables.** Tasks register themselves
   (`tasks/registry.py`: `@register(name, rig=…)`, `tasks()`, `resolve()`,
-  ids `namespace/name`, a `rq_pipeline.tasks` entry-point group so an
+  ids `namespace/name`, a `trainnr.tasks` entry-point group so an
   installed package's `acme/pour` is `--env.task=acme/pour` and
   `gym.make("acme/pour-v0")` with nothing of ours edited); variation
   appliers register by knob name (`physics/variations.py`), so a new
@@ -378,7 +378,7 @@ into two batches the same night. What changed:
   `sys.executable -m …` and resolves the device (cuda → mps → cpu); the
   bundle hash skips hidden files and `.gitattributes` pins LF, so a Mac
   `.DS_Store` or a Windows CRLF checkout cannot change a stamp; bundles
-  are located through `RQ_ROBOTS_DIR` with a loud error; launch lines
+  are located through `TRAINNR_ROBOTS_DIR` with a loud error; launch lines
   are labelled WSL vs macOS.
 - **Open-source hygiene.** `LICENSE` (Apache-2.0) and `NOTICE` at the
   root, `license` on the Cargo workspace; `.env` and per-user Claude
@@ -402,7 +402,7 @@ derived once; FULLPHYSICS offsets derived from the model; typed
 exists for the harness; the env still touches MuJoCo directly);
 bundles as package data; the remaining tool copies of scene constants
 (show-many, rl-watch, show-aloha2); and the older tools themselves —
-`tools/` was never under the ruff gate that `pipeline/` runs, and a
+`tools/` was never under the ruff gate that `trainnr/` runs, and a
 sweep found 60 findings (magic numbers, `zip` without `strict`,
 `subprocess.run` without `check`) in files this pass did not touch.
 215 sim tests, 3 plugin tests, the kitting-export round trip, and the
@@ -411,7 +411,7 @@ layer chain all green.
 ### The chain after the review, run whole (2026-08-26, late night)
 
 Demo batch (±30% DR, 4 of 5 kept) → `kitting_export` → `lerobot-train`
-with `--env.type=robotiq --env_eval_freq=600 --env.record_to=…` (the
+with `--env.type=trainnr --env_eval_freq=600 --env.record_to=…` (the
 trainer's own in-loop eval wrote two of our records) → `lerobot-eval`
 with records (0/4, CP95 [0, 0.602], funnel `part_moved 2/4`) →
 `train-watch --play` on the checkpoint → 216/216 in both venvs. Twenty
@@ -432,7 +432,7 @@ Still open after it, with the reason each one waits:
 |---|---|
 | ~~`MJXWarpBackend.stepper`~~ — **done 2026-08-27**: a BATCHED stepper (`MJXBatchedStepper`), admitted by the gauntlet; the vectorized gymnasium env over it is what remains (docs/49) | The env class over the batched stepper lands with the cloud run, where its throughput can be measured. |
 | ~~A `Stepper` Protocol~~ — **done 2026-08-27**: `harness.Stepper` names `sensordata`/`states`/`sensors`/`extras`/`advance`/`done`; the CPU stepper is asserted to satisfy it | — |
-| An engine registry — **done 2026-08-27**: `physics/registry.py`, `rq_pipeline.engines` entry points, one plugin loader (`plugins.py`) that names a failing plugin; and the observables hook (`EpisodeProtocol.observables`, `Engine.observables`, `require_observables`) | Plumbing `Stepper.extras` into `success` waits for the first engine that exposes anything (a deformable's particles). The pyproject entry-point keys are never read against the decorator names — drift there is silent until a plugin is installed. |
+| An engine registry — **done 2026-08-27**: `physics/registry.py`, `trainnr.engines` entry points, one plugin loader (`plugins.py`) that names a failing plugin; and the observables hook (`EpisodeProtocol.observables`, `Engine.observables`, `require_observables`) | Plumbing `Stepper.extras` into `success` waits for the first engine that exposes anything (a deformable's particles). The pyproject entry-point keys are never read against the decorator names — drift there is silent until a plugin is installed. |
 | Task-side FULLPHYSICS offsets (`CUBE_STATE_SLICE = slice(17, 20)`, `PART_STATE_SLICE`, `_QPOS_OFFSET`) adopting `physics.FullPhysicsLayout` | Every one is pinned by a test today; the adoption is a mechanical pass over two rigs, queued behind the kitting work. |
 | `show-rig.py`, `show-yellow.py` without a Rerun mirror (the house rule) | Older rig viewers; the mirror is `RigMirror` plumbing plus a yellow-twin reconstruction the two errand tools already carry twice — the next item. |
 | `YellowTwin` (replay-errand, rig-rerun, sim-errand carry ~30 lines of the yellow twin's pose reconstruction each) and `RerunPaths`/`Timelines` for the entity strings | A rig-tool refactor, not an evaluation-layer one; queued with the rig's port to a bundle (docs/24). |

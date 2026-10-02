@@ -9,15 +9,15 @@
 #   ssh <door> 'bash -s' < tools/_pod-resume.sh
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive PATH="/root/.local/bin:$PATH"
-REPO="${RQ_REPO:-/workspace/robotiq}"
-PY="${RQ_UV_PYTHON:-3.12.8}"   # the version both venvs' pyvenv.cfg name
+REPO="${TRAINNR_REPO:-/workspace/robotiq}"
+PY="${TRAINNR_UV_PYTHON:-3.12.8}"   # the version both venvs' pyvenv.cfg name
 if ! dpkg -s libegl1 libgl1 libglib2.0-0 rsync >/dev/null 2>&1; then
-  apt-get update -qq && apt-get install -y -qq libegl1 libgl1 libglib2.0-0 rsync >/tmp/rq-apt.log 2>&1
+  apt-get update -qq && apt-get install -y -qq libegl1 libgl1 libglib2.0-0 rsync >/tmp/trainnr-apt.log 2>&1
 fi
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install "$PY" >/dev/null 2>&1 || true
 cd "$REPO"
-rq_mjlab/.venv/bin/python -c 'import torch, mujoco, warp; print("rq_mjlab venv ok, cuda", torch.cuda.is_available())'
-pipeline/.venv-train/bin/python -c 'import torch, lerobot; print("train venv ok, cuda", torch.cuda.is_available())'
+trainnr-mjlab/.venv/bin/python -c 'import torch, mujoco, warp; print("trainnr_mjlab venv ok, cuda", torch.cuda.is_available())'
+trainnr/.venv-train/bin/python -c 'import torch, lerobot; print("train venv ok, cuda", torch.cuda.is_available())'
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo "pod ready: $REPO"

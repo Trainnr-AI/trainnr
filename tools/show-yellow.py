@@ -1,14 +1,14 @@
 """Live viewer: the real rig's twin trying the rear pick, looping.
 
-cd pipeline && uv run --extra sim mjpython ../tools/show-yellow.py
+cd trainnr && uv run --extra sim mjpython ../tools/show-yellow.py
 """
 
 import time
 
 import mujoco
 import mujoco.viewer
-from rq_pipeline.tasks.scene import NominalOptions
-from rq_pipeline.tasks.yellow import REAR_GRASP_POINT, compose_rig
+from trainnr.tasks.scene import NominalOptions
+from trainnr.tasks.yellow import REAR_GRASP_POINT, compose_rig
 
 scene = compose_rig(car=True)
 cube = scene.worldbody.add_body(name="prop", pos=[*REAR_GRASP_POINT, 0.0125])
@@ -27,7 +27,7 @@ mujoco.mj_forward(model, data)
 jadr = model.body("prop").jntadr[0]
 cq = model.jnt_qposadr[jadr]
 
-from rq_pipeline.tasks.yellow import (  # noqa: E402
+from trainnr.tasks.yellow import (  # noqa: E402
     REAR_LIFT,
     REAR_PICK_SEQUENCE,
     REAR_REACH,

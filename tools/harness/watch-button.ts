@@ -1,4 +1,4 @@
-// robotiq H1 harness: presses a virtual button on a schedule and MEASURES
+// trainnr H1 harness: presses a virtual button on a schedule and MEASURES
 // the LED's duty cycle in each window between presses. The firmware's job
 // (exercise H1) is to make the measured sequence read 0 → 25 → 50 → 100 → 0.
 //

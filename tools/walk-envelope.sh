@@ -11,10 +11,10 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 ckpt="${1:?checkpoint}"; scales="${2:-0.5 0.7 0.85 1.0 1.15 1.3 1.5 2.0}"
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
-cd "$repo/rq_mjlab"
+cd "$repo/trainnr_mjlab"
 for s in $scales; do
   say "envelope: judge $(basename "$ckpt") at fit x $s"
-  .venv/bin/python -m rq_mjlab.walk_verdict "$repo/$ckpt" --trials 40 --seed 1000 \
+  .venv/bin/python -m trainnr_mjlab.walk_verdict "$repo/$ckpt" --trials 40 --seed 1000 \
     --device cuda:0 --judge-at-scale "$s" --no-studio
 done
 say "ENVELOPE DONE"

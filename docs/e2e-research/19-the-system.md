@@ -3,7 +3,7 @@
 Research date: **2026-08-08**. Context: what a commercial mobile-manipulator
 pilot actually requires end to end — data gathering, data generation,
 simulation, sim training, real training, app, deployment, telemetry — and
-where `robotiq` fits in it.
+where `trainnr` fits in it.
 
 > **TL;DR.** Four tiers. **Tier 0 (safety) and Tier 1 (real-time) stay Rust on
 > the MCU and are what this repo is for.** Tier 2 (autonomy) and Tier 3 (fleet
@@ -58,7 +58,7 @@ organising principle that survives contact with a real deployment.
 The arrow of trust points **downward only**. Tier 3 may *request* motion;
 Tier 0 decides whether motion happens. Nothing above Tier 1 can widen a limit.
 
-`robotiq` today is a complete Tier 1 with a partial Tier 0 — `CommandWatchdog`
+`trainnr` today is a complete Tier 1 with a partial Tier 0 — `CommandWatchdog`
 exists and is tested, but no motor has ever been attached to it.
 
 ---
@@ -189,7 +189,7 @@ Three things in that diagram are the difference between a system and a demo:
 
 ---
 
-## 5. What `robotiq` becomes
+## 5. What `trainnr` becomes
 
 This needs saying plainly, because it is the part that is easy to get wrong out
 of attachment.

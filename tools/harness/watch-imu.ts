@@ -1,4 +1,4 @@
-// robotiq H2b harness: boots the pico-imu firmware with a virtual MPU6050
+// trainnr H2b harness: boots the pico-imu firmware with a virtual MPU6050
 // on I2C0, then TILTS the virtual sensor on a schedule. The firmware's
 // UART output should track the tilts — proof that the whole sense path
 // works: bus protocol -> driver -> physical units.

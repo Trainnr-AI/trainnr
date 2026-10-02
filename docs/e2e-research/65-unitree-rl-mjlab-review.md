@@ -154,5 +154,5 @@ Folded into the data-engine design (docs/66): the mimic lane as a
 fourth expert source, failure-bin sampling as prior art for the
 funnel→press loop, the deploy.yaml/sim2sim contract as the shape of
 our future sim-to-real seam, and the reward vocabulary + curricula as
-the adoption list for rq_mjlab when the walk grows terrain. The
+the adoption list for trainnr_mjlab when the walk grows terrain. The
 positioning lines went to docs/33 the same day.

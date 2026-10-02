@@ -2,12 +2,12 @@
 app that has no in-process MuJoCo binding of its own. Reads camera-orbit
 commands back on stdin, so the viewer on the other end can rotate and zoom.
 
-    cd pipeline && uv run --extra sim python ../tools/studio-render-stream.py [task]
+    cd trainnr && uv run --extra sim python ../tools/studio-render-stream.py [task]
 
 Why this exists: `mujoco-rs` (the Rust FFI binding) needs a patched fork of
 `glutin` to render on macOS at all, plus its own separate MuJoCo 3.9.0 install
 — a real dependency-trust and version-skew cost this repo chose not to pay
-(docs/e2e-research/54 and the studio-shell build log record the attempt).
+(docs/e2e-research/54 and the trainnr-desktop build log record the attempt).
 MuJoCo already renders correctly from Python everywhere this repo runs it
 (`camera-match.py`, `kitting_demos.py`, `show-aloha2.py`); this script is
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
@@ -38,7 +38,7 @@ Fallback wire format, stdout, per frame, flushed immediately:
 
 Scenes: a registry task's preview (`kitting`, `lift`), the `duck`
 flock, or a deployment by prefix (`deploy:<name>[:gate:<runtime>:<i> |
-:preflight:<i>]`, `rq_pipeline.deploy.viewport_source`: the exported
+:preflight:<i>]`, `trainnr.deploy.viewport_source`: the exported
 policy live, a gate trial re-run or replayed, a pre-flight segment
 replayed; `--project=<root>` names the project it lives in).
 
@@ -123,8 +123,8 @@ sys.setswitchinterval(0.0005)
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
-from rq_pipeline.tasks.registry import tasks  # noqa: E402
-from rq_pipeline.viz import MIRROR_HZ, SIM_TIMELINE  # noqa: E402
+from trainnr.tasks.registry import tasks  # noqa: E402
+from trainnr.viz import MIRROR_HZ, SIM_TIMELINE  # noqa: E402
 
 BUILDERS = {entry.name: entry for entry in tasks().values()}
 # Tasks whose accepted scripted expert drives the sim for real; anything
@@ -182,7 +182,7 @@ def rig_camera(rig: str | None) -> dict:
 
 
 # A walk scene's framing comes from the walk's own declaration
-# (rq_mjlab.walks: the spec's `view` framing), not from a preset keyed
+# (trainnr_mjlab.walks: the spec's `view` framing), not from a preset keyed
 # by the robot's name here: `--camera=` carries it, in this field order.
 CAMERA_FLAG = "--camera="
 CAMERA_FLAG_FIELDS = ("azimuth", "elevation", "distance", "lookat_height", "follow")
@@ -229,7 +229,7 @@ def parse_camera_flag(text: str) -> dict:
 # rate; the pixels keep their full frame rate regardless.
 NARRATE_HZ = 10.0  # scalar series: plots need no more
 NARRATE_SHARE = 0.25  # narration may take this share of the physics thread, no more
-# The 3D twin's rate is the one every mirror shares (rq_pipeline.viz).
+# The 3D twin's rate is the one every mirror shares (trainnr.viz).
 # messages (~275 ms/s of Python serialization) blew the loop's realtime
 # budget and slowed BOTH panes (2026-09-01)
 # Shadows are on until the render lane measures that it cannot keep the
@@ -252,7 +252,7 @@ PACE_SPIN_S = 0.0015
 SPEED_MIN, SPEED_MAX = 0.01, 100.0  # simulate's Speed slider, roughly
 # The twin's application id before the scene's name; the shell closes the
 # previous twin under it before a new viewport starts (viewport.rs mirrors it).
-TWIN_APP_PREFIX = "robotiq-sim-"
+TWIN_APP_PREFIX = "trainnr-sim-"
 
 
 class PhysicsNarrator:
@@ -266,7 +266,7 @@ class PhysicsNarrator:
     ) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
         import rerun.blueprint as rrb  # noqa: PLC0415
-        from rq_pipeline.viz import (  # noqa: PLC0415
+        from trainnr.viz import (  # noqa: PLC0415
             CHASE_PATH,
             VISUAL_ONLY_SKIP_GROUPS,
             RigMirror,
@@ -361,7 +361,7 @@ class PhysicsNarrator:
         (Rerun's `overrides` are visualizers; a visibility override did not
         take, 2026-09-26) — the entity is in the recording, one query edit
         away, never a blue skin over the splat by default."""
-        from rq_pipeline.viz import CHASE_PATH, SCENE_GROUND_PATH  # noqa: PLC0415
+        from trainnr.viz import CHASE_PATH, SCENE_GROUND_PATH  # noqa: PLC0415
 
         del model
         if not self._scene_shown:
@@ -421,7 +421,7 @@ class PhysicsNarrator:
         rr.set_time(SIM_TIMELINE, duration=sim_time)
         self.mirror.log(data)
         if self._chase_body is not None:
-            from rq_pipeline.viz import CHASE_PATH, chase_pose  # noqa: PLC0415
+            from trainnr.viz import CHASE_PATH, chase_pose  # noqa: PLC0415
 
             position, matrix = chase_pose(data.xpos[self._chase_body])
             rr.log(CHASE_PATH, rr.Transform3D(translation=position, mat3x3=matrix))
@@ -470,9 +470,9 @@ def staged_scene_dir(opened: object) -> "pathlib.Path | None":
     deployment or a scene that is not a deployment. A named scene whose
     folder is missing is said on stderr and the twin goes on without it,
     as the gate tool does."""
-    from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.locate import Project  # noqa: PLC0415
-    from rq_pipeline.scenes.stage import scene_name_of  # noqa: PLC0415
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.locate import Project  # noqa: PLC0415
+    from trainnr.scenes.stage import scene_name_of  # noqa: PLC0415
 
     context = getattr(opened, "context", None)
     manifest = getattr(context, "manifest", None)
@@ -501,12 +501,12 @@ def staged_scene_dir(opened: object) -> "pathlib.Path | None":
 # budget is raised to the viewer's own cap before compile, and requests
 # are clamped to the compiled framebuffer regardless, so no size a viewer
 # sends can kill the stream. 1920 matches MAX_RENDER_SIDE in
-# crates/studio-shell/src/viewport.rs — duplicated across the language
+# crates/trainnr-desktop/src/viewport.rs — duplicated across the language
 # boundary like the rest of this wire contract; change both together.
 MAX_RENDER_SIDE = 1920
 
 # Seeded from the `front` ArmnetBench camera's own placement
-# (pos=[0, -0.85, 0.25], rq_pipeline/tasks/so101.py) so the free camera's
+# (pos=[0, -0.85, 0.25], trainnr/tasks/so101.py) so the free camera's
 # first frame looks close to that fixed one — approximate by eye, not
 # derived, since the viewer immediately lets a human correct it.
 
@@ -1787,9 +1787,9 @@ def run_expert_forever(task: "object", pump: PhysicsPump) -> None:
     rides `on_control` (the hook the expert grew for exactly this), so
     the pixels and the narration show a genuine pick-and-place, contact
     events and grasp forces included."""
-    from rq_pipeline.evaluate.harness import home_state  # noqa: PLC0415
-    from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
-    from rq_pipeline.tasks.aloha2 import scripted_kitting_episode  # noqa: PLC0415
+    from trainnr.evaluate.harness import home_state  # noqa: PLC0415
+    from trainnr.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
+    from trainnr.tasks.aloha2 import scripted_kitting_episode  # noqa: PLC0415
 
     backend = MuJoCoBackend()
     backend.load_model(pump.model)
@@ -1981,7 +1981,7 @@ WALK = "walk"  # the RL view: N policy-driven worlds mirrored from the batched s
 
 
 # The project a prefixed scene lives in (`--project=`); None: the
-# environment's current project (`rq_pipeline.project.current_project`).
+# environment's current project (`trainnr.project.current_project`).
 PROJECT_ROOT: "pathlib.Path | None" = None
 
 
@@ -1990,9 +1990,9 @@ def open_deploy_scene(name: str) -> "object":
     scene and meshes, built the same in both processes; refused by name.
     The project is `--project=`'s, else the environment's current one,
     made current so the bundle's meshes are found project-first."""
-    from rq_pipeline.deploy.viewport_source import open_scene  # noqa: PLC0415
-    from rq_pipeline.project import current_project  # noqa: PLC0415
-    from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
+    from trainnr.deploy.viewport_source import open_scene  # noqa: PLC0415
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
 
     project = Project(PROJECT_ROOT) if PROJECT_ROOT is not None else current_project()
     project.use()
@@ -2006,7 +2006,7 @@ def open_deploy_scene(name: str) -> "object":
 
 
 def deploy_camera() -> dict:
-    from rq_pipeline.deploy.viewport_source import CAMERA  # noqa: PLC0415
+    from trainnr.deploy.viewport_source import CAMERA  # noqa: PLC0415
 
     return dict(CAMERA)
 
@@ -2066,10 +2066,10 @@ def walk_scene(
 ) -> "mujoco.MjModel":
     """One CPU model holding `worlds` copies of the walk robot on one
     ground plane, each under a `wNN/` prefix at its grid cell (the RL
-    view's mirror; rq_mjlab.walk_view fills its qpos from the batched
+    view's mirror; trainnr_mjlab.walk_view fills its qpos from the batched
     sim). The batched env's world origins are already in each free
     joint's global qpos, so the copies land on their origins by the copy
-    alone. Built here, not in rq_mjlab, so the render process — the
+    alone. Built here, not in trainnr_mjlab, so the render process — the
     pipeline venv, no mjlab — can build the same model. The robot's model
     is the one its bundle records (project first, then the library).
     `stage_xml`: the task's own terrain and dressing, as the walk view
@@ -2077,9 +2077,9 @@ def walk_scene(
     instead of the plain plane. `dressed`: the Studio's dressing, a sky
     and the live shadow budget; False is the bare mirror of 2026-09-09,
     for a camera whose pixels are data (the walk press's chase camera)."""
-    from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
-    from rq_pipeline.bundles.locate import find_bundle  # noqa: PLC0415
-    from rq_pipeline.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+    from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
+    from trainnr.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
 
     bundle = find_bundle(robot)
     model_file = model_file_of(bundle) if bundle is not None else None
@@ -2339,7 +2339,7 @@ if __name__ == "__main__":
         elif flag.startswith("--project="):
             # A walk scene names its robot by bundle; the project's robots
             # are searched first (the Go2 lives only there, 2026-09-12).
-            from rq_pipeline.project.locate import Project
+            from trainnr.project.locate import Project
 
             PROJECT_ROOT = pathlib.Path(flag.removeprefix("--project=")).resolve()
             Project(PROJECT_ROOT).use()

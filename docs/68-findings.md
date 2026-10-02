@@ -55,7 +55,7 @@ not this page.
 
 - date: 2026-09-25 · commit: `gripper-pick-2026-09-25 (this branch; the commit that adds this record)`
 - instrument: `mujoco-3.11.0+x86_64 (CPU MuJoCo; Newton solver, elliptic cone, impratio 10, Euler, 2 ms), the WSL box`
-- command: `cd pipeline && uv run --no-sync --extra sim python ../tools/accept-task.py --project ../projects/gripper-pick --name gripper-pick pipeline tests/test_tasks_gripper_pick.py::Ladder (tasks/acceptance.accept once per rung of tasks/gripper_pick.LADDER) a 5 x 5 grid of cube starts over cube_spawn_x x cube_spawn_y (both -0.05..0.05 m), each rung through the same expert and referee (a scratch probe, not a tool)`
+- command: `cd trainnr && uv run --no-sync --extra sim python ../tools/accept-task.py --project ../projects/gripper-pick --name gripper-pick pipeline tests/test_tasks_gripper_pick.py::Ladder (tasks/acceptance.accept once per rung of tasks/gripper_pick.LADDER) a 5 x 5 grid of cube starts over cube_spawn_x x cube_spawn_y (both -0.05..0.05 m), each rung through the same expert and referee (a scratch probe, not a tool)`
 - protocol: tasks/gripper_pick.GripperPickSpec defaults: 40 mm cube, 0.05 kg; spawn band x, y in -0.05..0.05 m, paired starts at the band's corners inset 10 %; success = the cube's centre at least 0.05 m above its spawn for the episode's last 1.0 s of 7 s.
 - outcome:
   - arms: {'expert': {'successes': 4, 'trials': 4, 'interval_95': [0.398, 1.0]}, 'floor': {'successes': 0, 'trials': 4, 'interval_95': [0.0, 0.602]}, 'no-close': {'successes': 0, 'trials': 4, 'interval_95': [0.0, 0.602]}, 'limp': {'successes': 0, 'trials': 4, 'interval_95': [0.0, 0.602]}, 'expert-band-grid': {'successes': 25, 'trials': 25, 'interval_95': [0.863, 1.0]}, 'no-close-band-grid': {'successes': 0, 'trials': 25, 'interval_95': [0.0, 0.137]}, 'limp-band-grid': {'successes': 0, 'trials': 25, 'interval_95': [0.0, 0.137]}, 'expert-condim-3': {'successes': 3, 'trials': 4, 'interval_95': [0.194, 0.994]}}
@@ -74,7 +74,7 @@ not this page.
 
 - date: 2026-09-25 · commit: `aad9f8c`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL box; 40 paired trials per cell (the same seeded draws per trial across cells)`
-- command: `rq_mjlab.walk_verdict <run>/model_1499.pt --trials 40 --seed 1000 --device cuda:0 --robot go2 --project projects/go2-walk [--judge-in-fit fit@0ad6202797c5|declared] [--judge-at-scale 0.8 --judge-param kp] [--delay 2] (through the MCP door evaluate_walk)`
+- command: `trainnr_mjlab.walk_verdict <run>/model_1499.pt --trials 40 --seed 1000 --device cuda:0 --robot go2 --project projects/go2-walk [--judge-in-fit fit@0ad6202797c5|declared] [--judge-at-scale 0.8 --judge-param kp] [--delay 2] (through the MCP door evaluate_walk)`
 - protocol: docs/07-progress-log.md 2026-09-25 evening entries
 - outcome:
   - arms: {'go2-c2 declared world (own, certificate)': {'successes': 38, 'trials': 40, 'ci95': [0.8308, 0.9939], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-cuda.json'}, 'go2-c2 in the fitted world (cross)': {'successes': 39, 'trials': 40, 'ci95': [0.8684, 0.9994], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-cuda.json'}, 'go2-c3-fit fitted world (own, certificate)': {'successes': 40, 'trials': 40, 'ci95': [0.9119, 1.0], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-cuda.json'}, 'go2-c3-fit in the declared world (cross)': {'successes': 39, 'trials': 40, 'ci95': [0.8684, 0.9994], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-cuda.json'}, 'go2-c2 declared world, kp x0.8': {'successes': 35, 'trials': 40, 'ci95': [0.732, 0.9581], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-at-x0.8-kp-cuda.json'}, 'go2-c2 fitted world, kp x0.8': {'successes': 26, 'trials': 40, 'ci95': [0.4832, 0.7937], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-at-x0.8-kp-cuda.json'}, 'go2-c3-fit declared world, kp x0.8': {'successes': 37, 'trials': 40, 'ci95': [0.7961, 0.9843], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-at-x0.8-kp-cuda.json'}, 'go2-c3-fit fitted world, kp x0.8': {'successes': 33, 'trials': 40, 'ci95': [0.6722, 0.9266], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-at-x0.8-kp-cuda.json'}, 'go2-c2 declared world, delay 2 ticks': {'successes': 5, 'trials': 40, 'ci95': [0.0419, 0.268], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-delay-2-cuda.json'}, 'go2-c2 fitted world, delay 2 ticks': {'successes': 0, 'trials': 40, 'ci95': [0.0, 0.0881], 'file': 'projects/go2-walk/runs/go2-c2/verdict/walk-verdict-in-fit-0ad6202797c5-delay-2-cuda.json'}, 'go2-c3-fit declared world, delay 2 ticks': {'successes': 1, 'trials': 40, 'ci95': [0.0006, 0.1316], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-in-declared-delay-2-cuda.json'}, 'go2-c3-fit fitted world, delay 2 ticks': {'successes': 18, 'trials': 40, 'ci95': [0.2926, 0.6151], 'file': 'projects/go2-walk/runs/go2-c3-fit/verdict/walk-verdict-delay-2-cuda.json'}}
@@ -201,7 +201,7 @@ not this page.
 - date: 2026-09-24 · commit: `8600ac9-dirty`
 - instrument: `mujoco-3.11.0+numpy-2.2.6+scipy-1.18.0+x86_64 (WSL2, the box), Python 3.12`
 - command: `python -m unittest tests.test_torque_balance (SyntheticRecovery, both postures) scratch synth_scan.py over cutoff {0, 15, 6} Hz x window {40, 80} ms x gate {0.1, 1.0} rad/s`
-- protocol: docs/e2e-research/26 (the synthetic identifiability rule), pipeline/rq_pipeline/robot/quadruped_synth.py
+- protocol: docs/e2e-research/26 (the synthetic identifiability rule), trainnr/trainnr/robot/quadruped_synth.py
 - inputs:
   - model: unitree_rl_mjlab unitree_go2/xmls/go2.xml (the go2-walk bundle's source, stamp go2@5003bf617b5f)
 - outcome:
@@ -220,7 +220,7 @@ not this page.
 - date: 2026-09-24 · commit: `8600ac9-dirty`
 - instrument: `mujoco-3.11.0+numpy-2.2.6+scipy-1.18.0+x86_64 (WSL2, the box), Python 3.12`
 - command: `identify_system(robot='go2@5003bf617b5f', recording='iit-go2-chirp@645b846a7d38') [MCP door, project go2-sysid] identify_system(robot='go2@d4ede9ec594d', recording='dfki-go2-field201@bccbb0801f6c') python tools/show-legged-fit.py <bundle> <recording> --stills docs/figures/go2-sysid/<log>`
-- protocol: docs/77-the-unitree-loop.md §8; pipeline/rq_pipeline/robot/legged_fit.py
+- protocol: docs/77-the-unitree-loop.md §8; trainnr/trainnr/robot/legged_fit.py
 - inputs:
   - iit: iit-DLSLab/sim2real-robot-identification datasets/go2/traj_0.pt (BSD-3-Clause; the collection script has a simulation flag, the real origin is the maintainers' word)
   - dfki: Zenodo 19336009 outdoors/field201 rosbag2_2024_06_16-08_50_53 (CC-BY-4.0; DFKI Bremen, Vulcano Island)
@@ -267,8 +267,8 @@ not this page.
   - preflight: projects/go2-walk/deploy/go2-c2-deploy-cited/preflight.json
   - old_records: the 2026-09-12 gate record was replaced by the re-run (its numbers are kept here, gate_count_draw); attribution.json beside the manifest is still the count-draw record, and the card marks it 'drawn by count (re-run to pair)'
 - sources:
-  - draw: pipeline/rq_pipeline/deploy/gate.py draw_commands, trial_rng, DRAW_NOW
-  - cliff_rule: pipeline/rq_pipeline/deploy/attribution.py CLIFF_RULE, BASELINE_BELOW
+  - draw: trainnr/trainnr/deploy/gate.py draw_commands, trial_rng, DRAW_NOW
+  - cliff_rule: trainnr/trainnr/deploy/attribution.py CLIFF_RULE, BASELINE_BELOW
 - caveats:
   - Sim only; nothing here is a hardware claim.
   - Both failed trials are near-zero forward commands (0.04 and 0.08 m/s) whose tracking error is judged as a ratio of the command, the shape where the ratio rule is harshest; the gate's rule is unchanged.
@@ -314,15 +314,15 @@ not this page.
 **The first walk trained on a captured scene, certified on that scene: go2-scene-c1 (mjlab's rough recipe - the height scan, no camera - on Neverwhere's hurdle course at the scene's own coordinates, 4,096 worlds, 51,600 env-steps/s) reached iteration 1,017 of 1,500 and died with NaN in the actor's observations; its last checkpoint, model_1000, judged on the scene by the verdict door with the scene in its protocol: survived 38/40, tracked 0/40, Clopper-Pearson 95 % [0, 0.088], error ratios 0.79-1.19 - and the training reward said the same, track_linear_velocity 0.67 of 2.0 against the plane run's 1.69. The scene walker learned to stay up on the course and not to go where it is told; every world starts at the course's start facing the first hurdle, commanded up to 1 m/s in any direction. The press on the scene (E3's plumbing: frames from the head camera inside the env, manifests naming the scene, its gap and its floor's basis) therefore kept nothing: 40 attempts, 38 survived, 0 tracked. The NaN's consistent cause: mjlab's terrain-bounds termination judges an origin-centred grid the scene patch is not, and had been dropped, so a world that walked off the heightfield's edge fell forever; the scene's own bounds termination is in. Also found: the Go2's play config runs 1e9-second episodes, so a press rollout ended only at a fall (fifty minutes in one batch) - capped at the training episode now.**
 
 - date: 2026-09-23 · commit: `83669e1`
-- instrument: `mjlab 1.6.0 + mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cuda, NVIDIA GeForce RTX 3090 Ti, WSL2, Python 3.12; the scene's heightfield at 0.05 m (rq_mjlab.scene_stage.TRAIN_CELL_M)`
-- command: `train_walk(agent='g3', iterations=1500, task='go2-flat', scene='hurdle-blue-carpet', cameras=False, name='go2-scene-c1') [MCP door; job train-walk-013deb9e; runs/go2-scene-c1] evaluate_walk('runs/go2-scene-c1/model_1000.pt', trials=40, robot='go2', scene='hurdle-blue-carpet') [MCP door -> python -m rq_mjlab.walk_verdict ... --scene; job evaluate-walk-9f6eea83] Actions.generate_walk_demos(checkpoint='runs/go2-scene-c1/model_1000.pt', episodes=2, worlds=4, robot='go2', scene=<scenes/hurdle-blue-carpet>) [job generate-walk-demos-2a915223: 40 attempts, kept 0] the plane's numbers: runs/go2-c2/training.json (final) and certificate go2-c2-model_1499-cuda-seed1000-n40-p37d3df`
+- instrument: `mjlab 1.6.0 + mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cuda, NVIDIA GeForce RTX 3090 Ti, WSL2, Python 3.12; the scene's heightfield at 0.05 m (trainnr_mjlab.scene_stage.TRAIN_CELL_M)`
+- command: `train_walk(agent='g3', iterations=1500, task='go2-flat', scene='hurdle-blue-carpet', cameras=False, name='go2-scene-c1') [MCP door; job train-walk-013deb9e; runs/go2-scene-c1] evaluate_walk('runs/go2-scene-c1/model_1000.pt', trials=40, robot='go2', scene='hurdle-blue-carpet') [MCP door -> python -m trainnr_mjlab.walk_verdict ... --scene; job evaluate-walk-9f6eea83] Actions.generate_walk_demos(checkpoint='runs/go2-scene-c1/model_1000.pt', episodes=2, worlds=4, robot='go2', scene=<scenes/hurdle-blue-carpet>) [job generate-walk-demos-2a915223: 40 attempts, kept 0] the plane's numbers: runs/go2-c2/training.json (final) and certificate go2-c2-model_1499-cuda-seed1000-n40-p37d3df`
 - protocol: docs/78-the-scene-loop.md §8.7; the verdict's: 40 seeded trials, held twists in the trained stage-1 envelope, survived and err_ratio < 0.5, law DR at the declared ±0.1 span, on the scene from the course's start
 - outcome:
   - training: {'iterations_logged': 1019, 'of': 1500, 'envs': 4096, 'wall_s': 3086, 'steps_per_s': 51575, 'died': 'NaN in the actor observation group at iteration 1017 (rsl_rl check_nan)', 'final': {'track_linear_velocity': 0.671, 'track_angular_velocity': 1.165, 'episode_length': 887.88, 'termination_time_out': 3.917, 'termination_illegal_contact': 0.667}}
   - plane_for_comparison: {'run': 'go2-c2', 'iterations': 1500, 'wall_s': 2470, 'final_track_linear_velocity': 1.69, 'certificate': '38/40 [0.8308, 0.9939]'}
   - scene_certificate: {'name': 'go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16', 'successes': 0, 'trials': 40, 'ci95': [0.0, 0.0881], 'funnel': {'survived': 38, 'tracked': 0}, 'err_ratio_range': [0.79, 1.19], 'scene': 'hurdle-blue-carpet@3c9ee1da4ed3'}
   - press_on_the_scene: {'attempts': 40, 'kept': 0, 'survived': 38, 'tracked': 0, 'frames': "head camera 160x120 from the env's camera sensor, per tick", 'artifacts': 'export.json, failures.jsonl; no datasheet (none kept)'}
-  - fixes: ["scene_stage.out_of_scene_bounds: a world past the grid's extent less 0.3 m is truncated (time_out)", 'walk_press: rollouts capped at the training episode (rq_pipeline.tasks.walks.DEFAULT_EPISODE_S)', "walk_verdict --scene with require_same_scene and the identity's camera rule (walk_view.trained_with_cameras)"]
+  - fixes: ["scene_stage.out_of_scene_bounds: a world past the grid's extent less 0.3 m is truncated (time_out)", 'walk_press: rollouts capped at the training episode (trainnr.tasks.walks.DEFAULT_EPISODE_S)', "walk_verdict --scene with require_same_scene and the identity's camera rule (walk_view.trained_with_cameras)"]
 - artifacts:
   - run: projects/go2-walk/runs/go2-scene-c1 (the box; projects/ is not tracked): model_0..model_1000.pt, train.log, training.json, identity.json
   - certificate: projects/go2-walk/certificates/go2-scene-c1-model_1000-cuda-seed1000-n40-pdf8c16; runs/go2-scene-c1/verdict/{walk-verdict-cuda.json, records-cuda.jsonl}
@@ -330,7 +330,7 @@ not this page.
   - studio: the verdict's feed: /verdict/err_ratio, /verdict/survived, /verdict/log per trial; projects/go2-walk/.index/screenshots/1790163592618083414-screenshot.png
 - sources:
   - bounds: mjlab 1.6.0 tasks/velocity/mdp/terminations.py out_of_terrain_bounds: half the grid's size about the origin, less the margin; velocity_env_cfg.py registers it time_out=True
-  - play_episode: rq_mjlab/go2_walk.py _rough_env_cfg(play=True): episode_length_s = int(1e9)
+  - play_episode: trainnr-mjlab/go2_walk.py _rough_env_cfg(play=True): episode_length_s = int(1e9)
   - tracking_reward: mjlab velocity_env_cfg.py track_linear_velocity: weight 2.0, std sqrt(0.25)
 - caveats:
   - The NaN's cause is consistent with the terminations recorded (no bounds term; worlds walk 10 m in an episode), not reproduced: the bounds termination is in for the next run, and that run will say.
@@ -344,8 +344,8 @@ not this page.
 
 - date: 2026-09-23 · commit: `70477fe`
 - instrument: `mjlab 1.6.0 + mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cuda, NVIDIA GeForce RTX 3090 Ti, WSL2 6.18.33.2, Python 3.12; rsl_rl through mjlab's runner, 256 worlds x 24 steps x 20 iterations`
-- command: `train_walk(agent='smoke', task='go2-flat', scene='hurdle-blue-carpet') [MCP door -> python -m rq_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 --task-stamp go2-walk@0e7e123a7de7 --scene projects/go2-walk/scenes/hurdle-blue-carpet], three times: the first at the 2 cm grid (job train-walk-7898aac6), the second at 5 cm (train-walk-eadf419f), the third at 5 cm with cameras=False (train-walk-35394cd3) rq_pipeline.scenes.terrain.ensure_grid(projects/go2-walk/scenes/hurdle-blue-carpet) [the pipeline environment, Open3D]: the 301x600 grid at 0.02 m, 31.7 % holes filled the plane's number: E0's smoke train, docs/findings/e0-instrument-step-2026-09-22.json (29 s; 27 s by the job's own clock)`
-- protocol: docs/78-the-scene-loop.md §8.5; rq_mjlab/scene_stage.py (TRAIN_CELL_M 0.05, CAMERA_WIDTH x CAMERA_HEIGHT 64x64, the head camera's pose from rq_pipeline/scenes/stage.py, VISIBLE_OPACITY 0.5); the rate as the trainer prints it: env-steps over the runner's learn() wall time
+- command: `train_walk(agent='smoke', task='go2-flat', scene='hurdle-blue-carpet') [MCP door -> python -m trainnr_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 --task-stamp go2-walk@0e7e123a7de7 --scene projects/go2-walk/scenes/hurdle-blue-carpet], three times: the first at the 2 cm grid (job train-walk-7898aac6), the second at 5 cm (train-walk-eadf419f), the third at 5 cm with cameras=False (train-walk-35394cd3) trainnr.scenes.terrain.ensure_grid(projects/go2-walk/scenes/hurdle-blue-carpet) [the pipeline environment, Open3D]: the 301x600 grid at 0.02 m, 31.7 % holes filled the plane's number: E0's smoke train, docs/findings/e0-instrument-step-2026-09-22.json (29 s; 27 s by the job's own clock)`
+- protocol: docs/78-the-scene-loop.md §8.5; trainnr-mjlab/scene_stage.py (TRAIN_CELL_M 0.05, CAMERA_WIDTH x CAMERA_HEIGHT 64x64, the head camera's pose from trainnr/scenes/stage.py, VISIBLE_OPACITY 0.5); the rate as the trainer prints it: env-steps over the runner's learn() wall time
 - outcome:
   - rates_env_steps_per_s: {'plane_no_camera': 4551, 'scene_no_camera': 4054, 'scene_head_camera_64x64': 393}
   - wall_s_for_122880_env_steps: {'plane_no_camera': 27, 'scene_no_camera': 30, 'scene_head_camera_64x64': 313}
@@ -363,7 +363,7 @@ not this page.
   - cap: mujoco_warp 3.13.0 _src/collision_convex.py: `if count >= MJ_MAXCONPAIR` in the hfield prism loop, MJ_MAXCONPAIR = mujoco.mjMAXCONPAIR (50); the warning text names the flag OverflowType.HFIELD
   - mjlab_camera: mjlab 1.6.0 sensor/sensor_context.py `_create_context`: mjwarp.create_render_context(...) without splat arguments; sensor/camera_sensor.py CameraSensorCfg
   - terrain_placement: mjlab 1.6.0 terrains/terrain_generator.py `_get_sub_terrain_position`: the grid centred at the world origin, the patch corner added to every geom's pos
-  - stamp: rq_pipeline/bundles/hashing.py bundle_hash: hidden files are not bundle content
+  - stamp: trainnr/bundles/hashing.py bundle_hash: hidden files are not bundle content
 - caveats:
   - Smokes: 20 iterations say nothing about learning; the numbers are rates and costs, not a policy. A policy that takes the hurdles is a g3-scale run whose scale the camera's cost sets (4,096 worlds render sixteen times as much per step).
   - One resolution (64x64), one scene, one instrument. The gate's cameras at 160x120 on the CPU took 1.47 s a frame (docs/findings/scene-cameras-and-assay-smoke-2026-09-22.json); the GPU number here is for the training picture.
@@ -404,7 +404,7 @@ not this page.
 
 - date: 2026-09-23 · commit: `af3e2de`
 - instrument: `macOS 25.5.0 Apple M1 Pro; COLMAP 4.2.0 (Homebrew, no GPU), Brush brush-cli 0.3.0 (Apache, Metal), Open3D 0.20.0, mujoco 3.11.0 (pipeline venv), mujoco_warp 3.13.0 + warp 1.17.0 CPU (scratch venv, the renderer), Python 3.12`
-- command: `scratch orbit_render.py / orbit2_render.py: one camera (fovy 70) on an ellipse around the course, looking at a point ahead on the course, frames by rq_pipeline.scenes.cameras over the scene's splat.ply (mujoco_warp 3.13.0, warp 1.17.0 CPU; 13 s a frame at 640x480); the true poses saved as poses.json tools/capture-scene.py --project projects/go2-walk --source <frames> --name orbit-synthetic --brush <Brush 0.3.0 aarch64> --steps 4000 --floor-friction 1.25 0.3 0.3 (the loose walk; run on the chain before it converted every mapper model) tools/capture-scene.py --project projects/go2-walk --source <frames> --name synthetic-walk --brush <Brush 0.3.0 aarch64> --steps 30000 --floor-friction 1.25 0.3 0.3 (the tight walk): colmap feature_extractor (one OPENCV camera, FeatureExtraction.use_gpu 0), exhaustive_matcher (a folder of stills), mapper, model_converter TXT per model; brush_app <dataset> --total-steps 30000 --export-every 30000 --max-resolution 1920 --eval-every 30001 --rerun-enabled scratch truth_compare.py <scene> <poses.json>: COLMAP camera centres through the record's alignment against the true positions by Umeyama similarity; visible centres (opacity >= 0.5) inside the course footprint [-2.5..10.5, -3.5..3.5, -0.5..3.0] m each way by k-d tree (100,000 samples); proxies sampled (50,000) each way by Open3D ray casting; heights along the course line y=0, x in [-1, 6] m by rays from above`
+- command: `scratch orbit_render.py / orbit2_render.py: one camera (fovy 70) on an ellipse around the course, looking at a point ahead on the course, frames by trainnr.scenes.cameras over the scene's splat.ply (mujoco_warp 3.13.0, warp 1.17.0 CPU; 13 s a frame at 640x480); the true poses saved as poses.json tools/capture-scene.py --project projects/go2-walk --source <frames> --name orbit-synthetic --brush <Brush 0.3.0 aarch64> --steps 4000 --floor-friction 1.25 0.3 0.3 (the loose walk; run on the chain before it converted every mapper model) tools/capture-scene.py --project projects/go2-walk --source <frames> --name synthetic-walk --brush <Brush 0.3.0 aarch64> --steps 30000 --floor-friction 1.25 0.3 0.3 (the tight walk): colmap feature_extractor (one OPENCV camera, FeatureExtraction.use_gpu 0), exhaustive_matcher (a folder of stills), mapper, model_converter TXT per model; brush_app <dataset> --total-steps 30000 --export-every 30000 --max-resolution 1920 --eval-every 30001 --rerun-enabled scratch truth_compare.py <scene> <poses.json>: COLMAP camera centres through the record's alignment against the true positions by Umeyama similarity; visible centres (opacity >= 0.5) inside the course footprint [-2.5..10.5, -3.5..3.5, -0.5..3.0] m each way by k-d tree (100,000 samples); proxies sampled (50,000) each way by Open3D ray casting; heights along the course line y=0, x in [-1, 6] m by rays from above`
 - protocol: docs/78-the-scene-loop.md §3 and §8.6
 - outcome:
   - loose_walk: {'frames': 72, 'ellipse_m': [10.0, 6.4], 'height_m': 1.5, 'registered': 19, 'models': [19, 20], 'brush_steps': 4000, 'chain_minutes': 2.0, 'gaussians': 12937, 'visible': 3216, 'camera_residual_mean_m': 0.0018, 'camera_residual_max_m': 0.0059, 'floor_tilt_deg': 0.58, 'scale_m_per_unit': 0.4346, 'splat_cap_to_orig_median_m': 0.0319, 'splat_orig_to_cap_median_m': 0.1299, 'chamfer_m': 0.1174}
@@ -452,8 +452,8 @@ not this page.
 **The collision proxy of a captured scene, as MuJoCo can touch it, two ways on Neverwhere's hurdle_226_blue_carpet_v3 (145,241 faces): as convex parts (CoACD, threshold 0.05, 64 hulls max) the course becomes 59 hulls in 16 s whose surface sits a mean 9.4 cm (95th percentile 21.7 cm) from the proxy - the hulls roof the 29 cm hurdles into a 36 cm plateau, so a walk would stand on a box; tightening to 230 hulls (26 s) still leaves a 12.3 cm 95th percentile, 512 hulls (218 s) 21.5 cm. As a heightfield of the proxy's top surface on a 2 cm grid the terrain matches the top surface to a median of 0.09 mm (mean 2.6 cm, 95th percentile 15.6 cm, both carried by samples within a cell of a hurdle edge, where the grid is a cliff), with 38.5 % of the proxy's surface (vertical faces, undersides) carried only as cliffs and 31.7 % of the grid's cells filled with the lowest height because nothing lies under them. The heightfield is the stage's default terrain; both gaps are recorded on every staged deployment.**
 
 - date: 2026-09-22 · commit: `a423f1d`
-- instrument: `rq_pipeline.scenes (numpy), CoACD 1.0.14, Open3D 0.20.0, mujoco 3.11.0, Python 3.12, macOS 25.5.0 Apple M1 Pro`
-- command: `rq_pipeline.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene) rq_pipeline.scenes.terrain.heightfield: sample_grid(cell 0.02 m) over the proxy's footprint, heightfield_gap over 50,000 proxy surface samples (topmost at their (x, y) by a ray from above, 1 mm tolerance) against the grid's bilinear height stage_deployment('review-check', 'hurdle-blue-carpet') [MCP door, project go2-walk on the Mac]: the Go2 deployment's plane floor replaced by the terrain, the robot started 1 m before waypoint-0 heading along the course`
+- instrument: `trainnr.scenes (numpy), CoACD 1.0.14, Open3D 0.20.0, mujoco 3.11.0, Python 3.12, macOS 25.5.0 Apple M1 Pro`
+- command: `trainnr.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene) trainnr.scenes.terrain.heightfield: sample_grid(cell 0.02 m) over the proxy's footprint, heightfield_gap over 50,000 proxy surface samples (topmost at their (x, y) by a ray from above, 1 mm tolerance) against the grid's bilinear height stage_deployment('review-check', 'hurdle-blue-carpet') [MCP door, project go2-walk on the Mac]: the Go2 deployment's plane floor replaced by the terrain, the robot started 1 m before waypoint-0 heading along the course`
 - protocol: docs/78-the-scene-loop.md §4 E2 and §4.1
 - outcome:
   - hulls_default: {'parts': 59, 'vertices': 3543, 'vertices_max_per_part': 100, 'seconds': 15.84, 'hulls_to_proxy_mean_m': 0.0936, 'hulls_to_proxy_p95_m': 0.21655, 'proxy_to_hulls_mean_m': 0.07704, 'proxy_to_hulls_p95_m': 0.17489}
@@ -478,8 +478,8 @@ not this page.
 **The first audit of a published splat scene's visible surface against its own collision proxy: on Neverwhere's hurdle_226_blue_carpet_v3 (MIT; 753,226 gaussians in the web splat, 145,241 collision faces, not watertight), the splat and the proxy are well aligned at the floor (the splats over the course sit at a median height of -0.002 m, median distance to the proxy 0.014 m) yet the gap is large away from it: inside the proxy's footprint the chamfer is 0.046 m, the 95th-percentile visible-to-proxy distance 0.185 m, 44.8 % of the visible surface lies more than 0.02 m from any collider, and 73.6 % of the proxy's surface lies more than 0.02 m from any visible gaussian (32 % beyond 0.05 m, 7 % beyond 0.10 m; the unseen samples sit at a median height of 0.17 m: hurdle faces and low walls). 91.0 % of the scene's visible surface lies inside the proxy's footprint at all; the rest is the corridor the course never covers. A first pass that audited the whole capture instead of the footprint reported a 3.2 m 95th percentile on this well-aligned scene, which is why the audit is scoped.**
 
 - date: 2026-09-22 · commit: `49ffccd`
-- instrument: `rq_pipeline.scenes (numpy), Open3D 0.20.0, Python 3.12, macOS 25.5.0 Apple M1 Pro; the scene's own collision_tf.json (scale 0.4313, euler radians (2.592, 1.268, 2.114), translation (1.662, 0.054, 0.661)) applied as MuJoCo's intrinsic x-y-z euler, verified against mujoco 3.11 xmat to 1e-9`
-- command: `import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the Mac] rq_pipeline.scenes.gap.measure(splats, proxy.obj, tolerance_m=0.02, seed=0): visible = opacity >= 0.5; footprint = the proxy's extent grown by 0.5 m; 200,000 visible centres sampled inside it against the proxy by Open3D ray casting; 100,000 proxy surface samples against the nearest visible centre anywhere by k-d tree diagnostic (scratch venv): the hidden fraction at 0.02 / 0.05 / 0.10 m tolerances and the unseen samples' height; the checkpoint's centres against the web file's (nearest 0.0000 m: the same frame); the author's visual mesh under collision_tf.json against the collision mesh (median 0.000 m)`
+- instrument: `trainnr.scenes (numpy), Open3D 0.20.0, Python 3.12, macOS 25.5.0 Apple M1 Pro; the scene's own collision_tf.json (scale 0.4313, euler radians (2.592, 1.268, 2.114), translation (1.662, 0.054, 0.661)) applied as MuJoCo's intrinsic x-y-z euler, verified against mujoco 3.11 xmat to 1e-9`
+- command: `import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the Mac] trainnr.scenes.gap.measure(splats, proxy.obj, tolerance_m=0.02, seed=0): visible = opacity >= 0.5; footprint = the proxy's extent grown by 0.5 m; 200,000 visible centres sampled inside it against the proxy by Open3D ray casting; 100,000 proxy surface samples against the nearest visible centre anywhere by k-d tree diagnostic (scratch venv): the hidden fraction at 0.02 / 0.05 / 0.10 m tolerances and the unseen samples' height; the checkpoint's centres against the web file's (nearest 0.0000 m: the same frame); the author's visual mesh under collision_tf.json against the collision mesh (median 0.000 m)`
 - protocol: docs/78-the-scene-loop.md §3 (the gap) and §4 E1
 - inputs:
   - scene_zip_sha256_prefix: b36604d74cf4b733
@@ -511,7 +511,7 @@ not this page.
 
 - date: 2026-09-22 · commit: `a423f1d`
 - instrument: `macOS 25.5.0 Apple M1 Pro; pinned: mujoco 3.11.0 + onnxruntime; scratch: mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cpu (arm)`
-- command: `stage_deployment('review-check', 'hurdle-blue-carpet') and stage_deployment('review-check', 'hurdle-blue-carpet', name='review-check-on-hurdle-cams') [MCP doors, project go2-walk] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv: mujoco 3.11.0, no renderer, the mirror notes why] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-cams --trials 1 --seed 1000 [scratch venv mjw313: mujoco 3.13.0, mujoco_warp 3.13.0, warp 1.17.0 CPU, onnxruntime 1.30.0, rerun 0.36.2; cameras head+course at 160x120, 2 Hz] scratch: rq_pipeline.scenes.cameras.open_cameras(...).render at 160x120 (60,000 and 393,684 gaussians, three renders each) and 320x240 (full) tools/assay-deployment.py --project projects/go2-walk --name review-check --scene hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv]`
+- command: `stage_deployment('review-check', 'hurdle-blue-carpet') and stage_deployment('review-check', 'hurdle-blue-carpet', name='review-check-on-hurdle-cams') [MCP doors, project go2-walk] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv: mujoco 3.11.0, no renderer, the mirror notes why] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-cams --trials 1 --seed 1000 [scratch venv mjw313: mujoco 3.13.0, mujoco_warp 3.13.0, warp 1.17.0 CPU, onnxruntime 1.30.0, rerun 0.36.2; cameras head+course at 160x120, 2 Hz] scratch: trainnr.scenes.cameras.open_cameras(...).render at 160x120 (60,000 and 393,684 gaussians, three renders each) and 320x240 (full) tools/assay-deployment.py --project projects/go2-walk --name review-check --scene hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv]`
 - protocol: docs/78-the-scene-loop.md §4 E2
 - outcome:
   - render_s_per_frame_both_cameras_one_world: {'160x120_393684_splats': [1.485, 1.469, 1.472], '160x120_60000_splats': [2.196, 0.259, 0.258], '320x240_393684_splats': 6.52, 'context_build_s': 0.3, 'note': "the first render at 60,000 includes Warp's kernel compilation"}
@@ -539,7 +539,7 @@ not this page.
 
 - date: 2026-09-22 · commit: `5e90f8f`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda (against mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda), NVIDIA GeForce RTX 3090 Ti driver 591.86, WSL2 6.18.33.2, Python 3.12`
-- command: `rq_mjlab/pyproject.toml [tool.uv] override-dependencies = ['mujoco==3.13.0', 'mujoco-warp==3.13.0']; uv lock; uv sync --locked --extra viz evaluate_walk(checkpoint='projects/go2-walk/runs/go2-c2/model_1499.pt', trials=40, seed=1000) [MCP door -> python -m rq_mjlab.walk_verdict, project go2-walk] the per-trial comparison: runs/go2-c2/verdict/records-cuda.jsonl, 40 rows per instrument, success and steps by trial python -m rq_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 (256 worlds, 20 iterations), before and after rq_mjlab.sim_options`
+- command: `trainnr-mjlab/pyproject.toml [tool.uv] override-dependencies = ['mujoco==3.13.0', 'mujoco-warp==3.13.0']; uv lock; uv sync --locked --extra viz evaluate_walk(checkpoint='projects/go2-walk/runs/go2-c2/model_1499.pt', trials=40, seed=1000) [MCP door -> python -m trainnr_mjlab.walk_verdict, project go2-walk] the per-trial comparison: runs/go2-c2/verdict/records-cuda.jsonl, 40 rows per instrument, success and steps by trial python -m trainnr_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 (256 worlds, 20 iterations), before and after trainnr_mjlab.sim_options`
 - protocol: docs/78-the-scene-loop.md §4 E0
 - outcome:
   - certificate_3_11: {'name': 'go2-c2-model_1499-cuda-seed1000-n40-pa29326', 'successes': 38, 'trials': 40, 'ci95': [0.8308, 0.9939], 'median_err_ratio': 0.2727, 'funnel': {'survived': 40, 'tracked': 38}}
@@ -565,7 +565,7 @@ not this page.
 - date: 2026-09-22 · commit: `cdf59a1`
 - instrument: `mujoco-3.11.0 + onnxruntime (the pipeline environment), the box: WSL2 6.18.33.2, Python 3.11`
 - command: `stage_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet') [MCP door, project go2-walk; the stage now writes the scene's course into the manifest] gate_deployment('go2-c2-deploy-cited-on-hurdle-blue-carpet', trials=4) [MCP door -> tools/gate-deployment.py --trials 4 --seed 1000, narrated into the Studio] assay_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet', trials=4) [MCP door -> tools/assay-deployment.py --trials 4 --seed 1000 --narrate; nine stages] the terrain profile: mujoco.mj_ray down from z=10 along y=0, x from -0.5 to 6 m in 0.1 m steps, on the staged model; the contacts: contacts-mujoco.npy, points above z=0.15 m`
-- protocol: docs/78-the-scene-loop.md §8.4; rq_pipeline/deploy/course.py (COURSE_SPEED_FRACTION 0.5, COURSE_REACH_M 0.3, COURSE_SLACK 2.0, steer gain 0.5 = mjlab's heading_control_stiffness for the Go2, the protocol's own because this manifest predates the export recording it)
+- protocol: docs/78-the-scene-loop.md §8.4; trainnr/deploy/course.py (COURSE_SPEED_FRACTION 0.5, COURSE_REACH_M 0.3, COURSE_SLACK 2.0, steer gain 0.5 = mjlab's heading_control_stiffness for the Go2, the protocol's own because this manifest predates the export recording it)
 - outcome:
   - nominal_gate: {'successes': 0, 'trials': 4, 'ci95': [0.0, 0.6024], 'speeds_mps': [0.761, 0.802, 0.735, 0.602], 'reached_of_4': [0, 0, 0, 0], 'seconds': [13.98, 13.26, 14.46, 17.68], 'fell': 0, 'err_ratio': [0.957, 0.957, 0.959, 0.955], 'wall_s_narrated': 53}
   - assay: {'stages': 9, 'trials_each': 4, 'successes_each': 0, 'reached_each': 0, 'falls': 0, 'cliff': {'nominal_rate': 0.0, 'worst_rate': 0.0, 'drop': 0.0, 'measurable': False}}
@@ -579,7 +579,7 @@ not this page.
   - twist_protocol_record: kept aside in the session's scratchpad (stale-stages/twist-protocol-0of4/gate.json)
 - sources:
   - steering_law: mjlab 1.6.0 tasks/velocity/mdp/velocity_command.py: vel_command_b[:, 2] = clip(heading_control_stiffness * wrap_to_pi(heading_target - heading_w), ang_vel_z range); velocity_env_cfg.py: heading_command=True, heading_control_stiffness=0.5
-  - course: the scene's XML: mocap bodies waypoint-N (rq_pipeline/scenes/neverwhere.py)
+  - course: the scene's XML: mocap bodies waypoint-N (trainnr/scenes/neverwhere.py)
   - before: docs/findings/scene-cameras-and-assay-smoke-2026-09-22.json (the assay's plumbing, 0/2 with the smoke policy)
 - caveats:
   - Four trials a stage: enough to say nominal is 0 (upper bound 0.60) and to record the cliff as unmeasurable; not a rate.
@@ -663,7 +663,7 @@ not this page.
   - after_pacing_and_narration_budget: {'kitting': {'rtf': 1.0, 'ticks_per_s': 50, 'lane_fps': 66, 'on_screen_fps_mean': 66.7}, 'kitting_before_deadline_pacing': {'rtf': 0.79, 'cause': 'time.sleep overshoot accumulated per 20 ms tick; the policy alone runs 22.5x real time'}, 'duck_20_physics': {'mj_step_ms': 0.73, 'rtf_with_narration': 0.06, 'rtf_without_narration': 1.0}, 'duck_render_ms_by_count': {'1': 11.5, '4': 39.0, '6': 52.3, '8': 61.7, '20': 156.0}, 'microduck_asset': {'meshes': 38, 'vertices': 215291, 'faces': 431750, 'largest_mesh_faces': 20970, 'visual_only_geoms': 70}, 'duck_4_preview': {'rtf': '0.82-0.90', 'lane_fps': 31.8, 'on_screen_fps_mean': 37.1}, 'native_viewer_on_20_ducks': {'rtf': '0.02-0.07', 'note': "mjpython launch_passive with the same parade loop; the human called it 'super laggy'"}}
 - artifacts:
   - script: tools/studio-render-stream.py
-  - studio: crates/studio-shell/src/viewport.rs
+  - studio: crates/trainnr-desktop/src/viewport.rs
   - previous: docs/findings/studio-viewport-pipe-2026-09-09.json
 - sources:
   - finding: studio-viewport-pipe-2026-09-09 (the before)
@@ -1410,7 +1410,7 @@ not this page.
 
 - date: 2026-09-04 · commit: `d25fb30`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
-- command: `rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 [--student <pretrained_model>] [--blank-camera | --blank-state]`
+- command: `trainnr_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 [--student <pretrained_model>] [--blank-camera | --blank-state]`
 - protocol: docs/e2e-research/63 §2 (the certificate); docs/07 campaigns 1-4
 - inputs:
   - teacher: runs/microduck-walk/20260901-163412/model_7999.pt (microduck-walk@824eba27c48c)
@@ -1537,7 +1537,7 @@ not this page.
 
 - date: 2026-09-04 · commit: `ecb04ac`
 - instrument: `mujoco-3.11.0+x86_64`
-- command: `rq_pipeline.envs.policy_bridge + envs.robotiq.make_env probe: hold 1 vs 5 on seeds 0,1,2 (pod, 2026-09-04) tools/study.py evaluate docs/studies/visual-dr-lift.json <out>  # before and after envs/hold.py`
+- command: `trainnr.envs.policy_bridge + envs.gymnasium_env.make_env probe: hold 1 vs 5 on seeds 0,1,2 (pod, 2026-09-04) tools/study.py evaluate docs/studies/visual-dr-lift.json <out>  # before and after envs/hold.py`
 - protocol: docs/e2e-research/68 §4.1
 - inputs:
   - checkpoint: visual-dr-lift fixed arm, 20000 steps (studies/visual-dr-lift on the volume)
@@ -1545,9 +1545,9 @@ not this page.
 - outcome:
   - arms: {'hold-1-probe': {'successes': 0, 'trials': 3}, 'hold-5-probe': {'successes': 3, 'trials': 3}, 'visual-dr-fixed-before': {'successes': 0, 'trials': 80}, 'visual-dr-visual-before': {'successes': 3, 'trials': 80}, 'visual-dr-fixed-after': {'successes': 80, 'trials': 80}, 'visual-dr-visual-after': {'successes': 80, 'trials': 80}}
 - artifacts:
-  - fix: pipeline/rq_pipeline/envs/hold.py
+  - fix: trainnr/trainnr/envs/hold.py
   - flag: --env.frame_every
-  - tests: pipeline/tests/test_action_hold.py
+  - tests: trainnr/tests/test_action_hold.py
   - after: docs/findings/visual-dr-lift-2026-09-03.json
   - log: docs/07-progress-log.md, entry 2026-09-04 'the studies'
 - caveats:
@@ -1980,7 +1980,7 @@ not this page.
 
 - date: 2026-09-02 · commit: `6ed84a7`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
-- command: `rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 with the teacher's action held 1 / 2 / 5 ticks (the hold probe of 2026-09-02, run on the pod)`
+- command: `trainnr_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 with the teacher's action held 1 / 2 / 5 ticks (the hold probe of 2026-09-02, run on the pod)`
 - protocol: docs/e2e-research/63 §2 (the certificate) with the action held N ticks
 - inputs:
   - teacher: microduck-walk@824eba27c48c, model_7999
@@ -2000,7 +2000,7 @@ not this page.
 
 - date: 2026-09-02 · commit: `see docs/07 campaign 2`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda (RTX 3090 Ti)`
-- command: `rq_mjlab.walk_verdict <teacher> --trials 40 --student <campaign-2 pretrained_model> --horizon 2 --stride 1 (WSL box, RTX 3090 Ti)`
+- command: `trainnr_mjlab.walk_verdict <teacher> --trials 40 --student <campaign-2 pretrained_model> --horizon 2 --stride 1 (WSL box, RTX 3090 Ti)`
 - protocol: docs/e2e-research/63 §2 (the certificate)
 - inputs:
   - student: student-last@5ca41ffb2fc6 (campaign 2: 120 episodes at 50 Hz, 30k steps)
@@ -2041,17 +2041,17 @@ not this page.
 
 - date: 2026-09-02 · commit: `70c078c`
 - instrument: `mujoco-3.11.0+arm64 (pixel check); mjlab-1.6.0 (linter)`
-- command: `read at source (docs/e2e-research/57 §5) tools/verify (rq_mjlab.linter tests) uv run --extra sim python -  # pixel check, docs/07 2026-09-02`
+- command: `read at source (docs/e2e-research/57 §5) tools/verify (trainnr_mjlab.linter tests) uv run --extra sim python -  # pixel check, docs/07 2026-09-02`
 - protocol: docs/e2e-research/67-novelty-audit.md §5
 - inputs:
-  - scene: rq_pipeline.tasks.so101 lift-study (nlight == 0)
+  - scene: trainnr.tasks.so101 lift-study (nlight == 0)
 - outcome:
   - microduck_rl_no_op_knobs: 5
   - our_no_op_knobs: 1
   - pixel_check: headlight draw 0.40 -> mean pixel 23.7, 1.14 -> 39.5, 1.17 -> 40.1 after the fix (docs/07 2026-09-02 D1)
 - artifacts:
-  - linter: rq_mjlab/src/rq_mjlab/linter.py
-  - applier: pipeline/rq_pipeline/physics/variations.py
+  - linter: trainnr-mjlab/src/trainnr_mjlab/linter.py
+  - applier: trainnr/trainnr/physics/variations.py
   - log: docs/07-progress-log.md 2026-09-02 (D1)
 - sources:
   - pollen-robotics/microduck_rl: repomix pack read 2026-08-31 (163 files); commit bf19b34a1ef6 (2026-08-31 12:27 UTC — the latest commit not after the read date; pinned 2026-09-07 from the GitHub history; the pack itself carried no hash)
@@ -2078,7 +2078,7 @@ not this page.
   - frames_per_episode: 280
 - artifacts:
   - log: docs/07-progress-log.md B3.2 (2026-08-31)
-  - code: pipeline/rq_pipeline/collect/multiply.py
+  - code: trainnr/trainnr/collect/multiply.py
 - caveats:
   - Run directories are on the WSL box, not tracked; the numbers are the log entry's.
 
@@ -2097,7 +2097,7 @@ not this page.
   - arms: {'own-start-device': {'successes': 3, 'trials': 3}, 'own-start-cpu': {'successes': 3, 'trials': 3}, 'jitter-5mm-w8': {'successes': 9, 'trials': 9}, 'jitter-5mm-w64': {'successes': 63, 'trials': 63}, 'jitter-30mm': {'successes': 1, 'trials': 12}}
 - artifacts:
   - log: docs/07-progress-log.md B3.1 (2026-08-31)
-  - code: pipeline/rq_pipeline/collect/multiply.py
+  - code: trainnr/trainnr/collect/multiply.py
   - positioning: docs/33-what-we-say.md
 - caveats:
   - Measured on the WSL box; the run directories live there, not on the volume or in git — the numbers are the log entry's.
@@ -2108,7 +2108,7 @@ not this page.
 
 - date: 2026-08-27 · commit: `see docs/07 2026-08-27 (pre-ledger)`
 - instrument: `mujoco-3.11.0 (Mac, arm64)`
-- command: `lerobot-eval --env.type=robotiq --env.task=kitting --env.record_to=<records> --eval.n_episodes=4 (the 600-step checkpoint)`
+- command: `lerobot-eval --env.type=trainnr --env.task=kitting --env.record_to=<records> --eval.n_episodes=4 (the 600-step checkpoint)`
 - protocol: docs/32 (the evaluation layer): paired starts, exact interval, milestone funnel
 - inputs:
   - policy: ACT, 600 steps, 4 demonstrations (a smoke-scale run)

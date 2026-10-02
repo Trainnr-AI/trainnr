@@ -13,7 +13,7 @@ stage and recorded here.*
 `unitree_rl_mjlab` (Apache 2.0; shallow clone at
 `~/.cache/trainnr/unitree_rl_mjlab`, commit `1425b15`) is Unitree's
 reinforcement-learning stack on mjlab — the same simulator stack our
-walk study runs on (docs/e2e-research/58; rq_mjlab pins mjlab 1.6.0,
+walk study runs on (docs/e2e-research/58; trainnr_mjlab pins mjlab 1.6.0,
 the reference pins 1.2.0 and mujoco-warp 3.5.0). What it holds:
 
 - Seven robot packages under `src/assets/robots` (go2, a2, as2, g1 at 29
@@ -66,22 +66,22 @@ read differently, and the window must say so rather than show a gap.
 | state | for the Go2 | door | status (2026-09-10; updated 2026-09-24) |
 |---|---|---|---|
 | asset onboarded | Menagerie `go2.xml` into `projects/go2-walk/robots/go2` | `onboard_robot` | done by the door; two frictions (§3) |
-| telemetry recorded | none of our own — no Go2 in the room. The live Unitree adapter is BUILT (2026-09-24, `pipeline/rq_pipeline/robots/dds_capture.py`): `start_capture(source="dds", network=<the robot's interface>)` records `rt/lowstate` AND `rt/lowcmd` as one recording, basis "own robot"; rehearsed on their simulator and controller (basis "simulation"; docs/07 2026-09-24 evening). Since 2026-09-24: a REAL Go2's public bag (YibinWu/leg-odometry, 12 min of `/lowstate` at 499.8 Hz measured) enters through the rosbag2 adapter (`pipeline/rq_pipeline/robots/adapters/rosbag2.py`) with a provenance block, and the strip's chip reads "Telemetry · public log", never met (docs/07 2026-09-24 afternoon) | `ingest_recording`, `ingest_public_log` | a real robot's telemetry, not ours; shown as such |
-| system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `rq_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists; the `legged-joints` method exists since 2026-09-24 (§8) and has fit public logs of other people's Go2s | declared for this robot; a method, no recording of ours |
-| environment defined | the walk families (`rq_pipeline/tasks/walks.py`): `robotiq/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; rq_mjlab builds the simulator environment from it (`rq_mjlab/src/rq_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
+| telemetry recorded | none of our own — no Go2 in the room. The live Unitree adapter is BUILT (2026-09-24, `trainnr/trainnr/robots/dds_capture.py`): `start_capture(source="dds", network=<the robot's interface>)` records `rt/lowstate` AND `rt/lowcmd` as one recording, basis "own robot"; rehearsed on their simulator and controller (basis "simulation"; docs/07 2026-09-24 evening). Since 2026-09-24: a REAL Go2's public bag (YibinWu/leg-odometry, 12 min of `/lowstate` at 499.8 Hz measured) enters through the rosbag2 adapter (`trainnr/trainnr/robots/adapters/rosbag2.py`) with a provenance block, and the strip's chip reads "Telemetry · public log", never met (docs/07 2026-09-24 afternoon) | `ingest_recording`, `ingest_public_log` | a real robot's telemetry, not ours; shown as such |
+| system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `trainnr-mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists; the `legged-joints` method exists since 2026-09-24 (§8) and has fit public logs of other people's Go2s | declared for this robot; a method, no recording of ours |
+| environment defined | the walk families (`trainnr/tasks/walks.py`): `trainnr/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; trainnr_mjlab builds the simulator environment from it (`trainnr-mjlab/src/trainnr_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
-| policy trained | rq_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
+| policy trained | trainnr_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)` → generic `train_policy` (A5) | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12) → generic `evaluate_policy` (A5, still walk-shaped) | done 2026-09-10 on the box: go2-c1 40/40 twice, go2-c2 38/40 |
-| deployment exported | the deploy manifest (A6, `rq_mjlab/src/rq_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`rq_pipeline/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
+| deployment exported | the deploy manifest (A6, `trainnr-mjlab/src/trainnr_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`trainnr/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
 | drift monitored | fresh telemetry identified without writing a fit record, judged against the union of the pinned intervals (docs/76 §9.1); empty on the Go2 — a method since 2026-09-24, no telemetry of ours yet (§8) | `check_drift` (A7) | built 2026-09-13, proved on the rig; waits on a real Go2 here |
 
 ## 3. Frictions found, in the order the loop found them
 
 1. **Onboarding ignores the open project** (found and fixed
    2026-09-10). `onboard_robot` wrote to the checkout's robot library
-   (`$RQ_ROBOTS_DIR` or `robots/`), while the loop says the project holds
+   (`$TRAINNR_ROBOTS_DIR` or `robots/`), while the loop says the project holds
    its robots and the Studio lists the project's. Fixed: the bundle
-   locator (`rq_pipeline/bundles/locate.py`) searches registered roots
+   locator (`trainnr/bundles/locate.py`) searches registered roots
    before the library — a project registers its `robots/` when it is
    made current (`Project.use`) — so a robot onboarded into a project
    builds tasks like a library rig; the door lands the bundle in the
@@ -95,7 +95,7 @@ read differently, and the window must say so rather than show a gap.
    `trainnr-robot/1`: the model file compiled, the source path, the
    census; no timestamps, so two onboardings of one directory are one
    version) and every reader asks it first
-   (`rq_pipeline/bundles/bundle.py`). The rig's `profile.json` stays what
+   (`trainnr/bundles/bundle.py`). The rig's `profile.json` stays what
    it is, a measurement, not provenance. Also found: the actuator store
    was listed as a robot bundle.
 3. **The pipeline strip assumed every loop has a dataset stage** (fixed
@@ -125,7 +125,7 @@ read differently, and the window must say so rather than show a gap.
    in — a census of named collision geoms and sites — so the agent learns
    this before training, not from a traceback.
 6. **A second venv, a second world** (2026-09-10). The walk runs in
-   rq_mjlab's own environment (mjlab pins), so the train door spawns it
+   trainnr_mjlab's own environment (mjlab pins), so the train door spawns it
    with `--project` and the walk resolves the robot through the same
    project-first locator the pipeline uses; nothing about the project's
    layout is known to the walk package.
@@ -147,7 +147,7 @@ read differently, and the window must say so rather than show a gap.
    experiment card's curve came only from a console log an imported
    study arm carries - a door-launched run has neither. Fixed three
    ways: `walk_train` tees its console into the run folder as
-   `train.log`; `rq_pipeline.project.live` turns that log into
+   `train.log`; `trainnr.project.live` turns that log into
    `training.json` whenever the log is newer (status `running` until
    the done line, iterations so far, the curve so far); and the
    presenter the Studio spawns does that and re-indexes every 15 s. The
@@ -159,7 +159,7 @@ read differently, and the window must say so rather than show a gap.
 9. **A certificate judged inside the project never became an
    evaluation** (found and fixed 2026-09-10, the box). `certify_walk`
    on `model_1400` of the training run wrote its 40/40 verdict where
-   rq_mjlab writes one - `runs/go2-c1/verdict/walk-verdict-cuda.json`
+   trainnr_mjlab writes one - `runs/go2-c1/verdict/walk-verdict-cuda.json`
    beside the checkpoint - and the Evaluations page stayed at zero: the
    only path from a verdict to an evaluation artifact was the importer,
    which refuses a run already in the project. Fixed: the importer's
@@ -191,7 +191,7 @@ read differently, and the window must say so rather than show a gap.
 
 11. **What the policy looked like every hundred iterations** (asked
     2026-09-10: "one image of each 100 iterations, like 80 images",
-    for after the run). `rq_mjlab.walk_stills <run> --project <root>
+    for after the run). `trainnr_mjlab.walk_stills <run> --project <root>
     --robot go2 --every 100 --tick 100`: the env built once at the
     nominal point with one world, every hundredth checkpoint's actor
     loaded into it in turn, a rollout capped at 100 control ticks (2 s)
@@ -215,7 +215,7 @@ read differently, and the window must say so rather than show a gap.
     is a thread in the process that opened the door; called from a
     script that returned, no `.exit` file ever landed, and the Studio
     counted a job running while no exit was recorded. Fixed twice: the
-    job now runs under a runner (`python -m rq_pipeline.mcp_jobs
+    job now runs under a runner (`python -m trainnr.mcp_jobs
     --exit-file … -- <tool>`) that writes the exit file itself, whoever
     launched it; and the Studio counts a job as running only while its
     process exists (Linux, through `/proc`; elsewhere the exit file
@@ -223,7 +223,7 @@ read differently, and the window must say so rather than show a gap.
     with both certificates ended.
 
 13. **A rotated verdict would have become a second evaluation** (found
-    before it happened, 2026-09-10). rq_mjlab never overwrites a
+    before it happened, 2026-09-10). trainnr_mjlab never overwrites a
     verdict: certifying `model_7999` moved `model_1400`'s file to
     `walk-verdict-cuda.seed1000.n40.json`, which the live loop would
     have imported as a new evaluation of `model_1400`. An evaluation is
@@ -234,13 +234,13 @@ read differently, and the window must say so rather than show a gap.
 
 ## 4. Decisions to take before building (asked 2026-09-10)
 
-- **Robot: Go2.** The Go1 walk already exists in rq_mjlab on mjlab's own
+- **Robot: Go2.** The Go1 walk already exists in trainnr_mjlab on mjlab's own
   asset; the Go2 is the current robot, has the reference's gains, deploy
   config and sim-to-sim twin, and mjlab 1.6's asset zoo does not ship
   it — so this exercises onboarding for real.
 - **Environment source: our registry, the reference's numbers.** A
-  `robotiq/go2-walk` family in `rq_pipeline.tasks` with a spec dataclass
-  holding the velocity task's knobs, stamped by content; rq_mjlab builds
+  `trainnr/go2-walk` family in `trainnr.tasks` with a spec dataclass
+  holding the velocity task's knobs, stamped by content; trainnr_mjlab builds
   the mjlab environment from it (as `go1_walk.py` does). Not a
   dependency on the reference package (its mjlab pin conflicts with
   ours, and its configs cannot be hashed).
@@ -292,8 +292,8 @@ onboarded into `projects/go2-walk` (the reference's `go2.xml`,
 `go2@b6170cf88b09`); the walk declared as `go2-flat`
 (`go2-walk@0e7e123a7de7`, span 0.10, flat, 20 s episodes, 40 trials)
 and accepted by the learnability smoke; the train door taking the
-declared task. The box needs what a pod needed: the rq_mjlab venv
-(mjlab 1.6, mujoco-warp, torch with CUDA — `cd rq_mjlab && uv sync --extra viz`; `viz` is the Rerun recorder the Studio watches, and its tests)
+declared task. The box needs what a pod needed: the trainnr_mjlab venv
+(mjlab 1.6, mujoco-warp, torch with CUDA — `cd trainnr-mjlab && uv sync --extra viz`; `viz` is the Rerun recorder the Studio watches, and its tests)
 and the project directory (gitignored; copy `projects/go2-walk`, the
 bundle is 24 MB of meshes). Then, with `TRAINNR_PROJECT` set to the
 project, by the door:
@@ -312,7 +312,7 @@ reaches "policy evaluated".
 
 ## 6. The deployment stage, built 2026-09-11 on the Mac
 
-`export_deployment(run, checkpoint, name)` spawns `rq_mjlab.walk_export`
+`export_deployment(run, checkpoint, name)` spawns `trainnr_mjlab.walk_export`
 in the walk package's venv: the actor as ONNX (rsl_rl's exporter,
 observation normalization inside the graph, a fixed batch of one, as a
 runtime uses it), checked against the torch actor on sixty-four random
@@ -331,12 +331,12 @@ evaluation in the index and cites them.
 
 `gate_deployment(name, trials, seed, tolerance)` spawns
 `tools/gate-deployment.py` in the pipeline's venv (`--extra deploy`:
-onnxruntime): `rq_pipeline.deploy.runtime` computes each observation
+onnxruntime): `trainnr.deploy.runtime` computes each observation
 term from MuJoCo state the way mjlab does (the IMU's velocimeter and
 gyro from the sensors, gravity rotated into the base frame, joint
 positions relative to home, joint velocities, the last action, the held
 command), runs the ONNX, maps actions to controls, steps at the
-manifest's rate; `rq_pipeline.deploy.gate` judges each seeded held
+manifest's rate; `trainnr.deploy.gate` judges each seeded held
 command the certificate's way (survived and error ratio below 0.5,
 floored at 0.1 m/s), writes the exact interval, and passes when the
 rate is within the stated tolerance (0.10) of the cited certificate's.
@@ -350,7 +350,7 @@ the joints and observations as tables) and the loop at 5 of 8 stages;
 "Show in viewer" on a deployment presents the trained scene from
 `scene.xml` with the bundle's meshes, the gate's error ratio per trial
 as bars against the 0.5 bound, and a reading with the lineage
-(`rq_pipeline/project/present.py::_present_deploy`, checked by capture).
+(`trainnr/project/present.py::_present_deploy`, checked by capture).
 
 Frictions found (docs/77 §3 continued): 14, the project's folder is
 `deploy/`, not `deployments/`; 15, the entity's spec is attached to the
@@ -386,14 +386,14 @@ marked done in the activity feed.
 Friction 18 (fixed): a run trained by the door cites its task by the
 project's stamp (`go2-walk@0e7e…`), and the export door handed that
 stamp to the task registry, which knows families by id
-(`robotiq/go2-walk`) - refused. The door now resolves the stamp
+(`trainnr/go2-walk`) - refused. The door now resolves the stamp
 through the environment card the index holds (its spec records the
 family id); a run naming the family id directly is taken as is.
 
 Friction 19 (fixed, 2026-09-11, the box): **the Studio window never
 appeared on the operator's screens under WSLg**, through a day of
 work seen only by the agent's in-app screenshots. WSLg's compositor
-announced the window to Windows every time (`robotiq_studio` in the
+announced the window to Windows every time (`ai.trainnr.desktop` in the
 RAIL app list), but Windows never showed a native Wayland window from
 this app, while an X11 test window (`xmessage`, through Xwayland)
 showed at once, and the Studio relaunched with `WAYLAND_DISPLAY`
@@ -443,7 +443,7 @@ geometry via python-xlib, one command.
 Then the chrome (2026-09-12, asked for: "make the OS window border
 standard for Windows, Mac and Linux, only the buttons differ, the
 app's colour"): the window's chrome is ours on every platform that
-lets a client draw it (`crates/studio-shell/src/chrome.rs`), the way
+lets a client draw it (`crates/trainnr-desktop/src/chrome.rs`), the way
 Rerun's own viewer does - our top bar is the title bar (drag,
 double-click to maximize), re_ui's caption buttons at its right on
 Windows and Linux, invisible resize zones on the edges; the Mac keeps
@@ -457,7 +457,7 @@ frame the operator saw was the manager's; it is gone.
 
 **The Studio's own walk scene on the Go2 (2026-09-12).** "The same
 four robots we saw in viser, in our Studio": the Simulator page's
-walk scene (`rq_mjlab.walk_view` feeding `tools/studio-render-stream.py`
+walk scene (`trainnr_mjlab.walk_view` feeding `tools/studio-render-stream.py`
 over the state ring) was microduck-shaped in three places - the
 checkpoint lookup under `runs/microduck-walk`, the scene name
 `walk:<worlds>` where the render stream now wants `walk:<robot>:<worlds>`
@@ -524,7 +524,7 @@ sampled twists only. mjlab's velocity term already carries a joystick
 override for its own viser viewer: three slider handles, an enable
 handle and an env index, read at every `compute`, written into the
 command the policy observes. The Studio drives that same hook - the
-handles are ours (`rq_mjlab.walk_view`, `Joystick`), fed from the
+handles are ours (`trainnr_mjlab.walk_view`, `Joystick`), fed from the
 ring's mailbox instead of viser; none of the term's logic is copied.
 A fifth drawer tab, **Commands**, appears in walk scenes: forward,
 left and turn sliders bounded by the task's own command ranges (the
@@ -552,7 +552,7 @@ Studio died mid-message and the server said so. Now the narrating
 processes close their Rerun connection on TERM and leave
 (`leave_cleanly_on_term` in `tools/studio-render-stream.py`, used by
 both), and the shell waits up to 1.5 s after TERM before the KILL
-(`crates/studio-shell/src/spawn.rs`). Measured: the walk scene and a
+(`crates/trainnr-desktop/src/spawn.rs`). Measured: the walk scene and a
 plain task each quit with no h2 line and no leftover process.
 
 Friction 31 (fixed, 2026-09-12): **`quit_studio` from the process
@@ -563,7 +563,7 @@ and every probe (`os.kill(pid, 0)`, psutil's `pid_exists`) counts a
 zombie as existing; the MCP server launches and quits in one process,
 so it always hit this. The launcher now keeps its Popen by pid and
 the liveness probe reaps it first, and a zombie is not alive
-(`pipeline/rq_pipeline/project/control.py`). Found while timing the
+(`trainnr/trainnr/project/control.py`). Found while timing the
 close: the "60 s hang" my own scripts measured was the same zombie.
 
 Friction 32 (fixed, 2026-09-12): **"WASD works in the Rerun 3D
@@ -574,7 +574,7 @@ view every shortcut of the picture went silent - the keys, Space, R.
 Now the picture takes focus when clicked, and the keys are the
 picture's whenever the pointer is over it or it was clicked last;
 only a text field being typed in blocks them (`ViewportFeed::wants_keys`
-in `crates/studio-shell/src/viewport.rs`, the `f` key the same). The
+in `crates/trainnr-desktop/src/viewport.rs`, the `f` key the same). The
 stream now echoes the camera pose - azimuth, elevation, distance,
 lookat - in its status and the shell in `studio-state.json`
 (`simulator.camera`), so a key can be checked as a number: the
@@ -596,7 +596,7 @@ MuJoCo's camera only at creation and while following a world, while
 azimuth, elevation and distance were applied every frame - so a pan
 moved the status echo (the number every test read) and never the
 picture. `OrbitCamera.apply_to` now applies the lookat too, and
-`pipeline/tests/test_studio_camera.py` reads `MjvCamera.lookat` after
+`trainnr/tests/test_studio_camera.py` reads `MjvCamera.lookat` after
 a pan, which the old code fails. The focus rule and the rate were
 real, smaller findings on the way. Lesson, the operator's own rule
 re-learned at a price: verify in the viewer, never in a printout; a
@@ -610,8 +610,8 @@ haze, shadow map) with the terrain built fresh from the terrain
 declaration the env was built from (`TerrainEntityCfg`: the checker
 plane, or a generator's heightfields and boxes from the same config
 and seed), no robot - as one XML beside the ring (`export_stage` in
-`rq_mjlab.walk_view`), and the render process builds the mirror ON it
-(`grid_of(stage=)` in `pipeline/rq_pipeline/tasks/scene.py`, the
+`trainnr_mjlab.walk_view`), and the render process builds the mirror ON it
+(`grid_of(stage=)` in `trainnr/trainnr/tasks/scene.py`, the
 `--stage=` flag of `tools/studio-render-stream.py`), adding Menagerie's
 gradient sky when the stage brings none. Heightfields ride inline in
 the XML (`elevation`), so no assets travel. Two MuJoCo XML-writer
@@ -647,7 +647,7 @@ manager counts frames KEPT, keeps none for 0, and their policy read
 an empty vector: the FSM reached Velocity and the joints stood at the
 fixed stand to three decimals (a live probe of their LowState). Their
 reference file writes 1. `their_history` in
-`pipeline/rq_pipeline/deploy/unitree_yaml.py` maps the count.
+`trainnr/trainnr/deploy/unitree_yaml.py` maps the count.
 
 Friction 36 (fixed): **the frame.** The quaternion was read off
 SportModeState, which their bridge fills with position and velocity
@@ -669,8 +669,8 @@ simulator window; law 0 says everything streams to the Studio. Every
 gate runtime now answers `pose()` (base position, quaternion, joints
 in the policy order - the DDS one re-orders their LowState motors by
 the manifest's `sdk_order_map`), and the gate mirrors each tick into
-the deployment's own scene through `rq_pipeline.viz.RigMirror`, the
-path every rig tool uses (`pipeline/rq_pipeline/deploy/mirror.py`):
+the deployment's own scene through `trainnr.viz.RigMirror`, the
+path every rig tool uses (`trainnr/trainnr/deploy/mirror.py`):
 a recording named for the runtime, the 3D view, the command and the
 measured planar velocity as series, the trials as a log. The gate job
 carries the `viz` extra for it; no Rerun or no loadable scene makes
@@ -702,10 +702,10 @@ A run is stamped by its identity (friction 9), so its stamp never
 changes, and a preview is drawn once per stamp: the sparkline drawn at
 the run's second iteration stood for its life. Previews now redraw
 when any file of the artifact is newer than the picture
-(`stale_preview` in `pipeline/rq_pipeline/project/previews.py`,
+(`stale_preview` in `trainnr/trainnr/project/previews.py`,
 `tests/test_previews_stale.py`), and the shell's image cache keys a
 preview by its path AND modification time (`preview_uri` in
-`crates/studio-shell/src/widgets.rs`) - the redrawn file was on disk
+`crates/trainnr-desktop/src/widgets.rs`) - the redrawn file was on disk
 while the window still showed the first picture ever loaded under
 that path. Seen: the card's full curve, "reward 85.0", after one
 reindex and a relaunch.
@@ -721,7 +721,7 @@ checkpoint had trained on.** The reward curve's step at iteration
 8000). A fresh environment restarts the curriculum, so every
 certificate had judged stage one and the deployment manifest's ranges
 (what the gate draws from) were stage one too; the two checkpoints'
-40/40 were the same question asked twice. Fixed: `rq_mjlab.envelope`
+40/40 were the same question asked twice. Fixed: `trainnr_mjlab.envelope`
 pins the config's command ranges to the stage the checkpoint's
 iteration had reached and removes the curriculum; the certificate
 records `protocol.commands` and `protocol.command_basis`, the
@@ -761,7 +761,7 @@ the pipeline's `viz` extra), it answers what the console never could:
 at iteration 5000 the two biggest losses were foot clearance (-0.38
 to -0.56) and action rate (-0.33 to -0.50), ahead of the two tracking
 terms (-0.16, -0.12) - the policy runs rougher at speed, not only less
-accurately. `rq_pipeline.envs.tfevents` turns the file into the same
+accurately. `trainnr.envs.tfevents` turns the file into the same
 training record the cards read (the five console names kept; every
 other series as `group/name`), the live loop prefers it and falls back
 to the console log, and the viewer lays the series out in grouped
@@ -855,7 +855,7 @@ waits for the next state message and publishes the command as gamepad
 sticks - their state machine and their velocity command both come from
 the pad, which the simulator reads from `/dev/input/js0` and packs into
 LowState; a virtual pad through the kernel's uinput is what a person's
-thumbs do. Pieces: `pipeline/rq_pipeline/deploy/unitree_yaml.py` (built: the manifest as
+thumbs do. Pieces: `trainnr/trainnr/deploy/unitree_yaml.py` (built: the manifest as
 their `deploy.yaml`; the observation names mapped to their runtime's
 registered terms; **refuses by name any term their runtime does not
 implement** - the writer is the deployability check), *deploy/gamepad.py*
@@ -875,7 +875,7 @@ a gait clock (`phase`: sine and cosine of the episode time modulo
 `gait_phase`. Fixed in `go2_walk.deployable_actor`: the actor sees the
 reference's seven terms in the reference's order, the critic keeps
 mjlab's full set; the gait clock transcribed (`gait_phase`) into our
-config and into `rq_pipeline.deploy.runtime`; the manifest's known
+config and into `trainnr.deploy.runtime`; the manifest's known
 sources gained it. Every Go2 policy trained from here is deployable
 through their stack; go2-c1 is not, and its two certificates stand as
 what they are. Smoke run `go2-c2-smoke` (80 iterations) exported as
@@ -929,7 +929,7 @@ MuJoCo gate's record standing beside it.
 
 Frictions on the way: 25, `libddsc.so.0` not found by their controller
 - `make install` put it under `/usr/local/lib`, which the loader does
-not search until `ldconfig`; the box's `pipeline/wsl.env` now carries
+not search until `ldconfig`; the box's `trainnr/wsl.env` now carries
 it and the stack passes it on. 26, a 0.15 s chord was missed by their
 1 kHz state machine (a press edge lives one message frame at ~900
 LowState messages a second); 0.3 s holds, each chord twice (a repeat
@@ -994,7 +994,7 @@ every fresh recording. The strip's Sys ID and Telemetry flags are the
 same gap seen from the other end.
 
 **2026-09-24, the method exists and has run on real Go2s — not ours.**
-`legged-joints` (`pipeline/rq_pipeline/robot/legged_fit.py`) fits
+`legged-joints` (`trainnr/trainnr/robot/legged_fit.py`) fits
 every hinge's armature, damping and Coulomb friction from a log of
 joint position, velocity and torque against the bundle's own MJCF, with
 bootstrap intervals, pinned verdicts and bound flags; proved on the
@@ -1016,7 +1016,7 @@ the Go2 in go2-walk left it at `go2@5003bf617b5f` and every certified
 checkpoint still passes its identity gate. The fit carries its own stamp
 (`fit_record.fit_stamp`, `fit@<hash of the record>`). A walk trains
 under one with `train_walk(fit=...)` / `walk_train --fit` / a task.json
-`fit` field (`rq_mjlab/src/rq_mjlab/fit_walk.py`): every hinge's armature, viscous
+`fit` field (`trainnr-mjlab/src/trainnr_mjlab/fit_walk.py`): every hinge's armature, viscous
 damping and Coulomb friction set at the fit's estimate in the training
 model; each pinned term drawn per reset over its bootstrap interval,
 each unpinned one over a declared ±0.5 of its estimate, said as "not
@@ -1038,7 +1038,7 @@ limits, control rate, observation order or normalizer is wrong". A gate
 says pass or fail with counts; this stage makes it say why, for the
 dynamics half of that list, before hardware.
 
-**The method** (`pipeline/rq_pipeline/deploy/attribution.py`). A gate
+**The method** (`trainnr/trainnr/deploy/attribution.py`). A gate
 that PASSED is re-run in plain MuJoCo with ONE dynamics knob turned at a
 time, up a ladder of the field's plausible deployment deviations from
 the smallest: actions applied late (1, 2, 3, 4 control ticks), every
@@ -1198,7 +1198,7 @@ checks (`terminations.hpp`: tilt 1.0 rad, joint speed 10 rad/s, gyro 6
 rad/s, winding 120 degC, casing 85 degC, battery 20 %, link 1000 ms) as
 examples that print; no deploy repo wires them.
 
-**The method** (`pipeline/rq_pipeline/deploy/preflight.py`). Three parts,
+**The method** (`trainnr/trainnr/deploy/preflight.py`). Three parts,
 each in the runtime.
 
 1. *Seven checks before the first tick*, a table (`CHECKS`), each a
@@ -1292,7 +1292,7 @@ Simulator page's native viewport played preview tasks and the walk; a
 deployment only reached the Studio as the gate mirror's Rerun stream,
 and a gate started while no Studio listened was only a saved file.
 
-**The source** (`pipeline/rq_pipeline/deploy/viewport_source.py`), a
+**The source** (`trainnr/trainnr/deploy/viewport_source.py`), a
 registry of modes behind one scene grammar the picker, the drawer and
 the agent's `simulate_in_studio` share:
 

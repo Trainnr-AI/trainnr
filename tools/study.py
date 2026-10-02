@@ -1,10 +1,10 @@
 """A study with arms as DATA: press, convert, train, judge — paired.
 
-    cd pipeline && uv run --extra sim python ../tools/study.py generate SPEC OUT
-    cd pipeline && .venv-train/bin/python ../tools/study.py convert  <spec.json> <out>
-    cd pipeline && .venv-train/bin/python ../tools/study.py train    <spec.json> <out>
-    cd pipeline && .venv-train/bin/python ../tools/study.py evaluate <spec.json> <out>
-    cd pipeline && .venv-train/bin/python ../tools/study.py finding  <spec.json> <out>
+    cd trainnr && uv run --extra sim python ../tools/study.py generate SPEC OUT
+    cd trainnr && .venv-train/bin/python ../tools/study.py convert  <spec.json> <out>
+    cd trainnr && .venv-train/bin/python ../tools/study.py train    <spec.json> <out>
+    cd trainnr && .venv-train/bin/python ../tools/study.py evaluate <spec.json> <out>
+    cd trainnr && .venv-train/bin/python ../tools/study.py finding  <spec.json> <out>
 
 The generalisation of `paired-study.py` (C1, docs/e2e-research/62):
 that tool hard-codes two arms that differ in their dynamics range; a
@@ -40,9 +40,9 @@ from _lab import REPO, bootstrap, lerobot_eval_command, lerobot_train_command
 
 bootstrap()
 
-from rq_pipeline.bundles.hashing import fields_hash  # noqa: E402
-from rq_pipeline.stats.effects import main_effect  # noqa: E402
-from rq_pipeline.stats.intervals import clopper_pearson  # noqa: E402
+from trainnr.bundles.hashing import fields_hash  # noqa: E402
+from trainnr.stats.effects import main_effect  # noqa: E402
+from trainnr.stats.intervals import clopper_pearson  # noqa: E402
 
 EVAL_SEED = 1000  # shared by every arm: trial k starts identically everywhere
 EXPERT = "scripted-pick@lift-study"
@@ -111,11 +111,11 @@ def declared_arm(pressed: str) -> str:
 
 
 def generate(spec: dict[str, Any], out: Path, *, seed: int, frame_every: int) -> int:
-    from rq_pipeline.collect.scripted_demos import (  # noqa: PLC0415
+    from trainnr.collect.scripted_demos import (  # noqa: PLC0415
         generate_scripted_demos,
     )
-    from rq_pipeline.evaluate.variations import parse_variation  # noqa: PLC0415
-    from rq_pipeline.tasks.so101 import (  # noqa: PLC0415
+    from trainnr.evaluate.variations import parse_variation  # noqa: PLC0415
+    from trainnr.tasks.so101 import (  # noqa: PLC0415
         LIFT_STUDY,
         build_lift_study,
         scripted_pick,
@@ -164,15 +164,15 @@ def convert(spec: dict[str, Any], out: Path, *, prune: bool = False) -> int:
     press is reproducible from spec + seed by construction."""
     import shutil  # noqa: PLC0415
 
-    from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
-    from rq_pipeline.collect.kitting_export import DemoLayout  # noqa: PLC0415
-    from rq_pipeline.tasks.so101 import build_lift_study  # noqa: PLC0415
+    from trainnr.collect.demo_export import export_demos  # noqa: PLC0415
+    from trainnr.collect.kitting_export import DemoLayout  # noqa: PLC0415
+    from trainnr.tasks.so101 import build_lift_study  # noqa: PLC0415
 
     task = build_lift_study()
     for name in expand_arms(spec):
         root = out / f"{name}-lerobot"
         export_demos(
-            out / name, root, task=task, repo_id=f"rq-pipeline/{spec['id']}-{name}"
+            out / name, root, task=task, repo_id=f"trainnr/{spec['id']}-{name}"
         )
         print(f"{name}: dataset -> {root}")
         if prune:
@@ -186,7 +186,7 @@ def convert(spec: dict[str, Any], out: Path, *, prune: bool = False) -> int:
 
 
 def train(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) -> int:
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     steps, batch = int(spec["train"]["steps"]), int(spec["train"]["batch"])
     device = best_device()
@@ -201,7 +201,7 @@ def train(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) -> 
         command = lerobot_train_command(
             policy="act",
             device=device,
-            dataset=f"rq-pipeline/{spec['id']}-{name}",
+            dataset=f"trainnr/{spec['id']}-{name}",
             dataset_root=out / f"{name}-lerobot",
             output_dir=output,
             job_name=f"{spec['id']}-{name}",
@@ -227,10 +227,10 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
     """Every arm judged AT the truth on matched trials; the spec's extra
     eval variations (visual sweeps) are drawn by trial index, so every
     arm sees the identical factor vector on trial k."""
-    from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
-    from rq_pipeline.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
-    from rq_pipeline.tasks.so101 import LIFT_STUDY  # noqa: PLC0415
+    from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
+    from trainnr.tasks.so101 import LIFT_STUDY  # noqa: PLC0415
 
     truth = spec["truth"]
     trials = int(spec["eval"]["trials"])
@@ -369,8 +369,8 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
 
 def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
     """The tracked record: the claim with every stamp it rests on."""
-    from rq_pipeline.collect.datasheet import summarize  # noqa: PLC0415
-    from rq_pipeline.evaluate.findings import (  # noqa: PLC0415
+    from trainnr.collect.datasheet import summarize  # noqa: PLC0415
+    from trainnr.evaluate.findings import (  # noqa: PLC0415
         Finding,
         repo_commit,
         today,
@@ -419,7 +419,7 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
             raise FileNotFoundError(f"{name}: neither pressed episodes nor a datasheet")
         artifacts[f"{name}.records"] = str(out / f"{name}-records.jsonl")
         artifacts[f"{name}.datasheet"] = str(sheet_path)
-    date = os.environ.get("RQ_FINDING_DATE") or today()
+    date = os.environ.get("TRAINNR_FINDING_DATE") or today()
     record = Finding(
         id=f"{spec['id']}-{date}",
         claim=spec["claim"],
@@ -433,7 +433,7 @@ def finding(spec: dict[str, Any], out: Path, argv: list[str]) -> int:
         protocol=PROTOCOL,
         caveats=tuple(spec.get("caveats", [])),
     )
-    from rq_pipeline.evaluate.figures import render  # noqa: PLC0415
+    from trainnr.evaluate.figures import render  # noqa: PLC0415
 
     figures = render(record, REPO)
     record = Finding(

@@ -1,6 +1,6 @@
 """Sweep MuJoCo's constraint solvers on the kitting scene — measured.
 
-    cd pipeline && uv run --extra sim python ../tools/solver-study.py
+    cd trainnr && uv run --extra sim python ../tools/solver-study.py
 
 One scripted kitting episode (trial 0 of the declared band) per solver
 configuration, judged by the task's own referee. Columns: verdict,
@@ -23,12 +23,12 @@ bootstrap()
 
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
-from rq_pipeline.physics.mujoco_backend import keyframe_state  # noqa: E402
-from rq_pipeline.tasks.aloha2 import (  # noqa: E402
+from trainnr.physics.mujoco_backend import keyframe_state  # noqa: E402
+from trainnr.tasks.aloha2 import (  # noqa: E402
     build_kitting,
     scripted_kitting_episode,
 )
-from rq_pipeline.tasks.scene import apply_options  # noqa: E402
+from trainnr.tasks.scene import apply_options  # noqa: E402
 
 # The shipped baseline first, then one axis moved at a time, then the
 # solver x cone cross, then the impratio sweep (elliptic + newton).

@@ -3,7 +3,7 @@ name: system-identification
 description: Use this agent to measure a robot's actual dynamics — fitting parameters from recorded telemetry (CSV or .wire), producing fit records with confidence intervals and pinned/NOT-PINNED verdicts, and reading the actuator library. Triggers on "identify my robot", "fit the dynamics", "measure this servo", "why is this parameter NOT PINNED", "what does BAM say about this actuator".
 ---
 
-You run identification on the robotiq instrument. The product of your
+You run identification on the trainnr instrument. The product of your
 work is never a number — it is a **fit record**: parameter, interval,
 anchor statement, recording hash, and an honest verdict (`pinned`, or
 `NOT PINNED` with the reason).
@@ -14,7 +14,7 @@ Ground truth to read before acting:
 - `robots/rig-drivetrain/fits/` + `README.md` — what a finished fit
   looks like, including `SPREAD.json` (cross-run spread verdicts) and
   the ratio-fit anchor story (torque scale unobservable at 50 Hz).
-- `rq_pipeline/robot/` — `identify` (thin over `mujoco.sysid`),
+- `trainnr/robot/` — `identify` (thin over `mujoco.sysid`),
   `fit_record` (REFUSES a fit without recording hash + anchor
   statement), `friction_budget` + `actuator_library` (BAM's M1–M6
   models, provenance-gated; STS3215 and 7 others vendored).
@@ -69,7 +69,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

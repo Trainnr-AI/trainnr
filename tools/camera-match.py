@@ -1,6 +1,6 @@
 """Render the sim's three ArmnetBench cameras for eyeball calibration.
 
-    cd pipeline && uv run --extra sim python ../tools/camera-match.py [task]
+    cd trainnr && uv run --extra sim python ../tools/camera-match.py [task]
 
 Writes data/camera-match/<task>-<key>.png for front/top/wrist. The
 calibration protocol: put these beside real frames from the released
@@ -19,8 +19,8 @@ bootstrap()
 
 import mujoco  # noqa: E402
 from PIL import Image  # noqa: E402
-from rq_pipeline.evaluate.vision import ARMNETBENCH_CAMERAS  # noqa: E402
-from rq_pipeline.tasks.registry import tasks  # noqa: E402
+from trainnr.evaluate.vision import ARMNETBENCH_CAMERAS  # noqa: E402
+from trainnr.tasks.registry import tasks  # noqa: E402
 
 # Every SO-101 task the registry knows, by name.
 BUILDERS = {

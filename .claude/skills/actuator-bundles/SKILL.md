@@ -11,7 +11,7 @@ params VERBATIM inside a stamped envelope of provenance, checks and
 advisories. The committed store is `robots/actuator-bundles/` (48
 bundles, 8 motors × m1..m6).
 
-## Commands (from `pipeline/`)
+## Commands (from `trainnr/`)
 
 - Wrap every vendored fit: `uv run python ../tools/actuator-bundle.py wrap --all`
 - Verify any bundle: `uv run python ../tools/actuator-bundle.py verify <file.bundle.json>`

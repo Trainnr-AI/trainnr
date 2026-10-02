@@ -1,8 +1,8 @@
 """Generate the Studio's app icon — the committed asset's provenance.
 
-    cd pipeline && uv run --extra sim python ../tools/gen-app-icon.py
+    cd trainnr && uv run --extra sim python ../tools/gen-app-icon.py
 
-Writes `crates/studio-shell/assets/icon-256.rgba`: 256x256 raw RGBA the
+Writes `crates/trainnr-desktop/assets/icon-256.rgba`: 256x256 raw RGBA the
 shell embeds via `include_bytes!` (raw, so no PNG decoder joins the
 dependency tree for one image). Rounded dark tile, the info-blue accent
 dot from the brand bar, a bold lowercase "rq". Re-run this and commit
@@ -45,7 +45,7 @@ y = (SIZE - (box[3] - box[1])) / 2 - box[1] - 10
 draw.text((x, y), "rq", font=font, fill=INK)
 draw.ellipse([SIZE - 78, 52, SIZE - 54, 76], fill=ACCENT)
 
-out = Path(__file__).resolve().parent.parent / "crates/studio-shell/assets"
+out = Path(__file__).resolve().parent.parent / "crates/trainnr-desktop/assets"
 out.mkdir(parents=True, exist_ok=True)
 (out / "icon-256.rgba").write_bytes(image.tobytes())
 image.save(out / "icon-preview.png")  # for humans; the app embeds the .rgba

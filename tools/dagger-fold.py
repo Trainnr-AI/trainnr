@@ -24,10 +24,10 @@ from _lab import REPO, bootstrap
 
 bootstrap()
 
-from rq_pipeline.evaluate.figures import render  # noqa: E402
-from rq_pipeline.evaluate.findings import Finding, repo_commit, today  # noqa: E402
-from rq_pipeline.evaluate.records import read_records  # noqa: E402
-from rq_pipeline.stats.effects import main_effect  # noqa: E402
+from trainnr.evaluate.figures import render  # noqa: E402
+from trainnr.evaluate.findings import Finding, repo_commit, today  # noqa: E402
+from trainnr.evaluate.records import read_records  # noqa: E402
+from trainnr.stats.effects import main_effect  # noqa: E402
 
 RECORDS = "records-student-cuda.jsonl"
 PROTOCOL = "docs/66 §6 (DAgger on the walk: tools/walk-dagger-round.sh)"
@@ -64,7 +64,7 @@ def main() -> int:
     parser.add_argument("--delta", type=float, default=0.15)
     args = parser.parse_args()
 
-    from rq_pipeline.stats.intervals import clopper_pearson  # noqa: PLC0415
+    from trainnr.stats.intervals import clopper_pearson  # noqa: PLC0415
 
     arms: dict[str, Any] = {}
     outcomes: dict[str, list[bool]] = {}

@@ -26,15 +26,15 @@ gate() {
 echo "pre-commit:"
 gate "formatting"            "cargo fmt --all --check"
 gate "clippy (no errors)"    "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
-# studio-shell is `exclude`d from the root workspace (its re_ui 0.36 pin
+# trainnr-desktop is `exclude`d from the root workspace (its re_ui 0.36 pin
 # conflicts with the root's rerun 0.35 over exact wasm-bindgen versions),
 # so the two gates above never see it — discovered when a review ran fmt
 # there by hand and found drift the "formatting ok" stamps had been
 # vacuously blessing. An excluded workspace needs its own gates, or it
 # has none.
-gate "formatting (studio-shell)" "cd crates/studio-shell && cargo fmt --check"
-gate "clippy (studio-shell)"     "! (cd crates/studio-shell && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
-gate "tests (studio-shell)"      "cd crates/studio-shell && cargo test -q"
+gate "formatting (trainnr-desktop)" "cd crates/trainnr-desktop && cargo fmt --check"
+gate "clippy (trainnr-desktop)"     "! (cd crates/trainnr-desktop && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
+gate "tests (trainnr-desktop)"      "cd crates/trainnr-desktop && cargo test -q"
 # NOT a grep for `unsafe`. The COMPILER forbids it — `unsafe_code =
 # "forbid"` in every manifest, `#![forbid(unsafe_code)]` in every
 # firmware — so a grep here would only duplicate that, worse. The first
@@ -59,11 +59,11 @@ gate "manuscript current"        "python3 tools/paper.py --check"
 # present so a Rust-only contributor is not blocked by tooling they never
 # touch; CI must not use that escape hatch.
 if [ -d pipeline ] && command -v uv >/dev/null 2>&1; then
-  gate "ruff format (pipeline)" "cd pipeline && uvx ruff format --check ."
-  gate "ruff lint (pipeline)"   "cd pipeline && uvx ruff check ."
-  gate "ruff format (tools)"    "cd pipeline && uvx ruff format --check ../tools"
-  gate "ruff lint (tools)"      "cd pipeline && uvx ruff check ../tools"
-  gate "python tests (pipeline)" "cd pipeline && uv run python -m unittest discover -s tests"
+  gate "ruff format (pipeline)" "cd trainnr && uvx ruff format --check ."
+  gate "ruff lint (pipeline)"   "cd trainnr && uvx ruff check ."
+  gate "ruff format (tools)"    "cd trainnr && uvx ruff format --check ../tools"
+  gate "ruff lint (tools)"      "cd trainnr && uvx ruff check ../tools"
+  gate "python tests (pipeline)" "cd trainnr && uv run python -m unittest discover -s tests"
 fi
 
 [ "$fail" -eq 0 ] || {

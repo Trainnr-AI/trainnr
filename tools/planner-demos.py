@@ -1,11 +1,11 @@
 """Press planner demonstrations on an SO-101 task (docs/66 D3).
 
-    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \\
+    cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \\
         python ../tools/planner-demos.py TASK [out] [--episodes 8] [--seed S] \\
         [--frame-every 5] [--dr-span 0.0] [--first-episode K] [--no-studio] \\
         [--shards N] [--parallel M]
 
-The planner (`rq_pipeline.collect.choreography.PickPlacePlanner`) reads
+The planner (`trainnr.collect.choreography.PickPlacePlanner`) reads
 the object and the goal off each seated scene, writes the beats, and
 executes them by chained IK; the task's own referee keeps or discards.
 Dynamics are drawn per episode from ±`--dr-span` around nominal (0 =
@@ -20,17 +20,17 @@ from _lab import PREVIEW_EVERY_TICKS, bootstrap
 
 bootstrap()
 
-from rq_pipeline.collect.planner_demos import generate_planned_demos  # noqa: E402
-from rq_pipeline.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
-from rq_pipeline.collect.shards import (  # noqa: E402
+from trainnr.collect.planner_demos import generate_planned_demos  # noqa: E402
+from trainnr.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
+from trainnr.collect.shards import (  # noqa: E402
     ShardSpec,
     plan_shards,
     record_shard,
     run_sharded_tool,
 )
-from rq_pipeline.tasks.registry import resolve  # noqa: E402
-from rq_pipeline.tasks.so101 import planner_rig  # noqa: E402
-from rq_pipeline.viz import viewer_file  # noqa: E402
+from trainnr.tasks.registry import resolve  # noqa: E402
+from trainnr.tasks.so101 import planner_rig  # noqa: E402
+from trainnr.viz import viewer_file  # noqa: E402
 
 DEFAULT_OUT = Path("runs/planner-demos")
 

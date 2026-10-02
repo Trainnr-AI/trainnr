@@ -23,10 +23,10 @@ from _lab import bootstrap, running
 
 bootstrap()
 
-from rq_pipeline.bundles.locate import robots_dir  # noqa: E402
-from rq_pipeline.robot.asset_fetch import AssetFetchError, fetch_tree  # noqa: E402
-from rq_pipeline.robot.onboarding import onboard  # noqa: E402
-from rq_pipeline.robot.usd_import import (  # noqa: E402
+from trainnr.bundles.locate import robots_dir  # noqa: E402
+from trainnr.robot.asset_fetch import AssetFetchError, fetch_tree  # noqa: E402
+from trainnr.robot.onboarding import onboard  # noqa: E402
+from trainnr.robot.usd_import import (  # noqa: E402
     ROOT_FIXED,
     ROOT_KINDS,
     ImportSettings,

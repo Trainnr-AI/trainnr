@@ -38,13 +38,13 @@ first with cameras and someone else's measurement.*
 
 | Stage | On ALOHA 2 | Hardware? | Status |
 |---|---|---|---|
-| ② ONBOARD — bundle | `robots/aloha2-nominal/`: Menagerie `aloha` byte-identical (commit `da76818e`, BSD-3) + `aloha2.xml` sensor wrapper (28 sensors: 14 jointpos + 14 jointvel in actuator order); census pins 14 actuators, 28 sensors, **6 cameras**, 95 geoms; wrapper-purity and hold/travel tests | No | **DONE 2026-08-26** — `pipeline/tests/test_aloha2_bundle.py`, 6/6 |
+| ② ONBOARD — bundle | `robots/aloha2-nominal/`: Menagerie `aloha` byte-identical (commit `da76818e`, BSD-3) + `aloha2.xml` sensor wrapper (28 sensors: 14 jointpos + 14 jointvel in actuator order); census pins 14 actuators, 28 sensors, **6 cameras**, 95 geoms; wrapper-purity and hold/travel tests | No | **DONE 2026-08-26** — `trainnr/tests/test_aloha2_bundle.py`, 6/6 |
 | ② ONBOARD — identification | Excitation on the real arms → `mujoco.sysid` → intervals + identifiability verdicts, compared against ALOHA 2's published values (Paper 1 as replication). Rehearse first in sim exactly as Paper 0 did: true model → sweep → degraded telemetry → `identify()` recovers | Real: yes. Rehearsal: no | queued |
 | ① SCAN | The scene IS the bundle's `scene.xml` (frame, table, cameras); task objects as cousins with measured mass/μ | No | queued |
 | ③ VALIDATE | Gate A: paired sim/real rank correlation, certificate on the lower bound | Yes | after hardware |
 | ④ COLLECT | LeRobot's ALOHA recorder (Dynamixel bus + cameras → LeRobotDataset) — not the Pico `.wire` | Yes (or scripted sim demos) | queued |
 | ⑤⑥⑦ TRAIN | ACT via LeRobot's ALOHA config on the 3090 Ti; released sim checkpoints first | No | queued |
-| ⑧ EVALUATE | Harness tasks on the bundle (rq_pipeline/tasks/aloha2/kitting.py (next rung)): transfer cube first, matching gym-aloha's protocol; paired trials → certificate dry run | No | next |
+| ⑧ EVALUATE | Harness tasks on the bundle (trainnr/tasks/aloha2/kitting.py (next rung)): transfer cube first, matching gym-aloha's protocol; paired trials → certificate dry run | No | next |
 | ⑨ ENVELOPE | Dynamixel current/torque limits + software watchdog — no Pico Tier 0 here; the safety story is different and must be written | Yes | queued |
 | ⑩⑪ OPERATE / TELEMETRY | Leader-arm interventions; present-current/temperature registers as drift telemetry | Yes | after hardware |
 
@@ -115,7 +115,7 @@ chosen by a certificate.
 | Rung | What | Data | Judge | Status |
 |---|---|---|---|---|
 | T0 | The train environment: `.venv-train` (Python 3.12.8, `lerobot[dataset,smolvla,training]` 0.6.1 + our sim extras, torch 2.11 + CUDA 13) beside the untouched 3.11 sim venv; the smoke `lerobot-train` proved the GPU path — ACT, 300 steps in 39 s at ~10 steps/s, batch 8, 2.1 GB VRAM, loss 3.23 → L1 0.505, checkpoint at `runs/t0-act-smoke/checkpoints/000300` | `lerobot/aloha_sim_transfer_cube_human` (50 human demos, 20k frames, the original ACT sim) | — | **DONE 2026-08-26** — the repo's first training run |
-| T1 | Released checkpoint through OUR harness: `lerobot/act_aloha_sim_transfer_cube_human` via `evaluate.vision.lerobot_checkpoint_policy` on the ALOHA 2 bundle's transfer-cube scene (`pipeline/rq_pipeline/tasks/aloha2/kitting.py`, cameras matched to gym-aloha's `top`, `look="act_sim"` for their cosmetics). The gap between its published sim score and ours is a sim-to-sim dynamics + camera gap — Paper 2's shape, before any hardware. **Result 2026-08-26: 0/4 in the grey twin, 0/4 in the wood scene** (the Hub checkpoint needed LeRobot's processor migration first). The mapping was then proven by replaying human demo 0's actions open-loop: all six joints of both arms track the dataset's recorded states at r = 0.98–1.00, RMSE ≤ 0.06 rad — so the zero is not a sign flip. It exposed one channel: the gripper state floor (fixed to the measured closed position, 0.0078 m). Re-run with the fix: **still 0/4**. The filmstrip showed why: the right arm performs the whole reach–sweep–handover choreography and the cube never moves — a transfer of nothing. Then the kinematics were compared directly, the ACT sim's model beside ours at the same joint angles: **our fingertips sit 2.6–5.7 cm higher above the table** (neutral +5.7, mid-reach +5.3, lowest reach +2.6) — 2.1 cm because Menagerie mounts the ALOHA 2 bases above the tabletop where the ACT sim's are flush, the rest because the ALOHA 2 gripper's fingers are shorter. A joint-space policy trained on their chain closes above a 4 cm cube on ours. Not a dynamics gap yet — a KINEMATIC one, between two models of "the same robot" | released weights | harness, paired trials | **explained: 0/4 is kinematic** |
+| T1 | Released checkpoint through OUR harness: `lerobot/act_aloha_sim_transfer_cube_human` via `evaluate.vision.lerobot_checkpoint_policy` on the ALOHA 2 bundle's transfer-cube scene (`trainnr/trainnr/tasks/aloha2/kitting.py`, cameras matched to gym-aloha's `top`, `look="act_sim"` for their cosmetics). The gap between its published sim score and ours is a sim-to-sim dynamics + camera gap — Paper 2's shape, before any hardware. **Result 2026-08-26: 0/4 in the grey twin, 0/4 in the wood scene** (the Hub checkpoint needed LeRobot's processor migration first). The mapping was then proven by replaying human demo 0's actions open-loop: all six joints of both arms track the dataset's recorded states at r = 0.98–1.00, RMSE ≤ 0.06 rad — so the zero is not a sign flip. It exposed one channel: the gripper state floor (fixed to the measured closed position, 0.0078 m). Re-run with the fix: **still 0/4**. The filmstrip showed why: the right arm performs the whole reach–sweep–handover choreography and the cube never moves — a transfer of nothing. Then the kinematics were compared directly, the ACT sim's model beside ours at the same joint angles: **our fingertips sit 2.6–5.7 cm higher above the table** (neutral +5.7, mid-reach +5.3, lowest reach +2.6) — 2.1 cm because Menagerie mounts the ALOHA 2 bases above the tabletop where the ACT sim's are flush, the rest because the ALOHA 2 gripper's fingers are shorter. A joint-space policy trained on their chain closes above a 4 cm cube on ours. Not a dynamics gap yet — a KINEMATIC one, between two models of "the same robot" | released weights | harness, paired trials | **explained: 0/4 is kinematic** |
 | T2 | ACT from scratch on the public demos → `policy@hash` → harness beside T1 and a limp floor: the recipe engine's first walk over one family. **Done 2026-08-26: 10k steps in ~20 min on the shared card, ten checkpoints each played live in `train-watch` (all fail — 10% of the released model's training), then the harness: ours 0/4, released 0/4, limp 0/4 (933 s).** A row of zeros the certificate correctly cannot rank: no joint-space ACT trained on the ACT sim's chain transfers to this one (T1's kinematic gap), and 10k steps is not a policy yet. The walk continues on OUR demos (T5) | public demos | certificate dry run | **DONE — zero row** |
 | T3 | Foundation model: SmolVLA fine-tune on the same demos (fits), then MolmoAct2/π0.5 LoRA if VRAM allows — same harness, same protocol; the family axis of the recipe space | public demos | certificate dry run | queued |
 | T4 | Combining models — the second axis: seed ensembles of T2/T3 checkpoints (action averaging), a VLM planner routing between BC skills, and merged fine-tunes (weight-space soups); each combination is a `recipe@hash` scored by the same protocol as a single model | public demos | certificate dry run | queued |
@@ -128,7 +128,7 @@ dataset and recipe hashes it was produced under.
 
 ## 4. Next rung (evaluation side)
 
-rq_pipeline/tasks/aloha2/kitting.py (next rung) — transfer cube: cube on the table
+trainnr/tasks/aloha2/kitting.py (next rung) — transfer cube: cube on the table
 between the arms, right arm picks, hands to left, success = cube held
 by the left gripper clear of the table. Scripted reference policy,
 graded ladder (pick / no-close / limp), paired trials, through the
@@ -141,7 +141,7 @@ The T5 chain at recipe scale is the same tool as the smoke run with one
 flag (`tools/e2e-smoke.py`; presets in its `Scale` struct):
 
 ```
-cd pipeline && MUJOCO_GL=egl .venv-train/bin/python \
+cd trainnr && MUJOCO_GL=egl .venv-train/bin/python \
     ../tools/e2e-smoke.py --scale cloud --name t5-cloud
 ```
 
@@ -176,7 +176,7 @@ different dataset — which it is.
 
 Before renting anything: `--scale smoke` on the box at the same commit,
 which proves the chain; the cloud run adds only scale. The box's own
-GL variables (`pipeline/wsl.env`: Mesa's D3D12 path, the WSL library
+GL variables (`trainnr/wsl.env`: Mesa's D3D12 path, the WSL library
 dir) are WSL's; a bare Linux GPU box needs `MUJOCO_GL=egl` and nothing
 else.
 

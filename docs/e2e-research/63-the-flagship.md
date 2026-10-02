@@ -24,7 +24,7 @@ stranger.
 | Theirs (measured, 57 §5) | Ours (exists, tested) | What can no longer happen |
 |---|---|---|
 | Fitted params resolve via a private API in one script and `~/Rhoban/bam/params/xl330/m6_new.json` on a laptop in another; no hash, no date; four rival actuator classes named `old`/`new`/`antoine`/`marc` | The certified bundle store: their m6 fit wrapped verbatim with provenance + content-hash stamp (`robots/actuator-bundles/xl330.m6`), `verified_bundle` refusing tampering, the stamp carried on every cfg and record | "Which fit trained this policy" has one answer, checkable by anyone |
-| Five silent no-op DR knobs (frictionloss + damping randomizers the actuator overwrites, an IMU field nothing reads, a mass no-op under 1.3, post-init config writes); a decorator-carrier event every env must remember | `rq_mjlab.linter` — DR terms writing overwritten fields REFUSE at construction; the expansion event is auto-registered and its absence raises | Turning a dial that does nothing; forgetting the event |
+| Five silent no-op DR knobs (frictionloss + damping randomizers the actuator overwrites, an IMU field nothing reads, a mass no-op under 1.3, post-init config writes); a decorator-carrier event every env must remember | `trainnr_mjlab.linter` — DR terms writing overwritten fields REFUSE at construction; the expansion event is auto-registered and its absence raises | Turning a dial that does nothing; forgetting the event |
 | Fitted-treated-as-exact beside hand-guessed ranges (±10 % friction scalar typed by hand; sag and delay ranges undocumented guesses their own testbench contradicts) | `dr_from_bundle` / `declared_ranges`: sampling regions come from the bundle's identified intervals or a caller-DECLARED span whose basis string says so; a point estimate with no span refuses | Randomizing from folklore while calling it measured; un-attributed ranges |
 | Training telemetry: none (mjlab's recorder API is empty; their monitoring is the viewer's reward strip) | `RerunRecorder` → the Studio; `studio-cloud-feed` for rented cards; the status card | Training you cannot watch or archive |
 | Verification: "train → deploy → watch the video"; one-servo bench with thresholds chosen by feel; a stale hardcoded obs layout | The harness: seeded paired episodes on BOTH instruments (CPU MuJoCo + MJX-Warp, stamps on every record), exact intervals, declared thresholds, funnels; C1's protocol as the template | A verdict nobody can recompute; "rolls but face-plants 1 in 3" as a reporting standard |
@@ -44,7 +44,7 @@ waits on docs/38):
    fetched when the network allows or from the Mac's packs). The XL330
    m6 fit is ALREADY in our store as a certified bundle.
 2. **The env**: their velocity-tracking walk expressed as an mjlab task
-   consumed through `rq_mjlab` — `BamActuatorCfg.from_bundle` (the
+   consumed through `trainnr_mjlab` — `BamActuatorCfg.from_bundle` (the
    identified law, per-world DR draws from `declared_ranges`), the
    linter green by construction, the RerunRecorder attached.
 3. **Training**: rsl-rl through mjlab, smoke on the box (short-local-
@@ -78,7 +78,7 @@ waits on docs/38):
   1.6 with our entity, the certified actuator, `dr_from_bundle`
   ranges, and the linter refusing what their five no-ops did
   silently. G1 and the entity brick are done (the tests beside
-  `rq_mjlab/tests/test_microduck_entity.py`); the cfg is the next
+  `trainnr-mjlab/tests/test_microduck_entity.py`); the cfg is the next
   sitting's work.
 
 ## 2.2 The deltas, read (2026-09-01, both sources local)
@@ -140,7 +140,7 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
 
 - G1: microduck MJCF in a stamped bundle; scene compiles on both
   engines; census tests.
-- G2: the env builds through rq_mjlab with zero linter findings and
+- G2: the env builds through trainnr_mjlab with zero linter findings and
   the m6 bundle's stamp on the cfg; a 2-minute smoke train on the box
   moves in the Studio.
 - G3: the real training run (paid, operator's go) reaches a walking
@@ -160,7 +160,7 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
   are §4 gait aesthetics — recorded, not retuned.
 - G4: the certificate, on both instruments, committed with the run's
   stamps; the §1 diff table lands in docs/33 with dates. **CLOSED
-  2026-09-02**: `rq_mjlab.walk_verdict` — one seeded episode per
+  2026-09-02**: `trainnr_mjlab.walk_verdict` — one seeded episode per
   trial under FULL DR and pushes, two declared milestones (survived;
   tracked = episode-mean planar velocity error closes at least half
   the standing-still gap, `err_ratio < 0.5` with a 0.1 m/s floored

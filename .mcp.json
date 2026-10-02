@@ -1,17 +1,17 @@
 {
   "mcpServers": {
-    "robotiq": {
+    "trainnr": {
       "command": "uv",
       "args": [
         "run",
         "--directory",
-        "pipeline",
+        "trainnr",
         "--extra",
         "sim",
         "--extra",
         "mcp",
-        "python",
-        "../tools/mcp-server.py"
+        "trainnr",
+        "mcp"
       ]
     }
   }

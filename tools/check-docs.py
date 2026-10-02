@@ -48,7 +48,7 @@ docs = sorted(
     + list(ROOT.glob("*.md"))
     # The two READMEs that name tools and modules by file — ungated until
     # 2026-08-27, when a review found rows describing tools that had moved on.
-    + [ROOT / "tools" / "README.md", ROOT / "pipeline" / "README.md"]
+    + [ROOT / "tools" / "README.md", ROOT / "trainnr" / "README.md"]
 )
 
 # The universe of files a doc may name is what GIT TRACKS, not what this

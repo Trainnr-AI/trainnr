@@ -1,10 +1,10 @@
 # The synthetic STS3215 identifiability study
 
 *Run 2026-08-25, hardware-free, per the strategy review's software-first
-constraint. Machinery: `pipeline/rq_pipeline/robot/sts_synth.py` riding
+constraint. Machinery: `trainnr/trainnr/robot/sts_synth.py` riding
 the same `identify()` wedge Paper 0 rehearsed. Full 32-cell matrix in
 `data/sts3215-synthetic-identifiability.json`; two load-bearing cells
-pinned by `pipeline/tests/test_sts_synth.py`.*
+pinned by `trainnr/tests/test_sts_synth.py`.*
 
 ## The question
 

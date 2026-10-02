@@ -90,10 +90,10 @@ build.
 ## 2. The phases
 
 1. **generate** (exists: `tools/paired-study.py generate`, on
-   `pipeline/rq_pipeline/collect/scripted_demos.py`): press N episodes per arm, referee-
+   `trainnr/trainnr/collect/scripted_demos.py`): press N episodes per arm, referee-
    gated, frames + full sidecars + datasheet per arm; `study.json`
    records truth, conditions, seeds, and this protocol's path.
-2. **convert** (exists: `pipeline/rq_pipeline/collect/lerobot_export.py`): both arms to
+2. **convert** (exists: `trainnr/trainnr/collect/lerobot_export.py`): both arms to
    LeRobot datasets, provenance carried.
 3. **train** (next): the same trainer config twice (LeRobot ACT at
    smoke scale locally; real scale on the rented card). Nothing about
@@ -102,7 +102,7 @@ build.
    under the TRUTH dynamics on MATCHED trials (the paired protocol —
    policy A's trial k and policy B's trial k start identically), on
    BOTH instruments (CPU MuJoCo + MJX-Warp), folded by
-   `pipeline/rq_pipeline/evaluate/records.py`, compared by `pipeline/rq_pipeline/stats/effects.py` — exact
+   `trainnr/trainnr/evaluate/records.py`, compared by `trainnr/trainnr/stats/effects.py` — exact
    intervals, paired comparison, a verdict under declared alpha/delta.
    Also evaluated AT nominal, to show the guessed arm is not simply
    broken — the claim is about transfer to truth, not competence.
@@ -114,9 +114,9 @@ it proves the protocol executes end-to-end and the accounting is
 paired; its verdict will be UNRESOLVED by construction (docs/32's
 power arithmetic — distinguishing rates at these sample sizes needs
 dozens of paired trials). The real run's sizing comes from
-`pipeline/rq_pipeline/stats/power.py` before any GPU hour is spent —
+`trainnr/trainnr/stats/power.py` before any GPU hour is spent —
 exact power of the SAME `fisher_exact` the verdict uses, stdlib-pure,
-pinned by `pipeline/tests/test_stats_power.py`. Measured 2026-08-31
+pinned by `trainnr/tests/test_stats_power.py`. Measured 2026-08-31
 (alpha 0.05, power 0.8, per-side paired trials; the test's actual
 size at n=40 is 0.03 — exact tests are conservative):
 

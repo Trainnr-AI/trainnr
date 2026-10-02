@@ -1,7 +1,7 @@
 """Replay a fetch errand whole: car from measured odometry, arm on the
 recorded stage cues — MuJoCo window + Rerun stream, side by side.
 
-    cd pipeline && uv run --extra sim --extra viz mjpython \
+    cd trainnr && uv run --extra sim --extra viz mjpython \
         ../tools/replay-errand.py ../recordings/<run>.wire
 """
 
@@ -18,15 +18,15 @@ import rerun as rr
 from _lab import bootstrap, rr_session
 
 bootstrap()
-from rq_pipeline.collect.frames import STATUS_HZ  # noqa: E402
-from rq_pipeline.collect.wire import parse_recording  # noqa: E402
-from rq_pipeline.tasks.yellow import (  # noqa: E402
+from trainnr.collect.frames import STATUS_HZ  # noqa: E402
+from trainnr.collect.wire import parse_recording  # noqa: E402
+from trainnr.tasks.yellow import (  # noqa: E402
     AIR_TUCK,
     air_mime_pose,
     compose_rig,
     salute_pose,
 )
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 parser.add_argument("wire", type=Path, help="the .wire recording")

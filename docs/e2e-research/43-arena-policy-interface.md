@@ -6,7 +6,7 @@ Every claim is cited as `path:Lnnnn` — the repository path, and the line numbe
 of that line INSIDE THE BUNDLE — with a short quote, checkable by
 `sed -n 'nnnnp' arena.md`. Nothing comes from memory of Arena; arithmetic on
 cited facts is marked "derived". Mapped against our harness
-(`rq_pipeline/evaluate/{harness,vision}.py`, `rq_pipeline/physics/mujoco_backend.py`)
+(`trainnr/evaluate/{harness,vision}.py`, `trainnr/physics/mujoco_backend.py`)
 and docs/30–31.*
 
 Terms, defined once. A **policy** is the thing judged: observation in, motor
@@ -182,7 +182,7 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
 ## 2. What we already have that is equivalent
 
 - **The one-method contract.** `VisionPolicy(name, act: (step, observation) -> controls, reset)`
-  (`pipeline/rq_pipeline/evaluate/vision.py:53–62`) is `get_action` + `reset` for
+  (`trainnr/trainnr/evaluate/vision.py:53–62`) is `get_action` + `reset` for
   one environment, observation already LeRobot-shaped
   (`{"observation.images.<key>": uint8 (H,W,3), "observation.state": float32}`,
   `mujoco_backend.py:272–273`) — Arena's `"camera_obs"` / `"policy"` under other keys.

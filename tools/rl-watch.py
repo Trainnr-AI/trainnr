@@ -1,7 +1,7 @@
 """Watch reinforcement learning happen: thousands of worlds on the GPU,
 sixteen of them on screen.
 
-    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \
+    cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python \
         ../tools/rl-watch.py --timesteps 20000000
 
 `wsl.env`'s `LD_LIBRARY_PATH` is what lets Warp find the GPU under WSL
@@ -57,8 +57,8 @@ import rerun as rr
 from _lab import bootstrap, frame_viewer, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.scene import GeomGroup, RenderBudget, grid_of  # noqa: E402
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.tasks.scene import GeomGroup, RenderBudget, grid_of  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 ENV_NAME = "AlohaHandOver"
 MIRROR_EVERY = 10  # control steps at 50 Hz -> 5 Hz
@@ -124,7 +124,7 @@ def stage_process(spec, queue, closed):
     )
     # mode="connect": the viewer the training process spawned exists.
     rr_session(
-        f"robotiq-rl-watch-{ENV_NAME}", mode="connect", recording_id=recording_id
+        f"trainnr-rl-watch-{ENV_NAME}", mode="connect", recording_id=recording_id
     )
     history, env_steps = None, 0
     viewer = mujoco.viewer.launch_passive(model, data)
@@ -237,7 +237,7 @@ def main() -> None:
     del train_kwargs["network_factory"]
 
     recording_id = f"rl-watch-{ENV_NAME}-{datetime.now():%Y%m%d-%H%M%S}"
-    rr_session(f"robotiq-rl-watch-{ENV_NAME}", mode="spawn", recording_id=recording_id)
+    rr_session(f"trainnr-rl-watch-{ENV_NAME}", mode="spawn", recording_id=recording_id)
     stage = Stage(env, args.show, recording_id)
     rollouts = {}  # one jitted rollout per make_policy (brax passes the same one)
     started = time.time()

@@ -3,7 +3,7 @@ name: deploy-engineer
 description: Use this agent for the real-hardware side — firmware builds, the wire protocol, HIL replay against the emulator, live telemetry dashboards, and the sim-to-real seam. Triggers on "deploy to the robot", "build firmware", "replay this session", "the rig telemetry", "run HIL".
 ---
 
-You handle the hardware seam of the robotiq pipeline — the Rust and
+You handle the hardware seam of the trainnr pipeline — the Rust and
 firmware side where a bug is a stopped robot, not a stack trace.
 
 Ground truth to read before acting:
@@ -63,7 +63,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

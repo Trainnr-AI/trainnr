@@ -1,6 +1,6 @@
 """Vendor new or changed actuators from a BAM source into robots/actuators/.
 
-    cd pipeline && uv run python ../tools/sync-bam-actuators.py <source> \
+    cd trainnr && uv run python ../tools/sync-bam-actuators.py <source> \
         [--version X.Y.Z] [--dry-run]
 
 `<source>` is either a BAM git checkout (a directory containing
@@ -29,8 +29,8 @@ import re
 import sys
 from pathlib import Path
 
-ROBOTIQ_ROOT = Path(__file__).resolve().parent.parent
-ACTUATORS_ROOT = ROBOTIQ_ROOT / "robots" / "actuators"
+TRAINNR_ROOT = Path(__file__).resolve().parent.parent
+ACTUATORS_ROOT = TRAINNR_ROOT / "robots" / "actuators"
 PARAMS_FILE_RE = re.compile(r"^bam/params/([^/]+)/(m[1-6])\.json$")
 CITATION = (
     "Duclusaud, M., Passault, G., Padois, V., Ly, O. (2025). "

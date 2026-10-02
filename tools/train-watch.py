@@ -1,16 +1,16 @@
 """Watch a policy learn: train in the background, play every checkpoint.
 
     # WSL / Linux (the train venv, with the Rerun viewer binary on PATH):
-    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \\
+    cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python \\
         ../tools/train-watch.py \\
         --steps 20000 --save-freq 1000 --batch-size 8 --name t2-act
     # macOS: the passive viewer needs mjpython, and none of the GL variables:
-    cd pipeline && mjpython ../tools/train-watch.py --steps 20000 --name t2-act
+    cd trainnr && mjpython ../tools/train-watch.py --steps 20000 --name t2-act
 
 `lerobot-train` runs as a subprocess (ACT on the public ALOHA
 transfer-cube demos by default). This process tails its log and, each
 time a checkpoint is written, loads it through LeRobot's own processors
-(`rq_pipeline.envs.lerobot_policy`) and plays ONE episode through the
+(`trainnr.envs.lerobot_policy`) and plays ONE episode through the
 gymnasium env on the aloha2-nominal bundle — the identified dynamics, not
 the trainer's simulator — in both viewers:
 
@@ -26,12 +26,12 @@ Episodes here are a WINDOW onto training, not the evaluation: one
 trial per checkpoint, the same paired start every time (trial 0), so
 successive checkpoints are comparable by eye. The certificate is the
 harness's job, with all trials, after training ends — and
-`lerobot-train --env.type=robotiq` evaluates in-loop through the same
+`lerobot-train --env.type=trainnr` evaluates in-loop through the same
 env without this tool at all.
 
     # a run that is ALREADY going — this box's chain, or a rented card's
     # run mirrored here by `cloud-gpu follow` — as a dashboard, no torch needed:
-    cd pipeline && uv run --extra sim --extra viz python ../tools/train-watch.py \\
+    cd trainnr && uv run --extra sim --extra viz python ../tools/train-watch.py \\
         --follow runs/t5-cloud-act
 
 `--follow` streams a run from its files: the chain's run manifest (every
@@ -77,8 +77,8 @@ from _lab import (
 )
 
 bootstrap()
-from rq_pipeline.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
-from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+from trainnr.envs.contract import InfoKeys, ObservationKeys  # noqa: E402
+from trainnr.envs.lerobot_train_log import (  # noqa: E402
     CHAIN_LOG_FILE,
     GPU_LOG_FILE,
     METRIC_NAMES,
@@ -94,7 +94,7 @@ from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
     parse_gpu_line,
     parse_train_line,
 )
-from rq_pipeline.evaluate.records import (  # noqa: E402
+from trainnr.evaluate.records import (  # noqa: E402
     EpisodeRecord,
     fold,
     funnel,
@@ -102,7 +102,7 @@ from rq_pipeline.evaluate.records import (  # noqa: E402
     passes,
     read_records,
 )
-from rq_pipeline.tasks.aloha2 import (  # noqa: E402
+from trainnr.tasks.aloha2 import (  # noqa: E402
     ACT_SIM_LOOK,
     CUBE_Z_STATE_INDEX,
     LOOKS,
@@ -113,9 +113,9 @@ from rq_pipeline.tasks.aloha2 import (  # noqa: E402
     act_sim_state,
     ctrl_from_act_sim_action,
 )
-from rq_pipeline.tasks.registry import tasks  # noqa: E402
-from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
-from rq_pipeline.viz import sinks  # noqa: E402
+from trainnr.tasks.registry import tasks  # noqa: E402
+from trainnr.tasks.scene import GeomGroup  # noqa: E402
+from trainnr.viz import sinks  # noqa: E402
 
 # The ALOHA 2 tasks; every builder takes `look`, and the first free body's
 # z sits at CUBE_Z_STATE_INDEX in either scene (the cube, or the right
@@ -303,7 +303,7 @@ def tail_training(process: subprocess.Popen) -> None:
 
 def scheduled(policy: Any, executed_horizon: int, nu: int) -> tuple[Act, Reset]:
     """A chunk policy executed on OUR horizon: `(act, reset)`."""
-    from rq_pipeline.evaluate.scheduler import ActionScheduler  # noqa: PLC0415
+    from trainnr.evaluate.scheduler import ActionScheduler  # noqa: PLC0415
 
     scheduler = ActionScheduler(policy, executed_horizon=executed_horizon, nu=nu)
     return scheduler.act, scheduler.reset
@@ -314,7 +314,7 @@ def openpi_controller(
 ) -> tuple[Act, Reset]:
     """A policy served by openpi, on the protocol's horizon; the first
     camera feeds their `cam_high`, the env's instruction is the prompt."""
-    from rq_pipeline.envs.openpi_policy import (  # noqa: PLC0415
+    from trainnr.envs.openpi_policy import (  # noqa: PLC0415
         DEFAULT_PORT,
         OpenpiKeys,
         OpenpiRequest,
@@ -351,7 +351,7 @@ def checkpoint_controller(  # noqa: PLR0913 - one controller, every knob named
     gym-aloha convention (normalised grippers) wrapped around the model
     call when the checkpoint speaks it. With `executed_horizon`, the
     checkpoint's chunk is executed on that horizon instead of its own."""
-    from rq_pipeline.envs.lerobot_policy import load_policy  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import load_policy  # noqa: PLC0415
 
     loaded = load_policy(path, instruction=instruction, device=device)
     if executed_horizon is not None:
@@ -382,8 +382,11 @@ class Watcher:
         self, look: str, task: str, device: str, executed_horizon: int | None = None
     ) -> None:
         import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
-        from rq_pipeline.envs.robotiq import RobotiqEnv, bundle_source  # noqa: PLC0415
-        from rq_pipeline.viz import RigMirror  # noqa: PLC0415, sinks
+        from trainnr.envs.gymnasium_env import (  # noqa: PLC0415
+            RobotiqEnv,
+            bundle_source,
+        )
+        from trainnr.viz import RigMirror  # noqa: PLC0415, sinks
 
         self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)
@@ -610,7 +613,7 @@ class Follower:
 
     def videos(self, steps: list[int]) -> None:
         for step in steps:
-            # LeRobot nests the suite (`robotiq_0/`) under the step directory.
+            # LeRobot nests the suite (`trainnr_0/`) under the step directory.
             for video in sorted(
                 (self.layout.training / "eval" / f"videos_step_{step:06d}").rglob(
                     "*.mp4"
@@ -734,13 +737,13 @@ def open_sinks(rrd: Path | None) -> None:
 def follow(args: argparse.Namespace) -> None:
     layout = RunLayout.of(Path(args.follow))
     rr_session(
-        f"robotiq-follow-{layout.name}", mode="spawn", world_up=args.play_checkpoints
+        f"trainnr-follow-{layout.name}", mode="spawn", world_up=args.play_checkpoints
     )
     open_sinks(args.rrd)
     rr.send_blueprint(dashboard_blueprint(training=True, play=args.play_checkpoints))
     watcher = None
     if args.play_checkpoints:
-        from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+        from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
 
         watcher = Watcher(
             args.look, args.task, best_device(args.device), args.executed_horizon
@@ -760,7 +763,7 @@ def follow(args: argparse.Namespace) -> None:
 
 def play_only(args: argparse.Namespace) -> None:
     """Watch one checkpoint: every paired start, both viewers, no training."""
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     device = best_device(args.device)
     name = (
@@ -768,7 +771,7 @@ def play_only(args: argparse.Namespace) -> None:
         if args.openpi
         else Path(args.play).parent.name
     )
-    rr_session(f"robotiq-play-{name}", mode="spawn")
+    rr_session(f"trainnr-play-{name}", mode="spawn")
     open_sinks(args.rrd)
     rr.send_blueprint(dashboard_blueprint(training=False, play=True))
     watcher = Watcher(args.look, args.task, device, args.executed_horizon)
@@ -805,13 +808,13 @@ def play_only(args: argparse.Namespace) -> None:
 
 
 def train_and_watch(args: argparse.Namespace) -> None:
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     # `runs/<name>` names the run the way the chain does: `--name t2-act`
     # trains into runs/t2-act, and every reader of the layout agrees.
     layout = RunLayout.of(Path(args.runs) / args.name)
     device = best_device(args.device)
-    rr_session(f"robotiq-train-watch-{layout.name}", mode="spawn")
+    rr_session(f"trainnr-train-watch-{layout.name}", mode="spawn")
     open_sinks(args.rrd)
     rr.send_blueprint(dashboard_blueprint(training=True, play=True))
     process = subprocess.Popen(

@@ -20,8 +20,8 @@ from _lab import REPO, bootstrap
 
 bootstrap()
 
-from rq_pipeline.evaluate import figures as fx  # noqa: E402
-from rq_pipeline.evaluate.findings import FINDINGS_DIR, Finding  # noqa: E402
+from trainnr.evaluate import figures as fx  # noqa: E402
+from trainnr.evaluate.findings import FINDINGS_DIR, Finding  # noqa: E402
 
 CAPTIONS = REPO / "docs" / "paper" / "captions.json"
 

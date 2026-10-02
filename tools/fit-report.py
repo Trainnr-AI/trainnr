@@ -1,6 +1,6 @@
 """The measurement report, one command — the artifact the product IS.
 
-    cd pipeline && uv run --extra sim python ../tools/fit-report.py \
+    cd trainnr && uv run --extra sim python ../tools/fit-report.py \
         ../robots/rig-drivetrain [--fit ../recordings/<sweep>.wire ...]
 
 Renders a bundle's fit records the way a customer should meet them:
@@ -22,7 +22,7 @@ from pathlib import Path
 from _lab import bootstrap
 
 bootstrap()
-from rq_pipeline.robot.fit_record import (  # noqa: E402
+from trainnr.robot.fit_record import (  # noqa: E402
     MIN_FITS_FOR_SPREAD,
     load_fit_records,
     spread_summary,
@@ -86,7 +86,7 @@ def main() -> int:
     )
     arguments = parser.parse_args()
     if arguments.fit:
-        from rq_pipeline.robot.drivetrain_fit import fit_drivetrain  # noqa: PLC0415
+        from trainnr.robot.drivetrain_fit import fit_drivetrain  # noqa: PLC0415
 
         for wire in arguments.fit:
             _, path = fit_drivetrain(arguments.bundle, wire)

@@ -63,7 +63,7 @@ version 1.0.2, the raw-data URL, licence, and vendored date
 (2026-08-28); the wrapped bundles `robots/actuator-bundles/xl330.m*`
 carry the stamp and the floor/bound checks and **no `uncertainty`
 section**. The consumer already exists:
-`pipeline/rq_pipeline/robot/actuator_bundle.py` reads
+`trainnr/trainnr/robot/actuator_bundle.py` reads
 `uncertainty: {param: {low, high}}` and names the basis
 `identified-interval`. Missing for citation: the zip's sha256, BAM's
 git SHA, the optimiser configuration.
@@ -142,7 +142,7 @@ terms trade off against each other in the fit: a replicate with high
 motor friction has low external friction. Drawing each from its
 marginal box independently would combine values no replicate had. The
 bundle therefore also carries all 100 replicate vectors (`samples`),
-and the DR event picks one whole vector per world (`rq_mjlab.dr`,
+and the DR event picks one whole vector per world (`trainnr_mjlab.dr`,
 basis "identified-set"). The marginal `uncertainty` box stays on the
 bundle for readers and for consumers that only understand boxes.
 

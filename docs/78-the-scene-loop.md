@@ -199,7 +199,7 @@ hand-picked spans.
 
 ## 8. E1 as built (2026-09-22, the Mac)
 
-`rq_pipeline/scenes/`: `splat.py` (the 3DGS PLY read and written with
+`trainnr/scenes/`: `splat.py` (the 3DGS PLY read and written with
 the activations applied at the file boundary, the web `.splat` read,
 a similarity applied to centres, rotations and scales together;
 MuJoCo's intrinsic x-y-z euler in radians, checked against `xmat`),
@@ -243,7 +243,7 @@ What the first real scene taught, in the order it was learned:
 
 ## 8.1 E2 as built, the Mac half (2026-09-22)
 
-The stage. `rq_pipeline/scenes/`: `obj.py` (the one OBJ parser; the
+The stage. `trainnr/scenes/`: `obj.py` (the one OBJ parser; the
 viewer's copy now delegates), `proxy.py` (CoACD convex parts with their
 own two-way gap, written once beside the proxy as `proxy-parts.json`),
 `terrain.py` (the registry: `heightfield`, the proxy's top surface on a
@@ -316,7 +316,7 @@ frame rate at N worlds, the Go2's real camera pose from the bundle.
 
 The walk package's pins moved by override, not by an mjlab release:
 mjlab 1.6.0 is still the newest and pins mujoco and mujoco-warp to 3.11,
-so `rq_mjlab/pyproject.toml` overrides both to 3.13.0 (warp stays at
+so `trainnr-mjlab/pyproject.toml` overrides both to 3.13.0 (warp stays at
 1.17); only those two lines of the lock moved. The walk suite passed on
 the new instrument, and go2-c2's final checkpoint certified 38/40,
 interval 0.83 to 0.99, median error ratio 0.2727 - the 3.11
@@ -341,7 +341,7 @@ What the step taught, in the order it was found:
    mjlab's velocity task caps the line search at 20 and 3.13 turns every
    overflow warning on: 149,000 lines, 25 MB, for a 20-iteration smoke
    train, and 3.11 had hit the same cap silently. The cap is physics and
-   stays; `rq_mjlab.sim_options` extends mjlab's own warp-options hook to
+   stays; `trainnr_mjlab.sim_options` extends mjlab's own warp-options hook to
    clear that one bit, and every overflow that drops physics still
    prints. 16 KB.
 4. **A feed with nowhere to go blocked training.** With no Studio
@@ -394,7 +394,7 @@ Two consequences:
 ## 8.4 The course gate: the scene's protocol, and where the walker stops (2026-09-22, the box)
 
 A deployment staged on a scene is now judged along the scene's course
-(`pipeline/rq_pipeline/deploy/course.py`); the manifest chooses — the stage
+(`trainnr/trainnr/deploy/course.py`); the manifest chooses — the stage
 writes the scene's course into its scene block beside the start, and
 a gate reads the manifest alone, so the DDS runtime is judged the same
 way. Every field that differs from the plane's protocol is in the
@@ -445,7 +445,7 @@ the scene, or E4's reproduction on Neverwhere's own terrain.
 
 ## 8.5 E2 on the box: the walk on the scene, and what the camera costs (2026-09-23)
 
-The Go2 now trains on a captured scene (`rq_mjlab/scene_stage.py`,
+The Go2 now trains on a captured scene (`trainnr-mjlab/scene_stage.py`,
 `train_walk(..., scene=)`): the scene's heightfield grid — the same
 surface the staged gate collides with, sampled once by the pipeline's
 Open3D path and saved beside the scene as a hidden numpy cache the walk
@@ -510,7 +510,7 @@ does), and the g3 scale with pictures.
 
 ## 8.6 E1's second half: the capture chain, on the Mac (2026-09-23)
 
-`capture_scene(source, name)` (`rq_pipeline/scenes/capture.py`, a job
+`capture_scene(source, name)` (`trainnr/scenes/capture.py`, a job
 through `tools/capture-scene.py`): a phone video or a folder of frames
 into a scene artifact by the chain the research chose — ffmpeg for the
 frames (two a second), COLMAP for the poses (one OPENCV camera,
@@ -628,7 +628,7 @@ the sparse mapper only.
 ## 8.7 E3 built, and the first scene walker judged: a press that stands on the scene, a certificate that names it, an empty batch (2026-09-23, the box)
 
 **The press on a scene.** `generate_walk_demos(checkpoint, robot=, scene=)`
-(`rq_mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
+(`trainnr-mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
 the microduck, now presses any registered walk, and on a captured scene
 the rollouts stand on its heightfield from the course's start; the
 frames are the head camera's picture of the splat, rendered inside the
@@ -710,7 +710,7 @@ nine minutes for the 185 frames: extraction, exhaustive matching (a
 folder of stills is unordered), the mapper, all 185 registered in one
 model.
 
-The trainer is a registry now (`rq_pipeline/scenes/splatters.py`):
+The trainer is a registry now (`trainnr/scenes/splatters.py`):
 `brush` (a release binary, any OS) and `gsplat` (nerfstudio-project's
 CUDA rasterizer, Apache-2.0, in the train environment), both reading
 the same COLMAP dataset folder and both leaving the same file - a 3DGS
@@ -721,7 +721,7 @@ with its version and licence, and the scene's work folder is named for
 it (`gsplat/` or `brush/`). A Mac never gets gsplat and its refusal
 says so, naming Brush.
 
-The gsplat trainer (`rq_pipeline/scenes/gsplat_train.py`, a subprocess
+The gsplat trainer (`trainnr/scenes/gsplat_train.py`, a subprocess
 under the train environment's interpreter) is gsplat's own reference
 recipe transcribed, not a fork of its example script: the sparse points
 as the first gaussians, each scaled by its three nearest neighbours,

@@ -4,7 +4,7 @@
 ([58](58-cross-framework-setup.md) §8 expanded into a product plan).
 Evidence base: the four-read arc (56, 57, 59), the field's measured
 rankings (docs/22), the synthetic-data principles (docs/31), and —
-decisive for the plan's footing — what `rq_pipeline/collect` already
+decisive for the plan's footing — what `trainnr/collect` already
 does. Design decisions are marked as such.*
 
 ## 0. The zero-adoption principle, applied to data
@@ -38,7 +38,7 @@ framework you move into.
 
 ## 2. What already exists in-repo: the micro-press
 
-`rq_pipeline/collect/kitting_demos.py::generate_demos` is a
+`trainnr/collect/kitting_demos.py::generate_demos` is a
 success-gated generator TODAY: draw dynamics, run the scripted expert,
 keep only referee-passing episodes, and write each with a `Manifest`
 recording the seed, the attempt number, **the actual draws**
@@ -167,7 +167,7 @@ their framework. That is the whole trick, twice now (58 §0).
 1. **Generalize the micro-press**: task-agnostic `generate_demos`
    (task registry + referee + expert in, today's kitting as case one),
    `DatasetProvenance` → the full sidecar schema. CPU-only, no gates.
-   *(SHIPPED 2026-08-31: `rq_pipeline/collect/press.py` — the loop +
+   *(SHIPPED 2026-08-31: `trainnr/collect/press.py` — the loop +
    `EpisodeManifest` with task/instrument/expert stamps and the named
    dynamics vector; kitting is the first adapter, its legacy manifest
    and committed batches untouched.)*
@@ -178,7 +178,7 @@ their framework. That is the whole trick, twice now (58 §0).
    the first piece that benefits from the GPU box; stacks on the
    standing WSL gate.
 5. **Host adapters** (mjlab RecorderTerm, Arena HDF5 import) with
-   58's `rq_mjlab`.
+   58's `trainnr_mjlab`.
 6. **The paired validation study** (§6) — the number that turns the
    datasheet into a sales page.
 

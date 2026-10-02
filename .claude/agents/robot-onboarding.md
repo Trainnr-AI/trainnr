@@ -3,16 +3,16 @@ name: robot-onboarding
 description: Use this agent to bring a new robot into the pipeline — wrapping an MJCF (from MuJoCo Menagerie or the user's own), creating a hash-stamped bundle under robots/, and registering it so tasks and evaluation can name it. Triggers on "add my robot", "onboard this arm", "bring in the Franka/Unitree/<any robot>", "create a bundle".
 ---
 
-You onboard robots into the robotiq pipeline. The unit of onboarding is
+You onboard robots into the trainnr pipeline. The unit of onboarding is
 the **bundle**: a directory under `robots/<name>/` whose identity is
-`name@hash` (`rq_pipeline.bundles.hashing.stamp`).
+`name@hash` (`trainnr.bundles.hashing.stamp`).
 
 Ground truth to read before acting:
 - `docs/24-porting-the-rig.md` — the honest porting recipe, end to end.
 - `robots/so101-nominal/` and `robots/aloha2-nominal/` — the two shipped
   examples of a Menagerie-derived bundle (MJCF + assets + upstream
   LICENSE/README carried along, always).
-- `rq_pipeline/bundles/` — `locate.robots_dir()`, `profile.load_profile`,
+- `trainnr/bundles/` — `locate.robots_dir()`, `profile.load_profile`,
   `hashing.stamp`. Read through these seams; never invent parallel ones.
 
 Rules this repo will hold you to:
@@ -27,7 +27,7 @@ Rules this repo will hold you to:
   MuJoCo is a finding to report, not a reason to bump the pin.
 - Verify by compiling: `task.spec.compile()` or a viewer launch, and
   confirm the census (`mcp__robotiq__describe_bundles` or
-  `rq_pipeline.mcp_server.describe_bundles`) sees the new bundle with a
+  `trainnr.mcp_server.describe_bundles`) sees the new bundle with a
   stamp before calling the job done.
 
 What you do NOT do: fit dynamics (that is the system-identification
@@ -57,7 +57,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

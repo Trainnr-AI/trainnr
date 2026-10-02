@@ -1,6 +1,6 @@
 """C1, the paired study — generate the two-condition datasets.
 
-    cd pipeline && uv run --env-file wsl.env --extra sim python \\
+    cd trainnr && uv run --env-file wsl.env --extra sim python \\
         ../tools/paired-study.py generate <out> \\
         [--episodes 8] [--seed 17] [--truth-damping 1.18] [--truth-gain 0.85] \\
         [--interval 0.05] [--guessed-span 0.30] [--frame-every 5]
@@ -25,8 +25,8 @@ from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
 
 bootstrap()
 
-from rq_pipeline.collect.scripted_demos import generate_scripted_demos  # noqa: E402
-from rq_pipeline.tasks.so101 import (  # noqa: E402
+from trainnr.collect.scripted_demos import generate_scripted_demos  # noqa: E402
+from trainnr.tasks.so101 import (  # noqa: E402
     LIFT_STUDY,
     build_lift_study,
     scripted_pick,
@@ -90,10 +90,10 @@ def evaluate(
     of every policy runs the same world (62 §2)."""
     import subprocess  # noqa: PLC0415
 
-    from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
-    from rq_pipeline.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
-    from rq_pipeline.stats.effects import main_effect  # noqa: PLC0415
+    from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
+    from trainnr.stats.effects import main_effect  # noqa: PLC0415
 
     study = json.loads((out / "study.json").read_text())
     truth = study["truth"]
@@ -163,7 +163,7 @@ def train(out: Path, *, steps: int, batch: int) -> int:
     eval: the judging happens once, paired, at truth (phase 4)."""
     import subprocess  # noqa: PLC0415
 
-    from rq_pipeline.envs.lerobot_policy import best_device  # noqa: PLC0415
+    from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
 
     study = json.loads((out / "study.json").read_text())
     device = best_device()
@@ -172,7 +172,7 @@ def train(out: Path, *, steps: int, batch: int) -> int:
         command = lerobot_train_command(
             policy="act",
             device=device,
-            dataset=f"rq-pipeline/paired-{name}",
+            dataset=f"trainnr/paired-{name}",
             dataset_root=out / f"{name}-lerobot",
             output_dir=output,
             job_name=f"paired-{name}",
@@ -189,13 +189,13 @@ def train(out: Path, *, steps: int, batch: int) -> int:
 def convert(out: Path) -> int:
     """Phase 2: both arms to LeRobot datasets (train venv - the
     converter needs the `train` extra)."""
-    from rq_pipeline.collect.demo_export import export_demos  # noqa: PLC0415
+    from trainnr.collect.demo_export import export_demos  # noqa: PLC0415
 
     study = json.loads((out / "study.json").read_text())
     task = build_lift_study()
     for name in study["conditions"]:
         root = out / f"{name}-lerobot"
-        export_demos(out / name, root, task=task, repo_id=f"rq-pipeline/paired-{name}")
+        export_demos(out / name, root, task=task, repo_id=f"trainnr/paired-{name}")
         print(f"{name}: dataset -> {root}")
     return 0
 

@@ -1,6 +1,6 @@
 # microduck_rl, read code-first: the sim2real recipe of an 800 g servo biped, and what it says about our servo model
 
-> **Archived (2026-09-07).** Written on branch `platform-2026-08-29`, which was retired on 2026-08-31 (docs/07, "a gate dissolved"): the design it describes - the pipeline's own MJX reinforcement-learning package and the actuator law as a runtime module - was superseded by `rq_mjlab` (docs/e2e-research/58) and never merged, so code paths named below may not exist on `main`. Restored to `main` unchanged because `pipeline/rq_pipeline/robot/friction_budget.py` and docs/e2e-research/53's successors cite it by number.
+> **Archived (2026-09-07).** Written on branch `platform-2026-08-29`, which was retired on 2026-08-31 (docs/07, "a gate dissolved"): the design it describes - the pipeline's own MJX reinforcement-learning package and the actuator law as a runtime module - was superseded by `trainnr_mjlab` (docs/e2e-research/58) and never merged, so code paths named below may not exist on `main`. Restored to `main` unchanged because `trainnr/trainnr/robot/friction_budget.py` and docs/e2e-research/53's successors cite it by number.
 
 *2026-08-28, branch `physics-newton-mac-2026-08-27`. Source: a repomix
 pack of [pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)
@@ -144,12 +144,12 @@ docs); the fit is CMA-ES over a scalar position MAE, ~100k trials.
 0.1` (Menagerie), ALOHA-2 per-joint `kp 10.4–265` with Menagerie
 damping, friction and armature; identification = `identify()` over a
 `ParameterSpec` writing kp, damping, frictionloss and armature into the
-`MjSpec` (`pipeline/rq_pipeline/robot/sts_synth.py`; real fits only for
-the N20 drivetrain, `pipeline/rq_pipeline/robot/drivetrain_fit.py`); DR
+`MjSpec` (`trainnr/trainnr/robot/sts_synth.py`; real fits only for
+the N20 drivetrain, `trainnr/trainnr/robot/drivetrain_fit.py`); DR
 = appliers scaling the identified model
-(`pipeline/rq_pipeline/physics/variations.py`); no delay, deliberately
+(`trainnr/trainnr/physics/variations.py`); no delay, deliberately
 ("an explicit fitted parameter, when we model it",
-`pipeline/rq_pipeline/physics/mujoco_backend.py`).
+`trainnr/trainnr/physics/mujoco_backend.py`).
 
 | Effect | BAM M6 | Ours | An arm at 50 Hz, pick-and-place |
 |---|---|---|---|
@@ -231,16 +231,16 @@ tracking reward measure the same view. Action and observation dims are
 unchanged, so "runtime/export need no changes" — a claim with **no test
 behind it**: `tests/` mentions backlash once, in a comment.
 
-**Ours.** No robotiq bundle models gear play;
-`pipeline/rq_pipeline/robot/sts_synth.py` models the firmware dead zone
+**Ours.** No trainnr bundle models gear play;
+`trainnr/trainnr/robot/sts_synth.py` models the firmware dead zone
 in the *measurement* path (`DEAD_ZONE_RAD = 10 · QUANTUM_RAD`), and
 docs/26 names "backlash as a mechanical element" as the open risk.
 Where a twin goes: one function `add_backlash(spec, play_by_joint)`
-beside `scale_dynamics` in `pipeline/rq_pipeline/tasks/aloha2/rig.py` —
+beside `scale_dynamics` in `trainnr/trainnr/tasks/aloha2/rig.py` —
 an uncompiled-`MjSpec` mutation adding the passive hinge per servo
 joint — applied to the arm spec before it is attached
-(`pipeline/rq_pipeline/tasks/so101.py`, `attach_arm` in
-`pipeline/rq_pipeline/tasks/components.py`); no XML rewriting, no
+(`trainnr/trainnr/tasks/so101.py`, `attach_arm` in
+`trainnr/trainnr/tasks/components.py`); no XML rewriting, no
 duplicated configs. Two design facts first: our arm state is
 `<jointpos>/<jointvel>` on the servo joints, so a twin must keep
 `state_width` and report servo + backlash per joint (a sensor on the
@@ -261,7 +261,7 @@ test they never wrote.
 
 | Robot | Servo | Play we hold | Verdict |
 |---|---|---|---|
-| Yellow arm | SG90 / MG90S | none — "every dynamics number beyond geometry is NOMINAL hobby-servo guesswork" (`pipeline/rq_pipeline/tasks/yellow.py`) | needs it most; no encoder to read through |
+| Yellow arm | SG90 / MG90S | none — "every dynamics number beyond geometry is NOMINAL hobby-servo guesswork" (`trainnr/trainnr/tasks/yellow.py`) | needs it most; no encoder to read through |
 | SO-101 | STS3215 | 0.0151 rad ≈ 0.87°, ~2× the datasheet, plus a 10-count firmware dead zone, stacking to a ~1.8° blind band ([27 §5](27-open-questions.md); a third-party video, not archived) | first candidate — the number exists |
 | ALOHA-2 | XM430 / XM540 | none | measure before modelling; Menagerie's armature 0.38–0.40 and damping 18–20 likely swallow it |
 
@@ -396,7 +396,7 @@ main line; ours is brax PPO at 36k env-steps/s on 2048 worlds
 commands and the spawn-mix table are already data — the pattern for
 `KittingSpec` start bands; they have no acceptance gate (acceptance =
 "builds, steps NaN-free, obs is 61D"), ours is expert-passes-all /
-floor-passes-none (`pipeline/rq_pipeline/tasks/acceptance.py`). (c) DR:
+floor-passes-none (`trainnr/trainnr/tasks/acceptance.py`). (c) DR:
 the startup/reset split and "cap the range from geometry" fit
 `physics/variations.py` and the batched GPU path; their centre is CAD +
 BAM, ours is identified — the philosophy is ours (docs/31 §3). (d) For
@@ -466,19 +466,19 @@ release pins its policies. Nothing is imported from microduck_rl:
 `JOINT_NAMES` lives in the IPC protocol crate, *obs.rs* restates the
 layout by hand.
 
-**Mapped onto ours.** `EpisodeProtocol` (`pipeline/rq_pipeline/protocol.py`)
+**Mapped onto ours.** `EpisodeProtocol` (`trainnr/trainnr/protocol.py`)
 is the hashed contract — trials, steps, control interval, home,
 milestones, observables, placements, executed horizon — and a mismatch
 is refused before a trial is spent; the names are spelled once
-(`ObservationKeys` in `pipeline/rq_pipeline/envs/contract.py`); records
+(`ObservationKeys` in `trainnr/trainnr/envs/contract.py`); records
 carry `source name@hash` and the instrument `mujoco-3.11.0+x86_64`
-(`pipeline/rq_pipeline/evaluate/records.py`); the firmware-mirror test
+(`trainnr/trainnr/evaluate/records.py`); the firmware-mirror test
 and the wire replays fail the build on drift
-(`pipeline/tests/test_firmware_mirror.py`, docs/24); `train-watch
+(`trainnr/tests/test_firmware_mirror.py`, docs/24); `train-watch
 --play` rehearses on the evaluation env itself, so there is no second
 observation assembly. What we lack: a deployable artefact — our
 policies are torch LeRobot checkpoints or an openpi websocket, no ONNX,
-no embedded metadata (0 hits for `onnx` in `pipeline/` and `tools/`); a
+no embedded metadata (0 hits for `onnx` in `trainnr/` and `tools/`); a
 runtime-side observation assembly to pin (moot until a Rust runtime
 exists — then it wants the mirror-test pattern, not a third copy); a
 per-tick observation/action stream with a metric for sim-vs-real; the
@@ -572,7 +572,7 @@ though a warm local cache tolerated it"); "do NOT override mujoco — an
 override here previously forced mujoco down to 3.4.0".
 *tests/test_aarch64_cuda_torch.py* tests the manifest and the lockfile:
 torch direct, the aarch64 source a CUDA index, one version across
-platforms. Ours (`pipeline/pyproject.toml`) pins the engine by
+platforms. Ours (`trainnr/pyproject.toml`) pins the engine by
 compatible release (`mujoco~=3.11.0`, with the dated reason "NINE tests
 broke") and runs two venvs as two instruments; we have no test that
 reads `uv.lock`.
@@ -620,15 +620,15 @@ tensorboard logger "to avoid polluting wandb".
 ## 7. Positioning sentences (each with its evidence; dated 2026-08-28)
 
 1. "The industry's SO-101 constants are one bench servo at 7.4 V, collapsed to first order by an export its own authors deprecate, then copied to six joints, a gripper and a 12 V arm; we identify the joint in the arm at the arm's own supply, with an interval." — §0 (MEASURED with BAM's `to_mujoco`); *leisaac* and Positronic per [30 §3.3](30-the-pipeline.md).
-2. "BAM ships one fitted point per servo model — 17 scalars, no interval, no unit identity, no date; we ship the customer's unit with intervals and NOT-PINNED verdicts." — *bam/params/&lt;motor&gt;/m6.json*; *bam/fit.py* optimises a scalar MAE; ours `pipeline/rq_pipeline/robot/identify.py`, `pipeline/rq_pipeline/robot/fit_record.py`.
-3. "Under BAM the robot's MJCF no longer states its actuator physics — the XML's `kp=0.55` is overwritten into a `<motor>` at load; our bundle's MJCF *is* the identified model on every engine." — *bam/mjlab.py* `edit_spec`; *robot/microduck/joints_properties.xml*; ours `pipeline/rq_pipeline/physics/mjx_backend.py`, the docs/33 Newton row.
+2. "BAM ships one fitted point per servo model — 17 scalars, no interval, no unit identity, no date; we ship the customer's unit with intervals and NOT-PINNED verdicts." — *bam/params/&lt;motor&gt;/m6.json*; *bam/fit.py* optimises a scalar MAE; ours `trainnr/trainnr/robot/identify.py`, `trainnr/trainnr/robot/fit_record.py`.
+3. "Under BAM the robot's MJCF no longer states its actuator physics — the XML's `kp=0.55` is overwritten into a `<motor>` at load; our bundle's MJCF *is* the identified model on every engine." — *bam/mjlab.py* `edit_spec`; *robot/microduck/joints_properties.xml*; ours `trainnr/trainnr/physics/mjx_backend.py`, the docs/33 Newton row.
 4. "Their sim2real gate is a plot and a printed MAE with no threshold; the only numeric pass is kernel-against-kernel at 0.01 rad; we gate on counts, Clopper–Pearson intervals and declared thresholds." — *scripts/testbench_sim2real.py*, *scripts/validate_bam_testbench.py*; ours docs/32.
 5. "microduck injects the same ±1° of play into all 14 servos from a script default, with no measurement in the repo and no test on the mechanism; we put the measured play per joint into a stamped bundle and randomise around it." — *robot/microduck/add_backlash.py* `--backlash-deg 2.0`, `tests/` (one comment); ours *planned*, §2.
-6. "They accept an environment when a 64-env × 5-iteration smoke test builds, steps NaN-free and has 61 observations; we accept a task only when its scripted expert passes every paired start and a hold-still floor passes none." — AGENTS.md step 5; ours `pipeline/rq_pipeline/tasks/acceptance.py`.
-7. "They read a run off wandb means and a video — zero hits for confidence, interval, Clopper or Wilson in 37,007 lines; we count paired trials and gate on a lower bound." — pack-wide grep; AGENTS.md "rolls but face-plants 1 in 3"; ours `pipeline/rq_pipeline/evaluate/certificate.py`.
-8. "Their observation layout lives in six hand copies with no test across them — their own runtime calls it 'the highest-risk code in the crate'; ours is spelled once and hashed, and a mismatch is refused before a trial is spent." — §4; ours `pipeline/rq_pipeline/envs/contract.py`, `pipeline/rq_pipeline/protocol.py`.
+6. "They accept an environment when a 64-env × 5-iteration smoke test builds, steps NaN-free and has 61 observations; we accept a task only when its scripted expert passes every paired start and a hold-still floor passes none." — AGENTS.md step 5; ours `trainnr/trainnr/tasks/acceptance.py`.
+7. "They read a run off wandb means and a video — zero hits for confidence, interval, Clopper or Wilson in 37,007 lines; we count paired trials and gate on a lower bound." — pack-wide grep; AGENTS.md "rolls but face-plants 1 in 3"; ours `trainnr/trainnr/evaluate/certificate.py`.
+8. "Their observation layout lives in six hand copies with no test across them — their own runtime calls it 'the highest-risk code in the crate'; ours is spelled once and hashed, and a mismatch is refused before a trial is spent." — §4; ours `trainnr/trainnr/envs/contract.py`, `trainnr/trainnr/protocol.py`.
 9. "They call a 1-in-4 back recovery 'seed-lucky' on warp 1.12.0, where a deterministic mode does not exist; we measured that RUN_TO_RUN determinism arrives with warp ≥ 1.16 and priced the upgrade." — *tasks/microduck_standup_env_cfg.py*, *pyproject.toml*; ours [52 §3](52-warp-determinism-mjwarp.md).
-10. Credit, and a gap of ours: "They export an artefact the robot loads, with the normaliser inside; we still hand the robot a torch checkpoint." — *scripts/export.py*; ours `pipeline/rq_pipeline/envs/lerobot_policy.py`.
+10. Credit, and a gap of ours: "They export an artefact the robot loads, with the normaliser inside; we still hand the robot a torch checkpoint." — *scripts/export.py*; ours `trainnr/trainnr/envs/lerobot_policy.py`.
 
 ## 8. What to run here (short local runs; the cloud for anything longer)
 
@@ -637,8 +637,8 @@ tensorboard logger "to avoid polluting wandb".
 3. *(Built and measured for M1, 2026-08-29 — [36 §5](../36-actuator-law.md), `tools/servo-ab.py`: 4/4 → 2/4; M6 awaits its parameter fetch.)* **Does M6 change a verdict?** The SO-101 lift/reach scripted expert, nominal `<position>` against `bam.mujoco.MujocoController(feetech_sts3215_7_4V, m6)` on the same bundle and paired starts; hold droop and settle hysteresis in both viewers. Expected: a ±`friction_base`-wide hold band (0.053 N·m ≈ 1–2° at the shoulder) invisible in the linear model. And the cost: `Stepper.advance` with and without the per-step controller, steps/s and `lerobot-eval` s/episode.
 4. **The backlash twin, A/B.** `add_backlash` on `so101` at 0.87° and at 2°; first the wind-through check in the viewer (actuator on the servo joint vs a tendon: the link must lag by exactly the play in the first case and not the second), then `tasks/acceptance.py`, 20 starts, nominal vs twin — the number that says whether play changes a verdict.
 5. **Observation realism.** A 1-tick joint-velocity lag and a 3–6-tick action delay in `envs/`, the T5 policy re-run through the harness; the funnel shift is their named sim2real footgun measured on our task.
-6. **Their DR widths through our sensitivity test.** CoM ±15 mm, friction 0.9–1.1, mass ±5 % on kitting via `pipeline/rq_pipeline/stats/effects.py` — SENSITIVE or not at their ranges.
+6. **Their DR widths through our sensitivity test.** CoM ±15 mm, friction 0.9–1.1, mass ±5 % on kitting via `trainnr/trainnr/stats/effects.py` — SENSITIVE or not at their ranges.
 7. **The artefact.** Export the T5 ACT checkpoint to ONNX (opset 18), compare ORT against torch on 1,000 recorded observations (max abs action error — the check their pipeline lacks), and time one tick under `ort` with one intra-op thread.
-8. **Process items, each an hour.** *pipeline/tests/test_pins.py* reading `pyproject.toml` and `uv.lock`; a `requires-python` ceiling matching the tested venvs, both suites re-run; a pinned `uv` + `UV_LINK_MODE=copy` in `tools/_pod-bootstrap.sh`, bootstrap timed before and after; a 60 s checkpoint watcher tested against `run --deadline-min` killing the job mid-run.
+8. **Process items, each an hour.** *trainnr/tests/test_pins.py* reading `pyproject.toml` and `uv.lock`; a `requires-python` ceiling matching the tested venvs, both suites re-run; a pinned `uv` + `UV_LINK_MODE=copy` in `tools/_pod-bootstrap.sh`, bootstrap timed before and after; a 60 s checkpoint watcher tested against `run --deadline-min` killing the job mid-run.
 9. **When arms are in hand.** The STS3215 hysteresis loop — a slow ±3° triangle at three amplitudes, `present_position` against an external reference — separating mechanical play from the firmware dead zone that docs/27 lumps; then a BAM-style pendulum at 7.4 V and at 12 V, `bam.fit` and `identify()` on identical logs: the interval BAM does not publish, and the winding delta.
 

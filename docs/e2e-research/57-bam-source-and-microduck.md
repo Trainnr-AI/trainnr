@@ -133,7 +133,7 @@ mirrored in `microduck:scripts/validate_bam_testbench.py` is ~30 lines.
 
 1. Demand is real and current: two independent teams (Rhoban, Pollen)
    built the identified-actuator→mjlab path without us.
-2. The path's weakest links are exactly robotiq's strengths: artifact
+2. The path's weakest links are exactly trainnr's strengths: artifact
    provenance, uncertainty, refusal semantics, declared perturbations,
    machine-readable contracts, statistics with thresholds that are
    declared rather than felt.

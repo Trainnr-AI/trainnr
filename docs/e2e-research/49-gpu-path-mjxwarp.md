@@ -81,7 +81,7 @@ batch-render quality on our camera specs.
 
 ## Postscript (2026-08-27, same day): the adapter landed
 
-`rq_pipeline/physics/mjx_backend.py` — `MJXWarpBackend`, the loop plus
+`trainnr/physics/mjx_backend.py` — `MJXWarpBackend`, the loop plus
 two sizing knobs this report promised: consumes the SAME compiled
 mjModel (`load_model` — one compile, two instruments), returns
 FULLPHYSICS rows referees read unchanged, `naconmax`/`njmax` passed

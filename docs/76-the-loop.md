@@ -34,7 +34,7 @@ The harness is not a pile of tools. It is one rule, applied everywhere:
 
 A *stamp* is `name@hash`: twelve hex characters of SHA-256 over a
 directory's file bytes and their relative paths, sorted
-(`pipeline/rq_pipeline/bundles/hashing.py`). For things that are data
+(`trainnr/trainnr/bundles/hashing.py`). For things that are data
 rather than files — a task specification, a protocol — the same shape is
 computed over the fields instead (`content_stamp`). Nothing in this
 system is nameable without its hash; `require_stamp` is the single place
@@ -98,9 +98,9 @@ Prakhar: "I want to see data and proper visually appealing data and
 sections that are meaningful and delightful to users in policies,
 evaluations, findings, deployments, monitoring." Filled from what exists
 first (his call): the flagship study's fifteen trained arms and the
-findings ledger. `pipeline/rq_pipeline/project/importer.py`:
+findings ledger. `trainnr/trainnr/project/importer.py`:
 
-- `import_experiment(project, arm_dir)` — an rq_mjlab run (`train/`
+- `import_experiment(project, arm_dir)` — an trainnr_mjlab run (`train/`
   with `identity.json`, `model_*.pt`, `verdict/`) becomes three kinds:
   a **run** (the identity, the log when kept), a **policy** (the
   checkpoint plus `policy.json`, schema `trainnr-policy/1`: checkpoint,
@@ -116,7 +116,7 @@ findings ledger. `pipeline/rq_pipeline/project/importer.py`:
 - The run's console log comes along: its own `train.log`, else the
   segment of a study log whose `log_dir:` banner names the run (a study
   launches several runs into one log; a restarted run leaves two
-  segments and the longer wins). `rq_pipeline/envs/rsl_rl_log.py` reads
+  segments and the longer wins). `trainnr/envs/rsl_rl_log.py` reads
   it once into `training.json` (schema `trainnr-training/1`: trainer,
   iterations, parallel environments, device, wall time, the final and
   best mean reward, and the curve sampled to 400 rows), so the index
@@ -218,7 +218,7 @@ itself uses — never around them.
   `cloud-seam-2026-09-08`, NOT merged as of 2026-09-24; this list said
   "built" without saying where until the market read named it.
 
-Counted from the registration list in `pipeline/rq_pipeline/mcp_server.py`
+Counted from the registration list in `trainnr/trainnr/mcp_server.py`
 on 2026-09-24: 69 tools at noon, 75 by the evening (ACT gained
 `attribute_deployment`, `preflight_deployment`, `stop_deployment`,
 `ingest_public_log`; DESCRIBE gained `list_public_logs` and
@@ -310,7 +310,7 @@ avoids, and a Unitree listener waits on its SDK research.
 ### 5.2 Showing an artifact as itself
 
 The Studio can index a project and launch the viewer; `present`
-(`pipeline/rq_pipeline/project/present.py`, the door docs/64 §3 named `show_in_studio`) points
+(`trainnr/trainnr/project/present.py`, the door docs/64 §3 named `show_in_studio`) points
 the viewer at one artifact: a robot as its meshes in a 3D view posed at
 its keyframe, a recording's channels as time series on its own clock, an
 experiment's curves from its log, a batch's kept frames beside its
@@ -343,11 +343,11 @@ are named on the bundle rather than hidden. A robot whose dynamics are
 guessed is allowed, but the guess is labelled a declared span everywhere
 downstream, in the datasheet and on the evaluation.
 
-**The door, built 2026-09-09.** `pipeline/rq_pipeline/robot/methods.py` is
+**The door, built 2026-09-09.** `trainnr/trainnr/robot/methods.py` is
 the third registry seam, the adapters' shape: an `IdentificationMethod`
 answers whether it can fit this bundle from this recording (and why not,
 in a sentence) and runs the fit; `@method(name)`, the built-ins, and the
-`rq_pipeline.identification_methods` entry-point group. Two built-ins
+`trainnr.identification_methods` entry-point group. Two built-ins
 as of 2026-09-24: `drivetrain-ratio`, the rig's ratio-form fit from a
 `.wire` sweep, and `legged-joints` (`robot/legged_fit.py`, a quadruped's
 per-joint armature, damping and Coulomb friction with bootstrap
@@ -381,7 +381,7 @@ every registered task whose builder takes a spec — kitting and the lift
 study today — with each spec field's type and default, so the agent
 writes only what it changes. `create_task(task_id, name, overlay)`
 builds the family with the overlay replaced into its spec
-(`rq_pipeline/tasks/overlay.py`: an unknown field is refused naming the
+(`trainnr/tasks/overlay.py`: an unknown field is refused naming the
 real ones; a task that composes a fixed scene is refused naming the
 families; JSON lists become the tuples the spec keeps), stamps it by
 content (`Task.stamp`, so two agents writing the same numbers get the
@@ -409,7 +409,7 @@ in 5 s — "IK failed: right arm to (0.09, 0.9, 0.14) — the choreography
 must not pretend a reach happened", the expert 0/2, the floor 0/2 — and
 `kitting-default` was accepted in 10 s, the expert 4/4 with the funnel
 full at every milestone, the floor 0/4. Both read back in the Studio.
-The scripted experts live in `rq_pipeline/tasks/experts.py`; a family
+The scripted experts live in `trainnr/tasks/experts.py`; a family
 without one is refused by name, since acceptance is the expert's
 verdict.
 
@@ -533,14 +533,14 @@ per check, run by an agent when it decides to.
 
 ### 9.2 Built (2026-09-13, the Mac)
 
-`rq_pipeline/fleet/drift.py` (the rule, the record, `judge`), the kind's
+`trainnr/fleet/drift.py` (the rule, the record, `judge`), the kind's
 marker imported from there by `project/kinds.py`, the project's
 `monitoring/` folder, the door `check_drift(robot, recording, method,
-name)` in `rq_pipeline/mcp_server.py`, the index's summary, the drawer,
+name)` in `trainnr/mcp_server.py`, the index's summary, the drawer,
 the tile and the viewer presentation, and `anchored` on the
-identification method's Protocol (`rq_pipeline/robot/methods.py`: the
+identification method's Protocol (`trainnr/robot/methods.py`: the
 drivetrain ratio fit anchors its damping) so an anchor is reported and
-never judged. Tests in `pipeline/tests/test_drift.py`: the rule on
+never judged. Tests in `trainnr/tests/test_drift.py`: the rule on
 constructed records, then the whole path on the rig's committed sweeps.
 
 The proof the design asked for, on a fresh project (`projects/rig-drift`,
@@ -591,8 +591,8 @@ as an event log**, and the agent **may launch and quit** the window.
 
 The one law holds: the Studio reads files and never talks to the MCP
 server. So control is three records under `<project>/.index/`, all
-mirrored between `pipeline/rq_pipeline/project/control.py` and
-`crates/studio-shell/src/control.rs`:
+mirrored between `trainnr/trainnr/project/control.py` and
+`crates/trainnr-desktop/src/control.rs`:
 
 | record | direction | shape | cadence |
 |---|---|---|---|
@@ -600,12 +600,12 @@ mirrored between `pipeline/rq_pipeline/project/control.py` and
 | `studio-state.json` | Studio → agent | `{"schema": "trainnr-studio-state/1", "pid", "heartbeat", "project", "project_name", "section", "selected", "live": {"recording", "timeline", "seconds" or "sequence"}, "presenter_running", "jobs_running"}`; after a project switch the old project's file is a pointer, `{…, "moved_to": "<new root>"}` | on every change, and at least once a second; a heartbeat older than 3 s, or a dead pid, is a dead Studio; a pointer is followed to the live one |
 | `events.jsonl` | Studio → agent | one line per human action: `open` (a page, a project), `select` / `deselect` (a card), `show` (the viewer button), `time` (a scrub, reported once the cursor rests 250 ms and only when no command of ours moved it); each carries `t` in epoch nanoseconds and `by: user`, `by: agent` (a door) or `by: studio` (the window's own move) | appended, never rewritten |
 
-The verbs, and the MCP door over each (`pipeline/rq_pipeline/mcp_server.py`):
+The verbs, and the MCP door over each (`trainnr/trainnr/mcp_server.py`):
 
 | verb | door | what it does in the window | refused when |
 |---|---|---|---|
 | — | `describe_studio` | reads the state file, adds `alive` and the presenter's last status | never; a missing Studio is reported, not raised |
-| — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/studio-shell/target/release/studio-shell`) on the project and waits for its first heartbeat | one already runs; no binary |
+| — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/trainnr-desktop/target/release/trainnr-desktop`) on the project and waits for its first heartbeat | one already runs; no binary |
 | `quit` | `quit_studio` | closes the window; past 5 s, terminates the pid | never |
 | `open` | `open_in_studio` | a page by its rail name; an artifact by version (its page opens with the drawer); a project by root; a `table` of the selected artifact by title (Joints, Actuators, Episodes…) in the exploration modal, an empty string closes it | no such page, artifact, project or table; a table with nothing selected |
 | `show` | `show_in_studio` | the presenter streams the artifact as itself; the Live view opens | no such artifact |
@@ -684,7 +684,7 @@ ranges, on mjlab's joystick override). While the scene runs itself the rows are 
 bars showing what the policy does; in drive mode they are sliders with
 a typed value. Ctrl+drag on the picture still shoves a body.
 
-**The wire** (`tools/studio-render-stream.py`, `crates/studio-shell/src/viewport.rs`):
+**The wire** (`tools/studio-render-stream.py`, `crates/trainnr-desktop/src/viewport.rs`):
 the same tagged stdin the camera uses, ten new tags — RUN, STEP, RESET,
 SPEED, MANUAL, CTRL, QPOS, VIS, RND, VIEW (a named camera view). RUN, STEP, RESET, SPEED, MANUAL,
 CTRL and QPOS cross into the physics process through the ring (a
@@ -744,7 +744,7 @@ shape follows Isaac Lab's own answer (`ViewerCfg.origin_type = env`,
 `env_index`) and the flock's lesson (twenty full-mesh robots are a
 slideshow on this GL path in every viewer):
 
-- **Physics, one process, N worlds.** `rq_mjlab.walk_view` is the physics
+- **Physics, one process, N worlds.** `trainnr_mjlab.walk_view` is the physics
   side of the two-process stream: it builds the env from the
   checkpoint's own identity (the basis string's wording changed on
   2026-09-06, so the gate compares the basis by what it means — the
@@ -865,7 +865,7 @@ agent's own door, the standing rule.
   since the index writes UTC), and a card's footer says how long ago.
   The Studio parses the ISO instants without a calendar crate
   (`model.rs`, `epoch_of`, Hinnant's days-from-civil).
-- *Views.* `crates/studio-shell/src/listing.rs`: every page has a
+- *Views.* `crates/trainnr-desktop/src/listing.rs`: every page has a
   Cards / Table / Matrix switch (remembered per page for the session,
   and set by the agent: `open_in_studio(view=...)`). The table's columns
   are the name, the summary keys the artifacts share (first six), and
@@ -903,7 +903,7 @@ page names the Scene strip and the agent's door instead of a port. And
 cell: 297 evaluation links overlapped the rows beneath).
 
 **Built 2026-09-09, item 9:** a command palette
-(`crates/studio-shell/src/palette.rs`) on ⌘K (Ctrl+K elsewhere) over
+(`crates/trainnr-desktop/src/palette.rs`) on ⌘K (Ctrl+K elsewhere) over
 every page and every artifact by name — pages first, then artifacts
 whose name starts with the query before those that merely hold it,
 newest first — Enter opens the first hit; the agent can open it with a
@@ -1001,7 +1001,7 @@ process runs and a viewer listens. A8 keeps the picture.
 to a file inside that artifact.** Rerun's file sink beside its viewer
 sink, set together, because saving alone replaces the viewer connection
 and the window goes dark while the file fills (measured 2026-08-28, the
-training watcher). One seam opens every stream (`rq_pipeline.viz`), so
+training watcher). One seam opens every stream (`trainnr.viz`), so
 the rule is one function, not a habit. The file is `.viewer/<name>.rrd`
 under the artifact's folder: hidden, because the artifact's version is a
 hash over its visible files and the index walks only those — a picture
@@ -1046,7 +1046,7 @@ lives. The cloud feed that follows a remote log stays as it is; the
 remote's own feeds now leave their files beside the remote's artifacts,
 which is what a pull brings home.
 
-**Built (2026-09-13, the Mac).** The seam: `rq_pipeline/viz.py`
+**Built (2026-09-13, the Mac).** The seam: `trainnr/viz.py`
 (`open_stream`, `sinks`, `viewer_file`, `viewer_files`,
 `studio_listening`, the `TRAINNR_VIEWER_FILE` knob). Through it: the
 mjlab recorder (a training run's `.viewer/train.rrd`, the reward
@@ -1054,11 +1054,11 @@ preview's `.viewer/preview-<controller>.rrd`), the walk verdict
 (`.viewer/verdict-<checkpoint>.rrd` in the run), the data-generation
 feed (`.viewer/press.rrd`), the gate's mirror
 (`.viewer/gate-<runtime>.rrd`), and the training watcher's own file
-flag. The reader: `rq_pipeline/project/viewer.py` — Rerun's command
+flag. The reader: `trainnr/project/viewer.py` — Rerun's command
 line for the inventory, Rerun's local catalog (the `viz-query` extra,
 DataFusion, 98 MB) for the values. The door `describe_viewer_recording`
 and the replay in `project/present.py`. Tests in
-`pipeline/tests/test_viewer_stream.py`.
+`trainnr/tests/test_viewer_stream.py`.
 
 The parity test, run: the Studio quit, the gate door on a laptop
 deployment — the job done in 6 s, one line on its stderr saying no

@@ -1,6 +1,6 @@
 """The instrument's records, one shot, into the Studio's embedded viewer.
 
-    cd pipeline && uv run --extra sim --extra viz \\
+    cd trainnr && uv run --extra sim --extra viz \\
         python ../tools/studio-instrument-view.py
 
 Logs three families of existing artifacts — nothing is produced here —
@@ -15,7 +15,7 @@ holds the standard port (the Studio itself, or standalone Rerun):
   on a `velocity_mrad_s` timeline — the x-axis IS velocity (mrad/s),
   never a sample index dressed up as one.
 
-All numbers come through `rq_pipeline.mcp_server`'s query functions —
+All numbers come through `trainnr.mcp_server`'s query functions —
 the same surface the agents' MCP tools serve, so these views and an
 agent's answers can never disagree.
 """
@@ -26,7 +26,7 @@ bootstrap()
 
 import rerun as rr  # noqa: E402
 import rerun.blueprint as rrb  # noqa: E402
-from rq_pipeline.mcp_server import (  # noqa: E402
+from trainnr.mcp_server import (  # noqa: E402
     describe_bundle,
     describe_bundles,
     describe_eval,
@@ -176,13 +176,13 @@ def friction_blueprint(friction_origins: list[str]) -> rrb.Blueprint:
 
 
 def main() -> None:
-    rr.init("robotiq-instrument", spawn=False)
+    rr.init("trainnr-instrument", spawn=False)
     rr.connect_grpc()  # the Studio's embedded viewer on the standard port
     eval_origins = log_evals()
     fit_origins, verdict_origins = log_fits()
     rr.send_blueprint(instrument_blueprint(eval_origins, fit_origins, verdict_origins))
 
-    actuators = rr.RecordingStream("robotiq-actuators")
+    actuators = rr.RecordingStream("trainnr-actuators")
     actuators.connect_grpc()
     friction_origins = log_friction(actuators)
     actuators.send_blueprint(friction_blueprint(friction_origins))

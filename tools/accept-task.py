@@ -1,10 +1,10 @@
 """Accept or reject a task: the scripted expert must pass its referee on
 every paired trial, and the do-nothing floor must pass none.
 
-    cd pipeline && uv run --extra sim python ../tools/accept-task.py kitting
-    cd pipeline && uv run --extra sim python ../tools/accept-task.py kitting \\
+    cd trainnr && uv run --extra sim python ../tools/accept-task.py kitting
+    cd trainnr && uv run --extra sim python ../tools/accept-task.py kitting \\
         --overlay '{"tray_center": [0.0, 0.9]}'   # the tray out of reach -> REJECTED
-    cd pipeline && uv run --extra sim python ../tools/accept-task.py \\
+    cd trainnr && uv run --extra sim python ../tools/accept-task.py \\
         --project ../projects/aloha-kitting --name tray-far   # a declared task
 
 Prints the verdict, the counts, the expert's funnel and every reason;
@@ -31,24 +31,24 @@ from _lab import bootstrap
 bootstrap()
 
 import mujoco  # noqa: E402
-from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
-from rq_pipeline.mcp_actions import RQ_MJLAB_DIR, walk_train_argv  # noqa: E402
-from rq_pipeline.mcp_jobs import prepare_uv  # noqa: E402
-from rq_pipeline.physics.backend import instrument_stamp  # noqa: E402
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.kinds import (  # noqa: E402
+from trainnr.envs.gymnasium_env import bundle_source  # noqa: E402
+from trainnr.mcp_actions import TRAINNR_MJLAB_DIR, walk_train_argv  # noqa: E402
+from trainnr.mcp_jobs import prepare_uv  # noqa: E402
+from trainnr.physics.backend import instrument_stamp  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.kinds import (  # noqa: E402
     ACCEPTANCE_FILE,
     ACCEPTANCE_SCHEMA,
 )
-from rq_pipeline.project.locate import Project  # noqa: E402
-from rq_pipeline.project.task_ref import (  # noqa: E402
+from trainnr.project.locate import Project  # noqa: E402
+from trainnr.project.task_ref import (  # noqa: E402
     TaskReference,
     read_task_reference,
 )
-from rq_pipeline.tasks.acceptance import accept  # noqa: E402
-from rq_pipeline.tasks.experts import expert_for, experts  # noqa: E402
-from rq_pipeline.tasks.overlay import build_from_reference, build_variant  # noqa: E402
-from rq_pipeline.tasks.walks import walk_robot  # noqa: E402
+from trainnr.tasks.acceptance import accept  # noqa: E402
+from trainnr.tasks.experts import expert_for, experts  # noqa: E402
+from trainnr.tasks.overlay import build_from_reference, build_variant  # noqa: E402
+from trainnr.tasks.walks import walk_robot  # noqa: E402
 
 
 def main() -> None:
@@ -90,7 +90,7 @@ def main() -> None:
 SMOKE_ENVS = 2
 SMOKE_ITERATIONS = 2
 SMOKE_AGENT = "smoke"
-SMOKE_DONE_MARK = "[smoke] done"  # the trainer's last line (rq_mjlab.walk_train)
+SMOKE_DONE_MARK = "[smoke] done"  # the trainer's last line (trainnr_mjlab.walk_train)
 ACCEPTANCE_LOG = "acceptance.log"
 Runner = Callable[..., subprocess.CompletedProcess[Any]]
 
@@ -105,7 +105,7 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     prepare: Callable[[Sequence[str], Path], None] = prepare_uv,
 ) -> bool:
     """A walk's acceptance is learnability: the environment builds from
-    the project's robot and a few PPO iterations run — rq_mjlab's smoke,
+    the project's robot and a few PPO iterations run — trainnr_mjlab's smoke,
     in its own venv, with the declared span, through the SAME command
     line the train door spawns (launch environment included). The
     identity it prints is the record."""
@@ -121,10 +121,14 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     log_path = folder / ACCEPTANCE_LOG
     # the door's line is `uv run --no-sync`: its environment is made ready
     # here, as the job runner does for a door (a failure is refused by name)
-    prepare(argv, RQ_MJLAB_DIR)
+    prepare(argv, TRAINNR_MJLAB_DIR)
     with log_path.open("w") as log:
         result = run(
-            argv, cwd=RQ_MJLAB_DIR, stdout=log, stderr=subprocess.STDOUT, check=False
+            argv,
+            cwd=TRAINNR_MJLAB_DIR,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
         )
     lines = log_path.read_text(errors="replace").splitlines()
     identity: dict = {}

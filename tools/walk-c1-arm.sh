@@ -26,15 +26,15 @@ mkdir -p "$root"
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
 say "walk-c1 arm $arm${replicate:+ replicate $replicate} on $robot: span $span, $iterations iterations${seed:+, seed $seed}"
-cd "$repo/rq_mjlab"
-.venv/bin/python -m rq_mjlab.walk_train --robot "$robot" --agent g3 --iterations "$iterations" \
+cd "$repo/trainnr_mjlab"
+.venv/bin/python -m trainnr_mjlab.walk_train --robot "$robot" --agent g3 --iterations "$iterations" \
   --dr-span "$span" --log-dir "$root/train" --no-recorder $seed_flag $bundle_flag
 
 ckpt="$(ls "$root"/train/model_*.pt | sort -t_ -k2 -n | tail -1)"
 say "certify $arm at the fit: $ckpt ($trials trials, seed 1000)"
-.venv/bin/python -m rq_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" --seed 1000 \
+.venv/bin/python -m trainnr_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" --seed 1000 \
   --device cuda:0 --judge-at-fit --no-studio $bundle_flag
 say "certify $arm under the walk's default span too (±0.10 for every arm — not its own)"
-.venv/bin/python -m rq_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" --seed 1000 \
+.venv/bin/python -m trainnr_mjlab.walk_verdict "$ckpt" --robot "$robot" --trials "$trials" --seed 1000 \
   --device cuda:0 --no-studio $bundle_flag
 say "ARM DONE $arm"

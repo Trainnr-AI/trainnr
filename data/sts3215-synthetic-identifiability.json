@@ -1,5 +1,5 @@
 {
- "generator": "tools/sts-study.py (rq_pipeline.robot.sts_synth)",
+ "generator": "tools/sts-study.py (trainnr.robot.sts_synth)",
  "design_date": "2026-08-25",
  "truth": {
   "servo_kp": 6.0,

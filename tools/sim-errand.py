@@ -5,7 +5,7 @@ reverse park, the waist-less air mime, carry, DONE — and streams the
 same dashboard into Rerun as the PREDICTION the real HIL run should
 match.
 
-    cd pipeline && uv run --extra sim --extra viz mjpython \
+    cd trainnr && uv run --extra sim --extra viz mjpython \
         ../tools/sim-errand.py
 """
 
@@ -19,7 +19,7 @@ import rerun as rr
 from _lab import bootstrap, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.yellow import (  # noqa: E402
+from trainnr.tasks.yellow import (  # noqa: E402
     AIR_PICK_SEQUENCE,
     AIR_TUCK,
     REAL_CAR,
@@ -28,7 +28,7 @@ from rq_pipeline.tasks.yellow import (  # noqa: E402
     compose_rig,
     salute_pose,
 )
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 
 def _mime_total_s() -> float:

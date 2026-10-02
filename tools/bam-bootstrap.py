@@ -231,7 +231,7 @@ def main() -> int:  # noqa: PLR0915 - one run, every step in order
                 if name not in rig
             },
             # Every replicate's vector: the identified SET a joint draw
-            # samples from (rq_mjlab.dr), keeping the terms' trade-offs.
+            # samples from (trainnr_mjlab.dr), keeping the terms' trade-offs.
             "samples": [
                 {
                     k: float(v)

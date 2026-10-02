@@ -6,7 +6,7 @@
     python3 tools/capture-telemetry.py record standin-1 --project projects/go2-walk \\
         --standin projects/go2-walk/deploy/go2-c2-deploy-cited --seconds 10
 
-`record` listens on one registered source (`rq_pipeline.robots.capture.
+`record` listens on one registered source (`trainnr.robots.capture.
 SOURCES`: `udp` the Pico rig, `dds` Unitree's `rt/lowstate` and `rt/lowcmd`
 as one recording) for `--seconds`, then ingests it into the project; the
 Studio's Recordings page shows it filling. `--standin DEPLOYMENT` is the
@@ -29,10 +29,10 @@ from _lab import bootstrap, running
 
 bootstrap()
 
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.ingest import capture, ingest  # noqa: E402
-from rq_pipeline.project.locate import INDEX_DIR, Project  # noqa: E402
-from rq_pipeline.robots.capture import DEFAULT_SOURCE, sources  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.ingest import capture, ingest  # noqa: E402
+from trainnr.project.locate import INDEX_DIR, Project  # noqa: E402
+from trainnr.robots.capture import DEFAULT_SOURCE, sources  # noqa: E402
 
 
 def main() -> int:
@@ -99,7 +99,7 @@ def _listen(run: Any, listener: Any, seconds: float) -> None:
 
 
 def _standin(project: Project, args: argparse.Namespace) -> object:
-    from rq_pipeline.robots.dds_capture import standin_capture  # noqa: PLC0415
+    from trainnr.robots.dds_capture import standin_capture  # noqa: PLC0415
 
     def land(_recordings: Path, source: Path, **kw: object) -> dict[str, object]:
         return ingest(project, source, **kw)  # type: ignore[arg-type]

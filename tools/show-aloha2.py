@@ -1,6 +1,6 @@
 """The ALOHA 2 bundle in both viewers: rig, servos, contacts, cameras.
 
-    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \
+    cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \
         python ../tools/show-aloha2.py
 
 `wsl.env` is the WSL GPU story (Rerun through Vulkan over D3D12, the
@@ -36,17 +36,17 @@ import rerun as rr
 from _lab import bootstrap, frame_viewer, hold_until_closed, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.aloha2 import (  # noqa: E402
+from trainnr.tasks.aloha2 import (  # noqa: E402
     ARM_NAMES,
     BUNDLE_XML,
     NEUTRAL_CTRL,
 )
-from rq_pipeline.tasks.scene import (  # noqa: E402
+from trainnr.tasks.scene import (  # noqa: E402
     GeomGroup,
     NominalOptions,
     RenderBudget,
 )
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 BUNDLE = BUNDLE_XML.parent
 OFFSET = [0.2, -0.7, 0.9, 0.0, -0.5, 0.3, 0.02] * 2
@@ -139,7 +139,7 @@ def main() -> None:
     model.vis.quality.shadowsize = RenderBudget.SHADOWSIZE
     data = mujoco.MjData(model)
 
-    rr_session("robotiq-aloha2", mode="spawn")
+    rr_session("trainnr-aloha2", mode="spawn")
 
     mujoco.mj_resetDataKeyframe(model, data, 0)
     with mujoco.viewer.launch_passive(model, data) as viewer:

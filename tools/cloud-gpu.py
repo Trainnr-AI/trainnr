@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """A rented GPU as a runbook: offers → launch → push → bootstrap → run
 → pull → terminate, every step one subcommand, every vendor behind
-the provider seam (`rq_pipeline/cloud`). The first vendor is Runpod.
+the provider seam (`trainnr/cloud`). The first vendor is Runpod.
 
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py offers \\
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py offers \\
         --tier COMMUNITY
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py launch \\
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py launch \\
         --name t5-cloud --gpu "NVIDIA GeForce RTX 4090" --tier COMMUNITY --wait
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py push <id>
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py bootstrap <id>
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py run <id> -- \\
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py push <id>
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py bootstrap <id>
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py run <id> -- \\
         ../tools/e2e-smoke.py --scale cloud --name t5-cloud --from train
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py pull <id> t5-cloud
-    cd pipeline && uv run --extra sim python ../tools/cloud-gpu.py terminate <id>
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py pull <id> t5-cloud
+    cd trainnr && uv run --extra sim python ../tools/cloud-gpu.py terminate <id>
 
 The API key is read from the repo's `.env` (`RUNPOD_API_KEY`) into the
 environment and travels in one request header; this tool never prints
-it and `push` never ships it (`rq_pipeline/cloud/transfer.py` names
+it and `push` never ships it (`trainnr/cloud/transfer.py` names
 what leaves the box). Billing starts at `launch` and stops at
 `terminate` — `stop` keeps the disk and a smaller bill; nothing here
 terminates on your behalf.
@@ -37,7 +37,7 @@ from _lab import REPO, TOOLS, bootstrap, load_dotenv
 
 bootstrap()
 
-from rq_pipeline.cloud import (  # noqa: E402
+from trainnr.cloud import (  # noqa: E402
     DEFAULT_PROVIDER,
     NETWORK_VOLUME_MOUNT,
     Action,
@@ -51,7 +51,7 @@ from rq_pipeline.cloud import (  # noqa: E402
     providers,
     resolve,
 )
-from rq_pipeline.cloud.transfer import (  # noqa: E402
+from trainnr.cloud.transfer import (  # noqa: E402
     Rsync,
     follow_filters,
     pull_filters,
@@ -60,7 +60,7 @@ from rq_pipeline.cloud.transfer import (  # noqa: E402
     rsync_argv,
     ssh_argv,
 )
-from rq_pipeline.envs.lerobot_train_log import RunLayout  # noqa: E402
+from trainnr.envs.lerobot_train_log import RunLayout  # noqa: E402
 
 
 class Defaults:
@@ -80,7 +80,7 @@ class Defaults:
 
 class Remote:
     """Where the repo lives on the machine and how its venv is built — the
-    values `tools/_pod-bootstrap.sh` takes as RQ_* variables."""
+    values `tools/_pod-bootstrap.sh` takes as TRAINNR_* variables."""
 
     DIR = "/workspace/robotiq"
     VENV = ".venv-train"
@@ -100,8 +100,9 @@ class Remote:
     def bootstrap_script(cls) -> str:
         extras = " ".join(f"--extra {e}" for e in cls.EXTRAS)
         exports = (
-            f"export RQ_DIR={cls.DIR} RQ_VENV={cls.VENV} RQ_PYTHON={cls.PYTHON} "
-            f"RQ_EXTRAS={shlex.quote(extras)} RQ_APT={shlex.quote(cls.APT)}\n"
+            f"export TRAINNR_DIR={cls.DIR} TRAINNR_VENV={cls.VENV} "
+            f"TRAINNR_PYTHON={cls.PYTHON} "
+            f"TRAINNR_EXTRAS={shlex.quote(extras)} TRAINNR_APT={shlex.quote(cls.APT)}\n"
         )
         return exports + cls.BOOTSTRAP.read_text(encoding="utf-8")
 
@@ -204,7 +205,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="also open the dashboard: train-watch --follow on the mirrored run",
     )
     run = sub.add_parser(
-        "run", help="ssh: run a command in the repo's pipeline/ with the train venv"
+        "run", help="ssh: run a command in the repo's trainnr/ with the train venv"
     )
     run.add_argument("id")
     run.add_argument(
@@ -407,7 +408,7 @@ def run_command(gpu: GpuProvider, args: argparse.Namespace) -> None:
         # `bash -c` on the pod, 2026-08-27), and the file stays as the
         # record of what ran.
         script = (
-            f"cat > {Remote.RUN_SH} <<'RQ_RUN'\n"
+            f"cat > {Remote.RUN_SH} <<'TRAINNR_RUN'\n"
             f"cd {Remote.DIR}/pipeline\n{line}\nRQ_RUN\n"
             f"nohup bash {Remote.RUN_SH} > {Remote.RUN_LOG} 2>&1 < /dev/null &\n"
             f"echo started: $(tail -n 1 {Remote.RUN_SH})"

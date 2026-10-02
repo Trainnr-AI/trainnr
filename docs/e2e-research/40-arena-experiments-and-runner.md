@@ -5,7 +5,7 @@ specifies an "experiment", runs it locally and across nodes, records each
 episode, and aggregates — read from the ACTUAL code (repomix bundle of
 `isaaclab_arena`, 132,303 lines). Citations are `<repo path>:L<bundle line>`;
 the number is the bundle's line, findable with one `sed -n`. Mapped against
-our harness (`pipeline/rq_pipeline/evaluate/`), certificate (`stats/`) and
+our harness (`trainnr/trainnr/evaluate/`), certificate (`stats/`) and
 bundles (`bundles/`). Nothing below comes from memory of Isaac Lab.*
 
 ---

@@ -1,15 +1,15 @@
 """Generate scripted kitting demonstrations — T5's data source.
 
-    cd pipeline && uv run --env-file wsl.env --extra sim \\
+    cd trainnr && uv run --env-file wsl.env --extra sim \\
         python ../tools/kitting-demos.py \\
         [episodes] [out] [--frame-every 1] [--dr-span 0.30] [--seed S] \\
         [--first-episode K] [--shards N] [--parallel M]
 
 (On WSL the offscreen renderer reaches the GPU only through the variables
-in pipeline/wsl.env — Mesa's EGL default is llvmpipe at ~300 ms per frame,
+in trainnr/wsl.env — Mesa's EGL default is llvmpipe at ~300 ms per frame,
 which turned a 1 s scripted episode into a 460 s one on 2026-08-26.)
 
-The generator itself is `rq_pipeline.collect.kitting_demos.generate_demos`
+The generator itself is `trainnr.collect.kitting_demos.generate_demos`
 (what it draws, keeps and writes is documented and tested there); this
 is its command line. The WSL box's train venv converts the batch to a
 LeRobot dataset for T5 training; this side stays torch-free.
@@ -23,15 +23,15 @@ from _lab import PREVIEW_EVERY_TICKS, bootstrap
 
 bootstrap()
 
-from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
-from rq_pipeline.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
-from rq_pipeline.collect.shards import (  # noqa: E402
+from trainnr.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
+from trainnr.collect.press_feed import PRESS_STREAM, StudioPressFeed  # noqa: E402
+from trainnr.collect.shards import (  # noqa: E402
     ShardSpec,
     plan_shards,
     record_shard,
     run_sharded_tool,
 )
-from rq_pipeline.viz import viewer_file  # noqa: E402
+from trainnr.viz import viewer_file  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

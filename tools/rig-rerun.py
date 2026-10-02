@@ -1,7 +1,7 @@
 """Live Rerun view of a rig session: tail a growing .wire, plot everything
 — and draw the rig in realtime 3D, posed by odometry and the stage notes.
 
-    cd pipeline && uv run --extra sim --extra viz \\
+    cd trainnr && uv run --extra sim --extra viz \\
         python ../tools/rig-rerun.py <file.wire>
 
 Tails the recording as `hil-host --record` writes it (works on finished
@@ -38,16 +38,16 @@ import rerun as rr
 from _lab import bootstrap, rr_session
 
 bootstrap()
-from rq_pipeline.bundles.profile import load_profile  # noqa: E402
-from rq_pipeline.collect.frames import STATUS_HZ  # noqa: E402
-from rq_pipeline.collect.wire import parse_status  # noqa: E402
-from rq_pipeline.tasks.yellow import (  # noqa: E402
+from trainnr.bundles.profile import load_profile  # noqa: E402
+from trainnr.collect.frames import STATUS_HZ  # noqa: E402
+from trainnr.collect.wire import parse_status  # noqa: E402
+from trainnr.tasks.yellow import (  # noqa: E402
     AIR_TUCK,
     air_mime_pose,
     compose_rig,
     salute_pose,
 )
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 PROFILE = load_profile(REPO / "robots" / "rig-drivetrain")

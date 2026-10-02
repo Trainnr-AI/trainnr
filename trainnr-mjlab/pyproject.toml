@@ -1,0 +1,85 @@
+# trainnr_mjlab — the maintained mjlab consumer (docs/e2e-research/58 §2):
+# BAM's actuator law ported to CURRENT mjlab and kept there, actuator
+# configs that build ONLY from verified bundles, the field-expansion
+# event made unforgettable, and a DR linter that turns silent no-ops
+# into refusals.
+#
+# Its own package and its own venv ON PURPOSE: mjlab 1.6 pins
+# mujoco~=3.11 with torch/CUDA — a third instrument beside the sim venv
+# (3.11 metrology) and the train venv (3.12 + Warp), never a merge of
+# them. mjlab ships a breaking minor roughly monthly (1.4 removed
+# actuator cfgs, 1.6 changed CollisionCfg and CommandTerm — measured on
+# microduck, docs/e2e-research/56 §7); the pin is exact and an upgrade
+# is one deliberate PR per minor, mjlab's own ritual.
+[project]
+name = "trainnr-mjlab"
+version = "0.1.0"
+description = "Identified actuator physics for mjlab: BAM's law from certified bundles, with refusals"
+requires-python = ">=3.12,<3.13"
+license = { text = "FSL-1.1-ALv2" }
+dependencies = [
+    # The exact minor: the port's whole reason is owning this pin.
+    "mjlab==1.6.0",
+    # The export's graph and its check (A6).
+    "onnx>=1.22.0",
+    "onnxruntime>=1.30.0",
+    # The certified-bundle store's reader and verifier (A1) — a path
+    # dependency; the pipeline's BASE install carries no heavy extras.
+    "trainnr",
+]
+
+[project.optional-dependencies]
+# The parity reference only — Rhoban's own package, never a runtime
+# dependency (its mjlab extra is walled at mjlab 1.3; we depend on
+# nothing behind that wall).
+bam = ["better-actuator-models==1.0.2"]
+# The Rerun recorder's sink - pinned to the Studio's own tree (0.36.x).
+viz = ["rerun-sdk==0.36.*"]
+
+[tool.uv.sources]
+trainnr = { path = "../trainnr", editable = true }
+
+[tool.uv]
+# E0 (docs/78 §4): the instrument step. mjlab 1.6.0 - still the newest
+# release on 2026-09-22 - pins mujoco and mujoco-warp to ~=3.11; 3.13
+# brings the Gaussian-splat ray tracer the scene loop renders with. The
+# override moves both ahead of mjlab's pins; every walk certificate from
+# here names the new instrument, and the old ones keep theirs.
+override-dependencies = ["mujoco==3.13.0", "mujoco-warp==3.13.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trainnr_mjlab", "src/rq_mjlab"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "PL", "RUF"]
+
+[tool.mypy]
+# Zero errors is the baseline; tools/verify.sh gates it, run INSIDE this
+# project's environment so mjlab (py.typed) and trainnr (py.typed
+# since 2026-09-13) are checked for real - the isolated check had read
+# both as Any and missed an import of a function removed on 2026-09-09.
+python_version = "3.12"
+ignore_missing_imports = true
+files = ["src/trainnr_mjlab"]
+# trainnr by the same relative path the dependency names: its
+# editable install is setuptools' import-hook finder, which mypy cannot
+# follow (the verdict's alias of its TrackingOutcome read as unknown).
+mypy_path = "../trainnr"
+
+[[tool.mypy.overrides]]
+# Read for its types; its own errors belong to the pipeline's step.
+module = ["trainnr", "trainnr.*"]
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+# The untyped C extensions (no py.typed; their API is compiled).
+module = ["mujoco", "mujoco.*", "mujoco_warp", "mujoco_warp.*", "warp", "warp.*"]
+follow_imports = "skip"

@@ -9,7 +9,7 @@ both cube paths together. They separate by centimetres, which is why
 on the Mac and failed on the WSL box: it pinned a number the physics
 does not pin. (The test now asserts the deck landing, not the pocket.)
 
-    cd pipeline && uv run --env-file wsl.env --extra sim --extra viz \
+    cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \
         python ../tools/show-cargo-chaos.py
 
 (`wsl.env` is WSL's GPU routing for the two windows; harmless elsewhere.)
@@ -32,15 +32,15 @@ import rerun as rr
 from _lab import bootstrap, hold_until_closed, rr_session
 
 bootstrap()
-from rq_pipeline.tasks.components import (  # noqa: E402
+from trainnr.tasks.components import (  # noqa: E402
     CROUCH_POSE,
     DECK_PICK_SEQUENCE,
     TRAY_CENTRE_X,
     TRAY_CENTRE_Y,
     compose,
 )
-from rq_pipeline.tasks.scene import NominalOptions  # noqa: E402
-from rq_pipeline.viz import RigMirror  # noqa: E402
+from trainnr.tasks.scene import NominalOptions  # noqa: E402
+from trainnr.viz import RigMirror  # noqa: E402
 
 CUBE_QPOS = 15  # free joint: cube x, y, z
 SIM_HZ = round(1 / NominalOptions.TIMESTEP)
@@ -130,7 +130,7 @@ def run_lap(model, data, lap, mirror=None, viewer=None):
 
 
 def main() -> None:
-    rr_session("robotiq-cargo-chaos", mode="spawn")
+    rr_session("trainnr-cargo-chaos", mode="spawn")
     # The tray pocket the cube is supposed to come home to.
     rr.log(
         "world/tray_centre",

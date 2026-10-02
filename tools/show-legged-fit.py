@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "pipeline"))
+sys.path.insert(0, str(REPO / "trainnr"))
 
 STILL_WIDTH, STILL_HEIGHT = 960, 600
 STILL_TIMES = (0.15, 0.5, 0.85)  # fractions of the recording
@@ -42,7 +42,7 @@ def stream(fit, recording_dir: Path, app_id: str) -> Path:
     """The fit into the Studio when one listens, and into the recording's
     `.viewer/` file (the headless door, docs/76 §10.5)."""
     import numpy as np  # noqa: PLC0415
-    from rq_pipeline.viz import open_stream  # noqa: PLC0415
+    from trainnr.viz import open_stream  # noqa: PLC0415
 
     out = recording_dir / ".viewer" / "fit-legged.rrd"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -138,12 +138,12 @@ def main() -> int:
         "--stills", type=Path, default=None, help="where the MuJoCo stills go"
     )
     args = parser.parse_args()
-    from rq_pipeline.bundles.bundle import model_file_of  # noqa: PLC0415
-    from rq_pipeline.robot.legged_fit import LeggedJoints  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+    from trainnr.robot.legged_fit import LeggedJoints  # noqa: PLC0415
 
     fit = LeggedJoints().fit_balance(args.bundle, args.recording)
     print(fit.balance.result.summary())
-    saved = stream(fit, args.recording, f"rq-fit-{args.recording.name}")
+    saved = stream(fit, args.recording, f"trainnr-fit-{args.recording.name}")
     print(f"viewer recording: {saved}")
     if args.stills is not None:
         model_file = model_file_of(args.bundle)

@@ -59,18 +59,20 @@ jobs:
         run: python3 tools/check-unsafe-gates.py
       - name: docs describe real code
         run: python3 tools/check-docs.py
+      - name: package layers (docs/80)
+        run: python3 tools/check-layers.py
       - name: cargo test
         run: cargo test -q --workspace
 
-      - name: ruff format (pipeline)
+      - name: ruff format (trainnr)
         run: uvx ruff format --check .
-        working-directory: pipeline
-      - name: ruff lint (pipeline)
+        working-directory: trainnr
+      - name: ruff lint (trainnr)
         run: uvx ruff check .
-        working-directory: pipeline
-      - name: python tests (pipeline, dependency-free core)
+        working-directory: trainnr
+      - name: python tests (trainnr, dependency-free core)
         run: uv run python -m unittest discover -s tests
-        working-directory: pipeline
+        working-directory: trainnr
 
   extras-weekly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -87,4 +89,4 @@ jobs:
           uv python install 3.12
           uv sync --python 3.12 --extra sim --extra train
           uv run --python 3.12 python -m unittest discover -s tests -v
-        working-directory: pipeline
+        working-directory: trainnr

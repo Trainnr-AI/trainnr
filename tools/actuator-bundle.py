@@ -1,9 +1,9 @@
 """The certified actuator bundle CLI — wrap BAM fits, verify anyone's.
 
-    cd pipeline && uv run python ../tools/actuator-bundle.py wrap --all
-    cd pipeline && uv run python ../tools/actuator-bundle.py wrap \
+    cd trainnr && uv run python ../tools/actuator-bundle.py wrap --all
+    cd trainnr && uv run python ../tools/actuator-bundle.py wrap \
         feetech_sts3215_7_4V m6 [--out DIR]
-    cd pipeline && uv run python ../tools/actuator-bundle.py verify \
+    cd trainnr && uv run python ../tools/actuator-bundle.py verify \
         path/to/*.bundle.json
 
 `wrap` turns a vendored (actuator, tier) fit into the interchange
@@ -23,7 +23,7 @@ from pathlib import Path
 from _lab import bootstrap
 
 bootstrap()
-from rq_pipeline.robot.actuator_bundle import (  # noqa: E402
+from trainnr.robot.actuator_bundle import (  # noqa: E402
     read_bundle,
     verify,
     wrap,

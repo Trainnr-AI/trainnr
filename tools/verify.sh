@@ -39,28 +39,29 @@ step() {                      # step "name" "command"
 }
 
 PY="${PYTHON:-python3}"  # the repo-level gates' interpreter; override where python3 is not the name
-echo "=== robotiq end-to-end verification ==="
+echo "=== trainnr end-to-end verification ==="
 step "formatting"            "cargo fmt --all --check"
 step "clippy (all targets)"  "! cargo clippy -q --workspace --all-targets 2>&1 | grep -qE '^error'"
 step "tests"                 "cargo test -q --workspace"
 step "docs describe real code" "\"$PY\" tools/check-docs.py"
+step "package layers (docs/80)" "\"$PY\" tools/check-layers.py"
 step "unsafe forbidden everywhere" "\"$PY\" tools/check-unsafe-gates.py"
-# The Python pipeline, under the same roof as the crates. These mirror
+# The Python package, under the same roof as the crates. These mirror
 # the pre-commit hook — but verify.sh is the "prove EVERYTHING" command
 # and until 2026-08-26 it proved everything except the Python half.
-step "ruff format (pipeline)"  "(cd pipeline && uvx ruff format --check .)"
-step "ruff lint (pipeline)"    "(cd pipeline && uvx ruff check .)"
-# tools/ has its own .ruff.toml (extending the pipeline's) and, until
+step "ruff format (trainnr)"   "(cd trainnr && uvx ruff format --check .)"
+step "ruff lint (trainnr)"     "(cd trainnr && uvx ruff check .)"
+# tools/ has its own .ruff.toml (extending trainnr's) and, until
 # 2026-08-27, no gate that ran it — 63 findings had accrued.
-step "ruff format (tools)"     "(cd pipeline && uvx ruff format --check ../tools)"
-step "ruff lint (tools)"       "(cd pipeline && uvx ruff check ../tools)"
-# rq_mjlab had NO Python gate until 2026-09-01 — its lint, types and
+step "ruff format (tools)"     "(cd trainnr && uvx ruff format --check ../tools)"
+step "ruff lint (tools)"       "(cd trainnr && uvx ruff check ../tools)"
+# trainnr_mjlab had NO Python gate until 2026-09-01 — its lint, types and
 # tests ran only when somebody remembered. Now under the same roof.
-step "ruff lint (rq_mjlab)"    "(cd rq_mjlab && uvx ruff check src tests)"
+step "ruff lint (trainnr_mjlab)"    "(cd trainnr-mjlab && uvx ruff check src tests)"
 # Types, both packages: zero errors is the baseline; the config (and
 # the untyped-C-extension skips) lives in each pyproject. Run INSIDE each
 # project's environment (`uv run --with mypy`), never as an isolated
-# `uvx mypy`: isolated, every installed package - mjlab, rq_pipeline,
+# `uvx mypy`: isolated, every installed package - mjlab, trainnr,
 # torch, rerun - read as Any, the check went quiet on how we call them,
 # and it missed an import of a function deleted a week earlier
 # (2026-09-13).
@@ -68,12 +69,12 @@ step "ruff lint (rq_mjlab)"    "(cd rq_mjlab && uvx ruff check src tests)"
 # machine (an inexact sync read whatever the box last installed); mypy
 # is pinned so a release of it does not move the gate.
 MYPY="mypy==2.3.1"
-step "mypy (pipeline)"         "(cd pipeline && uv run --extra sim --extra mcp --extra deploy --extra viz --with $MYPY mypy rq_pipeline)"
-step "mypy (rq_mjlab)"         "(cd rq_mjlab && uv run --extra viz --with $MYPY mypy src/rq_mjlab)"
-step "python tests (pipeline)" "(cd pipeline && uv run python -m unittest discover -s tests)"
+step "mypy (trainnr)"          "(cd trainnr && uv run --extra sim --extra mcp --extra deploy --extra viz --with $MYPY mypy trainnr)"
+step "mypy (trainnr_mjlab)"         "(cd trainnr-mjlab && uv run --extra viz --with $MYPY mypy src/trainnr_mjlab)"
+step "python tests (trainnr)"  "(cd trainnr && uv run python -m unittest discover -s tests)"
 # The recorder tests need the viz extra (rerun): named here, as the README
 # names it, so a fresh clone runs them rather than skipping them (2026-09-27).
-step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run --extra viz python -m unittest discover -s tests -t .)"
+step "python tests (trainnr_mjlab)" "(cd trainnr-mjlab && uv run --extra viz python -m unittest discover -s tests -t .)"
 # The USD door's own tests need Newton (the `usd` extra), which cannot
 # share a venv with `mjx` (uv's conflicts), so the main suite skips them.
 # Skipped, a wrong test sat unrun for a day (the stage-units line,
@@ -83,8 +84,8 @@ step "python tests (rq_mjlab)" "(cd rq_mjlab && uv run --extra viz python -m uni
 # after it cannot break the pipe. The Isaac asset is fetched at its pinned
 # commit when the cache (runs/assets) lacks it.
 step "python tests (USD import, Newton)" \
-     "(cd pipeline && UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu \
-      && RQ_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -x OK >/dev/null)"
+     "(cd trainnr && UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu \
+      && TRAINNR_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -x OK >/dev/null)"
 
 # The two crates that must compile for the chip as well as the laptop.
 # `cargo test` proves neither: it builds the std shape only, so an

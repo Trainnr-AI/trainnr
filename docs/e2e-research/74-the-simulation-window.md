@@ -239,7 +239,7 @@ MuJoCo C library, with a native viewer (re-)written in Rust."
   `terrain_generation`, `procedural_tree`, `multi_legged_creatures`).
 
 What this settles for the Studio: the viewport already made this call
-once. `crates/studio-shell/src/viewport.rs` streams frames from
+once. `crates/trainnr-desktop/src/viewport.rs` streams frames from
 `tools/studio-render-stream.py` (the pipeline's own `mujoco.Renderer`,
 MuJoCo 3.11) through shared memory, with camera deltas and the
 Ctrl+drag perturbation going back over stdin, and its module doc gives

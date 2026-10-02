@@ -15,22 +15,22 @@ from _lab import bootstrap, running
 
 bootstrap()
 
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.locate import Project  # noqa: E402
-from rq_pipeline.scenes.capture import (  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.locate import Project  # noqa: E402
+from trainnr.scenes.capture import (  # noqa: E402
     FRAMES_PER_SECOND,
     MissingToolError,
     Tools,
     capture_scene,
 )
-from rq_pipeline.scenes.record import (  # noqa: E402
+from trainnr.scenes.record import (  # noqa: E402
     CAPTURE_FAILED_WORD,
     CAPTURE_LOG_FILE,
     CAPTURE_STAGE_PREFIX,
     UNRECORDED,
     load_scene_record,
 )
-from rq_pipeline.scenes.splatters import (  # noqa: E402
+from trainnr.scenes.splatters import (  # noqa: E402
     AUTO,
     DEFAULT_SPLATTER,
     DEFAULT_STEPS,

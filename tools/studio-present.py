@@ -1,12 +1,12 @@
 """The presenter: the one Python process the Studio asks to show things.
 
-    cd pipeline && uv run --extra sim --extra viz \\
+    cd trainnr && uv run --extra sim --extra viz \\
         python ../tools/studio-present.py [--project <dir>] [--once]
 
 Watches `<project>/.index/present.json` — the Studio writes `{"stamp":
 ...}` when the user clicks Show on an artifact, or `{"stamps": [a, b]}`
 for a compare — and streams that into the embedded viewer as itself
-(`rq_pipeline.project.present`). The Studio spawns this once per open
+(`trainnr.project.present`). The Studio spawns this once per open
 project; an agent reaches it through the `show_in_studio` and
 `compare_in_studio` MCP tools (docs/76 §10.1), which command the Studio, which
 writes the intent here.
@@ -20,9 +20,9 @@ from _lab import bootstrap
 
 bootstrap()
 
-from rq_pipeline.project import PROJECT_ENV, current_project  # noqa: E402
-from rq_pipeline.project.control import pid_alive  # noqa: E402
-from rq_pipeline.project.present import serve  # noqa: E402
+from trainnr.project import PROJECT_ENV, current_project  # noqa: E402
+from trainnr.project.control import pid_alive  # noqa: E402
+from trainnr.project.present import serve  # noqa: E402
 
 
 def watch_parent(pid: int) -> None:

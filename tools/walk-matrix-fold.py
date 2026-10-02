@@ -33,11 +33,11 @@ from _lab import REPO, bootstrap
 
 bootstrap()
 
-from rq_pipeline.evaluate import figures as fx  # noqa: E402
-from rq_pipeline.evaluate.findings import Finding, repo_commit, today  # noqa: E402
-from rq_pipeline.evaluate.records import read_records  # noqa: E402
-from rq_pipeline.stats.effects import main_effect  # noqa: E402
-from rq_pipeline.stats.intervals import clopper_pearson  # noqa: E402
+from trainnr.evaluate import figures as fx  # noqa: E402
+from trainnr.evaluate.findings import Finding, repo_commit, today  # noqa: E402
+from trainnr.evaluate.records import read_records  # noqa: E402
+from trainnr.stats.effects import main_effect  # noqa: E402
+from trainnr.stats.intervals import clopper_pearson  # noqa: E402
 
 DEFAULT_ARMS = ("point", "narrow", "wide")
 DEFAULT_SCALES = (0.7, 0.8, 0.9, 1.1, 1.2, 1.3)

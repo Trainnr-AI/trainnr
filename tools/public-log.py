@@ -4,7 +4,7 @@
     python3 tools/public-log.py fetch go2-leg-odometry
     python3 tools/public-log.py ingest go2-leg-odometry --project projects/go2-walk
 
-The registry (`rq_pipeline.robots.public_logs`) names each log's source,
+The registry (`trainnr.robots.public_logs`) names each log's source,
 byte count, digest, robot, recorded date and the data's licence STATE;
 a fetch that differs from the registry is refused, never read. Ingest
 stamps the recording with its provenance so the Studio's telemetry
@@ -22,10 +22,10 @@ from _lab import bootstrap, running
 
 bootstrap()
 
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.ingest import ingest  # noqa: E402
-from rq_pipeline.project.locate import Project  # noqa: E402
-from rq_pipeline.robots import public_logs  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.ingest import ingest  # noqa: E402
+from trainnr.project.locate import Project  # noqa: E402
+from trainnr.robots import public_logs  # noqa: E402
 
 
 def main() -> int:

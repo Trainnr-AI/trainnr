@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run a command under the WSL box's launch environment (pipeline/wsl.env):
-#     cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python ../tools/train-watch.py ...
+# Run a command under the WSL box's launch environment (trainnr/wsl.env):
+#     cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python ../tools/train-watch.py ...
 # The sim venv can use `uv run --env-file wsl.env` directly; this exists for
 # interpreters uv does not launch (the train venv) and for anything else.
 set -euo pipefail

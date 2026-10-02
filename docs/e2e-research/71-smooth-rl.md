@@ -133,7 +133,7 @@ What the evidence does not contain, read carefully:
 
 **We already run the loop they optimize for, without the latency.** Our
 certificate drives a chunk policy through `ActionScheduler`
-(`pipeline/rq_pipeline/evaluate/scheduler.py`): a 20-frame ACT chunk,
+(`trainnr/trainnr/evaluate/scheduler.py`): a 20-frame ACT chunk,
 `executed_horizon` of 2, re-asked every 2 ticks through the bridge. In
 the simulator the environment waits for the answer, so today the
 committed region is empty and the execution window starts at frame 0.

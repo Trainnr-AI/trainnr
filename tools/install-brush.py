@@ -4,7 +4,7 @@
     python3 tools/install-brush.py [--version v0.3.0] [--into ~/.local/bin]
 
 Brush (ArthurBrussee/brush, Apache-2.0/MIT) is the splat trainer the
-capture chain runs (`rq_pipeline.scenes.capture`, docs/78 §8.6). It
+capture chain runs (`trainnr.scenes.capture`, docs/78 §8.6). It
 ships release binaries for macOS (arm64), Linux (x86_64) and Windows
 (x86_64); this fetches the one for the running platform, checks its
 published SHA-256, unpacks it into a user bin directory and prints

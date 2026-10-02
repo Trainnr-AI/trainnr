@@ -8,7 +8,7 @@
 #   tools/walk-axes-on-box.sh [axes] [scales] [date]
 #   e.g. tools/walk-axes-on-box.sh "kt friction R" "0.7 0.8 0.9 1.1 1.2 1.3" 2026-09-05
 #
-# On the box, export the launch environment first (pipeline/wsl.env:
+# On the box, export the launch environment first (trainnr/wsl.env:
 # MUJOCO_GL=egl, GALLIUM_DRIVER=d3d12, LD_LIBRARY_PATH for Warp).
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +25,6 @@ say "axes $axes over scales $scales on the nine tracked checkpoints"
 ROBOT=microduck "$repo/tools/walk-mismatch-matrix.sh" "$root" "point narrow wide" "$scales" 0 "$axes"
 for axis in $axes; do
   say "fold $axis"
-  (cd "$repo" && uv run --project pipeline python tools/walk-matrix-fold.py "$root" --param "$axis" --date "$date")
+  (cd "$repo" && uv run --project trainnr python tools/walk-matrix-fold.py "$root" --param "$axis" --date "$date")
 done
 say "AXES DONE — review docs/findings/walk-mismatch-matrix-*-$date.json, then commit docs/artifacts/walk-c1 and docs/findings"

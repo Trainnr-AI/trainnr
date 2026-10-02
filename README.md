@@ -1,4 +1,4 @@
-# robotiq — a measurement instrument for robots
+# trainnr — a measurement instrument for robots
 
 We fit the dynamics of *your* robot — motor by motor, unit by unit — and
 report every parameter with a confidence interval and an honesty
@@ -38,22 +38,22 @@ anywhere. **Possession of the robot is not identification of the robot.**
 
 ## What the instrument is
 
-[`pipeline/`](pipeline/README.md) is the product
+[`trainnr/`](trainnr/README.md) is the product
 ([architecture](docs/22-pipeline-architecture.md)): typed measurement
 bundles with `name@hash` identity ([`robots/`](robots/rig-drivetrain/README.md));
 identification wrapped thin over `mujoco.sysid` with intervals and
-pinned/NOT-PINNED verdicts (`rq_pipeline.robot.identify`); a fit-record
+pinned/NOT-PINNED verdicts (`trainnr.robot.identify`); a fit-record
 writer that **refuses** a fit without its recording hash and anchor
-statement (`rq_pipeline.robot.fit_record`); exact small-n statistics
+statement (`trainnr.robot.fit_record`); exact small-n statistics
 with no dependencies, so a signed report is recomputable anywhere
-(`rq_pipeline.stats`); and an evaluation harness whose certificates gate
-on the *lower* confidence bound (`rq_pipeline.evaluate`).
+(`trainnr.stats`); and an evaluation harness whose certificates gate
+on the *lower* confidence bound (`trainnr.evaluate`).
 
 Reproduce the flagship measurement in one command, no hardware — the
 committed sweep recordings are the input, and the report is the product:
 
 ```sh
-cd pipeline && uv sync --extra sim
+cd trainnr && uv sync --extra sim
 uv run --extra sim python ../tools/fit-report.py ../robots/rig-drivetrain
 ```
 
@@ -115,10 +115,10 @@ docs — is preserved in [`docs/27-rig-tour.md`](docs/27-rig-tour.md).
 ## Repository layout
 
 ```
-robotiq/
-├── pipeline/                # THE PRODUCT: bundles, identification, stats,
+trainnr/
+├── trainnr/                # THE PRODUCT: bundles, identification, stats,
 │   │                        #   evaluation, collection (Python, uv)
-│   └── rq_pipeline/{bundles,robot,stats,evaluate,collect,tasks,physics,envs}
+│   └── trainnr/{bundles,robot,stats,evaluate,collect,tasks,physics,envs}
 ├── robots/                  # measurement bundles: profile.json + model.xml
 │   └── rig-drivetrain/      #   + fits/*.json + fits/SPREAD.json (real data)
 ├── data/                    # committed evidence (benchmarks, studies)

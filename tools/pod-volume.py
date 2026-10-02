@@ -1,8 +1,8 @@
 """A RunPod network volume over its S3 API - usage, listing, deletion.
 
     python3 tools/pod-volume.py --bucket <volume-id> du [--depth 2] [--prefix P]
-    python3 tools/pod-volume.py --bucket <volume-id> ls robotiq/runs/campaign-1/
-    python3 tools/pod-volume.py --bucket <volume-id> rm robotiq/runs/x/ [--yes]
+    python3 tools/pod-volume.py --bucket <volume-id> ls trainnr/runs/campaign-1/
+    python3 tools/pod-volume.py --bucket <volume-id> rm trainnr/runs/x/ [--yes]
 
 The door that works when the pod is stopped (docs/07 2026-09-02).
 Credentials: a RunPod S3 API key pair as AWS_ACCESS_KEY_ID /
@@ -19,7 +19,7 @@ from _lab import bootstrap
 
 bootstrap()
 
-from rq_pipeline.cloud.volume import (  # noqa: E402
+from trainnr.cloud.volume import (  # noqa: E402
     VolumeDoor,
     human,
     load_credentials,

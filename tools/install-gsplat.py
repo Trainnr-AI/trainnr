@@ -2,7 +2,7 @@
 """Install gsplat, the capture chain's CUDA splat trainer, into the train
 environment and build its kernels once.
 
-    python3 tools/install-gsplat.py [--python pipeline/.venv-train/bin/python]
+    python3 tools/install-gsplat.py [--python trainnr/.venv-train/bin/python]
 
 gsplat (nerfstudio-project/gsplat, Apache-2.0) ships no kernels for this
 torch; it compiles them with nvcc at first use. pip carries CUDA's
@@ -29,9 +29,9 @@ from _lab import bootstrap  # noqa: E402
 
 bootstrap()
 
-from rq_pipeline.paths import train_python  # noqa: E402
+from trainnr.paths import train_python  # noqa: E402
 
-TRAINER = "rq_pipeline.scenes.gsplat_train"
+TRAINER = "trainnr.scenes.gsplat_train"
 # The compiler's wheels for CUDA 13, which pip lays out as one tree
 # (`nvidia/cu13`: bin, include, lib, nvvm) the trainer names as CUDA_HOME.
 # Every piece at torch's own minor: nvcc, its frontend (nvvm), the runtime

@@ -10,7 +10,7 @@ polished from the first pass instead of hand-rolled and replaced later.*
 
 **Rerun's own `TimeSeriesView` is built on `egui_plot` (^0.37) over
 `egui` ^0.36.1** (docs.rs, `re_view_time_series`, checked 2026-08-30) —
-the exact egui version `crates/studio-shell` already pins. A native
+the exact egui version `crates/trainnr-desktop` already pins. A native
 Studio chart drawn with `egui_plot` is not a hand-rolled imitation of
 Rerun's charts; it is the same foundation Rerun's viewer itself draws
 with. That makes the split below cheap on both sides.
@@ -48,13 +48,13 @@ their panels:
 | Repo surface | Rerun views it exercises |
 |---|---|
 | `train-watch --follow` | TimeSeries (loss, l1, kld, grad norm, lr, samples/s, GPU), TextDocument (run manifest, trainer config), TextLog (stage), Image/video (eval episodes), the funnel per checkpoint |
-| `rig-rerun.py` / `rq_pipeline/viz.py` | Spatial3D (Boxes3D batch + Mesh3D twin), Spatial2D (pose trail), TimeSeries (duty, ticks, angles, errors), TextLog (stage notes) |
+| `rig-rerun.py` / `trainnr/viz.py` | Spatial3D (Boxes3D batch + Mesh3D twin), Spatial2D (pose trail), TimeSeries (duty, ticks, angles, errors), TextLog (stage notes) |
 | `rl-watch` (rl-engineering branch, merges later) | its blueprint names verdict, reward terms, episode, losses, throughput, worlds grid |
 | `show-many.py` | batched DR worlds side by side (Spatial3D grid) |
 
 ## 3. The split: native panel vs the real viewer
 
-**Native (egui_plot in studio-shell)** — always-on, lightweight, lives
+**Native (egui_plot in trainnr-desktop)** — always-on, lightweight, lives
 beside the viewport and agent panel:
 
 - training loss / success-rate curves for a followed run (TimeSeries

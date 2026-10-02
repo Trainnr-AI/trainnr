@@ -218,7 +218,7 @@ designed:
   7.4V, Waveshare ST3025), all 6 model tiers each (48 JSON files), a
   `PROVENANCE.json` per actuator naming source/citation/license — a
   directory with none is refused at load time, not read as trustworthy.
-- **`rq_pipeline/robot/friction_budget.py`**: the M1→M6 equations as
+- **`trainnr/robot/friction_budget.py`**: the M1→M6 equations as
   ONE function, not six — the models are strictly nested (confirmed
   by inspecting all 48 files' field sets: M3/M4 use an undirected
   `load_friction_base`, M5/M6 replace it with the directional
@@ -228,7 +228,7 @@ designed:
   identical under `jax.numpy`, so it runs unchanged on CPU MuJoCo or
   MJX-Warp with no engine import at all. 7 tests check it against
   values hand-computed from the equations, independent of the code.
-- **`rq_pipeline/robot/actuator_library.py`**: `list_actuators`,
+- **`trainnr/robot/actuator_library.py`**: `list_actuators`,
   `list_models`, `load_actuator(slug, tier)` — the one door the data
   enters through, provenance-checked, fail-loud on an unknown
   actuator/tier/source. 10 tests, run against the real vendored

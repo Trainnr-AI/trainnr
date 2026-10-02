@@ -17,7 +17,7 @@
 #
 #   tools/walk-refit-rejudge-on-box.sh [rejudge_date] [aside_dir]
 #
-# Export the launch environment first (pipeline/wsl.env: MUJOCO_GL=egl,
+# Export the launch environment first (trainnr/wsl.env: MUJOCO_GL=egl,
 # GALLIUM_DRIVER=d3d12, LD_LIBRARY_PATH for Warp), e.g. under
 # tools/wsl-run.sh. Idempotent: a killed run resumes at the next
 # missing certificate (rerun WITHOUT moving aside — set ASIDE=0).
@@ -51,20 +51,20 @@ fi
 say "the matrix: ${#runs[@]} refit runs pinned at fit x {$scales} and drawn from ±0.30"
 BUNDLE="$bundle" ROBOT=microduck "$repo/tools/walk-mismatch-matrix.sh" "$root" "point-refit identified" "$scales" 0.30
 
-cd "$repo/rq_mjlab"
+cd "$repo/trainnr_mjlab"
 for run in "${runs[@]}"; do
   cert="$root/$run/train/verdict/walk-verdict-cuda.json"
   if [ -f "$cert" ]; then say "have the ±0.10 certificate for $run"; continue; fi
   say "certify $run under the walk's default span (±0.10, the second certificate)"
-  MUJOCO_GL=egl PYTHONUNBUFFERED=1 .venv/bin/python -m rq_mjlab.walk_verdict "$root/$run/train/model_7999.pt" \
+  MUJOCO_GL=egl PYTHONUNBUFFERED=1 .venv/bin/python -m trainnr_mjlab.walk_verdict "$root/$run/train/model_7999.pt" \
     --robot microduck --trials 40 --seed 1000 --device cuda:0 --no-studio --bundle "$repo/$bundle"
 done
 
 cd "$repo"
 say "fold: the refit matrix, in place"
-uv run --project pipeline python tools/walk-matrix-fold.py docs/artifacts/walk-c1 \
+uv run --project trainnr python tools/walk-matrix-fold.py docs/artifacts/walk-c1 \
   --arms point-refit,identified --span 0.30 --date "$study_date" --id walk-mismatch-matrix-refit
 say "fold: the refit arms, in place"
-uv run --project pipeline python tools/walk-c1-fold.py docs/artifacts/walk-c1 \
+uv run --project trainnr python tools/walk-c1-fold.py docs/artifacts/walk-c1 \
   --arms point-refit,identified --id walk-c1-refit --date "$study_date"
 say "REJUDGE DONE — add the revised notes (tools/walk-refit-rejudge-on-box.sh's docstring), review docs/findings, commit docs/artifacts/walk-c1 and docs/findings"

@@ -4,7 +4,7 @@ the acceptance ladder's rungs (pick, no-close, limp) replayed from the
 exact states the referee judged — the MuJoCo viewer live, the Rerun
 stream into the Studio (and a file), stills of the grasp and the hold.
 
-    cd pipeline && uv run --no-sync --extra sim --extra viz \\
+    cd trainnr && uv run --no-sync --extra sim --extra viz \\
         python ../tools/show-gripper-pick.py --stills ../docs/figures/gripper-pick
     # --trial 2          another paired start (the band's corners, 0-3)
     # --rungs pick       one rung only;  --no-viewer  headless (stills + stream)
@@ -38,11 +38,11 @@ import mujoco  # noqa: E402
 import mujoco.viewer  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
-from rq_pipeline.envs.robotiq import bundle_source  # noqa: E402
-from rq_pipeline.evaluate.harness import home_state  # noqa: E402
-from rq_pipeline.physics.mujoco_backend import MuJoCoBackend  # noqa: E402
-from rq_pipeline.protocol import events_for  # noqa: E402
-from rq_pipeline.tasks.gripper_pick import (  # noqa: E402
+from trainnr.envs.gymnasium_env import bundle_source  # noqa: E402
+from trainnr.evaluate.harness import home_state  # noqa: E402
+from trainnr.physics.mujoco_backend import MuJoCoBackend  # noqa: E402
+from trainnr.protocol import events_for  # noqa: E402
+from trainnr.tasks.gripper_pick import (  # noqa: E402
     BASE_BODY,
     EXPERT_RUNG,
     FINGER_SENSOR,
@@ -52,10 +52,10 @@ from rq_pipeline.tasks.gripper_pick import (  # noqa: E402
     PickChoreography,
     build_gripper_pick,
 )
-from rq_pipeline.tasks.scene import GeomGroup  # noqa: E402
-from rq_pipeline.viz import RigMirror, open_stream, viewer_file  # noqa: E402
+from trainnr.tasks.scene import GeomGroup  # noqa: E402
+from trainnr.viz import RigMirror, open_stream, viewer_file  # noqa: E402
 
-APP_ID = "rq-show-gripper-pick"
+APP_ID = "trainnr-show-gripper-pick"
 
 
 @dataclass(frozen=True)

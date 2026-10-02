@@ -1,5 +1,5 @@
-robotiq
-Copyright 2026 the robotiq authors
+trainnr
+Copyright 2026 the trainnr authors
 
 This product is licensed under the Functional Source License, Version 1.1,
 ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
@@ -18,12 +18,12 @@ It includes or builds on the following third-party material:
   and our wrappers (aloha2.xml, so101.xml) add sensors only.
 - gym-aloha / ACT (Tony Z. Zhao et al.; Hugging Face) — the transfer-cube
   task's spawn box, cube contact parameters and top-camera placement in
-  pipeline/rq_pipeline/tasks/aloha2.py follow the original ACT simulator's
+  trainnr/trainnr/tasks/aloha2.py follow the original ACT simulator's
   conventions (Apache-2.0 / MIT) so released checkpoints see the scene they
   were trained on. No source code is copied.
 - LeRobot (Hugging Face, Apache-2.0) — used as a dependency (training,
   datasets, policy loading, the evaluator's environment contract). No source
-  code is copied; pipeline/rq_pipeline/envs/lerobot_plugin.py implements
+  code is copied; trainnr/trainnr/envs/lerobot_plugin.py implements
   its EnvConfig interface.
 - Gymnasium (Farama Foundation, MIT) — used as a dependency.
 - MuJoCo (Google DeepMind, Apache-2.0) — used as a dependency.

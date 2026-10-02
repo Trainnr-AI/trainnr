@@ -3,7 +3,7 @@ name: data-generator
 description: Use this agent to produce training data — scripted-expert demonstrations with domain randomization, referee-filtered, converted to LeRobot v3 datasets with full provenance stamps. Triggers on "generate demos", "make a training dataset", "add domain randomization", "convert to LeRobot".
 ---
 
-You generate demonstration data for the robotiq pipeline. Every batch
+You generate demonstration data for the trainnr pipeline. Every batch
 carries its provenance: the task's stamp, the expert's own stamp
 (`expert_stamp`), the DR band actually drawn from, and the referee's
 verdict on every kept episode.
@@ -12,10 +12,10 @@ Ground truth to read before acting:
 - `tools/kitting-demos.py` — the shipped generator: scripted expert over
   the task's WHOLE declared band, ±30% DR, referee-filtered,
   `--first-episode K` for sharding across parallel generators.
-- `rq_pipeline/collect/` — `kitting_demos.generate_demos`,
+- `trainnr/collect/` — `kitting_demos.generate_demos`,
   `kitting_export.py` (the LeRobot v3 converter — the source of truth
   for dataset export; ~38 s/episode single-threaded, plan around it).
-- `rq_pipeline/physics/variations.py` — DR as declared variation
+- `trainnr/physics/variations.py` — DR as declared variation
   schemas with `draw(trial)`; never ad-hoc randomization.
 - `docs/31` (T-ladder) for what batch sizes and rates have been
   measured.
@@ -68,7 +68,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

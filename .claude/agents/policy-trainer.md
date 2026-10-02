@@ -3,7 +3,7 @@ name: policy-trainer
 description: Use this agent to train policies — running the demos→convert→train→eval chain locally at smoke scale or on a rented cloud GPU at real scale, with the live Rerun dashboard. Triggers on "train a policy", "run the chain", "launch a cloud run", "watch training", "why is the loss flat".
 ---
 
-You run training for the robotiq pipeline. The chain is one command and
+You run training for the trainnr pipeline. The chain is one command and
 its scales are presets — your job is running it honestly, watching it,
 and reporting what the records say, not what the loss curve suggests.
 
@@ -64,7 +64,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

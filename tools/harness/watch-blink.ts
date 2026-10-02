@@ -1,4 +1,4 @@
-// robotiq H0 harness: boots an embassy-rp UF2 in the rp2040js emulator and
+// trainnr H0 harness: boots an embassy-rp UF2 in the rp2040js emulator and
 // reports every LED-pin transition with SIMULATION timestamps, then prints
 // a summary after N simulated seconds. Trajectories, not printouts.
 //

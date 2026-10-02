@@ -50,8 +50,8 @@ if [ "$from" != press ] && [ -d "$root/demos" ]; then
   echo "kept $kept/$((kept + failed)) episodes -> $root/demos (replayed from the batch on disk: $failed rows in failures.jsonl)"
 fi
 if at press; then
-cd "$repo/rq_mjlab"
-.venv/bin/python -m rq_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
+cd "$repo/trainnr_mjlab"
+.venv/bin/python -m trainnr_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
   --episodes "$episodes" --worlds "$worlds" --seed 3000 --frame-every "$frame_every" --no-studio
 
 fi
@@ -62,14 +62,14 @@ if at export; then
 # campaign 4's export sat at 40 % of one core for 14 minutes (I/O-bound
 # on the volume, 2026-09-03); the writer fix (async threads) only pays
 # on a local disk. EXPORT_SCRATCH overrides the staging directory.
-scratch="${EXPORT_SCRATCH:-/tmp/rq-export}/$(basename "$root")"
+scratch="${EXPORT_SCRATCH:-/tmp/trainnr-export}/$(basename "$root")"
 rm -rf "$scratch"; mkdir -p "$scratch"
 say "export (staged on $scratch)"
 cd "$repo/pipeline"
 .venv-train/bin/python -c "
 from pathlib import Path
-from rq_pipeline.collect.demo_export import export_batch
-export_batch(Path('$root/demos'), Path('$scratch/dataset'), repo_id='rq-pipeline/microduck-walk-campaign', use_videos=False)
+from trainnr.collect.demo_export import export_batch
+export_batch(Path('$root/demos'), Path('$scratch/dataset'), repo_id='trainnr/microduck-walk-campaign', use_videos=False)
 print('exported')"
 say "move the dataset to $root/dataset"
 rm -rf "$root/dataset" && mv "$scratch/dataset" "$root/dataset"
@@ -82,7 +82,7 @@ cd "$repo/pipeline"  # every stage owns its cwd: FROM=train skipped export's cd 
 .venv-train/bin/python -m lerobot.scripts.lerobot_train \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
   --policy.chunk_size=20 --policy.n_action_steps=20 --policy.optimizer_lr=5e-5 \
-  --dataset.repo_id=rq-pipeline/microduck-walk-campaign --dataset.root="$root/dataset" \
+  --dataset.repo_id=trainnr/microduck-walk-campaign --dataset.root="$root/dataset" \
   --output_dir="$root/student" --job_name=walk-student \
   --steps="$steps" --batch_size=32 --num_workers=8 --log_freq=200 --save_freq=10000 \
   --wandb.enable=false
@@ -91,13 +91,13 @@ fi
 
 at certify
 say "certify the student (40 trials, cuda)"
-cd "$repo/rq_mjlab"
-.venv/bin/python -m rq_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
+cd "$repo/trainnr_mjlab"
+.venv/bin/python -m trainnr_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
   --device cuda:0 --student "$root/student/checkpoints/last/pretrained_model" \
   --horizon 2 --stride "$frame_every" --no-studio
 if [ "$blank" = 1 ]; then
 say "certify the student with the camera BLANKED (plan item 0)"
-.venv/bin/python -m rq_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
+.venv/bin/python -m trainnr_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
   --device cuda:0 --student "$root/student/checkpoints/last/pretrained_model" \
   --horizon 2 --stride "$frame_every" --no-studio --blank-camera
 fi

@@ -3,18 +3,18 @@ name: evaluator
 description: Use this agent to evaluate policies and report honestly — paired trials through the gymnasium env, per-episode records, milestone funnels, exact small-n intervals, and certificates that gate on the lower confidence bound. Triggers on "evaluate this checkpoint", "how good is the policy", "compare two policies", "make the certificate", "what does the funnel say".
 ---
 
-You evaluate policies on the robotiq instrument. The product is a
+You evaluate policies on the trainnr instrument. The product is a
 record, a funnel, and an interval — never a bare success rate.
 
 Ground truth to read before acting:
-- `rq_pipeline/envs/` — the tasks as gymnasium/LeRobot envs
-  (`gym.make("robotiq/<task>-v0")`); `lerobot-eval` does the rollouts,
+- `trainnr/envs/` — the tasks as gymnasium/LeRobot envs
+  (`gym.make("trainnr/<task>-v0")`); `lerobot-eval` does the rollouts,
   `--env.record_to` writes our per-trial records, `--env.trials=N` sizes
   the paired set (the seed→trial wrap bug is fixed; always pass trials).
-- `rq_pipeline/evaluate/` — `records.py` (EpisodeRecord + fold),
+- `trainnr/evaluate/` — `records.py` (EpisodeRecord + fold),
   milestones/funnel/disagreements, the scheduler/adapter split for
   chunked policies, `vision.py` (the ArmnetBench camera rig).
-- `rq_pipeline/stats/` — exact small-n statistics, no dependencies, so a
+- `trainnr/stats/` — exact small-n statistics, no dependencies, so a
   signed report is recomputable anywhere. Certificates gate on the
   LOWER confidence bound.
 - The MCP surface (`mcp__robotiq__*` tools) for bundles, tasks, engines
@@ -63,7 +63,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

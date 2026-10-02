@@ -4,8 +4,8 @@
 full `isaaclab_arena` repository as a repomix bundle (132,303 lines).
 Every claim cites `path:line` into that bundle with a quoted fragment;
 nothing is filled from memory. Mapped against our harness
-(`rq_pipeline/evaluate/harness.py`), our certificate
-(`rq_pipeline/stats/`), and our domain randomisation
+(`trainnr/evaluate/harness.py`), our certificate
+(`trainnr/stats/`), and our domain randomisation
 (`tools/kitting-demos.py`, `tools/show-many.py`). Field: how Arena
 parameterises an environment, sweeps it, and turns per-episode results
 into "which factors break the policy".*
@@ -185,12 +185,12 @@ assumes"; one policy/task per JSONL.
 
 | Arena | Ours | Where |
 |---|---|---|
-| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `rq_pipeline/tasks/aloha2/kitting.py:338-347` |
+| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `trainnr/tasks/aloha2/kitting.py:338-347` |
 | Paired trials | Built in: "policy A's trial 7 starts exactly where policy B's trial 7 starts"; perturb "receives the trial index (not an RNG)". Arena has no equivalent — its samplers hit the global RNG at reset | `harness.py:5-7, 49-51` |
 | Dynamics variation | ±span scaling of joint damping and actuator gains around the bundle's identified values, per episode (`damping_scale`, `gain_scale`) and per world (`randomise()`) | `tools/kitting-demos.py:99-108`, `tools/show-many.py:126-144` |
 | Per-episode record | `manifest.json` per kept demo: `seed, attempt, draws, dr_span, damping_scale, gain_scale, verdict` — Arena's row shape, but only for *kept demos*, never for evaluation trials | `tools/kitting-demos.py:168-185` |
-| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none (docs/e2e-research/30 §⑧ correction) | `rq_pipeline/stats/intervals.py`, `ranking.py`, `pooling.py` |
-| The certificate | `Certificate` binds bundle hashes, per-policy intervals, rank interval, gate bit | `rq_pipeline/evaluate/certificate.py:50-96` |
+| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none (docs/e2e-research/30 §⑧ correction) | `trainnr/stats/intervals.py`, `ranking.py`, `pooling.py` |
+| The certificate | `Certificate` binds bundle hashes, per-policy intervals, rank interval, gate bit | `trainnr/evaluate/certificate.py:50-96` |
 
 What we lack, precisely: (a) a *declared, enumerable* variation space —
 our perturbations are closures inside task files, not data; (b) a
@@ -200,7 +200,7 @@ is gone when the loop ends; (c) any factor-to-outcome analysis.
 
 ## 3. Adopt / skip
 
-### 3.1 ADOPT — a variation schema as data (new module `rq_pipeline/evaluate/variations`)
+### 3.1 ADOPT — a variation schema as data (new module `trainnr/evaluate/variations`)
 
 ```python
 @dataclass(frozen=True)
@@ -261,7 +261,7 @@ neural density estimator fits noise. (3) `sbi` + torch breaks the
 stdlib-only rule that keeps a certificate recomputable on an auditor's
 laptop (`intervals.py:1-7`).
 
-Adopt instead, stdlib only, as a new `rq_pipeline/stats` module:
+Adopt instead, stdlib only, as a new `trainnr/stats` module:
 
 - **Main effect per factor.** Continuous: split at the range midpoint
   (Arena's own test threshold, `:80469-80472`); categorical: per

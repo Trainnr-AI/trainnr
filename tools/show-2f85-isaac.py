@@ -6,7 +6,7 @@ MuJoCo stills through the offscreen renderer and the Rerun stream
 (the Studio when it listens, a recording file always). The evidence
 behind docs/e2e-research/77 §4.
 
-    cd pipeline && uv run --extra sim --extra viz python ../tools/show-2f85-isaac.py
+    cd trainnr && uv run --extra sim --extra viz python ../tools/show-2f85-isaac.py
     # --stills docs/figures/usd-import  writes open/closed PNGs there
 """
 
@@ -22,11 +22,11 @@ from _lab import bootstrap
 bootstrap()
 
 import mujoco  # noqa: E402
-from rq_pipeline.bundles.locate import bundle_file  # noqa: E402
-from rq_pipeline.viz import RigMirror, open_stream, viewer_file  # noqa: E402
+from trainnr.bundles.locate import bundle_file  # noqa: E402
+from trainnr.viz import RigMirror, open_stream, viewer_file  # noqa: E402
 
 BUNDLE = "robotiq-2f85-isaac"
-APP_ID = "rq-show-2f85-isaac"
+APP_ID = "trainnr-show-2f85-isaac"
 
 
 @dataclass(frozen=True)

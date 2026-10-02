@@ -1,6 +1,6 @@
 """Run the synthetic STS3215 identifiability matrix and write the artifact.
 
-    cd pipeline && uv run --extra sim python ../tools/sts-study.py
+    cd trainnr && uv run --extra sim python ../tools/sts-study.py
 
 Regenerates data/sts3215-synthetic-identifiability.json — the committed
 generator the artifact review found missing (an artifact whose producer
@@ -16,7 +16,7 @@ from pathlib import Path
 from _lab import bootstrap
 
 bootstrap()
-from rq_pipeline.robot.sts_synth import (  # noqa: E402
+from trainnr.robot.sts_synth import (  # noqa: E402
     STUDY_MATRIX,
     TRUE_ARMATURE,
     TRUE_DAMPING,
@@ -58,7 +58,7 @@ def main() -> int:
         rows.append({"label": condition.label, "parameters": cells})
         print(condition.label, file=sys.stderr)
     payload = {
-        "generator": "tools/sts-study.py (rq_pipeline.robot.sts_synth)",
+        "generator": "tools/sts-study.py (trainnr.robot.sts_synth)",
         "design_date": "2026-08-25",
         "truth": TRUTH,
         "units": UNITS,

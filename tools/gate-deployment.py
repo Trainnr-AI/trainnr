@@ -1,11 +1,11 @@
 """Run the sim-to-sim gate on a project's deployment (docs/76 A6).
 
-    cd pipeline && uv run --extra sim --extra deploy \\
+    cd trainnr && uv run --extra sim --extra deploy \\
         python ../tools/gate-deployment.py --project ../projects/go2-walk \\
         --name go2-c1-final --trials 20 [--runtime mujoco|dds]
 
 Drives the exported ONNX policy through its manifest under the named
-runtime (`rq_pipeline.deploy.runtimes`: plain MuJoCo, or Unitree's own
+runtime (`trainnr.deploy.runtimes`: plain MuJoCo, or Unitree's own
 simulator and controller over DDS, stood up around the gate), judges
 every trial the evaluation's way, writes the runtime's record beside
 the manifest, reindexes the project. Exits 1 when the gate fails.
@@ -19,26 +19,26 @@ from _lab import bootstrap, running, trial_reporter
 
 bootstrap()
 
-from rq_pipeline.deploy.gate import (  # noqa: E402
+from trainnr.deploy.gate import (  # noqa: E402
     DEFAULT_SEED,
     DEFAULT_TOLERANCE,
     DEFAULT_TRIALS,
     gate,
     gate_stream_name,
 )
-from rq_pipeline.deploy.manifest import Key, load_manifest  # noqa: E402
-from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: E402
-from rq_pipeline.deploy.runtimes import (  # noqa: E402
+from trainnr.deploy.manifest import Key, load_manifest  # noqa: E402
+from trainnr.deploy.runtime import assets_dir_of  # noqa: E402
+from trainnr.deploy.runtimes import (  # noqa: E402
     DEFAULT_RUNTIME,
     runtime_names,
     runtime_spec,
 )
-from rq_pipeline.deploy.viewport_source import scene_text  # noqa: E402
-from rq_pipeline.project import index_project, write_index  # noqa: E402
-from rq_pipeline.project.cited import cited_certificate  # noqa: E402
-from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
-from rq_pipeline.scenes.stage import scene_name_of  # noqa: E402
-from rq_pipeline.viz import viewer_file  # noqa: E402
+from trainnr.deploy.viewport_source import scene_text  # noqa: E402
+from trainnr.project import index_project, write_index  # noqa: E402
+from trainnr.project.cited import cited_certificate  # noqa: E402
+from trainnr.project.locate import DEPLOY_FOLDER, Project  # noqa: E402
+from trainnr.scenes.stage import scene_name_of  # noqa: E402
+from trainnr.viz import viewer_file  # noqa: E402
 
 # The verdict as the Running now panel's last line says it.
 VERDICT_WORDS = {

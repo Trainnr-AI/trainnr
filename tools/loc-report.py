@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lines-of-code report for the robotiq workspace.
+"""Lines-of-code report for the trainnr workspace.
 
 Splits every Rust file four ways — code, doc/comment, blank, and test —
 because a single "lines" number hides the thing we actually care about:

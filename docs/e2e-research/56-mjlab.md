@@ -125,7 +125,7 @@ identified artifacts; nothing in it can produce one.
 
 **Implication for us** (INFERENCE, flagged): our BAM-derived M1–M6
 records with intervals and recording hashes drop into their `ActuatorCfg`
-extension point without fighting the architecture — a robotiq-identified
+extension point without fighting the architecture — a trainnr-identified
 actuator would be a differentiated *upstream contribution*, not a
 competing framework. One technical caution from their own docs: implicit
 integration favors models expressed through MuJoCo's native slots; an
@@ -278,7 +278,7 @@ Rejected, with reasons:
 - Their claim "on par or faster than Isaac Lab" is experiential, no
   numbers published; their nightly publishes env-steps/s for one box.
   If we ever quote comparative throughput, measure it ourselves.
-- The actuator-net path (`LearnedMlpActuator`) as a robotiq *output*
+- The actuator-net path (`LearnedMlpActuator`) as a trainnr *output*
   format: an identified-artifact exporter targeting their loader is a
   small, legible upstream contribution — worth it only when a customer
   runs mjlab.

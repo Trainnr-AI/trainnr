@@ -2,7 +2,7 @@
 
     from _lab import bootstrap, rr_session
 
-Import-order contract: `bootstrap()` must run before any `rq_pipeline`
+Import-order contract: `bootstrap()` must run before any `trainnr`
 import (it is what puts <repo>/pipeline on sys.path), so callers keep
 `# noqa: E402` on the imports that follow the call.
 """
@@ -72,7 +72,7 @@ def load_dotenv(path: Path = REPO / ".env") -> list[str]:
 
 def bootstrap() -> None:
     """Put <repo>/pipeline and <repo>/tools at the front of sys.path."""
-    for root in (str(REPO / "tools"), str(REPO / "pipeline")):
+    for root in (str(REPO / "tools"), str(REPO / "trainnr")):
         if root not in sys.path:
             sys.path.insert(0, root)
 
@@ -99,11 +99,11 @@ def viewer_executable() -> str | None:
     SDK — so tools launched from the train venv used to need
     `PATH="$PWD/.venv/bin:$PATH"` (2026-08-26). None means "on PATH"."""
 
-    from rq_pipeline.mcp_actions import venv_bin  # noqa: PLC0415 - after bootstrap
+    from trainnr.mcp_actions import venv_bin  # noqa: PLC0415 - after bootstrap
 
     if shutil.which("rerun"):
         return None
-    candidate = venv_bin(REPO / "pipeline" / ".venv", "rerun")
+    candidate = venv_bin(REPO / "trainnr" / ".venv", "rerun")
     return str(candidate) if candidate.exists() else None
 
 
@@ -111,7 +111,7 @@ def viewer_executable() -> str | None:
 # external `ffmpeg` and wants at least this version; Ubuntu 22.04 ships
 # 4.4.2, and the viewer showed "Failed to decode" (2026-08-28).
 VIEWER_FFMPEG_MIN = (5, 1)
-VIEWER_BIN = REPO / "pipeline" / "runs" / ".viewer-bin"  # runs/ is git-ignored
+VIEWER_BIN = REPO / "trainnr" / "runs" / ".viewer-bin"  # runs/ is git-ignored
 
 
 def ffmpeg_on_path() -> str | None:
@@ -291,7 +291,7 @@ def hold_until_closed(viewer: Any, period_s: float = VIEWER_HOLD_PERIOD_S) -> No
 def deployment_args(parser: Any) -> None:
     """The arguments every deployment tool shares: the project, the
     deployment's folder name, the runtime (the registry's names)."""
-    from rq_pipeline.deploy.runtimes import (  # noqa: PLC0415
+    from trainnr.deploy.runtimes import (  # noqa: PLC0415
         DEFAULT_RUNTIME,
         runtime_names,
     )
@@ -305,9 +305,9 @@ def resolve_deployment(args: Any) -> tuple[Any, Path, Any, Path]:
     """(project, deployment folder, manifest, the bundle's assets) from
     `deployment_args`; the project made current. Raises what the loaders
     raise (FileNotFoundError, ValueError) for the tool to refuse by name."""
-    from rq_pipeline.deploy.manifest import load_manifest  # noqa: PLC0415
-    from rq_pipeline.deploy.runtime import assets_dir_of  # noqa: PLC0415
-    from rq_pipeline.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
+    from trainnr.deploy.manifest import load_manifest  # noqa: PLC0415
+    from trainnr.deploy.runtime import assets_dir_of  # noqa: PLC0415
+    from trainnr.project.locate import DEPLOY_FOLDER, Project  # noqa: PLC0415
 
     project = Project(Path(args.project).resolve()).use()
     deployment = project.folder(DEPLOY_FOLDER) / args.name
@@ -329,7 +329,7 @@ def running(
     table, else the pipeline's own (`mcp_jobs.default_jobs_root`, where the
     doors put theirs). Use as `with running(...) as run:` and tell it
     `run.stage(...)`, `run.progress(done, total, unit, line)`."""
-    from rq_pipeline.mcp_jobs import (  # noqa: PLC0415
+    from trainnr.mcp_jobs import (  # noqa: PLC0415
         default_jobs_root,
         jobs_dir_of,
         track,

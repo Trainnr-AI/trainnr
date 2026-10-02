@@ -52,7 +52,7 @@ run)
     d="$(door_of "$n")"; [ -n "$d" ] || { echo "$n has no door"; continue; }
     host="${d%:*}"; port="${d##*:}"
     say "sync $commit -> $n"
-    git -C "$repo" archive --format=tar HEAD | ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "tar -x -C /workspace/robotiq && echo $commit > /workspace/robotiq/.rq-commit"
+    git -C "$repo" archive --format=tar HEAD | ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "tar -x -C /workspace/robotiq && echo $commit > /workspace/robotiq/.trainnr-commit"
     say "start $arm#$rep (span $span, seed $seed) on $n"
     ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "cd /workspace/robotiq && mkdir -p runs/studies/walk-c1 && (BUNDLE=$BUNDLE nohup bash tools/walk-c1-arm.sh $arm $span $ITER $TRIALS $seed $rep > runs/studies/walk-c1/$arm-$rep.log 2>&1 < /dev/null &)"
   done; say "six arms started; logs runs/studies/walk-c1/<arm>-<k>.log on the volume"

@@ -10,12 +10,12 @@ CPU-bound demos and convert on one box, the GPU-bound train and eval on
 another.
 
     # WSL / Linux (train venv; the GPU renderer for the demos, the card for ACT):
-    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \\
+    cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python \\
         ../tools/e2e-smoke.py --episodes 2 --steps 300
     # macOS: none of the GL variables; the policy device is picked for you:
-    cd pipeline && .venv-train/bin/python ../tools/e2e-smoke.py --episodes 2 --steps 300
+    cd trainnr && .venv-train/bin/python ../tools/e2e-smoke.py --episodes 2 --steps 300
     # the cloud GPU, on a dataset the box converted and pushed:
-    cd pipeline && MUJOCO_GL=egl .venv-train/bin/python \\
+    cd trainnr && MUJOCO_GL=egl .venv-train/bin/python \\
         ../tools/e2e-smoke.py --scale cloud --name t5-cloud --from train
 
 Every stage writes what the next one reads, and every file is one a
@@ -45,16 +45,16 @@ from _lab import bootstrap, lerobot_eval_command, lerobot_train_command
 
 bootstrap()
 
-from rq_pipeline.collect.datasheet import DATASHEET_FILE, summarize  # noqa: E402
-from rq_pipeline.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
-from rq_pipeline.collect.kitting_export import (  # noqa: E402
+from trainnr.collect.datasheet import DATASHEET_FILE, summarize  # noqa: E402
+from trainnr.collect.kitting_demos import DR_SPAN, generate_demos  # noqa: E402
+from trainnr.collect.kitting_export import (  # noqa: E402
     DatasetProvenance,
     export_kitting_demos,
 )
-from rq_pipeline.collect.provenance import PROVENANCE_FILE  # noqa: E402
-from rq_pipeline.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
-from rq_pipeline.envs.lerobot_policy import best_device  # noqa: E402
-from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
+from trainnr.collect.provenance import PROVENANCE_FILE  # noqa: E402
+from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
+from trainnr.envs.lerobot_policy import best_device  # noqa: E402
+from trainnr.envs.lerobot_train_log import (  # noqa: E402
     CHAIN_LOG_FILE,
     GPU_LOG_FILE,
     GPU_QUERY,
@@ -65,14 +65,14 @@ from rq_pipeline.envs.lerobot_train_log import (  # noqa: E402
     Scale,
     resolve_scale,
 )
-from rq_pipeline.evaluate.records import (  # noqa: E402
+from trainnr.evaluate.records import (  # noqa: E402
     fold,
     funnel,
     passes,
     read_records,
 )
-from rq_pipeline.stats.intervals import clopper_pearson  # noqa: E402
-from rq_pipeline.tasks.aloha2 import KITTING  # noqa: E402
+from trainnr.stats.intervals import clopper_pearson  # noqa: E402
+from trainnr.tasks.aloha2 import KITTING  # noqa: E402
 
 # The seeds lerobot-eval hands the env: episode i starts at EVAL_SEED + i,
 # which our env reads as trial i - the pairing the certificate needs.
@@ -191,7 +191,7 @@ def demos(chain: Chain) -> None:
     # Preflight: the certified actuator-bundle store verifies before a
     # single episode is pressed — a tampered or malformed bundle fails
     # the chain here, by name, not in a training run three stages later.
-    from rq_pipeline.robot.actuator_bundle import (  # noqa: PLC0415
+    from trainnr.robot.actuator_bundle import (  # noqa: PLC0415
         BUNDLE_STORE,
         read_bundle,
     )

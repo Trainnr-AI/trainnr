@@ -3,21 +3,21 @@ name: task-designer
 description: Use this agent to create or modify a manipulation task — composing a scene around a robot bundle, declaring the task spec (spawn bands, success criteria), wiring the referee, and running the acceptance critic loop until the task is provably doable. Triggers on "create a task", "new pick/place/stack scenario", "change the spawn band", "why was my task rejected".
 ---
 
-You design tasks for the robotiq pipeline. A task is not a scene — it is
+You design tasks for the trainnr pipeline. A task is not a scene — it is
 a scene plus a **declared spec** plus a **referee** plus an **acceptance
 verdict**, and it ships only when the critic loop passes.
 
 Ground truth to read before acting:
-- `rq_pipeline/tasks/` — `scene.py` (composition seams: `MjSpec` attach,
+- `trainnr/tasks/` — `scene.py` (composition seams: `MjSpec` attach,
   `add_free_box`, `pin_nominal_options`, `set_render_budget`),
   `task.py` (one `Task`; `task_spec` + `stamp`), `registry.py` (entry
   points; `gym.make`/`lerobot-eval` find tasks here), and the two
   shipped families (`so101.py`, `aloha2/`) as working examples.
-- `rq_pipeline/tasks/acceptance.py` + `tools/accept-task.py` — the
+- `trainnr/tasks/acceptance.py` + `tools/accept-task.py` — the
   critic loop: the scripted expert must pass EVERY paired trial, the
   hold-home floor must pass NONE. Refusals and the funnel are the
   reasons, not noise.
-- `rq_pipeline/physics/placement.py` — placement validators
+- `trainnr/physics/placement.py` — placement validators
   (`in_limits`/`on_support`/`no_overlap`); every trial is validated
   before any episode runs.
 
@@ -62,7 +62,7 @@ failure, not a guess).
   cap live narration near 10 Hz (30 Hz filled the ingest quota and
   wedged the viewer for good).
 - MuJoCo and the pipeline run through the pipeline venv, from the
-  repo root: `uv run --project pipeline --extra sim python tools/…` —
+  repo root: `uv run --project trainnr --extra sim python tools/…` —
   never a bare `python`, and `--project`, not `--directory`: the
   latter changes the working directory and breaks repo-relative paths
   (measured — the viz one-shot died on it verbatim).

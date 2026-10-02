@@ -42,7 +42,7 @@ code in core. Apache-2.0, governance files from day one.
   is trainnr.ai. Capitalised only where an operating system demands it
   (`Trainnr.app`).
 - One line: *measure your robot, train on the measurement, certify, deploy.*
-- No "robotiq" anywhere a person reads (§5 lists the one identifier that
+- No "trainnr" anywhere a person reads (§5 lists the one identifier that
   must stay, and why). "Robotiq" the gripper vendor keeps its name in the
   2F-85 asset, because it is theirs.
 
@@ -78,7 +78,7 @@ the rule both Rerun and goose follow.
 
 | Repository | Holds | Why separate |
 |---|---|---|
-| **`trainnr`** (public) | the pipeline (`python/trainnr`), the mjlab plugin (`python/trainnr-mjlab`), the desktop app (`crates/trainnr-desktop`), the CLI and tools, the actuator library and the four nominal robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
+| **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the desktop app (`crates/trainnr-desktop`), the CLI and tools, the actuator library and the four nominal robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
 | **`trainnr-cloud`** (private) | the control plane of docs/64: registry, scheduler, orgs, billing | Closed by decision; different owners and cadence. |
 | **`trainnr-www`** (private or public) | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Vercel deploys; a designer's repo. |
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
@@ -139,21 +139,21 @@ Rules:
 
 | Identifier | Now | Becomes | Kind of change |
 |---|---|---|---|
-| PyPI / import | `rq-pipeline` / `rq_pipeline` | `trainnr` / `trainnr` | compat shim `rq_pipeline` for one release, then gone |
-| PyPI / import | `rq-mjlab` / `rq_mjlab` | `trainnr-mjlab` / `trainnr_mjlab` | same |
-| entry-point groups | `rq_pipeline.tasks` … | `trainnr.tasks` … | both sides in-tree |
-| MCP server | `robotiq` (`.mcp.json`, `name=`) | `trainnr` | agents' tool prefix changes |
-| Desktop crate / binary | `studio-shell` | `trainnr-desktop` | launch path, `$TRAINNR_DESKTOP` |
-| app id / eframe name | `robotiq_studio` / "robotiq studio" | `ai.trainnr.desktop` / "trainnr Desktop" | resets the app's persisted window state once |
-| gym / task namespace | `robotiq/<task>` | `trainnr/<task>` | `robotiq/` accepted as a legacy alias; no stamp moves (the stamp hashes the bare name) |
-| LeRobot env type | `--env.type=robotiq` | `--env.type=trainnr` | |
-| the module named after the old brand (`envs/robotiq.py`) | | a module named for what it holds (the gym environments) | |
-| Rerun app ids | `robotiq-sim-`, `rq-gate`, `rq-press`, `rq-walk-*`, `rq-reward-preview`, `robotiq-walk-worlds`, `robotiq-instrument` | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-actuators` | replays of old streams keep their old ids; the cloud feed's uuid5 seed changes (new recording ids) |
-| env vars | `RQ_*` (19), `ROBOTIQ_*` (2) | `TRAINNR_*` | documented in one page |
+| PyPI / import | `trainnr` / `trainnr` | `trainnr` / `trainnr` | compat shim `trainnr` for one release, then gone |
+| PyPI / import | `trainnr-mjlab` / `trainnr_mjlab` | `trainnr-mjlab` / `trainnr_mjlab` | same |
+| entry-point groups | `trainnr.tasks` … | `trainnr.tasks` … | both sides in-tree |
+| MCP server | `trainnr` (`.mcp.json`, `name=`) | `trainnr` | agents' tool prefix changes |
+| Desktop crate / binary | `trainnr-desktop` | `trainnr-desktop` | launch path, `$TRAINNR_DESKTOP` |
+| app id / eframe name | `ai.trainnr.desktop` / "trainnr Desktop" | `ai.trainnr.desktop` / "trainnr Desktop" | resets the app's persisted window state once |
+| gym / task namespace | `trainnr/<task>` | `trainnr/<task>` | `trainnr/` accepted as a legacy alias; no stamp moves (the stamp hashes the bare name) |
+| LeRobot env type | `--env.type=trainnr` | `--env.type=trainnr` | |
+| the module named after the old brand (`envs/gymnasium_env.py`) | | a module named for what it holds (the gym environments) | |
+| Rerun app ids | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-instrument` | `trainnr-sim-`, `trainnr-gate`, `trainnr-data`, `trainnr-walk-*`, `trainnr-reward-preview`, `trainnr-walk-worlds`, `trainnr-actuators` | replays of old streams keep their old ids; the cloud feed's uuid5 seed changes (new recording ids) |
+| env vars | `TRAINNR_*` (19), `TRAINNR_*` (2) | `TRAINNR_*` | documented in one page |
 | dataset ids | `rq-pipeline/rig`, `rq-pipeline/aloha2-kitting` | frozen for existing datasets; new defaults `trainnr/<name>` | |
-| user agents | `rq-pipeline/cloud-gpu` | `trainnr/<version>` | |
+| user agents | `trainnr/cloud-gpu` | `trainnr/<version>` | |
 | actor word | `by: studio` | `by: desktop` | the event log's word |
-| the old rig's ids | `robotiq_hil`, `robotiq_rig`, … | untouched; they leave with the rig | |
+| the old rig's ids | `trainnr_hil`, `trainnr_rig`, … | untouched; they leave with the rig | |
 
 **The one identifier that keeps the old word**: the bundle schema string
 `robotiq-actuator-bundle/1`. It is hashed into every actuator model's stamp

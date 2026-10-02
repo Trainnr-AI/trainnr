@@ -7,7 +7,7 @@ behind it today, one command per step.*
 
 ## 1. The seam — providers by name, like engines
 
-`pipeline/rq_pipeline/cloud/provider.py` is the contract:
+`trainnr/trainnr/cloud/provider.py` is the contract:
 
 | Type | What it is |
 |---|---|
@@ -17,7 +17,7 @@ behind it today, one command per step.*
 | `GpuProvider` | the Protocol: `offers`, `launch`, `machine(s)`, `act` (start/stop/restart/terminate), `logs` |
 
 A vendor registers itself with `@provider("name")` and an entry point in
-the `rq_pipeline.gpu_providers` group — the engine registry's pattern
+the `trainnr.gpu_providers` group — the engine registry's pattern
 (`physics/registry.py`), applied to compute. `resolve("runpod")` today;
 a second vendor is one module and one line in `pyproject.toml`. The
 package sits at layer 1 (`tests/test_layers.py`): standard library HTTP
@@ -32,7 +32,7 @@ excludes `.env` from what it ships. A test pins the header rule.
 
 ## 2. Runpod, as measured 2026-08-27
 
-`pipeline/rq_pipeline/cloud/runpod.py` speaks **REST API v2**
+`trainnr/trainnr/cloud/runpod.py` speaks **REST API v2**
 (`https://api.runpod.io/v2`; v1 retires 2026-11-15), read from its
 OpenAPI schema (`/v2/openapi.json`), standard library only — the surface
 we use is six calls and an SDK would pin us to its pace. What the
@@ -43,7 +43,7 @@ schema and the wire said:
 - **Cloudflare fronts the API** and answers urllib's default agent
   string with `403 Error 1010: Access denied — browser signature`;
   `curl` and any named product token pass. Every request carries
-  `User-Agent: rq-pipeline/cloud-gpu` (pinned in `tests/test_cloud.py`).
+  `User-Agent: trainnr/cloud-gpu` (pinned in `tests/test_cloud.py`).
 - **The catalog** (`/v2/catalog/gpus?include=AVAILABILITY&product=POD&cloud=…&minCudaVersion=13.0`)
   prices per tier and reports stock as `NONE / LOW / MEDIUM / HIGH`.
   Our train venv is torch+cu130, so the **host driver must be CUDA
@@ -101,7 +101,7 @@ schema and the wire said:
 Every step is a subcommand; every subcommand prints what it does.
 
 ```sh
-cd pipeline
+cd trainnr
 P="uv run --extra sim python ../tools/cloud-gpu.py"
 $P offers --tier COMMUNITY                       # priced, in stock, CUDA >= 13 hosts
 $P launch --name t5-cloud --gpu "NVIDIA GeForce RTX 4090" --tier COMMUNITY --wait
@@ -160,7 +160,7 @@ machine does only train + eval. The first run this way, 2026-08-27
 night, is in docs/07.
 
 The remote layout is `Remote` in the tool: the repo at
-`/workspace/robotiq`, the venv `pipeline/.venv-train` built with
+`/workspace/robotiq`, the venv `trainnr/.venv-train` built with
 `UV_PROJECT_ENVIRONMENT=.venv-train uv sync --python 3.12.8 --extra sim
 --extra viz --extra train` (the WSL box's own line), commands run as
 `MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv-train/bin/python …` — EGL is the

@@ -2,10 +2,10 @@
 
     # the deciding run: the WSL card, the train venv (mujoco 3.12 + mujoco_warp
     # 3.12 + warp 1.16, the DeterministicMode lockstep), wsl.env for CUDA:
-    cd pipeline && ../tools/wsl-run.sh .venv-train/bin/python \\
+    cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python \\
         ../tools/determinism-probe.py [--budget-s 900]
     # the Mac / CPU plumbing smoke (warp 1.14: RUN_TO_RUN reports UNAVAILABLE):
-    cd pipeline && uv run --extra sim --extra mjx python ../tools/determinism-probe.py
+    cd trainnr && uv run --extra sim --extra mjx python ../tools/determinism-probe.py
 
 Runs the kitting scene twice per Warp determinism mode (the default
 NOT_GUARANTEED, then RUN_TO_RUN) and reports bit-equality and wall
@@ -35,7 +35,7 @@ from _lab import bootstrap
 
 bootstrap()
 
-MODE_ENV = "ROBOTIQ_DET_MODE"
+MODE_ENV = "TRAINNR_DET_MODE"
 MODES = ("NOT_GUARANTEED", "RUN_TO_RUN")
 REFUSAL_MARKER = "Deterministic mode does not support"  # warp/_src/deterministic.py
 DEFAULT_BUDGET_S = (
@@ -72,12 +72,12 @@ def child(mode: str) -> None:
             return
         wp.config.deterministic = getattr(wp.DeterministicMode, mode)
     import numpy as np  # noqa: PLC0415
-    from rq_pipeline.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
-    from rq_pipeline.physics.mujoco_backend import (  # noqa: PLC0415
+    from trainnr.physics.mjx_backend import MJXWarpBackend  # noqa: PLC0415
+    from trainnr.physics.mujoco_backend import (  # noqa: PLC0415
         MuJoCoBackend,
         keyframe_state,
     )
-    from rq_pipeline.tasks.aloha2 import NEUTRAL_CTRL, build_kitting  # noqa: PLC0415
+    from trainnr.tasks.aloha2 import NEUTRAL_CTRL, build_kitting  # noqa: PLC0415
 
     cpu = MuJoCoBackend()
     cpu.load_spec(build_kitting().spec)
