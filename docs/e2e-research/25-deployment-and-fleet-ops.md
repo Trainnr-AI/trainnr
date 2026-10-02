@@ -1,5 +1,9 @@
 # Deployment, fleet operations and telemetry
 
+> **Archived code.** The Rust crates, firmware and emulator tools this page
+> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
+> on 2026-10-02; the paths below are relative to that repository.
+
 Research date: **2026-08-08**. Question: what does it take to run 2–3 robots at
 a customer site — serving policies, logging, updating, and knowing whether it is
 working?

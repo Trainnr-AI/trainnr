@@ -1,5 +1,9 @@
 # Simulation and real→sim: how reality gets into the simulator
 
+> **Archived code.** The Rust crates, firmware and emulator tools this page
+> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
+> on 2026-10-02; the paths below are relative to that repository.
+
 Research date: **2026-08-08**. Question: what is the fastest, cheapest path
 from a real commercial site and a real low-cost mobile manipulator to a
 simulator good enough that using it improves real-world performance?

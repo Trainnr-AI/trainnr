@@ -8,5 +8,5 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 git config core.hooksPath tools/hooks
 echo "core.hooksPath -> tools/hooks"
-echo "  pre-commit: fmt, clippy, no-unsafe, docs"
+echo "  pre-commit: the desktop crate's fmt/clippy/tests, no-unsafe, docs, layers, numbers, ruff, the unit suite"
 echo "  everything else: tools/verify.sh"

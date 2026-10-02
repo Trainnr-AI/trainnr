@@ -13,6 +13,7 @@ side deliberately and regenerate the other, then both match again.
 
 from __future__ import annotations
 
+import os
 import re
 import unittest
 from pathlib import Path
@@ -30,12 +31,22 @@ from trainnr.tasks.yellow import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
-SERVO_RS = (REPO / "firmware" / "pico-odom" / "src" / "servo.rs").read_text(
-    encoding="utf-8"
+# The firmware moved with the rig to its own repository on 2026-10-02
+# (https://github.com/Trainnr-AI/rig). The firmware halves of these mirrors
+# run when a checkout of it is named; without one they skip by name, so
+# the Python-only halves still hold on every machine.
+RIG = Path(os.environ.get("TRAINNR_RIG_DIR", REPO))
+_PICO_ODOM = RIG / "firmware" / "pico-odom" / "src"
+HAVE_FIRMWARE = (_PICO_ODOM / "servo.rs").exists()
+needs_firmware = unittest.skipUnless(
+    HAVE_FIRMWARE,
+    "the rig firmware is not checked out here "
+    "(TRAINNR_RIG_DIR=<a Trainnr-AI/rig clone>)",
 )
-MAIN_RS = (REPO / "firmware" / "pico-odom" / "src" / "main.rs").read_text(
-    encoding="utf-8"
+SERVO_RS = (
+    (_PICO_ODOM / "servo.rs").read_text(encoding="utf-8") if HAVE_FIRMWARE else ""
 )
+MAIN_RS = (_PICO_ODOM / "main.rs").read_text(encoding="utf-8") if HAVE_FIRMWARE else ""
 SIM_ERRAND = (REPO / "tools" / "sim-errand.py").read_text(encoding="utf-8")
 BRIDGE = (REPO / "tools" / "udp-wire-bridge.py").read_text(encoding="utf-8")
 
@@ -61,10 +72,11 @@ def rust_const(source: str, name: str) -> float:
     return float(match.group(1).replace("_", ""))
 
 
-FETCH_FOREVER = rust_fn(MAIN_RS, "fetch_forever")
-FETCH_ARM = rust_fn(SERVO_RS, "fetch_arm")
+FETCH_FOREVER = rust_fn(MAIN_RS, "fetch_forever") if HAVE_FIRMWARE else ""
+FETCH_ARM = rust_fn(SERVO_RS, "fetch_arm") if HAVE_FIRMWARE else ""
 
 
+@needs_firmware
 class FetchPickTable(unittest.TestCase):
     """servo.rs FETCH_PICK is generated from AIR_PICK_SEQUENCE — prove it."""
 
@@ -118,6 +130,7 @@ class FetchPickTable(unittest.TestCase):
         self.assertEqual(signs, [1, 1, -1, -1, 1])
 
 
+@needs_firmware
 class SimErrandMirror(unittest.TestCase):
     """tools/sim-errand.py hand-mirrors fetch_forever — hold it to that."""
 
@@ -190,6 +203,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@needs_firmware
 class WireClockAndPort(unittest.TestCase):
     """The wire's clock and the radio's port: mirrors found unpinned in
     the 2026-08-26 review. STATUS_HZ scales every timestamp the

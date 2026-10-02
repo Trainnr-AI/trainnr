@@ -9,6 +9,5 @@
 *.obj binary
 *.mp4 binary
 *.gz binary
-*.uf2 binary
 *.wire binary
 *.npz binary

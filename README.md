@@ -124,8 +124,7 @@ trainnr/
 ├── data/                    # committed evidence (benchmarks, studies)
 ├── recordings/              # sessions that replay as regression tests
 ├── tools/                   # fit-report, sts-study/figure, verify.sh, viewers
-├── crates/                  # Rust: wire protocol, recorder, sim-core, …
-├── firmware/                # the rig's Pico firmware (no_std)
+├── crates/trainnr-desktop/  # the desktop app (Rust: egui + the Rerun viewer)
 └── docs/                    # dated research, decisions, the progress log
 ```
 

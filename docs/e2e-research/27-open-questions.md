@@ -1,5 +1,9 @@
 # Open questions: where this research stops
 
+> **Archived code.** The Rust crates, firmware and emulator tools this page
+> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
+> on 2026-10-02; the paths below are relative to that repository.
+
 Research date: **2026-08-08**; **second pass 2026-08-15** (six field agents,
 one per doc). Entries below carry their post-second-pass state. This is the
 agenda for the next pass, so it starts where the last one stopped rather than

@@ -444,7 +444,7 @@ Still open after it, with the reason each one waits:
 | The GPU model in the MJX stamp (today: device class) | The architecture finding suggests it; measured on one GPU so far. |
 | `physics.__all__` listing the lazy `MJXWarpBackend` | A star import needs the extra; nobody star-imports. |
 | The tools' `qpos[15]` / `CUBE_QPOS` cube index by body lookup | Display-only; `show-many` and `show-yellow` show the pattern. |
-| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate cannot run on this box (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading `build-robot.sh`'s identical fix. |
+| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate cannot run on this box (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's (now in the rig archive, Trainnr-AI/rig) identical fix. |
 | From §10, still open: `EpisodeDesign` structs (kitting's is `KittingSpec` since 2026-08-27; the SO-101 tasks' step tables are next), typed `MilestoneEvent`/`ProtocolFields`, bundles as package data, the ALOHA joint-name lists derived once, the env's own `import mujoco` | Reasons unchanged. |
 | ~~The scripted expert has no stamp of its own~~ — **done 2026-08-27 (late)**: `tasks.aloha2.expert_stamp` names the choreography by content (`kitting-expert@<hash>` over `KittingChoreography.fields()` and the segment table); every manifest carries it, the dataset's provenance carries the one value, and a batch with two experts is refused at export | A task's stamp names the SPEC, a batch's provenance the BUNDLE; until this, a choreography change left both unchanged while the demonstrations differed |
 
