@@ -221,6 +221,8 @@ def serve(project: Project, *, once: bool = False) -> None:
                 refreshed = refresh_project(project) + refresh_verdicts(project)
                 if first or refreshed or index_stale(project):
                     write_index(project, index_project(project))
+                if first:
+                    refresh_siblings(project)
                 first = False
             except Exception as why:  # a broken log must not kill the presenter
                 _write_status(project, {"live_error": str(why)})
@@ -250,6 +252,27 @@ def serve(project: Project, *, once: bool = False) -> None:
             if once:
                 return
         time.sleep(POLL_S)
+
+
+def refresh_siblings(project: Project) -> int:
+    """Rewrite the index of every other indexed project under the same
+    home once, so the Projects page has every cover in both palettes
+    even for a project whose own presenter has not run under this build
+    (2026-10-03: the open project's cover switched, the others stayed
+    dark). Returns how many were rewritten; a failure skips that one."""
+    from trainnr.project.index import index_project, write_index  # noqa: PLC0415
+    from trainnr.project.locate import list_projects  # noqa: PLC0415
+
+    done = 0
+    for other in list_projects(project.root.parent):
+        if other.root == project.root or not other.index_path.is_file():
+            continue
+        try:
+            write_index(other, index_project(other))
+            done += 1
+        except Exception:
+            continue
+    return done
 
 
 def _write_status(project: Project, status: dict[str, Any]) -> None:
