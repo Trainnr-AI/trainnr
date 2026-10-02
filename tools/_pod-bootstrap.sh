@@ -17,7 +17,7 @@ TRAINNR_APT="${TRAINNR_APT:-libegl1 libgl1 libglib2.0-0 rsync}"
 apt-get update -qq && apt-get install -y -qq --no-install-recommends $TRAINNR_APT
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
-cd "$TRAINNR_DIR/pipeline"
+cd "$TRAINNR_DIR/trainnr"
 # shellcheck disable=SC2086
 UV_PROJECT_ENVIRONMENT="$TRAINNR_VENV" uv sync --python "$TRAINNR_PYTHON" $TRAINNR_EXTRAS
 "$TRAINNR_VENV/bin/python" -c 'import torch, mujoco

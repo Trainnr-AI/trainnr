@@ -65,7 +65,7 @@ if at export; then
 scratch="${EXPORT_SCRATCH:-/tmp/trainnr-export}/$(basename "$root")"
 rm -rf "$scratch"; mkdir -p "$scratch"
 say "export (staged on $scratch)"
-cd "$repo/pipeline"
+cd "$repo/trainnr"
 .venv-train/bin/python -c "
 from pathlib import Path
 from trainnr.collect.demo_export import export_batch
@@ -78,7 +78,7 @@ fi
 
 if at train; then
 say "train"
-cd "$repo/pipeline"  # every stage owns its cwd: FROM=train skipped export's cd (2026-09-04)
+cd "$repo/trainnr"  # every stage owns its cwd: FROM=train skipped export's cd (2026-09-04)
 .venv-train/bin/python -m lerobot.scripts.lerobot_train \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
   --policy.chunk_size=20 --policy.n_action_steps=20 --policy.optimizer_lr=5e-5 \

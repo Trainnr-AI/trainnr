@@ -13,7 +13,7 @@
 # Pod names are walk-refit-<arm>-<k>; doors are read from `machines`.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-cloud() { uv run --project "$repo/pipeline" python "$repo/tools/cloud-gpu.py" "$@"; }
+cloud() { uv run --project "$repo/trainnr" python "$repo/tools/cloud-gpu.py" "$@"; }
 GPU="NVIDIA RTX PRO 6000 Blackwell Server Edition"
 VOLUME="${VOLUME:-q51i67dwu8}"; DC="${DC:-US-NC-2}"
 BUNDLE="robots/actuator-bundles/xl330-refit.m6.bundle.json"

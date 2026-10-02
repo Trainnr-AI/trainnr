@@ -36,7 +36,7 @@ fi
 if stage_after export; then
 say "export the relabeled batch (local disk), then merge with the base dataset"
 scratch="${EXPORT_SCRATCH:-/tmp/trainnr-export}/dagger-$(basename "$root")"; rm -rf "$scratch"; mkdir -p "$scratch"
-cd "$repo/pipeline"
+cd "$repo/trainnr"
 .venv-train/bin/python -c "
 from pathlib import Path
 from trainnr.collect.demo_export import export_batch

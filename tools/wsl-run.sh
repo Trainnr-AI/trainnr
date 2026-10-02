@@ -8,7 +8,7 @@ if [ "$#" -eq 0 ]; then
   echo "usage: tools/wsl-run.sh <command> [args...]" >&2
   exit 64
 fi
-env_file="$(cd "$(dirname "$0")/.." && pwd)/pipeline/wsl.env"
+env_file="$(cd "$(dirname "$0")/.." && pwd)/trainnr/wsl.env"
 if [ ! -r "$env_file" ]; then
   echo "wsl-run.sh: no readable env file at $env_file" >&2
   exit 66
