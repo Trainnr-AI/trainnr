@@ -10,23 +10,16 @@
 # recordings and ~9-minute emulator belong.
 name: gates
 
-# PARKED 2026-08-23 by operator decision ("dont do CI for now, we will
-# do it later"): manual trigger only, no push/PR/schedule runs. Its two
-# shakedown runs already paid for themselves — each found a one-laptop
-# bug (docs checked against one filesystem; a color-coded error sailing
-# through the clippy grep). To re-arm, restore:
-#
-#   on:
-#     push:
-#       branches: ["**"]
-#     pull_request:
-#     schedule:
-#       - cron: "0 6 * * 1"   # weekly extras, Monday 06:00 UTC
-#     workflow_dispatch:
-#
-# The jobs' `if:` guards already handle every trigger; a manual dispatch
-# meanwhile runs both jobs, so the whole suite stays one click away.
+# Parked 2026-08-23 ("dont do CI for now"); re-armed 2026-10-02 with the
+# first public push: a protected main requires the fast-gates check, so
+# the gates run on pushes to main and on pull requests, the heavy extras
+# weekly, and the whole suite stays one click away.
 on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly extras, Monday 06:00 UTC
   workflow_dispatch:
 
 jobs:
