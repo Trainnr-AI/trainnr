@@ -201,6 +201,14 @@ serves two jobs and the 3D view is agnostic to which is live:
   I/O on the UI thread. The words and keys Rust reads are pinned in
   `tests/test_studio_mirrors.py::RunningNow`.
 
+### 5.0 The chrome (2026-10-03)
+
+After Zed's: the title bar holds the brand, a read-only crumb (project ›
+page) and the window's caption buttons; a status bar along the bottom
+holds what runs (a click opens Running now), "presenter stopped" when
+it is, the viewer's panel toggles, the theme switch and the frame time
+from the heartbeat. The rail's head is the project switcher.
+
 ### 5.1 Two themes (2026-10-02)
 
 Dark and light, or the system's, from egui's own theme preference: the

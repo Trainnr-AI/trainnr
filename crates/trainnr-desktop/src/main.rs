@@ -299,21 +299,30 @@ impl eframe::App for StudioShell {
         // override above); its panel toggles ride on ours, and matter on
         // the Live view.
         let sender = self.rerun_app.command_sender.clone();
-        self.shell.top_bar(ui, chrome::custom_chrome(), |ui| {
-            use re_ui::{UICommand, UICommandSender as _};
-            if ui
-                .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
-                .clicked()
-            {
-                sender.send_ui(UICommand::ToggleSelectionPanel);
-            }
-            if ui
-                .small_icon_button(&re_ui::icons::LEFT_PANEL_TOGGLE, "Blueprint panel")
-                .clicked()
-            {
-                sender.send_ui(UICommand::ToggleBlueprintPanel);
-            }
-        });
+        self.shell.top_bar(ui, chrome::custom_chrome());
+        // The status bar along the bottom (Zed's shape): what runs, the
+        // presenter, the viewer's panel toggles, the theme, the frame time.
+        let frame_ms = self.frames.mean_ms();
+        egui::Panel::bottom("status_bar")
+            .resizable(false)
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| {
+                self.shell.status_bar(ui, frame_ms, |ui| {
+                    use re_ui::{UICommand, UICommandSender as _};
+                    if ui
+                        .small_icon_button(&re_ui::icons::RIGHT_PANEL_TOGGLE, "Selection panel")
+                        .clicked()
+                    {
+                        sender.send_ui(UICommand::ToggleSelectionPanel);
+                    }
+                    if ui
+                        .small_icon_button(&re_ui::icons::LEFT_PANEL_TOGGLE, "Blueprint panel")
+                        .clicked()
+                    {
+                        sender.send_ui(UICommand::ToggleBlueprintPanel);
+                    }
+                });
+            });
         // A presenter failure is a panel under the header, before the page;
         // so is Running now, when its indicator was clicked.
         self.shell.presenter_failure(ui);

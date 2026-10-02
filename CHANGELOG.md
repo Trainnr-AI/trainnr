@@ -31,6 +31,11 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 - The project switcher sits at the head of the sidebar; the Simulator's
   empty state is one card with the scene picker.
 - The app's heartbeat reports frame time, frame rate and repaint causes.
+- The chrome after Zed's: a title bar with the brand and a project › page
+  crumb; a status bar along the bottom with what runs, the presenter's
+  state, the viewer's panel toggles, the theme switch and the frame time.
+- Card pictures are decoded off the UI thread at the card's size; the
+  window no longer polls for agent commands (a watcher thread wakes it).
   Under WSLg the app now takes the Wayland window path (`TRAINNR_X11=1`
   for the old one), which presents a frame ten times faster there.
 - `trainnr.mcp_tools`: an entry-point group through which an installed

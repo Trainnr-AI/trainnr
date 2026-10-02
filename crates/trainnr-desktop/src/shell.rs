@@ -187,12 +187,11 @@ impl Shell {
 
     /// The top bar: wordmark, project, jobs, and the viewer's panel
     /// toggles (meaningful on the Live view; harmless elsewhere).
-    pub fn top_bar(
-        &mut self,
-        ui: &mut egui::Ui,
-        custom_chrome: bool,
-        viewer_buttons: impl FnOnce(&mut egui::Ui),
-    ) {
+    /// The title bar, after Zed's: the brand and a crumb (the open project,
+    /// the page) on the left, the window's caption buttons on the right,
+    /// nothing else; what runs and the switches live in the status bar
+    /// (2026-10-03, "headers and footer like zed editor").
+    pub fn top_bar(&mut self, ui: &mut egui::Ui, custom_chrome: bool) {
         let tokens = ui.tokens();
         let palette = crate::theme::palette(ui);
         let bar = egui::Frame::new()
@@ -211,49 +210,18 @@ impl Shell {
                     ui.add_space(TRAFFIC_LIGHTS_INSET);
                     ui.label(egui::RichText::new("●").color(tokens.highlight_color));
                     ui.label(egui::RichText::new("trainnr").strong().size(15.0));
+                    ui.add_space(10.0);
+                    // The crumb: where the person is, read-only; the rail
+                    // and its switcher are where it changes.
+                    let crumb = ui.visuals().weak_text_color();
+                    ui.label(egui::RichText::new(self.model.name()).color(crumb));
+                    ui.label(egui::RichText::new("›").color(crumb));
+                    ui.label(egui::RichText::new(self.section.title()).color(crumb));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if custom_chrome {
                             // re_ui's caption buttons: close, maximize,
                             // minimize, in the platform's own order.
                             ui.native_window_buttons_ui();
-                            ui.separator();
-                        }
-                        viewer_buttons(ui);
-                        // Dark, light or the system's: egui's own switch, so the
-                        // embedded viewer and this chrome change together.
-                        egui::global_theme_preference_switch(ui);
-                        ui.add_space(8.0);
-                        // What runs, whoever started it: a click opens
-                        // the Running now panel (2026-09-25).
-                        // The line rotates through the running runs, so a
-                        // short gate never hides a long training.
-                        let t = ui.input(|i| i.time);
-                        let (text, color) =
-                            match crate::running::indicator_line(&self.model.jobs, t) {
-                                Some(line) => {
-                                    ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
-                                    (line, tokens.highlight_color)
-                                }
-                                None => ("idle".to_owned(), ui.visuals().weak_text_color()),
-                            };
-                        let clicked = ui
-                            .add(
-                                egui::Button::selectable(
-                                    self.running_open,
-                                    egui::RichText::new(text).small().color(color),
-                                )
-                                .frame_when_inactive(false),
-                            )
-                            .on_hover_text("Running now: every run in the job table")
-                            .clicked();
-                        if self.model.running_jobs() > 0 {
-                            ui.small_icon(&icons::PLAY, Some(tokens.highlight_color));
-                        }
-                        if clicked {
-                            self.running_open = !self.running_open;
-                            if !self.running_open {
-                                self.close_log();
-                            }
                         }
                     });
                 });
@@ -266,6 +234,91 @@ impl Shell {
             rect.bottom() - 0.5,
             egui::Stroke::new(1.0, palette.edge),
         );
+    }
+
+    /// The status bar along the bottom, after Zed's: on the left what
+    /// runs (a click opens Running now) and the presenter's state; on the
+    /// right the viewer's panel toggles, the theme switch and the frame
+    /// time the heartbeat reports.
+    pub fn status_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        frame_ms: Option<f32>,
+        viewer_buttons: impl FnOnce(&mut egui::Ui),
+    ) {
+        let tokens = ui.tokens();
+        let palette = crate::theme::palette(ui);
+        let rect = ui.available_rect_before_wrap();
+        ui.painter().hline(
+            rect.x_range(),
+            rect.top() + 0.5,
+            egui::Stroke::new(1.0, palette.edge),
+        );
+        egui::Frame::new()
+            .fill(palette.bar)
+            .inner_margin(egui::Margin::symmetric(10, 4))
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    // What runs, whoever started it: a click opens the
+                    // Running now panel (2026-09-25). The line rotates
+                    // through the running runs, so a short gate never
+                    // hides a long training.
+                    let t = ui.input(|i| i.time);
+                    let (text, color) = match crate::running::indicator_line(&self.model.jobs, t) {
+                        Some(line) => {
+                            ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
+                            (line, tokens.highlight_color)
+                        }
+                        None => ("idle".to_owned(), ui.visuals().weak_text_color()),
+                    };
+                    if self.model.running_jobs() > 0 {
+                        ui.small_icon(&icons::PLAY, Some(tokens.highlight_color));
+                    }
+                    let clicked = ui
+                        .add(
+                            egui::Button::selectable(
+                                self.running_open,
+                                egui::RichText::new(text).small().color(color),
+                            )
+                            .frame_when_inactive(false),
+                        )
+                        .on_hover_text("Running now: every run in the job table")
+                        .clicked();
+                    if clicked {
+                        self.running_open = !self.running_open;
+                        if !self.running_open {
+                            self.close_log();
+                        }
+                    }
+                    if !self.presenter_running() {
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new("presenter stopped")
+                                .small()
+                                .color(ui.visuals().warn_fg_color),
+                        )
+                        .on_hover_text("The process that draws the cards and shows recordings is not running; launch_studio restarts it");
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(ms) = frame_ms {
+                            ui.label(
+                                egui::RichText::new(format!("{ms:.0} ms"))
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                            )
+                            .on_hover_text("One frame, drawn to shown, on this machine");
+                            ui.add_space(6.0);
+                        }
+                        // Dark, light or the system's: egui's own switch,
+                        // so the embedded viewer and this chrome change
+                        // together.
+                        egui::global_theme_preference_switch(ui);
+                        ui.add_space(6.0);
+                        viewer_buttons(ui);
+                    });
+                });
+            });
     }
 
     /// The left rail: grouped sections with counts, the current one lit.
