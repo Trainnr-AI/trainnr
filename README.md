@@ -1,6 +1,6 @@
 # trainnr
 
-**The end-to-end robotics platform: a self-improvement flywheel for robots,
+**The end-to-end robotics platform: a self-improving loop for robots,
 run from your coding agent.** trainnr turns a robot's own telemetry into a
 simulation model (real-to-sim), builds training datasets, trains and
 evaluates policies, gates and deploys them (sim-to-real), and reads the
@@ -10,9 +10,9 @@ record is queryable from the agent: one MCP server, a desktop app, a
 Claude Code plugin. For developers with one robot and companies with a
 fleet.
 
-## The flywheel
+## The loop
 
-| Turn | What happens | The tools | What it leaves |
+| Step | What happens | The tools | What it leaves |
 |---|---|---|---|
 | 1. Capture | telemetry from the robot or a public log, a phone video of the space | `start_capture`, `ingest_recording`, `ingest_public_log`, `capture_scene` | recordings with their rate, dropouts and licence state; scenes |
 | 2. Real-to-sim | the robot's actuators identified into a hash-stamped model, every parameter with an interval and a pinned / NOT PINNED verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |

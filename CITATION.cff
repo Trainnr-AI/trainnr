@@ -3,7 +3,7 @@ message: >-
   If you use trainnr, please cite the software; if you build on its
   results, please cite the paper under preferred-citation.
 type: software
-title: "trainnr: the end-to-end robotics platform, a self-improvement flywheel for robots"
+title: "trainnr: the end-to-end robotics platform, a self-improving loop for robots"
 abstract: >-
   An end-to-end robotics platform run from a coding agent: the robot's
   own telemetry becomes a content-hashed simulation model (real-to-sim),

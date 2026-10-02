@@ -42,7 +42,7 @@ code in core. Apache-2.0, governance files from day one.
   is trainnr.ai. Capitalised only where an operating system demands it
   (`Trainnr.app`).
 - One line (2026-10-02, the operator's framing): *the end-to-end robotics
-  platform, a self-improvement flywheel for robots, run from your coding
+  platform, a self-improving loop for robots, run from your coding
   agent.* The turns, in the order a developer meets them: capture,
   real-to-sim, build data, train, evaluate, sim-to-real, deploy and watch,
   query and learn. The earlier line, *measure your robot, train on the

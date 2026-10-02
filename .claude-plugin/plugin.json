@@ -2,7 +2,7 @@
   "name": "trainnr",
   "displayName": "trainnr",
   "version": "0.1.0",
-  "description": "The end-to-end robotics platform: a self-improvement flywheel for robots. Real-to-sim from the robot's own telemetry, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift, every record queryable from your coding agent. One MCP server, seven agents and two skills.",
+  "description": "The end-to-end robotics platform: a self-improving loop for robots. Real-to-sim from the robot's own telemetry, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift, every record queryable from your coding agent. One MCP server, seven agents and two skills.",
   "author": {
     "name": "Trainnr AI",
     "url": "https://trainnr.ai"
