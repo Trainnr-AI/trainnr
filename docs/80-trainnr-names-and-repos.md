@@ -41,9 +41,10 @@ code in core. Apache-2.0, governance files from day one.
   company and the GitHub organisation (`github.com/Trainnr-AI`); the site
   is trainnr.ai. Capitalised only where an operating system demands it
   (`Trainnr.app`).
-- One line (2026-10-02, the operator's framing): *the end-to-end robotics
-  platform, a self-improving loop for robots, run from your coding
-  agent.* The turns, in the order a developer meets them: capture,
+- One line (2026-10-02, the operator's framing, tightened the same night
+  so it names the work: simulation, reinforcement and imitation learning,
+  policies, datasets, deployment): *the end-to-end robotics platform, run
+  from your coding agent: real-to-sim, train, sim-to-real, and back.* The turns, in the order a developer meets them: capture,
   real-to-sim, build data, train, evaluate, sim-to-real, deploy and watch,
   query and learn. The earlier line, *measure your robot, train on the
   measurement, certify, deploy*, is turns 2 to 6 of it. The honesty rule

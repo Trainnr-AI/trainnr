@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trainnr"
 version = "0.1.0"
-description = "The end-to-end robotics loop: real-to-sim from the robot's telemetry, datasets, training, evaluation with exact intervals, sim-to-real gating, deployment telemetry and drift, as MCP tools."
+description = "The end-to-end robotics platform, run from your coding agent: identify the robot from its telemetry, generate datasets, train policies by reinforcement or imitation learning, evaluate with exact intervals, gate and deploy, watch the telemetry for drift."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "FSL-1.1-ALv2" }

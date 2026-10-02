@@ -1,14 +1,14 @@
 # trainnr
 
-**The end-to-end robotics platform: a self-improving loop for robots,
-run from your coding agent.** trainnr turns a robot's own telemetry into a
-simulation model (real-to-sim), builds training datasets, trains and
-evaluates policies, gates and deploys them (sim-to-real), and reads the
-deployment telemetry back to find drift and start the next turn. Every
-turn leaves a record that cites the records it was made from, and every
-record is queryable from the agent: one MCP server, a desktop app, a
-Claude Code plugin. For developers with one robot and companies with a
-fleet.
+**The end-to-end robotics platform, run from your coding agent: real-to-sim,
+train, sim-to-real, and back.** Identify your robot's dynamics from its own
+telemetry into a simulation model, generate training datasets, train
+policies by reinforcement learning (MuJoCo, mjlab) or imitation learning
+(LeRobot), evaluate them with exact confidence intervals, gate and deploy
+them on the robot's runtime, and watch the deployment telemetry for drift,
+which starts the next turn. One MCP server, a desktop app, a Claude Code
+plugin; every step is a tool call and every result is a record the next
+step cites. For developers with one robot and companies with a fleet.
 
 ## The loop
 

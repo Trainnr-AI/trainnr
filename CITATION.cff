@@ -3,16 +3,17 @@ message: >-
   If you use trainnr, please cite the software; if you build on its
   results, please cite the paper under preferred-citation.
 type: software
-title: "trainnr: the end-to-end robotics platform, a self-improving loop for robots"
+title: "trainnr: the end-to-end robotics platform, from real-to-sim through training to a gated deployment"
 abstract: >-
-  An end-to-end robotics platform run from a coding agent: the robot's
-  own telemetry becomes a content-hashed simulation model (real-to-sim),
-  training datasets are generated with recorded provenance, policies are
-  trained on the identified model with measured randomization spans,
-  evaluated with paired trials and exact intervals, gated against the
-  deployment runtime (sim-to-real), deployed, and watched through their
-  telemetry for drift, which starts the next turn. One MCP server, a
-  desktop app and a Claude Code plugin.
+  The end-to-end robotics platform, run from a coding agent: a robot's
+  dynamics are identified from its own telemetry into a content-hashed
+  simulation model, training datasets are generated with recorded
+  provenance, policies are trained by reinforcement learning (MuJoCo,
+  mjlab) or imitation learning (LeRobot) on the identified model with a
+  measured randomization span, evaluated with paired trials and exact
+  intervals, gated against the robot's runtime, deployed, and watched
+  through their telemetry for drift, which starts the next turn. One MCP
+  server, a desktop app and a Claude Code plugin.
 authors:
   - family-names: Aggarwal
     given-names: Prakhar

@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.trainnr-ai/trainnr",
-  "description": "The trainnr robotics loop as MCP tools over stdio: real-to-sim, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift.",
+  "description": "The trainnr robotics loop as MCP tools over stdio: identify the robot from its telemetry, generate datasets, train policies by reinforcement or imitation learning, evaluate with exact intervals, gate and deploy, watch for drift.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/Trainnr-AI/trainnr",

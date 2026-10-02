@@ -12,7 +12,7 @@
     {
       "name": "trainnr",
       "source": "./",
-      "description": "The end-to-end robotics platform: a self-improving loop for robots. Real-to-sim from the robot's own telemetry, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift, every record queryable from your coding agent.",
+      "description": "The end-to-end robotics platform, run from your coding agent: identify the robot from its telemetry, generate datasets, train policies by reinforcement or imitation learning, evaluate with exact intervals, gate and deploy, watch the telemetry for drift.",
       "version": "0.1.0",
       "author": {
         "name": "Trainnr AI"
