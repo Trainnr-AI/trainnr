@@ -12,7 +12,7 @@
     {
       "name": "trainnr",
       "source": "./",
-      "description": "The trainnr MCP server, agents and skills: identify, train, evaluate, gate and monitor robot policies from your coding agent.",
+      "description": "The end-to-end robotics platform: a self-improvement flywheel for robots. Real-to-sim from the robot's own telemetry, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift, every record queryable from your coding agent.",
       "version": "0.1.0",
       "author": {
         "name": "Trainnr AI"

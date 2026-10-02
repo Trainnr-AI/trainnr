@@ -41,7 +41,15 @@ code in core. Apache-2.0, governance files from day one.
   company and the GitHub organisation (`github.com/Trainnr-AI`); the site
   is trainnr.ai. Capitalised only where an operating system demands it
   (`Trainnr.app`).
-- One line: *measure your robot, train on the measurement, certify, deploy.*
+- One line (2026-10-02, the operator's framing): *the end-to-end robotics
+  platform, a self-improvement flywheel for robots, run from your coding
+  agent.* The turns, in the order a developer meets them: capture,
+  real-to-sim, build data, train, evaluate, sim-to-real, deploy and watch,
+  query and learn. The earlier line, *measure your robot, train on the
+  measurement, certify, deploy*, is turns 2 to 6 of it. The honesty rule
+  holds in every sentence: what has run is simulation end to end on the
+  Go2; the hardware step is the vendor's runtime; no real deployment is
+  claimed until one is on the record.
 - No "trainnr" anywhere a person reads (§5 lists the one identifier that
   must stay, and why). "Robotiq" the gripper vendor keeps its name in the
   2F-85 asset, because it is theirs.

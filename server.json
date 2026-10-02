@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.trainnr-ai/trainnr",
-  "description": "Identify, train, evaluate, gate and monitor robot policies: the trainnr pipeline as MCP tools over stdio.",
+  "description": "The trainnr robotics flywheel as MCP tools over stdio: real-to-sim, datasets, training, evaluation, sim-to-real gating, deployment telemetry and drift.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/Trainnr-AI/trainnr",

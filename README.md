@@ -1,25 +1,42 @@
 # trainnr
 
-**Identify, train, evaluate, gate and monitor robot policies, from your coding
-agent.** trainnr is the real-to-sim-to-real pipeline as one MCP server, a
-desktop app and a Claude Code plugin: the robot's actuators are identified
-from its own telemetry into a content-hashed bundle, policies are trained on
-the identified model with a measured randomization span, evaluated with
-paired trials and exact confidence intervals, gated against the deployment
-stack before any hardware is touched, and watched for drift afterwards.
-Every stage leaves a record that cites the records it was made from, by
-version.
+**The end-to-end robotics platform: a self-improvement flywheel for robots,
+run from your coding agent.** trainnr turns a robot's own telemetry into a
+simulation model (real-to-sim), builds training datasets, trains and
+evaluates policies, gates and deploys them (sim-to-real), and reads the
+deployment telemetry back to find drift and start the next turn. Every
+turn leaves a record that cites the records it was made from, and every
+record is queryable from the agent: one MCP server, a desktop app, a
+Claude Code plugin. For developers with one robot and companies with a
+fleet.
 
-The one-paragraph argument, with the measurements behind it, is the paper:
+## The flywheel
+
+| Turn | What happens | The tools | What it leaves |
+|---|---|---|---|
+| 1. Capture | telemetry from the robot or a public log, a phone video of the space | `start_capture`, `ingest_recording`, `ingest_public_log`, `capture_scene` | recordings with their rate, dropouts and licence state; scenes |
+| 2. Real-to-sim | the robot's actuators identified into a hash-stamped model, every parameter with an interval and a pinned / NOT PINNED verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |
+| 3. Build data | demonstrations generated under recorded randomization, kept by the task's success criterion, exported as LeRobot v3 with a datasheet | `generate_kitting_demos`, `generate_walk_demos`, `multiply_demos` | datasets with provenance |
+| 4. Train | reinforcement learning on mjlab or imitation through LeRobot, on the identified model with a measured randomization span | `train_walk`, `run_chain` | experiments and policies |
+| 5. Evaluate | paired, seed-matched trials, exact confidence intervals, a milestone funnel | `evaluate_walk`, `evals`, `eval_detail` | evaluations that gate on the lower bound |
+| 6. Sim-to-real | the export, a gate on two runtimes (ours and the vendor's) against the same rows, attribution of a failed gate, pre-flight before the first tick | `export_deployment`, `gate_deployment`, `attribute_deployment`, `preflight_deployment` | deployments with their gate and pre-flight |
+| 7. Deploy and watch | the policy on the vendor's runtime; its telemetry back into turn 1; the robot re-identified against its fitted intervals | `stage_deployment`, `check_drift` | drift records |
+| 8. Query and learn | every record above, from the agent or the desktop app: which policy, on which model, under which conditions, with what interval | `describe_project`, `runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
+
+Everything in this table has run end to end on a Unitree Go2, in simulation,
+through the tools alone. The hardware step is the vendor's own runtime; no
+result in this repository claims a real deployment yet.
+
+The measurements behind the method are the paper:
 [*How Wide a Span, and What Does Identification Buy?*](docs/paper/manuscript.md)
 (draft v3; every number in it resolves to a record under
 [`docs/findings/`](docs/findings/)). The positioning, with evidence per
 claim, is [`docs/33-what-we-say.md`](docs/33-what-we-say.md).
 
-## The pipeline, on a Unitree Go2, in one conversation
+## One turn, on a Unitree Go2, in one conversation
 
-With the plugin installed, this is the whole loop an agent walks through the
-MCP tools, as a new user's agent did on 2026-09-28
+With the plugin installed, this is the loop an agent walks through the MCP
+tools, as a new user's agent did on 2026-09-28
 ([the record](docs/07-progress-log.md)):
 
 | Stage | Tool | What it leaves behind |
