@@ -14,6 +14,12 @@ All notable changes to trainnr. The format follows
   `rq_pipeline` and `rq_mjlab` and the task namespace `robotiq/` still
   resolve, with a deprecation warning, until the next release.
 
+### Removed
+
+- The 2025–26 rig (14 Rust crates, the Pico firmware, their tools and
+  gates) moved to its own archive repository, `Trainnr-AI/rig`, with its
+  history. `recordings/` and the drivetrain bundle stay as evidence.
+
 ### Added
 
 - `trainnr mcp` serves the MCP server over stdio; `trainnr desktop`

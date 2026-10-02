@@ -196,12 +196,15 @@ the stranger test passes from that clone, and the README is the Go2 path.
 
 ## 9. Order of work
 
-*Status 2026-10-02: 1 written into docs/64 and docs/70; 2 landed (the
+*Status 2026-10-02 (night): 1 written into docs/64 and docs/70; 2 landed (the
 rename commit); 3 landed (NOTICE, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT,
 GOVERNANCE, CITATION.cff, CODEOWNERS, CHANGELOG, the README, the org
-profile under `tools/export/`); the plugin manifest and the MCP Registry
-`server.json` beside them; 4 in progress (the rig archive); 5 scripted
-(`tools/export/public-export.sh`), the push awaiting the operator.*
+profile under `tools/export/`), with the plugin manifest and the MCP
+Registry `server.json` beside them; 4 landed (the extraction commit, and
+the archive built with history by `tools/export/rig/build-rig-archive.sh`:
+177 commits, 195 files, the crates' tests and a firmware build green);
+5 run (`tools/export/public-export.sh`: 892 commits, no private path in
+any of them; the cold-clone gate in docs/07). The push awaits the operator.*
 
 1. This document decided (the Desktop name, the robots split timing, the
    logs), then written into docs/64 and docs/70 as the standing decision.

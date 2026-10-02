@@ -1,6 +1,6 @@
 """The USD path, pinned against the Isaac layer it reads (docs/e2e-research/77).
 
-The fixture is Robotiq's own 2F-85 (trainnr/isaacsim_assets at the
+The fixture is Robotiq's own 2F-85 (robotiq/isaacsim_assets at the
 pinned commit, CC BY 4.0), fetched once into the runs/assets cache by
 `robot.asset_fetch` and never committed; without the network and
 without the cache the reading tests skip by name. The registry, the
@@ -26,7 +26,7 @@ from trainnr.robot import onboarding
 from trainnr.robot.asset_fetch import cached_tree, fetch_tree
 
 FETCH_ENV = "TRAINNR_FETCH_TEST_ASSETS"
-ASSET_REPOSITORY = "trainnr/isaacsim_assets"
+ASSET_REPOSITORY = "robotiq/isaacsim_assets"
 ASSET_COMMIT = "6d992b664428"  # 2026-09-23, the tip docs/77 read
 ASSET_PATH = "grippers/Robotiq_2F_85"
 ASSET_FILE = "Robotiq_2F_85.usda"

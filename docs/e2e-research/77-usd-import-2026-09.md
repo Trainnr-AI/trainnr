@@ -3,7 +3,7 @@
 Research date: **2026-09-24** (the box, past midnight). The question
 Prakhar asked after the second standards review: *"can we use these
 kind of assets directly with our studio without changing anything?"*
-(trainnr/isaacsim_assets), and then: *"lets research more on this USD
+(robotiq/isaacsim_assets), and then: *"lets research more on this USD
 thing and how can we make it easily importable in our app with native
 USD support with Newton and WARP and everything"*.
 
@@ -73,7 +73,7 @@ five-bar finger linkage) and cannot live in a tree.
   render-frames-to-USD *exporter* for Omniverse and Blender; it writes
   no physics and reads no USD.
 
-## 2. The asset (trainnr/isaacsim_assets, read at the tip 6d992b6, 2026-09-23)
+## 2. The asset (robotiq/isaacsim_assets, read at the tip 6d992b6, 2026-09-23)
 
 One gripper: `grippers/Robotiq_2F_85/Robotiq_2F_85.usda` with parts,
 payloads, materials and a `newton/` folder. Licence in the package:
@@ -330,7 +330,7 @@ Primary, read at the code on 2026-09-24: newton-physics/newton main
 main (`CMakeLists.txt`, `plugin/usd_decoder/usd_decoder.cc`,
 `doc/OpenUSD/*.rst`, `doc/changelog.rst`, `python/mujoco/usd/`);
 mujoco_warp *io.py*; mjlab `faq.rst`, `entity.py`; Menagerie
-`robotiq_2f85/2f85.xml` + README; trainnr/isaacsim_assets at 6d992b6
+`robotiq_2f85/2f85.xml` + README; robotiq/isaacsim_assets at 6d992b6
 (every layer, both variant sets, `PACKAGE-LICENSES/LICENSE`); Isaac
 Lab `converters/`; Isaac Sim `isaacsim.asset.exporter.urdf`
 (*joint_reader.py*, *urdf_writer.py*) and
