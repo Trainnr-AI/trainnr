@@ -75,17 +75,22 @@ const MAX_SIM_STEPS: u32 = 100_000;
 /// How long a capture waits for the window to produce a frame.
 const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Under WSLg the compositor announces a native Wayland window to Windows
-/// but Windows never shows it, while the same app through Xwayland shows
-/// at once (seen live 2026-09-11: an X11 test window visible, the Studio
-/// not; the Studio relaunched with the Wayland display hidden, visible).
-/// winit picks Wayland whenever `WAYLAND_DISPLAY` is set, so on WSL the
-/// event loop is asked for X11 instead. Elsewhere winit's own choice stands.
+/// Under WSLg a native Wayland window did not show on Windows on
+/// 2026-09-11, so the app took the X11 path; on 2026-10-02 the Wayland
+/// window shows, and the X11 path presents a frame in 385 to 570 ms
+/// against 50 to 64 ms on Wayland (the heartbeat's frame_ms). So winit's
+/// own choice (Wayland when `WAYLAND_DISPLAY` is set) stands by default;
+/// `TRAINNR_X11=1` takes the X11 path again, with its window fixes.
 /// Comfortably inside a 1080-line monitor with the manager's frame.
 const WSL_WINDOW_SIZE: [f32; 2] = [1600.0, 900.0];
 
+/// Whether the X11 path was asked for under WSLg.
+fn x11_under_wslg() -> bool {
+    on_wsl() && std::env::var_os("TRAINNR_X11").is_some_and(|v| v == "1")
+}
+
 fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
-    if !on_wsl() {
+    if !x11_under_wslg() {
         return;
     }
     re_log::info!("WSLg: taking the X11 path so the window shows");
@@ -133,6 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut native_options = re_viewer::native::eframe_options(None);
     prefer_x11_under_wslg(&mut native_options);
+    no_vsync_under_wslg(&mut native_options);
     // Our own dock/window icon in place of the Rerun logo the viewer's
     // eframe options install. Raw RGBA committed beside a generator with
     // provenance (tools/gen-app-icon.py) — no PNG decoder in the tree.
@@ -213,6 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 viewport_full: false,
                 closing: false,
                 theme_preference: egui::ThemePreference::System,
+                frames: FrameClock::default(),
             }))
         }),
     )?;
@@ -223,6 +230,8 @@ struct StudioShell {
     /// The theme preference as of this frame (system, dark or light),
     /// persisted by `save`.
     theme_preference: egui::ThemePreference,
+    /// Frame times, for the heartbeat.
+    frames: FrameClock,
     rerun_app: re_viewer::App,
     viewport: ViewportFeed,
     shell: Shell,
@@ -272,7 +281,7 @@ impl eframe::App for StudioShell {
             chrome::paint_ground(ui);
             chrome::resize_handles(ui);
             // A frameless window has no manager to keep it on the screen.
-            chrome::keep_on_screen(ui.ctx(), spawn::on_wsl());
+            chrome::keep_on_screen(ui.ctx(), x11_under_wslg() && spawn::on_wsl());
         }
         self.fullscreen_keys(ui.ctx());
         self.leave_fullscreen_before_close(ui.ctx());
@@ -1341,6 +1350,7 @@ impl StudioShell {
         if let Some(rested) = self.control.watch_live(&live) {
             self.control.event(Event::time(BY_USER).at(&rested));
         }
+        self.frames.tick();
         self.theme_preference = ui.ctx().options(|o| o.theme_preference);
         theme::align_light_visuals(ui.ctx());
         let state = control::StudioState {
@@ -1356,6 +1366,14 @@ impl StudioShell {
             presenter_running: self.shell.presenter_running(),
             jobs_running: self.shell.model.running_jobs(),
             theme: theme_name(ui.ctx().theme()).to_owned(),
+            frame_ms: self.frames.mean_ms(),
+            frames_per_s: self.frames.per_second(),
+            repaint_causes: ui
+                .ctx()
+                .repaint_causes()
+                .iter()
+                .map(|c| format!("{}:{}", c.file, c.line))
+                .collect(),
             viewport_task: self.viewport.task().map(str::to_owned),
             viewport_fps: self.viewport.fps(),
             window: Some(control::WindowState {
@@ -1446,4 +1464,50 @@ fn theme_preference(name: &str) -> egui::ThemePreference {
         "light" => egui::ThemePreference::Light,
         _ => egui::ThemePreference::System,
     }
+}
+
+/// The last second of frames: when each began. Mean frame time and
+/// frames per second come from it; both are None until two frames exist.
+#[derive(Default)]
+struct FrameClock {
+    starts: std::collections::VecDeque<std::time::Instant>,
+}
+
+impl FrameClock {
+    fn tick(&mut self) {
+        let now = std::time::Instant::now();
+        self.starts.push_back(now);
+        while self
+            .starts
+            .front()
+            .is_some_and(|t| now.duration_since(*t) > std::time::Duration::from_secs(1))
+        {
+            self.starts.pop_front();
+        }
+    }
+
+    fn mean_ms(&self) -> Option<f32> {
+        let (first, last) = (self.starts.front()?, self.starts.back()?);
+        let n = self.starts.len();
+        (n > 1).then(|| last.duration_since(*first).as_secs_f32() * 1000.0 / (n - 1) as f32)
+    }
+
+    fn per_second(&self) -> Option<f32> {
+        let n = self.starts.len();
+        (n > 1).then_some(n as f32)
+    }
+}
+
+/// Under WSLg the Vulkan layer (dzn over Direct3D) stalls about half a
+/// second on every vsynced present: 2 frames a second on a 24-core box,
+/// the app's own threads idle (measured 2026-10-02 through the
+/// heartbeat's frame_ms; the same build on software Vulkan drew a frame
+/// in 13 ms). egui repaints only when asked, so no vsync costs nothing
+/// at rest; `TRAINNR_VSYNC=1` restores it.
+fn no_vsync_under_wslg(options: &mut eframe::NativeOptions) {
+    if !on_wsl() || std::env::var_os("TRAINNR_VSYNC").is_some_and(|v| v == "1") {
+        return;
+    }
+    re_log::info!("WSLg: presenting without vsync (TRAINNR_VSYNC=1 restores it)");
+    options.wgpu_options.surface.present_mode = eframe::wgpu::PresentMode::AutoNoVsync;
 }

@@ -144,6 +144,10 @@ pub struct Artifact {
     /// A picture, relative to the project root, when the kind has one.
     #[serde(default)]
     pub preview: Option<String>,
+    /// The same picture in the light palette, when the kind is painted
+    /// by the presenter; absent for the simulator's renders and frames.
+    #[serde(default)]
+    pub preview_light: Option<String>,
     /// The detail view's file, relative to the project root, when the
     /// kind has a writer (`trainnr/project/details.py`).
     #[serde(default)]
@@ -348,6 +352,9 @@ pub struct ProjectSummary {
     pub indexed: String,
     /// The first artifact preview found, for the project's tile.
     pub preview: Option<PathBuf>,
+    /// The same cover in the light palette, when that project's presenter
+    /// has drawn one; the page falls back to the dark cover.
+    pub preview_light: Option<PathBuf>,
 }
 
 pub struct Model {
@@ -471,13 +478,18 @@ impl Model {
         watched.current(|p| Detail::load(p).map(Rc::new)).cloned()
     }
 
-    /// An artifact's preview as an absolute path, when it has one.
-    pub fn preview_path(&self, artifact: &Artifact) -> Option<PathBuf> {
-        artifact
-            .preview
-            .as_ref()
-            .map(|rel| self.project_root.join(rel))
-            .filter(|p| p.is_file())
+    /// An artifact's preview as an absolute path, when it has one: the
+    /// light set when `light` and it exists, else the dark set.
+    pub fn preview_path(&self, artifact: &Artifact, light: bool) -> Option<PathBuf> {
+        let pick = |rel: &Option<String>| {
+            rel.as_ref()
+                .map(|rel| self.project_root.join(rel))
+                .filter(|p| p.is_file())
+        };
+        light
+            .then(|| pick(&artifact.preview_light))
+            .flatten()
+            .or_else(|| pick(&artifact.preview))
     }
 
     /// Every project under the projects home, by name, with what its own
@@ -538,15 +550,20 @@ impl Model {
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default()
                     });
-                let preview = index.as_ref().and_then(|i| {
-                    i.artifacts
-                        .iter()
-                        .filter_map(|a| a.preview.as_ref())
-                        .map(|rel| root.join(rel))
-                        .find(|p| p.is_file())
-                });
+                let cover = |pick: fn(&Artifact) -> Option<&String>| {
+                    index.as_ref().and_then(|i| {
+                        i.artifacts
+                            .iter()
+                            .filter_map(pick)
+                            .map(|rel| root.join(rel))
+                            .find(|p| p.is_file())
+                    })
+                };
+                let preview = cover(|a| a.preview.as_ref());
+                let preview_light = cover(|a| a.preview_light.as_ref());
                 ProjectSummary {
                     name,
+                    preview_light,
                     stages_proved: index
                         .as_ref()
                         .map_or(0, |i| i.states.iter().filter(|s| s.present).count()),

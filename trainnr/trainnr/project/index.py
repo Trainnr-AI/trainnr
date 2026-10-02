@@ -147,6 +147,9 @@ class Artifact:
     # A picture, relative to the project root, when the kind has one
     # (`project/previews.py`); None otherwise — never a placeholder.
     preview: str | None = None
+    # The same picture drawn in the light palette, for the kinds the
+    # presenter paints; the app picks by its theme (2026-10-02).
+    preview_light: str | None = None
     # The detail view's path, relative to the project root
     # (`project/details.py`); None when the kind has no writer yet.
     detail: str | None = None
@@ -299,23 +302,28 @@ def write_index(
     index: ProjectIndex | None = None,
     *,
     previews: bool = True,
-    theme: str = "dark",
 ) -> Path:
     """Write the index; with `previews`, render each artifact's picture
-    first, in the app's `theme`, and record its path on the artifact (a
-    cache keyed by stamp and theme, so unchanged artifacts are never
-    re-rendered)."""
+    first, in both palettes, and record both paths on the artifact (a
+    cache keyed by stamp and palette, so unchanged artifacts are never
+    re-rendered); the app shows the set of its theme, instantly."""
     index = index if index is not None else index_project(project)
     if previews:
         from trainnr.project.details import write_details  # noqa: PLC0415
         from trainnr.project.previews import write_previews  # noqa: PLC0415
 
-        found = write_previews(project, index, theme)
+        found = write_previews(project, index, "dark")
+        found_light = write_previews(project, index, "light")
         details = write_details(project, index)
         index = replace(
             index,
             artifacts=[
-                replace(a, preview=found.get(a.stamp), detail=details.get(a.stamp))
+                replace(
+                    a,
+                    preview=found.get(a.stamp),
+                    preview_light=found_light.get(a.stamp),
+                    detail=details.get(a.stamp),
+                )
                 for a in index.artifacts
             ],
         )

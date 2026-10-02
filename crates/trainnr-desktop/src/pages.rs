@@ -603,7 +603,14 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
                     let response = picture_card(
                         ui,
                         width,
-                        project.preview.as_deref(),
+                        if ui.visuals().dark_mode {
+                            project.preview.as_deref()
+                        } else {
+                            project
+                                .preview_light
+                                .as_deref()
+                                .or(project.preview.as_deref())
+                        },
                         Section::Projects.icon(),
                         CardText {
                             title: &project.name,
@@ -707,7 +714,9 @@ fn latest_pictures(
                 let response = picture_card_with_id(
                     ui,
                     width,
-                    model.preview_path(artifact).as_deref(),
+                    model
+                        .preview_path(artifact, !ui.visuals().dark_mode)
+                        .as_deref(),
                     Section::icon_for(&artifact.kind),
                     CardText {
                         title: name,
@@ -795,7 +804,9 @@ fn best_by_condition(
                 let response = picture_card_with_id(
                     ui,
                     width,
-                    model.preview_path(artifact).as_deref(),
+                    model
+                        .preview_path(artifact, !ui.visuals().dark_mode)
+                        .as_deref(),
                     Section::icon_for(&artifact.kind),
                     CardText {
                         title: condition,
@@ -1450,7 +1461,9 @@ fn card_rows(
                         let response = picture_card_with_id(
                             ui,
                             width,
-                            model.preview_path(artifact).as_deref(),
+                            model
+                                .preview_path(artifact, !ui.visuals().dark_mode)
+                                .as_deref(),
                             Section::icon_for(&artifact.kind),
                             CardText {
                                 title: name,
@@ -1509,7 +1522,7 @@ fn detail(
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.horizontal_top(|ui| {
-            if let Some(path) = model.preview_path(artifact) {
+            if let Some(path) = model.preview_path(artifact, !ui.visuals().dark_mode) {
                 let rect = egui::Rect::from_min_size(
                     ui.cursor().min,
                     egui::vec2(

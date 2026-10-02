@@ -30,6 +30,9 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
   card pictures follow; `set_studio_theme` sets it from an agent.
 - The project switcher sits at the head of the sidebar; the Simulator's
   empty state is one card with the scene picker.
+- The app's heartbeat reports frame time, frame rate and repaint causes.
+  Under WSLg the app now takes the Wayland window path (`TRAINNR_X11=1`
+  for the old one), which presents a frame ten times faster there.
 - `trainnr.mcp_tools`: an entry-point group through which an installed
   package registers tools on the same MCP server (the seam the cloud
   package extends, docs/83).

@@ -244,6 +244,14 @@ pub struct StudioState {
     /// drew to the screen in the last second (the on-screen rate).
     pub viewport_task: Option<String>,
     pub viewport_fps: Option<f32>,
+    /// The mean wall time of the last frames, in milliseconds, and how
+    /// many frames the window drew in the last second: the cost of one
+    /// repaint on this machine, readable by a door (2026-10-02, "laggy").
+    pub frame_ms: Option<f32>,
+    pub frames_per_s: Option<f32>,
+    /// Who asked for the last repaint (egui's repaint causes, as
+    /// `file:line`), so a window that never rests names its reason.
+    pub repaint_causes: Vec<String>,
     /// The simulator's clock and mode, from the stream's status.
     pub simulator: Option<SimulatorState>,
     /// The window's content size in logical points and its pixel ratio,
@@ -826,6 +834,9 @@ mod tests {
             live: Live::default(),
             presenter_running: false,
             jobs_running: 0,
+            repaint_causes: Vec::new(),
+            frame_ms: None,
+            frames_per_s: None,
             theme: "dark".to_owned(),
             viewport_task: None,
             viewport_fps: None,

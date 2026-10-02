@@ -213,12 +213,13 @@ theme: dark is the tokens' values, light is designed (a white page,
 warm paper panels, chips one step deeper, hairlines near the surface,
 near-black text, a soft blue tint behind the selected rail item) after
 the operator's reference, because Rerun's light tokens give every
-surface one flat grey. The card pictures are drawn by the presenter, so
-the heartbeat carries `theme` and the presenter draws the kinds it
-paints in the matching palette (`previews.LIGHT`) under
-`previews/light/`, keyed by a palette stamp; the simulator's own renders
-and the batches' frames are theme-free and shared. A switch shows within
-one presenter refresh (15 s).
+surface one flat grey. The card pictures are drawn by the presenter in both
+palettes on every index write (`preview` and `preview_light` on the
+artifact; `previews/light/` keyed by a palette stamp); the simulator's
+own renders and the batches' frames are theme-free and shared; the app
+picks the set of its theme, so a switch is instant. Under WSLg the app
+takes winit's own window path (Wayland) since 2026-10-03; the X11 path
+(`TRAINNR_X11=1`) presents a frame in half a second there (docs/07).
 
 ## 6. Performance lessons, all measured
 
