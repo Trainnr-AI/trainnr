@@ -35,13 +35,13 @@ pub fn icon_at(ui: &mut egui::Ui, icon: &Icon, size: f32, tint: egui::Color32) -
 
 /// A card frame in Rerun's own card colour and radius.
 pub fn card(ui: &egui::Ui, accent: Option<egui::Color32>) -> egui::Frame {
-    let tokens = ui.tokens();
+    let palette = crate::theme::palette(ui);
     let stroke = match accent {
         Some(color) => egui::Stroke::new(1.5, color),
-        None => egui::Stroke::new(1.0, tokens.native_frame_stroke.color),
+        None => egui::Stroke::new(1.0, palette.hairline),
     };
     egui::Frame::new()
-        .fill(tokens.example_card_background_color)
+        .fill(palette.surface)
         .stroke(stroke)
         .corner_radius(CARD_RADIUS)
         .inner_margin(egui::Margin::same(CARD_INNER_MARGIN))
@@ -50,9 +50,18 @@ pub fn card(ui: &egui::Ui, accent: Option<egui::Color32>) -> egui::Frame {
 /// A small pill in the welcome screen's tag style.
 pub fn tag(ui: &mut egui::Ui, text: &str) {
     let tokens = ui.tokens();
+    let palette = crate::theme::palette(ui);
+    let (fill, stroke) = if ui.visuals().dark_mode {
+        (tokens.example_tag_bg_fill, tokens.example_tag_stroke)
+    } else {
+        (
+            palette.surface_alt,
+            egui::Stroke::new(1.0, palette.hairline),
+        )
+    };
     egui::Frame::new()
-        .fill(tokens.example_tag_bg_fill)
-        .stroke(tokens.example_tag_stroke)
+        .fill(fill)
+        .stroke(stroke)
         .corner_radius(999.0)
         .inner_margin(egui::Margin::symmetric(7, 2))
         .show(ui, |ui| {

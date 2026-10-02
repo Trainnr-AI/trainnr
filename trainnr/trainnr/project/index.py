@@ -295,17 +295,22 @@ def _live_capture(project: Project) -> list[dict[str, str]]:
 
 
 def write_index(
-    project: Project, index: ProjectIndex | None = None, *, previews: bool = True
+    project: Project,
+    index: ProjectIndex | None = None,
+    *,
+    previews: bool = True,
+    theme: str = "dark",
 ) -> Path:
     """Write the index; with `previews`, render each artifact's picture
-    first and record its path on the artifact (a cache keyed by stamp, so
-    unchanged artifacts are never re-rendered)."""
+    first, in the app's `theme`, and record its path on the artifact (a
+    cache keyed by stamp and theme, so unchanged artifacts are never
+    re-rendered)."""
     index = index if index is not None else index_project(project)
     if previews:
         from trainnr.project.details import write_details  # noqa: PLC0415
         from trainnr.project.previews import write_previews  # noqa: PLC0415
 
-        found = write_previews(project, index)
+        found = write_previews(project, index, theme)
         details = write_details(project, index)
         index = replace(
             index,

@@ -210,13 +210,20 @@ def serve(project: Project, *, once: bool = False) -> None:
     path = intent_path(project)
     claimed = path.with_name(path.name + CLAIMED_SUFFIX)
     last_live = 0.0
+    # None, not the file's word: the state file on disk may be the LAST
+    # window's, so the first tick always writes once in the theme the
+    # live window reports (a stale "light" left the light set unrendered,
+    # 2026-10-02).
+    last_theme: str | None = None
     while True:
         if time.time() - last_live >= LIVE_REFRESH_S:
             last_live = time.time()
             try:
+                theme = studio_theme(project)
                 refreshed = refresh_project(project) + refresh_verdicts(project)
-                if refreshed or index_stale(project):
-                    write_index(project, index_project(project))
+                if refreshed or index_stale(project) or theme != last_theme:
+                    write_index(project, index_project(project), theme=theme)
+                    last_theme = theme
             except Exception as why:  # a broken log must not kill the presenter
                 _write_status(project, {"live_error": str(why)})
         if path.is_file() and not claimed.is_file():
@@ -245,6 +252,19 @@ def serve(project: Project, *, once: bool = False) -> None:
             if once:
                 return
         time.sleep(POLL_S)
+
+
+def studio_theme(project: Project) -> str:
+    """The theme the app reports in its heartbeat (`studio-state.json`),
+    so the cards are drawn in the palette the window shows; dark when no
+    window has written one."""
+    from trainnr.project.control import state_path  # noqa: PLC0415
+
+    try:
+        theme = json.loads(state_path(project).read_text(encoding="utf-8")).get("theme")
+    except (OSError, ValueError):
+        return "dark"
+    return theme if theme in ("dark", "light") else "dark"
 
 
 def _write_status(project: Project, status: dict[str, Any]) -> None:

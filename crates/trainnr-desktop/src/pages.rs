@@ -473,8 +473,8 @@ fn picture_card_with_id(
         ui.id().with(salt).with(width as u32),
         egui::Sense::click(),
     );
-    ui.painter()
-        .rect_filled(rect, CARD_RADIUS, tokens.example_card_background_color);
+    let palette = crate::theme::palette(ui);
+    ui.painter().rect_filled(rect, CARD_RADIUS, palette.surface);
     let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(width, thumb_h));
     match picture {
         Some(path) => thumbnail(ui, path, thumb_rect),
@@ -485,7 +485,7 @@ fn picture_card_with_id(
     } else if response.hovered() {
         egui::Stroke::new(1.0, tokens.highlight_color.linear_multiply(0.6))
     } else {
-        egui::Stroke::new(1.0, tokens.native_frame_stroke.color)
+        egui::Stroke::new(1.0, palette.hairline)
     };
     ui.painter()
         .rect_stroke(rect, CARD_RADIUS, stroke, egui::StrokeKind::Inside);
@@ -770,7 +770,7 @@ fn best_by_condition(
             if ui
                 .add(egui::Link::new(
                     egui::RichText::new(format!("{} conditions · open the matrix", best.len()))
-                        .color(ui.tokens().highlight_color),
+                        .color(crate::theme::palette(ui).link),
                 ))
                 .clicked()
             {
@@ -841,8 +841,8 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     // its note on hover, never "the next move".
                     (
                         egui::Color32::TRANSPARENT,
-                        tokens.native_frame_stroke.color.linear_multiply(0.5),
-                        ui.visuals().weak_text_color().linear_multiply(0.6),
+                        crate::theme::palette(ui).hairline,
+                        ui.visuals().weak_text_color().gamma_multiply(0.7),
                     )
                 } else if state.present && state.basis.as_deref().is_some_and(|b| b != BASIS_OWN) {
                     // Proved on a basis that is not the operator's own robot (a
@@ -868,7 +868,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 } else {
                     (
                         egui::Color32::TRANSPARENT,
-                        tokens.native_frame_stroke.color,
+                        crate::theme::palette(ui).hairline,
                         ui.visuals().weak_text_color(),
                     )
                 };
@@ -1677,7 +1677,7 @@ fn stamp_link(ui: &mut egui::Ui, model: &Model, stamp: &str, short: bool, nav: &
             .add(egui::Link::new(
                 egui::RichText::new(text)
                     .monospace()
-                    .color(ui.tokens().highlight_color),
+                    .color(crate::theme::palette(ui).link),
             ))
             .on_hover_text(format!("open {name} (version {hash})"))
             .clicked()

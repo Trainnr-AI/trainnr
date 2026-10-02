@@ -34,6 +34,7 @@ mod running;
 mod shell;
 mod simulator;
 mod spawn;
+mod theme;
 mod viewport;
 mod widgets;
 
@@ -62,9 +63,8 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
-/// The strip the viewport collapses to when no scene runs: the scene
-/// picker and nothing else.
-const VIEWPORT_IDLE_HEIGHT: f32 = 36.0;
+/// The picker row alone, when no scene runs above a streaming viewer.
+const VIEWPORT_PICKER_HEIGHT: f32 = 34.0;
 /// The standard Rerun SDK port on every interface: anything calling
 /// `rr.connect_grpc()` lands in this window.
 const GRPC_BIND: &str = "0.0.0.0:9876";
@@ -190,6 +190,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // the window we built.
             rerun_app.app_options_mut().custom_window_decorations = chrome::custom_chrome();
 
+            // The theme the person chose last time, before the first frame;
+            // the system's when nothing was chosen.
+            if let Some(pref) = cc.storage.and_then(|s| s.get_string(THEME_KEY)) {
+                cc.egui_ctx.set_theme(theme_preference(&pref));
+            }
+
             let viewport = ViewportFeed::idle();
             let mut shell = Shell::new(Model::open(repo_root()));
             shell.open_project();
@@ -206,6 +212,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 activated_shown: None,
                 viewport_full: false,
                 closing: false,
+                theme_preference: egui::ThemePreference::System,
             }))
         }),
     )?;
@@ -213,6 +220,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct StudioShell {
+    /// The theme preference as of this frame (system, dark or light),
+    /// persisted by `save`.
+    theme_preference: egui::ThemePreference,
     rerun_app: re_viewer::App,
     viewport: ViewportFeed,
     shell: Shell,
@@ -243,6 +253,7 @@ struct StudioShell {
 
 impl eframe::App for StudioShell {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(THEME_KEY, preference_name(self.theme_preference).to_owned());
         // The viewer persists its blueprint/state exactly as standalone
         // Rerun would.
         self.rerun_app.save(storage);
@@ -377,6 +388,41 @@ impl eframe::App for StudioShell {
             // egui remembers a panel's size by id, and the idle strip
             // must not inherit a 420 px preview height.
             let active = self.viewport.is_active();
+            if !active && !has_recording {
+                // Nothing runs and nothing streams: one card says so and
+                // holds the Scene picker; no idle band, no transport bar,
+                // no second sentence (2026-10-02, "too many border lines").
+                egui::CentralPanel::default().show(ui, |ui| {
+                    pages::page(ui, |ui| {
+                        pages::heading(ui, "Simulator");
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(
+                                "No scene is running. Pick one here, or ask your agent to \
+                                 simulate an environment; a data generation, a training \
+                                 run or an evaluation streams into the viewer the moment \
+                                 it starts.",
+                            )
+                            .text_style(re_ui::DesignTokens::welcome_screen_body())
+                            .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        let deployments = self.shell.model.deploy_scenes();
+                        if let Some(simulator::Action::Spawn(task)) =
+                            simulator::transport(ui, &mut self.viewport, &deployments)
+                        {
+                            self.viewport = ViewportFeed::spawn(
+                                ui.ctx(),
+                                &task,
+                                &self.shell.model.project_root,
+                            );
+                        }
+                    });
+                });
+                self.shell.overlays(ui.ctx());
+                self.report(ui);
+                return;
+            }
             egui::Panel::top(if active {
                 "sim_viewport"
             } else {
@@ -386,33 +432,29 @@ impl eframe::App for StudioShell {
             .default_size(if active {
                 VIEWPORT_DEFAULT_HEIGHT
             } else {
-                VIEWPORT_IDLE_HEIGHT
+                VIEWPORT_PICKER_HEIGHT
             })
             .min_size(if active {
                 VIEWPORT_MIN_HEIGHT
             } else {
-                VIEWPORT_IDLE_HEIGHT
+                VIEWPORT_PICKER_HEIGHT
             })
             .show(ui, |ui| self.viewport_body(ui));
             if has_recording {
                 self.rerun_app.ui(ui, frame);
             } else {
+                // A scene runs and nothing streams yet: the viewport above is
+                // the page; the viewer takes this space when a recording
+                // arrives.
                 egui::CentralPanel::default().show(ui, |ui| {
-                    pages::page(ui, |ui| {
-                        pages::heading(ui, "Simulator");
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(
-                                "No scene is running. Open the Scene strip at the top of \
-                                 this page and pick one, or ask your agent to simulate an \
-                                 environment. A data generation, a training run or an \
-                                 evaluation streams into the viewer here on its own the \
-                                 moment it starts.",
-                            )
-                            .text_style(re_ui::DesignTokens::welcome_screen_body())
-                            .color(ui.visuals().weak_text_color()),
-                        );
-                    });
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "The viewer appears here the moment a run, an evaluation or \
+                             this scene's twin streams.",
+                        )
+                        .color(ui.visuals().weak_text_color()),
+                    );
                 });
             }
         } else {
@@ -429,6 +471,14 @@ impl StudioShell {
     /// the Live page's top panel and alone in full screen.
     fn viewport_body(&mut self, ui: &mut egui::Ui) {
         let mut action = None;
+        if !self.viewport.is_active() {
+            // No scene: the row is the picker and nothing else; no idle
+            // placeholder above it (2026-10-02, "too many border lines").
+            let deployments = self.shell.model.deploy_scenes();
+            action = simulator::transport(ui, &mut self.viewport, &deployments);
+            self.spawn_or_stop(ui, action);
+            return;
+        }
         egui::Panel::bottom("simulator_transport")
             .resizable(false)
             .show(ui, |ui| {
@@ -444,6 +494,11 @@ impl StudioShell {
             self.control.event(Event::key(BY_USER, &press));
         }
         simulator::apply_follow(ui.ctx(), &mut self.viewport);
+        self.spawn_or_stop(ui, action);
+    }
+
+    /// What the transport bar asked for.
+    fn spawn_or_stop(&mut self, ui: &egui::Ui, action: Option<simulator::Action>) {
         match action {
             Some(simulator::Action::Spawn(task)) => {
                 self.viewport =
@@ -835,6 +890,13 @@ impl StudioShell {
                     };
                     sender.send_ui(cmd);
                 }
+                Ok(())
+            }
+            Command::Theme { theme } => {
+                if !matches!(theme.as_str(), "system" | "dark" | "light") {
+                    return Err(format!("theme: {theme:?} is not system, dark or light"));
+                }
+                ui.ctx().set_theme(theme_preference(&theme));
                 Ok(())
             }
             Command::Simulate { task } => {
@@ -1279,6 +1341,8 @@ impl StudioShell {
         if let Some(rested) = self.control.watch_live(&live) {
             self.control.event(Event::time(BY_USER).at(&rested));
         }
+        self.theme_preference = ui.ctx().options(|o| o.theme_preference);
+        theme::align_light_visuals(ui.ctx());
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,
             pid: std::process::id(),
@@ -1291,6 +1355,7 @@ impl StudioShell {
             live,
             presenter_running: self.shell.presenter_running(),
             jobs_running: self.shell.model.running_jobs(),
+            theme: theme_name(ui.ctx().theme()).to_owned(),
             viewport_task: self.viewport.task().map(str::to_owned),
             viewport_fps: self.viewport.fps(),
             window: Some(control::WindowState {
@@ -1352,5 +1417,33 @@ fn cmd_clone(
     match cmd {
         TimeControlCommand::StepTimeBack => TimeControlCommand::StepTimeBack,
         _ => TimeControlCommand::StepTimeForward,
+    }
+}
+
+/// The storage key of the chosen theme preference.
+const THEME_KEY: &str = "trainnr.theme";
+
+/// The heartbeat's word for the theme in effect.
+fn theme_name(theme: egui::Theme) -> &'static str {
+    match theme {
+        egui::Theme::Dark => "dark",
+        egui::Theme::Light => "light",
+    }
+}
+
+/// The stored word for a preference, and back.
+fn preference_name(pref: egui::ThemePreference) -> &'static str {
+    match pref {
+        egui::ThemePreference::Dark => "dark",
+        egui::ThemePreference::Light => "light",
+        egui::ThemePreference::System => "system",
+    }
+}
+
+fn theme_preference(name: &str) -> egui::ThemePreference {
+    match name {
+        "dark" => egui::ThemePreference::Dark,
+        "light" => egui::ThemePreference::Light,
+        _ => egui::ThemePreference::System,
     }
 }

@@ -89,6 +89,11 @@ pub enum Command {
         #[serde(default)]
         time: Option<String>,
     },
+    /// The window's theme preference: `system`, `dark` or `light`
+    /// (the same switch the top bar offers; persisted with the window).
+    Theme {
+        theme: String,
+    },
     /// Run a scene in the MuJoCo viewport (a preview task by name), or
     /// stop it when `task` is absent.
     Simulate {
@@ -176,6 +181,7 @@ impl Command {
                 | Command::Compare { .. }
                 | Command::Time { .. }
                 | Command::Panels { .. }
+                | Command::Theme { .. }
                 | Command::Simulate { .. }
                 | Command::Simulator { .. }
                 | Command::Focus { .. }
@@ -231,6 +237,9 @@ pub struct StudioState {
     pub live: Live,
     pub presenter_running: bool,
     pub jobs_running: usize,
+    /// The window's theme, "dark" or "light": the presenter draws the
+    /// card pictures in the matching palette (2026-10-02).
+    pub theme: String,
     /// The MuJoCo viewport: which preview scene runs, and the frames it
     /// drew to the screen in the last second (the on-screen rate).
     pub viewport_task: Option<String>,
@@ -817,6 +826,7 @@ mod tests {
             live: Live::default(),
             presenter_running: false,
             jobs_running: 0,
+            theme: "dark".to_owned(),
             viewport_task: None,
             viewport_fps: None,
             simulator: None,

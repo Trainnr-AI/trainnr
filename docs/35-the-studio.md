@@ -201,6 +201,25 @@ serves two jobs and the 3D view is agnostic to which is live:
   I/O on the UI thread. The words and keys Rust reads are pinned in
   `tests/test_studio_mirrors.py::RunningNow`.
 
+### 5.1 Two themes (2026-10-02)
+
+Dark and light, or the system's, from egui's own theme preference: the
+switch sits in the title bar beside the viewer's panel buttons, the
+`set_studio_theme` door sets it, and the choice is stored with the
+window (`trainnr.theme` in eframe's storage) and restored before the
+first frame. Rerun's design tokens serve the embedded viewer in either
+theme; the app's own surfaces come from `theme.rs`, one palette per
+theme: dark is the tokens' values, light is designed (a white page,
+warm paper panels, chips one step deeper, hairlines near the surface,
+near-black text, a soft blue tint behind the selected rail item) after
+the operator's reference, because Rerun's light tokens give every
+surface one flat grey. The card pictures are drawn by the presenter, so
+the heartbeat carries `theme` and the presenter draws the kinds it
+paints in the matching palette (`previews.LIGHT`) under
+`previews/light/`, keyed by a palette stamp; the simulator's own renders
+and the batches' frames are theme-free and shared. A switch shows within
+one presenter refresh (15 s).
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

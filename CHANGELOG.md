@@ -24,6 +24,15 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- A light theme for the desktop app, designed (a white page, warm paper
+  panels, soft blue tints): a switch in the title bar (dark, light or the
+  system's), kept across launches; the embedded viewer, the pages and the
+  card pictures follow; `set_studio_theme` sets it from an agent.
+- The project switcher sits at the head of the sidebar; the Simulator's
+  empty state is one card with the scene picker.
+- `trainnr.mcp_tools`: an entry-point group through which an installed
+  package registers tools on the same MCP server (the seam the cloud
+  package extends, docs/83).
 - `trainnr mcp` serves the MCP server over stdio; `trainnr desktop`
   launches the app; `trainnr version`.
 - The repository installs as a Claude Code plugin and marketplace

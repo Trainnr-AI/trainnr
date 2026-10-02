@@ -194,8 +194,9 @@ impl Shell {
         viewer_buttons: impl FnOnce(&mut egui::Ui),
     ) {
         let tokens = ui.tokens();
+        let palette = crate::theme::palette(ui);
         egui::Frame::new()
-            .fill(tokens.top_bar_color)
+            .fill(palette.bar)
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
@@ -210,41 +211,6 @@ impl Shell {
                     ui.add_space(TRAFFIC_LIGHTS_INSET);
                     ui.label(egui::RichText::new("●").color(tokens.highlight_color));
                     ui.label(egui::RichText::new("trainnr").strong().size(15.0));
-                    ui.add_space(12.0);
-                    // The project switcher: the current project's name;
-                    // click for the list, or open the Projects page.
-                    let name = self.model.name();
-                    let response = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new(format!("{name}  ▾"))
-                                .text_style(DesignTokens::welcome_screen_body()),
-                        )
-                        .frame(false),
-                    );
-                    // The list is walked when the popup opens, not every
-                    // frame the bar is drawn.
-                    if response.clicked() {
-                        self.model.refresh_projects();
-                    }
-                    let projects = self.model.projects();
-                    egui::Popup::menu(&response).show(|ui| {
-                        ui.set_min_width(220.0);
-                        for project in projects {
-                            let current = project.root == self.model.project_root;
-                            let label = if current {
-                                egui::RichText::new(&project.name).strong()
-                            } else {
-                                egui::RichText::new(&project.name)
-                            };
-                            if ui.button(label).clicked() && !current {
-                                self.switch_to = Some(project.root.clone());
-                            }
-                        }
-                        ui.separator();
-                        if ui.button("All projects…").clicked() {
-                            self.section = Section::Projects;
-                        }
-                    });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if custom_chrome {
                             // re_ui's caption buttons: close, maximize,
@@ -253,6 +219,9 @@ impl Shell {
                             ui.separator();
                         }
                         viewer_buttons(ui);
+                        // Dark, light or the system's: egui's own switch, so the
+                        // embedded viewer and this chrome change together.
+                        egui::global_theme_preference_switch(ui);
                         ui.add_space(8.0);
                         // What runs, whoever started it: a click opens
                         // the Running now panel (2026-09-25).
@@ -298,6 +267,7 @@ impl Shell {
             .exact_size(RAIL_WIDTH)
             .show(ui, |ui| {
                 ui.add_space(8.0);
+                self.project_switcher(ui);
                 for (group, items) in Section::RAIL {
                     if !group.is_empty() {
                         ui.add_space(10.0);
@@ -318,6 +288,63 @@ impl Shell {
             });
     }
 
+    /// The project switcher at the head of the rail: the open project's
+    /// name in a field with a chevron; click for the list, or the
+    /// Projects page. It lived in the title bar until 2026-10-02, where a
+    /// bare name beside the brand read as a stray label.
+    fn project_switcher(&mut self, ui: &mut egui::Ui) {
+        let palette = crate::theme::palette(ui);
+        let name = self.model.name();
+        let response = egui::Frame::new()
+            .fill(palette.surface)
+            .stroke(egui::Stroke::new(1.0, palette.hairline))
+            .corner_radius(6.0)
+            .inner_margin(egui::Margin::symmetric(10, 6))
+            .show(ui, |ui| {
+                ui.set_min_width(RAIL_WIDTH - 36.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Project")
+                            .small()
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.small_icon(
+                            &icons::ARROW_DOWN,
+                            Some(ui.tokens().label_button_icon_color),
+                        );
+                        ui.label(egui::RichText::new(name).strong());
+                    });
+                });
+            })
+            .response
+            .interact(egui::Sense::click())
+            .on_hover_text("Switch project");
+        if response.clicked() {
+            self.model.refresh_projects();
+        }
+        let projects = self.model.projects();
+        egui::Popup::menu(&response).show(|ui| {
+            ui.set_min_width(RAIL_WIDTH - 36.0);
+            for project in projects {
+                let current = project.root == self.model.project_root;
+                let label = if current {
+                    egui::RichText::new(&project.name).strong()
+                } else {
+                    egui::RichText::new(&project.name)
+                };
+                if ui.button(label).clicked() && !current {
+                    self.switch_to = Some(project.root.clone());
+                }
+            }
+            ui.separator();
+            if ui.button("All projects…").clicked() {
+                self.section = Section::Projects;
+            }
+        });
+        ui.add_space(6.0);
+    }
+
     fn rail_item(&mut self, ui: &mut egui::Ui, item: Section) {
         let tokens = ui.tokens();
         let selected = self.section == item;
@@ -326,8 +353,9 @@ impl Shell {
             .index()
             .map(|index| item.kinds().map(|k| index.count(k)).sum::<usize>())
             .unwrap_or(0);
+        let palette = crate::theme::palette(ui);
         let fill = if selected {
-            tokens.selection_bg_fill
+            palette.accent_soft
         } else {
             egui::Color32::TRANSPARENT
         };
@@ -338,8 +366,10 @@ impl Shell {
             .show(ui, |ui| {
                 ui.set_min_width(RAIL_WIDTH - 36.0);
                 ui.horizontal(|ui| {
-                    let tint = if selected {
+                    let tint = if selected && ui.visuals().dark_mode {
                         tokens.strong_fg_color
+                    } else if selected {
+                        palette.text
                     } else {
                         tokens.label_button_icon_color
                     };
@@ -612,7 +642,7 @@ impl Shell {
         egui::Panel::top("running-now")
             .frame(
                 egui::Frame::new()
-                    .fill(ui.tokens().top_bar_color)
+                    .fill(crate::theme::palette(ui).bar)
                     .inner_margin(egui::Margin::symmetric(12, 8)),
             )
             .show(ui, |ui| {

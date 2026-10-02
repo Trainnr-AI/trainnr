@@ -1753,6 +1753,21 @@ def set_studio_panels(
     )
 
 
+THEMES = ("system", "dark", "light")
+
+
+def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
+    """The Studio's theme: `light`, `dark`, or `system` (follow the
+    desktop). The embedded viewer, the pages and the card pictures follow;
+    the choice is kept across launches."""
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.control import command  # noqa: PLC0415
+
+    if theme not in THEMES:
+        return refusal(f"theme: {theme!r} is not one of {', '.join(THEMES)}")
+    return command(current_project(), "theme", theme=theme)
+
+
 def simulate_in_studio(task: str | None = None) -> dict[str, Any] | Refusal:
     """Run a scene in the Studio's MuJoCo viewport — a preview scene by a
     task's name (`describe_tasks`; the viewport's own list is what the
@@ -2742,6 +2757,10 @@ def build_server() -> Any:  # noqa: PLR0915
         "(right) panels."
     )(set_studio_panels)
     server.tool(
+        description="The Studio's theme: light, dark or system; the viewer, the pages "
+        "and the card pictures follow, and the choice is kept."
+    )(set_studio_theme)
+    server.tool(
         description="Run a scene in the MuJoCo viewport (a task's preview scene, or "
         "walk:<robot> for the newest trained walk) and open the Live view; no task "
         "stops it. State reports viewport_fps."
@@ -2862,7 +2881,33 @@ def build_server() -> Any:  # noqa: PLR0915
     server.tool(description="A job's state and log tail")(actions.job_status)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
     server.tool(description="Every job on record, newest first")(actions.list_jobs)
+    register_plugin_tools(server)
     return server
+
+
+# The extension seam for tools (docs/83): an installed package names a
+# callable `register(server)` under this entry-point group and it runs
+# here, after the built-ins, on the same server. The cloud package adds
+# its tools this way instead of forking the server; a failure names the
+# plugin and re-raises (`trainnr.plugins.load_entries`).
+TOOL_PLUGIN_GROUP = "trainnr.mcp_tools"
+
+
+def register_plugin_tools(server: Any) -> list[str]:
+    """Run every installed `trainnr.mcp_tools` entry point against `server`;
+    return the plugin names, in load order."""
+    from importlib.metadata import entry_points  # noqa: PLC0415
+
+    names: list[str] = []
+    for entry in entry_points(group=TOOL_PLUGIN_GROUP):
+        try:
+            entry.load()(server)
+        except Exception as exc:
+            raise RuntimeError(
+                f"MCP tool plugin {entry.name!r} ({entry.value}) failed: {exc}"
+            ) from exc
+        names.append(entry.name)
+    return names
 
 
 def main() -> None:

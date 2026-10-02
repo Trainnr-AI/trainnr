@@ -68,6 +68,7 @@ VERBS = (
     "compare",
     "time",
     "panels",
+    "theme",
     "simulate",
     "simulator",
     "screenshot",

@@ -628,11 +628,8 @@ impl ViewportFeed {
         if !self.is_active() {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new(
-                        "No scene is running. Pick one from the bar below — a training \
-                         run streams into the viewer underneath on its own.",
-                    )
-                    .color(ui.visuals().weak_text_color()),
+                    egui::RichText::new("No scene is running; pick one from the Scene menu below.")
+                        .color(ui.visuals().weak_text_color()),
                 );
             });
             return None;

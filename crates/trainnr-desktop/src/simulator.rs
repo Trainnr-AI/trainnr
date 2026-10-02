@@ -316,7 +316,8 @@ pub fn transport(
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         // The scene picker: a named menu, the empty state's only door.
-        let current = viewport.task().unwrap_or("Scene");
+        // In the empty state the picker is the page's one door: it says so.
+        let current = viewport.task().unwrap_or("Choose a scene");
         menu(ui, current, |ui| {
             for task in PREVIEW_TASKS {
                 if ui.button(*task).clicked() {

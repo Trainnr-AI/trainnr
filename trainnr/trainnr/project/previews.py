@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,9 +60,67 @@ ROBOT_CAMERA = {"distance_scale": 2.2, "azimuth": 135.0, "elevation": -20.0}
 SCENE_CAMERA = {"distance_scale": 1.3, "azimuth": 90.0, "elevation": -35.0}
 LOSS_LINE = re.compile(r"\bloss:\s*([0-9.eE+-]+)")
 MIN_CURVE_POINTS = 2  # a line needs two
-# The preview palette, named once: the ground, the series in order, the
-# faint reference line, the text.
-GROUND = (24, 26, 31)
+
+
+# The preview palette, named once per theme: the ground, the text at
+# three weights, the faint reference line, the chip behind a bar, the
+# accent, the series in order, the drift colours. The dark palette is the
+# original; the light one carries the same roles for the app's light
+# theme (2026-10-02). `write_previews(theme=...)` picks one for the
+# cards it draws; the simulator's own renders (robots, tasks) and photos
+# are theme-free and shared.
+@dataclass(frozen=True)
+class Palette:
+    ground: tuple[int, int, int]
+    text: tuple[int, int, int]
+    text_dim: tuple[int, int, int]
+    text_bright: tuple[int, int, int]
+    reference_line: tuple[int, int, int]
+    chip: tuple[int, int, int]
+    accent: tuple[int, int, int]
+    series: tuple[tuple[int, int, int], ...]
+    drift_red: tuple[int, int, int]
+    drift_blue: tuple[int, int, int]
+    drift_grey: tuple[int, int, int]
+
+
+DARK = Palette(
+    ground=(24, 26, 31),
+    text=(200, 205, 215),
+    text_dim=(160, 166, 178),
+    text_bright=(236, 238, 242),
+    reference_line=(60, 64, 72),
+    chip=(44, 48, 56),
+    accent=(88, 166, 255),
+    series=((88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)),
+    drift_red=(255, 107, 107),
+    drift_blue=(88, 166, 255),
+    drift_grey=(70, 74, 84),
+)
+LIGHT = Palette(
+    ground=(244, 242, 237),
+    text=(60, 60, 64),
+    text_dim=(92, 96, 104),
+    text_bright=(23, 23, 23),
+    reference_line=(214, 211, 203),
+    chip=(226, 223, 215),
+    accent=(0, 102, 204),
+    series=((0, 102, 204), (214, 128, 20), (34, 150, 70), (176, 60, 150)),
+    drift_red=(205, 50, 50),
+    drift_blue=(0, 102, 204),
+    drift_grey=(176, 172, 164),
+)
+PALETTES = {"dark": DARK, "light": LIGHT}
+DEFAULT_THEME = "dark"
+_PALETTE: ContextVar[Palette] = ContextVar("preview_palette", default=DARK)
+
+
+def pal() -> Palette:
+    """The palette of the preview being drawn."""
+    return _PALETTE.get()
+
+
+GROUND = DARK.ground
 # The card is drawn at PREVIEW_SIZE and shown at about half that (a 337 pt
 # card), so a size here is roughly twice what the eye gets: 28 px is the
 # floor for anything a person must read (2026-09-28, after the drift card
@@ -73,9 +133,6 @@ PT_LABEL = 30  # a bar's label or a legend
 CARD_MARGIN = 48
 BAR_H = 26
 ROW_STEP = 56  # a labelled bar row
-SERIES = [(88, 166, 255), (255, 176, 88), (120, 220, 140), (230, 120, 200)]
-REFERENCE_LINE = (60, 64, 72)
-TEXT = (200, 205, 215)
 PLOT_MARGIN = 40
 # A tile is small: a recording's channel shows at most this many
 # components here (the viewer draws up to `present.MAX_TRACES`).
@@ -84,8 +141,20 @@ TILE_TRACES = 8
 Renderer = Callable[[Project, Path, Path, dict[str, Any]], bool]
 
 
-def preview_path(project: Project, stamp: str) -> Path:
-    return project.root / INDEX_DIR / PREVIEWS_DIR / f"{stamp}.png"
+# The kinds whose picture is drawn here (PIL) and so follows the theme;
+# the others are the simulator's renders or the batch's own frames.
+THEMED_KINDS = frozenset(
+    {"scene", "drift", "recording", "policy", "certificate", "deploy", "finding", "run"}
+)
+
+
+def preview_path(project: Project, stamp: str, theme: str = DEFAULT_THEME) -> Path:
+    """Where a preview lives: the dark set at `previews/`, the light set
+    under `previews/light/`."""
+    base = project.root / INDEX_DIR / PREVIEWS_DIR
+    if theme != DEFAULT_THEME:
+        base = base / theme
+    return base / f"{stamp}.png"
 
 
 def stale_preview(source: Path, out: Path) -> bool:
@@ -99,26 +168,54 @@ def stale_preview(source: Path, out: Path) -> bool:
     return bool(times) and out.stat().st_mtime < max(times)
 
 
-def write_previews(project: Project, index: ProjectIndex) -> dict[str, str]:
+def write_previews(
+    project: Project, index: ProjectIndex, theme: str = DEFAULT_THEME
+) -> dict[str, str]:
     """Write a preview for every artifact that has none yet or whose
-    files changed since; return `{stamp: relative path}` for those that
-    exist afterwards."""
+    files changed since, in the palette of `theme` for the kinds drawn
+    here; return `{stamp: relative path}` for those that exist afterwards."""
+    palette = PALETTES.get(theme, DARK)
+    _drop_set_if_palette_changed(project, theme, palette)
     written: dict[str, str] = {}
     for artifact in index.artifacts:
-        out = preview_path(project, artifact.stamp)
+        themed = artifact.kind in THEMED_KINDS
+        out = preview_path(project, artifact.stamp, theme if themed else DEFAULT_THEME)
         source = project.root / artifact.path
         if not out.is_file() or stale_preview(source, out):
             renderer = _RENDERERS.get(artifact.kind)
             if renderer is None:
                 continue
+            token = _PALETTE.set(palette if themed else DARK)
             try:
                 ok = renderer(project, source, out, artifact.summary)
             except Exception:  # a preview is decoration; the index is not
                 ok = False
+            finally:
+                _PALETTE.reset(token)
             if not ok:
                 continue
         written[artifact.stamp] = out.relative_to(project.root).as_posix()
     return written
+
+
+PALETTE_STAMP = ".palette"
+
+
+def _drop_set_if_palette_changed(
+    project: Project, theme: str, palette: Palette
+) -> None:
+    """A preview is keyed by its artifact's mtime, which a palette change
+    never touches: the set's stamp names the palette it was drawn in, and
+    a different one empties the set so every card is redrawn."""
+    folder = preview_path(project, "x", theme).parent
+    stamp = folder / PALETTE_STAMP
+    want = repr(palette)
+    if stamp.is_file() and stamp.read_text(encoding="utf-8") == want:
+        return
+    for old in folder.glob("*.png"):
+        old.unlink(missing_ok=True)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(want, encoding="utf-8")
 
 
 # -- per kind -------------------------------------------------------------
@@ -256,13 +353,15 @@ def _plot_lines(
     if zero_line and lo < 0 < hi:
         y = at(x0, 0.0)[1]
         draw.line(
-            [(PLOT_MARGIN, y), (width - PLOT_MARGIN, y)], fill=REFERENCE_LINE, width=2
+            [(PLOT_MARGIN, y), (width - PLOT_MARGIN, y)],
+            fill=pal().reference_line,
+            width=2,
         )
     for i, pts in enumerate(series):
         if len(pts) >= MIN_CURVE_POINTS:
             draw.line(
                 [at(x, y) for x, y in pts],
-                fill=SERIES[i % len(SERIES)],
+                fill=pal().series[i % len(pal().series)],
                 width=stroke,
                 joint="curve",
             )
@@ -290,7 +389,7 @@ def _render_training_curve(source: Path, out: Path) -> bool:
     ]
     if len(points) < MIN_CURVE_POINTS:
         return False
-    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
+    image = Image.new("RGB", PREVIEW_SIZE, pal().ground)
     draw = ImageDraw.Draw(image)
     _plot_lines(draw, [points], zero_line=True)
     # The label sits on a patch of ground so a curve that peaks early
@@ -298,8 +397,8 @@ def _render_training_curve(source: Path, out: Path) -> bool:
     label = f"reward {points[-1][1]:.1f}"
     font = _font(PT_BODY)
     left, top, right, bottom = draw.textbbox((PLOT_MARGIN, 14), label, font=font)
-    draw.rectangle([left - 10, top - 6, right + 10, bottom + 6], fill=GROUND)
-    draw.text((PLOT_MARGIN, 14), label, fill=TEXT, font=font)
+    draw.rectangle([left - 10, top - 6, right + 10, bottom + 6], fill=pal().ground)
+    draw.text((PLOT_MARGIN, 14), label, fill=pal().text, font=font)
     return _save_pil(image, out)
 
 
@@ -328,7 +427,7 @@ def _render_run(
     ]
     if len(losses) < MIN_CURVE_POINTS:
         return False
-    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
+    image = Image.new("RGB", PREVIEW_SIZE, pal().ground)
     draw = ImageDraw.Draw(image)
     _plot_lines(draw, [[(float(i), v) for i, v in enumerate(losses)]], stroke=6)
     return _save_pil(image, out)
@@ -350,7 +449,7 @@ def _render_recording(
     channel = next(iter(recording.channels.values()), None)
     if channel is None or len(channel.times) < MIN_CURVE_POINTS:
         return False
-    image = Image.new("RGB", PREVIEW_SIZE, GROUND)
+    image = Image.new("RGB", PREVIEW_SIZE, pal().ground)
     draw = ImageDraw.Draw(image)
     values = channel.values.reshape(len(channel.times), -1)
     series = [
@@ -408,7 +507,7 @@ def _bars(
 ) -> None:
     """A track and a filled share of it: `box` is (x, y, width, height)."""
     x, y, w, h = box
-    draw.rounded_rectangle([x, y, x + w, y + h], radius=6, fill=(44, 48, 56))
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=6, fill=pal().chip)
     if fraction > 0:
         draw.rounded_rectangle(
             [x, y, x + max(12, int(w * min(1.0, fraction))), y + h],
@@ -431,27 +530,30 @@ def _render_certificate(
     if k is None or not n:
         return False
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), GROUND)
+    image = Image.new("RGB", (width, height), pal().ground)
     draw = ImageDraw.Draw(image)
     big, body, label = _font(PT_DISPLAY), _font(PT_BODY), _font(PT_LABEL)
     rate = k / n
     x0, x1 = CARD_MARGIN, width - CARD_MARGIN
-    draw.text((x0, 28), f"{k} / {n}", fill=TEXT_BRIGHT, font=big)
-    draw.text((x0, 152), f"{rate:.0%} success", fill=TEXT_DIM, font=body)
+    draw.text((x0, 28), f"{k} / {n}", fill=pal().text_bright, font=big)
+    draw.text((x0, 152), f"{rate:.0%} success", fill=pal().text_dim, font=body)
     interval = interval_of(c)
     if interval is not None:
         y = 224
-        draw.rounded_rectangle([x0, y, x1, y + 16], radius=8, fill=(44, 48, 56))
+        draw.rounded_rectangle([x0, y, x1, y + 16], radius=8, fill=pal().chip)
         lo, hi = interval
         draw.rounded_rectangle(
             [x0 + int((x1 - x0) * lo), y - 3, x0 + int((x1 - x0) * hi), y + 19],
             radius=9,
-            fill=(88, 166, 255),
+            fill=pal().accent,
         )
         px = x0 + int((x1 - x0) * rate)
-        draw.ellipse([px - 10, y - 3, px + 10, y + 19], fill=TEXT_BRIGHT)
+        draw.ellipse([px - 10, y - 3, px + 10, y + 19], fill=pal().text_bright)
         draw.text(
-            (x0, y + 30), f"95% CI [{lo:.2f}, {hi:.2f}]", fill=TEXT_DIM, font=label
+            (x0, y + 30),
+            f"95% CI [{lo:.2f}, {hi:.2f}]",
+            fill=pal().text_dim,
+            font=label,
         )
     funnel = c.get("funnel") or {}
     rows = [(k_, v) for k_, v in funnel.items() if isinstance(v, (int, float))]
@@ -460,14 +562,14 @@ def _render_certificate(
         top = max(v for _, v in rows) or 1
         bar_x = x0 + 190
         for name, value in rows[:3]:
-            draw.text((x0, y), name, fill=TEXT_DIM, font=label)
+            draw.text((x0, y), name, fill=pal().text_dim, font=label)
             _bars(
                 draw,
                 (bar_x, y + 6, x1 - bar_x - 96, BAR_H),
                 value / top,
                 (70, 200, 110),
             )
-            draw.text((x1 - 84, y), f"{int(value)}", fill=TEXT_BRIGHT, font=label)
+            draw.text((x1 - 84, y), f"{int(value)}", fill=pal().text_bright, font=label)
             y += ROW_STEP
     return _save_pil(image, out)
 
@@ -484,7 +586,7 @@ def _render_finding(
     raw = read_json(source)
     outcome = outcome_of(raw.get("outcome"))
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), GROUND)
+    image = Image.new("RGB", (width, height), pal().ground)
     draw = ImageDraw.Draw(image)
     arms = (outcome or {}).get("arms") if isinstance(outcome, dict) else None
     rows = []
@@ -496,33 +598,45 @@ def _render_finding(
         x0, x1 = CARD_MARGIN, width - CARD_MARGIN
         body, label = _font(PT_BODY), _font(PT_LABEL)
         draw.text(
-            (x0, 28), _cut(str(raw.get("id", "")), ID_CHARS), fill=TEXT_DIM, font=label
+            (x0, 28),
+            _cut(str(raw.get("id", "")), ID_CHARS),
+            fill=pal().text_dim,
+            font=label,
         )
         y = 92
         for name, k, n in rows[:ARM_ROWS]:
             # The label has its own column: an arm's name longer than it
             # ran under its bar ("expert-band-g", 2026-09-28).
-            draw.text((x0, y), _cut(name, ARM_LABEL_CHARS), fill=TEXT_BRIGHT, font=body)
+            draw.text(
+                (x0, y), _cut(name, ARM_LABEL_CHARS), fill=pal().text_bright, font=body
+            )
             _bars(
                 draw,
                 (ARM_BAR_X, y + 8, x1 - ARM_BAR_X - 112, BAR_H),
                 k / n if n else 0,
-                (88, 166, 255),
+                pal().accent,
             )
-            draw.text((x1 - 100, y), f"{k}/{n}", fill=TEXT_BRIGHT, font=body)
+            draw.text((x1 - 100, y), f"{k}/{n}", fill=pal().text_bright, font=body)
             y += ROW_STEP + 6
         if len(rows) > ARM_ROWS:
             draw.text(
-                (x0, y), f"+{len(rows) - ARM_ROWS} more", fill=TEXT_DIM, font=label
+                (x0, y),
+                f"+{len(rows) - ARM_ROWS} more",
+                fill=pal().text_dim,
+                font=label,
             )
         return _save_pil(image, out)
     # A claim with no numbers to draw: its first sentence, large — the
     # headline — under the record's id; the rest waits in the drawer.
-    draw.text(CARD_ORIGIN, raw.get("id", ""), fill=TEXT_DIM, font=_font(CARD_LABEL_PT))
+    draw.text(
+        CARD_ORIGIN, raw.get("id", ""), fill=pal().text_dim, font=_font(CARD_LABEL_PT)
+    )
     headline = _first_sentence(str(raw.get("claim", "")))
     y = HEADLINE_TOP
     for row in _wrap(headline, HEADLINE_CHARS)[:HEADLINE_LINES]:
-        draw.text((CARD_ORIGIN[0], y), row, fill=TEXT_BRIGHT, font=_font(HEADLINE_PT))
+        draw.text(
+            (CARD_ORIGIN[0], y), row, fill=pal().text_bright, font=_font(HEADLINE_PT)
+        )
         y += HEADLINE_LEADING
     return _save_pil(image, out)
 
@@ -538,8 +652,6 @@ HEADLINE_LEADING = 58
 HEADLINE_TOP = 92
 CARD_ORIGIN = (CARD_MARGIN, 28)  # where a card's small label starts
 CARD_LABEL_PT = PT_LABEL
-TEXT_DIM = (160, 166, 178)
-TEXT_BRIGHT = (236, 238, 242)
 
 
 def _cut(text: str, chars: int) -> str:
@@ -609,11 +721,11 @@ def _render_drift(
     except (OSError, ValueError, TypeError, KeyError):
         return False
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), GROUND)
+    image = Image.new("RGB", (width, height), pal().ground)
     draw = ImageDraw.Draw(image)
     word, body, label = _font(PT_WORD), _font(PT_BODY), _font(PT_LABEL)
     x0, x1 = CARD_MARGIN, width - CARD_MARGIN
-    ink = DRIFT_RED if d.drifted else TEXT_BRIGHT
+    ink = pal().drift_red if d.drifted else pal().text_bright
     draw.text((x0, 24), verdict_word(d.drifted), fill=ink, font=word)
     judged = [p for p in d.parameters if p.verdict != ANCHORED]
     counts = {
@@ -623,24 +735,26 @@ def _render_drift(
     }
     total = sum(counts.values())
     if not total:
-        draw.text((x0, 150), "no parameter judged", fill=TEXT_DIM, font=body)
+        draw.text((x0, 150), "no parameter judged", fill=pal().text_dim, font=body)
         return _save_pil(image, out)
     # One bar: the judged parameters as shares, in the legend's order.
     y = 150
     x = x0
-    for key, colour in DRIFT_COLOURS:
+    for key in DRIFT_COLOURS:
+        colour = getattr(pal(), DRIFT_PALETTE_FIELD[key])
         share = counts[key] / total
         w = int((x1 - x0) * share)
         if w:
             draw.rectangle([x, y, x + w, y + BAR_H], fill=colour)
             x += w
     y += BAR_H + 22
-    for key, colour in DRIFT_COLOURS:
+    for key in DRIFT_COLOURS:
+        colour = getattr(pal(), DRIFT_PALETTE_FIELD[key])
         draw.rectangle([x0, y + 8, x0 + 18, y + 26], fill=colour)
         draw.text(
             (x0 + 32, y),
             f"{counts[key]} {DRIFT_LEGEND[key]}",
-            fill=TEXT_DIM,
+            fill=pal().text_dim,
             font=label,
         )
         y += 40
@@ -649,25 +763,27 @@ def _render_drift(
         y += 8
         for name in d.left[:DRIFT_NAMES]:
             draw.text(
-                (x0, y), _cut(name, DRIFT_NAME_CHARS), fill=TEXT_BRIGHT, font=body
+                (x0, y), _cut(name, DRIFT_NAME_CHARS), fill=pal().text_bright, font=body
             )
             y += 42
         if len(d.left) > DRIFT_NAMES:
             draw.text(
-                (x0, y), f"+{len(d.left) - DRIFT_NAMES} more", fill=TEXT_DIM, font=label
+                (x0, y),
+                f"+{len(d.left) - DRIFT_NAMES} more",
+                fill=pal().text_dim,
+                font=label,
             )
     return _save_pil(image, out)
 
 
-DRIFT_RED = (255, 107, 107)
-DRIFT_BLUE = (88, 166, 255)
-DRIFT_GREY = (70, 74, 84)
-# The stacked bar's segments and legend, in order (`fleet.drift` words).
-DRIFT_COLOURS = (
-    ("left", DRIFT_RED),
-    ("within", DRIFT_BLUE),
-    ("unresolved", DRIFT_GREY),
-)
+# The stacked bar's segments and legend, in order (`fleet.drift` words);
+# the colour is the palette's at draw time.
+DRIFT_COLOURS = ("left", "within", "unresolved")
+DRIFT_PALETTE_FIELD = {
+    "left": "drift_red",
+    "within": "drift_blue",
+    "unresolved": "drift_grey",
+}
 DRIFT_LEGEND = {
     "left": "out of interval",
     "within": "within interval",
@@ -720,7 +836,7 @@ def _render_scene(
     except (OSError, ValueError, TypeError, KeyError):
         return False
     width, height = PREVIEW_SIZE
-    image = Image.new("RGB", (width, height), GROUND)
+    image = Image.new("RGB", (width, height), pal().ground)
     draw = ImageDraw.Draw(image)
     extent = _extent_pair(s.proxy.get("extent_m"))
     xy = splats.means[:, :2]
@@ -751,7 +867,7 @@ def _render_scene(
         x1 = margin + (extent[1][0] - lo[0]) * scale
         y0 = height - margin - (extent[1][1] - lo[1]) * scale
         y1 = height - margin - (extent[0][1] - lo[1]) * scale
-        draw.rectangle([x0, y0, x1, y1], outline=(88, 166, 255), width=2)
+        draw.rectangle([x0, y0, x1, y1], outline=pal().accent, width=2)
     g = s.gap
     head = (
         f"gap p95 {g.p95_m * 100:.1f} cm"
@@ -766,11 +882,11 @@ def _render_scene(
 
 def _scene_caption(draw: ImageDraw, head: str, count: object) -> None:
     """The gap's number as the title, the gaussian count under it."""
-    draw.text((CARD_MARGIN, 24), head, fill=TEXT_BRIGHT, font=_font(PT_TITLE))
+    draw.text((CARD_MARGIN, 24), head, fill=pal().text_bright, font=_font(PT_TITLE))
     gaussians = (
         f"{count:,} gaussians" if isinstance(count, int) else "gaussians uncounted"
     )
-    draw.text((CARD_MARGIN, 92), gaussians, fill=TEXT_DIM, font=_font(PT_LABEL))
+    draw.text((CARD_MARGIN, 92), gaussians, fill=pal().text_dim, font=_font(PT_LABEL))
 
 
 _RENDERERS: dict[str, Renderer] = {
