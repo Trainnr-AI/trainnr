@@ -29,6 +29,8 @@ pub struct Palette {
     pub link: egui::Color32,
     /// The soft tint behind the selected item (the rail, a chosen row).
     pub accent_soft: egui::Color32,
+    /// A line that must be seen: the title bar's edge, a divider.
+    pub edge: egui::Color32,
 }
 
 /// The light palette, designed 2026-10-02 after the operator's reference
@@ -45,6 +47,7 @@ pub const LIGHT: Palette = Palette {
     muted: egui::Color32::from_rgb(92, 96, 104),
     link: egui::Color32::from_rgb(0, 102, 204),
     accent_soft: egui::Color32::from_rgb(198, 229, 250),
+    edge: egui::Color32::from_rgb(214, 211, 203),
 };
 
 /// The palette of the theme in effect: dark from Rerun's tokens, light
@@ -63,6 +66,7 @@ pub fn palette(ui: &egui::Ui) -> Palette {
             muted: visuals.weak_text_color(),
             link: visuals.hyperlink_color,
             accent_soft: tokens.selection_bg_fill,
+            edge: tokens.native_frame_stroke.color,
         }
     } else {
         LIGHT

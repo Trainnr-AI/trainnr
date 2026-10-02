@@ -418,6 +418,8 @@ impl Event {
 }
 
 pub struct Control {
+    /// The root the watcher thread reads, kept in step with `set_root`.
+    watched_root: std::sync::Arc<std::sync::Mutex<PathBuf>>,
     root: PathBuf,
     seen: BTreeSet<String>,
     last_poll: Option<Instant>,
@@ -436,6 +438,7 @@ pub struct Control {
 impl Control {
     pub fn new(root: PathBuf) -> Self {
         let mut control = Self {
+            watched_root: std::sync::Arc::new(std::sync::Mutex::new(root.clone())),
             root,
             seen: BTreeSet::new(),
             last_poll: None,
@@ -455,7 +458,46 @@ impl Control {
     /// old project's state file becomes a pointer to the new root (the
     /// last state written there, `moved_to` set), never a stale
     /// heartbeat.
+    /// Watch the commands directory from a thread and wake the window
+    /// when a new command file appears, so the frame loop never has to
+    /// poll on its own clock: an idle window draws nothing, and a click
+    /// gets the very next frame (2026-10-03, "nothing feels instant" on a
+    /// path where every frame costs 50 ms). The root follows
+    /// `set_root`; the poll interval is the agent's worst-case latency.
+    pub fn watch(&mut self, ctx: egui::Context) {
+        let root = std::sync::Arc::clone(&self.watched_root);
+        std::thread::Builder::new()
+            .name("trainnr-command-watch".to_owned())
+            .spawn(move || {
+                let mut last: std::collections::BTreeSet<String> = Default::default();
+                loop {
+                    std::thread::sleep(POLL_EVERY);
+                    let dir = root.lock().map(|r| r.join(COMMANDS_RELATIVE));
+                    let Ok(dir) = dir else { break };
+                    let now: std::collections::BTreeSet<String> = std::fs::read_dir(&dir)
+                        .map(|entries| {
+                            entries
+                                .flatten()
+                                .map(|e| e.file_name().to_string_lossy().into_owned())
+                                .filter(|n| n.ends_with(".json") && !n.ends_with(".ack.json"))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if now.difference(&last).next().is_some() {
+                        ctx.request_repaint();
+                    }
+                    last = now;
+                }
+            })
+            .expect("the command watcher thread");
+    }
+
     pub fn set_root(&mut self, root: PathBuf) {
+        if let Ok(mut watched) = self.watched_root.lock() {
+            if *watched != root {
+                *watched = root.clone();
+            }
+        }
         if root != self.root {
             if let Some(mut last) = self.last_state.take() {
                 last.moved_to = Some(root.display().to_string());

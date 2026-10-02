@@ -195,7 +195,7 @@ impl Shell {
     ) {
         let tokens = ui.tokens();
         let palette = crate::theme::palette(ui);
-        egui::Frame::new()
+        let bar = egui::Frame::new()
             .fill(palette.bar)
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
@@ -258,6 +258,14 @@ impl Shell {
                     });
                 });
             });
+        // The bar's edge: the one line between the chrome and the page
+        // (2026-10-03, "the top header is all mixed up in the body").
+        let rect = bar.response.rect;
+        ui.painter().hline(
+            rect.x_range(),
+            rect.bottom() - 0.5,
+            egui::Stroke::new(1.0, palette.edge),
+        );
     }
 
     /// The left rail: grouped sections with counts, the current one lit.

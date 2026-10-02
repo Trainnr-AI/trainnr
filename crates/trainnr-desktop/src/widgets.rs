@@ -100,15 +100,13 @@ pub fn preview_uri(ui: &egui::Ui, path: &std::path::Path) -> Option<String> {
     // old one is forgotten when the new one is registered.
     if previous.as_deref().is_some_and(|p| p != uri) {
         if let Some(previous) = &previous {
-            ui.ctx().forget_image(previous);
+            if let Ok(mut pictures) = crate::pictures::shared(ui.ctx()).lock() {
+                pictures.forget(previous);
+            }
         }
     }
     if previous.as_deref() != Some(uri.as_str()) {
         ui.ctx().data_mut(|d| d.insert_temp(last, uri.clone()));
-    }
-    if ui.ctx().try_load_bytes(&uri).is_err() {
-        let bytes = std::fs::read(path).ok()?;
-        ui.ctx().include_bytes(uri.clone(), bytes);
     }
     Some(uri)
 }
@@ -138,34 +136,33 @@ pub fn thumbnail(ui: &mut egui::Ui, path: &std::path::Path, rect: egui::Rect) {
         sw: 0,
         se: 0,
     };
-    // Cropping to fit needs the source size; egui's loader gives it once
-    // the image is loaded. Until then the image is fit whole, which is a
-    // frame's worth of letterboxing at most.
-    let uv = ui
-        .ctx()
-        .try_load_image(&uri, egui::SizeHint::default())
+    // The picture is decoded and shrunk to the card's own pixel size off
+    // the UI thread (pictures.rs); until it arrives the card shows its
+    // ground, and the frame never waits.
+    let ppp = ui.ctx().pixels_per_point();
+    let max = [
+        (rect.width() * ppp).ceil() as u32,
+        (rect.height() * ppp).ceil() as u32,
+    ];
+    let texture = crate::pictures::shared(ui.ctx())
+        .lock()
         .ok()
-        .and_then(|poll| match poll {
-            egui::load::ImagePoll::Ready { image } => Some(image.size),
-            egui::load::ImagePoll::Pending { .. } => None,
-        })
-        .map(|[w, h]| {
-            let (w, h) = (w as f32, h as f32);
-            let display = rect.width() / rect.height();
-            let source = w / h;
-            if source > display {
-                let a = (w / h * rect.height() - rect.width()) / 2.0 / w;
-                egui::Rect::from_min_max(egui::pos2(a, 0.0), egui::pos2(1.0 - a, 1.0))
-            } else {
-                let a = (h / w * rect.width() - rect.height()) / 2.0 / h;
-                egui::Rect::from_min_max(egui::pos2(0.0, a), egui::pos2(1.0, 1.0 - a))
-            }
-        })
-        .unwrap_or(egui::Rect::from_min_max(
-            egui::pos2(0.0, 0.0),
-            egui::pos2(1.0, 1.0),
-        ));
-    egui::Image::new(uri)
+        .and_then(|mut pictures| pictures.get(ui.ctx(), &uri, path, max));
+    let Some(texture) = texture else {
+        return;
+    };
+    let [w, h] = texture.size();
+    let (w, h) = (w as f32, h as f32);
+    let display = rect.width() / rect.height();
+    let source = w / h;
+    let uv = if source > display {
+        let a = (w / h * rect.height() - rect.width()) / 2.0 / w;
+        egui::Rect::from_min_max(egui::pos2(a, 0.0), egui::pos2(1.0 - a, 1.0))
+    } else {
+        let a = (h / w * rect.width() - rect.height()) / 2.0 / h;
+        egui::Rect::from_min_max(egui::pos2(0.0, a), egui::pos2(1.0, 1.0 - a))
+    };
+    egui::Image::from_texture(&texture)
         .uv(uv)
         .corner_radius(cr)
         .paint_at(ui, rect);

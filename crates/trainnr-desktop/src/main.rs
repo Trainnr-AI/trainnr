@@ -30,6 +30,7 @@ mod listing;
 mod model;
 mod pages;
 mod palette;
+mod pictures;
 mod running;
 mod shell;
 mod simulator;
@@ -205,7 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let viewport = ViewportFeed::idle();
             let mut shell = Shell::new(Model::open(repo_root()));
             shell.open_project();
-            let control = control::Control::new(shell.model.project_root.clone());
+            let mut control = control::Control::new(shell.model.project_root.clone());
+            control.watch(cc.egui_ctx.clone());
             Ok(Box::new(StudioShell {
                 rerun_app,
                 viewport,
@@ -619,9 +621,8 @@ impl StudioShell {
     /// answering each on disk. A command that cannot be applied is
     /// refused with the reason, never dropped.
     fn apply_commands(&mut self, ui: &mut egui::Ui) {
-        // The next frame must come soon even when the human is idle: a
-        // command waits at most one poll interval.
-        ui.ctx().request_repaint_after(control::POLL_EVERY);
+        // The watcher thread (`Control::watch`) wakes the window when a
+        // command file appears; the frame loop itself never polls.
         self.control.set_root(self.shell.model.project_root.clone());
         for pending in self.control.poll() {
             let outcome = match pending.command {
