@@ -211,3 +211,40 @@ mod tests {
         assert_eq!(w, 250.0);
     }
 }
+
+/// A path as people read it: the home directory written `~`, the way
+/// editors and shells show it (and a screenshot does not carry the
+/// account name), and `..` segments resolved.
+pub fn home_relative(path: &str) -> String {
+    let resolved = std::fs::canonicalize(path)
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| path.to_owned());
+    // A symlinked project reads as the path it was opened by, when that
+    // path has no `..` to resolve.
+    let shown = if path.contains("/../") {
+        resolved
+    } else {
+        path.to_owned()
+    };
+    match std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+        Ok(home) if !home.is_empty() && shown.starts_with(&home) => {
+            format!("~{}", &shown[home.len()..])
+        }
+        _ => shown,
+    }
+}
+
+#[cfg(test)]
+mod home_relative_tests {
+    use super::home_relative;
+
+    #[test]
+    fn the_home_directory_reads_as_a_tilde() {
+        let home = std::env::var("HOME").unwrap_or_default();
+        if home.is_empty() {
+            return;
+        }
+        assert_eq!(home_relative(&format!("{home}/projects/x")), "~/projects/x");
+        assert_eq!(home_relative("/srv/projects/x"), "/srv/projects/x");
+    }
+}

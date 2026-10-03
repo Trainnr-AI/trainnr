@@ -793,7 +793,7 @@ pub fn row(
         }
         if crate::viewport::is_known_scene(&job.viewport)
             && ui
-                .small_button("watch in viewport")
+                .small_button("watch in simulator")
                 .on_hover_text(&job.viewport)
                 .clicked()
         {

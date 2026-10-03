@@ -34,6 +34,10 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- A README with a capture of every stage in the Studio, a real quickstart
+  session, the robots the loop has run and the headline results with their
+  records; the app icon reads "tr".
+
 - Contributing on GitHub: issue forms (bug, feature, robot support) with
   contact links to Discussions and private security reports, a pull request
   template, a sign-off check on every pull request, weekly Dependabot

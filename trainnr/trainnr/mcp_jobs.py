@@ -74,7 +74,7 @@ SOURCE_ENV = "TRAINNR_RUN_SOURCE"
 JOB_ID_ENV = "TRAINNR_JOB_ID"
 JOBS_DIR_ENV = "TRAINNR_JOBS_DIR"
 # The Studio's viewport scene that plays the project's walk (its newest
-# checkpoint): what a training run's "watch in viewport" opens
+# checkpoint): what a training run's "watch in simulator" opens
 # (`viewport.rs::WALK_TASK`, pinned by test_studio_mirrors).
 VIEWPORT_WALK = "walk"
 

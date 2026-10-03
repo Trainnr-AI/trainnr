@@ -469,7 +469,7 @@ pub fn transport(
         // Inspect and full screen, at the right end.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
-                .small_icon_button(&re_ui::icons::CHROME_MAXIMIZE, "Viewport full screen  (F)")
+                .small_icon_button(&re_ui::icons::CHROME_MAXIMIZE, "Simulator full screen  (F)")
                 .clicked()
             {
                 action = Some(Action::ToggleFullscreen);

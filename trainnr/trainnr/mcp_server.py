@@ -1741,7 +1741,7 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
 def focus_studio_recording(recording: str) -> dict[str, Any]:
     """Bring a recording to the front of the Studio's viewer by the
     application id the tool that streams it used (the Sources list's
-    name): the viewport's twin is `trainnr-sim-<scene>`, a training run
+    name): the simulator's twin is `trainnr-sim-<scene>`, a training run
     its stamp, a gate `trainnr-gate-<runtime>-<deployment>`. A human's click on
     a card leaves that card in front, and a twin started afterwards stays
     a row in Sources; this is how an agent turns the viewer back. Returns
@@ -1864,15 +1864,15 @@ def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
 
 
 def simulate_in_studio(task: str | None = None) -> dict[str, Any] | Refusal:
-    """Run a scene in the Studio's MuJoCo viewport — a preview scene by a
-    task's name (`describe_tasks`; the viewport's own list is what the
+    """Run a scene in the Studio's MuJoCo simulator — a preview scene by a
+    task's name (`describe_tasks`; the simulator's own list is what the
     Simulator page offers), `walk:<robot>` for the newest trained walk
     policy of a registered walk family, or a deployment of the open
     project (`deploy:<name>` live and drivable, `deploy:<name>:gate:
     <runtime>:<trial>` a gate trial re-run or replayed, `deploy:<name>:
     preflight:<segment>` a pre-flight segment replayed; the index's
     `viewport` summary lists them, docs/77 §11) — and switch to the Live view;
-    with no task, stop the viewport. The
+    with no task, stop the simulator. The
     state file then reports `viewport_task` and `viewport_fps`, the
     frames drawn to the screen in the last second."""
     from trainnr.project import current_project  # noqa: PLC0415

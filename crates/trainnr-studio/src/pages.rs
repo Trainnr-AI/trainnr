@@ -653,7 +653,7 @@ pub fn overview(
         );
         ui.add_space(2.0);
         ui.horizontal(|ui| {
-            weak_body(ui, &index.root);
+            weak_body(ui, crate::widgets::home_relative(&index.root));
             weak_body(ui, format!("· updated {}", short_time(&index.indexed)));
         });
         ui.add_space(24.0);
@@ -1560,7 +1560,7 @@ fn detail(
                             let scenes = crate::model::viewport_scenes(artifact);
                             if let Some(((_, live), replays)) = scenes.split_first() {
                                 if !replays.is_empty() {
-                                    ui.menu_button("Replay in viewport", |ui| {
+                                    ui.menu_button("Replay in simulator", |ui| {
                                         for (label, scene) in replays {
                                             if ui.button(label).clicked() {
                                                 nav.scene = Some(scene.clone());
@@ -1570,7 +1570,7 @@ fn detail(
                                     });
                                 }
                                 if ui
-                                    .button("Play in viewport")
+                                    .button("Play in simulator")
                                     .on_hover_text(
                                         "The exported policy live in the Simulator's MuJoCo \
                                      viewport: drive it with WASD",
