@@ -83,5 +83,5 @@ def _can_render() -> bool:
 RENDER = _can_render()
 needs_render = unittest.skipUnless(
     RENDER,
-    "no offscreen rendering here (no OpenGL/EGL context); runs on a desktop or Linux CI",
+    "no offscreen OpenGL/EGL context here; runs on a desktop or Linux CI",
 )
