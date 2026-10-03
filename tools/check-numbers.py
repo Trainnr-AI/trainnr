@@ -83,6 +83,12 @@ def main() -> int:
     have = recorded_ratios()
     problems: list[str] = []
     for rel in PROSE:
+        if not (REPO / rel).is_file():
+            # The public edition ships without the maintainers' ledgers
+            # (tools/export/private-paths.txt); their numbers are checked
+            # on the private checkout.
+            print(f"skipped (not in this edition): {rel}")
+            continue
         text = (REPO / rel).read_text()
         for lineno, line in enumerate(text.splitlines(), 1):
             listed = {m.start() for m in LISTED.finditer(line)}
