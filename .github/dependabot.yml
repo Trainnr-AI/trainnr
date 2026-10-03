@@ -1,0 +1,28 @@
+# Weekly update pull requests, grouped so they are few: the CI actions
+# (pinned to commit SHAs in the workflow), the Python lockfiles and the
+# Studio's Cargo lockfile. Each goes through the same gates as any PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+  - package-ecosystem: uv
+    directory: /trainnr
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    groups:
+      python: { patterns: ["*"], update-types: ["minor", "patch"] }
+  - package-ecosystem: uv
+    directory: /trainnr-mjlab
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    groups:
+      python: { patterns: ["*"], update-types: ["minor", "patch"] }
+  - package-ecosystem: cargo
+    directory: /crates/trainnr-studio
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    groups:
+      rust: { patterns: ["*"], update-types: ["minor", "patch"] }

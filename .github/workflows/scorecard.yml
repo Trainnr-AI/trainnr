@@ -1,0 +1,36 @@
+# OpenSSF Scorecard: an outside rating of this repository's security
+# practices (branch protection, pinned actions, token permissions,
+# signed releases, dependency updates), shown as a README badge and in
+# the Security tab. It reads the public repository, so it does nothing
+# while the repository is private.
+name: scorecard
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "30 5 * * 1"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write   # upload the findings to the Security tab
+      id-token: write          # publish the result for the badge
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
+        with:
+          sarif_file: results.sarif

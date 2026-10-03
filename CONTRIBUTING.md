@@ -3,6 +3,14 @@
 Thank you for considering it. This page is short on purpose; the long
 version of every rule below is in `docs/`.
 
+## Asking, reporting, proposing
+
+- **Questions and ideas** go to [Discussions](https://github.com/Trainnr-AI/trainnr/discussions).
+- **Bugs, feature requests and robot support** go through the issue forms
+  (New issue); each asks for what a maintainer needs to act.
+- **Security problems** never go in an issue: use "Report a vulnerability"
+  under the Security tab (`SECURITY.md`).
+
 ## Before you write code
 
 - **Open an issue first** for anything beyond a typo or a one-line fix,
@@ -72,6 +80,19 @@ subset. Both must be green:
 A screen you changed is verified by looking at it: launch the Studio,
 read every label as a user would, and attach the screenshot to the pull
 request.
+
+## What happens to your pull request
+
+- CI runs on every pull request: the sign-off check, the Rust and Python
+  gates and the test suite with line coverage (the coverage table is in the
+  run's summary). A first-time contributor's run starts once a maintainer
+  approves it; that is GitHub's guard against a stranger's code running
+  with this repository's token, not a judgement of the change.
+- `main` accepts changes only through a pull request with green checks and
+  a code owner's approval (`.github/CODEOWNERS`); it is never force-pushed.
+  Only maintainers merge, by squash or rebase.
+- Dependabot opens weekly update pull requests; they go through the same
+  gates.
 
 ## Licence
 

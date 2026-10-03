@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Trainnr-AI/trainnr/security/advisories/new
+    about: Privately, never as a public issue. See SECURITY.md.
+  - name: Ask a question or share what you built
+    url: https://github.com/Trainnr-AI/trainnr/discussions
+    about: Questions, ideas and show-and-tell go to Discussions; issues are for bugs and agreed work.

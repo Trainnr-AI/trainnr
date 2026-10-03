@@ -52,3 +52,9 @@ trainnr/build/
 trainnr/dist/
 trainnr-mjlab/build/
 trainnr-mjlab/dist/
+
+# coverage.py data and reports
+.coverage
+coverage.json
+badge-coverage.json
+htmlcov/

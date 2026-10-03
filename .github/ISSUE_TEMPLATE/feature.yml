@@ -1,0 +1,33 @@
+name: Feature request
+description: A workflow trainnr should support.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user and the workflow, not the implementation. Large changes are shaped here before anyone builds them.
+  - type: textarea
+    id: who
+    attributes:
+      label: Who needs it, doing what
+      placeholder: "I train a quadruped policy and deploy it on ... ; today I have to ..."
+    validations:
+      required: true
+  - type: textarea
+    id: want
+    attributes:
+      label: What you want to happen
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: What you do today instead
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you build it?
+      options:
+        - "Yes, with guidance"
+        - "Maybe"
+        - "No"

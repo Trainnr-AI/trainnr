@@ -1,0 +1,31 @@
+name: Robot or simulator support
+description: Ask for a robot, actuator, telemetry format or simulator trainnr does not handle yet.
+labels: ["robot-support", "needs-triage"]
+body:
+  - type: input
+    id: robot
+    attributes:
+      label: Robot or format
+      placeholder: "Unitree G1 / Dynamixel XM430 / ROS 2 bag from ... / Isaac Sim USD"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Where its model or spec lives
+      description: A URL to the MJCF, URDF or USD and its licence, or the telemetry format's spec.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you want to do with it
+      description: Identify it, train it, deploy to it, import a recording.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you tried
+      description: The onboard_robot or ingest_recording reply, if you got that far.
+      render: text

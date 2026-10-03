@@ -34,6 +34,13 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- Contributing on GitHub: issue forms (bug, feature, robot support) with
+  contact links to Discussions and private security reports, a pull request
+  template, a sign-off check on every pull request, weekly Dependabot
+  updates, line coverage in CI with a README badge, OpenSSF Scorecard,
+  every CI action pinned to a commit, and `tools/github-setup.sh` for the
+  repository's settings (a ruleset on `main` once public).
+
 - A light theme for the Studio, designed (a white page, warm paper
   panels, soft blue tints): a switch in the title bar (dark, light or the
   system's), kept across launches; the embedded viewer, the pages and the

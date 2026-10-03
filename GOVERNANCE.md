@@ -5,7 +5,11 @@ the Functional Source License (FSL-1.1-ALv2).
 
 ## Roles
 
-- **Maintainers** merge changes, cut releases and decide the roadmap.
+- **Maintainers** merge changes, cut releases and decide the roadmap. Only
+  maintainers hold write access; `main` is protected by a ruleset that
+  requires a pull request, green checks and a code owner's approval, and
+  only the organisation's admins may bypass it (`tools/github-setup.sh`
+  applies these settings and lists who can merge).
   Today there is one: Prakhar Aggarwal (@aggprakhar). Maintainers are
   listed in `.github/CODEOWNERS`; a contributor becomes one by sustained,
   reviewed contributions and the agreement of the existing maintainers.

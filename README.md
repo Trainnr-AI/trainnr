@@ -1,5 +1,14 @@
 # trainnr
 
+[![gates](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml/badge.svg?branch=main)](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml)
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Trainnr-AI/trainnr/badges/coverage.json)](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Trainnr-AI/trainnr/badge)](https://scorecard.dev/viewer/?uri=github.com/Trainnr-AI/trainnr)
+[![licence: FSL-1.1-ALv2](https://img.shields.io/badge/licence-FSL--1.1--ALv2-blue)](LICENSE)
+[![python ≥ 3.10](https://img.shields.io/badge/python-%E2%89%A5%203.10-blue)](trainnr/pyproject.toml)
+[![MCP server](https://img.shields.io/badge/MCP-76%20tools-6f42c1)](#install)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#install)
+[![DCO](https://img.shields.io/badge/DCO-signed--off-green)](CONTRIBUTING.md)
+
 **The end-to-end robotics platform, run from your coding agent: real-to-sim,
 train, sim-to-real, and back.** Identify your robot's dynamics from its own
 telemetry into a simulation model, generate training datasets, train

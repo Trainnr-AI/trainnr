@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in trainnr does not do what it says.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A bug we can reproduce gets fixed first. Security problems go to the Security tab, never here.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - MCP server or a tool (trainnr mcp)
+        - The Studio (desktop app)
+        - Identification (identify_system, check_drift)
+        - Training or evaluation (train_walk, evaluate_walk, trainnr-mjlab)
+        - Deployment (export, gate, pre-flight)
+        - Data (demos, datasets, recordings)
+        - Scenes (capture, import)
+        - Claude Code plugin, agents or skills
+        - Install or docs
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: ran
+    attributes:
+      label: What you ran
+      description: The tool call or command, with its arguments. Paste the agent's tool call if an agent made it.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: The reply or error, and the job log tail if a job failed (projects/<name>/mcp-jobs/<job>.log).
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: "`trainnr version`, or `git rev-parse --short HEAD`"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Ubuntu 24.04, RTX 4090 / macOS 15, M3 / Windows 11 + WSL2"
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: A screenshot for a Studio problem, the robot model, the project's stage map.
