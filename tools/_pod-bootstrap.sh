@@ -7,7 +7,7 @@
 # exports the TRAINNR_* variables first; the defaults below are its `Remote`.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-TRAINNR_DIR="${TRAINNR_DIR:-/workspace/robotiq}"
+TRAINNR_DIR="${TRAINNR_DIR:-/workspace/trainnr}"
 TRAINNR_VENV="${TRAINNR_VENV:-.venv-train}"
 TRAINNR_PYTHON="${TRAINNR_PYTHON:-3.12.8}"
 TRAINNR_EXTRAS="${TRAINNR_EXTRAS:---extra sim --extra viz --extra train}"

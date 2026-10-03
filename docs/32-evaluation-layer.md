@@ -1,17 +1,17 @@
 # The evaluation layer, minimum lines: standard on the outside, ours on the inside
 
-*Written 2026-08-26, the evening T5's loop closed. The operator's question:
-"how can we create the most standard, ecosystem-fit, production-grade,
-minimum-lines evaluation for ourselves — what can be used from open
-source, what needs to be built — adhering to our coding standards?" This
-is the answer, built on three primary-source reads made the same day:
+*Written 2026-08-26, the evening T5's loop closed. The question was how
+to build the most standard, ecosystem-fit, production-grade evaluation in
+the fewest lines: what open source already provides, what has to be
+built, within the coding standards. This is the answer, built on three
+primary-source reads made the same day:
 LeRobot's evaluation contract from the installed package
 ([e2e-research/45](e2e-research/45-lerobot-eval-contract.md)), six
 ecosystem interfaces from their repositories
 ([46](e2e-research/46-ecosystem-eval-interfaces.md)), and a line-by-line
 audit of our own surface (numbers below are from it), on top of the
-Arena sweep ([30 §7](30-the-full-loop.md)). It is a plan, not a build;
-nothing here is implemented yet.*
+Arena sweep (the operator's brief, folded into [the loop](76-the-loop.md)).
+Written as a plan; §9 records what was built, and §10 the review of it.*
 
 Terms, defined once. An **environment** (env) is the simulated task as
 code: holds state, takes an action, returns an observation. **Gymnasium**
@@ -49,7 +49,7 @@ and the control rate each defined once instead of three or four times.
 |---|---|---|
 | The env interface | gymnasium 1.3.0 (`gym.Env`, `SyncVectorEnv`/`AsyncVectorEnv`, `AutoresetMode`) | LeRobot 0.6.1 pins `gymnasium>=1.1.1,<2`; every system in 46 speaks it |
 | Rollout runner, batching, video, per-episode JSON | `lerobot-eval` (*lerobot/scripts/lerobot_eval.py*) | reads four things from an env: `pixels`/`agent_pos` observations, `info["is_success"]`, `_max_episode_steps`, `task_description` (45 §1.2–1.4); seeds episode *i* with `seed + i` (45 §1.5) |
-| In-loop eval while training, on OUR task | `lerobot-train` calls the same `make_env` and `eval_policy_all` at `env_eval_freq` (verified: *lerobot/scripts/lerobot_train.py* L84, L629, L720) | the "watch training in the sim" the operator asked for, through the ecosystem's own path |
+| In-loop eval while training, on OUR task | `lerobot-train` calls the same `make_env` and `eval_policy_all` at `env_eval_freq` (verified: *lerobot/scripts/lerobot_train.py* L84, L629, L720) | the "watch training in the sim" requirement, through the ecosystem's own path |
 | Policy loading, pre/post processors, action-chunk queues | LeRobot's `make_policy` + `make_pre_post_processors` — ACT, SmolVLA, π0/π0.5 (LeRobot format), XVLA | replaces our `lerobot_checkpoint_policy` adapter and its hand-rolled uint8→CHW conversion (45 §2) |
 | Plugin registration without forking | `register_third_party_plugins()` imports any installed distribution named `lerobot_env_*` (*lerobot/utils/import_utils.py* L223–236); or `--env.discover_packages_path=<module>` on the CLI (*lerobot/configs/parser.py* L43, L126–128) | both verified in the installed package |
 | Sharing the env with others | the EnvHub door: a repo with *env.py* exposing `make_env(n_envs, use_async_envs, cfg)` (46 §1.5) | Arena publishes this way; the contract is the code above |
@@ -83,7 +83,7 @@ Total essential ≈ 1,470 lines, and none of it changes shape.
 ## 4. What to build (about 300 lines, three files)
 
 **4.1 The env — `trainnr/envs/lerobot` (~220 code lines).** One
-class per rig, not per task: `RobotiqEnv(task, ...)` where `task` is
+class per rig, not per task: `TrainnrEnv(task, ...)` where `task` is
 the existing `build_transfer_cube()` / `build_kitting()` result.
 
 - `metadata = {"render_modes": ["rgb_array"], "render_fps": 50}` —
@@ -111,10 +111,10 @@ the existing `build_transfer_cube()` / `build_kitting()` result.
 - The census gate runs in `__init__`; an unstamped `source` is refused
   there too — the same rules `score_policies` enforces today, moved to
   where the env is born.
-- `RobotiqEnvConfig(EnvConfig)` registered as `trainnr_aloha2`:
+- `TrainnrEnvConfig(EnvConfig)` registered as `trainnr_aloha2`:
   `features`, `features_map` (`agent_pos → observation.state`,
   `pixels/top → observation.images.top`), `create_envs` building
-  `SyncVectorEnv`/`AsyncVectorEnv` over `partial(RobotiqEnv, ...)`, and
+  `SyncVectorEnv`/`AsyncVectorEnv` over `partial(TrainnrEnv, ...)`, and
   `get_env_processors()` carrying the measured gripper mapping
   (closed = 0.0078 m) as an env post-processor, so the action space
   stays honest in metres.
@@ -148,7 +148,7 @@ T2 and T5 rows of zeros hid.
 
 | Item | Lines | Replaced by |
 |---|---:|---|
-| `MuJoCoBackend._closed_loop`, `closed_loop_rollout`, `closed_loop_vision_rollout` | 139 | `RobotiqEnv.reset/step` over the Stepper |
+| `MuJoCoBackend._closed_loop`, `closed_loop_rollout`, `closed_loop_vision_rollout` | 139 | `TrainnrEnv.reset/step` over the Stepper |
 | `PhysicsBackend` Protocol (one implementation ever; keep `ModelCounts`) | ~77 | `gym.Env` is the backend-agnostic interface |
 | `VisionPolicy`, `evaluate_vision_policies`, `lerobot_checkpoint_policy` | 115 | `lerobot-eval` + LeRobot's processors |
 | `SimPolicy`, `evaluate_policies` | 23 | a ~15-line local runner over the same env with `environment_state` exposed (scripted experts are not `PreTrainedPolicy`s) |
@@ -182,7 +182,7 @@ collapse to one each.
 |---|---|
 | stats/bundles/certificate stdlib-only, so a certificate recomputes on any Python ≥ 3.10 | untouched; the env package depends on gymnasium and lerobot and lives behind the `train` extra — the certificate never imports it |
 | Counts, never rates | `SimScore` folds records; sim n reaches the certificate (§6) |
-| `name@hash` or refused; census before any episode | moved into `RobotiqEnv.__init__`, tested there |
+| `name@hash` or refused; census before any episode | moved into `TrainnrEnv.__init__`, tested there |
 | One truth per fact; pin both ends where a copy must exist | observation contract, stepping loop, control rate, keyframe home: one definition each; a test pins our `features_map` against LeRobot's `preprocess_observation` output — the one copy we cannot avoid |
 | Magic numbers get names (PLR2004 on) | `render_fps` derived, hold window and thresholds already named |
 | Paired trials by trial index, no RNG | `reset(seed)` maps seed → trial, never draws |
@@ -198,14 +198,14 @@ collapse to one each.
 1. **Stepper extraction** — `_closed_loop` rewritten over it; the
    existing sim tests (Gate A pendulum, ALOHA ladders) must pass
    unchanged. No new behaviour.
-2. **`RobotiqEnv` + `RobotiqEnvConfig`** — test: gymnasium's
+2. **`TrainnrEnv` + `TrainnrEnvConfig`** — test: gymnasium's
    `check_env`; `preprocess_observation(env.reset()[0])` yields exactly
    `observation.state` (14,) and `observation.images.top` (3, 480, 640);
    two policies at `seed=1000..1003` start from identical states
    (pairing); `is_success` reaches `final_info` under `SAME_STEP`.
 3. **`lerobot-eval` end to end** on the T5 checkpoint
    (`--env.type=trainnr_aloha2 --env.discover_packages_path=trainnr.envs.lerobot --seed=1000 --eval.n_episodes=4`)
-   — must reproduce this afternoon's 0/4, and write `eval_info.json`.
+   — must reproduce the 0/4 of the same day, and write `eval_info.json`.
 4. **Records + fold** — `score_policies` becomes the fold; `certify()`
    unchanged; the Gate A dry run passes on records; the §6 fixes land
    with their pins.
@@ -225,9 +225,9 @@ needed for step 3's checkpoint.
   hand-rolled inner loop. A pin: the Stepper reproduces
   `closed_loop_rollout` bit for bit on the pendulum, including the short
   last tick. Existing sim tests unchanged and green.
-- **Step 2, the env**: `trainnr/envs/gymnasium_env.py` (`RobotiqEnv`,
+- **Step 2, the env**: `trainnr/envs/gymnasium_env.py` (`TrainnrEnv`,
   `TASKS`, `make_env`, `gym.register("trainnr/<task>-v0")`) and
-  `trainnr/envs/lerobot_plugin.py` (`RobotiqEnvConfig`, registered
+  `trainnr/envs/lerobot_plugin.py` (`TrainnrEnvConfig`, registered
   as `trainnr`). gymnasium joined the `sim` extra. Pinned: gymnasium's
   own `check_env`; the raw observation shape; seed = trial pairing;
   truncation with the verdict under both names; the unstamped source
@@ -268,7 +268,7 @@ needed for step 3's checkpoint.
   through the env; `vision.py` is camera data now); `act_sim_vision_policy`
   (the two gym-aloha mapping functions stay as data adapters for demo
   replay); `train-watch`'s `_Backend` shim and hand-rolled `_episode`
-  (the tool drives `RobotiqEnv`, binds its viewer to the env's persistent
+  (the tool drives `TrainnrEnv`, binds its viewer to the env's persistent
   `MjData`, and loads checkpoints through LeRobot's own processors and
   `preprocess_observation`; `--action-space {act_sim,bundle}` says what
   the checkpoint speaks). `SO101Task` gained `cameras` so the ArmnetBench
@@ -297,7 +297,7 @@ needed for step 3's checkpoint.
   `trainnr/tasks/task.py`, validated on construction (a positive
   state width, a non-empty instruction, at least one camera) replaces
   `SO101Task` and `ALOHA2Task`; every builder states its rig's jointpos
-  block and its sentence, and `RobotiqEnv(task, source=…)` reads them
+  block and its sentence, and `TrainnrEnv(task, source=…)` reads them
   instead of taking them as keyword arguments. `KITTING_INSTRUCTION` is
   one string read by the exporter and the task. All six tasks — the
   four SO-101 and the two ALOHA 2 — register as `trainnr/<task>-v0` on
@@ -334,7 +334,7 @@ needed for step 3's checkpoint.
 
 ## 10. The review pass (2026-08-26, night) — standards applied
 
-The operator's standard, stated after the build: modular and
+The standard, stated after the build: modular and
 cross-platform, nothing hardcoded unless necessary, open-source-ready,
 strings and constants handled cleanly, DRY. Three reviewers read the
 day's code against it (hardcoding/portability/OSS hygiene; DRY and
@@ -383,11 +383,7 @@ into two batches the same night. What changed:
 - **Open-source hygiene.** `LICENSE` (Apache-2.0) and `NOTICE` at the
   root, `license` on the Cargo workspace; `.env` and per-user Claude
   settings ignored; provenance records a batch's name, not its absolute
-  path; `mujoco-warp` marked non-Darwin. Left for the operator's
-  decision: `claude-sync/` (transcripts, a personal memory file, home
-  paths) is tracked and must be filtered out of history before any
-  public push — it is the cross-machine chat sync, so its fate is a
-  choice, not a fix.
+  path; `mujoco-warp` marked non-Darwin.
 - **Library code out of tools.** `envs/lerobot_policy.py` (a checkpoint
   as `act(observation)` through LeRobot's own processors) and
   `envs/lerobot_info.py` (the `eval_info.json` reader over the generic
@@ -439,12 +435,12 @@ Still open after it, with the reason each one waits:
 | `grid_scene` / `grid_model_from_xml` (show-many, rl-watch) into `_rig3d` | Same family; both tools work, both restate a ground plane and a pitch. |
 | `show-rig`'s sixteen tuned thresholds (`.ruff.toml` exempts the file, with the reason) | A hand-tuned demo controller; naming them is honest only with the desk to re-measure. |
 | `RatioParams`/`RigNames` in `robot/drivetrain_fit.py` | The car rig's identification code, off the training path; its fit records are test-pinned. |
-| `sim-errand.py`'s thirteen constants mirrored from `firmware/pico-odom/src/main.rs` without a test that reads them | The right test is a regex over `const X: T = v;` in that file; queued with the firmware's next change. |
+| `sim-errand.py`'s thirteen constants mirrored from the Pico firmware's `main.rs` (in the rig archive) without a test that reads them | The right test is a regex over `const X: T = v;` in that file; queued with the firmware's next change. |
 | `cli_flags` spelling its four field names as literals rather than `dataclasses.fields` | The test pins every flag; a field rename fails loudly. |
 | The GPU model in the MJX stamp (today: device class) | The architecture finding suggests it; measured on one GPU so far. |
 | `physics.__all__` listing the lazy `MJXWarpBackend` | A star import needs the extra; nobody star-imports. |
 | The tools' `qpos[15]` / `CUBE_QPOS` cube index by body lookup | Display-only; `show-many` and `show-yellow` show the pattern. |
-| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate cannot run on this box (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's (now in the rig archive, Trainnr-AI/rig) identical fix. |
+| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate could not run on the development machine (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's identical fix (now in the rig archive). |
 | From §10, still open: `EpisodeDesign` structs (kitting's is `KittingSpec` since 2026-08-27; the SO-101 tasks' step tables are next), typed `MilestoneEvent`/`ProtocolFields`, bundles as package data, the ALOHA joint-name lists derived once, the env's own `import mujoco` | Reasons unchanged. |
 | ~~The scripted expert has no stamp of its own~~ — **done 2026-08-27 (late)**: `tasks.aloha2.expert_stamp` names the choreography by content (`kitting-expert@<hash>` over `KittingChoreography.fields()` and the segment table); every manifest carries it, the dataset's provenance carries the one value, and a batch with two experts is refused at export | A task's stamp names the SPEC, a batch's provenance the BUNDLE; until this, a choreography change left both unchanged while the demonstrations differed |
 
@@ -453,10 +449,11 @@ Still open after it, with the reason each one waits:
 1. Async vector envs under WSL: LIBERO defers simulator creation to the
    first `reset` inside the worker to dodge stale EGL contexts under
    `forkserver`; our `mujoco.Renderer` needs the same deferral before
-   `batch_size > 1` is trusted on this box.
-2. Executed action horizon: inside the env (GR00T's `MultiStepWrapper` — **built 2026-08-27** (`executed_horizon`, `evaluate/scheduler.py`).
+   `batch_size > 1` is trusted under WSL.
+2. Executed action horizon: inside the env (GR00T's `MultiStepWrapper`
    shape, visible to every client) or in `EpisodeProtocol` (report 43)?
-   Decide before the record schema freezes — it is a field either way.
+   **Built 2026-08-27** inside the env (`executed_horizon`,
+   `evaluate/scheduler.py`); it is a field of the record either way.
 3. Hub publishing: does a pinned `@<commit>` satisfy the `source@hash`
    rule, or do we hash the tree ourselves? Proposal: both, the tree hash
    is what the certificate cites.

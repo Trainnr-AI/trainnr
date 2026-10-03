@@ -1,17 +1,11 @@
-# R5's fix: the 7 gates used to run on exactly one laptop — the hook
-# itself warned about hooks that exist on one machine, then had the same
-# property. This mirrors tools/hooks/pre-commit (plus `cargo test`, which
+# The gates used to run on exactly one machine, through the pre-commit
+# hook. This mirrors tools/hooks/pre-commit (plus `cargo test`, which
 # the hook leaves to tools/verify.sh) on every push and PR, and runs the
 # heavier sim/train-extra suites weekly, where the multi-gigabyte torch
 # download is a schedule's problem instead of every contributor's.
-#
-# Deliberately NOT here: the emulator run, firmware cross-builds and wire
-# replays from tools/verify.sh — those stay pre-push, where the hardware
-# recordings and ~9-minute emulator belong.
 name: gates
 
-# Parked 2026-08-23 ("dont do CI for now"); re-armed 2026-10-02 with the
-# first public push: a protected main requires the fast-gates check, so
+# Armed 2026-10-02 with the first public push: a protected main requires the fast-gates check, so
 # the gates run on pushes to main and on pull requests, the heavy extras
 # weekly, and the whole suite stays one click away.
 on:
@@ -33,8 +27,8 @@ jobs:
     # honest.
     env:
       CARGO_TERM_COLOR: never
-      # MuJoCo renders headless through Mesa's EGL on the runner, as the
-      # box does (trainnr/wsl.env); through GLFW with no display the process
+      # MuJoCo renders headless through Mesa's EGL on the runner (the same
+      # setting trainnr/wsl.env uses under WSL); through GLFW with no display the process
       # aborts (exit 134, the fourth public run of 2026-10-02).
       MUJOCO_GL: egl
     steps:
@@ -67,6 +61,8 @@ jobs:
         run: python3 tools/check-unsafe-gates.py
       - name: docs describe real code
         run: python3 tools/check-docs.py
+      - name: numbers trace to records
+        run: python3 tools/check-numbers.py
       - name: package layers (docs/80)
         run: python3 tools/check-layers.py
       - name: cargo test (trainnr-studio)

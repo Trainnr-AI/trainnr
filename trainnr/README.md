@@ -57,10 +57,10 @@ Two environment facts that cost an afternoon each, recorded so they
 cost nothing again:
 
 - **Training lives in a second venv.** LeRobot 0.6.1 needs Python 3.12,
-  and `uv sync` prunes anything it didn't install — so the WSL box keeps
+  and `uv sync` prunes anything it didn't install — so on WSL2 a second environment
   `.venv-train` (3.12 + torch/CUDA + these packages) beside the untouched
   3.11 sim venv, selected with `--python .venv-train/bin/python`.
-- **The WSL box's GPU routing is one file, `wsl.env`** (`uv run --env-file wsl.env …`
+- **The WSL2 GPU routing is one file, `wsl.env`** (`uv run --env-file wsl.env …`
   or `../tools/wsl-run.sh`). Headless rendering there needs `MUJOCO_GL=egl`. Without it the
   Renderer wants a display and vision rollouts die in the harness, not
   in your code.

@@ -1,0 +1,177 @@
+{
+ "name": "mipnerf-garden",
+ "source": "capture/images",
+ "capture": {
+  "device": "unrecorded",
+  "app": "unrecorded",
+  "frames": 185,
+  "resolution": "unrecorded",
+  "duration_s": "unrecorded",
+  "lighting": "unrecorded"
+ },
+ "tools": [
+  {
+   "name": "COLMAP",
+   "version": "3.7",
+   "license": "BSD-3-Clause",
+   "role": "poses: one OPENCV camera, exhaustive matching, the mapper"
+  },
+  {
+   "name": "gsplat",
+   "version": "1.5.3",
+   "license": "Apache-2.0",
+   "role": "the splat: 30000 steps, 10.3 min for the whole chain"
+  },
+  {
+   "name": "Open3D",
+   "version": "0.20.0",
+   "license": "MIT",
+   "role": "the floor plane, the gap"
+  },
+  {
+   "name": "rq_pipeline.scenes",
+   "version": "ffeea89",
+   "license": "Apache-2.0",
+   "role": "the chain, the alignment, the record"
+  }
+ ],
+ "splat": {
+  "file": "splat.ply",
+  "from": "gsplat/splat-colmap-frame.ply",
+  "renders": [
+   "gsplat/renders/view-00.png",
+   "gsplat/renders/view-01.png",
+   "gsplat/renders/view-02.png",
+   "gsplat/renders/view-03.png",
+   "gsplat/renders/view-04.png",
+   "gsplat/renders/view-05.png",
+   "gsplat/renders/view-06.png",
+   "gsplat/renders/view-07.png"
+  ],
+  "poses": {
+   "registered": 185,
+   "given": 185,
+   "points": 128768,
+   "camera_model": "OPENCV",
+   "models": [
+    185
+   ],
+   "chosen": "0"
+  },
+  "floor_inliers": 234798,
+  "floor_of": 2319096,
+  "count": 6674386,
+  "sh_degree": 3,
+  "visible_count": 2319096,
+  "extent_m": [
+   [
+    -26.186,
+    -13.931,
+    -0.498
+   ],
+   [
+    37.915,
+    25.478,
+    11.05
+   ]
+  ],
+  "scale_median_m": 0.00179
+ },
+ "proxy": {
+  "file": "proxy.obj",
+  "vertices": 372901,
+  "faces": 762968,
+  "watertight": false,
+  "edge_manifold": true,
+  "ground": {
+   "file": "ground.obj",
+   "clearance_m": 0.25
+  },
+  "overhang": {
+   "file": "overhang.obj",
+   "clearance_m": 0.25,
+   "cap_m": 2.5,
+   "voxel_m": 0.05,
+   "min_centres": 2,
+   "margin_m": 0.5,
+   "min_component_voxels": 64,
+   "centres": 994838,
+   "voxels": 81516,
+   "components": 78,
+   "specks_dropped": 7064,
+   "faces": 417248,
+   "parts": 5836,
+   "parts_file": "overhang-parts.json"
+  },
+  "method": "below 0.25 m, the visible gaussian centres' top surface on a 0.02 m grid (each cell the 90th percentile of its centres, then the median of its 5x5 neighbours, small holes filled from their neighbours): the ground; at or above it, the centres as an occupancy volume on 0.05 m voxels, the exposed faces of the occupied ones: what stands, with air beneath a table top; not a dense reconstruction",
+  "from": "the visible gaussian centres (opacity >= 0.5)",
+  "cell_m": 0.02,
+  "cells": 180290,
+  "cells_seen": 131896,
+  "cells_filled": 48394,
+  "cells_despiked": 4396,
+  "parts": 64,
+  "parts_file": "proxy-parts.json"
+ },
+ "alignment": {
+  "scale": 0.56,
+  "rotation_euler_xyz": [
+   -1.8841735153903734,
+   0.0011656122716532339,
+   0.0016030089274101326
+  ],
+  "translation": [
+   0.22212515985208367,
+   0.026542296356361288,
+   1.7807545140749337
+  ],
+  "source": "the largest plane through the visible centres (RANSAC) as the floor, its normal to +z, most of the scene above it, its centroid at the origin; scale 0.56 m per COLMAP unit, declared by the caller"
+ },
+ "gap": {
+  "chamfer_m": 0.04515,
+  "p95_m": 0.3288,
+  "beyond_tolerance_fraction": 0.39315,
+  "hidden_fraction": 0.64593,
+  "tolerance_m": 0.02,
+  "visible_samples": 200000,
+  "proxy_samples": 100000,
+  "method": "visible gaussian centres (opacity >= 0.5) inside the proxy's extent grown by 0.5 m, to the proxy surface by Open3D ray casting; proxy surface samples to the nearest visible centre anywhere by k-d tree; distances in metres",
+  "footprint_fraction": 0.83023,
+  "note": ""
+ },
+ "physics": [],
+ "created_utc": "2026-09-23T18:09:31.069330+00:00",
+ "code": "ffeea89",
+ "schema": "trainnr-scene/1",
+ "notes": [
+  "captured from <checkout>/runs/datasets/garden/images",
+  "the proxy is the visible surface itself (the ground's top on a grid, what stands above it as voxels): the gap measures its fidelity to the splat, not to the world",
+  "no dense reconstruction: COLMAP's patch-match needs CUDA and the 2DGS chain waits on the box (docs/78 \u00a73)",
+  "the colour is the zeroth harmonic; the higher harmonics stay in the file"
+ ],
+ "course": {
+  "waypoints": [
+   [
+    0.5,
+    -1.5,
+    0.32
+   ],
+   [
+    0.5,
+    -0.5,
+    0.32
+   ],
+   [
+    0.5,
+    0.6,
+    0.32
+   ],
+   [
+    0.5,
+    1.5,
+    0.32
+   ]
+  ],
+  "source": "laid out by the operator (2026-09-23): under the table south to north at x=0.5, the line farthest from every leg (0.35 m clear); it crosses the base beams where they meet, 5-10 cm high"
+ }
+}

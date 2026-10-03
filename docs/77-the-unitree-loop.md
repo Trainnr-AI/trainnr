@@ -1,9 +1,8 @@
 # 77 — The Unitree loop: a Go2 from asset to deployment, by the doors alone
 
-*Started 2026-09-10 on branch `unitree-e2e-2026-09-10`. Prakhar: "start
-with a new branch where we do end to end with a new unitree robot and in
-the process fix all the bugs and issues and ui ux to make the tool super
-helpful efficient", with `unitreerobotics/unitree_rl_mjlab` as the
+*Started 2026-09-10. The brief: run the loop end to end on a new Unitree
+robot and, on the way, fix every bug and every rough edge of the tool,
+with `unitreerobotics/unitree_rl_mjlab` as the
 reference. This document is the plan and the running log of what the
 loop taught us; every friction found on the way is fixed in the same
 stage and recorded here.*
@@ -134,10 +133,10 @@ read differently, and the window must say so rather than show a gap.
    (found and fixed 2026-09-10, the WSL box). `bundle.json` recorded the
    source as an absolute path, and the record lives inside the directory
    the stamp hashes, so the Go2 onboarded from the same clone at the same
-   commit was `go2@b6170cf88b09` on the Mac and `go2@a185f9103878` on the
-   box. Fixed: the record keeps the source's last three path components
+   commit was `go2@b6170cf88b09` on one machine and `go2@a185f9103878` on
+   another. Fixed: the record keeps the source's last three path components
    (`unitree_go2/xmls/go2.xml`), the same on every machine; the box's Go2
-   is `go2@5003bf617b5f`, and the Mac's stamp changes when it re-onboards.
+   is `go2@5003bf617b5f`, and the other machine's stamp changes when it re-onboards.
    The task stamp (`go2-walk@0e7e123a7de7`) was identical on both machines
    from the start, as a content hash should be.
 
@@ -244,15 +243,15 @@ read differently, and the window must say so rather than show a gap.
   the mjlab environment from it (as `go1_walk.py` does). Not a
   dependency on the reference package (its mjlab pin conflicts with
   ours, and its configs cannot be hashed).
-- **Compute: the RunPod pod for training and evaluation, the Mac for
+- **Compute: a rented pod for training and evaluation, a laptop for
   everything else**, per the standing rule (short local runs).
-  Amended 2026-09-10: the pod launch was refused (account balance too
-  low), and Prakhar: "we will do the training run tomorrow on wsl gpu"
-  — the RTX 3090 Ti box. §5 is the runbook for it.
+  Amended 2026-09-10: a cloud pod was not available that night, so the
+  training run moved to the next day on a workstation with an RTX 3090
+  Ti. §5 is the runbook for it.
 - **Hardware: none in this pass.** The rig connects at A6/A7 per the
   earlier call; a Go2's SDK2 adapter is gated research.
 
-## 5. Tomorrow on the WSL box: the run, by the doors
+## 5. The next day's run, by the doors
 
 **Done on the box, 2026-09-10.** The reference cloned at commit
 `1425b15` into `~/.cache/trainnr/`, the venvs synced with their extras
@@ -270,7 +269,7 @@ The run: `walk_train --agent g3 --robot go2 --project <root> --dr-span
 iterations at ~1.5 s each on the 3090 Ti (about 3.5 h); console log
 `<root>/runs/go2-c1.log`. Then `certify_walk`.
 
-**The loop closed, 2026-09-10 20:25 IST.** The run took 2 h 24 min
+**The loop closed, 2026-09-10.** The run took 2 h 24 min
 (8000 iterations, 1.03-1.13 s each, ~102k steps/s, final reward 74.0,
 episode length 1000 of 1000). `certify_walk` on `model_1400` mid-run
 and on `model_7999` at the end: both 40/40 survived and tracked, exact
@@ -283,7 +282,7 @@ reads 4 of 8 stages (asset, environment, policy, evaluation) with
 "next: run system identification on a recording". What the loop does
 not have on this robot: telemetry from a real Go2, hence no sys-id and
 no identified interval - the span was declared, not measured, which is
-the Go1 finding's shape (docs/74) and the reason the overview's next
+the Go1 finding's shape (docs/e2e-research/74) and the reason the overview's next
 move points at a recording.
 
 
@@ -310,7 +309,7 @@ once the run ends). Then `evaluate_walk(<checkpoint>, robot="go2")` (the
 door was `certify_walk` until 2026-09-12) for the evaluation, and the loop
 reaches "policy evaluated".
 
-## 6. The deployment stage, built 2026-09-11 on the Mac
+## 6. The deployment stage, built 2026-09-11 on a Mac (M1 Pro)
 
 `export_deployment(run, checkpoint, name)` spawns `trainnr_mjlab.walk_export`
 in the walk package's venv: the actor as ONNX (rsl_rl's exporter,
@@ -391,13 +390,13 @@ through the environment card the index holds (its spec records the
 family id); a run naming the family id directly is taken as is.
 
 Friction 19 (fixed, 2026-09-11, the box): **the Studio window never
-appeared on the operator's screens under WSLg**, through a day of
+appeared on the maintainer's screens under WSLg**, through a day of
 work seen only by the agent's in-app screenshots. WSLg's compositor
-announced the window to Windows every time (`ai.trainnr.desktop` in the
+announced the window to Windows every time (`ai.trainnr.studio` in the
 RAIL app list), but Windows never showed a native Wayland window from
 this app, while an X11 test window (`xmessage`, through Xwayland)
 showed at once, and the Studio relaunched with `WAYLAND_DISPLAY`
-hidden showed at once - the operator's screenshot. winit takes
+hidden showed at once - the maintainer's screenshot. winit takes
 Wayland whenever that variable is set, so the binary now asks the
 event loop for X11 when it runs on WSL (`main.rs::prefer_x11_under_wslg`,
 eframe's event-loop hook and winit's X11 extension trait - no
@@ -414,7 +413,7 @@ has no vertical blank. Presenting without vsync changed nothing; the
 OpenGL path (Mesa's D3D12 driver, WSLg's usual route) refuses the
 viewer's R32Float render target on this box even under the driver
 environment. Left as is: the load is inside the driver, the window
-stays live. (b) The operator's pointer landed a row below where it
+stays live. (b) The maintainer's pointer landed a row below where it
 hovered, while a pointer moved through X directly (XTest) hit the
 right row - so the offset was added between Windows and the X server.
 Dropping the window-manager frame (client-drawn chrome) did not
@@ -423,7 +422,7 @@ with the frame, not maximized, put the pointer right ("ok fixed
 now"). The offset is therefore tied to the window's state on the
 Windows side (it had been resized to 1908 x 999 and driven from the
 frame), not to the app; the measurement to take if it returns is the
-X server's pointer position against the operator's, in one
+X server's pointer position against the user's, in one
 "park the mouse" round trip.
 
 Friction 19, resolved (2026-09-12, the box): the pointer offset and
@@ -443,7 +442,7 @@ geometry via python-xlib, one command.
 Then the chrome (2026-09-12, asked for: "make the OS window border
 standard for Windows, Mac and Linux, only the buttons differ, the
 app's colour"): the window's chrome is ours on every platform that
-lets a client draw it (`crates/trainnr-desktop/src/chrome.rs`), the way
+lets a client draw it (`crates/trainnr-studio/src/chrome.rs`), the way
 Rerun's own viewer does - our top bar is the title bar (drag,
 double-click to maximize), re_ui's caption buttons at its right on
 Windows and Linux, invisible resize zones on the edges; the Mac keeps
@@ -453,7 +452,7 @@ needed: the app's ground painted under everything (a see-through
 strip showed the desktop between the header and the panels), and,
 on WSL, the window keeping its own outer edge on the screen (WSLg's
 manager opened the frameless window 21 px above the top). The grey
-frame the operator saw was the manager's; it is gone.
+frame the maintainer saw was the manager's; it is gone.
 
 **The Studio's own walk scene on the Go2 (2026-09-12).** "The same
 four robots we saw in viser, in our Studio": the Simulator page's
@@ -461,7 +460,7 @@ walk scene (`trainnr_mjlab.walk_view` feeding `tools/studio-render-stream.py`
 over the state ring) was microduck-shaped in three places - the
 checkpoint lookup under `runs/microduck-walk`, the scene name
 `walk:<worlds>` where the render stream now wants `walk:<robot>:<worlds>`
-(the Mac's review had generalised the stream, not the view), and the
+(the earlier review had generalised the stream, not the view), and the
 camera rig. Now: `--robot` and `--project` (the robot from the
 project's one declared walk, the same rule the doors apply; "latest"
 = the newest policy artifact, else the newest run checkpoint); the
@@ -478,11 +477,11 @@ deployable (48 terms; the current actor 47), so the view rebuilds
 with the earlier recipe by name (`go2_walk_env_cfg(legacy_actor=True)`,
 the width read shared with the exporter) - an old policy stays
 watchable, and only the exporter refuses it. Seen: four Go2 worlds at
-33 frames per second and real time in the viewport, the followed
+33 frames per second and real time in the simulator, the followed
 world with contacts, forces and joints drawn, the worlds' markers and
 the reward per world in the viewer.
 
-**Full screen (2026-09-12).** The viewport had no way to fill the
+**Full screen (2026-09-12).** The simulator had no way to fill the
 page. Now: the `f` key, the maximize button in the transport bar, or
 `set_simulator_view(fullscreen=True)` put the picture and its bar
 alone on the Live page (no rail, no viewer panels); Escape or the
@@ -491,7 +490,7 @@ chrome. Seen: the four Go2 worlds filling the page at 32 frames per
 second.
 
 **Walking the camera (2026-09-12).** "There is no WASD to move the
-camera": the viewport only orbited and zoomed. Now W and S walk the
+camera": the simulator only orbited and zoomed. Now W and S walk the
 camera along its view flattened to the ground, A and D across it, Q
 and E lower and raise it, Shift three times as fast, for as long as
 the key is held (`tools/studio-render-stream.py`, one new wire
@@ -552,7 +551,7 @@ Studio died mid-message and the server said so. Now the narrating
 processes close their Rerun connection on TERM and leave
 (`leave_cleanly_on_term` in `tools/studio-render-stream.py`, used by
 both), and the shell waits up to 1.5 s after TERM before the KILL
-(`crates/trainnr-desktop/src/spawn.rs`). Measured: the walk scene and a
+(`crates/trainnr-studio/src/spawn.rs`). Measured: the walk scene and a
 plain task each quit with no h2 line and no leftover process.
 
 Friction 31 (fixed, 2026-09-12): **`quit_studio` from the process
@@ -564,7 +563,7 @@ zombie as existing; the MCP server launches and quits in one process,
 so it always hit this. The launcher now keeps its Popen by pid and
 the liveness probe reaps it first, and a zombie is not alive
 (`trainnr/trainnr/project/control.py`). Found while timing the
-close: the "60 s hang" my own scripts measured was the same zombie.
+close: the "60 s hang" the agent's own scripts measured was the same zombie.
 
 Friction 32 (fixed, 2026-09-12): **"WASD works in the Rerun 3D
 viewer but not in the MuJoCo viewer."** The shortcuts refused the keys
@@ -578,19 +577,19 @@ in `crates/trainnr-desktop/src/viewport.rs`, the `f` key the same). The
 stream now echoes the camera pose - azimuth, elevation, distance,
 lookat - in its status and the shell in `studio-state.json`
 (`simulator.camera`), so a key can be checked as a number: the
-operator's flow reproduced with injected input (click the picture,
+maintainer's flow reproduced with injected input (click the picture,
 click Rerun's 3D view, glide back, hold W a second) moved the lookat
 2.5 m. A single pointer warp never registers as a hover in egui; the
-test had to glide. The operator then reported the same again, so the
+test had to glide. The maintainer then reported the same again, so the
 Studio now writes every W A S D Q E press to `events.jsonl` (kind
 `key`: whether the picture had the keys, who held focus, where the
-pointer was). His log settled it: the presses reached the picture
+pointer was). The maintainer's log settled it: the presses reached the picture
 with focus on it - they were taps in alternating directions, and at
 0.6 of the camera distance per second a tap moved centimetres, which
 reads as nothing next to Rerun's fly camera (its orbit-mode speed is
 the orbit radius per second, with momentum). The rate is now 2.0
 (`PAN_RATE_PER_S` in `tools/studio-render-stream.py`): a tap is most of
-a metre at the Go2 rig's distance. Then the operator a third time,
+a metre at the Go2 rig's distance. Then the maintainer a third time,
 and the real cause: the render lane copied the orbit's lookat into
 MuJoCo's camera only at creation and while following a world, while
 azimuth, elevation and distance were applied every frame - so a pan
@@ -598,7 +597,7 @@ moved the status echo (the number every test read) and never the
 picture. `OrbitCamera.apply_to` now applies the lookat too, and
 `trainnr/tests/test_studio_camera.py` reads `MjvCamera.lookat` after
 a pan, which the old code fails. The focus rule and the rate were
-real, smaller findings on the way. Lesson, the operator's own rule
+real, smaller findings on the way. Lesson, the standing rule
 re-learned at a price: verify in the viewer, never in a printout; a
 number the app echoes is not the picture the human sees.
 
@@ -691,7 +690,7 @@ against it: MuJoCo 20/20 passed, DDS 20/20 passed (rate 1.0 against
 the certificate's 0.95, tolerance 0.1). The order that closes the
 loop is certificate, then export, then the gates; the export door
 refuses a checkpoint without an evaluation unless `unevaluated=True`
-says the export is deliberate (closed 2026-09-20, the Mac).
+says the export is deliberate (closed 2026-09-20).
 
 Friction 33 (fixed, 2026-09-12): **"where are the iterations visible
 in the Studio?"** They are the Experiments card (the reward sparkline
@@ -705,7 +704,7 @@ when any file of the artifact is newer than the picture
 (`stale_preview` in `trainnr/trainnr/project/previews.py`,
 `tests/test_previews_stale.py`), and the shell's image cache keys a
 preview by its path AND modification time (`preview_uri` in
-`crates/trainnr-desktop/src/widgets.rs`) - the redrawn file was on disk
+`crates/trainnr-studio/src/widgets.rs`) - the redrawn file was on disk
 while the window still showed the first picture ever loaded under
 that path. Seen: the card's full curve, "reward 85.0", after one
 reindex and a relaunch.
@@ -765,7 +764,7 @@ accurately. `trainnr.envs.tfevents` turns the file into the same
 training record the cards read (the five console names kept; every
 other series as `group/name`), the live loop prefers it and falls back
 to the console log, and the viewer lays the series out in grouped
-panels. The operator's rule, from this: be additive on top of the
+panels. The rule, from this: be additive on top of the
 libraries, use their features and their outputs as they are, keep our
 modules for what they leave unsolved, and let the Studio and the data
 piping tie it together.
@@ -817,12 +816,12 @@ rollout streamed into the Live view by the recorder; `walk_play` now
 takes the walk by robot and project like the other tools (it was
 microduck-only, and the Go2's play mode had never run: its terrain
 event named the wrong module). Friction 22: mjlab's native MuJoCo
-window on this box drew at 0.01x real time, 0 FPS, step 28 after two
-minutes (the operator's screenshot) - the same X11 path the Studio
+window on the WSL machine drew at 0.01x real time, 0 FPS, step 28 after two
+minutes (the maintainer's screenshot) - the same X11 path the Studio
 pays a core for, and this window pays with its frames. mjlab's other
 viewer, the browser one (viser, `http://localhost:8080`), is the
 door's default now; the native window stays a choice.
-Seen by the operator in the browser at 0.40x real time, 18 FPS, with
+Seen by the maintainer in the browser at 0.40x real time, 18 FPS, with
 mjlab's own panels - Controls, Visualization, Rewards, Metrics - so
 the library's live reward view is there too, for one world, for as
 long as the tab is open; the Studio's is the one that persists.
@@ -862,7 +861,7 @@ implement** - the writer is the deployability check), *deploy/gamepad.py*
 (uinput pad, ~50 lines, next), *deploy/dds_runtime.py* (~100 lines,
 next: subscribe to their state, publish the pad, drive the FSM at
 reset, the two formulas our runtime already uses for velocity and
-fell-over), *tools/unitree-sim.sh* and `gate_deployment(runtime="dds")`
+fell-over), the Unitree simulator wrapper and `gate_deployment(runtime="dds")`
 (build once, launch both as jobs, gate, stop).
 
 **Friction 24, found by the writer before a line of DDS existed.** The
@@ -883,13 +882,13 @@ what they are. Smoke run `go2-c2-smoke` (80 iterations) exported as
 with the shipped Go2 file's numbers exactly (joint map 3,4,5,0,1,2,…;
 kp 20/20/40; the home pose), our Python gate runs it end to end
 (0 of 4 at 80 iterations, no falls - a smoke, not a policy). The
-operator's rule tonight: smoke runs only; the full retrain waits.
+rule that night: smoke runs only; the full retrain waits.
 
-**What the box needs from the operator, one time** (root):
+**What the machine needs from the user, one time** (root):
 
     sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev libglfw3-dev
-    git clone https://github.com/unitreerobotics/unitree_sdk2 ~/src/unitree_sdk2
-    cd ~/src/unitree_sdk2 && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && make -j8 && sudo make install
+    git clone https://github.com/unitreerobotics/unitree_sdk2   # a local checkout of unitree_sdk2
+    cd unitree_sdk2 && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local && make -j8 && sudo make install
     echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
     printf 'uinput\njoydev\n' | sudo tee /etc/modules-load.d/uinput.conf
     sudo modprobe uinput && sudo modprobe joydev
@@ -903,7 +902,7 @@ controller build with CMake from the cached checkout, and the Python
 side takes Unitree's SDK from GitHub (not on PyPI) plus the cyclonedds
 and python-evdev wheels in a `dds` extra.
 
-**Built and run, 2026-09-11 (late).** The operator ran the four root
+**Built and run, 2026-09-11 (late).** The maintainer ran the four root
 lines; their simulator (4.4 MB) and Go2 controller (8.8 MB) built from
 the cached checkout; the `dds` extra installed (cyclonedds against
 `/usr/local`, Unitree's SDK from GitHub, evdev). Then, in order:
@@ -939,7 +938,7 @@ the MuJoCo gate's `gate.json`; each runtime writes its own
 gate asks for at most 1 m/s and 1 rad/s whatever the manifest's
 ranges say (`command_limit`, the draw is clipped).
 
-Closed on the Mac, 2026-09-12: a deployment's card, drawer and viewer
+Closed 2026-09-12 (on a Mac, M1 Pro): a deployment's card, drawer and viewer
 read every gate record beside the manifest by runtime (`deploy.manifest`:
 `GATE_RECORDS`, `read_gates`, `gate_word`) - the card says `gate` and
 `gate (DDS)`, the drawer holds one verdict and one trials table per
@@ -970,16 +969,16 @@ artifact it narrates (docs/76 §10.5): the next training run on the box
 leaves `runs/<run>/.viewer/train.rrd`, its evaluation
 `.viewer/verdict-<checkpoint>.rrd`, its gates
 `.viewer/gate-mujoco.rrd` and `.viewer/gate-dds.rrd`. A pull of the
-project brings the pictures home; Show in viewer on the Mac replays them
-as they ran on the box. Nothing on the box has to change; the Studio
-there may even be closed, and the feeds say so and save. What waits for
-the box: the first Go2 run made after this commit, so the claim has a
-box-side number beside the Mac's.
+project brings the pictures home; Show in viewer on the second machine
+replays them as they ran on the first. Nothing on the first machine has
+to change; the Studio there may even be closed, and the feeds say so and
+save. What waits: the first Go2 run made after this commit, so the claim
+has a number from each machine.
 
 ## 8. The last stage, and why it is empty here (2026-09-13)
 
 A7, drift monitoring, is built (docs/76 §9.1–9.2) and proved on the
-Pico rig: two real sweeps as the reference, a copy with one wheel's
+archived rig: two real sweeps as the reference, a copy with one wheel's
 encoder scaled named that wheel's gear and nothing else, an untouched
 copy came back within. On the Go2 the stage stays empty and the strip
 says so — a drift check needs an identification method and a recording
@@ -1028,7 +1027,7 @@ like with like: only fits of the fresh recording's basis are the
 reference, the others named as left out. The IIT chirp's fit in
 go2-walk is `fit@0ad6202797c5` (31/36 pinned); a 30-iteration smoke
 (`runs/go2-c3-fit-smoke`) proved the chain; the full `go2-c3-fit` run
-waits for the operator.
+waits for the user's go.
 
 ## 9. What would break it first: the gate says why (2026-09-24)
 
@@ -1105,7 +1104,7 @@ baseline of 18 (finding `gate-paired-draw-go2-c2-2026-09-24`). The
 ranking above stands as a reading of the old draw only, and the card
 says "drawn by count (re-run to pair)" beside it. Which rule a cliff is
 read by, the strict lower bound or the gate's 0.10 tolerance, is the
-operator's call; both verdicts are in every rung's record.
+user's call; both verdicts are in every rung's record.
 
 ![The fall at the cliff: go2-c2 at two ticks of action latency, trial 13, tick 109](figures/attribution/go2-c2-latency-2-ticks.png)
 
@@ -1126,7 +1125,7 @@ a walker clears one.
 **2026-09-25: the gate's own rule, the fit's joints, and the Studio.**
 The paired draw (§7) made go2-c2's plane gate read 18/20, and the strict
 rule above could not attribute it at all: only 20/20 clears the
-certificate's lower bound at twenty trials. The operator chose the
+certificate's lower bound at twenty trials. The decision was the
 gate's own rule: a rung is past the cliff when its tracked rate falls
 more than the gate's tolerance (0.10) under the certificate's rate,
 0.95 - 0.10 = 0.85 for go2-c2. Rules are a registry
@@ -1177,11 +1176,11 @@ and each knob's ladder is logged as that knob lands (`open_live`,
 `log_knob`, `attribute(on_knob=)`), the ranking and the fit rungs last.
 Each rung keeps its worst trial (the first that fell, else the first
 untracked, else the first) in `.viewer/attribution-poses.npz`, and the
-Studio's MuJoCo viewport replays it as
+Studio's MuJoCo simulator replays it as
 `deploy:<name>:attribution:<knob>:<rung>` (`<rung>` 1-based, or `fit`),
 captioned with the rung's count and the trial's outcome; the drawer's
-"Replay in viewport" lists the fit rungs first. Frames rendered through
-the viewport's own path: `figures/attribution/viewport-attribution-fit-999.png`
+"Replay in simulator" lists the fit rungs first. Frames rendered through
+the simulator's own path: `figures/attribution/viewport-attribution-fit-999.png`
 (the fit rung's worst trial ends standing, untracked, not fallen) and
 `…-latency2-347.png` (two ticks late: on its back).
 
@@ -1217,7 +1216,7 @@ each in the runtime.
 2. *The ramp-in*: from damping, the commanded target blended from the
    pose measured at handover to the policy's over `ramp_in_s` (1 s
    default, a manifest field).
-3. *The soft stop*: on a watchdog or the operator's stop (a STOP file
+3. *The soft stop*: on a watchdog or the user's stop (a STOP file
    beside the manifest, door `stop_deployment`; Ctrl-C and their Passive
    chord on the DDS runtime), the gains blended to damping (kp 0, kd 3:
    their Passive) over `soft_stop_s`, the pose at the stop held.
@@ -1274,7 +1273,7 @@ the card's check. The DDS run (the state read from their simulator in
 their fixed stand, their Passive stop measured beside ours) is built and
 tested against fakes of their bus and pad, and NOT yet run on their
 stack on 2026-09-24: `/dev/uinput` went back to root-only after the
-box's reboot. The operator's lines are a udev rule giving the node to
+machine's reboot. The one-time lines are a udev rule giving the node to
 the `input` group, the user in that group and the two modules loaded at
 boot (`deploy/gamepad.py::UINPUT_FIX_LINES`, §7); not `chmod 666`, which
 opens input injection to every local user and is gone at the next
@@ -1284,11 +1283,12 @@ their stop is their Passive in one press, measured, not changed. The
 compute check measures this machine; the robot's computer is measured on
 the day. The margins are our stated choices, not a standard.
 
-## 11. The deployment in our own MuJoCo viewport (2026-09-24)
+## 11. The deployment in our own MuJoCo simulator (2026-09-24)
 
-The operator, after the DDS gate and the live pre-flight ran on go2-c2:
-"not in the 3d rerun viewer but our mujoco viewer". Until now the
-Simulator page's native viewport played preview tasks and the walk; a
+The ask, after the DDS gate and the live pre-flight ran on go2-c2: show
+the deployment in our own MuJoCo simulator, not only in the Rerun 3D
+view. Until now the Simulator page's native window played preview tasks
+and the walk; a
 deployment only reached the Studio as the gate mirror's Rerun stream,
 and a gate started while no Studio listened was only a saved file.
 
@@ -1296,7 +1296,7 @@ and a gate started while no Studio listened was only a saved file.
 registry of modes behind one scene grammar the picker, the drawer and
 the agent's `simulate_in_studio` share:
 
-| scene | what the viewport shows |
+| scene | what the simulator shows |
 |---|---|
 | `deploy:<name>` | live: the exported ONNX through the plain runtime and the gate's own tick (`Ticks`), the command the human's twist (WASD, the Commands tab) clipped to the manifest's ranges; a fall holds a second and resets |
 | `deploy:<name>:gate:<runtime>:<i>` | trial i of that runtime's gate: re-run through the gate's own trial code where our physics can (`RuntimeSpec.rerun_in_plain`: the MuJoCo gate), else replayed from the poses the gate saved (Unitree's simulator), no physics |
@@ -1323,7 +1323,7 @@ it can show.
 ring, the wire; frames read from the shared-memory ring) on a scratch
 copy of go2-c2, whose DDS gate (2 trials) and pre-flights (plain and on
 their stack) were re-run there so their poses exist, leaving the
-operator's records untouched:
+maintainer's records untouched:
 
 | scene | real-time factor | caption the bar shows |
 |---|---|---|
@@ -1338,12 +1338,12 @@ operator's records untouched:
 ![The zeroed stop](figures/viewport-deploy/preflight-stop-zeroed.png)
 ![Their Passive](figures/viewport-deploy/preflight-stop-their-passive.png)
 
-**Honest edges.** The records on the operator's go2-walk project were
+**Honest edges.** The records on the maintainer's go2-walk project were
 written before poses were recorded: its plain MuJoCo trials re-run in
-the viewport today, its DDS trials and pre-flight segments appear once
+the simulator today, its DDS trials and pre-flight segments appear once
 the gate and the pre-flight are run again. The live-window check in the
-operator's Studio is the parent's to do after the merge (the port is
-the operator's Studio's; this was proved headless). The pipeline spawn
+maintainer's Studio was left for after the merge (the port belonged to
+that Studio; this was proved headless). The pipeline spawn
 now syncs the `deploy` extra (onnxruntime) for every preview, since uv
 runs sync the venv to the extras they name.
 

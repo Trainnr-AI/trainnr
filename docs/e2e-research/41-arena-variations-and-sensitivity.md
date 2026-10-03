@@ -185,11 +185,11 @@ assumes"; one policy/task per JSONL.
 
 | Arena | Ours | Where |
 |---|---|---|
-| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `trainnr/tasks/aloha2/kitting.py:338-347` |
+| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `trainnr/trainnr/tasks/aloha2/kitting.py:338-347` |
 | Paired trials | Built in: "policy A's trial 7 starts exactly where policy B's trial 7 starts"; perturb "receives the trial index (not an RNG)". Arena has no equivalent — its samplers hit the global RNG at reset | `harness.py:5-7, 49-51` |
 | Dynamics variation | ±span scaling of joint damping and actuator gains around the bundle's identified values, per episode (`damping_scale`, `gain_scale`) and per world (`randomise()`) | `tools/kitting-demos.py:99-108`, `tools/show-many.py:126-144` |
 | Per-episode record | `manifest.json` per kept demo: `seed, attempt, draws, dr_span, damping_scale, gain_scale, verdict` — Arena's row shape, but only for *kept demos*, never for evaluation trials | `tools/kitting-demos.py:168-185` |
-| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none (docs/e2e-research/30 §⑧ correction) | `trainnr/stats/intervals.py`, `ranking.py`, `pooling.py` |
+| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none (the pipeline brief's §⑧ correction, private) | `trainnr/stats/intervals.py`, `ranking.py`, `pooling.py` |
 | The certificate | `Certificate` binds bundle hashes, per-policy intervals, rank interval, gate bit | `trainnr/evaluate/certificate.py:50-96` |
 
 What we lack, precisely: (a) a *declared, enumerable* variation space —

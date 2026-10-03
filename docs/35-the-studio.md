@@ -13,7 +13,7 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 *2026-09-09: the agent drives the window in real time through files — commands in, state and events out; the contract and the MCP doors (76 registered on 2026-09-27) are in docs/76 §10.1.*
 
 
-*2026-09-09, measured (finding `studio-viewport-pipe-2026-09-09`): the viewport pipe delivers 32.6 fps on the kitting scene; the offscreen render is 26 ms/frame at any size, 17 ms of it shadows; shadows off gives 41 fps; on macOS the render is inline with physics, and a CGL context renders from a background thread at 12 ms, so the two fixes are known. The native window was not measured.*
+*2026-09-09, measured (finding `studio-viewport-pipe-2026-09-09`): the simulator's frame pipe delivers 32.6 fps on the kitting scene; the offscreen render is 26 ms/frame at any size, 17 ms of it shadows; shadows off gives 41 fps; on macOS the render is inline with physics, and a CGL context renders from a background thread at 12 ms, so the two fixes are known. The native window was not measured.*
 
 
 *2026-09-09, later: the stream is two processes (physics and render, a shared-memory state ring between them) because MuJoCo's Python render holds the GIL; kitting reaches 66 fps on screen at real-time factor 1.00 (finding `studio-viewport-two-process-2026-09-09`). The duck preview is four ducks: each microduck is 431,750 faces and this GL path draws ~7 ms per duck; MuJoCo's own viewer crawled on twenty too.*
@@ -23,8 +23,9 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 ## 0. What the Studio is
 
-One native desktop application, `crates/trainnr-studio`, about 1,200 lines
-of Rust in three files. It is an [eframe](https://github.com/emilk/egui)
+One native desktop application, `crates/trainnr-studio`, about 12,500 lines
+of Rust in seventeen files (2026-10-03; the first cut was 1,200 lines in
+three). It is an [eframe](https://github.com/emilk/egui)
 app (eframe = the application harness for the egui immediate-mode GUI
 library) that does two things:
 
@@ -33,15 +34,16 @@ library) that does two things:
    blueprint panel, selection panel, time scrubber and all eleven view
    types. The app binds Rerun's gRPC ingest server on port 9876 and
    anything speaking the Rerun SDK streams into it.
-2. **It runs a live MuJoCo viewport.** A subprocess renders frames into
+2. **It runs a live MuJoCo simulator.** A subprocess renders frames into
    a shared-memory ring; the shell displays them and sends camera,
    selection and perturbation input back over a tagged stdin protocol.
    Drag orbits, scroll zooms, Ctrl-drag shoves the robot and the policy
    recovers.
 
-Around those: a brand bar, and an optional file-tree-and-editor panel
-behind a `code` button. That is the whole app. There is **no chat panel**
-— see §2.
+Around those, in the first cut: a brand bar, and an optional
+file-tree-and-editor panel behind a `code` button. The pages, the rail,
+the project switcher and the title and status bars of today are §5.
+There is **no chat panel** — see §2.
 
 The single ingest address has one definition, `STUDIO_ADDRESS` in
 `trainnr/trainnr/viz.py`, mirrored against the Rust bind string by a
@@ -80,7 +82,7 @@ tool-call cards, markdown replies, a Stop button, prompt queueing, and
 the seven pipeline specialists as stage chips. It worked, and it was
 removed in S1 along with about a thousand lines and the ACP dependency.
 
-**Why (docs/64 §1, operator's call):** developers already have an agent
+**Why (the open-core decision, docs/80):** developers already have an agent
 they trust and pay for. Embedding one makes us a worse IDE instead of a
 better instrument. The agent lives in the developer's own tool — Claude
 Code in a terminal, Cursor, VS Code, Claude Desktop — and reaches this
@@ -95,9 +97,9 @@ non-developer audience.
 
 The old §10 offered two options: a companion Rerun window, or native
 plot panels to avoid depending on Rerun's shifting API. An evening was
-spent building bespoke egui plot panels; the operator's verdict —
-*"use exactly what Rerun is doing, don't reinvent the wheel"* (2026-08-30)
-— replaced them with the embed.
+spent building bespoke egui plot panels; the decision (2026-08-30) was to
+use exactly what Rerun does rather than reinvent it, and the embed
+replaced them.
 
 The rule that came out of it, and still holds
 (docs/e2e-research/55): **native panels only for glanceable state; the
@@ -129,13 +131,13 @@ serves two jobs and the 3D view is agnostic to which is live:
 - **Idle**: a strip offering four scene previews — kitting, lift, duck,
   and the newest trained walk checkpoint rolled live — and, since
   2026-09-24, every deployment of the open project (`deploy · <name>`):
-  the exported ONNX driven by the plain runtime in the viewport, the
+  the exported ONNX driven by the plain runtime in the simulator, the
   command from WASD and the Commands tab inside the manifest's trained
   ranges, the robot followed. A deployment's drawer adds **Play in
-  viewport** and **Replay in viewport** (each gate trial, re-run in plain
+  simulator** and **Replay in simulator** (each gate trial, re-run in plain
   MuJoCo or replayed from the poses Unitree's simulator produced; each
   pre-flight segment: the ramp both ways, each stop, their Passive), and
-  the viewport's bar says what the picture is (docs/77 §11).
+  the simulator's bar says what the picture is (docs/77 §11).
 - **Active**: a resizable MuJoCo image, orbit and zoom and shove, with
   contact-force arrows; a red banner if the render stream dies.
 - **Everything else**: whatever streams in on 9876. In practice that
@@ -170,7 +172,7 @@ serves two jobs and the 3D view is agnostic to which is live:
   strip: kind, name, source (`door`, `tool` or `agent`), state, the bar,
   the stage line, elapsed time, pid, and the buttons. The buttons are
   **open log** (the last 12 lines, live), **show in viewer** (the run's
-  `.rrd` loaded into the viewer), **watch in viewport** (`deploy:<name>`,
+  `.rrd` loaded into the viewer), **watch in simulator** (`deploy:<name>`,
   or `walk` for training) and **stop**. Stop asks twice: it signals a
   door job's process group, and a tool's or agent's pid. The selection
   is kept by job id through the once-a-second refresh
@@ -181,7 +183,7 @@ serves two jobs and the 3D view is agnostic to which is live:
   **The source** is one table, `<project>/mcp-jobs/`. `mcp_jobs.track`
   is the context manager every long-running entry wraps itself in. It
   writes a `JobRecord` (kind, name, project, pid, argv, started,
-  source, viewport scene, viewer file) and a `<id>.status` beside it:
+  source, simulator scene, viewer file) and a `<id>.status` beside it:
   `RunStatus`, `trainnr-job-status/1`, written atomically at most every
   0.25 s, except that a new stage, a new total or the last step always
   lands. It also writes `<id>.exit` at the end: 0, 1 on an error, 130
@@ -220,7 +222,7 @@ theme; the app's own surfaces come from `theme.rs`, one palette per
 theme: dark is the tokens' values, light is designed (a white page,
 warm paper panels, chips one step deeper, hairlines near the surface,
 near-black text, a soft blue tint behind the selected rail item) after
-the operator's reference, because Rerun's light tokens give every
+a reference design, because Rerun's light tokens give every
 surface one flat grey. The card pictures are drawn by the presenter in both
 palettes on every index write (`preview` and `preview_light` on the
 artifact; `previews/light/` keyed by a palette stamp); the simulator's
@@ -252,12 +254,12 @@ These are the ones that cost real time and are worth not rediscovering:
 - **Anything streaming in budgets its entity count, not just its rate.**
   Twenty ducks' worth of series plus seven hundred mesh transforms per
   tick wedged the log channel — the Rerun SDK blocks under backpressure.
-- **The viewport counts pixels, not points.** Sending egui points to a
+- **The simulator image counts pixels, not points.** Sending egui points to a
   renderer that wants pixels rendered every second frame at half
   resolution; passing the physical size made it Retina-sharp.
 - **Kill the whole process tree.** A surviving Python grandchild once
   flooded the ingest as a zombie; killing the Studio by signal skips
-  Rust's `Drop`, so the viewport child exits on stdin EOF instead.
+  Rust's `Drop`, so the simulator child exits on stdin EOF instead.
 - **WSLg needs the Wayland variable unset** and Rerun's client-drawn
   decorations turned off, or the window has no chrome (2026-08-31).
 

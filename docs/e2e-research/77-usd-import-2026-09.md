@@ -1,11 +1,9 @@
 # 77 — Native USD import: Isaac assets into a bundle, through Newton
 
-Research date: **2026-09-24** (the box, past midnight). The question
-Prakhar asked after the second standards review: *"can we use these
-kind of assets directly with our studio without changing anything?"*
-(robotiq/isaacsim_assets), and then: *"lets research more on this USD
-thing and how can we make it easily importable in our app with native
-USD support with Newton and WARP and everything"*.
+Research date: **2026-09-24**. The question, raised after the second
+standards review: can Isaac Sim's assets (`robotiq/isaacsim_assets`) be
+used in the Studio directly, unchanged; and then: how USD becomes easily
+importable in the app, natively, through Newton and Warp.
 
 Four readers against primary sources, one per field, plus a hands-on
 experiment on the box with the actual asset: OpenUSD and the asset's

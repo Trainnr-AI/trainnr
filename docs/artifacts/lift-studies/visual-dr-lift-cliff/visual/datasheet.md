@@ -24,7 +24,7 @@ Basis: declared span ±0.30 around nominal (the folklore DR, docs/31)
 
 ## Visual draws
 
-Basis: declared visual span: headlight 0.5-1.5, front camera ±1 cm (docs/66 §4; the so101 scenes are lit by the headlight only, docs/07 2026-09-02)
+Basis: declared visual span: headlight 0.5-1.5, front camera ±1 cm (the task declares its cameras and lights and the datasheet records the span drawn from them; the so101 scenes are lit by the headlight only)
 
 | knob | low | mean | high |
 |---|---|---|---|

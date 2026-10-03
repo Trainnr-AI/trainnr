@@ -70,7 +70,7 @@ independently (every other solver/cone fails the kitting referee).
 
 We run Euler at 500 Hz in both rigs, and nobody chose it — it is the
 inherited default (now pinned deliberately). Flipping to implicitfast
-is measured-equivalent on kitting (docs/47 §7) but **changes the
+is measured-equivalent on kitting (docs/e2e-research/47 §7) but **changes the
 nominal condition Paper 2 defines** — a measured decision to schedule,
 not a hygiene commit.
 

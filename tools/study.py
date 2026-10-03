@@ -227,7 +227,7 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
     """Every arm judged AT the truth on matched trials; the spec's extra
     eval variations (visual sweeps) are drawn by trial index, so every
     arm sees the identical factor vector on trial k."""
-    from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+    from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
     from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
     from trainnr.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
     from trainnr.tasks.so101 import LIFT_STUDY  # noqa: PLC0415
@@ -260,7 +260,7 @@ def evaluate(spec: dict[str, Any], out: Path, *, only: list[str] | None = None) 
             seed=EVAL_SEED,
             episodes=trials,
             batch_size=min(trials, 8),
-            extra=RobotiqEnvConfig.cli_flags(
+            extra=TrainnrEnvConfig.cli_flags(
                 LIFT_STUDY,
                 record_to=records_path,
                 policy_name=f"{spec['id']}-{name}",

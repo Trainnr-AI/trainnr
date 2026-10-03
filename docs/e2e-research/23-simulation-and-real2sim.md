@@ -180,7 +180,7 @@ And the actuator model that would be fitted is, today, eight lines in
 `crates/sim-core/src/motor.rs`: a velocity clamp and a first-order lag. Its time
 constant is `0.15 s` — **an unsourced guess sitting in a defaults literal**, with
 no deadband, no stall, no acceleration limit, no back-EMF and no left/right
-asymmetry. `docs/10-hil-protocol.md` already says so out loud:
+asymmetry. The rig's own protocol note said so out loud:
 *"motor dynamics are a first-order lag model, not a real motor."*
 
 **The honest summary: this repo has the mechanism for real→sim and has never

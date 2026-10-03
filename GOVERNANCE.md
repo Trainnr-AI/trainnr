@@ -29,14 +29,15 @@ the Functional Source License (FSL-1.1-ALv2).
 
 The product repository (`trainnr`: the Python packages, the Studio,
 the CLI, the agent plugin, the robot bundles, the docs and the paper's
-records) is open source. A hosted service built on these packages
-(`trainnr-cloud`) is closed by decision (docs/80 §3, docs/83); nothing in
-the open packages depends on it, and it extends them through the same
-entry points any other package would.
+records) is open source. Anything built on top of these packages that is
+not in this repository extends them through the same entry points any
+other package would (`trainnr.mcp_tools`, the task and robot registries);
+nothing in the open packages depends on it.
 
 ## Security and conduct
 
-Vulnerabilities go through `SECURITY.md`; conduct through
-`CODE_OF_CONDUCT.md`. Until Trainnr AI has public mailboxes, both reach
-the maintainers through GitHub (private vulnerability reporting, and a
-direct message or private issue to @aggprakhar).
+Vulnerabilities go through `SECURITY.md` (GitHub's private vulnerability
+reporting on this repository). Conduct goes through `CODE_OF_CONDUCT.md`:
+a GitHub issue labelled `conduct`, or the contact on the maintainer's
+GitHub profile (@aggprakhar). A private address at trainnr.ai will be
+named here once it exists.

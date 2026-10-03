@@ -53,7 +53,7 @@ bump — each fixed by chasing an upstream release
 command (`mjlab:.claude/commands/update-mjwarp.md`: one upstream commit → one
 minimal-diff PR → `uv lock`) and a CI matrix that resolves both `locked`
 and `unlocked` "so a new upstream release breaks a PR instead of a
-release". Our two-instrument seam (CPU MuJoCo + MJX-Warp, docs/49)
+release". Our two-instrument seam (CPU MuJoCo + MJX-Warp, docs/e2e-research/49)
 would have caught the `qfrc_constraint` class in-house as an A/B
 divergence; theirs cannot, by declared design.
 

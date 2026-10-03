@@ -81,7 +81,7 @@ enumerate it. The docs enumerate it themselves
 | **`<sensor>`** | **not imported** — Newton has its own sensor pipeline | the whole harness contract ("policies observe sensors"), the referee framepos sensors, the bundle's jointpos/jointvel census, `LEFT_GRIPPER_POS_SLICE` — all of it would need re-plumbing through Newton sensors |
 | Cameras/lights in MJCF | ignored (own viewer pipeline; `SensorTiledCamera` instead) | our vision harness renders MJCF-declared cameras per step |
 | `<plugin>`, `<composite>`, `<flex>`, `<skin>` | not supported/imported | unused by us today |
-| Version pin | `mujoco~=3.11.0` on main (1.6.0.dev0) | CORRECTED 2026-08-27: the repo's lock also runs 3.11.0 (upstream latest is 3.12.0) — so Newton's pin currently *matches* ours. The deeper point survives intact: the engine version is part of the identified artifact, and an accidental 3.11→3.12 bump broke nine of our tests the same day (see docs/49 postscript) |
+| Version pin | `mujoco~=3.11.0` on main (1.6.0.dev0) | CORRECTED 2026-08-27: the repo's lock also runs 3.11.0 (upstream latest is 3.12.0) — so Newton's pin currently *matches* ours. The deeper point survives intact: the engine version is part of the identified artifact, and an accidental 3.11→3.12 bump broke nine of our tests the same day (see docs/e2e-research/49 postscript) |
 | Contact `solref` | force-space re-conversion unless MJCF-authored (`SOLREF_MODE_RAW` preserved verbatim) | our gym-aloha-copied solimp/solref are MJCF-authored → preserved; but `save_to_mjcf` round-trip is lossy for force-space joints |
 | Multi-world | model built from the **first world only**, replicated; worlds must be structurally identical | per-trial DYNAMICS variation (our `variations.py` DR) has no first-class door here; per-world values exist only via custom attributes |
 | Non-convex meshes | convex-hulled at conversion (MuJoCo semantics — same as ours) | no change |
@@ -98,7 +98,7 @@ mass, flips the integrator in the emitted file — and the importer
 zeroes the position servos' kv, so Newton simulates this robot with
 UNDAMPED servos: the very parameter sysid identifies. (Mechanism found
 2026-08-27 in their source: the importer reads an explicit `kv` but
-not MuJoCo's compiled `dampratio`, which our bundles author; docs/51.)
+not MuJoCo's compiled `dampratio`, which our bundles author; docs/e2e-research/51.)
 
 ## 4. What is worth taking regardless: the tuning corpus
 
@@ -212,7 +212,7 @@ Three conclusions, each load-bearing for the GPU-path decision:
    stick-slip").
 3. **implicitfast passes the referee at ~equal cost — but it is NOT
    behaviorally equivalent** (revised 2026-08-27 when the sweep gained
-   the docs/48 §3 diagnostics): peak pad normal force is **318 N vs
+   the docs/e2e-research/48 §3 diagnostics): peak pad normal force is **318 N vs
    Euler's 22.6 N** — a 14x spike at the fingertips the verdict column
    cannot see. Referee-equivalent, contact-dynamics different; the
    integrator decision needs the force trace, not just the outcome.
@@ -223,7 +223,7 @@ physics they get — so "fail" measures the pipeline outcome (the thing
 we ship), not solver accuracy in isolation. The penetration column is
 the solver-only signal.
 
-**Second pass, same day — the sweep grew the docs/48 §3 diagnostics**
+**Second pass, same day — the sweep grew the docs/e2e-research/48 §3 diagnostics**
 (peak tangential pad-part slip from the elliptic efc_vel rows; peak
 pad normal force via mj_contactForce) plus an impratio sweep:
 

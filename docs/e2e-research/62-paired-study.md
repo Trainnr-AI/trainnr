@@ -135,7 +135,7 @@ cheap (a 5 s episode even on CPU; 2 × 40 trials is minutes) — the cost
 is the two REAL trainings, and T5's precedent (docs/34: ACT 10k steps
 at batch 64 on a rented B200 in well under an hour) puts the whole
 study around **2–3 GPU-hours ≈ $10–20** plus demo generation, which
-is CPU. The decision the operator holds is that number. That sizing
+is CPU. The decision to run it rests on that number. That sizing
 note — "we computed N before running" — is itself a positioning line
 no surveyed framework can write.
 

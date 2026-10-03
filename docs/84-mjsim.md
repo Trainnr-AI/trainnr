@@ -1,19 +1,18 @@
 # 84 — mjsim: the MuJoCo simulator window as its own package
 
-*2026-10-03. Prakhar: "can we keep the mujoco viewer as a separate module
-repo that can be just imported into the app and it can be built and
-improved separately as a package", and on the name: "I am not liking the
-term viewport, we can name it mjsim, mjlab, mujoco, etc." `mjlab` is
+*2026-10-03. The ask: keep the MuJoCo simulator window as its own module,
+importable by the app and improved on its own, under a name that is not
+"viewport" (mjsim, mjlab or mujoco were offered). `mjlab` is
 mujocolab's trainer, which we depend on and cite; `mujoco` is
 DeepMind's; `mjsim` is free on PyPI, crates.io and the organisation
-(checked 2026-10-03), so **mjsim** it is: the repository
-`Trainnr-AI/mjsim`, the crate `mjsim`, the package `mjsim`, the module
-`mjsim`. docs/80 §3's rule is satellites only where the lifecycle
+(checked 2026-10-03), so **mjsim** it is: the crate `mjsim`, the
+package `mjsim`, the module `mjsim`; a repository of its own is deferred
+(below). docs/80 §3's rule is satellites only where the lifecycle
 differs; this one's does: a MuJoCo simulator window for egui apps, with
 the simulation streaming into it from a Python process, is useful to any
 egui app and to any MuJoCo user, and it moves on its own cadence
 (rendering, the drawer, the follow rules, the ring). In prose it is "the
-simulator" (the page already says so); "viewport" leaves the vocabulary
+simulator" (the page already says so); the old word leaves the vocabulary
 with the extraction, and the heartbeat's `viewport_*` fields with the
 next schema version. This was the plan for a repository; decided 2026-10-03 that no
 repository splits off for now ("lets use just trainnr for now"), so
@@ -67,7 +66,7 @@ list it offers comes in as an argument.
 Buys: the widget improves on its own cadence and pull requests (rendering
 quality, the drawer, the half-size rule, a Windows build of just the
 widget's demo), a demo app in the repo that is the smallest MuJoCo
-viewport anyone can run, and a second consumer is possible (a notebook,
+simulator window anyone can run, and a second consumer is possible (a notebook,
 another egui app). Costs: two version pins to keep in step (the Studio's
 Cargo.toml and `trainnr`'s pyproject), a release step the monorepo did
 not have, and the first week of cutting, which is mostly moving files
@@ -81,10 +80,10 @@ and naming the contract that exists already.
 2. Move: the crate under `crates/mjsim` and the package under `mjsim/`
    in the monorepo first (a path dependency), the
    Studio and `trainnr` consuming them; every gate green.
-3. Extract: the repository `Trainnr-AI/mjsim` with the files'
-   history (the rig recipe, `tools/export/rig/`), the monorepo switching
-   to a versioned dependency; the demo app and its README.
+3. Extract (deferred, see the note above): a repository of its own with
+   the files' history, the monorepo switching to a versioned dependency;
+   the demo app and its README.
 4. Release with the first tag; the Studio pins it.
 
-Decided by the operator; steps 1 and 2 are a day inside the monorepo and
+Decided 2026-10-03; steps 1 and 2 are a day inside the monorepo and
 carry no risk; step 3 is the point of no return for the file history.

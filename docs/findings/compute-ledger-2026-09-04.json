@@ -71,9 +71,9 @@
   "Corrected 2026-09-04 after audit: the B200 attempt was 94 min on 2026-08-27 (~$10.6), not 2 h on 08-28; the sized C1 run was 2026-08-31/09-01; the total is one figure (~$110), not $110 + $34.",
   "Updated 2026-09-04 (late): +4.2 h for the campaign 4b retrain and DAgger round 1 pod (launch ~16:15, stopped 20:25 UTC; the launch time is reconstructed) \u2014 53.4 h, ~$120.",
   "Updated 2026-09-04 (later): +0.9 h for the matrix pod (63 certificates in 28 minutes, then a two-minute Go1 smoke) \u2014 54.3 h, ~$120.",
-  "Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods \u2014 62.1 h, ~$140. The account balance moved $18 \u2192 $3.9 over that session, consistent with ~$14 of the two pods' billing plus the earlier matrix pod.",
-  "Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study \u2014 78.7 h, ~$170; the account moved $44 \u2192 about $10 over the evening.",
-  "Dates in this record are UTC (the pods' clock); record ids elsewhere carry the fold's local date, which for the evening of 2026-09-05 UTC is 2026-09-06 IST."
+  "Updated 2026-09-04 (latest): +7.8 h for the replicated lift curve on two pods \u2014 62.1 h, ~$140.",
+  "Updated 2026-09-06: +16.6 h for the per-axis matrices and the refit study \u2014 78.7 h, ~$170; ",
+  "Dates in this record are UTC (the pods' clock); record ids elsewhere carry the fold's local date, which for the evening of 2026-09-05 UTC is 2026-09-06 local time."
  ],
  "revised": [
   {

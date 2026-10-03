@@ -197,7 +197,7 @@ class TheGate(unittest.TestCase):
         from dataclasses import replace  # noqa: PLC0415
 
         from trainnr.envs.gymnasium_env import (  # noqa: PLC0415
-            RobotiqEnv,
+            TrainnrEnv,
             bundle_source,
         )
         from trainnr.physics.placement import PlacementRefusedError  # noqa: PLC0415
@@ -214,7 +214,7 @@ class TheGate(unittest.TestCase):
             return start
 
         task = replace(base, protocol=replace(base.protocol, perturb=hovering))
-        env = RobotiqEnv(task, source=bundle_source(task.bundle_dir))
+        env = TrainnrEnv(task, source=bundle_source(task.bundle_dir))
         try:
             with self.assertRaises(PlacementRefusedError) as caught:
                 env.reset(seed=1002)

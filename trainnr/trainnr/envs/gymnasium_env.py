@@ -84,7 +84,7 @@ def bundle_source(bundle_dir: Path) -> str:
     return stamp(bundle_dir.name, bundle_dir)
 
 
-class RobotiqEnv(gym.Env):
+class TrainnrEnv(gym.Env):
     """A `Task` (spec + protocol + cameras + state width + instruction)
     as a gymnasium env.
 
@@ -343,7 +343,7 @@ def make_env(  # noqa: PLR0913 - gym.make's keywords, each a knob of one env
     variations: tuple[Variation, ...] = (),
     trials: int | None = None,
     **builder_kwargs: Any,
-) -> RobotiqEnv:
+) -> TrainnrEnv:
     """`gym.make`'s entry point: a registered task by id (`trainnr/kitting`,
     or bare `kitting` for a built-in); extra keywords reach the builder
     (`look=...`).
@@ -367,7 +367,7 @@ def make_env(  # noqa: PLR0913 - gym.make's keywords, each a knob of one env
         built = entry.build(
             spec=replace(built.task_spec, trials=trials), **builder_kwargs
         )
-    return RobotiqEnv(
+    return TrainnrEnv(
         built,
         source=bundle_source(built.bundle_dir),
         render_mode=render_mode,

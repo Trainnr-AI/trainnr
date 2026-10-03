@@ -1,0 +1,58 @@
+{
+ "schema": "trainnr-evaluation/1",
+ "source": "go2-walk@f527f5c58619",
+ "policy": "go2-c2-s1002-model_1499@d0b8107f5ae6",
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_ratio_bound": 0.5,
+  "err_floor_mps": 0.1,
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "commands": {
+   "lin_vel_x": [
+    -1.0,
+    1.0
+   ],
+   "lin_vel_y": [
+    -1.0,
+    1.0
+   ],
+   "ang_vel_z": [
+    -0.5,
+    0.5
+   ],
+   "heading": [
+    -3.141592653589793,
+    3.141592653589793
+   ]
+  },
+  "command_basis": "command curriculum stage 1 of 3, reached by iteration 1499",
+  "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda",
+  "judged_at": "law DR: declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants"
+ },
+ "identity": {
+  "robot": "go2@5003bf617b5f",
+  "actuator": "unitree-go2-declared-pd@3b68245f8d2a",
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "actor": "deployable",
+  "task": null,
+  "trained_dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "seed": 1002
+ },
+ "funnel": {
+  "survived": 40,
+  "tracked": 38
+ },
+ "successes": 38,
+ "trials": 40,
+ "ci95": [
+  0.8308,
+  0.9939
+ ],
+ "median_err_ratio": 0.2605,
+ "robot": "go2@5003bf617b5f",
+ "task": "go2-walk@f527f5c58619",
+ "run": "go2-c2-s1002@1e10e30a3565"
+}

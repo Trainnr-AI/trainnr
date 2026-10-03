@@ -1,0 +1,298 @@
+{
+ "schema": "trainnr-deploy/1",
+ "stamp_of": "go2 policy model_1499",
+ "policy": "go2-c2-model_1499@99b1655e2cec",
+ "checkpoint": "model_1499.pt",
+ "run": "go2-c2@4dc757293b97",
+ "robot": "go2@5003bf617b5f",
+ "actuator": "unitree-go2-declared-pd@3b68245f8d2a",
+ "task": "go2-walk@0e7e123a7de7",
+ "dr_basis": "none: the reference's declared PD gains exactly (no actuator DR)",
+ "seed": null,
+ "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f",
+ "control": {
+  "physics_timestep_s": 0.005,
+  "decimation": 4,
+  "control_hz": 50,
+  "episode_length_s": 20.0
+ },
+ "joints": {
+  "policy_order": [
+   "FL_hip_joint",
+   "FL_thigh_joint",
+   "FL_calf_joint",
+   "FR_hip_joint",
+   "FR_thigh_joint",
+   "FR_calf_joint",
+   "RL_hip_joint",
+   "RL_thigh_joint",
+   "RL_calf_joint",
+   "RR_hip_joint",
+   "RR_thigh_joint",
+   "RR_calf_joint"
+  ],
+  "ctrl_order": [
+   "FL_hip_joint",
+   "FR_hip_joint",
+   "RL_hip_joint",
+   "RR_hip_joint",
+   "FL_thigh_joint",
+   "FR_thigh_joint",
+   "RL_thigh_joint",
+   "RR_thigh_joint",
+   "FL_calf_joint",
+   "FR_calf_joint",
+   "RL_calf_joint",
+   "RR_calf_joint"
+  ],
+  "action_to_ctrl": [
+   0,
+   4,
+   8,
+   1,
+   5,
+   9,
+   2,
+   6,
+   10,
+   3,
+   7,
+   11
+  ],
+  "sdk_order_map": [
+   3,
+   4,
+   5,
+   0,
+   1,
+   2,
+   9,
+   10,
+   11,
+   6,
+   7,
+   8
+  ],
+  "sdk_order_source": "unitree_rl_mjlab deploy/robots/go2 deploy.yaml joint_ids_map (declared)",
+  "stiffness": [
+   20.0,
+   20.0,
+   40.0,
+   20.0,
+   20.0,
+   40.0,
+   20.0,
+   20.0,
+   40.0,
+   20.0,
+   20.0,
+   40.0
+  ],
+  "damping": [
+   1.0,
+   1.0,
+   2.0,
+   1.0,
+   1.0,
+   2.0,
+   1.0,
+   1.0,
+   2.0,
+   1.0,
+   1.0,
+   2.0
+  ],
+  "effort_limit": [
+   23.5,
+   23.5,
+   45.0,
+   23.5,
+   23.5,
+   45.0,
+   23.5,
+   23.5,
+   45.0,
+   23.5,
+   23.5,
+   45.0
+  ],
+  "default_pos": [
+   -0.1,
+   0.9,
+   -1.8,
+   0.1,
+   0.9,
+   -1.8,
+   -0.1,
+   0.9,
+   -1.8,
+   0.1,
+   0.9,
+   -1.8
+  ]
+ },
+ "action": {
+  "kind": "joint position target = default_pos + scale * action",
+  "scale": [
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25,
+   0.25
+  ],
+  "offset": [
+   -0.1,
+   0.9,
+   -1.8,
+   0.1,
+   0.9,
+   -1.8,
+   -0.1,
+   0.9,
+   -1.8,
+   0.1,
+   0.9,
+   -1.8
+  ],
+  "clip": null
+ },
+ "observations": [
+  {
+   "name": "base_ang_vel",
+   "width": 3,
+   "source": "sensor robot/imu_ang_vel",
+   "params": {
+    "sensor_name": "robot/imu_ang_vel"
+   },
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "projected_gravity",
+   "width": 3,
+   "source": "projected_gravity",
+   "params": {},
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "command",
+   "width": 3,
+   "source": "command twist",
+   "params": {
+    "command_name": "twist"
+   },
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "phase",
+   "width": 2,
+   "source": "gait_phase",
+   "params": {
+    "period": 0.6,
+    "command_name": "twist"
+   },
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "joint_pos",
+   "width": 12,
+   "source": "joint_pos_rel",
+   "params": {
+    "biased": true
+   },
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "joint_vel",
+   "width": 12,
+   "source": "joint_vel_rel",
+   "params": {},
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  },
+  {
+   "name": "actions",
+   "width": 12,
+   "source": "last_action",
+   "params": {},
+   "scale": 1.0,
+   "clip": null,
+   "history_length": 0
+  }
+ ],
+ "onnx": {
+  "file": "policy.onnx",
+  "input": "obs",
+  "output": "actions",
+  "input_width": 47,
+  "output_width": 12,
+  "normalization": "folded into the graph",
+  "export_check_max_abs_diff": 2.384185791015625e-06
+ },
+ "scene": {
+  "file": "scene.xml",
+  "meshes": "the robot bundle's assets/, by name (the bundle is the version above)",
+  "terrain": "plane",
+  "floor": {
+   "size": [
+    0.0,
+    0.0,
+    0.01
+   ],
+   "condim": 3,
+   "priority": 0,
+   "friction": [
+    1.0,
+    0.005,
+    0.0001
+   ]
+  }
+ },
+ "commands": {
+  "twist": {
+   "lin_vel_x": [
+    -1.0,
+    1.0
+   ],
+   "lin_vel_y": [
+    -1.0,
+    1.0
+   ],
+   "ang_vel_z": [
+    -0.5,
+    0.5
+   ],
+   "heading": [
+    -3.141592653589793,
+    3.141592653589793
+   ]
+  }
+ },
+ "command_basis": "command curriculum stage 1 of 3, reached by iteration 1499",
+ "termination": {
+  "fell_over_deg": 70.0
+ },
+ "unitree": {
+  "robot": "go2",
+  "controller": "go2_ctrl",
+  "scene": "src/assets/robots/unitree_go2/xmls/scene_go2.xml",
+  "source": "unitree_rl_mjlab simulate/config.yaml and deploy/robots/go2 (read 2026-09-11)"
+ }
+}

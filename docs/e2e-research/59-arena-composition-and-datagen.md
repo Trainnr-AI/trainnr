@@ -63,7 +63,7 @@ too.
   **MuJoCo-Warp via Newton inside Isaac Lab** (`MJWarpSolverCfg`,
   implicitfast, elliptic cone). The GPU/EULA tax is Kit and USD, not
   the physics — the physics is becoming the same engine mjlab runs and
-  we instrumented (docs/49, 52).
+  we instrumented (docs/e2e-research/49, 52).
 
 ## 4. No measurement layer here either
 

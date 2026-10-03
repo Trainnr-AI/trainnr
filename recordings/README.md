@@ -1,5 +1,11 @@
 # Recorded sessions
 
+These recordings were made by the 2025–26 rig, whose crates (`hil-host`, the
+`vision` crate, the Pico firmware) now live in the archive repository
+[Trainnr-AI/rig](https://github.com/Trainnr-AI/rig); the commands below run
+from that checkout. The files stay here as the evidence the identification
+work cites (the drivetrain fits, the chirp and sweep studies).
+
 Every line the host and the chip said to each other, captured from a real
 run. `>` is host → chip, `<` is chip → host.
 

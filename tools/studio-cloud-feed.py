@@ -731,7 +731,7 @@ def recording_id_for(door: str, log: str) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("door", help="user@host:port (cloud-gpu machines prints it)")
-    parser.add_argument("log", help="remote log path, e.g. /workspace/robotiq/run.log")
+    parser.add_argument("log", help="remote log path, e.g. /workspace/trainnr/run.log")
     parser.add_argument("--name", default="cloud")
     parser.add_argument("--every", type=float, default=2.0, help="poll seconds")
     parser.add_argument(

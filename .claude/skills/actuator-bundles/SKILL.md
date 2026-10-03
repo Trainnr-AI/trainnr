@@ -8,7 +8,7 @@ allowed-tools: Bash(uv run:*), Read, Grep
 
 The interchange artifact of docs/e2e-research/58 §1: BAM's fitted
 params VERBATIM inside a stamped envelope of provenance, checks and
-advisories. The committed store is `robots/actuator-bundles/` (48
+advisories. The committed store is `robots/actuator-bundles/` (49
 bundles, 8 motors × m1..m6).
 
 ## Commands (from `trainnr/`)

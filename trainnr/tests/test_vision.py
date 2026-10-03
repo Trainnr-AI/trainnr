@@ -20,10 +20,10 @@ class ArmnetBenchRig(unittest.TestCase):
     def test_observation_matches_the_armnetbench_contract(self) -> None:
         import numpy as np  # noqa: PLC0415
 
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
         from trainnr.tasks.so101 import build_reach  # noqa: PLC0415
 
-        env = RobotiqEnv(build_reach(), source="so101-reach@testhash")
+        env = TrainnrEnv(build_reach(), source="so101-reach@testhash")
         try:
             observation, _ = env.reset(seed=0)
             pixels = observation["pixels"]

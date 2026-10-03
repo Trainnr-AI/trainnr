@@ -22,7 +22,7 @@ own examples already set it True.
 
 `uv pip install "newton[sim]"` is clean on Apple Silicon (newton 1.5.0
 + warp-lang 1.16.0 + mujoco/mujoco-warp **3.11.0** — matching the
-3.11.0 the repo's lock actually runs — see docs/49's postscript for
+3.11.0 the repo's lock actually runs — see docs/e2e-research/49's postscript for
 the correction; 3.12.0 is upstream latest). **All five
 stable solvers step a box-on-plane scene on Warp's CPU backend,
 including SolverMuJoCo** — the 36-report's "presumably needs CUDA"
@@ -48,7 +48,7 @@ run):
 - **The `<sensor>` block is silently ignored** — the installed MJCF
   importer module contains zero occurrences of "sensor". Our 12
   jointpos/jointvel sensors — the entire reason so101.xml wraps the
-  Menagerie file — vanish without a warning. This verifies docs/47's
+  Menagerie file — vanish without a warning. This verifies docs/e2e-research/47's
   parity-ledger row by execution: the robot-is-an-artifact contract
   (policies observe sensordata only) has no representation on the
   Newton side of `add_mjcf`.
@@ -60,7 +60,7 @@ run):
   on plain MuJoCo; Newton-on-CPU is an API-compatibility checker,
   nothing more.
 
-## The revisit trigger has NOT fired — and docs/47 §5 needs a correction
+## The revisit trigger has NOT fired — and docs/e2e-research/47 §5 needs a correction
 
 Isaac Lab's latest release is still v3.0.0-beta2.patch1 (2026-07-02);
 its Newton-integration page (updated 2026-08-26) still says "only a
@@ -70,7 +70,7 @@ learning examples," **no manipulation/arm/gripper environments**, and
 Newton's own FAQ (main) claims "basic manipulation" among initial
 Isaac Lab environments — **the two primary sources disagree, and
 Isaac Lab's own docs are the authority on Isaac Lab's contents**.
-docs/47 §5's "inching closer" read is hereby downgraded: the trigger
+docs/e2e-research/47 §5's "inching closer" read is hereby downgraded: the trigger
 shows no sign of firing before late 2026.
 
 ## Net effect on the standing recommendation
@@ -88,5 +88,5 @@ MJX-Warp, which keeps sensors for free).
 CPU timings are single-run, one machine, no GPU comparison possible;
 the docs site's per-solver pages were not individually fetched (solver
 roster read from installed v1.5.0 source); Isaac Lab develop-branch
-activity not audited beyond releases + the integration page. Probe
-scripts live in the session scratchpad only.
+activity not audited beyond releases + the integration page. The probe
+scripts were not kept.

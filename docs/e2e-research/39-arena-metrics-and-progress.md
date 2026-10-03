@@ -1,13 +1,15 @@
 # Isaac Lab Arena: metrics, progress tracking, predicates and composite tasks
 
 *Research pass, 2026-08-26. One agent, one field, one primary source: a
-repomix bundle of the whole `isaaclab_arena` repository (132,303 lines).
+repomix bundle of the whole `isaaclab_arena` repository (132,303 lines),
+read in session at the commit stated below; the line numbers cited here
+are lines of that bundle, not of a file in this tree.
 Every claim cites `<repo path>:<line>`, the line in that bundle
 (*scratchpad/arena.md*), with the bundle's text quoted; nothing is filled
 from memory of Isaac Lab in general. The field: how Arena decides an
 episode succeeded, scores partial progress, records episodes, and judges
 multi-stage tasks — mapped against our harness (`trainnr/evaluate/`),
-task referees (`trainnr/tasks/aloha2/kitting.py`) and the certificate
+task referees (`trainnr/trainnr/tasks/aloha2/kitting.py`) and the certificate
 (`trainnr/stats/`, `evaluate/certificate.py`).*
 
 ---
@@ -272,7 +274,7 @@ failure is attributed to an arm. The verdict stays the AND.
    recorded in the row, so re-tuning a milestone does not invalidate a
    certificate.
 2. **Real-side milestones.** Sim milestones read privileged state; on
-   the rig the only referee is the operator's label. Paper-2
+   the rig the only referee is a human label. Paper-2
    sub-question: does sim `progress` rank policies the way real success
    does — a cheaper early signal?
 3. **Progress inside the recipe engine.** `mean_progress` could order

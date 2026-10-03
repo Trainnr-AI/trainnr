@@ -21,7 +21,7 @@ with the machine and gets cheaper than expected.*
 - **Feature coverage of our contact regime is total.** MJX support
   table: cone "All" (elliptic in), condim "All", solvers all except
   PGS/noslip, sensors all except PLUGIN, geoms/joints "All". Our
-  measured requirement (mjSOL_NEWTON + elliptic, docs/47 §7) is
+  measured requirement (mjSOL_NEWTON + elliptic, docs/e2e-research/47 §7) is
   fully covered; the gaps (PGS, noslip, plugins, flex) touch nothing
   we run.
 - **Per-world MODEL batching is first-class** — MEASURED: vmap over
@@ -76,7 +76,7 @@ resurrected backend protocol.
 ## Not verified
 
 GPU-side behavior of the probes (needs a one-hour WSL re-run — probe
-kept in the session scratchpad); Warp-CPU vs Warp-GPU agreement;
+not kept); Warp-CPU vs Warp-GPU agreement;
 batch-render quality on our camera specs.
 
 ## Postscript (2026-08-27, same day): the adapter landed
@@ -158,6 +158,6 @@ rollout, the seat-and-forward, one hold per substep count — live on
 the backend per loaded model, so a new stepper or a new episode never
 recompiles (the batched stepper had been jitting fresh closures per
 instance). `mjwarp-testspeed`'s own estimate for 64 worlds of kitting
-was 262,144 contacts (docs/52 §5.1): that is the order the knob takes
+was 262,144 contacts (docs/e2e-research/52 §5.1): that is the order the knob takes
 at batch.
 

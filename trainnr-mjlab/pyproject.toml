@@ -17,6 +17,7 @@ version = "0.1.0"
 description = "Identified actuator physics for mjlab: BAM's law from certified bundles, with refusals"
 requires-python = ">=3.12,<3.13"
 license = { text = "FSL-1.1-ALv2" }
+authors = [{ name = "Prakhar Aggarwal" }]
 dependencies = [
     # The exact minor: the port's whole reason is owning this pin.
     "mjlab==1.6.0",
@@ -35,6 +36,10 @@ dependencies = [
 bam = ["better-actuator-models==1.0.2"]
 # The Rerun recorder's sink - pinned to the Studio's own tree (0.36.x).
 viz = ["rerun-sdk==0.36.*"]
+
+[project.urls]
+Homepage = "https://trainnr.ai"
+Repository = "https://github.com/Trainnr-AI/trainnr"
 
 [tool.uv.sources]
 trainnr = { path = "../trainnr", editable = true }

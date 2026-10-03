@@ -43,7 +43,7 @@ or widen a band because the expert fails there.
 
 The operator usually has the Studio open — a native window whose
 embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
-then `rr.connect_grpc()` lands there) and whose viewport is a live
+then `rr.connect_grpc()` lands there) and whose simulator is a live
 MuJoCo render. Evidence that exists only in your terminal output does
 not count as shown: every sim run, fit, sweep or eval you produce must
 stream into that window while it runs, or be logged there when it

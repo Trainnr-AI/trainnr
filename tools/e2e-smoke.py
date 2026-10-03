@@ -52,7 +52,7 @@ from trainnr.collect.kitting_export import (  # noqa: E402
     export_kitting_demos,
 )
 from trainnr.collect.provenance import PROVENANCE_FILE  # noqa: E402
-from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: E402
+from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: E402
 from trainnr.envs.lerobot_policy import best_device  # noqa: E402
 from trainnr.envs.lerobot_train_log import (  # noqa: E402
     CHAIN_LOG_FILE,
@@ -268,7 +268,7 @@ def train(chain: Chain) -> None:
         eval_freq=scale.checkpoint_every,
         eval_episodes=episodes,
         eval_batch=episodes,
-        extra=RobotiqEnvConfig.cli_flags(
+        extra=TrainnrEnvConfig.cli_flags(
             KITTING,
             record_to=layout.inloop_records,
             policy_name=f"{layout.name}-inloop",
@@ -295,7 +295,7 @@ def evaluate(chain: Chain) -> None:
             seed=EVAL_SEED,
             episodes=scale.eval_episodes,
             batch_size=min(scale.eval_episodes, MAX_EVAL_BATCH),
-            extra=RobotiqEnvConfig.cli_flags(
+            extra=TrainnrEnvConfig.cli_flags(
                 KITTING,
                 record_to=layout.eval_records,
                 policy_name=f"{layout.name}-{POLICY}-{scale.steps}",

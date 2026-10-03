@@ -82,7 +82,7 @@ class Remote:
     """Where the repo lives on the machine and how its venv is built — the
     values `tools/_pod-bootstrap.sh` takes as TRAINNR_* variables."""
 
-    DIR = "/workspace/robotiq"
+    DIR = "/workspace/trainnr"
     VENV = ".venv-train"
     PYTHON = "3.12.8"
     EXTRAS = ("sim", "viz", "train")

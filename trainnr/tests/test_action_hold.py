@@ -46,16 +46,16 @@ class TheHold(unittest.TestCase):
 @needs_train_sim  # the plugin's config imports lerobot
 class TheFlag(unittest.TestCase):
     def test_frame_every_sets_fps_and_refuses_a_non_divisor(self) -> None:
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
-        cfg = RobotiqEnvConfig(task="lift-study", frame_every=5)
+        cfg = TrainnrEnvConfig(task="lift-study", frame_every=5)
         self.assertEqual(cfg.fps, 10)
-        self.assertEqual(RobotiqEnvConfig(task="lift-study").fps, 50)
+        self.assertEqual(TrainnrEnvConfig(task="lift-study").fps, 50)
         with self.assertRaisesRegex(ValueError, "frame_every"):
-            RobotiqEnvConfig(task="lift-study", frame_every=7)
+            TrainnrEnvConfig(task="lift-study", frame_every=7)
         self.assertIn(
             "--env.frame_every=5",
-            RobotiqEnvConfig.cli_flags("lift-study", frame_every=5),
+            TrainnrEnvConfig.cli_flags("lift-study", frame_every=5),
         )
 
 

@@ -9,6 +9,7 @@ description = "The end-to-end robotics platform, run from your coding agent: ide
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "FSL-1.1-ALv2" }
+authors = [{ name = "Prakhar Aggarwal" }]
 dependencies = [
     "onnx>=1.22.0",
     "onnxruntime>=1.24.3",
@@ -135,6 +136,10 @@ usd = "trainnr.robot.usd_import"
 [project.entry-points."trainnr.identification_methods"]
 drivetrain-ratio = "trainnr.robot.methods:DrivetrainRatio"
 
+[project.urls]
+Homepage = "https://trainnr.ai"
+Repository = "https://github.com/Trainnr-AI/trainnr"
+
 [tool.setuptools.packages.find]
 include = ["trainnr*"]
 
@@ -144,9 +149,9 @@ include = ["trainnr*"]
 trainnr = ["py.typed"]
 
 # Ruff is the whole lint/format story — same role clippy+rustfmt play for
-# the crates, and the pre-commit gate runs it the same way. Rules mirror
-# docs/18-code-quality.md: no unused anything, no shadowed builtins,
-# modern syntax for the real floor, complexity kept visible.
+# the crates, and the pre-commit gate runs it the same way. The rules: no
+# unused anything, no shadowed builtins, modern syntax for the real floor,
+# complexity kept visible.
 [tool.uv]
 # openpi-client declares numpy<2 (its pyproject, 2026-08-27); the client's
 # msgpack-numpy codec round-trips on numpy 2.2 (measured) and the train

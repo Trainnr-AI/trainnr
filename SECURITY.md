@@ -25,7 +25,7 @@ reporters in the release notes unless they prefer otherwise.
 - The `trainnr` and `trainnr-mjlab` Python packages and the `trainnr`
   command-line tool, including the MCP server (`trainnr mcp`) that agents
   connect to over stdio.
-- the Studio (`crates/trainnr-studio`), including the files it reads
+- The Studio (`crates/trainnr-studio`), including the files it reads
   from a project directory (`.index/`) and the processes it spawns.
 - The Claude Code plugin (`.claude-plugin/`): its skills, agents and the
   MCP server entry.

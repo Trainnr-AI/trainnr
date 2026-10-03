@@ -53,7 +53,7 @@ session:
 | Pre-flight | `preflight_deployment` | the checks before the first tick on a robot, soft stop measured |
 | Monitoring | `check_drift` | the robot re-identified from a new recording against its fitted intervals |
 
-the Studio shows each stage as it lands: the Overview's pipeline strip,
+The Studio shows each stage as it lands: the Overview's pipeline strip,
 the robot and its fit, the experiment's curves, the evaluation's intervals,
 the deployment gate, and the simulator with the policy driving the robot.
 
@@ -68,7 +68,8 @@ claude plugin marketplace add Trainnr-AI/trainnr
 claude plugin install trainnr@trainnr
 ```
 
-The tools then appear as `mcp__trainnr_trainnr__<tool>`; ask the agent to
+The tools then appear as `mcp__plugin_trainnr_trainnr__<tool>` (a plugin's server is named
+plugin, then server); ask the agent to
 "create a project and onboard the Go2" and it starts at the top of the table.
 
 **Any MCP client**, from a checkout (the server is `trainnr mcp`, served over
@@ -92,7 +93,7 @@ command = "uv"
 args = ["run", "--directory", "/path/to/trainnr/trainnr", "--extra", "sim", "--extra", "mcp", "trainnr", "mcp"]
 ```
 
-**the Studio** (Rust; the embedded Rerun viewer and the MuJoCo simulator):
+**The Studio** (Rust; the embedded Rerun viewer and the MuJoCo simulator):
 
 ```sh
 cd crates/trainnr-studio && cargo build --release && cd ../..
@@ -112,7 +113,7 @@ test, runs on a laptop without a GPU.
 | [`crates/trainnr-studio/`](crates/trainnr-studio/) | L2, Rust | the Studio; talks to L0 through the project's files and processes only |
 | [`robots/`](robots/) | data | the actuator library (BAM's fits, each with provenance) and the nominal robot bundles |
 | [`tools/`](tools/) | scripts | the gates (`verify.sh`, `check-docs.py`, `check-numbers.py`, `check-layers.py`), the paper build, the cloud runbook |
-| [`docs/`](docs/) | the record | dated research against primary sources, numbered decisions, the progress log, the findings and the paper |
+| [`docs/`](docs/) | the record | dated research against primary sources, numbered decisions, the findings and the paper |
 | [`.claude/`](.claude/), [`.claude-plugin/`](.claude-plugin/) | the plugin | the agents, the skills and the manifest that make this repository a Claude Code marketplace |
 
 The layers never import upward (`tools/check-layers.py`). Robot and dataset

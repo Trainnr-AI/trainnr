@@ -1,6 +1,6 @@
 # The pipeline as software: architecture of `trainnr/`
 
-Started **2026-08-20** on branch `h9/pipeline`. This turns the research design
+Started **2026-08-20**. This turns the research design
 in [docs/e2e-research/30-the-pipeline.md](e2e-research/30-the-pipeline.md)
 into a codebase. Scope here: what exists, what each module owes the others,
 and the decisions that shape everything downstream. The research docs carry
@@ -38,9 +38,9 @@ packages. Built means: typed, tested, gated, on `main`'s quality bar.
 | ④ collect | `trainnr/trainnr/collect/` | **built end to end** — `.wire` reader (Rust-census conformance) → frame alignment (27 frames, 50 Hz-counter clock) → **LeRobot export** behind the `train` extra, roundtrip-tested: export, reload, shapes and the real wire clock all verified. The rig's own data can now feed a training run |
 | ⑤ curate | planned `trainnr/curate` | PSD ranker first (needs nothing), rollout scoring later |
 | ⑥ expand | planned `trainnr/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage |
-| ⑦ train | WSL box, `.venv-train` | **running** (2026-08-26, docs/31) — LeRobot 0.6.1 trains against this repo's exports: T0 ACT smoke (300 steps, 2.1 GB), T6 PPO on MuJoCo Warp (36k env-steps/s, 2048 worlds). Thin wrappers stay a non-goal until a second trainer forces an abstraction — today the dataset contract IS the interface |
+| ⑦ train | the development machine, `.venv-train` | **running** (2026-08-26, docs/31) — LeRobot 0.6.1 trains against this repo's exports: T0 ACT smoke (300 steps, 2.1 GB), T6 PPO on MuJoCo Warp (36k env-steps/s, 2048 worlds). Thin wrappers stay a non-goal until a second trainer forces an abstraction — today the dataset contract IS the interface |
 | ③/⑧ evaluate | `trainnr/trainnr/evaluate/` | **built end to end** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals, exact permutation p whenever n ≤ 8) **and the harness that feeds it** (`harness.py`): census-gated closed-loop episodes, paired trials across policies, sensors-only observations, exact-join to real outcomes by name. The whole Gate A chain runs in one test: four policies → sim ranking → join → honest FAIL at n=4 with exact p = 1/24. **The real side has real data**: `evaluate/armnetbench.py` loads the committed third-party aggregate (`data/armnetbench-v01-so101-counts.json` — 2,099 SO-101 rollouts, 7 policies × 8 tasks, Apache-2.0, provenance in-file) into `join_with_real`'s shape, strict-by-default on the `suboptimal` label. **Pixels too** (`evaluate/vision.py`, 2026-08-25): the same paired-trial skeleton over rendered cameras (ArmnetBench's three-camera rig as data), camera-count census-gated, with a LeRobot checkpoint adapter that runs released policies through their own pre/post-processors |
-| ⑨ envelope | stays in `firmware/` | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
+| ⑨ envelope | stays with the rig's firmware (the rig archive) | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
 ## 2.1 The two entry maps: where the ML enters, where the physics enters
 
@@ -135,13 +135,14 @@ swallow a customer's arm either.
 ## 5. Next, in order
 
 The original three next-steps (LeRobot adapter, MuJoCo adapter, first
-robot-bundle) all landed — see the stage map. As of **2026-08-26**:
+robot-bundle) all landed — see the stage map. The plan as of **2026-08-26**
+(the Go2 loop of docs/76 and docs/77 superseded it; kept as the record):
 
 1. **T5 at scale**: batch `kitting-demos` generation → LeRobot conversion →
-   an ACT policy trained on our own scripted demonstrations (WSL card).
+   an ACT policy trained on our own scripted demonstrations.
 2. **Camera matching against released real videos** (`tools/camera-match.py`
    discipline) before any sim↔real correlation is signed — a vision policy
    failing on cosmetics must not be read as a dynamics gap.
-3. **Identification on a feedback-capable arm** stays gated on hardware the
-   venture has deliberately deferred buying; until then the STS3215 study
-   (docs/28, YouTube benchmark ingest) carries the dynamics side.
+3. **Identification on a feedback-capable arm** stays gated on hardware not
+   yet on the bench; until then the STS3215 study (docs/26, from a public
+   bench video) carries the dynamics side.

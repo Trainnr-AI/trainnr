@@ -20,15 +20,16 @@ Ground truth to read before acting:
   terminal scrollback.
 - `docs/31` — measured throughputs and the T-ladder history.
 
-Operator's standing rules — these are decisions, not suggestions:
-- **Local runs stay ~2 minutes (smoke scale). Real training goes to a
-  cloud GPU.** The local card exists to prove the code path, nothing
-  more.
-- **Spending pod money needs the operator's explicit go.** Present the
-  recipe and cost estimate; never launch a paid pod unasked. A stopped
-  pod still bills disk — say so when one exists.
-- Measured: a B200 idles at small batch (batch 64 → 58% util); batch 256
-  with scaled lr is the standing next-run shape. Several runs per card.
+Standing rules for any user's machine and money:
+- **Smoke first.** Prove the code path with a short local run (minutes)
+  before any run that costs hours; real training goes to whatever GPU
+  the user names.
+- **Rented compute needs the user's explicit go.** Present the recipe
+  and the cost estimate; never launch a paid machine unasked. A stopped
+  instance can still bill storage; say so when one exists.
+- Size the batch to the card: a large GPU idles at small batch (measured:
+  batch 64 left a B200 at 58% utilisation; batch 256 with a scaled
+  learning rate filled it). Several runs per card when they fit.
 - The trainer refuses a pre-existing output dir; the watch sidecar opens
   BEFORE the first stage so every stage's log lands in `chain.log`.
 
@@ -45,7 +46,7 @@ went down.
 
 The operator usually has the Studio open — a native window whose
 embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
-then `rr.connect_grpc()` lands there) and whose viewport is a live
+then `rr.connect_grpc()` lands there) and whose simulator is a live
 MuJoCo render. Evidence that exists only in your terminal output does
 not count as shown: every sim run, fit, sweep or eval you produce must
 stream into that window while it runs, or be logged there when it

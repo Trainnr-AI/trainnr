@@ -1,8 +1,7 @@
 # The scene loop: a captured scene as a data source, with its physics honest
 
-*Branch `scene-loop-2026-09-22`, cut from main at the A0–A8 merge.
-Designed 2026-09-22 from docs/e2e-research/75, before any code. The
-operator's framing (2026-09-22): data collection, augmentation,
+*Started 2026-09-22, after the A0–A8 merge. Designed from
+docs/e2e-research/75, before any code. The framing (2026-09-22): data collection, augmentation,
 generation, telemetry and the loop that improves the model are the
 product's most important feature; a captured scene is judged by what
 it adds to that loop, never by how it looks.*
@@ -51,7 +50,7 @@ robot touched, a declared span where it did not, drift judged against
 the interval.
 
 **Cannot, in this branch:** any number about a real robot in that
-scene. No Go2 hardware exists here; the Pico rig's drivetrain fit says
+scene. No Go2 hardware exists here; the archived rig's drivetrain fit says
 nothing about a floor's friction on its own. The real-to-sim
 correlation the field reports comes from real trials we do not have.
 Every certificate this branch produces is sim-only at declared scene
@@ -111,9 +110,9 @@ number).
 E0 through E3 need the box's GPU and a phone. E4 needs their data and
 a day. E5 needs a robot and is where the loop closes.
 
-**The Mac order (2026-09-22, the box unavailable).** Probed the same
-day, before any building: mujoco_warp 3.13's splat renderer runs on a
-CPU-only Warp on this Mac and composites correctly, at about 3 frames a
+**The CPU order (2026-09-22, the GPU workstation unavailable).** Probed
+the same day, before any building: mujoco_warp 3.13's splat renderer
+runs on a CPU-only Warp on a Mac (M1 Pro) and composites correctly, at about 3 frames a
 second for four worlds at 320 by 240 (finding
 `splat-renderer-cpu-2026-09-22`), so E2 can be smoked here at a small
 resolution and measured for real on the box later. Brush ships an
@@ -123,11 +122,11 @@ and Open3D install from PyPI. And Neverwhere's scenes (MIT) each ship
 a gsplat checkpoint, a web splat, a MuJoCo collision mesh with its
 alignment transform, the COLMAP poses, the dense reconstruction and
 the original capture — a complete scene artifact by another author,
-one of them under 200 MB. So the order on the Mac is: E4's data first
+one of them under 200 MB. So the order on the CPU machine is: E4's data first
 as E1's first scene (import, the record, the gap measured against
-their own collision mesh, the Studio); the operator's phone video as
+their own collision mesh, the Studio); a phone video of a room as
 E1's second scene through the Brush chain; E2 smoked on the CPU; E0 the
-instrument step and every GPU rate when the box returns. The scratch
+instrument step and every GPU rate when the GPU workstation returns. The scratch
 venv with mujoco_warp 3.13 stays beside the repo; the walk package's
 pins do not move until E0.
 
@@ -197,7 +196,7 @@ scene against a field that never audits it; scene physics with an
 interval and a drift check against a field of point estimates and
 hand-picked spans.
 
-## 8. E1 as built (2026-09-22, the Mac)
+## 8. E1 as built (2026-09-22, on a Mac, M1 Pro)
 
 `trainnr/scenes/`: `splat.py` (the 3DGS PLY read and written with
 the activations applied at the file boundary, the web `.splat` read,
@@ -241,7 +240,7 @@ What the first real scene taught, in the order it was learned:
    the proxy (CoACD) or loads MuJoCo's SDF plugin, and the record's
    notes say so; the decomposition's own gap is E2's to measure.
 
-## 8.1 E2 as built, the Mac half (2026-09-22)
+## 8.1 E2 as built, the CPU half (2026-09-22)
 
 The stage. `trainnr/scenes/`: `obj.py` (the one OBJ parser; the
 viewer's copy now delegates), `proxy.py` (CoACD convex parts with their
@@ -354,7 +353,7 @@ What the step taught, in the order it was found:
 
 ## 8.3 E2 on the box: the first walker on the course (2026-09-22)
 
-The scene came to the box as it came to the Mac: Neverwhere's
+The scene came to the GPU workstation as it came to the CPU machine: Neverwhere's
 `hurdle_226_blue_carpet_v3.zip` from their Hugging Face dataset (MIT,
 198,253,978 bytes, sha256 `b36604d74cf4b733...`, the same file), imported
 through `import_scene` into `go2-walk`; the gap reproduced to the last
@@ -375,7 +374,7 @@ ten metres. The gate holds a random twist for twenty seconds, which on a
 course drives a flat-ground policy into its hurdles, desks and walls: on
 a scene, that protocol measures collisions more than terrain. The
 contact-site gap where it touched: chamfer 2.0 cm, 95th percentile
-6.6 cm (the Mac's smoke policy: 2.3 / 7.3).
+6.6 cm (the CPU smoke policy: 2.3 / 7.3).
 
 Two consequences:
 
@@ -445,7 +444,7 @@ the scene, or E4's reproduction on Neverwhere's own terrain.
 
 ## 8.5 E2 on the box: the walk on the scene, and what the camera costs (2026-09-23)
 
-The Go2 now trains on a captured scene (`trainnr-mjlab/scene_stage.py`,
+The Go2 now trains on a captured scene (`trainnr-mjlab/src/trainnr_mjlab/scene_stage.py`,
 `train_walk(..., scene=)`): the scene's heightfield grid — the same
 surface the staged gate collides with, sampled once by the pipeline's
 Open3D path and saved beside the scene as a hidden numpy cache the walk
@@ -508,7 +507,7 @@ scene-trained checkpoint on the scene (the verdict door passes no scene
 yet), exporting one (the manifest would carry the scene as a stage
 does), and the g3 scale with pictures.
 
-## 8.6 E1's second half: the capture chain, on the Mac (2026-09-23)
+## 8.6 E1's second half: the capture chain, on the CPU (2026-09-23)
 
 `capture_scene(source, name)` (`trainnr/scenes/capture.py`, a job
 through `tools/capture-scene.py`): a phone video or a folder of frames
@@ -571,7 +570,7 @@ per COLMAP unit — while the splat was thin (3,065 visible centres over
 the course against the original's 357,903) and the proxy with it. The
 tight walk — 96 frames on an ellipse inside the captured volume,
 93 registered in one model with 16,477 points, 30,000 Brush steps,
-26 minutes for the whole chain on this Mac — put the poses within
+26 minutes for the whole chain on a Mac (M1 Pro) — put the poses within
 5 mm of the truth (camera centres 0.51 cm mean, 1.35 cm max after the
 similarity; the fitted floor 0.12° from level; scale 0.770 m per COLMAP
 unit) and the surface within centimetres where it was seen: the
@@ -628,7 +627,7 @@ the sparse mapper only.
 ## 8.7 E3 built, and the first scene walker judged: a press that stands on the scene, a certificate that names it, an empty batch (2026-09-23, the box)
 
 **The press on a scene.** `generate_walk_demos(checkpoint, robot=, scene=)`
-(`trainnr-mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
+(`trainnr-mjlab/src/trainnr_mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
 the microduck, now presses any registered walk, and on a captured scene
 the rollouts stand on its heightfield from the course's start; the
 frames are the head camera's picture of the splat, rendered inside the
@@ -692,20 +691,20 @@ What a walker for this scene needs, for the record: a run long enough
 that do not send it into the hurdles from the first tick (the course
 protocol's own, or mjlab's terrain curriculum over difficulty rows the
 scene does not have), and a reference for the jump the velocity reward
-alone has not found (mocap and retargeting are the data engine's D5
-lane, designed, not built). None fits the box's one-hour rule; the
-cloud is empty; the operator's call.
+alone has not found (mocap and retargeting are a planned data lane,
+designed, not built). None fits the one-hour rule for local runs; the
+cloud is empty; the call is the maintainer's.
 
-## 8.8 A second splat trainer: gsplat on CUDA, chosen by the registry (2026-09-23, the box)
+## 8.8 A second splat trainer: gsplat on CUDA, chosen by the registry (2026-09-23, the GPU workstation)
 
-The first public-data capture on the box (Mip-NeRF 360's garden, 185
+The first public-data capture on the GPU workstation (Mip-NeRF 360's garden, 185
 frames at 1297x840 from `nvs-bench/mipnerf360` on Hugging Face; the
-INRIA host gave 30 KB/s) found the Mac-tuned chain's weak leg here:
+INRIA host gave 30 KB/s) found the CPU-tuned chain's weak leg here:
 Brush reaches the GPU through wgpu, and under WSL the only Vulkan is
 Mesa's D3D12 layer, which runs on the CPU. Measured: 1,500 % CPU
 (fifteen cores) for 30-40 % of the RTX and 1.1 iterations a second -
-the default 30,000 steps would have taken 7.5 hours, and the operator's
-machine overheated and restarted. COLMAP itself (apt 3.7, CPU) took
+the default 30,000 steps would have taken 7.5 hours, and the run was
+interrupted and restarted. COLMAP itself (apt 3.7, CPU) took
 nine minutes for the 185 frames: extraction, exhaustive matching (a
 folder of stills is unordered), the mapper, all 185 registered in one
 model.
@@ -775,7 +774,7 @@ each found by a screenshot and a measurement:
 - **A surface, not the specks.** The proxy took each cell's highest
   gaussian centre. On a real capture that is every floating speck: the
   lawn's heightfield swung ±37 cm within a metre, the dog hung on the
-  spikes and looked as if it floated (the operator's word). Two
+  spikes and looked as if it floated. Two
   changes: each cell takes the 90th percentile of its centres, then
   the median of its 5x5 neighbours - a median keeps a step's two
   levels and strikes what stands alone. The paving's cell-to-cell
@@ -792,7 +791,7 @@ each found by a screenshot and a measurement:
   from the proxy at 0.2 m cells (obstacle above 20 cm, flat under 3 cm
   of scatter) showed a flat ring around the table; a six-waypoint loop
   on it went into the record as the scene's course, laid out by the
-  operator and said so.
+  maintainer and said so.
 
 The result, `go2-c2-garden-loop`: six of six trials walk the full loop
 around the table at 0.60-0.80 m/s, every waypoint reached within
@@ -825,7 +824,7 @@ own. The two are joined as the proxy the audit and the viewer see; a
 stage on `overhangs` carries the ground as a heightfield under the
 parts as mesh geoms. The record's schema stays `trainnr-scene/1`: the
 new facts (`proxy.ground`, `proxy.overhang`, `splat.renders`, the
-operator's `course`) are keys inside dictionaries every reader takes
+user's `course`) are keys inside dictionaries every reader takes
 with a default, and a scene captured before them stages on the
 heightfield as before and is refused by name on `overhangs`. A table then has a top at 74 cm, legs, and air
 between: rays down under the top reach the ground, a ray along the

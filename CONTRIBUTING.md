@@ -26,7 +26,7 @@ cd crates/trainnr-studio && cargo build --release && cd ../..       # the Studio
 tools/setup-hooks.sh                                                  # the pre-commit gates
 ```
 
-The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or the
+The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or
 the Studio; `trainnr-mjlab` imports `trainnr`; the Studio talks to the
 packages through files and processes only. `tools/check-layers.py` enforces
 it.
@@ -59,13 +59,15 @@ it.
 `tools/verify.sh` is the whole gate; the pre-commit hook runs the fast
 subset. Both must be green:
 
-- `ruff format --check` and `ruff check` for `trainnr`, `trainnr-mjlab` and
-  `tools`; `mypy` for both packages (zero errors is the baseline).
+- `ruff format --check` and `ruff check` for `trainnr` and `tools`, `ruff
+  check` for `trainnr-mjlab`; `mypy` for both packages (zero errors is the
+  baseline).
 - `python -m unittest discover -s tests` in each package. Tests that need a
   GPU, a trained checkpoint or a project skip with a reason and say so.
 - `cargo fmt --check`, `cargo clippy` and `cargo test` for the Studio.
-- `tools/check-docs.py` (docs describe real code), `tools/check-layers.py`,
-  `tools/check-numbers.py` (every number in the docs resolves to a record).
+- `tools/check-docs.py` (docs describe real code), `tools/check-layers.py`
+  and `tools/check-numbers.py` (every number in the docs resolves to a
+  record): in CI, in the pre-commit hook and in `tools/verify.sh`.
 
 A screen you changed is verified by looking at it: launch the Studio,
 read every label as a user would, and attach the screenshot to the pull

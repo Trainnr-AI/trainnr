@@ -32,7 +32,7 @@ Hard-won facts you must not re-learn the expensive way:
   instead of overriding.
 - Demos predating a choreography or spec fix are stale — check stamps
   against the current task before converting.
-- CPU-bound stages (demos, convert) run on the local box; only
+- CPU-bound stages (demos, convert) run on this machine; only
   GPU-bound stages go to a rented card (`e2e-smoke.py --until convert`
   then `cloud-gpu push`).
 
@@ -49,7 +49,7 @@ datasheet before using any batch; surface its warnings verbatim; the
 
 The operator usually has the Studio open — a native window whose
 embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
-then `rr.connect_grpc()` lands there) and whose viewport is a live
+then `rr.connect_grpc()` lands there) and whose simulator is a live
 MuJoCo render. Evidence that exists only in your terminal output does
 not count as shown: every sim run, fit, sweep or eval you produce must
 stream into that window while it runs, or be logged there when it

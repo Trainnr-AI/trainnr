@@ -90,7 +90,7 @@ def evaluate(
     of every policy runs the same world (62 §2)."""
     import subprocess  # noqa: PLC0415
 
-    from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+    from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
     from trainnr.envs.lerobot_policy import best_device  # noqa: PLC0415
     from trainnr.evaluate.records import fold, funnel, read_records  # noqa: PLC0415
     from trainnr.stats.effects import main_effect  # noqa: PLC0415
@@ -115,7 +115,7 @@ def evaluate(
             # A batch is one renderer per env; 40 EGL contexts is a way
             # to find a driver limit, not a result.
             batch_size=min(trials, 8),
-            extra=RobotiqEnvConfig.cli_flags(
+            extra=TrainnrEnvConfig.cli_flags(
                 LIFT_STUDY,
                 record_to=records_path,
                 policy_name=f"paired-{name}",

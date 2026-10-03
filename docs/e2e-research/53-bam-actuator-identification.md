@@ -135,7 +135,7 @@ for the episode. **This is a real version wall for us**: the `mjlab`
 extra pins `mujoco-warp>=3.7,<3.8` and `warp-lang>=1.12,<1.13`
 ("mjlab 1.3 targets the MuJoCo Warp 3.7 era... otherwise `Simulation()`
 raises `ls_parallel was removed`"). Our pin is `mujoco~=3.11.0` /
-measured `warp-lang 1.14.0` (docs/49, docs/52). Trying `bam[mjlab]`
+measured `warp-lang 1.14.0` (docs/e2e-research/49, docs/e2e-research/52). Trying `bam[mjlab]`
 against our stack today would hit exactly the kind of breakage
 Tuesday night's accidental 3.11→3.12 bump caused on our own suite —
 this is not speculative, it's the same failure shape, pinned in their
@@ -209,9 +209,8 @@ bundle currently models at all.
 
 ## 7. Postscript (2026-08-28, same day): the library is landed, all 8 actuators
 
-Following the operator's direct question — "how can we use all the
-BAM servos and keep adding more?" — the answer is built, not just
-designed:
+The question was how to use all of BAM's servos and keep adding more.
+The answer is built, not just designed:
 
 - **`robots/actuators/`**: all 8 BAM actuators vendored (Dynamixel
   MX-64/MX-106/XL-320/XL-330, eRob80:50/eRob80:100, Feetech STS3215

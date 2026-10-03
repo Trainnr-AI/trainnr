@@ -1,9 +1,9 @@
 # Quickstart: identify your robot
 
 *The product's core workflow, start to finish, for someone who has never
-seen this repo. Written 2026-08-25 after the practitioner review found
-every piece existed but was scattered across four files and a progress
-log. Rig owners have a shorter path — see the end.*
+seen this repo. Written 2026-08-25 after an earlier review found every
+piece existed but was scattered across four files. Owners of the original
+rig have a shorter path — see the end.*
 
 ## 0. Install
 
@@ -13,8 +13,9 @@ One prerequisite: [uv](https://docs.astral.sh/uv/).
 cd trainnr && uv sync --extra sim     # mujoco[sysid] and friends
 ```
 
-(Rust and the Pico toolchain are only for this repo's own rig — you
-don't need them to measure your robot.)
+(Rust is only for the Studio; the Pico toolchain belongs to the original
+rig, which lives in its own archive repository — you need neither to
+measure your robot.)
 
 ## 1. Make a bundle
 
@@ -122,7 +123,9 @@ what it doesn't know is a guess with confidence theater.
 
 ## Rig owners' shortcut
 
-For this repo's own drivetrain the whole chain is one command:
+For the original drivetrain (its bundle is `robots/rig-drivetrain`; the
+hardware and firmware live in the rig archive repository) the whole chain
+is one command:
 
 ```sh
 uv run --extra sim python ../tools/fit-report.py ../robots/rig-drivetrain \

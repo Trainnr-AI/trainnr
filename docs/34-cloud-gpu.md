@@ -1,8 +1,8 @@
 # 34. Rented GPUs — the provider seam and the runbook
 
 *2026-08-27. The training run at recipe scale (docs/31 §5) needs a card
-for four and a half hours; the WSL box is a smoke box (docs/07
-2026-08-26). This page is how a card is rented: one seam, one vendor
+for four and a half hours; the development machine is a smoke box.
+This page is how a card is rented: one seam, one vendor
 behind it today, one command per step.*
 
 ## 1. The seam — providers by name, like engines
@@ -60,29 +60,29 @@ schema and the wire said:
   machine assigned; `ssh.proxy` is a shell only (no rsync).
 - **Logs** are a `text/event-stream`; the provider reads the `data:`
   lines.
-- **The account's registered SSH key is this box's `~/.ssh/id_ed25519`**
+- **The account's registered SSH key** is the one `--ssh-key` names
   (fingerprints compared, 2026-08-27), so `startSsh` pods accept it.
 - **Image**: `runpod/pytorch:1.1.0-cu1300-torch291-ubuntu2404` (Docker
   Hub, 2026-08-27) — CUDA 13, Ubuntu 24.04, sshd. The image's torch is
   irrelevant: the bootstrap builds our own `.venv-train` from the
-  lockfile, exactly the WSL box's recipe.
-- **The first session, on the account's own B200** (`sqhor60yskfutj`,
-  secure, US-NC-2, 192 CPU cores, driver 580.126.09 / CUDA 13.0, a 50 GB
-  persistent volume at `/workspace`), 2026-08-27 night, measured:
-  the pod sat in "initializing" for **52 minutes** after `start` before
-  its container ran (billing started at the container, 22:04 IST);
+  lockfile, exactly the development machine's recipe.
+- **The first session, on a secure-tier B200** (192 CPU cores, CUDA
+  13.0, a 50 GB persistent volume at `/workspace`), 2026-08-27 night,
+  measured: the pod sat in "initializing" for **52 minutes** after
+  `start` before its container ran (billing started at the container);
   `bootstrap` (apt + uv + the train venv, 128 packages) took **5 min**;
-  the smoke chain there: demos **45 s/episode** (the box: 95), the
-  PNG → AV1 convert **223 s/episode** (the box: 38 — slower cores),
+  the smoke chain there: demos **45 s/episode** (the development
+  machine: 95), the PNG → AV1 convert **223 s/episode** (the development
+  machine: 38, slower cores),
   ACT training **11.3 steps/s with 4 dataloader workers and 11.4 with
-  16, the card at 17 % — slower than the 3090 Ti's 14.8**: the training
+  16, the card at 17 %, slower than a 24 GB RTX 3090 Ti's 14.8**: the training
   loop itself is CPU-bound at batch 8 (per-step Python and kernel
   launches on slower server cores), so workers are not the lever and a
   bigger batch is: **batch 64 ran at 9.26 steps/s, 58 % GPU, 17 GB** —
   81 % of the batch-8 step rate with eight times the samples per step,
   6.5× the throughput (`e2e-smoke --batch`, with `--lr` scaled by the
   square root of the batch ratio; the preset keeps the recipe's 8 for
-  comparability, the operator's call on the night was 64). The pod's volume
+  comparability; the decision that night was 64). The pod's volume
   refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
   UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
 - **An evaluation of N episodes needs N distinct starts.** The env
@@ -92,9 +92,8 @@ schema and the wire said:
   start three times). `--env.trials=N` rebuilds the spec with N paired
   trials — the chain does it for every evaluation it launches — and
   LeRobot's padded last batch falls into a second pass of the fold.
-- The account held a **stopped B200 pod** (`$6.79/h` when running; a
-  stopped pod bills its disk) when the tool first listed it. The tool
-  reports; it never terminates on anyone's behalf.
+- A **stopped pod still bills its disk**. The tool reports what the
+  account holds; it never terminates on anyone's behalf.
 
 ## 3. The runbook — `tools/cloud-gpu.py`
 
@@ -109,7 +108,7 @@ $P push <id>                                     # rsync the tree (no .env, no v
 $P bootstrap <id>                                # apt + uv + .venv-train, then a torch/CUDA/mujoco check
 $P run <id> -- ../tools/e2e-smoke.py --scale smoke --name t5-smoke   # prove the chain there
 $P run <id> -- ../tools/e2e-smoke.py --scale cloud --name t5-cloud   # the real run (docs/31 §5)
-$P pull <id> t5-cloud                            # runs/t5-cloud-* back onto this box
+$P pull <id> t5-cloud                            # runs/t5-cloud-* back onto this machine
 $P terminate <id>                                # billing stops here
 ```
 
@@ -122,11 +121,11 @@ KILL a minute later): a budget the machine enforces, not a clock
 someone watches; checkpoints written before it survive.
 
 **Six EGL renderers on WSL livelock.** Six parallel `kitting-demos`
-shards on the box's card each finished five episodes and then all
+shards on the development machine's card each finished five episodes and then all
 parked in `futex_do_wait` at the same minute (2026-08-27, 29 of 50
 kept, nothing for 30 minutes at 98 % GPU). Three shards completed the
 rest without incident. Until the driver path is understood, three
-shards is the box's ceiling; on a native-EGL Linux box with 192 cores
+shards is that machine's ceiling; on a native-EGL Linux host with 192 cores
 the same split has no such ceiling in principle, but is unmeasured.
 
 **Watch it as it trains.** The chain writes a sidecar beside the
@@ -147,22 +146,21 @@ mirrors the light files (never the weights) every 20 s and opens the
 dashboard on the mirror — same files, same panels, either box.
 `--rrd` saves the stream as one portable record.
 
-**Split the chain by what each box is good at.** The demos (a render
+**Split the chain by what each machine is good at.** The demos (a render
 per control tick, 95 s/episode) and the PNG → AV1 conversion (38
-s/episode) are CPU-bound and free on the WSL box; training and the
+s/episode) are CPU-bound and free on the development machine; training and the
 evaluations are what a rented card is for. `kitting-demos.py
 --first-episode K` lets N generators with disjoint ranges and seeds
-fill one batch directory in parallel (six shards on the box's 24
-cores); `e2e-smoke.py --until convert` runs the chain up to the
+fill one batch directory in parallel (six shards on 24 cores); `e2e-smoke.py --until convert` runs the chain up to the
 dataset; then `push` + an rsync of `runs/<name>-lerobot` and
 `e2e-smoke.py --scale cloud --from train --name <name>` on the
-machine does only train + eval. The first run this way, 2026-08-27
-night, is in docs/07.
+machine does only train + eval. The first run this way was 2026-08-27
+night.
 
 The remote layout is `Remote` in the tool: the repo at
-`/workspace/robotiq`, the venv `trainnr/.venv-train` built with
+`/workspace/trainnr`, the venv `trainnr/.venv-train` built with
 `UV_PROJECT_ENVIRONMENT=.venv-train uv sync --python 3.12.8 --extra sim
---extra viz --extra train` (the WSL box's own line), commands run as
+--extra viz --extra train` (the development machine's own line), commands run as
 `MUJOCO_GL=egl OMP_NUM_THREADS=1 .venv-train/bin/python …` — EGL is the
 offscreen renderer on a bare Linux GPU box; none of WSL's Mesa
 variables apply.
@@ -176,7 +174,7 @@ disk; `terminate` when the results are pulled.
 
 Runpod also ships a Claude Code plugin (router plus six skills and a
 hosted MCP server, OAuth-authenticated) — `docs.runpod.io/agent-setup`.
-It is installed by the operator, not by a tool:
+It is installed by hand, not by a tool:
 
 ```
 claude plugin marketplace add runpod/runpod-plugins-official
@@ -197,4 +195,4 @@ pipeline depends on, and it needs only the API key.
 | Several runs on one card | The way to load a B200 with a small model (ACT at batch 64 used 58 % of it): N seeds or variants at once, each its own name — what a sweep and the certificate's seed variance both want. The tool launches one run per machine today |
 | Multi-GPU / multi-node | ACT at batch 8 fits one card; LeRobot's trainer is single-process. The `count` field is there; the distributed launcher is not |
 | Spot / interruptible pricing | Runpod's v2 pods are on-demand; a checkpoint every 20k steps (docs/31 §5) already bounds what an interruption costs |
-| Automatic terminate on completion | Nothing here terminates on the operator's behalf: a finished run is pulled and inspected first, then the machine is released by hand |
+| Automatic terminate on completion | Nothing here terminates on anyone's behalf: a finished run is pulled and inspected first, then the machine is released by hand |

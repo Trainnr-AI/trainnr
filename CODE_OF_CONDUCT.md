@@ -60,7 +60,9 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement: the maintainers
-named in `GOVERNANCE.md`, through a private message on GitHub to @aggprakhar.
+named in `GOVERNANCE.md`: open a GitHub issue labelled `conduct`, or use the
+contact on the maintainer's GitHub profile (@aggprakhar); a private address
+at trainnr.ai will be named here once it exists.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

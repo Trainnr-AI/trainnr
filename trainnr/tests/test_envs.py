@@ -67,7 +67,7 @@ class StepperIsTheOneLoop(unittest.TestCase):
 @needs_envs
 class GymnasiumContract(unittest.TestCase):
     def _env(self, steps: int | None = None):
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
         from trainnr.tasks.aloha2 import build_transfer_cube  # noqa: PLC0415
 
         task = build_transfer_cube()
@@ -75,7 +75,7 @@ class GymnasiumContract(unittest.TestCase):
             task = dataclasses.replace(
                 task, protocol=dataclasses.replace(task.protocol, steps=steps)
             )
-        return RobotiqEnv(task, source=SOURCE)
+        return TrainnrEnv(task, source=SOURCE)
 
     def test_passes_gymnasium_env_checker(self) -> None:
         from gymnasium.utils.env_checker import check_env  # noqa: PLC0415
@@ -169,7 +169,7 @@ class GymnasiumContract(unittest.TestCase):
 
         import numpy as np  # noqa: PLC0415
 
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
         from trainnr.evaluate.records import read_records  # noqa: PLC0415
         from trainnr.tasks.aloha2 import (  # noqa: PLC0415
             NEUTRAL_CTRL,
@@ -182,7 +182,7 @@ class GymnasiumContract(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "episodes.jsonl"
-            env = RobotiqEnv(task, source=SOURCE, record_to=path, policy_name="limp")
+            env = TrainnrEnv(task, source=SOURCE, record_to=path, policy_name="limp")
             env.reset(seed=1001)
             limp = np.asarray(NEUTRAL_CTRL, dtype=np.float32)
             for _ in range(env._max_episode_steps):
@@ -201,11 +201,11 @@ class GymnasiumContract(unittest.TestCase):
         self.assertIn("rms_velocity", row.variations)
 
     def test_unstamped_source_is_refused_before_any_episode(self) -> None:
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
         from trainnr.tasks.aloha2 import build_transfer_cube  # noqa: PLC0415
 
         with self.assertRaises(ValueError):
-            RobotiqEnv(build_transfer_cube(), source="unstamped")
+            TrainnrEnv(build_transfer_cube(), source="unstamped")
 
     def test_variations_are_drawn_by_trial_applied_and_recorded(self) -> None:
         import tempfile  # noqa: PLC0415
@@ -213,7 +213,7 @@ class GymnasiumContract(unittest.TestCase):
 
         import numpy as np  # noqa: PLC0415
 
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
         from trainnr.evaluate.records import read_records  # noqa: PLC0415
         from trainnr.evaluate.variations import (  # noqa: PLC0415
             Uniform,
@@ -237,7 +237,7 @@ class GymnasiumContract(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "episodes.jsonl"
-            env = RobotiqEnv(task, source=SOURCE, record_to=path, variations=sweep)
+            env = TrainnrEnv(task, source=SOURCE, record_to=path, variations=sweep)
             nominal_damping = env.model.dof_damping.copy()
             nominal_gain = env.model.actuator_gainprm[:, 0].copy()
             nominal_bias = env.model.actuator_biasprm[:, 1].copy()
@@ -267,7 +267,7 @@ class GymnasiumContract(unittest.TestCase):
         self.assertEqual(len(row.variations["top.offset_m"]), 3)
         self.assertEqual(len(row.protocol["variations"]), len(sweep))
         with self.assertRaises(ValueError):
-            RobotiqEnv(
+            TrainnrEnv(
                 task,
                 source=SOURCE,
                 variations=(Variation("nobody", "mass_scale", Uniform((1,), (2,))),),

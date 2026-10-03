@@ -8,8 +8,8 @@ readthedocs and vendor pages; VERIFIED means the number was read in the
 primary source, CLAIMED means an abstract or README asserted it). The
 prior verdict (docs/e2e-research/34, 2026-08-25): splats buy appearance,
 physics needs a mesh proxy, standardize on the pair. This pass keeps
-that and corrects one of its facts, then answers the question the
-operator put on 2026-09-22: what does a captured scene add to
+that and corrects one of its facts, then answers the question put on
+2026-09-22: what does a captured scene add to
 collection, augmentation, generation, telemetry and the loop that
 improves the model.*
 

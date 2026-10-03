@@ -85,7 +85,7 @@ their stacks that runs on a laptop):
   rather than pose-proximity.
 - **Batch scale**: MJX-Warp parallel worlds for the draw sweep;
   CPU MuJoCo spot-checks a sample of kept episodes as the second
-  instrument (the divergence habit from docs/49 applied to data).
+  instrument (the divergence habit from docs/e2e-research/49 applied to data).
 
 **Outputs**:
 - A **LeRobot v2.1 dataset** — the format LeRobot trainers, GR00T

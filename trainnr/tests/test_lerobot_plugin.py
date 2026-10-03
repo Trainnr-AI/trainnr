@@ -34,9 +34,9 @@ class ThroughLeRobot(unittest.TestCase):
             preprocess_observation,
         )
 
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
-        cfg = RobotiqEnvConfig(task="transfer_cube")
+        cfg = TrainnrEnvConfig(task="transfer_cube")
         self.assertEqual(cfg.type, "trainnr")
         policy_features = env_to_policy_features(cfg)
         self.assertEqual(policy_features["observation.state"].shape, (SERVOS,))
@@ -70,12 +70,12 @@ class ThroughLeRobot(unittest.TestCase):
             vec.close()
 
     def test_unknown_or_missing_task_is_refused_at_config_time(self) -> None:
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
         with self.assertRaises(ValueError):
-            RobotiqEnvConfig(task="juggling")
+            TrainnrEnvConfig(task="juggling")
         with self.assertRaises(ValueError):
-            RobotiqEnvConfig()  # no silent default task
+            TrainnrEnvConfig()  # no silent default task
 
     @unittest.skipUnless(
         T5_CHECKPOINT.exists(), "no local T5 checkpoint (runs/ is per machine)"
@@ -120,9 +120,9 @@ class ThroughLeRobot(unittest.TestCase):
     def test_cli_flags_spell_the_plugin_once(self) -> None:
         """A tool that drives lerobot-train/eval takes the --env.* flags
         from the plugin, never from its own string."""
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
-        flags = RobotiqEnvConfig.cli_flags(
+        flags = TrainnrEnvConfig.cli_flags(
             "kitting", record_to="runs/x/episodes.jsonl", policy_name="smoke"
         )
         self.assertEqual(flags[0], "--env.type=trainnr")
@@ -130,22 +130,22 @@ class ThroughLeRobot(unittest.TestCase):
         self.assertEqual(flags[2], "--env.discover_packages_path=trainnr.envs")
         self.assertIn("--env.record_to=runs/x/episodes.jsonl", flags)
         self.assertIn("--env.policy_name=smoke", flags)
-        self.assertEqual(len(RobotiqEnvConfig.cli_flags("kitting")), 3)
+        self.assertEqual(len(TrainnrEnvConfig.cli_flags("kitting")), 3)
 
     def test_cli_flags_carry_the_trials(self) -> None:
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
-        flags = RobotiqEnvConfig.cli_flags("kitting", trials=10)
+        flags = TrainnrEnvConfig.cli_flags("kitting", trials=10)
         self.assertIn("--env.trials=10", flags)
         self.assertNotIn(
-            "--env.trials", " ".join(RobotiqEnvConfig.cli_flags("kitting"))
+            "--env.trials", " ".join(TrainnrEnvConfig.cli_flags("kitting"))
         )
 
     def test_fps_comes_from_the_task(self) -> None:
-        from trainnr.envs.lerobot_plugin import RobotiqEnvConfig  # noqa: PLC0415
+        from trainnr.envs.lerobot_plugin import TrainnrEnvConfig  # noqa: PLC0415
 
-        self.assertEqual(RobotiqEnvConfig(task="kitting").fps, 50)
-        self.assertEqual(RobotiqEnvConfig(task="reach").fps, 50)
+        self.assertEqual(TrainnrEnvConfig(task="kitting").fps, 50)
+        self.assertEqual(TrainnrEnvConfig(task="reach").fps, 50)
 
 
 if __name__ == "__main__":

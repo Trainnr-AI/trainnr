@@ -383,14 +383,14 @@ class Watcher:
     ) -> None:
         import mujoco.viewer  # noqa: PLC0415 - the window, only when playing
         from trainnr.envs.gymnasium_env import (  # noqa: PLC0415
-            RobotiqEnv,
+            TrainnrEnv,
             bundle_source,
         )
         from trainnr.viz import RigMirror  # noqa: PLC0415, sinks
 
         self.executed_horizon = executed_horizon
         built = ALOHA_TASKS[task](look=look)
-        self.env = RobotiqEnv(built, source=bundle_source(built.bundle_dir))
+        self.env = TrainnrEnv(built, source=bundle_source(built.bundle_dir))
         self.device = device
         self.mirror = RigMirror(
             self.env.model, model_colors=True, skip_groups=(GeomGroup.COLLISION,)

@@ -23,17 +23,17 @@ Ground truth to read before acting:
 - The doors: `export_deployment`, `gate_deployment`, `list_gate_runtimes`,
   `stage_deployment`, `assay_deployment`, `attribute_deployment`,
   `preflight_deployment`, `stop_deployment`, `check_drift`
-  (`trainnr/trainnr/mcp_server.py`); `tools/go2-*.py` for the same by hand.
+  (`trainnr/trainnr/mcp_server.py`).
 - `docs/77-the-unitree-loop.md` §6 (the stage), §7 (the DDS gate), §9 (what
   breaks it first: the gate says why), §10 (pre-flight), §11 (the deployment
-  in our viewport); `docs/e2e-research/71` for the latency budget.
+  in the simulator); `docs/e2e-research/71` for the latency budget.
 
 Doctrine you must not soften:
 - **A gate is parity with the cited evaluation, not a walking bar.** A 0/8
   policy gated 0/8 "passes" the gate; the drawer says so beside the number.
   Never read a gate as a quality claim.
 - **Latency is the first suspect.** One control tick of unmodelled delay
-  took a tracking policy from 25/40 to 0/40 (docs/71 E1); the attribution
+  took a tracking policy from 25/40 to 0/40 (docs/e2e-research/71 E1); the attribution
   door tests it first, and the fit's delay margin is in the certificate.
 - **The joint order is a real reordering** (the policy's MJCF order against
   the SDK's); the manifest carries the map with its source, and the gate
@@ -53,7 +53,7 @@ the gate passed.
 
 The operator usually has the Studio open — a native window whose
 embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
-then `rr.connect_grpc()` lands there) and whose viewport is a live
+then `rr.connect_grpc()` lands there) and whose simulator is a live
 MuJoCo render. Evidence that exists only in your terminal output does
 not count as shown: every sim run, fit, sweep or eval you produce must
 stream into that window while it runs, or be logged there when it

@@ -13,8 +13,8 @@ this pass could *not* settle.
 **Second pass: 2026-08-15.** Docs 20–27 re-swept field by field against primary
 sources (search quota was again exhausted, so discovery ran on the arXiv/HF/
 GitHub APIs — blog-only vendor news remains under-sampled). Each doc carries a
-dated re-verification note; [29-the-company.md](29-the-company.md) records the
-business thesis that pass was tested against.
+dated re-verification note; the pass was tested against the business
+thesis the maintainers hold privately.
 
 **Third pass: 2026-08-16 → 2026-08-20 — the commercial and competitive
 sweeps.** Thirteen companies examined at primary sources (vendor pages, SEC
@@ -27,8 +27,8 @@ followed; its findings and their fix status live in
 
 **Fourth pass: 2026-08-25 — the full-loop sprint.** Seven fields
 researched in parallel (one agent per field, primary sources) to
-harden the surfaces the operator's platform brief added
-([../30-the-full-loop.md](../30-the-full-loop.md)); results in docs
+harden the surfaces the platform brief added
+(the loop, [docs/76](../30-the-full-loop.md)); results in docs
 32–38, verdicts summarized in the brief's §6. One standing verdict
 amended (physics splats, doc 23 cross-linked); one decided (MLOps
 stack); the rest confirmed with refinements.
@@ -39,14 +39,14 @@ Arena (the one shipping composable-evaluation system) were read in
 parallel from a repomix bundle of its whole repository — docs and
 source, 977 files — one agent per field, every claim cited to a bundle
 line. Results in docs 39–44; verdicts and the order of adoption in
-[../30-the-full-loop.md §7](../30-the-full-loop.md). The finding that
+[the loop, docs/76 §7](../30-the-full-loop.md). The finding that
 ties them: Arena has the coverage machinery and no honesty layer — no
 interval anywhere in the code — and five of six reports converge on
 one artifact we lack, the per-trial record.
 
 **Sixth pass: 2026-08-26 — the evaluation layer, minimum lines.** The
-operator's question "the most standard, ecosystem-fit, production-grade,
-minimum-lines evaluation layer": LeRobot's contract read from the
+question was the most standard, ecosystem-fit, production-grade,
+minimum-lines evaluation layer: LeRobot's contract read from the
 installed package (45), six ecosystem eval interfaces from their
 repositories (46), and a line-by-line audit of our own surface. The plan
 is [../32-evaluation-layer.md](../32-evaluation-layer.md).
@@ -125,7 +125,7 @@ code-reads) but its company list is still a convenience sample, not a census —
 - [58 — The cross-framework setup](58-cross-framework-setup.md): the design the three reads add up to — three neutral versioned artifacts (certified actuator bundle wrapping BAM's JSON; a maintained current-mjlab consumer with a DR no-op linter and the first real RecorderTerm; the deployment manifest + our certificate) each solving a named pain of mjlab/Rhoban/Pollen, with trainnr owning the spec, the service and the certification behind them.
 - [59 — Arena, second pass](59-arena-composition-and-datagen.md): composition/portability + the data factory + platform walls (extends 39–46) — ArenaEnvGraphSpec as the proven manifest shape; the plugin layer half-built (no entry points, submodule vendoring); USD-only in, LeRobot/ONNX/remote-policy out as the ecosystem-consensus seams; MuJoCo-Warp arriving under Isaac Lab via Newton; zero sysid hits in 992 files and a README asking for sim-to-real validated eval methods; the Mimic success-gated data factory with a seed for provenance.
 - [60 — The data press](60-the-data-press.md): the synthetic-data product plan (58 §8 expanded) — zero-adoption cross-framework generation: MJCF + certified bundle + expert-or-seeds in, LeRobot dataset + provenance sidecar + datasheet out, on plain MuJoCo/MJX-Warp; grounded in the micro-press that already exists (collect/kitting_demos.py's success-gated, draws-stamped generator); the field's measured rankings encoded (curation built in, dynamics before pixels, generative rejected); steps 1–3 need no GPU and no merge.
-- [61 — Upstream offers](61-upstream-offers.md): the drafted contributions back to Rhoban/BAM and mjlab from the 56–58 reads; sends await the operator.
+- [61 — Upstream offers](61-upstream-offers.md): the drafted contributions back to Rhoban/BAM and mjlab from the 56–58 reads; not yet sent.
 - [62 — The paired study](62-paired-study.md): the C1 protocol — same expert, same task, two DR arms differing only in range + basis, matched seeded trials, a verdict with exact intervals; and its two honest nulls (ceiling at easy truths, recipe-capped at hard ones).
 - [63 — The flagship](63-the-flagship.md): microduck's walk through the whole certified stack — stamped bundle, declared DR bases, the G-series runs, and the pushed-episode certificates on both instruments.
 - [65 — Unitree's own mjlab stack](65-unitree-rl-mjlab-review.md): read code-first (2026-09-02) — two task families, ~180-line robots vs ~1200-line families, NO community/plugin schema, a ranked steal list (reward vocabulary, failure-bin sampling, the deploy.yaml/sim2sim contract, motion ingest), and the convergence: they too derive dynamics from measured motor physics instead of wide DR — from the vendor side, where the datasheet is readable; we fit the deployed unit.

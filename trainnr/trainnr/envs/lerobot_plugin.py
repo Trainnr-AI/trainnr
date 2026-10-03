@@ -70,7 +70,7 @@ def held_env(*, frame_every: int = 1, **kwargs: Any) -> gym.Env:
 
 @EnvConfig.register_subclass(ENV_TYPE)
 @dataclass
-class RobotiqEnvConfig(EnvConfig):
+class TrainnrEnvConfig(EnvConfig):
     """`--env.type=trainnr --env.task=<id>`; features and fps come from
     the task. `task` has no default on purpose — the repo's rule is no
     silent default where a wrong value is possible, and evaluating the

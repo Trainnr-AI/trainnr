@@ -4,8 +4,9 @@
 tools let an agent take a real robot from "just plugged in" to "trained,
 certified and deployed", and keep it improving. Written before the build,
 because the concepts have to be right before hardware is involved. The
-build sequence and its gates live beside this doc; what follows is the
-design those phases implement.*
+build sequence and its gates are recorded in docs/77 (the Go2 loop) and
+docs/78 (the scene loop); what follows is the design those phases
+implement.*
 
 ## 0. The question
 
@@ -52,7 +53,7 @@ Three consequences fall out, and they are the whole reason for the rule:
   archaeology project.
 - **The cloud, when it comes, stores rather than decides.** A registry
   keyed by the same stamps inherits the honesty layer instead of
-  replacing it (docs/64 §1).
+  replacing it (the open-core split, 2026-09-07).
 
 ## 2. Artifact kinds
 
@@ -94,13 +95,12 @@ than guessed at.
 
 ### 2.1 Policies, evaluations and findings as artifacts (2026-09-09)
 
-Prakhar: "I want to see data and proper visually appealing data and
-sections that are meaningful and delightful to users in policies,
-evaluations, findings, deployments, monitoring." Filled from what exists
-first (his call): the flagship study's fifteen trained arms and the
-findings ledger. `trainnr/trainnr/project/importer.py`:
+The requirement (2026-09-09): the policies, evaluations, findings,
+deployments and monitoring pages show real data in sections a user finds
+meaningful. The decision was to fill them from what exists first: the
+flagship study's fifteen trained arms and the findings ledger. `trainnr/trainnr/project/importer.py`:
 
-- `import_experiment(project, arm_dir)` — an trainnr_mjlab run (`train/`
+- `import_experiment(project, arm_dir)` — a trainnr_mjlab run (`train/`
   with `identity.json`, `model_*.pt`, `verdict/`) becomes three kinds:
   a **run** (the identity, the log when kept), a **policy** (the
   checkpoint plus `policy.json`, schema `trainnr-policy/1`: checkpoint,
@@ -137,7 +137,7 @@ trial table. A finding card draws a bar per condition when its outcome
 has conditions with successes over trials, else the claim; its drawer
 holds the claim, the record's facts (date, commit, simulator build,
 protocol, command), the outcome by condition, inputs, artifacts,
-sources and caveats. Measured on duck-walk: 15 policies, 15 runs, 297
+sources and caveats. Measured on duck-walk (a local project, not tracked): 15 policies, 15 runs, 297
 evaluations, 10 findings, and the loop's "policy trained" and "policy
 evaluated" states proved by them.
 
@@ -214,9 +214,9 @@ itself uses — never around them.
 - **STUDIO** (built, 14 tools): launch, quit, open, show, compare, time,
   panels, simulate, the simulator's controls, screenshot, events.
 - **CLOUD** (8 tools, off by default): custody by stamp and managed jobs;
-  offline is a named state, not an error. Built on the branch
-  `cloud-seam-2026-09-08`, NOT merged as of 2026-09-24; this list said
-  "built" without saying where until the market read named it.
+  offline is a named state, not an error. Built 2026-09-08, not merged
+  as of 2026-09-24; the hosted service it would talk to is not in this
+  repository.
 
 Counted from the registration list in `trainnr/trainnr/mcp_server.py`
 on 2026-09-24: 69 tools at noon, 75 by the evening (ACT gained
@@ -227,7 +227,7 @@ on 2026-09-24: 69 tools at noon, 75 by the evening (ACT gained
 What the harness adds, by stage: a workspace description (what artifacts
 exist, by kind, with their lineage), robot ingest and identification
 doors, task authoring and acceptance doors, the four chain doors that
-were named in docs/64 §3 but never built (dataset export, policy
+were named in the open-core split note but never built (dataset export, policy
 training, policy evaluation, generic certification), a tool to point the
 Studio at an artifact, deployment export and its gate, and the drift
 check.
@@ -260,7 +260,7 @@ critical path:
 1. **replay** — a recorded fixture. This is the one that makes every
    later phase testable with no robot in the room; the repo already has
    twenty-five real recordings.
-2. **wire** — this repo's own rig, wrapping the existing reader.
+2. **wire** — the archived rig (Trainnr-AI/rig), wrapping the existing reader.
 3. **mcap** — the ROS 2 path. Since the Iron release (2023-05-23),
    `ros2 bag record` writes MCAP by default, and an MCAP file carries the
    message schemas inside it, so an offline reader needs no ROS
@@ -294,7 +294,7 @@ by the caller:
 | collection | what it means | source today |
 |---|---|---|
 | teleop | a human drove a leader device; the follower's joints and cameras were recorded | a LeRobot dataset (`lerobot` adapter). LeRobot's leader-arm flow is the community standard; the pipeline ingests its recordings rather than rebuilding teleop |
-| robot-operation | the robot ran, under an operator, a script or a policy, and its telemetry was captured | this repo's rig over UDP, captured live (`robots/capture`: listen, append, ingest, with the Studio watching); a ROS 2 graph via `ros2 bag record` into MCAP, ingested afterwards |
+| robot-operation | the robot ran, under an operator, a script or a policy, and its telemetry was captured | the archived rig over UDP, captured live (`robots/capture`: listen, append, ingest, with the Studio watching); a ROS 2 graph via `ros2 bag record` into MCAP, ingested afterwards |
 | mocap | optical or inertial motion capture of a human | a marker or joint CSV, or a BVH skeleton (`mocap` adapter): positions in metres, rotations in radians, the capture rate and marker set in the census. **Not retargeted to any robot** — that mapping, with the sim-replay honesty check the Unitree review named (docs/e2e-research/65 §4), is the retargeting step, designed and not built |
 | wearable | IMUs, gloves, suits worn by a human | **designed only.** A wearable produces the same channels an IMU on a robot does (`imu.angular_velocity`, `imu.linear_acceleration`, `imu.orientation`) plus per-segment poses; an adapter for a device is one module and one entry point, written when a device is on hand |
 | scripted | a scripted expert pressed demonstrations in simulation | every batch the press writes; a LeRobot dataset this repo exported carries an expert stamp and is marked scripted, not teleop |
@@ -303,14 +303,14 @@ by the caller:
 Live capture is a small state machine with its state on disk (idle,
 listening with datagrams so far, ingested with the stamp, failed with the
 reason), so the Studio shows it and a tool can poll it, the way jobs
-work. There is one live listener today, this repo's rig over UDP; a live
+work. There is one live listener today, the archived rig over UDP; a live
 ROS 2 listener would need a ROS installation, which is what the seam
 avoids, and a Unitree listener waits on its SDK research.
 
 ### 5.2 Showing an artifact as itself
 
 The Studio can index a project and launch the viewer; `present`
-(`trainnr/trainnr/project/present.py`, the door docs/64 §3 named `show_in_studio`) points
+(`trainnr/trainnr/project/present.py`, the door the open-core split named `show_in_studio`) points
 the viewer at one artifact: a robot as its meshes in a 3D view posed at
 its keyframe, a recording's channels as time series on its own clock, an
 experiment's curves from its log, a batch's kept frames beside its
@@ -403,7 +403,7 @@ names a version: when the name half differs (a certificate cites
 `kitting@7d4f…`, the project holds it as `tray-far@7d4f…`) the hash
 decides, in the index (`_link_cited_by`) and in the Studio's lookup.
 
-The gate, run on the aloha-kitting project by the doors alone
+The gate, run on the aloha-kitting project (a local project, not tracked) by the doors alone
 (2026-09-09): `tray-far` (the tray at y = 0.9, two trials) was rejected
 in 5 s — "IK failed: right arm to (0.09, 0.9, 0.14) — the choreography
 must not pretend a reach happened", the expert 0/2, the floor 0/2 — and
@@ -469,7 +469,7 @@ re-identification. Injecting synthetic drift into a recorded fixture
 tests the whole path with no robot.
 
 This is the smallest honest version of the fleet data plane designed in
-docs/30 §3.3 — telemetry always, interventions on event, heavy logs
+the full-loop rule — telemetry always, interventions on event, heavy logs
 batched — and it is the piece that turns a one-shot pipeline into a loop
 that keeps improving.
 
@@ -531,7 +531,7 @@ that robot the stage stays empty and the strip says so. The fleet tiers
 (always-on telemetry, events, batches) are a service; this is one record
 per check, run by an agent when it decides to.
 
-### 9.2 Built (2026-09-13, the Mac)
+### 9.2 Built (2026-09-13, on a Mac, M1 Pro)
 
 `trainnr/fleet/drift.py` (the rule, the record, `judge`), the kind's
 marker imported from there by `project/kinds.py`, the project's
@@ -543,7 +543,7 @@ drivetrain ratio fit anchors its damping) so an anchor is reported and
 never judged. Tests in `trainnr/tests/test_drift.py`: the rule on
 constructed records, then the whole path on the rig's committed sweeps.
 
-The proof the design asked for, on a fresh project (`projects/rig-drift`,
+The proof the design asked for, on a fresh project (`projects/rig-drift`, local, not tracked,
 not tracked): two real sweeps identified (the reference), then a copy of
 the first with the LEFT wheel's encoder ticks scaled by 1.4 — the check
 named `left_gear_per_damp` as left and the right wheel's gear as within;
@@ -583,9 +583,8 @@ rented machine or in continuous integration has none.
 
 ### 10.1 The control surface (2026-09-09)
 
-Prakhar's requirement, verbatim: "we have to make sure everything the
-users claude agent must be able to completely control on the studio in
-real time." Three decisions, taken the same day: the channel is a
+The requirement: everything a user's agent can do in the Studio, it must
+be able to do in real time. Three decisions, taken the same day: the channel is a
 **command log on disk** (not a socket), what the human does **flows back
 as an event log**, and the agent **may launch and quit** the window.
 
@@ -615,9 +614,8 @@ The verbs, and the MCP door over each (`trainnr/trainnr/mcp_server.py`):
 | `screenshot` | `screenshot_studio` | the whole window as a PNG under `.index/screenshots/`, scaled to a stated width (default 1600, never upscaled); with a page or an artifact named, it navigates first, lets the page draw, then captures — the agent reads the file and sees what the human sees | a capture is already in flight; no frame arrives within 3 s (a hidden or minimized window) |
 | — | `read_studio_events` | the event log after a time | never |
 
-The tables (2026-09-09, Prakhar: "when a user clicks on the table, or
-click on the small expand button on table, a new modal popup opened
-with proper table visible for exploration"): a section's table shows
+The tables (2026-09-09; the ask was that a click on a table, or on its
+expand button, opens the full table for exploration): a section's table shows
 its first eight rows in the card, column names on top, nothing
 scrolling, each column sized to its longest value; the table itself,
 the expand button beside its title and the "Explore all N rows" footer
@@ -649,19 +647,18 @@ each waits for the loop stage that needs it.
 
 ### 10.2 The Simulator page (2026-09-09)
 
-Prakhar's call after the research pass (docs/e2e-research/74): a
+The decision after the research pass (docs/e2e-research/74): a
 **SIMULATION** group with one page, **Simulator**, absorbing Live view;
 and after the measurements (findings `studio-viewport-pipe` and
 `studio-viewport-two-process`), the engine stays the pipeline's own
 MuJoCo in a subprocess — now two: physics and render, on a
 shared-memory state ring.
 
-**The page** (redesigned the same evening after Prakhar's verdict on the
-first cut — "there is no user based thinking in terms of delight and how
-easy and simple things are for user to see and interact" — around what
-a person does in a simulator, in order of how often: watch; pause,
+**The page** (redesigned the same evening, after the first cut was judged
+to show no thinking about what is simple and delightful for the user,
+around what a person does in a simulator, in order of how often: watch; pause,
 step, reset, change speed; poke the robot; flip an overlay; look up a
-fact). The picture is the page: the MuJoCo viewport fills the strip and
+fact). The picture is the page: the MuJoCo simulator fills the strip and
 nothing permanent sits beside it. Under it a **transport bar**, the
 video-player shape and the shape of Rerun's timeline right below: the
 scene picker (a named menu, the empty state's only door), play or
@@ -711,8 +708,8 @@ choices; nothing runs → refused with "simulate_in_studio first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,
 render_ms}` beside `viewport_task` and `viewport_fps`.
 
-**Are the overlays true?** (Prakhar, 2026-09-09: "is the contact
-forces joints section all correct and showing correct info?") The
+**Are the overlays true?** (asked 2026-09-09 of the contact forces and
+joints section) The
 renderer draws MuJoCo's own visualization (`mjv_updateScene` with the
 flag set) on a forward pass over the state the ring carries — qpos,
 mocap, ctrl, and since that question qvel and act as well. Measured on
@@ -737,8 +734,8 @@ waits for the loop stage that needs it.
 
 ### 10.3 Many worlds (2026-09-09)
 
-Prakhar: "how would this look with tens of simultaneous simulations?" —
-then "ok walk scene." Built on the RL view, the one many-worlds scene
+The question (2026-09-09) was how the page looks with tens of simultaneous
+simulations; the walk scene was the answer. Built on the RL view, the one many-worlds scene
 that exists: nine policy-driven worlds in a batched mjlab env. The
 shape follows Isaac Lab's own answer (`ViewerCfg.origin_type = env`,
 `env_index`) and the flock's lesson (twenty full-mesh robots are a
@@ -773,7 +770,7 @@ slideshow on this GL path in every viewer):
 - **The door.** `control_simulator(follow="worst" | "failing" | "cycle" |
   "none" | "w4")`.
 
-Measured on this Mac (Apple M1 Pro, warp on CPU): nine worlds step at
+Measured on a Mac (Apple M1 Pro, warp on CPU): nine worlds step at
 a real-time factor of 0.27–0.34 (70 ms per 20 ms control step; the GPU
 box runs this at rate), the mirror renders in 49–61 ms a frame
 (16–21 fps on screen — nine copies of the 431,750-face duck, the
@@ -785,9 +782,9 @@ of one world while the policy runs the rest.
 
 ### 10.4 The window from first principles (proposed 2026-09-09, not built)
 
-Prakhar, after the data pages filled: "we have to look at everything
-from first principles and users current window and view and interaction
-and delight and amazing easy access to data in visuals." The pass was
+After the data pages filled, the ask was a pass from first principles
+over the user's window, view and interaction, with easy visual access to
+the data. The pass was
 made against the captures of duck-walk (15 runs, 15 policies, 297
 evaluations, 10 findings), page by page, asking one question of each:
 what does the person at this window need to learn here, and how many
@@ -834,8 +831,8 @@ Where it fails the question, ranked by what the user learns:
 7. **The Simulator's empty state is stale.** It still says "Live view"
    and "Nothing is streaming" and points at a port; it should offer the
    scenes the project can run, in one click.
-8. **Nothing is ordered by time.** Prakhar, same day: "things are not
-   structured based on time like when it was added or updated." The
+8. **Nothing is ordered by time.** Noted the same day: nothing was
+   structured by when it was added or updated. The
    index records no time (`Artifact` has kind, stamp, path, cites,
    summary, preview, detail) and every page sorts by name, so the newest
    evaluation sits wherever the alphabet puts it. Every artifact gets
@@ -853,7 +850,7 @@ Proposed order: 1–3 and 8 first (they change what the user can learn),
 4–7 as one polish pass, 9 after. Each lands with captures through the
 agent's own door, the standing rule.
 
-**Built 2026-09-09 (Prakhar: "ok continue"), items 1, 2, 3 and 8:**
+**Built 2026-09-09, items 1, 2, 3 and 8:**
 
 - *Time.* The index writes `created` and `updated` on every artifact
   (`index.py`, `_times`): the record's own date where it keeps one (a
@@ -926,8 +923,7 @@ cursor to the right edge, since `available_width` in a wrapped row is
 the whole row. The state file now records the window's size and pixel
 ratio, so a capture's pixels read back as layout.
 
-**"Show in viewer" (2026-09-09, Prakhar: "the show in viewer button is
-not working").** It worked for robots, recordings, runs, datasets, tasks
+**"Show in viewer" (2026-09-09, reported as not working).** It worked for robots, recordings, runs, datasets, tasks
 and evaluations; for a policy or a finding the presenter had nothing to
 show and said so only in `present-status.json`, which the Studio never
 read — so the click looked dead. Three fixes: presenters for the missing
@@ -990,7 +986,7 @@ clipped; not worth a broken door for a convenience.
 ### 10.5 Headless (designed 2026-09-13, before building)
 
 **What "headless" means here.** Not a second window and not a web page:
-a run with no window at all — the box overnight, a rented pod, CI —
+a run with no window at all — a workstation overnight, a rented pod, CI —
 must leave behind the same two things a windowed run has. The facts:
 every artifact's JSON, which it already leaves, because every stage
 writes records before it paints anything. And the picture: the stream
@@ -1031,7 +1027,7 @@ each described.
 carries viewer files sends them into the Studio first — each lands
 under its own recording id with the layout it was saved with, exactly
 as the live stream looked — then the derived presentation. So a run
-that happened on the box opens on the Mac as it ran.
+that happened on one machine opens on another as it ran.
 
 **Parity, stated as a test.** A gate run with the Studio quit leaves its
 file; the door reads from that file the same number of ticks the gate's
@@ -1046,7 +1042,7 @@ lives. The cloud feed that follows a remote log stays as it is; the
 remote's own feeds now leave their files beside the remote's artifacts,
 which is what a pull brings home.
 
-**Built (2026-09-13, the Mac).** The seam: `trainnr/viz.py`
+**Built (2026-09-13, on a Mac, M1 Pro).** The seam: `trainnr/viz.py`
 (`open_stream`, `sinks`, `viewer_file`, `viewer_files`,
 `studio_listening`, the `TRAINNR_VIEWER_FILE` knob). Through it: the
 mjlab recorder (a training run's `.viewer/train.rrd`, the reward

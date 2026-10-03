@@ -8,7 +8,7 @@ the **bundle**: a directory under `robots/<name>/` whose identity is
 `name@hash` (`trainnr.bundles.hashing.stamp`).
 
 Ground truth to read before acting:
-- `docs/24-porting-the-rig.md` — the honest porting recipe, end to end.
+- `docs/76-the-loop.md` — the loop a bundle enters, stage by stage.
 - `robots/so101-nominal/` and `robots/aloha2-nominal/` — the two shipped
   examples of a Menagerie-derived bundle (MJCF + assets + upstream
   LICENSE/README carried along, always).
@@ -17,8 +17,8 @@ Ground truth to read before acting:
 
 Rules this repo will hold you to:
 - **A number without provenance is a guess and must say so.** Menagerie
-  MJCFs ship *nominal* dynamics (the field's copied guesses — see
-  README's "the field" contrast). A new bundle is `<name>-nominal` until
+  MJCFs ship *nominal* dynamics (copied guesses, not measurements;
+  see docs/76 on real-to-sim). A new bundle is `<name>-nominal` until
   identification says otherwise; never present nominal constants as
   measured.
 - Vendored upstream files come verbatim, with their LICENSE, and the
@@ -38,7 +38,7 @@ bundles' numbers without a fit record behind the change.
 
 The operator usually has the Studio open — a native window whose
 embedded Rerun viewer listens on the standard gRPC port (`rr.init(...)`
-then `rr.connect_grpc()` lands there) and whose viewport is a live
+then `rr.connect_grpc()` lands there) and whose simulator is a live
 MuJoCo render. Evidence that exists only in your terminal output does
 not count as shown: every sim run, fit, sweep or eval you produce must
 stream into that window while it runs, or be logged there when it

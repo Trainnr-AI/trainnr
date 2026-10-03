@@ -1,0 +1,423 @@
+{
+  "robot": "go2",
+  "recording": "iit-go2-chirp@f7f50914a129",
+  "anchor": "TORQUE BALANCE: tau_motor - tau_rigid regressed per joint on [ddq, dq, tanh(dq/0.45)] with bounds; torque = pd command; the rigid torque is MuJoCo's inverse dynamics of the bundle's model with armature, damping and frictionloss zeroed and contacts off; derivatives from the position (velocity a Savitzky-Golay derivative over 40 ms, acceleration its forward difference over the tick, mid-tick state); samples slower than 1 rad/s left out; both sides low-passed at 15 Hz (zero phase) on samples at 200 Hz; base: the base taken as still: no orientation and gyro in the recording (a log of a robot in the air); every sample counts (no foot-contact channel). Intervals: moving-block bootstrap, 200 replicates of 100-sample blocks. Per joint: FL_hip_joint 402 samples explained 93.9%, FL_thigh_joint 657 samples explained 93.1%, FL_calf_joint 1826 samples explained 99.1%, FR_hip_joint 421 samples explained 95.0%, FR_thigh_joint 656 samples explained 93.6%, FR_calf_joint 1920 samples explained 96.7%, RL_hip_joint 427 samples explained 90.9%, RL_thigh_joint 667 samples explained 92.9%, RL_calf_joint 1725 samples explained 95.5%, RR_hip_joint 412 samples explained 93.8%, RR_thigh_joint 642 samples explained 95.9%, RR_calf_joint 1845 samples explained 96.5%.",
+  "confidence": 0.95,
+  "parameters": [
+    {
+      "name": "FL_hip_joint.armature",
+      "estimate": 0.01919827373451518,
+      "half_width": 0.008066648976344824,
+      "allowed_range": 0.05,
+      "pinned": false,
+      "at_bound": false
+    },
+    {
+      "name": "FL_hip_joint.damping",
+      "estimate": 0.17887572534672136,
+      "half_width": 0.1480696387579551,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_hip_joint.frictionloss",
+      "estimate": 0.29601388661198613,
+      "half_width": 0.1928194190859679,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_thigh_joint.armature",
+      "estimate": 0.024388514243786692,
+      "half_width": 0.002214364809912746,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_thigh_joint.damping",
+      "estimate": 0.17246121683189808,
+      "half_width": 0.034979203677080295,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_thigh_joint.frictionloss",
+      "estimate": 0.27574452946154493,
+      "half_width": 0.06475408406345362,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_calf_joint.armature",
+      "estimate": 0.036824578430329144,
+      "half_width": 0.002051604673391272,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_calf_joint.damping",
+      "estimate": 0.1970176609385833,
+      "half_width": 0.05110757035014303,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FL_calf_joint.frictionloss",
+      "estimate": 1.0347298579180653,
+      "half_width": 0.07877702072006404,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_hip_joint.armature",
+      "estimate": 0.02098591144582903,
+      "half_width": 0.0035977195143194907,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_hip_joint.damping",
+      "estimate": 0.15840387352242208,
+      "half_width": 0.05172616999370177,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_hip_joint.frictionloss",
+      "estimate": 0.29660893297372937,
+      "half_width": 0.0795175412134285,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_thigh_joint.armature",
+      "estimate": 0.023370526272600316,
+      "half_width": 0.004160659850591953,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_thigh_joint.damping",
+      "estimate": 0.15631987333563463,
+      "half_width": 0.02689006760997703,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_thigh_joint.frictionloss",
+      "estimate": 0.2824068093902831,
+      "half_width": 0.0522768436897736,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_calf_joint.armature",
+      "estimate": 0.03667471709358213,
+      "half_width": 0.005395018483755223,
+      "allowed_range": 0.05,
+      "pinned": false,
+      "at_bound": false
+    },
+    {
+      "name": "FR_calf_joint.damping",
+      "estimate": 0.2288421034886488,
+      "half_width": 0.08069161818416166,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "FR_calf_joint.frictionloss",
+      "estimate": 0.4806650721113759,
+      "half_width": 0.12295093503636842,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_hip_joint.armature",
+      "estimate": 0.023065839420089402,
+      "half_width": 0.005230562656888016,
+      "allowed_range": 0.05,
+      "pinned": false,
+      "at_bound": false
+    },
+    {
+      "name": "RL_hip_joint.damping",
+      "estimate": 0.26445676679362995,
+      "half_width": 0.0575678672520656,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_hip_joint.frictionloss",
+      "estimate": 0.1027250034639242,
+      "half_width": 0.10901765534529284,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_thigh_joint.armature",
+      "estimate": 0.02399233878443855,
+      "half_width": 0.00271041039392105,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_thigh_joint.damping",
+      "estimate": 0.16101985597677043,
+      "half_width": 0.04298507585610116,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_thigh_joint.frictionloss",
+      "estimate": 0.26026514462897676,
+      "half_width": 0.07240739783410508,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_calf_joint.armature",
+      "estimate": 0.03879811929152818,
+      "half_width": 0.0021311074428488827,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_calf_joint.damping",
+      "estimate": 0.15795655179112045,
+      "half_width": 0.10158022159217416,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RL_calf_joint.frictionloss",
+      "estimate": 1.3262429074785795,
+      "half_width": 0.23716752035694877,
+      "allowed_range": 2.0,
+      "pinned": false,
+      "at_bound": false
+    },
+    {
+      "name": "RR_hip_joint.armature",
+      "estimate": 0.024437188963777876,
+      "half_width": 0.0061496678823822985,
+      "allowed_range": 0.05,
+      "pinned": false,
+      "at_bound": false
+    },
+    {
+      "name": "RR_hip_joint.damping",
+      "estimate": 0.21545635961787746,
+      "half_width": 0.09354465573495535,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_hip_joint.frictionloss",
+      "estimate": 0.3102390382667399,
+      "half_width": 0.11508432769149589,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_thigh_joint.armature",
+      "estimate": 0.02306653094215925,
+      "half_width": 0.0038038367453353556,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_thigh_joint.damping",
+      "estimate": 0.15128803771364824,
+      "half_width": 0.0464170353815557,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_thigh_joint.frictionloss",
+      "estimate": 0.3482114909795418,
+      "half_width": 0.07372148389667146,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_calf_joint.armature",
+      "estimate": 0.036328259305559545,
+      "half_width": 0.0014150141769300045,
+      "allowed_range": 0.05,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_calf_joint.damping",
+      "estimate": 0.18690277198864513,
+      "half_width": 0.05328864546524471,
+      "allowed_range": 3.0,
+      "pinned": true,
+      "at_bound": false
+    },
+    {
+      "name": "RR_calf_joint.frictionloss",
+      "estimate": 0.741292186228754,
+      "half_width": 0.11469964648839853,
+      "allowed_range": 2.0,
+      "pinned": true,
+      "at_bound": false
+    }
+  ],
+  "created_utc": "2026-09-25T10:00:58.656654+00:00",
+  "profile": null,
+  "model": "go2.xml@2965117f44c2",
+  "code": "f22a1ee",
+  "units": {
+    "FL_hip_joint.armature": "kg*m^2",
+    "FL_hip_joint.damping": "N*m*s/rad",
+    "FL_hip_joint.frictionloss": "N*m",
+    "FL_thigh_joint.armature": "kg*m^2",
+    "FL_thigh_joint.damping": "N*m*s/rad",
+    "FL_thigh_joint.frictionloss": "N*m",
+    "FL_calf_joint.armature": "kg*m^2",
+    "FL_calf_joint.damping": "N*m*s/rad",
+    "FL_calf_joint.frictionloss": "N*m",
+    "FR_hip_joint.armature": "kg*m^2",
+    "FR_hip_joint.damping": "N*m*s/rad",
+    "FR_hip_joint.frictionloss": "N*m",
+    "FR_thigh_joint.armature": "kg*m^2",
+    "FR_thigh_joint.damping": "N*m*s/rad",
+    "FR_thigh_joint.frictionloss": "N*m",
+    "FR_calf_joint.armature": "kg*m^2",
+    "FR_calf_joint.damping": "N*m*s/rad",
+    "FR_calf_joint.frictionloss": "N*m",
+    "RL_hip_joint.armature": "kg*m^2",
+    "RL_hip_joint.damping": "N*m*s/rad",
+    "RL_hip_joint.frictionloss": "N*m",
+    "RL_thigh_joint.armature": "kg*m^2",
+    "RL_thigh_joint.damping": "N*m*s/rad",
+    "RL_thigh_joint.frictionloss": "N*m",
+    "RL_calf_joint.armature": "kg*m^2",
+    "RL_calf_joint.damping": "N*m*s/rad",
+    "RL_calf_joint.frictionloss": "N*m",
+    "RR_hip_joint.armature": "kg*m^2",
+    "RR_hip_joint.damping": "N*m*s/rad",
+    "RR_hip_joint.frictionloss": "N*m",
+    "RR_thigh_joint.armature": "kg*m^2",
+    "RR_thigh_joint.damping": "N*m*s/rad",
+    "RR_thigh_joint.frictionloss": "N*m",
+    "RR_calf_joint.armature": "kg*m^2",
+    "RR_calf_joint.damping": "N*m*s/rad",
+    "RR_calf_joint.frictionloss": "N*m"
+  },
+  "pinned_criterion": "half_width <= 0.1 * allowed_range (range-relative; a pinned interval can still span zero)",
+  "basis": "public log",
+  "provenance": {
+    "source": "traj_0.pt",
+    "adapter": "pt-dict",
+    "collection": "scripted",
+    "notes": [
+      "no torque recorded: the motor torque is the PD law kp (q_des - q) + kd (dq_des - dq) the joint ran under"
+    ],
+    "torque_source": "pd command"
+  },
+  "metrics": {
+    "FL_hip_joint": {
+      "samples": 402,
+      "rms_before": 0.6177370420446568,
+      "rms_after": 0.15290663804987104,
+      "explained": 0.9387303512183388
+    },
+    "FL_thigh_joint": {
+      "samples": 657,
+      "rms_before": 0.628327138719459,
+      "rms_after": 0.16535906605993458,
+      "explained": 0.9307396973223442
+    },
+    "FL_calf_joint": {
+      "samples": 1826,
+      "rms_before": 1.4407646157641347,
+      "rms_after": 0.13726783017950303,
+      "explained": 0.9909228090889648
+    },
+    "FR_hip_joint": {
+      "samples": 421,
+      "rms_before": 0.5951065484895658,
+      "rms_after": 0.13307433008989492,
+      "explained": 0.9499966479738279
+    },
+    "FR_thigh_joint": {
+      "samples": 656,
+      "rms_before": 0.6052208958837265,
+      "rms_after": 0.15272522031763294,
+      "explained": 0.9363213727629549
+    },
+    "FR_calf_joint": {
+      "samples": 1920,
+      "rms_before": 0.9978776830523781,
+      "rms_after": 0.18231336582731042,
+      "explained": 0.9666203023946581
+    },
+    "RL_hip_joint": {
+      "samples": 427,
+      "rms_before": 0.5708610480950411,
+      "rms_after": 0.17250706994542436,
+      "explained": 0.9086827180471835
+    },
+    "RL_thigh_joint": {
+      "samples": 667,
+      "rms_before": 0.601243659565002,
+      "rms_after": 0.16057202064750847,
+      "explained": 0.9286755015988555
+    },
+    "RL_calf_joint": {
+      "samples": 1725,
+      "rms_before": 1.7062593575162621,
+      "rms_after": 0.3603563336614343,
+      "explained": 0.9553959568773268
+    },
+    "RR_hip_joint": {
+      "samples": 412,
+      "rms_before": 0.6971316378190411,
+      "rms_after": 0.17375719120018887,
+      "explained": 0.9378764894037225
+    },
+    "RR_thigh_joint": {
+      "samples": 642,
+      "rms_before": 0.6502756386777722,
+      "rms_after": 0.13171253168118927,
+      "explained": 0.9589739952070566
+    },
+    "RR_calf_joint": {
+      "samples": 1845,
+      "rms_before": 1.1718696271705558,
+      "rms_after": 0.21849785007323397,
+      "explained": 0.9652355198449984
+    }
+  }
+}

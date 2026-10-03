@@ -10,7 +10,7 @@ polished from the first pass instead of hand-rolled and replaced later.*
 
 **Rerun's own `TimeSeriesView` is built on `egui_plot` (^0.37) over
 `egui` ^0.36.1** (docs.rs, `re_view_time_series`, checked 2026-08-30) —
-the exact egui version `crates/trainnr-desktop` already pins. A native
+the exact egui version `crates/trainnr-studio` already pins. A native
 Studio chart drawn with `egui_plot` is not a hand-rolled imitation of
 Rerun's charts; it is the same foundation Rerun's viewer itself draws
 with. That makes the split below cheap on both sides.
@@ -36,7 +36,7 @@ bookkeeping (AnnotationContext, Clear, RecordingInfo).
 Three entries earn a note against earlier research: `GaussianSplats3D`
 is first-class now (the splat capture layer of the-studio doc's phase 7
 has a native display path waiting); the MCAP archetypes land exactly
-where docs/25-deployment-and-fleet-ops.md pointed for fleet logging; and
+where docs/e2e-research/25-deployment-and-fleet-ops.md pointed for fleet logging; and
 `StateTimeline` is purpose-built for the stage/milestone bands the
 funnel already produces.
 
@@ -54,7 +54,7 @@ their panels:
 
 ## 3. The split: native panel vs the real viewer
 
-**Native (egui_plot in trainnr-desktop)** — always-on, lightweight, lives
+**Native (egui_plot in trainnr-studio)** — always-on, lightweight, lives
 beside the viewport and agent panel:
 
 - training loss / success-rate curves for a followed run (TimeSeries

@@ -55,7 +55,7 @@
   "scene": "projects/go2-walk/scenes/mipnerf-garden (the WSL box; projects/ is not tracked)",
   "figure": "docs/figures/viewport-deploy/garden-twin-in-splat-2026-09-26.png"
  },
- "protocol": "docs/e2e-research/78-market-gap-2026-09.md §8.9; docs/07-progress-log.md 2026-09-23 late",
+ "protocol": "docs/78-the-scene-loop.md §8.9; docs/07-progress-log.md 2026-09-23 late",
  "caveats": [
   "Six trials: enough to say the course is walked, not a rate; the interval's lower bound is 0.54.",
   "The policy never saw the garden in training: this is 'test in a copy of your space', not 'train in it' (the garden-trained walker of scene-walk-garden-2026-09-25 tracks 3/40).",

@@ -143,9 +143,9 @@ class TransferCubeScene(unittest.TestCase):
         self.assertFalse(task.protocol.success(states, sensors))  # nobody picked it
 
     def _first_frame(self, task):
-        from trainnr.envs.gymnasium_env import RobotiqEnv  # noqa: PLC0415
+        from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415
 
-        env = RobotiqEnv(task, source=f"{task.name}@test")
+        env = TrainnrEnv(task, source=f"{task.name}@test")
         try:
             observation, _ = env.reset(seed=0)
             return observation["pixels"]["top"]

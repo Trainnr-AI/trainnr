@@ -26,7 +26,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Fixed
 
-- From the second stranger test (the public edition cloned cold, 2026-10-03):
+- From a fresh clone of the public edition, walked end to end (2026-10-03):
   `evaluate_walk` hands its job the resolved checkpoint path (a bare
   `run/model_N.pt` died in the judge); the artifact drawer's header
   picture (a red triangle after the picture decoder moved off the UI
@@ -49,8 +49,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
   Under WSLg the app now takes the Wayland window path (`TRAINNR_X11=1`
   for the old one), which presents a frame ten times faster there.
 - `trainnr.mcp_tools`: an entry-point group through which an installed
-  package registers tools on the same MCP server (the seam the cloud
-  package extends, docs/83).
+  package registers tools on the same MCP server.
 - `trainnr mcp` serves the MCP server over stdio; `trainnr studio`
   launches the app; `trainnr version`.
 - The repository installs as a Claude Code plugin and marketplace

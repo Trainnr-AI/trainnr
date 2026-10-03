@@ -7,7 +7,7 @@ of that line INSIDE THE BUNDLE — with a short quote, checkable by
 `sed -n 'nnnnp' arena.md`. Nothing comes from memory of Arena; arithmetic on
 cited facts is marked "derived". Mapped against our harness
 (`trainnr/evaluate/{harness,vision}.py`, `trainnr/physics/mujoco_backend.py`)
-and docs/30–31.*
+and the pipeline brief (private) and docs/e2e-research/31.*
 
 Terms, defined once. A **policy** is the thing judged: observation in, motor
 command out. A **foundation-model policy** (VLA, vision-language-action model:

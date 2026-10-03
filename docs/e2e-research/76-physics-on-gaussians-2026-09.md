@@ -1,7 +1,7 @@
 # Physics on gaussians: the 2026-09-22 pass
 
-*The operator's rule, 2026-09-22: make sure we are researching the state
-of the art in physics for Gaussian-splat simulation training. The
+*The brief, 2026-09-22: research the state of the art in physics for
+Gaussian-splat simulation training. The
 previous pass (docs/e2e-research/75) inherited the standing verdict that
 physics needs a mesh proxy and researched the proxy chain hard; this one
 asks the opposite question on purpose — what runs physics on the splat

@@ -16,7 +16,7 @@ below MEASURED unless flagged.*
 | dof damping / armature / frictionloss, jnt_range | — | identical | SAME |
 | actuator gainprm (kp=50), ctrlrange, forcerange | — | identical | SAME |
 | timestep, impratio, tolerance, iterations, cone, solver | — | identical | SAME |
-| **nsensor** | 12 | **0** | the observation contract, gone (docs/47 §3, now round-trip-measured) |
+| **nsensor** | 12 | **0** | the observation contract, gone (docs/e2e-research/47 §3, now round-trip-measured) |
 | **nkey** | 2 | **0** | the reset mechanism, gone |
 | **ngeom** | 31 | **18** | all 13 visual meshes (group 2, contype 0) dropped — physics-neutral, but a rendered policy would see a skeleton robot |
 | **integrator** | Euler | **implicitfast** | the silent opinionated default, now written INTO the emitted MJCF |
@@ -47,7 +47,7 @@ quantity most directly erased by the conversion.
 (Not verified at the time: whether some import flag or the `mujoco:*`
 custom-attribute namespace can preserve kv.)
 
-**Verified the next day, from the source** (the operator's pack of
+**Verified the next day, from the source** (a repomix pack of
 `newton` main, 1.6.0.dev0 — *newton/_src/utils/import_mjcf.py*
 `parse_actuators`, *newton/_src/solvers/mujoco/solver_mujoco.py*): the
 importer does read a `<position>` actuator's `kv` and stores it in
@@ -71,7 +71,7 @@ cameras, lights, keyframes, composites, skins, plugins and user data —
 and not this; it is a bug, not a documented limit. Filed against
 nothing yet; the issue text is this paragraph.
 
-Combined verdict, sharpening docs/47 §3: crossing into Newton (engine)
+Combined verdict, sharpening docs/e2e-research/47 §3: crossing into Newton (engine)
 costs sensors, keyframes, visual geoms, the integrator choice, the
 root body's authored mass, and the servo damping. "Not an adapter, a
 port" now has a table.
@@ -99,5 +99,5 @@ day the certificates want deterministic GPU rollouts:
   whether `wp.config.deterministic = RUN_TO_RUN` set before kernel
   compilation gives MJX-Warp (`impl='warp'`, no Newton) run-to-run
   repeatability on contact scenes, and at what throughput cost. If
-  yes, docs/49's "certificates go statistical" softens to
+  yes, docs/e2e-research/49's "certificates go statistical" softens to
   "deterministic mode available, same-arch, at a measured cost."

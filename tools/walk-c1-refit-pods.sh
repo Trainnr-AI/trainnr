@@ -52,16 +52,16 @@ run)
     d="$(door_of "$n")"; [ -n "$d" ] || { echo "$n has no door"; continue; }
     host="${d%:*}"; port="${d##*:}"
     say "sync $commit -> $n"
-    git -C "$repo" archive --format=tar HEAD | ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "tar -x -C /workspace/robotiq && echo $commit > /workspace/robotiq/.trainnr-commit"
+    git -C "$repo" archive --format=tar HEAD | ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "tar -x -C /workspace/trainnr && echo $commit > /workspace/trainnr/.trainnr-commit"
     say "start $arm#$rep (span $span, seed $seed) on $n"
-    ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "cd /workspace/robotiq && mkdir -p runs/studies/walk-c1 && (BUNDLE=$BUNDLE nohup bash tools/walk-c1-arm.sh $arm $span $ITER $TRIALS $seed $rep > runs/studies/walk-c1/$arm-$rep.log 2>&1 < /dev/null &)"
+    ssh -o BatchMode=yes -o ConnectTimeout=30 -p "$port" "$host" "cd /workspace/trainnr && mkdir -p runs/studies/walk-c1 && (BUNDLE=$BUNDLE nohup bash tools/walk-c1-arm.sh $arm $span $ITER $TRIALS $seed $rep > runs/studies/walk-c1/$arm-$rep.log 2>&1 < /dev/null &)"
   done; say "six arms started; logs runs/studies/walk-c1/<arm>-<k>.log on the volume"
   ;;
 status)
   for spec in "${ARMS[@]}"; do set -- $spec; arm="$1"; rep="$3"; n="$(name_of "$@")"; d="$(door_of "$n")"
     [ -n "$d" ] || { echo "$n: no door"; continue; }
     host="${d%:*}"; port="${d##*:}"
-    printf "%-24s " "$n"; ssh -o BatchMode=yes -o ConnectTimeout=20 -p "$port" "$host" "tr '\r' '\n' < /workspace/robotiq/runs/studies/walk-c1/$arm-$rep.log 2>/dev/null | grep -aE '^== |\[verdict\] survived|Traceback' | tail -1" || echo "(unreachable)"
+    printf "%-24s " "$n"; ssh -o BatchMode=yes -o ConnectTimeout=20 -p "$port" "$host" "tr '\r' '\n' < /workspace/trainnr/runs/studies/walk-c1/$arm-$rep.log 2>/dev/null | grep -aE '^== |\[verdict\] survived|Traceback' | tail -1" || echo "(unreachable)"
   done
   ;;
 stop)

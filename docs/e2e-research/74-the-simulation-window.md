@@ -1,11 +1,11 @@
 # 74. The simulation window: how the field lays it out
 
-Research date: **2026-09-09**. Prakhar's question: "where will simulation
-section come, how is it in isaac sim and mujoco and others?" — and the
-call to do a primary-source pass before deciding. Four agents, one per
+Research date: **2026-09-09**. The question was where the simulation
+section goes, and how Isaac Sim, MuJoCo and the others place theirs; the
+call was a primary-source pass before deciding. Four agents, one per
 field, each held to the vendor's own docs and source with an access
 date on every claim; a fifth source is a Repomix bundle of the
-`mujoco-rs` repository Prakhar handed over the same day. §1–§5 record
+`mujoco-rs` repository supplied the same day. §1–§5 record
 what each source says, per field, with its gaps. §6 is ours: what it
 means for the Studio's rail. Nothing in §6 is a claim about the field.
 
@@ -199,7 +199,7 @@ Accessed 2026-09-09.
   `stop_recording`. No pinned release was found; the readthedocs site
   404'd and source was read instead.
 
-## 5. mujoco-rs 6.0.1 (the bundle Prakhar handed over)
+## 5. mujoco-rs 6.0.1 (the supplied bundle)
 
 Read 2026-09-09 from a Repomix export of github.com/davidhozic/mujoco-rs
 at `main` (`Cargo.toml`: `version = "6.0.1+mj-3.12.0"`, `license = "MIT
@@ -239,7 +239,7 @@ MuJoCo C library, with a native viewer (re-)written in Rust."
   `terrain_generation`, `procedural_tree`, `multi_legged_creatures`).
 
 What this settles for the Studio: the viewport already made this call
-once. `crates/trainnr-desktop/src/viewport.rs` streams frames from
+once. `crates/trainnr-studio/src/viewport.rs` streams frames from
 `tools/studio-render-stream.py` (the pipeline's own `mujoco.Renderer`,
 MuJoCo 3.11) through shared memory, with camera deltas and the
 Ctrl+drag perturbation going back over stdin, and its module doc gives

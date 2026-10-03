@@ -7,7 +7,7 @@
 #   without the API key we never ship - docs/07 2026-09-01).
 #
 #   tools/campaign-distill.sh <run_root> <teacher.pt> [episodes] [steps] [worlds] [frame_every]
-#   e.g. /workspace/robotiq/runs/campaign-2 runs/microduck-walk/<stamp>/model_7999.pt 120 30000 48 1
+#   e.g. /workspace/trainnr/runs/campaign-2 runs/microduck-walk/<stamp>/model_7999.pt 120 30000 48 1
 #
 #   FROM=train tools/campaign-distill.sh ...   resumes at a stage (press |
 #   export | train | certify): a campaign parked after its export

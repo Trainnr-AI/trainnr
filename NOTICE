@@ -8,29 +8,71 @@ under the Apache License, Version 2.0 from the second anniversary of the
 day it is made available. The third-party material below keeps its own
 licence; the text of the Apache License, Version 2.0 is in LICENSE-APACHE.
 
-It includes or builds on the following third-party material:
+It includes or builds on the following third-party material. Each vendored
+directory carries the upstream licence text and a README naming the
+repository, commit and date it was taken from.
 
-- MuJoCo Menagerie (Google DeepMind) — the ALOHA 2 model under
-  robots/aloha2-nominal/ (BSD-3-Clause, upstream commit da76818e) and the
-  SO-101 / SO-ARM100 model under robots/so101-nominal/ (Apache-2.0). Each
-  bundle directory carries the upstream LICENSE and a README recording the
-  repository, branch, commit and date; the upstream files are byte-identical
-  and our wrappers (aloha2.xml, so101.xml) add sensors only.
-- gym-aloha / ACT (Tony Z. Zhao et al.; Hugging Face) — the transfer-cube
-  task's spawn box, cube contact parameters and top-camera placement in
-  trainnr/trainnr/tasks/aloha2.py follow the original ACT simulator's
-  conventions (Apache-2.0 / MIT) so released checkpoints see the scene they
-  were trained on. No source code is copied.
-- LeRobot (Hugging Face, Apache-2.0) — used as a dependency (training,
-  datasets, policy loading, the evaluator's environment contract). No source
-  code is copied; trainnr/trainnr/envs/lerobot_plugin.py implements
-  its EnvConfig interface.
-- Gymnasium (Farama Foundation, MIT) — used as a dependency.
-- MuJoCo (Google DeepMind, Apache-2.0) — used as a dependency.
-- Infineon CYW43 wireless firmware — firmware/cyw43-firmware/, under the
-  license files kept alongside it.
-- rp2040js (Wokwi, MIT) — an ignored vendor checkout used by the firmware
-  tests; not distributed here.
+Robot models and data vendored in this repository
 
-Data and session files under claude-sync/ are the maintainers' private
-working notes and are not part of the licensed product.
+- MuJoCo Menagerie (Google DeepMind), https://github.com/google-deepmind/mujoco_menagerie
+  — the ALOHA 2 model under robots/aloha2-nominal/ (BSD-3-Clause, upstream
+  commit da76818e) and the SO-101 / SO-ARM100 model under
+  robots/so101-nominal/ (Apache-2.0). The upstream files are byte-identical;
+  our wrappers (aloha2.xml, so101.xml) add sensors only.
+- microduck_rl (Pollen Robotics), https://github.com/pollen-robotics/microduck_rl
+  — the walking robot's model and its 38 meshes under robots/microduck/
+  (Apache-2.0, upstream commit d424a0c8).
+- Robotiq 2F-85 gripper (Robotiq Inc.), https://github.com/robotiq/isaacsim_assets
+  — the USD asset Robotiq_2F_85.usda (commit 6d992b6) imported as the
+  bundle robots/robotiq-2f85-isaac/ (CC-BY-4.0; attribution required and
+  given here and in the bundle's README). trainnr is not affiliated with
+  Robotiq.
+- BAM: Better Actuator Models (Rhoban), https://github.com/Rhoban/bam
+  — the identified friction parameters of eight actuators under
+  robots/actuators/ and the derived bundles under robots/actuator-bundles/
+  (Apache-2.0; each actuator's PROVENANCE.json names the source and the
+  citation, ICRA 2025).
+- unitree_rl_mjlab (Unitree Robotics), https://github.com/unitreerobotics/unitree_rl_mjlab
+  — the Unitree Go2 walk task's declared constants (gains, limits, home
+  pose, joint order) read from src/assets/robots/unitree_go2/ (commit
+  1425b15) into trainnr-mjlab/src/trainnr_mjlab/go2_walk.py (Apache-2.0).
+  The Go2 model itself is not distributed here; onboarding reads it from
+  the user's checkout.
+
+Public telemetry the tools can fetch (not distributed here; licence state
+is recorded on every recording the tools make from them)
+
+- leg-odometry (Yibin Wu et al.), https://github.com/YibinWu/leg-odometry
+  — a real Go2's /lowstate bag (repository MIT, the bag unlabelled).
+- DFKI Robotics Innovation Center, Zenodo record 19336009 — a real Go2 on
+  Vulcano Island, field201 (CC-BY-4.0).
+- sim2real-robot-identification (IIT DLSLab),
+  https://github.com/iit-DLSLab/sim2real-robot-identification — the Go2
+  chirp traj_0.pt (BSD-3-Clause).
+
+Scenes used in the recorded experiments (not distributed here)
+
+- Mip-NeRF 360 (Barron et al., Google Research) — the "garden" capture,
+  reconstructed and walked as a scene in docs/findings/ under the dataset's
+  own terms.
+- Neverwhere (Ran et al.) — the Go1 parkour scenes imported by
+  trainnr/trainnr/scenes/neverwhere.py (MIT).
+
+Software this product depends on (no source copied)
+
+- MuJoCo (Google DeepMind, Apache-2.0) — the simulator.
+- mjlab (mujocolab, Apache-2.0) — the reinforcement-learning trainer
+  trainnr-mjlab plugs into.
+- Rerun (Rerun Technologies, MIT or Apache-2.0) — the viewer embedded in
+  the Studio through the re_viewer and re_ui crates, and the SDK the
+  streams are written with.
+- Newton (NVIDIA and the newton-physics project, Apache-2.0) — the USD
+  importer behind the USD onboarding path.
+- LeRobot (Hugging Face, Apache-2.0) — training, datasets, policy loading
+  and the evaluator's environment contract; trainnr/trainnr/envs/lerobot_plugin.py
+  implements its EnvConfig interface.
+- gym-aloha / ACT (Tony Z. Zhao et al.; Hugging Face, Apache-2.0 / MIT) —
+  the transfer-cube task under trainnr/trainnr/tasks/aloha2/ follows the
+  original simulator's spawn box, cube contact parameters and top-camera
+  placement so released checkpoints see the scene they were trained on.
+- Gymnasium (Farama Foundation, MIT).

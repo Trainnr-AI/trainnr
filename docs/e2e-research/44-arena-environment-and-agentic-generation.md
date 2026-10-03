@@ -2,7 +2,9 @@
 
 *Fifth pass, 2026-08-26. One agent, one field, against a single primary
 source: a repomix bundle of the whole `isaaclab_arena` repository
-(*scratchpad/arena.md*, 132,303 lines). Tests [docs/30-the-full-loop.md](../30-the-full-loop.md)
+(132,303 lines, read in session at the commit stated below; the line
+numbers cited here are lines of that bundle, not of a file in this tree).
+Tests [the loop](../30-the-full-loop.md)
 §3.6 (coding agents write the leaves, gates judge them) and §3.1/①
 (scenes are programs) against the one shipping system that already has
 an LLM writing evaluation environments behind validation gates.
@@ -87,7 +89,7 @@ Measured quality and its limits, in Arena's words: public `openai/gpt-oss-120b` 
 
 ## 2. What we already have that is equivalent
 
-- **Scene + task as a program.** `trainnr/tasks/aloha2/kitting.py::_rig_scene` loads the bundle `aloha2.xml` as `mujoco.MjSpec`, `_task_scene` applies a `look`, `build_kitting` adds slot walls, two free boxes (`_add_free_box`), the `top` camera and `referee/*_gripper_pos` framepos sensors (`_add_top_camera_and_referees`), and returns `ALOHA2Task(name, spec, protocol, cameras)`. That is Arena's Scene + Task in one function; the embodiment is the bundle itself. `tasks/components.py::compose` already does Arena-style composition (car alone, arm alone, arm on car).
+- **Scene + task as a program.** `trainnr/trainnr/tasks/aloha2/kitting.py::_rig_scene` loads the bundle `aloha2.xml` as `mujoco.MjSpec`, `_task_scene` applies a `look`, `build_kitting` adds slot walls, two free boxes (`_add_free_box`), the `top` camera and `referee/*_gripper_pos` framepos sensors (`_add_top_camera_and_referees`), and returns `ALOHA2Task(name, spec, protocol, cameras)`. That is Arena's Scene + Task in one function; the embodiment is the bundle itself. `tasks/components.py::compose` already does Arena-style composition (car alone, arm alone, arm on car).
 - **The protocol object.** `trainnr/evaluate/harness.py::EpisodeProtocol(trials, steps, control_interval, perturb, success, home)` is our `TaskSpec` + termination + episode length; `perturb(trial, home)` is keyed by trial index so trials are paired across policies (Arena's `placement_seed` role, but deterministic by construction); `home` names the bundle keyframe (docs/31 §2).
 - **Gates.** `score_policies` refuses duplicate policy names and any `source` without `@hash`, then census-gates via `robot/model_checks.py::assert_model_alive(actuators, sensors, geoms, cameras)` — the equivalent of Arena's "fail before the simulator starts", at the model level. `bundles/profile.py::load_profile` rejects unknown keys ("a misspelled field would otherwise fall back to a default and lie quietly") — the same posture as Pydantic strict mode, in stdlib.
 - **Identity.** `bundles/hashing.py::stamp` gives `name@hash`; Arena has no content hash on a spec — its reproducibility claim rests on "the reviewed YAML", unhashed.

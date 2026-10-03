@@ -246,7 +246,7 @@ from zero. Borrow, with sources:
 
 ## 9. The dialect rule: whose conventions win where *(standing, 2026-08-31)*
 
-The operator's rule: the product must hold trainnr's coding standards
+The rule: the product must hold trainnr's coding standards
 AND read as native in each host's dialect. The boundary principle —
 **at every interface we speak THEIR language; inside the core we keep
 ours** — resolved per artifact, from the idioms the reads measured:

@@ -44,13 +44,13 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 
 | Tool | What it does |
 |---|---|
-| `show-aloha2.py`, `show-cargo-chaos.py` | One scene each, MuJoCo viewer + Rerun (the house rule: every session gets both) |
+| `show-aloha2.py`, `show-cargo-chaos.py` | One scene each, MuJoCo viewer + Rerun (the rule: every session gets both) |
 | `show-rig.py`, `show-yellow.py` | The car+arm rig and the yellow arm in the MuJoCo passive viewer only — their Rerun mirror is queued (docs/32 §10.1) |
 | `show-many.py` | Batched domain-randomized worlds side by side |
 | `show-2f85-isaac.py` | The USD-born 2F-85 bundle closing on a cube between its pads: MuJoCo stills (`--stills`) and the Rerun stream (the Studio when it listens, a recording always); exits 0 when the cube is held (docs/e2e-research/77 §4.1) |
 | `show-gripper-pick.py` | The `gripper-pick` task on the USD-born 2F-85: the acceptance ladder's rungs (pick, no-close, limp) run through the task's expert, then REPLAYED from the judged rows in the MuJoCo viewer and streamed to the Studio (10 Hz, one clock; a recording always); `--stills` writes grasp/hold/failure PNGs; exits 0 when only the expert rung succeeds |
 | `pod-volume.py` | a RunPod network volume over its S3 API: `du` by prefix, `ls`, and `rm` (a dry run unless `--yes`) — the door that works when the pod is stopped; credentials are a RunPod S3 API key pair as `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or `--env-file` lifting exactly those two names |
-| `planner-demos.py` | docs/66 D3: the planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`) — beats written from each seated scene, executed by chained IK, kept by the task's referee, every declared camera captured, the batch stamped `planner@<knobs>`; streams to the Studio by default; `--shards N --parallel M` presses in N runs with disjoint ranges and seeds and merges them (docs/66 D4: the datasheet then states the keep rate exactly) |
+| `planner-demos.py` | The planner data lane (D3): the planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`) — beats written from each seated scene, executed by chained IK, kept by the task's referee, every declared camera captured, the batch stamped `planner@<knobs>`; streams to the Studio by default; `--shards N --parallel M` presses in N runs with disjoint ranges and seeds and merges them (docs/66 D4: the datasheet then states the keep rate exactly) |
 | `kitting-demos.py` | T5's data source: referee-filtered scripted kitting episodes drawn over the task's whole declared band with ±30% DR — trajectories + frames + manifests, each manifest carrying the expert's own stamp (`expert_stamp`); `--first-episode K` shards one batch across parallel generators, or `--shards N --parallel M` does it for you and merges the records |
 | `camera-match.py` | Sim renders beside released real frames — camera placement is calibration, not decoration |
 | `studio-render-stream.py` | MuJoCo's own render as a subprocess service for `crates/trainnr-studio`: frames out on stdout, orbit/zoom/size commands in on stdin — the app's 3D viewport without linking MuJoCo's C API into Rust; a scene is a preview task, the walk, or a deployment (`deploy:<name>` live, `:gate:<runtime>:<i>`, `:preflight:<i>`; `--project=<root>`, docs/77 §11) |
@@ -63,6 +63,9 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 | Tool | What it does |
 |---|---|
 | `cloud-gpu.py` | A rented GPU as a runbook: `offers` (priced, in stock, CUDA ≥ 13 hosts) → `launch` → `push` (rsync, never `.env`) → `bootstrap` (the train venv, the WSL recipe) → `run` → `pull` → `terminate`; every vendor behind `trainnr/cloud`'s provider seam, Runpod first (docs/34); `follow <id> NAME --watch` mirrors a running pod run's light files every 20 s and opens the dashboard on them |
+| `walk-axes-on-box.sh [axes] [scales] [date]` | The per-axis walk mismatch matrices where a GPU is free: the nine walk C1 checkpoints tracked under `docs/artifacts/walk-c1/<run>/train/` are judged on each axis at each scale and the certificates land beside the tracked ones; then one fold per axis. Needs the launch environment (`trainnr/wsl.env`) exported first |
+| `walk-refit-rejudge-on-box.sh [rejudge_date] [aside_dir]` | Re-judges the refit arms' withdrawn certificates with the fixed DR seam (pins and declared spans built from the bundle's params): the at-fit certificates stand, every other certificate of the six runs is moved aside and re-run, then both folds rewrite their records in place with a `revised` note, so the manuscript's citations keep resolving |
+| `studio-cloud-feed.py <ssh-door> <remote-log>` | A rented card's training live in the Studio: tails the remote `run.log` over ssh, parses the trainer's metric lines with the pipeline's parsers and streams `cloud/train/*` and `cloud/gpu/*` to the Studio's ingest port, so one window holds the local and the cloud run |
 | `train-watch.py --follow <runs/NAME-act>` | The run as a live Rerun dashboard, from its files (no torch needed): the chain's run manifest as a text panel — every parameter and the dataset's stamps — `train/*` (loss, grad norm, lr, samples, update/dataloading seconds), `eval/inloop/*` and `eval/final/*` (success rate and the milestone funnel per checkpoint, the eval videos), `machine/gpu_*` (nvidia-smi samples), the trainer's resolved config at each checkpoint; `--rrd FILE` saves the stream; `--play-checkpoints` adds both viewers (train venv). Works on a mirrored pod run (`cloud-gpu follow`) |
 | `e2e-smoke.py` | The T5 chain in one command: demos → LeRobot v3 → `lerobot-train` with in-loop eval through our env → `lerobot-eval` with records → the fold. `--scale smoke` (default: minutes on the WSL card) or `--scale cloud` (the ACT sim recipe: 50 demos, 100k steps, checkpoints every 20k, 20 paired starts); any knob overrides its preset; `--from <stage>`/`--until <stage>` run any contiguous slice of the four stages — the CPU-bound demos and convert on this box, the GPU-bound train and eval on a rented card (docs/34); it writes `runs/NAME-watch/` from its first second (the run manifest, every stage's output teed into `chain.log`, nvidia-smi samples) for the dashboard |
 | `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? Subprocess-per-mode (compile option); the verdict needs the WSL CUDA device |
@@ -81,7 +84,7 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 | `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
 | `sync-bam-actuators.py` | Vendor new/changed servos from a BAM checkout or repomix pack into `robots/actuators/` — refuses a changed file with no `--version` |
 | `train-watch.py`, `rl-watch.py` | Watch a training run / RL policy roll out live in Rerun |
-| `debug-inference.sh` | Runs any command with ONNX Runtime's and Rust's logging gates open (`ORT_LOG`, `RUST_LOG`) so execution-provider diagnostics show — e.g. `cargo run -p vision --bin bench` |
+| `debug-inference.sh` | Runs any command with ONNX Runtime's and Rust's logging gates open (`ORT_LOG`, `RUST_LOG`) so execution-provider diagnostics show — e.g. the vision crate's bench (rig archive) |
 
 ## Repo plumbing (not tools, but they live here)
 
@@ -89,8 +92,7 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 |---|---|
 | `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `trainnr/trainnr/viz.py`). `running(project_root, name=, viewport=, viewer=)` puts a tool's run in the project's job table while it runs (`trainnr.mcp_jobs.track`), so the Studio's Running now panel shows its stage and progress; `trial_reporter(run)` is the gate's per-trial line |
 
-Running now: `gate-deployment.py`, `attribute-deployment.py`, `preflight-deployment.py`, `capture-telemetry.py`, `public-log.py` (ingest), `import-usd.py`, `capture-scene.py` and trainnr_mjlab's `walk_train` each enter `<project>/mcp-jobs/` with a `.status` beside the record (stage, `done/total unit`). A run started by an agent sets `TRAINNR_RUN_SOURCE=agent`; a door's own job is adopted, never listed twice (docs/35 §5).
-| `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL box's GPU routing in one file |
+| `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL2 GPU routing in one file |
 | `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (the Studio crate's fmt/clippy/tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
 | `.ruff.toml` | Extends the pipeline's lint contract to `tools/`, with the per-file exceptions and their reasons |
 
