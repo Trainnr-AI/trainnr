@@ -60,3 +60,28 @@ needs_mcp = unittest.skipUnless(MCP, "mcp extra not installed (uv sync --extra m
 USD = installed("pxr", "newton", "mujoco_warp", "mujoco")
 USD_LINE = "usd import needs the usd and gpu extras (uv sync --extra usd --extra gpu)"
 needs_usd = unittest.skipUnless(USD, USD_LINE)
+
+
+def _can_render() -> bool:
+    """Whether MuJoCo's offscreen renderer opens here: a CI virtual machine
+    with no graphics device cannot (GitHub's macOS runners refuse a pixel
+    format), a desktop or a Linux runner with Mesa's EGL can. Probed once,
+    with the smallest model, and only when the sim extra is installed."""
+    if not SIM:
+        return False
+    try:
+        import mujoco  # noqa: PLC0415
+
+        model = mujoco.MjModel.from_xml_string("<mujoco><worldbody/></mujoco>")
+        renderer = mujoco.Renderer(model, height=8, width=8)
+        renderer.close()
+    except Exception:  # any failure to open a context means no rendering here
+        return False
+    return True
+
+
+RENDER = _can_render()
+needs_render = unittest.skipUnless(
+    RENDER,
+    "no offscreen rendering here (no OpenGL/EGL context); runs on a desktop or Linux CI",
+)

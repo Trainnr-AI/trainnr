@@ -9,13 +9,14 @@ exists to catch.
 
 import unittest
 
-from tests._extras import needs_envs
+from tests._extras import needs_envs, needs_render
 
 SO101_JOINTS = 6
 NOT_BLACK = 20
 
 
 @needs_envs
+@needs_render
 class ArmnetBenchRig(unittest.TestCase):
     def test_observation_matches_the_armnetbench_contract(self) -> None:
         import numpy as np  # noqa: PLC0415

@@ -10,7 +10,7 @@ consumes renders a real frame at the checkpoint's resolution.
 
 import unittest
 
-from tests._extras import needs_sim
+from tests._extras import needs_render, needs_sim
 
 BLACK_FRAME_MEAN = 5.0
 
@@ -72,6 +72,7 @@ class GripperRemap(unittest.TestCase):
 
 
 @needs_sim
+@needs_render
 class TransferCubeScene(unittest.TestCase):
     def _loaded(self):
         from trainnr.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415

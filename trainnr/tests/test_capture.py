@@ -139,17 +139,25 @@ class TheTools(unittest.TestCase):
         self.assertEqual(
             tooling.install_hint("colmap", "Darwin"), "brew install colmap"
         )
-        self.assertEqual(
-            tooling.install_hint("colmap", "Linux"), "sudo apt install colmap"
-        )
+        with mock.patch.object(
+            tooling, "linux_installer", return_value="sudo apt install"
+        ):
+            # the Linux line follows the machine's own package manager
+            # (os-release); pinned here so the test runs on any host
+            self.assertEqual(
+                tooling.install_hint("colmap", "Linux"), "sudo apt install colmap"
+            )
+            self.assertEqual(
+                tooling.install_hint("ffprobe", "Linux"), "sudo apt install ffmpeg"
+            )
         self.assertIn("tools/install-brush.py", tooling.install_hint("brush", "Linux"))
         self.assertIn(
             "tools/install-brush.py", tooling.install_hint("brush", "Windows")
         )
-        self.assertEqual(
-            tooling.install_hint("ffprobe", "Linux"), "sudo apt install ffmpeg"
-        )
         with (
+            mock.patch.object(
+                tooling, "linux_installer", return_value="sudo apt install"
+            ),
             mock.patch("shutil.which", return_value=None),
             mock.patch("platform.system", return_value="Linux"),
             self.assertRaises(capture.MissingToolError) as caught,

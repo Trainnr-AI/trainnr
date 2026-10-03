@@ -7,7 +7,7 @@ half lives in the train venv and is pinned there.
 import dataclasses
 import unittest
 
-from tests._extras import needs_envs
+from tests._extras import needs_envs, needs_render
 
 SHORT_STEPS = 40  # four control ticks of the ALOHA protocol, enough to truncate
 SOURCE = "aloha2-transfer@testhash"
@@ -65,6 +65,7 @@ class StepperIsTheOneLoop(unittest.TestCase):
 
 
 @needs_envs
+@needs_render
 class GymnasiumContract(unittest.TestCase):
     def _env(self, steps: int | None = None):
         from trainnr.envs.gymnasium_env import TrainnrEnv  # noqa: PLC0415

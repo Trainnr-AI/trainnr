@@ -31,6 +31,8 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Fixed
 
+- Tests that render skip, with the reason, where no OpenGL context opens (CI's macOS virtual machines); the capture-tool test no longer assumes the host has apt.
+
 - Every tool's failure reaches the agent with its reason; `trainnr mcp` without the extras names the command that installs them; the Studio download error names the build-from-source line.
 - `wsl.env` applies on WSL only and never overrides a variable the user set.
 - The Robotiq 2F-85 bundle carries both licences (Robotiq BSD-3, NVIDIA CC-BY) in `LICENSES/`; the USD importer records every licence up to the repository root.

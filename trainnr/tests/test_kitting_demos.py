@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tests._extras import needs_sim
+from tests._extras import needs_render, needs_sim
 
 SHORT_STEPS = (
     400  # the parts never reach the slots in 0.8 s: every attempt is a discard
@@ -16,6 +16,7 @@ SPARSE_FRAMES = 100  # one frame per 100 control ticks: 14 frames per kept episo
 
 
 @needs_sim
+@needs_render
 class TheGenerator(unittest.TestCase):
     def test_gives_up_after_max_attempts_and_writes_nothing(self) -> None:
         from trainnr.collect.kitting_demos import generate_demos  # noqa: PLC0415
