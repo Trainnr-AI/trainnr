@@ -68,8 +68,8 @@ lands. For developers with one robot and companies with a fleet.
 
 ## Quickstart
 
-In Claude Code, install the plugin (the MCP server, seven agents and two
-skills):
+In Claude Code, install the plugin. It brings the MCP server, seven
+agents, two skills, and the Studio, which downloads on the first session:
 
 ```sh
 claude plugin marketplace add Trainnr-AI/trainnr
@@ -129,12 +129,19 @@ args = ["run", "--directory", "/path/to/trainnr/trainnr", "--extra", "sim", "--e
 <details>
 <summary><b>The Studio</b> (desktop app) and <b>training</b> (CUDA GPU)</summary>
 
-**The Studio** (Rust; the embedded Rerun viewer and the MuJoCo simulator):
+**The Studio** (the desktop app: the embedded Rerun viewer and the MuJoCo
+simulator) comes prebuilt for Linux (x86_64), macOS (Apple Silicon) and
+Windows (x86_64). With the plugin there is nothing to do: the first
+session after install downloads it in the background, and `launch_studio`
+opens it. Without the plugin:
 
 ```sh
-cd crates/trainnr-studio && cargo build --release && cd ../..
-uv run --directory trainnr trainnr studio        # or the launch_studio tool
+uv run --directory trainnr trainnr studio --install   # download it ahead (72 MB)
+uv run --directory trainnr trainnr studio             # open it on the current project
 ```
+
+On another platform, or to work on the Studio, build it from source:
+`cd crates/trainnr-studio && cargo build --release`.
 
 **Training** needs the mjlab trainer and a CUDA GPU:
 `cd trainnr-mjlab && uv sync --extra viz`. Everything else, including every

@@ -12,7 +12,7 @@
     {
       "name": "trainnr",
       "source": "./",
-      "description": "The end-to-end robotics platform, run from your coding agent: identify the robot from its telemetry, generate datasets, train policies by reinforcement or imitation learning, evaluate with exact intervals, gate and deploy, watch the telemetry for drift.",
+      "description": "The physical AI platform for robot learning, run from your coding agent: data collection and telemetry, real-to-sim system identification, simulation, synthetic data, reinforcement and imitation learning, evaluation, sim-to-real deployment, and the data flywheel back into training. One MCP server, the Studio (downloaded on first use), seven agents and two skills.",
       "version": "0.1.0",
       "author": {
         "name": "Trainnr AI"

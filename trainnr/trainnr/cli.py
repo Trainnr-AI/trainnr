@@ -29,7 +29,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog=PACKAGE, description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("mcp", help="serve the tools over stdio (needs the `mcp` extra)")
-    sub.add_parser("studio", help="launch the trainnr Studio on the current project")
+    studio = sub.add_parser(
+        "studio", help="launch the trainnr Studio on the current project"
+    )
+    studio.add_argument(
+        "--install",
+        action="store_true",
+        help="download the prebuilt Studio for this platform and exit",
+    )
     sub.add_parser("version", help="print the version")
     args = parser.parse_args(argv)
     if args.command == "version":
@@ -40,6 +47,10 @@ def main(argv: list[str] | None = None) -> int:
 
         serve()
         return 0
+    if args.command == "studio" and args.install:
+        from trainnr.studio_install import main as install  # noqa: PLC0415
+
+        return install([])
     if args.command == "studio":
         from trainnr.project import current_project  # noqa: PLC0415
         from trainnr.project.control import launch  # noqa: PLC0415

@@ -1,8 +1,8 @@
-"""trainnr: robot training and evaluation with numbers you can sign.
+"""trainnr: the physical AI platform for robot learning, run from your
+coding agent.
 
-Module map mirrors the pipeline stages in docs/e2e-research/30-the-pipeline.md;
-the architecture and stage-by-stage roadmap live in
-docs/22-pipeline-architecture.md.
+The package map is trainnr/README.md; the loop it implements is
+docs/76-the-loop.md.
 """
 
 __version__ = "0.1.0"

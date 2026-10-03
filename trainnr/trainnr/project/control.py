@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from trainnr.paths import checkout
+from trainnr.paths import CHECKOUT_ENV, checkout
 from trainnr.project.locate import INDEX_DIR, PROJECT_ENV, Project
 from trainnr.viz import STUDIO_ADDRESS
 
@@ -426,14 +426,37 @@ def _psutil() -> Any:
 
 
 def studio_binary() -> Path | None:
-    """The built Studio: `$TRAINNR_STUDIO`, else the repo's release build."""
+    """The Studio to run: `$TRAINNR_STUDIO`, else the checkout's own
+    release build, else the prebuilt one downloaded for this version
+    (`trainnr.studio_install`), else None."""
+    from trainnr.studio_install import installed_binary  # noqa: PLC0415
+
     named = os.environ.get(STUDIO_ENV)
     if named:
         path = Path(named)
         return path if path.is_file() else None
     exe = "trainnr-studio.exe" if sys.platform.startswith("win") else "trainnr-studio"
     path = checkout() / STUDIO_RELEASE / exe
-    return path if path.is_file() else None
+    if path.is_file():
+        return path
+    return installed_binary()
+
+
+def ensure_studio_binary() -> Path | dict[str, Any]:
+    """The Studio's binary, downloading the prebuilt one when nothing is
+    built or installed (the plugin's first launch: its session hook
+    normally fetched it already), or a refusal saying why there is none."""
+    from trainnr.studio_install import StudioInstallError, install  # noqa: PLC0415
+
+    found = studio_binary()
+    if found is not None:
+        return found
+    if os.environ.get(STUDIO_ENV):
+        return {"status": "refused", "reason": f"${STUDIO_ENV} names no file"}
+    try:
+        return install(say=lambda _line: None)
+    except StudioInstallError as why:
+        return {"status": "refused", "reason": str(why)}
 
 
 # The Studio's embedded Rerun server: the port of `viz.STUDIO_ADDRESS`,
@@ -520,7 +543,9 @@ def wsl_gpu_environment(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
+def launch(  # noqa: PLR0911 - each refusal names its own reason
+    project: Project, binary: Path | None = None
+) -> dict[str, Any]:
     """Start the Studio on the project; wait for its first heartbeat.
     Waits for the viewer's port first: a window quit a moment ago can
     still hold it, and a Studio started then runs without a viewer
@@ -529,17 +554,13 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     current = state(project)
     if current.get("alive"):
         return _already_running(project, current)
-    binary = binary or studio_binary()
-    if binary is None or not binary.is_file():
-        return {
-            "status": "refused",
-            "reason": (
-                f"no Studio binary at {binary}"
-                if binary is not None
-                else "no Studio binary: build it with "
-                "`cargo build --release -p trainnr-studio` or set $TRAINNR_STUDIO"
-            ),
-        }
+    if binary is None:
+        found = ensure_studio_binary()
+        if isinstance(found, dict):
+            return found
+        binary = found
+    if not binary.is_file():
+        return {"status": "refused", "reason": f"no Studio binary at {binary}"}
     deadline = time.monotonic() + PORT_FREE_TIMEOUT_S
     while not viewer_port_free() and time.monotonic() < deadline:
         time.sleep(0.1)
@@ -553,6 +574,9 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
     log.parent.mkdir(parents=True, exist_ok=True)
     env = wsl_gpu_environment(dict(os.environ))
     env[PROJECT_ENV] = str(project.root)
+    # A downloaded Studio lives in the user's cache, not in the checkout:
+    # it finds the simulator's scripts through the checkout's path.
+    env.setdefault(CHECKOUT_ENV, str(checkout()))
     with log.open("ab") as sink:
         child = subprocess.Popen(
             [str(binary)],

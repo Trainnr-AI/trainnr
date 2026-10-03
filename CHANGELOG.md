@@ -34,6 +34,13 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- The Studio, prebuilt: a release workflow builds it for Linux (x86_64),
+  macOS (Apple Silicon) and Windows (x86_64); `launch_studio` and
+  `trainnr studio` download the build matching the package version,
+  verified by its SHA-256, into the user's cache; the plugin's session hook
+  fetches it in the background after install; `trainnr studio --install`
+  fetches it ahead.
+
 - A README with a capture of every stage in the Studio, a real quickstart
   session, the robots the loop has run and the headline results with their
   records; the app icon reads "tr".

@@ -27,6 +27,7 @@ page says what each one is for.
 | `findings.py` | Renders `docs/findings/*.json` into `docs/68-findings.md`; `--check` fails when the page is stale. The ledger is generated, never hand-edited. |
 | `coverage.sh` | Rust line coverage for the Studio crate. |
 | `coverage-badge.py` | Turns coverage.py's JSON report into the README's coverage badge (CI, after the tests). |
+| `plugin-prefetch.sh` | The plugin's session-start hook (`hooks/hooks.json`): downloads the prebuilt Studio in the background, once per version, silently. |
 | `github-setup.sh` | Applies the repository's GitHub settings: merges, Actions, labels and, once public, the ruleset on `main` and the security features; lists who can merge. Idempotent. |
 | `loc-report.py` | Line counts by area. |
 
