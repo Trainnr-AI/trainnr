@@ -25,4 +25,7 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     groups:
-      rust: { patterns: ["*"], update-types: ["minor", "patch"] }
+      # Rerun's crates version together (the viewer is embedded); a lone
+      # re_ui bump cannot build.
+      rerun: { patterns: ["rerun", "re_*"] }
+      rust: { patterns: ["*"], exclude-patterns: ["rerun", "re_*"], update-types: ["minor", "patch"] }

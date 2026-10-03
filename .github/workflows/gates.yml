@@ -71,7 +71,18 @@ jobs:
       # setting trainnr/wsl.env uses under WSL); through GLFW with no display the process
       # aborts (exit 134, the fourth public run of 2026-10-02).
       MUJOCO_GL: egl
+      # No debug info in CI builds: the Studio links the whole Rerun
+      # viewer, and its debug test binary filled the runner's disk until
+      # the linker died with a bus error (every main run from the first
+      # public push to 2026-10-03). Line tables keep panics readable.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
+      - name: free the runner's disk (preinstalled SDKs this workflow does not use)
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+          df -h / | tail -1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: system libraries (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input; Mesa's EGL and software GL for MuJoCo's renderer)
         run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev libegl1 libgl1-mesa-dri libgles2 libosmesa6
