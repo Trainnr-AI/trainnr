@@ -37,6 +37,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -157,6 +158,9 @@ class JobRecord(JsonRecord):
     # writes; empty when it has none.
     viewport: str = ""
     viewer: str = ""
+    # The process's start time as the OS reports it (psutil), so a cancel
+    # can tell the job's process from a later one that reused its pid.
+    create_time: float = 0.0
 
 
 # The spawner is injectable so tests assert the exact command lines
@@ -166,6 +170,24 @@ Spawner = Callable[[Sequence[str], Path, Path], subprocess.Popen]
 
 
 EXIT_SUFFIX = ".exit"
+# A job id as `start` makes it: the tool's name and eight hex digits. Any
+# other string (a path, `..`) is refused before it reaches the filesystem.
+JOB_ID = re.compile(r"[\w.-]+")
+# Two reads of one process's start time agree to well under this.
+CREATE_TIME_SLACK_S = 1.0
+
+
+def process_create_time(pid: int) -> float:
+    """When the process `pid` started, by the OS clock (0.0 when it is
+    gone or psutil is not installed)."""
+    try:
+        import psutil  # noqa: PLC0415 - the `mcp` extra
+    except ImportError:
+        return 0.0
+    try:
+        return float(psutil.Process(pid).create_time())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError):
+        return 0.0
 
 
 def exit_path_for(log_path: Path) -> Path:
@@ -422,6 +444,7 @@ class JobManager:
             log=str(log_path),
             pid=process.pid,
             started=time.time(),
+            create_time=process_create_time(process.pid),
         )
         record.write(self._record_path(job_id))
 
@@ -469,10 +492,23 @@ class JobManager:
             "unit": live.unit,
         }
 
-    def cancel(self, job_id: str) -> Cancelled:
+    def cancel(self, job_id: str) -> Cancelled | Refusal:
         """SIGTERM the job's whole process group (its own session — the
-        same gesture as the Studio's stop button)."""
+        same gesture as the Studio's stop button), only while the job's
+        own process still runs: a finished job, or a pid the OS has since
+        given to another process, is refused rather than signalled."""
         record = self._record(job_id)
+        if (self.jobs_dir / f"{job_id}{EXIT_SUFFIX}").exists():
+            return refusal(f"job {job_id} has already finished; nothing to cancel")
+        if not record.create_time:
+            return refusal(
+                f"job {job_id} was recorded without its process's start time, so "
+                f"its pid {record.pid} cannot be told from a reused one; stop it "
+                "by hand if it still runs"
+            )
+        now = process_create_time(record.pid)
+        if not now or abs(now - record.create_time) > CREATE_TIME_SLACK_S:
+            return refusal(f"job {job_id}'s process is no longer running")
         return {"job_id": job_id, "cancelled": terminate_group(record.pid)}
 
     def list(self) -> list[JobStatus]:
@@ -490,6 +526,8 @@ class JobManager:
         return self.jobs_dir / f"{job_id}.json"
 
     def _record(self, job_id: str) -> JobRecord:
+        if not JOB_ID.fullmatch(job_id):
+            raise ValueError(f"not a job id: {job_id!r}")
         path = self._record_path(job_id)
         if not path.exists():
             known = sorted(p.stem for p in self.jobs_dir.glob("*.json"))

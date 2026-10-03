@@ -35,7 +35,13 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from trainnr.paths import CHECKOUT_ENV, checkout
-from trainnr.project.locate import INDEX_DIR, PROJECT_ENV, Project
+from trainnr.project.locate import (
+    INDEX_DIR,
+    PROJECT_ENV,
+    PROJECTS_ENV,
+    Project,
+    projects_home,
+)
 from trainnr.viz import STUDIO_ADDRESS
 
 COMMANDS_DIR = "commands"
@@ -521,10 +527,10 @@ WSL_GALLIUM_DRIVER = "d3d12"
 
 
 def on_wsl() -> bool:
-    try:
-        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
-    except OSError:
-        return False
+    """WSL, by the one rule the package and the Studio share."""
+    from trainnr.paths import on_wsl as detected  # noqa: PLC0415
+
+    return detected()
 
 
 def wsl_gpu_environment(env: dict[str, str]) -> dict[str, str]:
@@ -574,6 +580,8 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     log.parent.mkdir(parents=True, exist_ok=True)
     env = wsl_gpu_environment(dict(os.environ))
     env[PROJECT_ENV] = str(project.root)
+    # the projects home the switcher lists, the one the tools create in
+    env.setdefault(PROJECTS_ENV, str(projects_home()))
     # A downloaded Studio lives in the user's cache, not in the checkout:
     # it finds the simulator's scripts through the checkout's path.
     env.setdefault(CHECKOUT_ENV, str(checkout()))

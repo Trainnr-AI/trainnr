@@ -65,12 +65,18 @@ STAMP_SEPARATOR = "@"
 FITS_DIR = "fits"
 # The file a bundle's importer audit lives in (`bundles.bundle`).
 AUDIT_FILE = "audit.json"
+# The folder a bundle's licence and attribution texts live in, when its
+# sources need more than its own `LICENSE` (a dual-licensed upstream:
+# Robotiq's BSD-3 meshes beside NVIDIA's CC-BY asset, 2026-10-03). Legal
+# records about the content, not content: correcting an attribution must
+# not change which robot it is.
+LICENSES_DIR = "LICENSES"
 # Records ABOUT a bundle, not its content: identifying the robot or
 # auditing its import must not change which robot it is. Until
 # 2026-09-25 a fit or an audit written into the bundle moved its stamp,
 # and every checkpoint certified on the old stamp was refused by the
 # identity gate (go2@5003bf617b5f -> go2@c699dc1b0772 on 2026-09-24).
-BUNDLE_RECORDS: tuple[str, ...] = (f"{FITS_DIR}/*", AUDIT_FILE)
+BUNDLE_RECORDS: tuple[str, ...] = (f"{FITS_DIR}/*", AUDIT_FILE, f"{LICENSES_DIR}/*")
 
 
 def stamp(name: str, root: Path) -> str:

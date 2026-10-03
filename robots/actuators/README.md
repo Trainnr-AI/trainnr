@@ -11,7 +11,7 @@ the numbers came from.
 
 ## The rule
 
-**No `PROVENANCE.json`, no load.** `rq_pipeline.robot.actuator_library`
+**No `PROVENANCE.json`, no load.** `trainnr.robot.actuator_library`
 refuses a directory that doesn't declare its `source` (`"bam"` /
 `"own-bench"` / `"datasheet"`), citation, and license — an actuator
 model with unknown provenance is worse than no model, because it reads

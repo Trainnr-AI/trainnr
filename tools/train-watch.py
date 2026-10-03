@@ -221,7 +221,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="HOST[:PORT]",
         help="play a policy served by openpi (pi0 / pi0.5) instead of a "
-        "checkpoint; needs --executed-horizon and the 'remote' extra",
+        "checkpoint; needs --executed-horizon and the 'remote' dependency group",
     )
     parser.add_argument(
         "--action-space",

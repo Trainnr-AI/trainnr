@@ -10,6 +10,11 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Changed
 
+- Projects live in `~/trainnr/projects` (`TRAINNR_PROJECTS`, `TRAINNR_HOME`); `create_project` makes the new project current and the new `use_project` tool chooses one; user caches move to `~/trainnr/cache` (existing checkout caches are kept).
+- Tool descriptions are in plain words, every tool is annotated read-only or destructive, and the server reports its version.
+- Actuator-bundle readers accept `trainnr-actuator-bundle/1` as well as the frozen `robotiq-actuator-bundle/1`.
+- The `remote` and `dds` extras are dependency groups (`uv sync --group remote`), so the published metadata carries no git URL.
+
 - The project is now **trainnr** (packages `trainnr` and `trainnr-mjlab`,
   the Studio `trainnr-studio` (crate, binary, `trainnr studio`, app id
   `ai.trainnr.studio`; the app's persisted window state resets once),
@@ -26,6 +31,11 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Fixed
 
+- Every tool's failure reaches the agent with its reason; `trainnr mcp` without the extras names the command that installs them; the Studio download error names the build-from-source line.
+- `wsl.env` applies on WSL only and never overrides a variable the user set.
+- The Robotiq 2F-85 bundle carries both licences (Robotiq BSD-3, NVIDIA CC-BY) in `LICENSES/`; the USD importer records every licence up to the repository root.
+- NOTICE corrected (ALOHA 2 to Trossen Robotics, DFKI CC-BY attribution, the Mip-NeRF 360 licence state, the Studio's linked crates and fonts), one copyright line in both NOTICE files.
+
 - From a fresh clone of the public edition, walked end to end (2026-10-03):
   `evaluate_walk` hands its job the resolved checkpoint path (a bare
   `run/model_N.pt` died in the judge); the artifact drawer's header
@@ -38,15 +48,6 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
   job (pip-audit on every locked Python set, cargo-deny on the Studio,
   zizmor on the workflows); a pre-commit config; a threat model in
   SECURITY.md and the public API's definition in GOVERNANCE.md.
-
-### Security
-
-- The Studio's viewer server listens on this machine only (127.0.0.1:9876);
-  it listened on every interface, so anyone on the same network could
-  stream into an open Studio. `TRAINNR_VIEWER_BIND` opens it on purpose.
-- urllib3 2.8.0, pyjwt 2.15.1, accelerate 1.15.0 and rustls 0.23.45, past
-  their published advisories; checkouts no longer keep the token, and the
-  release build restores no cache.
 
 - The Studio, prebuilt: a release workflow builds it for Linux (x86_64),
   macOS (Apple Silicon) and Windows (x86_64); `launch_studio` and
@@ -89,3 +90,17 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 - `tools/check-layers.py` pins the package layers.
 - Governance files: `CONTRIBUTING.md` (DCO), `SECURITY.md`,
   `CODE_OF_CONDUCT.md`, `GOVERNANCE.md`, `CITATION.cff`.
+
+### Security
+
+- `cancel_job` refuses invalid IDs, finished jobs and reused process IDs; a failing tool plugin is skipped instead of stopping the server.
+- The Studio installer locks per version, never removes a complete install, and keeps the GitHub token off other hosts.
+- Public-log downloads show the licence first and refuse unlicensed data without `--accept-unlicensed` / `accept_unlicensed`.
+
+- The Studio's viewer server listens on this machine only (127.0.0.1:9876);
+  it listened on every interface, so anyone on the same network could
+  stream into an open Studio. `TRAINNR_VIEWER_BIND` opens it on purpose.
+- urllib3 2.8.0, pyjwt 2.15.1, accelerate 1.15.0 and rustls 0.23.45, past
+  their published advisories; checkouts no longer keep the token, and the
+  release build restores no cache.
+

@@ -634,3 +634,32 @@ class TheCheckpointCheck(unittest.TestCase):
             self.assertIn(
                 "is not a run folder", checkpoint_missing("nope/model_1.pt", Path(tmp))
             )
+
+
+class PublicLogLicences(unittest.TestCase):
+    """Review 2026-10-03: the ingest tool refuses data whose publisher
+    states no licence, naming the state and the flag, before any job."""
+
+    def test_unlicensed_log_is_refused_until_accepted(self) -> None:
+        from trainnr.mcp_server import ingest_public_log  # noqa: PLC0415
+        from trainnr.robots import public_logs  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            with (
+                mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}),
+                mock.patch.object(public_logs, "locate", return_value=None),
+            ):
+                refused = ingest_public_log("go2-leg-odometry")
+                self.assertEqual(refused["status"], "refused")
+                self.assertIn("unlabelled", refused["reason"])
+                self.assertIn("accept_unlicensed", refused["reason"])
+                started = mock.MagicMock(return_value={"job_id": "j"})
+                with mock.patch(
+                    "trainnr.mcp_actions.Actions.ingest_public_log", started
+                ):
+                    self.assertEqual(
+                        ingest_public_log("go2-leg-odometry", accept_unlicensed=True),
+                        {"job_id": "j"},
+                    )
+                self.assertTrue(started.call_args.kwargs["accept_unlicensed"])

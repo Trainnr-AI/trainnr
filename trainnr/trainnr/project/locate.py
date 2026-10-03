@@ -1,9 +1,13 @@
 """Which project, and where its parts are — one answer, overridable, loud.
 
-The same shape as `bundles/locate.py` for robot bundles: an environment
-variable names the project directory, the checkout has a default, and a
-missing manifest is refused with the variable's name in the message
-instead of a stack trace from whatever tried to write into it.
+Projects live in the user's projects home: `$TRAINNR_PROJECTS`, else
+`~/trainnr/projects` — never inside a checkout or a plugin's install
+folder, which an update replaces. The current project is
+`$TRAINNR_PROJECT`, else the one last created or chosen (`use_project`),
+remembered in the projects home's `.current` file; a checkout that still
+has a `projects/default` keeps opening it. With none of those, a tool is
+refused with the two ways out (`create_project`, `use_project`) instead
+of a stack trace from whatever tried to write into a missing directory.
 
 A project is portable: it holds its own recordings, fits, tasks, batches,
 datasets, runs, policies, certificates, deploy manifests and findings.
@@ -20,10 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from trainnr.bundles.hashing import FITS_DIR
-from trainnr.paths import checkout
+from trainnr.paths import checkout, user_home
 from trainnr.project.files import read_json, write_json
 
 PROJECT_ENV = "TRAINNR_PROJECT"
+PROJECTS_ENV = "TRAINNR_PROJECTS"  # the projects home
+CURRENT_FILE = ".current"  # in the projects home: the chosen project's path
+USER_HOME_DIR = "trainnr"  # ~/trainnr/projects
 MANIFEST_FILE = "project.json"
 INDEX_DIR = ".index"
 INDEX_FILE = "project.json"
@@ -180,32 +187,110 @@ class Project:
         return self.root / INDEX_DIR / INDEX_FILE
 
 
+def projects_home() -> Path:
+    """Where projects are created: `$TRAINNR_PROJECTS`, else
+    `<user home>/projects` (`$TRAINNR_HOME`, else ~/trainnr)."""
+    named = os.environ.get(PROJECTS_ENV, "").strip()
+    if named:
+        return Path(named).expanduser().absolute()
+    return user_home() / PROJECTS_DIR_NAME
+
+
+def checkout_projects() -> Path | None:
+    """A checkout's own `projects/`, when it has one: the maintainers'
+    working projects and the committed sample are listed from it too."""
+    folder = checkout() / PROJECTS_DIR_NAME
+    return folder if folder.is_dir() else None
+
+
 def projects_dir() -> Path:
-    """The checkout's `projects/` — the default home."""
-    return checkout() / PROJECTS_DIR_NAME
+    """The projects home (kept under this name for callers that predate it)."""
+    return projects_home()
+
+
+def _is_project(root: Path) -> bool:
+    return (root / MANIFEST_FILE).is_file()
+
+
+def remembered_project() -> Path | None:
+    """The project last created or chosen, when its manifest is still there."""
+    marker = projects_home() / CURRENT_FILE
+    try:
+        text = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    root = Path(text) if text else None
+    return root if root is not None and _is_project(root) else None
+
+
+def remember_project(root: Path) -> None:
+    """Make `root` the current project for every later call that names none."""
+    home = projects_home()
+    home.mkdir(parents=True, exist_ok=True)
+    (home / CURRENT_FILE).write_text(
+        str(Path(root).absolute()) + "\n", encoding="utf-8"
+    )
+
+
+def resolve_project_path(target: str | Path) -> Path:
+    """A project named by the user: an absolute path as given; a bare name
+    or relative path under the projects home, else under a checkout's
+    `projects/` when the project is there."""
+    path = Path(target).expanduser()
+    if path.is_absolute():
+        return path
+    under_home = projects_home() / path
+    if _is_project(under_home):
+        return under_home
+    in_checkout = checkout_projects()
+    if in_checkout is not None and _is_project(in_checkout / path):
+        return in_checkout / path
+    return under_home
+
+
+NO_PROJECT = (
+    "no project is selected: create one with `create_project` (it becomes the "
+    "current project) or choose one with `use_project`; `list_projects` lists "
+    f"them. ${PROJECT_ENV} names one for this process."
+)
 
 
 def current_project() -> Project:
-    """`$TRAINNR_PROJECT`, else `projects/default`; refused by name when
-    the directory has no manifest."""
+    """`$TRAINNR_PROJECT`, else the remembered project, else a checkout's
+    `projects/default`; refused by name when none of them is a project."""
     override = os.environ.get(PROJECT_ENV, "").strip()
-    # absolute: the Studio is spawned with the checkout as its working
-    # directory, so a relative override would point it somewhere else
-    # (measured 2026-09-23: a launch with `../projects/x` never heartbeat);
-    # links are kept as typed (macOS's /var is one) so paths compare as given
-    root = (
-        Path(override).expanduser().absolute()
-        if override
-        else projects_dir() / DEFAULT_PROJECT
-    )
-    project = Project(root)
-    if not project.manifest_path.is_file():
+    if override:
+        # absolute: the Studio is spawned with the checkout as its working
+        # directory, so a relative override would point it somewhere else
+        # (measured 2026-09-23: a launch with `../projects/x` never heartbeat);
+        # links are kept as typed (macOS's /var is one) so paths compare as given
+        root = Path(override).expanduser().absolute()
+        if not _is_project(root):
+            raise FileNotFoundError(
+                f"no project at {root} (no {MANIFEST_FILE}): ${PROJECT_ENV} names "
+                "a directory that is not a project; create it with `create_project`"
+            )
+        return Project(root).use()
+    remembered = remembered_project()
+    if remembered is not None:
+        return Project(remembered).use()
+    in_checkout = checkout_projects()
+    if in_checkout is not None and _is_project(in_checkout / DEFAULT_PROJECT):
+        return Project(in_checkout / DEFAULT_PROJECT).use()
+    raise FileNotFoundError(NO_PROJECT)
+
+
+def use_project(target: str | Path) -> Project:
+    """Choose the current project by name or path; remembered for later
+    calls and later sessions. Refused when the target is not a project."""
+    root = resolve_project_path(target)
+    if not _is_project(root):
         raise FileNotFoundError(
-            f"no project at {root} (no {MANIFEST_FILE}) — set {PROJECT_ENV} to a "
-            f"project directory, or create one with `create_project`"
+            f"no project at {root} (no {MANIFEST_FILE}); `list_projects` lists "
+            "the projects, `create_project` makes one"
         )
-    project.use()
-    return project
+    remember_project(root)
+    return Project(root).use()
 
 
 def create_project(
@@ -234,14 +319,23 @@ def create_project(
 
 
 def list_projects(root: Path | None = None) -> list[Project]:
-    """Every project directory under `projects/` (or `root`), by name."""
-    home = Path(root) if root is not None else projects_dir()
-    if not home.is_dir():
-        return []
-    return sorted(
-        (Project(p) for p in home.iterdir() if (p / MANIFEST_FILE).is_file()),
-        key=lambda p: p.root.name,
-    )
+    """Every project in the projects home and, from a checkout, in its own
+    `projects/` (or every project under `root` when one is named), by
+    name, each directory once."""
+    homes = [Path(root)] if root is not None else [projects_home()]
+    if root is None and (in_checkout := checkout_projects()) is not None:
+        homes.append(in_checkout)
+    seen: set[Path] = set()
+    found: list[Project] = []
+    for home in homes:
+        if not home.is_dir():
+            continue
+        for path in sorted(home.iterdir()):
+            key = path.resolve()
+            if _is_project(path) and key not in seen:
+                seen.add(key)
+                found.append(Project(path))
+    return sorted(found, key=lambda p: p.root.name)
 
 
 NAME_FORBIDDEN = "/\\@"

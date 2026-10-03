@@ -5,11 +5,13 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    labels: ["dependencies"]
     schedule: { interval: weekly }
     groups:
       actions: { patterns: ["*"] }
   - package-ecosystem: uv
     directory: /trainnr
+    labels: ["dependencies", "area: mcp"]
     ignore:
       # The simulator is the measuring instrument: its version changes
       # the numbers the records carry, so it moves by a deliberate commit
@@ -23,6 +25,7 @@ updates:
       python: { patterns: ["*"], update-types: ["minor", "patch"] }
   - package-ecosystem: uv
     directory: /trainnr-mjlab
+    labels: ["dependencies", "area: train"]
     ignore:
       # The simulator is the measuring instrument: its version changes
       # the numbers the records carry, so it moves by a deliberate commit
@@ -36,6 +39,7 @@ updates:
       python: { patterns: ["*"], update-types: ["minor", "patch"] }
   - package-ecosystem: cargo
     directory: /crates/trainnr-studio
+    labels: ["dependencies", "area: studio"]
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     groups:

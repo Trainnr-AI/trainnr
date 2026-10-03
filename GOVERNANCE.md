@@ -10,7 +10,10 @@ the Functional Source License (FSL-1.1-ALv2).
   requires a pull request, green checks and a code owner's approval, and
   only the organisation's admins may bypass it (`tools/github-setup.sh`
   applies these settings and lists who can merge).
-  Today there is one: Prakhar Aggarwal (@aggprakhar). Maintainers are
+  Today there is one, Prakhar Aggarwal (@aggprakhar), so the project's
+  bus factor is one; a second maintainer is wanted, and until there is
+  one the maintainer's own pull requests merge through the admin bypass.
+  Maintainers are
   listed in `.github/CODEOWNERS`; a contributor becomes one by sustained,
   reviewed contributions and the agreement of the existing maintainers.
 - **Contributors** are everyone who opens an issue or a pull request, under
@@ -29,14 +32,33 @@ the Functional Source License (FSL-1.1-ALv2).
 - Disagreements are settled by the maintainers after discussion in the
   issue or pull request; the reasoning is recorded with the decision.
 
-## What is open and what is not
+## Open source and the hosted service
 
-The product repository (`trainnr`: the Python packages, the Studio,
-the CLI, the agent plugin, the robot bundles, the docs and the paper's
-records) is open source. Anything built on top of these packages that is
-not in this repository extends them through the same entry points any
-other package would (`trainnr.mcp_tools`, the task and robot registries);
-nothing in the open packages depends on it.
+Everything in this repository (the Python packages, the Studio, the
+CLI, the agent plugin, the robot bundles, the docs and the paper's
+records) is FSL-1.1-ALv2, and each version becomes Apache-2.0 two years
+after it is made available. A hosted service may be
+built on top of it; if it is, it extends these packages through the same
+public entry points any other package can use (`trainnr.mcp_tools`, the
+task and robot registries), which are part of the public API below.
+Nothing in this repository depends on a hosted service, and nothing here
+requires an account.
+
+The open packages send no telemetry and never phone home. The only
+network connections they make are the ones the user asks for:
+
+- downloading the prebuilt Studio from this repository's GitHub release
+  (`trainnr studio --install`, `launch_studio`, the plugin's session hook);
+- fetching a registered public robot log (`ingest_public_log`) or a public
+  robot asset at a pinned commit (`tools/import-usd.py`, which fetches
+  an Isaac asset by repository and commit);
+- a rented cloud GPU (RunPod's API and its storage), only through the
+  cloud tools, with the user's own key;
+- an openpi policy server the user points an evaluation at;
+- the local Studio (127.0.0.1) receiving the viewer's streams.
+
+The Studio is built without the Rerun viewer's analytics feature
+(`rerun`'s default features are off in `crates/trainnr-studio/Cargo.toml`).
 
 ## Security and conduct
 

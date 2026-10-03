@@ -18,6 +18,11 @@ document that defines it.
 | Word | Meaning | Defined in |
 |---|---|---|
 | identification, fit | Fitting a robot's dynamics from its own telemetry; the fit record carries each parameter with a confidence interval | [28](28-quickstart-identify.md) |
+| fit record | The file an identification writes beside the robot (`robots/<name>/fits/`): each parameter's estimate, interval and verdict, the recording it came from, and the method | [28](28-quickstart-identify.md) |
+| CP95 | The exact 95 % confidence interval on a success rate (Clopper-Pearson), printed as `CP95 [low, high]`; gates read the low end | [32 §3](32-evaluation-layer.md) |
+| survived, tracked | A walk episode survived when the robot did not fall; it tracked when it also followed the commanded velocity within the task's error bound. Success is tracked | [77 §5](77-the-unitree-loop.md) |
+| learnability check | What `accept_task` runs on a walk task: the trainer for two iterations on two environments, which proves the task builds and trains before hours are spent on it | [77 §3](77-the-unitree-loop.md) |
+| g3 | The full walk-training recipe in trainnr-mjlab (`train_walk(agent="g3")`), hours on a GPU; `smoke` is the minutes-long check | [trainnr-mjlab](../trainnr-mjlab/README.md) |
 | pinned / NOT PINNED | A fitted parameter whose interval is narrow enough to use (half-width within a tenth of its allowed range), or not | [26](26-sts3215-synthetic-identifiability.md) |
 | basis | Where a randomization range comes from: `identified` (the fit's interval), `declared` (a stated range around nominal constants), `pinned` (a point) | [paper §4](paper/manuscript.md) |
 | world | The simulator a policy is judged in: the `identified` (fit) world or the `declared` world | [77 §8](77-the-unitree-loop.md) |

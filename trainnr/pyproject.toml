@@ -1,15 +1,35 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "trainnr"
 version = "0.1.0"
-description = "The end-to-end robotics platform, run from your coding agent: identify the robot from its telemetry, generate datasets, train policies by reinforcement or imitation learning, evaluate with exact intervals, gate and deploy, watch the telemetry for drift."
+description = "The physical AI platform for robot learning, run from your coding agent: telemetry, real-to-sim identification, simulation, RL and imitation, evaluation, sim-to-real deployment."
 readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "FSL-1.1-ALv2" }
+requires-python = ">=3.11,<3.14"
+license = "FSL-1.1-ALv2"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Prakhar Aggarwal" }]
+keywords = [
+    "physical-ai", "robotics", "robot-learning", "reinforcement-learning",
+    "imitation-learning", "sim-to-real", "system-identification", "mujoco",
+    "simulation", "telemetry", "mcp",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
 dependencies = [
     "onnx>=1.22.0",
     "onnxruntime>=1.24.3",
@@ -19,7 +39,7 @@ dependencies = [
 ]
 
 # The core is dependency-free on purpose: the statistics and bundle layers
-# must be recomputable anywhere a report is audited — any Python >= 3.10,
+# must be recomputable anywhere a report is audited — any Python >= 3.11,
 # no scipy, no GPU (uv provisions the interpreter). Heavy stages are
 # opt-in extras with their own floors:
 [project.optional-dependencies]
@@ -59,31 +79,17 @@ viz-query = ["rerun-sdk[datafusion]>=0.20"]
 # Captured scenes (docs/78): the visible-surface-to-proxy audit needs Open3D's
 # ray casting; collision proxies from meshes need CoACD (MIT; V-HACD is archived).
 scene = ["open3d>=0.19", "coacd>=1.0"]
-# deploy: the manifest-driven runtime and the sim-to-sim gate run the
-# exported ONNX policy; onnx reads the metadata the exporter attached.
-deploy = ["onnxruntime>=1.20", "onnx>=1.16"]
+# deploy: kept as a name for the commands that pass `--extra deploy`;
+# onnx and onnxruntime are core dependencies (above), because the
+# deployment tools the plugin's server exposes (export, gate, pre-flight)
+# need them with only the sim and mcp extras installed.
+deploy = []
 # The instrument's MCP surface (trainnr/mcp_server.py): bundles, tasks,
 # engines, actuators, runs as queryable tools for any MCP client — the
 # Studio's agent panel first. Official SDK, MIT; v2 is a rework of v1, so
 # the pin holds the major.
 # psutil: the Studio's process liveness (`project/control`), cross-platform.
 mcp = ["mcp~=2.1", "psutil>=5.9"]
-# openpi's own websocket client (trainnr/envs/openpi_policy.py): pi0 /
-# pi0.5 served from their process, evaluated through our env. Pinned to the
-# commit it was read at (docs/e2e-research/43); not on PyPI. Its numpy<2 pin
-# is overridden below - measured working on numpy 2.2 (2026-08-27).
-remote = [
-    "openpi-client @ git+https://github.com/Physical-Intelligence/openpi.git@215abfb217dbac7d5f1273282331b9b1866c0479#subdirectory=packages/openpi-client",
-]
-# dds: the second gate - Unitree's own simulator and controller (docs/77 §7).
-# cyclonedds builds against the C library unitree_sdk2 installs under
-# /usr/local (`CYCLONEDDS_HOME=/usr/local uv sync --extra dds`); the SDK
-# is not on PyPI, hence the git source; evdev is the virtual gamepad.
-dds = [
-    "cyclonedds>=0.10.2",
-    "evdev>=1.9.3",
-    "unitree-sdk2py",
-]
 # usd: native USD assets (Isaac Sim / Omniverse robots) read by Newton's
 # importer and bridged to an MjSpec through its MuJoCo solver
 # (docs/e2e-research/77). Newton's own `sim` extra is NOT taken: the
@@ -137,8 +143,11 @@ usd = "trainnr.robot.usd_import"
 drivetrain-ratio = "trainnr.robot.methods:DrivetrainRatio"
 
 [project.urls]
-Homepage = "https://trainnr.ai"
+Homepage = "https://github.com/Trainnr-AI/trainnr"
 Repository = "https://github.com/Trainnr-AI/trainnr"
+Documentation = "https://github.com/Trainnr-AI/trainnr/tree/main/docs"
+Issues = "https://github.com/Trainnr-AI/trainnr/issues"
+Changelog = "https://github.com/Trainnr-AI/trainnr/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["trainnr*"]
@@ -152,6 +161,27 @@ trainnr = ["py.typed"]
 # the crates, and the pre-commit gate runs it the same way. The rules: no
 # unused anything, no shadowed builtins, modern syntax for the real floor,
 # complexity kept visible.
+# Not published with the package: their sources are a git URL (PyPI
+# refuses those in a distribution's metadata) and Unitree's SDK, which is
+# not on PyPI. From a checkout: `uv sync --group remote` / `--group dds`.
+[dependency-groups]
+# openpi's own websocket client (trainnr/envs/openpi_policy.py): pi0 /
+# pi0.5 served from their process, evaluated through our env. Pinned to the
+# commit it was read at (docs/e2e-research/43). Its numpy<2 pin is
+# overridden below - measured working on numpy 2.2 (2026-08-27).
+remote = [
+    "openpi-client @ git+https://github.com/Physical-Intelligence/openpi.git@215abfb217dbac7d5f1273282331b9b1866c0479#subdirectory=packages/openpi-client",
+]
+# dds: the second gate - Unitree's own simulator and controller (docs/77 §7).
+# cyclonedds builds against the C library unitree_sdk2 installs under
+# /usr/local (`CYCLONEDDS_HOME=/usr/local uv sync --group dds`); the SDK
+# is not on PyPI, hence the git source; evdev is the virtual gamepad.
+dds = [
+    "cyclonedds>=0.10.2",
+    "evdev>=1.9.3",
+    "unitree-sdk2py",
+]
+
 [tool.uv]
 # openpi-client declares numpy<2 (its pyproject, 2026-08-27); the client's
 # msgpack-numpy codec round-trips on numpy 2.2 (measured) and the train

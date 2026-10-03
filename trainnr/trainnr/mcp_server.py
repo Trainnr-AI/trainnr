@@ -31,8 +31,10 @@ no MCP import anywhere near them — the suite tests them directly and the
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import re
+import sys
 import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -290,9 +292,13 @@ def onboard_robot(
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.robot.onboarding import ACCEPT_CHANGES  # noqa: PLC0415
 
-    into: Path | None = None
-    with contextlib.suppress(FileNotFoundError):
-        into = current_project().folder(ROBOTS_FOLDER)
+    # A robot lands in the open project; with none open the call is
+    # refused rather than written into the shared library, which lives in
+    # the checkout or the plugin's install folder.
+    try:
+        into: Path | None = current_project().folder(ROBOTS_FOLDER)
+    except FileNotFoundError as why:
+        return refusal(str(why))
     actions = Actions(JobManager(_jobs_root()))
     options: dict[str, Any] = {}
     if variants is not None:
@@ -1266,7 +1272,11 @@ def _jobs_root() -> Path:
 
 
 def _runs_root(runs_root: Path | None) -> Path:
-    return runs_root if runs_root is not None else Path(__file__).parents[1] / "runs"
+    """The legacy runs folder of a checkout (`<checkout>/trainnr/runs`),
+    never a path inside an installed package."""
+    from trainnr.paths import checkout  # noqa: PLC0415
+
+    return runs_root if runs_root is not None else checkout() / "trainnr" / "runs"
 
 
 # Where a run keeps its per-episode rows: beside the manifest (the
@@ -1412,13 +1422,22 @@ def refresh_records(project: Any) -> None:
 
 
 def list_project_dirs() -> list[dict[str, Any]]:
-    """Every project under `projects/`: name, root, and its loop progress
+    """Every project in the projects home (and a checkout's `projects/`):
+    name, root, whether it is the current one, and its loop progress
     (stages proved of eight) from its index when one exists."""
-    from trainnr.project import list_projects  # noqa: PLC0415
+    from trainnr.project import current_project, list_projects  # noqa: PLC0415
 
+    try:
+        current: Path | None = current_project().root
+    except FileNotFoundError:
+        current = None
     listed = []
     for project in list_projects():
-        entry: dict[str, Any] = {"name": project.name, "root": str(project.root)}
+        entry: dict[str, Any] = {
+            "name": project.name,
+            "root": str(project.root),
+            "current": project.root == current,
+        }
         if project.index_path.is_file():
             raw = json.loads(project.index_path.read_text())
             entry["stages_proved"] = sum(
@@ -1582,7 +1601,7 @@ def list_public_logs() -> list[dict[str, Any]]:
 
 
 def ingest_public_log(
-    name: str, recording_name: str | None = None
+    name: str, recording_name: str | None = None, accept_unlicensed: bool = False
 ) -> JobHandle | Refusal:
     """Fetch a registered public log (every piece checked against its byte
     count and digest, cached under runs/public-logs) and ingest it into
@@ -1592,7 +1611,9 @@ def ingest_public_log(
     tens to hundreds of megabytes); refused here, by name, when no
     project is open or the name is not in the registry; the job refuses a
     download that differs from the registry, a log no adapter reads and a
-    network that is not there."""
+    network that is not there. Data whose publisher states no licence is
+    refused, naming its licence state, unless `accept_unlicensed` says the
+    user's use is allowed."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
@@ -1600,11 +1621,20 @@ def ingest_public_log(
 
     try:
         project = current_project()
-        public_logs.resolve(name)
+        entry = public_logs.resolve(name)
     except (FileNotFoundError, KeyError) as why:
         return refusal(_reason(why))
+    if (
+        not public_logs.licence_stated(entry)
+        and not accept_unlicensed
+        and public_logs.locate(name) is None
+    ):
+        return refusal(public_logs.unlicensed_reason(entry))
     return Actions(JobManager(_jobs_root())).ingest_public_log(
-        name, project=str(project.root), recording_name=recording_name
+        name,
+        project=str(project.root),
+        recording_name=recording_name,
+        accept_unlicensed=accept_unlicensed,
     )
 
 
@@ -2586,17 +2616,142 @@ def create_project_dir(
     path: str, name: str, description: str = "", loop: str = ""
 ) -> dict[str, Any] | Refusal:
     """Make a project directory: the manifest and one folder per artifact
-    kind. `loop` says how its policy learns — `imitation` (from a
-    dataset) or `reinforcement` (from its own rollouts; the dataset stage
-    is then marked not needed) — or is left unset and read off the runs.
-    Never overwrites an existing project."""
-    from trainnr.project import create_project  # noqa: PLC0415
+    kind. A bare name or relative `path` lands in the projects home
+    (`$TRAINNR_PROJECTS`, else ~/trainnr/projects); an absolute one is
+    used as given. The new project becomes the current one. `loop` says
+    how its policy learns — `imitation` (from a dataset) or
+    `reinforcement` (from its own rollouts; the dataset stage is then
+    marked not needed) — or is left unset and read off the runs. Never
+    overwrites an existing project."""
+    from trainnr.project import create_project, remember_project  # noqa: PLC0415
+    from trainnr.project.locate import projects_home  # noqa: PLC0415
 
+    target = Path(path).expanduser()
+    root = target if target.is_absolute() else projects_home() / target
     try:
-        project = create_project(Path(path), name, description, loop=loop)
+        project = create_project(root, name, description, loop=loop)
     except (FileExistsError, ValueError) as why:
         return refusal(str(why))
-    return {"status": DONE, "root": str(project.root), "name": project.name}
+    remember_project(project.root)
+    return {
+        "status": DONE,
+        "root": str(project.root),
+        "name": project.name,
+        "current": True,
+    }
+
+
+def use_project(project: str) -> dict[str, Any] | Refusal:
+    """Choose the current project by name or path: later tool calls, and
+    later sessions, act on it until another is chosen."""
+    from trainnr.project import use_project as choose  # noqa: PLC0415
+
+    try:
+        chosen = choose(project)
+    except FileNotFoundError as why:
+        return refusal(str(why))
+    return {"status": DONE, "root": str(chosen.root), "name": chosen.name}
+
+
+# What every tool's reply may be relied on for: read-only tools change no
+# project state (a describe may refresh the index cache it reads), and
+# destructive ones stop or replace something already running or made.
+READ_ONLY_TOOLS = frozenset(
+    {
+        "capture_status",
+        "describe_actuator",
+        "describe_actuator_bundle",
+        "describe_actuator_bundles",
+        "describe_actuators",
+        "describe_bundle",
+        "describe_bundles",
+        "describe_datasheet",
+        "describe_engines",
+        "describe_eval",
+        "describe_identification",
+        "describe_project",
+        "describe_runs",
+        "describe_scene",
+        "describe_studio",
+        "describe_task",
+        "describe_task_families",
+        "describe_tasks",
+        "describe_viewer_recording",
+        "friction_curve",
+        "job_status",
+        "list_capture_sources",
+        "list_eval_records",
+        "list_gate_runtimes",
+        "list_identification_methods",
+        "list_jobs",
+        "list_ledger_findings",
+        "list_projects",
+        "list_public_logs",
+        "list_robot_adapters",
+        "read_studio_events",
+    }
+)
+DESTRUCTIVE_TOOLS = frozenset(
+    {"cancel_job", "stop_deployment", "quit_studio", "stage_deployment"}
+)
+# Failures a tool reports as a refusal with its own sentence: the caller
+# named something that is not there, or not allowed, or not valid.
+REFUSABLE = (FileNotFoundError, KeyError, ValueError, PermissionError)
+
+
+def _guarded(fn: Any) -> Any:
+    """`fn` with its failures reaching the agent: the MCP SDK replaces any
+    exception it did not expect with "Error executing tool <name>" and
+    drops the text, so a missing project or an unknown name read as a
+    crash (review, 2026-10-03). A refusable failure comes back as the
+    tool's refusal when its reply type has one, else as a ToolError
+    carrying the sentence; anything else as a ToolError naming its type."""
+    from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
+    returns_refusal = "Refusal" in str(fn.__annotations__.get("return", ""))
+
+    @functools.wraps(fn)
+    def call(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except ToolError:
+            raise
+        except REFUSABLE as exc:
+            reason = _reason(exc) or type(exc).__name__
+            if returns_refusal:
+                return refusal(reason)
+            raise ToolError(reason) from exc
+        except Exception as exc:
+            raise ToolError(
+                f"{type(exc).__name__}: {_reason(exc) or 'no message'}"
+            ) from exc
+
+    return call
+
+
+def _guard_tools(server: Any) -> None:
+    """Every tool registered on `server` from here on, the built-ins and
+    the plugins' alike, is guarded and annotated (read-only, destructive)."""
+    from mcp.types import ToolAnnotations  # noqa: PLC0415
+
+    register = server.tool
+
+    def tool(name: str | None = None, **kwargs: Any) -> Any:
+        def apply(fn: Any) -> Any:
+            tool_name = name or fn.__name__
+            kwargs.setdefault(
+                "annotations",
+                ToolAnnotations(
+                    read_only_hint=tool_name in READ_ONLY_TOOLS,
+                    destructive_hint=tool_name in DESTRUCTIVE_TOOLS,
+                ),
+            )
+            register(name=tool_name, **kwargs)(_guarded(fn))
+            return fn
+
+        return apply
+
+    server.tool = tool
 
 
 # A registration list: one statement per door, read top to bottom.
@@ -2604,29 +2759,30 @@ def build_server() -> Any:  # noqa: PLR0915
     """The MCP server over the query functions. Needs the `mcp` extra."""
     from mcp.server import MCPServer  # noqa: PLC0415 - mcp extra
 
+    from trainnr import __version__  # noqa: PLC0415
+
     server = MCPServer(
+        # The name is bound by clients' MCP configuration entries.
         name="trainnr",
-        # The name is bound by clients' .mcp.json entries; it changes with
-        # the S3 rename (docs/70 §1), not here.
+        version=__version__,
         instructions=(
-            "The instrument's doors: describe (robot bundles hash-stamped "
-            "with fit records and their honesty verdicts, the provenance-"
-            "gated actuator library, the task and physics-engine registries, "
-            "runs, evaluations, projects), act (onboard a robot, ingest or "
-            "capture telemetry, identify, create and accept a task, press "
-            "demonstrations, train, evaluate, export, gate, check drift, "
-            "capture a scene — long work returns a job handle), and drive "
-            "the Studio (open, show, compare, time, simulate, screenshot). "
-            "Every answer comes through the same code paths the pipeline "
-            "itself uses; a refusal names its reason."
+            "trainnr's tools for robot learning. Start with create_project "
+            "(or use_project); then onboard a robot, ingest or capture its "
+            "telemetry, identify its dynamics, declare and accept a task, "
+            "generate demonstrations, train, evaluate, export, gate, run "
+            "pre-flight and check drift. Describe tools read what exists; "
+            "long work returns a job handle (job_status, cancel_job); the "
+            "Studio tools drive the desktop app. A refused call says why."
         ),
     )
+    _guard_tools(server)
     server.tool(description="Every robot bundle: name@hash, file census")(
         describe_bundles
     )
-    server.tool(description="One bundle in full: profile, fit records, SPREAD verdict")(
-        describe_bundle
-    )
+    server.tool(
+        description="One robot bundle in full: its model census, its fit records, and "
+        "whether repeated fits agree."
+    )(describe_bundle)
     server.tool(description="The actuator library: servos, tiers, provenance")(
         describe_actuators
     )
@@ -2691,7 +2847,8 @@ def build_server() -> Any:  # noqa: PLR0915
     )(describe_project)
     server.tool(
         name="list_projects",
-        description="Every project under projects/: name, root, stages proved, count.",
+        description="Every project (the projects home, ~/trainnr/projects by "
+        "default): name, root, whether it is current, stages proved.",
     )(list_project_dirs)
     server.tool(description="Every source format a recording can enter through.")(
         list_robot_adapters
@@ -2706,9 +2863,10 @@ def build_server() -> Any:  # noqa: PLR0915
         "options, and whether it runs on this machine."
     )(list_capture_sources)
     server.tool(
-        description="Record a robot's telemetry live into the project: udp (the "
-        "rig) or dds (Unitree's rt/lowstate + rt/lowcmd as one recording, the "
-        "robot or their simulator); stop_capture ingests it."
+        description="Record a robot's telemetry live into the project, over UDP or "
+        "Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from "
+        "the robot or its simulator); stop_capture saves it as a "
+        "recording."
     )(start_capture)
     server.tool(
         description="Stop the project's listener and ingest the capture as a stamped "
@@ -2753,16 +2911,16 @@ def build_server() -> Any:  # noqa: PLR0915
         "series' count, min, max and last value."
     )(describe_viewer_recording)
     server.tool(
-        description="Bring a captured scene into the project (a Neverwhere benchmark "
-        "scene folder today): the splat in the world frame, the collision proxy, the "
-        "visible-surface-to-proxy gap measured, the floor's declared friction with its "
-        "span. Refuses a folder that is not a scene."
+        description="Bring a captured scene folder into the project: the Gaussian "
+        "splat placed in the world frame, the collision proxy, the gap "
+        "between what is seen and what is touched, and the floor's "
+        "friction."
     )(import_scene)
     server.tool(
-        description="Capture a scene from a phone video or a folder of frames: ffmpeg, "
-        "COLMAP (poses), Brush (the splat), the floor fitted to z=0, the proxy as "
-        "the visible surface, the gap measured, friction recorded as declared. A "
-        "job of minutes to an hour; refuses a missing tool by name."
+        description="Turn a phone video or a folder of frames into a scene: frames, "
+        "camera poses (COLMAP), a Gaussian splat, the floor at z=0, a "
+        "collision proxy and the measured gap. A job of minutes to an "
+        "hour."
     )(capture_scene)
     server.tool(
         description="A captured scene's record: source, capture, the tool chain with "
@@ -2771,35 +2929,31 @@ def build_server() -> Any:  # noqa: PLR0915
         "declared with a span)."
     )(describe_scene)
     server.tool(
-        description="Put a deployment on a captured scene as a new deployment: the "
-        "plane floor replaced by the scene's collision proxy in convex parts with "
-        "its declared friction, the robot started on the scene's course, cameras "
-        "added for the splat renderer. gate_deployment then judges the policy there."
+        description="Copy a deployment onto a captured scene as a new deployment: the "
+        "flat floor replaced by the scene's collision proxy, the robot "
+        "placed on the scene's course. gate_deployment then judges it "
+        "there."
     )(stage_deployment)
     server.tool(
-        description="The perturbation assay on a captured scene: the deployment "
-        "staged nine times (nominal, ±20 mm per axis, ±5° yaw about the start) "
-        "and gated on each with one seed; the success cliff that sets a task's "
-        "collision tolerance and span. A job; assay.json on the nominal stage."
+        description="Test how a staged deployment tolerates scene error: it is gated "
+        "nine times with the terrain shifted ±20 mm per axis and turned "
+        "±5°, and the drop in success is reported. A job."
     )(assay_deployment)
     server.tool(
-        description="Which parameter would break this policy first: a passing "
-        "plane gate re-run with one dynamics knob turned at a time up its ladder "
-        "(latency, friction, payload, kp, kd, encoder noise, tilt, pushes); the "
-        "cliff per knob against the certificate's lower bound, the knobs ranked, "
-        "the fall pictured. A job; attribution.json beside the manifest."
+        description="Find which parameter breaks a policy first: a passing gate is "
+        "re-run with one dynamics parameter pushed at a time (latency, "
+        "friction, payload, gains, noise, slope, pushes), ranked by where "
+        "it fails. A job."
     )(attribute_deployment)
     server.tool(
-        description="Pre-flight before the first tick on a robot: policy widths, "
-        "joint order, gains (scene and Unitree's YAML), a dry rollout's targets "
-        "and torques against ranges, compute per tick, the robot's state against "
-        "the SDK's watchdogs; then the ramp-in and the stops measured. runtime "
-        "'dds' reads Unitree's simulator. A job; preflight.json beside the manifest."
+        description="Check a deployment before the first tick on a robot: joint "
+        "order, gains, a dry run's targets and torques against limits, "
+        "compute per tick, the robot's state, then the ramp-in and stops "
+        "measured. A job."
     )(preflight_deployment)
     server.tool(
-        description="The operator's stop: a STOP file beside the deployment's "
-        "manifest that a guarded run answers with the soft stop (gains blended "
-        "to damping, never zeroed)."
+        description="Stop a running deployment: writes a STOP file that a guarded run "
+        "answers with a soft stop (gains blended to damping, never cut)."
     )(stop_deployment)
     server.tool(
         description="Drift monitoring: identify fresh telemetry (a recording, by "
@@ -2808,14 +2962,18 @@ def build_server() -> Any:  # noqa: PLR0915
         "and recommending re-identification."
     )(check_drift)
     server.tool(
-        description="A robot's fit records: parameters, intervals, identified or not, "
-        "anchors, the cross-run spread."
+        description="A robot's fit records: each parameter's estimate and interval, "
+        "whether it is identified, and how repeated fits agree."
     )(describe_identification)
     server.tool(
         name="create_project",
-        description="Make a project directory with its manifest and one folder "
-        "per artifact kind; never overwrites.",
+        description="Make a project (a bare name lands in ~/trainnr/projects) "
+        "and make it the current one; never overwrites an existing project.",
     )(create_project_dir)
+    server.tool(
+        description="Choose the current project by name or path; later calls "
+        "and later sessions act on it."
+    )(use_project)
 
     # The Studio's control surface: every door a file under <project>/.index
     # (commands in, state and events out), so the agent drives the window
@@ -2896,12 +3054,10 @@ def build_server() -> Any:  # noqa: PLR0915
     actions = Actions(JobManager(_jobs_root()))
 
     server.tool(
-        description="Export a trained walk policy for deployment: ONNX with "
-        "normalization folded in, a manifest read from the built environment "
-        "(joint and actuator orders, gains, home pose, action scale, ordered "
-        "observations, control rate), the trained scene as MJCF; cites the "
-        "checkpoint's newest evaluation and refuses one that has none unless "
-        "unevaluated=True. Job handle."
+        description="Export a trained walk policy: ONNX with normalization folded in, "
+        "a manifest of joint orders, gains, observations and control "
+        "rate, and the scene as MJCF. Cites the checkpoint's evaluation. "
+        "A job."
     )(export_deployment)
     server.tool(
         description="The sim-to-sim gate: drive the exported policy through its "
@@ -2931,19 +3087,18 @@ def build_server() -> Any:  # noqa: PLR0915
         "successful episodes are kept (DR draws recorded). Returns a job handle."
     )(actions.generate_kitting_demos)
     server.tool(
-        description="Augment seed demonstrations (device filters, CPU verifies, "
-        "success criterion gates). Needs the GPU box. Returns a job handle."
+        description="Multiply seed demonstrations under randomization: candidates "
+        "generated on the GPU, replayed on the CPU, kept by the task's "
+        "success criterion. Needs a CUDA GPU. Returns a job handle."
     )(actions.multiply_demos)
     server.tool(
         description="The whole chain: generate -> dataset -> train -> paired "
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk policy through trainnr-mjlab on a declared walk "
-        "(task) "
-        "or a registered walk family's robot (describe_task_families); name the "
-        "experiment to archive it in the project. agent=smoke is minutes; agent=g3 "
-        "is the flagship recipe. Job handle."
+        description="Train a walk policy with trainnr-mjlab on a declared walk task "
+        "or a registered robot. agent=smoke runs in minutes; agent=g3 is "
+        "the full walk-training recipe (hours on a GPU). Job handle."
     )(train_walk)
     server.tool(
         description="Evaluate a walk policy: paired episodes, exact confidence "
@@ -2961,22 +3116,20 @@ def build_server() -> Any:  # noqa: PLR0915
         "Studio, a per-term summary written beside the task. Job handle."
     )(preview_rewards)
     server.tool(
-        description="The RL teacher generates demonstrations (docs/66 D2): the walk "
-        "checkpoint rolls out, keepers become a stamped batch with chase-camera "
-        "frames, discards a failures.jsonl. Job handle."
+        description="Generate demonstrations from a trained walk policy: its rollouts "
+        "that succeed become a stamped batch with camera frames; failures "
+        "are logged. Job handle."
     )(actions.generate_walk_demos)
     server.tool(
-        description="The planner policy generates demonstrations (docs/66 D3) on a "
-        "task from the registry: beats written from the seated scene, executed by "
-        "chained IK, kept by the task's success criterion, streamed to the Studio. "
-        "Job handle."
+        description="Generate demonstrations with a motion planner on a registered "
+        "task: waypoints solved by inverse kinematics, kept by the task's "
+        "success criterion, streamed to the Studio. Job handle."
     )(actions.generate_planned_demos)
     server.tool(
-        description="Onboard a robot: its MJCF file (the directory's meshes and "
-        "includes ride along) or a USD file read by Newton becomes a "
-        "hash-stamped bundle under robots/, compiled once as the honesty "
-        "check; the reply's `shape` census names the collision geoms, sites "
-        "and trunk a trainer will look for."
+        description="Add a robot from its MJCF file (meshes and includes come along) "
+        "or a USD file: a hash-stamped bundle, compiled once to check it "
+        "loads; the reply lists the collision geoms, sites and trunk a "
+        "trainer needs."
     )(onboard_robot)
     server.tool(description="A job's state and log tail")(actions.job_status)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
@@ -2985,11 +3138,11 @@ def build_server() -> Any:  # noqa: PLR0915
     return server
 
 
-# The extension seam for tools (docs/83): an installed package names a
-# callable `register(server)` under this entry-point group and it runs
-# here, after the built-ins, on the same server. The cloud package adds
-# its tools this way instead of forking the server; a failure names the
-# plugin and re-raises (`trainnr.plugins.load_entries`).
+# The extension seam for tools: an installed package names a callable
+# `register(server)` under this entry-point group and it runs here, after
+# the built-ins, on the same server. A hosted service adds its tools this
+# way instead of forking the server; a plugin that fails is named on
+# stderr and skipped, so the built-in tools stay available.
 TOOL_PLUGIN_GROUP = "trainnr.mcp_tools"
 
 
@@ -3002,10 +3155,13 @@ def register_plugin_tools(server: Any) -> list[str]:
     for entry in entry_points(group=TOOL_PLUGIN_GROUP):
         try:
             entry.load()(server)
-        except Exception as exc:
-            raise RuntimeError(
-                f"MCP tool plugin {entry.name!r} ({entry.value}) failed: {exc}"
-            ) from exc
+        except Exception as exc:  # one broken plugin never takes the server down
+            print(
+                f"trainnr: MCP tool plugin {entry.name!r} ({entry.value}) failed "
+                f"and was skipped: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            continue
         names.append(entry.name)
     return names
 

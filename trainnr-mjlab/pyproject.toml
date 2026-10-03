@@ -14,10 +14,22 @@
 [project]
 name = "trainnr-mjlab"
 version = "0.1.0"
-description = "Identified actuator physics for mjlab: BAM's law from certified bundles, with refusals"
+description = "The mjlab trainer for trainnr: identified actuator physics (BAM) as mjlab actuators, randomization from measured intervals, and a linter that refuses silent no-ops."
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = { text = "FSL-1.1-ALv2" }
+license = "FSL-1.1-ALv2"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Prakhar Aggarwal" }]
+keywords = ["physical-ai", "robotics", "reinforcement-learning", "mjlab", "mujoco", "sim-to-real", "actuators"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     # The exact minor: the port's whole reason is owning this pin.
     "mjlab==1.6.0",
@@ -38,8 +50,11 @@ bam = ["better-actuator-models==1.0.2"]
 viz = ["rerun-sdk==0.36.*"]
 
 [project.urls]
-Homepage = "https://trainnr.ai"
+Homepage = "https://github.com/Trainnr-AI/trainnr"
 Repository = "https://github.com/Trainnr-AI/trainnr"
+Documentation = "https://github.com/Trainnr-AI/trainnr/tree/main/docs"
+Issues = "https://github.com/Trainnr-AI/trainnr/issues"
+Changelog = "https://github.com/Trainnr-AI/trainnr/blob/main/CHANGELOG.md"
 
 [tool.uv.sources]
 trainnr = { path = "../trainnr", editable = true }
@@ -50,10 +65,14 @@ trainnr = { path = "../trainnr", editable = true }
 # brings the Gaussian-splat ray tracer the scene loop renders with. The
 # override moves both ahead of mjlab's pins; every walk certificate from
 # here names the new instrument, and the old ones keep theirs.
+# Under pip there is no override: mjlab 1.6.0 declares mujoco~=3.11.0, so
+# a pip install gets the 3.11 engine; the walk certificates name 3.13.0,
+# which uv (this lock) installs. A hard 3.13.0 requirement here would make
+# the package unresolvable until mjlab releases against 3.13.
 override-dependencies = ["mujoco==3.13.0", "mujoco-warp==3.13.0"]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

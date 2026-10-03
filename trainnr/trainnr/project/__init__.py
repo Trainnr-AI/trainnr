@@ -23,14 +23,19 @@ from trainnr.project.index import ProjectIndex, index_project, write_index
 from trainnr.project.kinds import Kind, detect, stamp_kind
 from trainnr.project.locate import (
     PROJECT_ENV,
+    PROJECTS_ENV,
     Project,
     create_project,
     current_project,
     list_projects,
+    projects_home,
+    remember_project,
+    use_project,
 )
 from trainnr.project.task_ref import write_task_reference
 
 __all__ = [
+    "PROJECTS_ENV",
     "PROJECT_ENV",
     "Kind",
     "Project",
@@ -40,7 +45,10 @@ __all__ = [
     "detect",
     "index_project",
     "list_projects",
+    "projects_home",
+    "remember_project",
     "stamp_kind",
+    "use_project",
     "write_index",
     "write_task_reference",
 ]

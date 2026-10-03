@@ -171,6 +171,31 @@ class LicenceAndPlugin(unittest.TestCase):
             package.write_text("Attribution 4.0 International\n")
             self.assertEqual(find_license(asset), (package, "CC-BY-4.0"))
 
+    def test_a_dual_licensed_tree_yields_every_licence_nearest_first(self) -> None:
+        # robotiq/isaacsim_assets: NVIDIA's CC-BY beside the USD, Robotiq's
+        # BSD-3 at the repository root; both apply (review 2026-10-03).
+        from trainnr.robot.asset_fetch import MARKER_FILE  # noqa: PLC0415
+        from trainnr.robot.usd_import import (  # noqa: PLC0415
+            find_licenses,
+            license_expression,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            slot = Path(tmp) / "cache" / "robotiq-assets-6d992b6"
+            asset = slot / "grippers" / "g" / "g.usda"
+            asset.parent.mkdir(parents=True)
+            asset.write_text("#usda 1.0\n")
+            (slot / MARKER_FILE).write_text("{}")
+            root = slot / "LICENSE"
+            root.write_text("BSD 3-Clause License\n\nCopyright (c) 2026, ROBOTIQ\n")
+            package = asset.parent / "PACKAGE-LICENSES" / "LICENSE"
+            package.parent.mkdir()
+            package.write_text("Attribution 4.0 International\n")
+            found = find_licenses(asset)
+            self.assertEqual(found, [(package, "CC-BY-4.0"), (root, "BSD-3-Clause")])
+            self.assertEqual(license_expression(found), "CC-BY-4.0 AND BSD-3-Clause")
+            self.assertEqual(license_expression([]), "unrecorded")
+
     def test_without_the_schema_plugin_no_stage_opens(self) -> None:
         from unittest import mock  # noqa: PLC0415
 

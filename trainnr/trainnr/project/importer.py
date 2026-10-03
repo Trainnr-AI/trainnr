@@ -44,7 +44,12 @@ LEDGER_DIR = Path("docs") / "findings"  # the repo's findings ledger
 
 
 def ledger() -> Path:
-    return checkout() / LEDGER_DIR
+    """A checkout's findings ledger (`docs/findings`), else the user's own
+    (`<user home>/findings`) when the package runs outside a checkout."""
+    from trainnr.paths import user_home  # noqa: PLC0415
+
+    in_checkout = checkout() / LEDGER_DIR
+    return in_checkout if in_checkout.is_dir() else user_home() / "findings"
 
 
 def _checkpoint(train: Path) -> Path:

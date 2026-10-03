@@ -28,16 +28,30 @@ from trainnr.project.locate import Project  # noqa: E402
 from trainnr.robots import public_logs  # noqa: E402
 
 
+def _say(line: str) -> None:
+    print(line, file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="verb", required=True)
     sub.add_parser("list", help="every registered log and whether it is fetched")
     fetch = sub.add_parser("fetch", help="download, check and unpack one log")
     fetch.add_argument("name")
+    fetch.add_argument(
+        "--accept-unlicensed",
+        action="store_true",
+        help="download data whose publisher states no licence",
+    )
     ingest_p = sub.add_parser("ingest", help="fetch if needed, then ingest")
     ingest_p.add_argument("name")
     ingest_p.add_argument("--project", required=True, type=Path)
     ingest_p.add_argument("--as", dest="recording", default=None)
+    ingest_p.add_argument(
+        "--accept-unlicensed",
+        action="store_true",
+        help="download data whose publisher states no licence",
+    )
     args = parser.parse_args()
     if args.verb == "list":
         print(json.dumps(public_logs.listing(), indent=1))
@@ -45,12 +59,17 @@ def main() -> int:
     try:
         entry = public_logs.resolve(args.name)
         if args.verb == "fetch":
-            print(f"{entry.name} -> {public_logs.fetch(args.name)}")
+            got = public_logs.fetch(
+                args.name, accept_unlicensed=args.accept_unlicensed, say=_say
+            )
+            print(f"{entry.name} -> {got}")
             return 0
         project = Project(args.project.resolve()).use()
         with running(project.root, name=args.recording or entry.name) as run:
             run.stage(f"fetching {entry.name} (size and digest checked)")
-            source = public_logs.fetch(args.name)
+            source = public_logs.fetch(
+                args.name, accept_unlicensed=args.accept_unlicensed, say=_say
+            )
             run.stage(f"decoding {entry.name} with {entry.adapter}")
             out = ingest(
                 project,

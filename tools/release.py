@@ -9,8 +9,8 @@ The source of truth is `trainnr/pyproject.toml`. The Python packages, the
 Studio, the Claude Code plugin and its marketplace entry, the MCP Registry
 entry and the citation file each carry a copy, because each is read by a
 different tool; `check` fails the build when any copy disagrees, and
-`bump` rewrites them all and leaves the CHANGELOG's *Unreleased* heading
-for the release commit to rename.
+`bump` rewrites them all and, for a release (not a pre-release), dates
+the CHANGELOG's *Unreleased* section under a fresh one.
 
 The version follows Semantic Versioning with the pre-1.0 rule: a minor
 bump (0.2.0) may break the public API, a patch bump (0.1.1) never does.
@@ -21,6 +21,7 @@ paths (GOVERNANCE.md).
 
 from __future__ import annotations
 
+import datetime
 import re
 import sys
 from dataclasses import dataclass
@@ -29,12 +30,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SOURCE = REPO / "trainnr" / "pyproject.toml"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
+CHANGELOG = REPO / "CHANGELOG.md"
+UNRELEASED = "## [Unreleased]"
 
 
 @dataclass(frozen=True)
 class Copy:
     """One place the version is written: a file and the pattern around it.
-    The pattern's single group is the version; `count` copies must match."""
+    The pattern's single group is the version; at least `count` copies
+    must be there (an entry such as server.json's package block may come
+    and go), and every copy found must agree."""
 
     path: str
     pattern: str
@@ -51,7 +56,7 @@ COPIES: tuple[Copy, ...] = (
     Copy("crates/trainnr-studio/Cargo.toml", r'(?m)^version = "([^"]+)"'),
     Copy(".claude-plugin/plugin.json", r'(?m)^  "version": "([^"]+)"'),
     Copy(".claude-plugin/marketplace.json", r'"version": "([^"]+)"', count=2),
-    Copy("server.json", r'"version": "([^"]+)"', count=2),
+    Copy("server.json", r'"version": "([^"]+)"'),
     Copy("CITATION.cff", r"(?m)^version: (\S+)$"),
 )
 
@@ -73,7 +78,7 @@ def check() -> int:
     problems = []
     for copy in COPIES:
         versions = found(copy)
-        if len(versions) != copy.count:
+        if len(versions) < copy.count:
             problems.append(
                 f"{copy.path}: expected {copy.count} version(s), found {len(versions)}"
             )
@@ -91,6 +96,21 @@ def check() -> int:
     return 0
 
 
+def date_changelog(new: str) -> str:
+    """A release (not a pre-release) closes the changelog's *Unreleased*
+    section: it becomes `## [X.Y.Z] - YYYY-MM-DD` under a fresh, empty
+    *Unreleased* heading, so the release notes are that section."""
+    if "-" in new:
+        return "a pre-release: the changelog's Unreleased section stays open"
+    text = CHANGELOG.read_text(encoding="utf-8")
+    if UNRELEASED not in text:
+        return "CHANGELOG.md has no Unreleased section; nothing dated"
+    today = datetime.date.today().isoformat()
+    dated = f"{UNRELEASED}\n\n## [{new}] - {today}"
+    CHANGELOG.write_text(text.replace(UNRELEASED, dated, 1), encoding="utf-8")
+    return f"CHANGELOG.md: Unreleased is now [{new}] - {today}"
+
+
 def bump(new: str) -> int:
     if not SEMVER.match(new):
         print(f"not a semantic version: {new!r}")
@@ -104,7 +124,7 @@ def bump(new: str) -> int:
             return whole[:start] + new + whole[start + len(match.group(1)) :]
 
         updated, n = re.subn(copy.pattern, put, text)
-        if n != copy.count:
+        if n < copy.count:
             print(
                 f"{copy.path}: expected {copy.count} version(s), found {n}; "
                 "nothing written"
@@ -115,6 +135,7 @@ def bump(new: str) -> int:
         f"version {new} written to {len(COPIES)} files; the Studio's Cargo.lock "
         "updates on its next build (`cargo build`), the uv lockfiles on `uv lock`"
     )
+    print(date_changelog(new))
     return check()
 
 

@@ -1,7 +1,8 @@
 """Verified-bundle loading: the refusal at the door.
 
 `trainnr_mjlab` builds actuators from the certified store in
-`robots/actuator-bundles/` (schema robotiq-actuator-bundle/1, A1) and
+`robots/actuator-bundles/` (schema robotiq-actuator-bundle/1,
+a frozen format id; trainnr-actuator-bundle/1 reads as the same, A1) and
 from nowhere else. The reader and verifier are the pipeline's own
 (`trainnr.robot.actuator_bundle`) — one implementation of the hash,
 the rails and the floors, never a second copy here. An unverifiable

@@ -39,7 +39,7 @@ INSTALL_HINTS["ffprobe"] = INSTALL_HINTS["ffmpeg"]
 # Unitree's Python SDK and CycloneDDS under it: the `dds` extra (docs/77 §7).
 INSTALL_HINTS["unitree_sdk2py"] = {
     "Linux": "build CycloneDDS and unitree_sdk2 into /usr/local (docs/77 §7), "
-    "then in trainnr/: CYCLONEDDS_HOME=/usr/local uv sync --extra dds",
+    "then in trainnr/: CYCLONEDDS_HOME=/usr/local uv sync --group dds",
     "*": "Unitree's SDK runs on Linux only; capture from a Linux machine on "
     "the robot's network",
 }

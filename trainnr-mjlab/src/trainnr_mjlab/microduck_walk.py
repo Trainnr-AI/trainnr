@@ -59,6 +59,7 @@ from mjlab.sensor import (
 from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
+from trainnr.paths import checkout
 
 from trainnr_mjlab.actuator import BamActuatorCfg
 from trainnr_mjlab.dr import bam_param_dr_event
@@ -66,7 +67,8 @@ from trainnr_mjlab.entity import entity_from_bundle
 from trainnr_mjlab.events import bam_expansion_event
 from trainnr_mjlab.linter import lint
 
-REPO = Path(__file__).resolve().parents[3]
+# The checkout: `$TRAINNR_REPO`, else the ancestor that carries trainnr.
+REPO = checkout()
 ROBOT_DIR = REPO / "robots" / "microduck"
 MODEL_FILE = "robot_walk.xml"
 XL330_BUNDLE = REPO / "robots" / "actuator-bundles" / "xl330.m6.bundle.json"

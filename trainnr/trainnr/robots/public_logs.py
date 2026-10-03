@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from trainnr.paths import checkout
+from trainnr.paths import user_cache
 from trainnr.robots.recording import BASIS_PUBLIC
 
 CACHE_ENV = "TRAINNR_PUBLIC_LOGS_DIR"
@@ -283,7 +283,7 @@ def cache_root() -> Path:
     named = os.environ.get(CACHE_ENV, "").strip()
     if named:
         return Path(named).expanduser()
-    return checkout().joinpath(*CACHE_RELATIVE)
+    return user_cache("public-logs", CACHE_RELATIVE)
 
 
 def resolve(name: str) -> PublicLog:
@@ -337,8 +337,42 @@ def locate(name: str, cache: Path | None = None) -> Path | None:
 Opener = Callable[..., Any]
 
 
+class UnlicensedDataError(ValueError):
+    """A download of data whose licence is not stated, refused until the
+    user accepts it explicitly."""
+
+
+def licence_stated(entry: PublicLog) -> bool:
+    """Whether the publisher states a licence for the data itself."""
+    return not (
+        entry.licence.startswith(LICENCE_UNLABELLED)
+        or entry.licence == LICENCE_NONE_STATED
+    )
+
+
+def licence_notice(entry: PublicLog) -> str:
+    """What a user reads before the download: whose data, under what."""
+    return (
+        f"{entry.name}: {entry.source}\n  licence: {entry.licence}\n"
+        f"  from: {entry.url}\n  size: {entry.bytes / 1e6:.1f} MB"
+    )
+
+
+def unlicensed_reason(entry: PublicLog) -> str:
+    return (
+        f"{entry.name}: the publisher states no licence for this data "
+        f"({entry.licence}); download it only if your use is allowed, by "
+        "passing accept_unlicensed=True (--accept-unlicensed)"
+    )
+
+
 def fetch(
-    name: str, cache: Path | None = None, *, opener: Opener = urllib.request.urlopen
+    name: str,
+    cache: Path | None = None,
+    *,
+    opener: Opener = urllib.request.urlopen,
+    accept_unlicensed: bool = False,
+    say: Callable[[str], None] | None = None,
 ) -> Path:
     """Download by the entry's fetcher, check every piece's byte count and
     digest; returns the path the adapter reads. Idempotent: a COMPLETE
@@ -353,6 +387,14 @@ def fetch(
     found = locate(name, base)
     if found is not None:
         return found
+    # Before any byte moves: whose data and under what licence, and a
+    # refusal when the publisher states none and the user has not said
+    # their use is allowed (review 2026-10-03). A copy already in the
+    # cache was accepted when it was fetched.
+    if say is not None:
+        say(licence_notice(entry))
+    if not licence_stated(entry) and not accept_unlicensed:
+        raise UnlicensedDataError(unlicensed_reason(entry))
     staging = base / f"{STAGING_PREFIX}{entry.name}{STAGING_SUFFIX}"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)

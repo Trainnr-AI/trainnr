@@ -1,0 +1,18 @@
+# Third-party licences of the trainnr Studio
+
+The Studio binary includes the following open-source software. Each
+licence is reproduced once, followed by the crates it covers.
+
+{{#each licenses}}
+## {{name}}
+
+Used by:
+{{#each used_by}}
+- [{{crate.name}} {{crate.version}}]({{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}})
+{{/each}}
+
+```
+{{text}}
+```
+
+{{/each}}

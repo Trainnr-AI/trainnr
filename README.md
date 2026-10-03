@@ -14,8 +14,8 @@
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml/badge.svg?branch=main" alt="gates"></a>
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/raw/badges/coverage.svg" alt="coverage"></a>
   <a href="#licence"><img src="https://img.shields.io/badge/licence-FSL--1.1--ALv2-blue" alt="licence: FSL-1.1-ALv2"></a>
-  <a href="trainnr/pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A5%203.10-blue" alt="python ≥ 3.10"></a>
-  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-76%20tools-6f42c1" alt="MCP server: 76 tools"></a>
+  <a href="trainnr/pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-blue" alt="python 3.11 to 3.13"></a>
+  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-77%20tools-6f42c1" alt="MCP server: 77 tools"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/DCO-signed--off-green" alt="DCO"></a>
   <!-- After the repository is public and the scorecard workflow has run once:
@@ -65,47 +65,70 @@ lands. For developers with one robot and companies with a fleet.
 | **Evaluation** | Paired, seed-matched trials, exact Clopper-Pearson intervals, milestone funnels, sensitivity tables, mismatch matrices across the sim-to-real gap |
 | **Sim-to-real deployment** | ONNX export with a manifest, a sim-to-sim gate on MuJoCo and on Unitree's own simulator over DDS, failure attribution (latency first), pre-flight checks, soft stops |
 | **Telemetry and monitoring** | Deployed robots' telemetry re-identified against their fitted intervals: drift detected per parameter, re-identification recommended, the new fit fed back into training |
-| **Agents and tools** | One MCP server with 76 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
+| **Agents and tools** | One MCP server with 77 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
 
 ## Quickstart
 
+**Prerequisites.**
+[uv](https://docs.astral.sh/uv/getting-started/installation/) (it brings
+Python 3.12 if you don't have it), git, and about 0.6 GB of disk for the
+server's environment. Training adds about 6.4 GB and needs an NVIDIA GPU
+with CUDA; everything else runs on a laptop CPU. With the plugin, the first
+Claude Code session after install prepares the server's environment and
+downloads the Studio (72 MB) in the background (`TRAINNR_NO_PREFETCH=1`
+turns that off). Projects live in `~/trainnr/projects`.
+
 In Claude Code, install the plugin. It brings the MCP server, seven
-agents, two skills, and the Studio, which downloads on the first session:
+agents, two skills, and the Studio:
 
 ```sh
 claude plugin marketplace add Trainnr-AI/trainnr
 claude plugin install trainnr@trainnr
 ```
 
-Then ask for the loop in plain words:
+Fetch the robot model the example uses, Unitree's own Go2:
+
+```sh
+git clone --depth 1 https://github.com/unitreerobotics/unitree_rl_mjlab ~/unitree_rl_mjlab
+# onboard_robot takes: ~/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/go2.xml
+```
+
+### On a laptop, in minutes (CPU)
+
+Ask for the first half of the loop in plain words:
 
 ```text
-you    Create a project, onboard Unitree's Go2 and identify it from the IIT chirp log.
-agent  create_project("go2")                        → a project with its index
-       onboard_robot(go2.xml, "go2")                → go2@e5aa641994fc, shape checked
+you    Create a project called go2, onboard Unitree's Go2 from
+       ~/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/go2.xml,
+       and identify it from the IIT chirp log.
+agent  create_project("go2")                        → ~/trainnr/projects/go2, now current
+       onboard_robot(".../go2.xml", "go2")          → go2@e5aa641994fc, shape checked
        ingest_public_log("iit-go2-chirp")           → 24 s · 200 Hz · 6 channels · public log
        identify_system("go2", "iit-go2-chirp")      → 31 of 36 parameters pinned at 95 %
+```
 
+### With a GPU
+
+```text
 you    Train a walk on that fit, evaluate it, and gate the export.
-agent  create_task("trainnr/go2-walk"), accept_task → accepted: learnability smoke
+agent  create_task("trainnr/go2-walk"), accept_task → accepted: learnability check
        train_walk(agent="g3", fit="fit@…")          → an mjlab experiment on the fit
        evaluate_walk(trials=8)                      → survived 8/8, tracked 0/8, CP95 [0.00, 0.37]
        export_deployment, gate_deployment           → ONNX + manifest, sim-to-sim gate passed
        preflight_deployment, check_drift            → 7/7 checks; drift within interval
 ```
 
-That is a real session from a fresh clone (2026-10-03), with a short
+Both are a real session from a fresh clone (2026-10-03), with a short
 150-iteration training run, which survives but does not yet track its
-commands. The full recipe certifies at 38 of 40 (below). The robot model
-is Unitree's own `go2.xml` from
-[`unitree_rl_mjlab`](https://github.com/unitreerobotics/unitree_rl_mjlab)
-(`src/assets/robots/unitree_go2/xmls/`).
+commands. The full recipe certifies at 38 of 40 (below). The words used
+here (fit record, `name@hash`, CP95, g3, survived and tracked, the
+learnability check) are defined in the [glossary](docs/GLOSSARY.md).
 
 <details>
 <summary><b>Any other MCP client</b> (Cursor, Codex, a checkout)</summary>
 
 **Any MCP client**, from a checkout (the server is `trainnr mcp`, served over
-stdio; `uvx trainnr mcp` once the package is on PyPI):
+stdio). The server runs from a checkout today; a PyPI package is planned.
 
 ```sh
 git clone https://github.com/Trainnr-AI/trainnr && cd trainnr
@@ -224,11 +247,15 @@ torques and compute before the first tick, and measures the stops.
 ### Simulation in a captured scene
 
 MuJoCo inside the Studio, with the embedded [Rerun](https://rerun.io)
-viewer beside it. A phone video becomes a scene: Gaussian splats for what
-the camera sees, a collision proxy for what the feet touch, and the gap
-between the two measured. Here the deployed Go2 walks a captured garden.
+viewer beside it. The scene pipeline turns a phone video into a scene:
+Gaussian splats for what the camera sees, a collision proxy for what the
+feet touch, and the gap between the two measured. The image shows the
+public Mip-NeRF 360 "garden" capture run through that pipeline, with the
+deployed Go2 walking in it.
 
-<img alt="The Studio's simulator: the deployed Go2 walking in a captured garden, with joint, command, force and contact plots" src="docs/figures/readme/studio-simulator-garden.png">
+<img alt="The Studio's simulator: the deployed Go2 walking in the Mip-NeRF 360 garden scene, with joint, command, force and contact plots" src="docs/figures/readme/studio-simulator-garden.png">
+
+<sub>Scene: Mip-NeRF 360 "garden" (Barron et al., CVPR 2022), reconstructed by trainnr's scene pipeline.</sub>
 
 `capture_scene` · `import_scene` · `simulate_in_studio` · `control_simulator` · `screenshot_studio`
 
@@ -263,10 +290,10 @@ says whether it is in the shape a task needs before anything trains.
 
 | Result | Number | Record |
 |---|---|---|
-| Go2 walker certified on its declared world | 38 of 40, 95 % CI [0.83, 0.99] | [`dds-gate-go2-c2`](docs/68-findings.md#dds-gate-go2-c2-2026-09-13) |
+| Go2 walker passing this project's evaluation in its declared world | 38 of 40, 95 % CI [0.83, 0.99] | [`dds-gate-go2-c2`](docs/68-findings.md#dds-gate-go2-c2-2026-09-13) |
 | The same policy gated on Unitree's simulator over DDS | 20 of 20 | [`dds-gate-go2-c2`](docs/68-findings.md#dds-gate-go2-c2-2026-09-13) |
 | A Go2 identified from a public chirp log (IIT) | 31 of 36 parameters pinned | [`go2-legged-fit-public-logs`](docs/68-findings.md#go2-legged-fit-public-logs-2026-09-24) |
-| The Go2 walking a captured garden under full physics | 6 of 6, [0.54, 1.00] | [`go2-walks-the-captured-garden`](docs/68-findings.md#go2-walks-the-captured-garden-2026-09-23) |
+| The Go2 walking the Mip-NeRF 360 garden scene under full physics | 6 of 6, [0.54, 1.00] | [`go2-walks-the-captured-garden`](docs/68-findings.md#go2-walks-the-captured-garden-2026-09-23) |
 
 Every number in this repository resolves to a record under
 [`docs/findings/`](docs/findings/README.md), and a commit gate refuses a ratio
@@ -327,6 +354,17 @@ identity is `name@hash` everywhere; nothing is nameable without its hash.
 
 </details>
 
+## Troubleshooting
+
+| You see | What to do |
+|---|---|
+| `no project is selected: create one with create_project … or choose one with use_project` | Ask the agent to create a project, or to use an existing one (`list_projects` lists them). `TRAINNR_PROJECT` names one for a single process. |
+| `the Studio release … is not published yet` (or HTTP 404) when the Studio downloads | Build it from a checkout until the release exists: `cd crates/trainnr-studio && cargo build --release`. |
+| `trainnr mcp needs the sim and mcp extras` | Start the server as `uv run --directory trainnr --extra sim --extra mcp trainnr mcp`. |
+| `port 9876 (the viewer server) is held by another process` | Another Studio or a standalone Rerun viewer is running; close it, then launch again. |
+| Slow or black rendering under WSL | The WSL launch settings live in `trainnr/wsl.env`; they apply only on WSL and never override a variable you set. |
+| `the publisher states no licence for this data` from `ingest_public_log` | Pass `accept_unlicensed=True` once you have checked your use is allowed. |
+
 ## Community
 
 - **Questions and ideas:** [Discussions](https://github.com/Trainnr-AI/trainnr/discussions).
@@ -342,3 +380,6 @@ rig this toolchain grew up on lives in its own archive,
 [`Trainnr-AI/rig`](https://github.com/Trainnr-AI/rig). "Robotiq" in
 `robots/robotiq-2f85-isaac` is Robotiq Inc.'s gripper; trainnr is not
 affiliated with Robotiq.
+
+MuJoCo, Rerun, Unitree, Go2, NVIDIA, Isaac, Robotiq, LeRobot, Claude and
+Anthropic are trademarks of their owners; no endorsement is implied.

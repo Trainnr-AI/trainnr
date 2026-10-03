@@ -73,6 +73,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
       - name: one version everywhere
         run: python3 tools/release.py check
       - name: workflows linted for security
@@ -85,6 +87,74 @@ jobs:
           tar xzf deny.tar.gz && sudo mv "${name}/cargo-deny" /usr/local/bin/
       - name: dependencies audited (Python and Rust)
         run: python3 tools/supply-chain.py
+
+  package:
+    # The wheels a user installs from PyPI: both build, and each carries
+    # LICENSE and NOTICE (Apache-2.0 4(a) and (d)); trainnr-mjlab's NOTICE
+    # is a copy of the root one and must stay identical.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - name: the packages' NOTICE copy matches the root
+        run: cmp NOTICE trainnr-mjlab/NOTICE && cmp LICENSE trainnr/LICENSE && cmp LICENSE trainnr-mjlab/LICENSE
+      - name: build both wheels; LICENSE and NOTICE inside each
+        run: |
+          (cd trainnr && uv build --out-dir ../dist)
+          (cd trainnr-mjlab && uv build --out-dir ../dist)
+          for wheel in dist/*.whl; do
+            for f in LICENSE NOTICE; do
+              python3 -c "import sys, zipfile; names = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(n.endswith('.dist-info/licenses/' + sys.argv[2]) for n in names) else 1)" "$wheel" "$f" \
+                || { echo "::error::$wheel has no $f"; exit 1; }
+            done
+            echo "$wheel: LICENSE and NOTICE present"
+          done
+
+  python-matrix:
+    # The supported Python versions on Linux: the core suite with the sim
+    # and mcp extras (fast-gates runs the full set on 3.12).
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MUJOCO_GL: egl
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Mesa's EGL for MuJoCo's renderer
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgles2 libosmesa6
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - name: python tests (trainnr) on Python ${{ matrix.python }}
+        run: uv run --python ${{ matrix.python }} --extra sim --extra mcp python -m unittest discover -s tests
+        working-directory: trainnr
+
+  macos:
+    # The Mac the README promises: the core suite on Apple Silicon.
+    if: github.event_name != 'schedule'
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - name: python tests (trainnr) on macOS, Python 3.12
+        run: uv run --python 3.12 --extra sim --extra mcp python -m unittest discover -s tests
+        working-directory: trainnr
 
   fast-gates:
     if: github.event_name != 'schedule'
@@ -125,6 +195,8 @@ jobs:
         with:
           workspaces: crates/trainnr-studio
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
 
       # the Studio is the one Rust crate (the rig's crates and firmware
       # moved to their own repository on 2026-10-02); it is its own
@@ -227,6 +299,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
 
       - name: python tests with sim + train extras
         # The full suite: mujoco.sysid rehearsal, physics census, the

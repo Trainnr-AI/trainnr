@@ -36,6 +36,14 @@ TIMEOUT_S = 60.0
 # checkout (runs/ is never committed) — found the way the public logs'
 # cache is (`robots.public_logs`: `$TRAINNR_PUBLIC_LOGS_DIR`, `runs/public-logs`).
 ASSET_CACHE_ENV = "TRAINNR_ASSETS_DIR"
+# The repository's own licence and notice files, fetched with any asset
+# under it: a dual-licensed repository states its root licence there
+# (robotiq/isaacsim_assets: BSD-3 at the root, CC-BY beside the USD), and
+# an asset fetched without it was labelled with half its licence
+# (review 2026-10-03).
+ROOT_LEGAL_FILES = frozenset(
+    {"LICENSE", "LICENSE.txt", "LICENSE.md", "COPYING", "NOTICE", "NOTICE.txt"}
+)
 LEGACY_ASSET_CACHE_ENV = "TRAINNR_ASSET_CACHE"  # the first spelling, still read
 CACHE_RELATIVE = ("runs", "assets")
 LFS_OID = "oid sha256:"
@@ -72,9 +80,9 @@ def asset_cache() -> Path:
         override = os.environ.get(env, "").strip()
         if override:
             return Path(override).expanduser()
-    from trainnr.paths import checkout  # noqa: PLC0415
+    from trainnr.paths import user_cache  # noqa: PLC0415
 
-    return checkout().joinpath(*CACHE_RELATIVE)
+    return user_cache("assets", CACHE_RELATIVE)
 
 
 def cache_slot(repository: str, commit: str, cache: Path | None = None) -> Path:
@@ -197,10 +205,11 @@ def fetch_tree(
     blobs = {
         entry["path"]: entry.get("sha")
         for entry in listing.get("tree", [])
-        if entry.get("type") == "blob" and entry["path"].startswith(prefix)
+        if entry.get("type") == "blob"
+        and (entry["path"].startswith(prefix) or entry["path"] in ROOT_LEGAL_FILES)
     }
     files = tuple(blobs)
-    if not files:
+    if not any(relative.startswith(prefix) for relative in files):
         raise AssetFetchError(f"nothing under {path} at {repository}@{commit[:7]}")
     for relative in files:
         target = slot / relative

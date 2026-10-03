@@ -626,8 +626,40 @@ class TheRegistry(unittest.TestCase):
                     "go2-leg-odometry",
                     Path(tmp),
                     opener=_serving(payload.getvalue()),
+                    accept_unlicensed=True,
                 )
             self.assertEqual(list((Path(tmp) / "go2-leg-odometry").glob("*.zip")), [])
+
+    def test_unlicensed_data_is_refused_before_any_byte_moves(self) -> None:
+        # Review 2026-10-03: the licence is shown before a download, and
+        # data whose publisher states none needs the user's yes.
+        asked: list[object] = []
+
+        def opener(*args: object, **kwargs: object) -> object:
+            asked.append(args)
+            raise AssertionError("no download may start")
+
+        said: list[str] = []
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaisesRegex(
+                public_logs.UnlicensedDataError,
+                "states no licence.*--accept-unlicensed",
+            ),
+        ):
+            public_logs.fetch(
+                "go2-leg-odometry", Path(tmp), opener=opener, say=said.append
+            )
+        self.assertEqual(asked, [])
+        self.assertIn("licence: unlabelled", said[0])
+        self.assertIn("github.com/YibinWu/leg-odometry", said[0])
+
+    def test_a_stated_licence_needs_no_acceptance(self) -> None:
+        entry = public_logs.resolve("iit-go2-chirp")
+        self.assertTrue(public_logs.licence_stated(entry))
+        self.assertFalse(
+            public_logs.licence_stated(public_logs.resolve("go2-leg-odometry"))
+        )
 
     def test_zip_members_are_read_by_range_inflated_and_checked(self) -> None:
         """Two members out of a larger remote zip: only their bytes are

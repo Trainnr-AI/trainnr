@@ -43,8 +43,18 @@ def main(argv: list[str] | None = None) -> int:
         print(_version())
         return 0
     if args.command == "mcp":
-        from trainnr.mcp_server import main as serve  # noqa: PLC0415
+        try:
+            from mcp.server import MCPServer  # noqa: F401, PLC0415
 
+            from trainnr.mcp_server import main as serve  # noqa: PLC0415
+        except ImportError as why:
+            print(
+                f"trainnr mcp needs the `sim` and `mcp` extras ({why}). From a "
+                "checkout: uv run --directory trainnr --extra sim --extra mcp "
+                "trainnr mcp",
+                file=sys.stderr,
+            )
+            return 1
         serve()
         return 0
     if args.command == "studio" and args.install:

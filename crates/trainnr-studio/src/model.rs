@@ -41,6 +41,39 @@ const JOBS_DIR: &str = "mcp-jobs";
 const INTENT_RELATIVE: &str = ".index/present.json";
 /// The environment variable both halves honour (`PROJECT_ENV`).
 pub const PROJECT_ENV: &str = "TRAINNR_PROJECT";
+/// Mirrored from `trainnr/project/locate.py` and `trainnr/paths.py`: the
+/// projects home (`PROJECTS_ENV`, else `<HOME_ENV or ~/trainnr>/projects`)
+/// and the file in it naming the current project (`CURRENT_FILE`).
+pub const PROJECTS_ENV: &str = "TRAINNR_PROJECTS";
+const HOME_ENV: &str = "TRAINNR_HOME";
+const HOME_DIR: &str = "trainnr";
+const CURRENT_FILE: &str = ".current";
+
+/// Where projects are created: `$TRAINNR_PROJECTS`, else
+/// `$TRAINNR_HOME/projects`, else `~/trainnr/projects`.
+pub fn user_projects_home() -> Option<PathBuf> {
+    let named = |var: &str| {
+        std::env::var_os(var)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    if let Some(home) = named(PROJECTS_ENV) {
+        return Some(home);
+    }
+    if let Some(root) = named(HOME_ENV) {
+        return Some(root.join(PROJECTS_HOME));
+    }
+    named("HOME")
+        .or_else(|| named("USERPROFILE"))
+        .map(|home| home.join(HOME_DIR).join(PROJECTS_HOME))
+}
+
+/// The project last created or chosen through the tools, when it is one.
+fn remembered_project(home: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(home.join(CURRENT_FILE)).ok()?;
+    let root = PathBuf::from(text.trim());
+    root.join(MANIFEST_FILE).is_file().then_some(root)
+}
 /// How often the files' mtimes are polled. A tool call rewrites the
 /// index in one atomic replace; a second of latency is invisible next to
 /// the seconds the tool itself took.
@@ -358,11 +391,12 @@ pub struct ProjectSummary {
 }
 
 pub struct Model {
-    /// `projects/` in the checkout: where the switcher looks.
-    projects_home: PathBuf,
-    /// Every project under the home, as last walked (`refresh_projects`).
+    /// Where the switcher looks: the user's projects home, and a
+    /// checkout's own `projects/` when the Studio runs from one.
+    projects_homes: Vec<PathBuf>,
+    /// Every project under the homes, as last walked (`refresh_projects`).
     projects: Vec<ProjectSummary>,
-    projects_home_seen: Option<SystemTime>,
+    projects_home_seen: Vec<Option<SystemTime>>,
     projects_scanned_at: Option<std::time::Instant>,
     pub project_root: PathBuf,
     index: Watched<Index>,
@@ -386,29 +420,36 @@ pub struct Model {
 }
 
 impl Model {
-    /// The project the Studio opens: `$TRAINNR_PROJECT`, else the
-    /// checkout's default, else the committed sample — the same rule the
+    /// The project the Studio opens: `$TRAINNR_PROJECT`, else the one
+    /// last created or chosen (the projects home's `.current`), else the
+    /// checkout's default, else the committed sample — the rule the
     /// Python side applies, plus the sample so a fresh clone shows a page
     /// instead of an error.
     pub fn open(repo_root: &Path) -> Self {
-        let home = repo_root.join(PROJECTS_HOME);
+        let in_checkout = repo_root.join(PROJECTS_HOME);
+        let user_home = user_projects_home();
+        let mut homes: Vec<PathBuf> = user_home.iter().cloned().collect();
+        if in_checkout.is_dir() && !homes.contains(&in_checkout) {
+            homes.push(in_checkout.clone());
+        }
         let root = std::env::var_os(PROJECT_ENV)
             .map(PathBuf::from)
             .filter(|p| p.join(MANIFEST_FILE).is_file())
+            .or_else(|| user_home.as_deref().and_then(remembered_project))
             .or_else(|| {
-                let default = home.join(DEFAULT_PROJECT_NAME);
+                let default = in_checkout.join(DEFAULT_PROJECT_NAME);
                 default.join(MANIFEST_FILE).is_file().then_some(default)
             })
-            .unwrap_or_else(|| home.join(SAMPLE_PROJECT_NAME));
-        Self::at(root, home)
+            .unwrap_or_else(|| in_checkout.join(SAMPLE_PROJECT_NAME));
+        Self::at(root, homes)
     }
 
     /// Open a specific project directory.
-    pub fn at(root: PathBuf, projects_home: PathBuf) -> Self {
+    pub fn at(root: PathBuf, projects_homes: Vec<PathBuf>) -> Self {
         let mut model = Self {
-            projects_home,
+            projects_home_seen: vec![None; projects_homes.len()],
+            projects_homes,
             projects: Vec::new(),
-            projects_home_seen: None,
             projects_scanned_at: None,
             index: Watched::new(root.join(INDEX_RELATIVE)),
             detail: RefCell::new(None),
@@ -454,7 +495,7 @@ impl Model {
 
     /// Switch to another project directory, keeping the projects home.
     pub fn switch(&mut self, root: PathBuf) {
-        *self = Self::at(root, self.projects_home.clone());
+        *self = Self::at(root, self.projects_homes.clone());
     }
 
     /// An artifact's detail file as an absolute path, when it has one.
@@ -517,20 +558,29 @@ impl Model {
 
     fn rescan_projects(&mut self) {
         self.projects_scanned_at = Some(std::time::Instant::now());
-        self.projects_home_seen = std::fs::metadata(&self.projects_home)
-            .and_then(|m| m.modified())
-            .ok();
+        self.projects_home_seen = self.homes_modified();
         self.projects = self.walk_projects();
     }
 
+    fn homes_modified(&self) -> Vec<Option<SystemTime>> {
+        self.projects_homes
+            .iter()
+            .map(|home| std::fs::metadata(home).and_then(|m| m.modified()).ok())
+            .collect()
+    }
+
     fn walk_projects(&self) -> Vec<ProjectSummary> {
-        let Ok(entries) = std::fs::read_dir(&self.projects_home) else {
-            return Vec::new();
-        };
-        let mut found: Vec<ProjectSummary> = entries
-            .filter_map(Result::ok)
-            .map(|e| e.path())
+        let mut seen = std::collections::HashSet::new();
+        let roots: Vec<PathBuf> = self
+            .projects_homes
+            .iter()
+            .filter_map(|home| std::fs::read_dir(home).ok())
+            .flat_map(|entries| entries.filter_map(Result::ok).map(|e| e.path()))
             .filter(|p| p.join(MANIFEST_FILE).is_file())
+            .filter(|p| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())))
+            .collect();
+        let mut found: Vec<ProjectSummary> = roots
+            .into_iter()
             .map(|root| {
                 let index: Option<Index> = std::fs::read_to_string(root.join(INDEX_RELATIVE))
                     .ok()
@@ -643,10 +693,7 @@ impl Model {
             self.reload_index();
             projects_stale = true;
         }
-        let home_modified = std::fs::metadata(&self.projects_home)
-            .and_then(|m| m.modified())
-            .ok();
-        if home_modified != self.projects_home_seen {
+        if self.homes_modified() != self.projects_home_seen {
             projects_stale = true;
         }
         if projects_stale {
@@ -914,13 +961,42 @@ mod tests {
             r#"{"schema":"somebody-else/1","project":"p","artifacts":[],"states":[]}"#,
         )
         .unwrap();
-        let model = Model::at(root.clone(), root.join(PROJECTS_HOME));
+        let model = Model::at(root.clone(), vec![root.join(PROJECTS_HOME)]);
         assert!(model.index().is_none());
         assert!(model
             .problem
             .as_deref()
             .is_some_and(|p| p.contains("somebody-else/1") && p.contains(INDEX_SCHEMA)));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_studio_opens_the_project_the_tools_chose() {
+        let base = std::env::temp_dir().join(format!("studio-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let home = base.join("projects");
+        let chosen = home.join("demo");
+        std::fs::create_dir_all(&chosen).unwrap();
+        std::fs::write(chosen.join(MANIFEST_FILE), "{}").unwrap();
+        std::fs::write(home.join(CURRENT_FILE), format!("{}\n", chosen.display())).unwrap();
+        assert_eq!(remembered_project(&home), Some(chosen.clone()));
+        std::fs::write(home.join(CURRENT_FILE), "/nowhere/at/all\n").unwrap();
+        assert_eq!(
+            remembered_project(&home),
+            None,
+            "a stale choice is not a project"
+        );
+        let checkout = base.join("checkout").join(PROJECTS_HOME);
+        std::fs::create_dir_all(checkout.join("other")).unwrap();
+        std::fs::write(checkout.join("other").join(MANIFEST_FILE), "{}").unwrap();
+        let model = Model::at(chosen.clone(), vec![home.clone(), checkout.clone()]);
+        let names: Vec<String> = model
+            .walk_projects()
+            .iter()
+            .map(|p| p.root.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["demo".to_owned(), "other".to_owned()]);
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

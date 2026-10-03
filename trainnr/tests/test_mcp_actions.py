@@ -19,7 +19,6 @@ from trainnr.mcp_actions import (
     TRAINNR_MJLAB_DIR,
     UNITREE_REFERENCE_DEFAULT,
     UNITREE_REFERENCE_ENV,
-    WSL_RUN,
     Actions,
     unitree_reference,
     walk_train_argv,
@@ -471,11 +470,17 @@ class TheLaunchEnvironment(unittest.TestCase):
             [(argv, _)] = spawner.calls
             self.assertEqual(argv[:7], [*UV_MJLAB[:5], "--env-file", "/box/wsl.env"])
 
-    def test_the_train_venv_chain_runs_under_wsl_run(self) -> None:
+    def test_the_train_venv_chain_loads_the_file_through_uv(self) -> None:
+        # uv fills only the variables that are unset, so the user's own
+        # values win (wsl-run.sh sourced the file and overwrote them).
         with harness(env_file=Path("/box/wsl.env")) as (actions, spawner):
             actions.run_chain(name="t")
             [(argv, _)] = spawner.calls
-            self.assertEqual(argv[:2], [str(WSL_RUN), str(TRAIN_PYTHON)])
+            self.assertEqual(
+                argv[:6],
+                ["uv", "run", "--no-project", "--env-file", "/box/wsl.env", "--"],
+            )
+            self.assertEqual(argv[6], str(TRAIN_PYTHON))
 
     def test_without_an_env_file_nothing_is_wrapped(self) -> None:
         with harness() as (actions, spawner):
@@ -522,3 +527,31 @@ class ThePlayDoor(unittest.TestCase):
             self.assertEqual(argv[argv.index("--robot") + 1], "go2")
             self.assertEqual(argv[argv.index("--envs") + 1], "4")
             self.assertEqual(argv[argv.index("--project") + 1], "/p")
+
+
+class TheWslRule(unittest.TestCase):
+    """The env file is a WSL file: on any other Linux it would point the
+    renderer at a driver that is not there (review, 2026-10-03)."""
+
+    def test_not_wsl_means_no_env_file(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from trainnr import paths  # noqa: PLC0415
+
+        with (
+            mock.patch.dict("os.environ", {}, clear=False),
+            mock.patch.object(paths, "WSL_INTEROP", Path("/nonexistent/WSLInterop")),
+        ):
+            import os  # noqa: PLC0415
+
+            os.environ.pop("WSL_DISTRO_NAME", None)
+            self.assertFalse(paths.on_wsl())
+            self.assertIsNone(paths.wsl_env_file())
+
+    def test_wsl_is_named_by_the_distro_variable(self) -> None:
+        from unittest import mock  # noqa: PLC0415
+
+        from trainnr import paths  # noqa: PLC0415
+
+        with mock.patch.dict("os.environ", {"WSL_DISTRO_NAME": "Ubuntu"}):
+            self.assertTrue(paths.on_wsl())

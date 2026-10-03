@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from trainnr.paths import checkout
 from trainnr.project.kinds import IDENTITY_FILE, POLICY_FILE, TASK_FILE
 from trainnr.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
 from trainnr.viz import SIM_TIMELINE
@@ -49,7 +50,8 @@ from trainnr_mjlab.walks import (
     walk_spec,
 )
 
-REPO = Path(__file__).resolve().parents[3]
+# The checkout: `$TRAINNR_REPO`, else the ancestor that carries trainnr.
+REPO = checkout()
 OVERVIEW_HZ = 10.0  # the per-world markers into the Studio's viewer
 CHECKPOINT_GLOB = "model_*.pt"  # rsl_rl's checkpoint names, as walk_train writes them
 

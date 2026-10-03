@@ -1,0 +1,42 @@
+# The Studio compiles on macOS and Windows, checked on every change to
+# its crate (the release builds all three; this catches a break before a
+# tag does). Path-filtered, so it is never a required check.
+name: studio-platforms
+
+on:
+  pull_request:
+    paths: ["crates/**", ".github/workflows/studio-platforms.yml"]
+  push:
+    branches: ["main"]
+    paths: ["crates/**", ".github/workflows/studio-platforms.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: crates/trainnr-studio
+      - name: cargo check
+        run: cargo check --locked --all-targets
+        working-directory: crates/trainnr-studio

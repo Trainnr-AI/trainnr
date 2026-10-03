@@ -75,6 +75,44 @@ class TheTreeIsWholeAndChecked(unittest.TestCase):
             self.assertEqual((fetched.root / "mesh.bin").read_bytes(), MESH)
             self.assertIsNotNone(cached_tree(REPO, COMMIT, PATH, cache=Path(tmp)))
 
+    def test_the_repositorys_root_licence_comes_with_the_asset(self) -> None:
+        # Review 2026-10-03: robotiq/isaacsim_assets states BSD-3 at its
+        # root and CC-BY beside the USD; fetching only the asset's folder
+        # labelled Robotiq's meshes with half their licence.
+        root_licence = b"BSD 3-Clause License\n\nCopyright (c) 2026, ROBOTIQ\n"
+        get = fake_github({"robot.usda": LAYER})
+        unrelated = b"not legal text"
+
+        def with_root(url: str, timeout: float) -> bytes:
+            if "/git/trees/" in url:
+                listing = json.loads(get(url, timeout))
+                listing["tree"] += [
+                    {
+                        "path": "LICENSE",
+                        "type": "blob",
+                        "sha": git_blob_id(root_licence),
+                    },
+                    {
+                        "path": "README.md",
+                        "type": "blob",
+                        "sha": git_blob_id(unrelated),
+                    },
+                ]
+                return json.dumps(listing).encode()
+            if url.endswith("/LICENSE"):
+                return root_licence
+            return get(url, timeout)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(asset_fetch, "_get", with_root),
+        ):
+            fetched = fetch_tree(REPO, COMMIT, PATH, cache=Path(tmp))
+            slot = fetched.root.parent
+            self.assertEqual((slot / "LICENSE").read_bytes(), root_licence)
+            self.assertFalse((slot / "README.md").exists())
+            self.assertEqual((fetched.root / "robot.usda").read_bytes(), LAYER)
+
     def test_a_truncated_listing_is_refused_by_name(self) -> None:
         get = fake_github({"robot.usda": LAYER}, truncated=True)
         with (

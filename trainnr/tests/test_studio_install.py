@@ -77,6 +77,50 @@ class DownloadedStudio(unittest.TestCase):
             si.install(say=lambda _line: None)
 
 
+@unittest.skipIf(sys.platform.startswith("win"), "the fixture writes a POSIX archive")
+class ThreeInstallsAtOnce(unittest.TestCase):
+    """The plugin's session hook and launch_studio can install the same
+    version at the same moment: each must end with the binary in place
+    and none may fail or remove the others' work (review, 2026-10-03)."""
+
+    def test_concurrent_installs_all_succeed(self) -> None:
+        import json  # noqa: PLC0415
+        import subprocess  # noqa: PLC0415
+
+        tmp = Path(tempfile.mkdtemp())
+        urls = _release(tmp, "v9.9.9", "x86_64-unknown-linux-gnu")
+        script = (
+            "import json, sys\n"
+            "from unittest import mock\n"
+            "from trainnr import studio_install as si\n"
+            f"urls = json.loads({json.dumps(json.dumps(urls))})\n"
+            "triple = 'x86_64-unknown-linux-gnu'\n"
+            "with mock.patch.object(si, 'target', return_value=triple), "
+            "mock.patch.object(si, '_asset_urls', return_value=urls):\n"
+            "    print(si.install(say=lambda _l: None))\n"
+        )
+        env = {
+            **os.environ,
+            "XDG_CACHE_HOME": str(tmp / "cache"),
+            si.RELEASE_ENV: "v9.9.9",
+        }
+        runs = [
+            subprocess.Popen(
+                [sys.executable, "-c", script],
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(3)
+        ]
+        outputs = [run.communicate(timeout=120) for run in runs]
+        for run, (out, err) in zip(runs, outputs, strict=True):
+            self.assertEqual(run.returncode, 0, err)
+            self.assertTrue(Path(out.strip()).is_file(), out)
+        self.assertEqual(len({out.strip() for out, _ in outputs}), 1)
+
+
 class Names(unittest.TestCase):
     def test_assets_are_named_by_tag_and_target(self) -> None:
         self.assertEqual(

@@ -44,15 +44,20 @@ class ToolPlugins(unittest.TestCase):
         self.assertEqual(names, ["cloud"])
         self.assertEqual(server.tools, ["submit_job"])
 
-    def test_a_failing_plugin_is_named(self) -> None:
+    def test_a_failing_plugin_is_named_and_skipped(self) -> None:
+        # One broken plugin never takes the server down (2026-10-03): it
+        # is named on stderr and the built-in tools stay available.
         with (
             mock.patch(
                 "importlib.metadata.entry_points",
                 return_value=self._entries("broken", f"{__name__}:register_bad"),
             ),
-            self.assertRaisesRegex(RuntimeError, "broken"),
+            mock.patch("sys.stderr") as err,
         ):
-            mcp_server.register_plugin_tools(FakeServer())
+            names = mcp_server.register_plugin_tools(FakeServer())
+        self.assertEqual(names, [])
+        written = "".join(c.args[0] for c in err.write.call_args_list)
+        self.assertIn("broken", written)
 
     def test_no_plugins_is_the_default(self) -> None:
         with mock.patch("importlib.metadata.entry_points", return_value=[]):

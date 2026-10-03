@@ -42,7 +42,15 @@ from trainnr.robot.actuator_library import (
     list_models,
 )
 
+# The format id the committed bundles carry. It is inside each bundle's
+# content hash, so it stays as written: renaming it would change every
+# actuator stamp the records cite (xl330-m6@3ae1b8c2156b). It names a
+# format, not a vendor; the project's earlier name was robotiq, and
+# Robotiq Inc. has nothing to do with these actuators (review 2026-10-03).
 SCHEMA = "robotiq-actuator-bundle/1"
+# The same format under the project's name: read, never yet written, so a
+# bundle written by a later version under this id verifies here too.
+SCHEMA_ALIASES = frozenset({SCHEMA, "trainnr-actuator-bundle/1"})
 
 # The committed store of wrapped bundles, beside the library they wrap —
 # the ONE spelling (the MCP server, the CLI and the e2e preflight all
@@ -212,9 +220,10 @@ def verify(bundle: Mapping[str, Any]) -> list[str]:
     for required in ("schema", "params", "provenance", "checks", "stamp"):
         if required not in bundle:
             raise ValueError(f"bundle is missing required section {required!r}")
-    if bundle["schema"] != SCHEMA:
+    if bundle["schema"] not in SCHEMA_ALIASES:
         raise ValueError(
-            f"bundle schema is {bundle['schema']!r}; this verifier speaks {SCHEMA!r}"
+            f"bundle schema is {bundle['schema']!r}; this verifier speaks "
+            f"{sorted(SCHEMA_ALIASES)}"
         )
 
     params = bundle["params"]

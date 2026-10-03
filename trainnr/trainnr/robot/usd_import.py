@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from trainnr.bundles.bundle import source_locator, write_bundle_record
-from trainnr.bundles.hashing import stamp
+from trainnr.bundles.hashing import LICENSES_DIR, stamp
 from trainnr.robot.asset_fetch import read_marker
 from trainnr.robot.import_audit import (
     ANY,
@@ -723,6 +723,30 @@ def find_license(source: Path) -> tuple[Path | None, str]:
     return None, UNRECORDED
 
 
+def find_licenses(source: Path) -> list[tuple[Path, str]]:
+    """Every licence on the path from the asset up to the fetched tree's
+    root (`licence_folders`), nearest first, one file per folder. A
+    dual-licensed upstream carries one licence beside the asset and
+    another at its root (robotiq/isaacsim_assets: NVIDIA's CC-BY next to
+    the USD, Robotiq's BSD-3 over the repository); taking only the nearest
+    labelled Robotiq's own meshes CC-BY (review 2026-10-03)."""
+    found = []
+    for folder in licence_folders(source):
+        for candidate in LICENSE_CANDIDATES:
+            path = folder / candidate
+            if path.is_file():
+                found.append((path, license_of(path)))
+                break
+    return found
+
+
+def license_expression(found: list[tuple[Path, str]]) -> str:
+    """The licences found, as one SPDX expression: each covers a part of
+    the asset, so they combine with AND."""
+    names = list(dict.fromkeys(spdx for _path, spdx in found))
+    return " AND ".join(names) if names else UNRECORDED
+
+
 def license_of(path: Path) -> str:
     head = path.read_text(encoding="utf-8", errors="replace")[:2000]
     for phrase, spdx in LICENSE_PHRASES.items():
@@ -762,7 +786,8 @@ def readme_text(
         "",
         f"Source: `{source.name}` ({prov['repository']} @ {commit}), "
         f"variants {variants}, licence {prov['license']} "
-        f"(the upstream text is `{LICENSE_FILE}`).",
+        f"(the upstream texts are `{LICENSE_FILE}` and, when the asset sits "
+        f"under more than one, `{LICENSES_DIR}/`).",
         "",
         "Read by Newton's USD importer and bridged to MuJoCo by its solver "
         f"(newton {versions.get('newton')}, usd-core {versions.get('usd-core')}); "
@@ -826,9 +851,17 @@ def write_usd_bundle(
     model = mujoco.MjModel.from_xml_path(
         str(destination / model_file)
     )  # the file is the truth
-    license_path, spdx = find_license(source)
-    if license_path is not None:
-        (destination / LICENSE_FILE).write_bytes(license_path.read_bytes())
+    licences = find_licenses(source)
+    spdx = license_expression(licences)
+    if licences:
+        (destination / LICENSE_FILE).write_bytes(licences[0][0].read_bytes())
+    if len(licences) > 1:
+        # Every licence the asset sits under, beside the bundle's own
+        # LICENSE: in LICENSES/, which the version stamp leaves out.
+        folder = destination / LICENSES_DIR
+        folder.mkdir(exist_ok=True)
+        for index, (path, spdx_id) in enumerate(licences):
+            (folder / f"{index}-{spdx_id}-{path.name}").write_bytes(path.read_bytes())
     prov = provenance(source, read, settings, spdx)
     (destination / "README.md").write_text(
         readme_text(name, source, prov, visuals), encoding="utf-8"

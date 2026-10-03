@@ -14,3 +14,11 @@ value on BAM's observed optimizer rail — e.g. xl330 m4's
 alpha = 9.999999997) and 9 carry `at_floor` flags (values at the
 optimizer's floor, ~1e-13). Those flags are the reason the envelope
 exists: BAM ships these numbers with nothing saying so.
+
+The files carry `"schema": "robotiq-actuator-bundle/1"`. The id is part of
+each bundle's content hash, so it stays as written: renaming it would
+change every actuator stamp the findings cite. It names this project's
+format under the project's earlier name; it is not Robotiq Inc.'s, and
+the actuators here are not Robotiq products. Readers also accept
+`trainnr-actuator-bundle/1` as the same format.
+

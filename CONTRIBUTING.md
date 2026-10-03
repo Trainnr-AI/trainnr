@@ -47,7 +47,8 @@ it.
   `Signed-off-by: Your Name <you@example.com>` and certifies the
   [Developer Certificate of Origin](https://developercertificate.org/):
   that you wrote the change or have the right to submit it under the
-  Apache License 2.0. Unsigned commits are not merged.
+  Apache License 2.0. Unsigned commits are not merged. The history before
+  the public launch is the maintainer's own work and predates this rule.
 - **Pull request titles** follow Conventional Commits
   (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), with a scope
   where it helps (`feat(studio): ...`, `fix(mjlab): ...`). The body says
@@ -90,7 +91,9 @@ request.
   approves it; that is GitHub's guard against a stranger's code running
   with this repository's token, not a judgement of the change.
 - `main` accepts changes only through a pull request with green checks and
-  a code owner's approval (`.github/CODEOWNERS`); it is never force-pushed.
+  a code owner's approval (`.github/CODEOWNERS`). Before the public launch,
+  `main` is republished from the maintainers' tree; from the launch on it
+  is never force-pushed.
   Only maintainers merge, by squash or rebase.
 - Dependabot opens weekly update pull requests; they go through the same
   gates. A supply-chain job audits every locked dependency set for known

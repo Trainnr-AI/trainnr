@@ -84,7 +84,7 @@ def _require_client() -> Any:
         from openpi_client import websocket_client_policy  # noqa: PLC0415
     except ImportError as error:
         raise ImportError(
-            "openpi's client is the 'remote' extra: uv sync --extra remote "
+            "openpi's client is the 'remote' dependency group: uv sync --group remote "
             "(it pins numpy<2; the extra overrides that pin, measured working "
             "with numpy 2 on 2026-08-27)"
         ) from error

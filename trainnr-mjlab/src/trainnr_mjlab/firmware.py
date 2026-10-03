@@ -1,9 +1,10 @@
 """The servo firmwares' own constants — the one copy on this branch.
 
 A certified actuator bundle (robots/actuator-bundles, schema
-robotiq-actuator-bundle/1) carries BAM's IDENTIFIED parameters: kt, R,
-armature, the friction budget, the command delay. It deliberately does
-not carry the FIRMWARE's constants — the supply voltage, the gain
+robotiq-actuator-bundle/1, a frozen format id;
+trainnr-actuator-bundle/1 reads as the same) carries BAM's IDENTIFIED
+parameters: kt, R, armature, the friction budget, the command delay.
+It deliberately does not carry the FIRMWARE's constants — the supply voltage, the gain
 register, the register-to-duty gain, the pwm ceiling, the current
 limiter — because those are facts about a servo family's controller,
 not about one unit's fit. BAM measured them with an oscilloscope and

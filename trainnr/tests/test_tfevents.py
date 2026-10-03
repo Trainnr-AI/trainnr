@@ -14,10 +14,10 @@ from trainnr.envs.tfevents import (
     record_from_events,
     record_from_scalars,
 )
-from trainnr.project.locate import projects_dir
+from trainnr.paths import checkout
 
-# The certified Go2 run: on the box only (docs/77 §5).
-GO2_RUN = projects_dir() / "go2-walk" / "runs" / "go2-c1"
+# The certified Go2 run: in the maintainers' checkout only (docs/77 §5).
+GO2_RUN = checkout() / "projects" / "go2-walk" / "runs" / "go2-c1"
 
 
 class TheColumns(unittest.TestCase):

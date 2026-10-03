@@ -49,6 +49,7 @@ from trainnr.mcp_jobs import (
     jobs_dir_of,
     track,
 )
+from trainnr.paths import checkout
 from trainnr.viz import viewer_file
 
 from trainnr_mjlab.envelope import (
@@ -558,11 +559,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--student-python",
         type=Path,
-        default=Path(__file__).resolve().parents[3]
-        / "trainnr"
-        / ".venv-train"
-        / "bin"
-        / "python",
+        default=checkout() / "trainnr" / ".venv-train" / "bin" / "python",
         help="the interpreter with LeRobot (the bridge's server side)",
     )
     parser.add_argument("--frame-width", type=int, default=320)

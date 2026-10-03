@@ -23,8 +23,13 @@ PRIVATE=$(api "repos/$REPO" --jq .private)
 say "repository: $REPO (private: $PRIVATE)"
 
 # --- merging -----------------------------------------------------------
+# The homepage points at the repository until trainnr.ai serves its own
+# page over HTTPS (it is a parked domain as of 2026-10-03); the
+# organisation's profile is left as it is.
 api -X PATCH "repos/$REPO" \
   -F has_issues=true -F has_discussions=true -F has_wiki=false -F has_projects=false \
+  -F allow_forking=true \
+  -f homepage=https://github.com/Trainnr-AI/trainnr \
   -F allow_merge_commit=false -F allow_squash_merge=true -F allow_rebase_merge=true \
   -F allow_auto_merge=false -F delete_branch_on_merge=true -F allow_update_branch=true \
   -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY >/dev/null
@@ -86,6 +91,12 @@ else
   # latest push approved, conversations resolved, and the gates green.
   # Organisation admins may bypass, so the maintainer can still merge
   # their own pull requests.
+  # With one maintainer, the approval rule cannot be met on the
+  # maintainer's own pull requests (nobody else can approve), so those
+  # merge through the admin bypass; for anyone else's it holds. Only
+  # always-running jobs are required: path-filtered workflows
+  # (studio-platforms, mjlab) and the python-matrix and macos jobs are
+  # not, until they have run green for a while.
   RULES=$(cat <<'JSON'
 {"name": "main", "target": "branch", "enforcement": "active",
  "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
@@ -98,7 +109,7 @@ else
      "required_review_thread_resolution": true, "allowed_merge_methods": ["squash", "rebase"]}},
   {"type": "required_status_checks", "parameters": {
      "strict_required_status_checks_policy": true,
-     "required_status_checks": [{"context": "fast-gates"}, {"context": "sign-off"}, {"context": "supply-chain"}]}}
+     "required_status_checks": [{"context": "fast-gates"}, {"context": "sign-off"}, {"context": "supply-chain"}, {"context": "package"}]}}
  ]}
 JSON
 )

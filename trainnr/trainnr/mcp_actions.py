@@ -22,20 +22,26 @@ Environment shapes (each the wrapped tool's own documented launch):
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 from trainnr.bundles.locate import robots_dir
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME
 from trainnr.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
-from trainnr.mcp_jobs import UV_NO_SYNC, Cancelled, JobHandle, JobManager, JobStatus
-from trainnr.paths import train_python
+from trainnr.mcp_jobs import (
+    UV_NO_SYNC,
+    Cancelled,
+    JobHandle,
+    JobManager,
+    JobStatus,
+    Refusal,
+)
+from trainnr.paths import checkout, train_python, wsl_env_file
 
-# The checkout this package runs from (trainnr/ -> trainnr/ -> the
-# repo). Not the robot library's parent: `TRAINNR_ROBOTS_DIR` moves the
-# library without moving the tools.
-REPO_ROOT = Path(__file__).resolve().parents[2]  # <repo>/trainnr/trainnr/<file>
+# The checkout the tools run from: `$TRAINNR_REPO`, else the ancestor that
+# carries the package (`paths.checkout`). Not the robot library's parent:
+# `TRAINNR_ROBOTS_DIR` moves the library without moving the tools.
+REPO_ROOT = checkout()
 PIPELINE_DIR = REPO_ROOT / "trainnr"
 TRAINNR_MJLAB_DIR = REPO_ROOT / "trainnr-mjlab"
 TOOLS_DIR = REPO_ROOT / "tools"
@@ -58,19 +64,13 @@ def unitree_reference() -> Path:
     return (Path(override) if override else UNITREE_REFERENCE_DEFAULT).expanduser()
 
 
-# The box's launch environment (trainnr/wsl.env: GL to the card, CUDA's
-# library path, one BLAS thread). Every door carries it on Linux, because
-# the developer's agent launches the MCP server with NO environment of
-# its own (.mcp.json) — and a warp child without LD_LIBRARY_PATH falls to
-# the CPU SILENTLY: a stranger's evaluate_walk (certify_walk then) would
-# have judged on the wrong instrument (found 2026-09-02, the first run of
-# the doors on the GPU box). Harmless on native Linux (the file's own
-# header); absent on
-# macOS and Windows. Tests pass None to keep the command lines verbatim.
-ENV_FILE: Path | None = (
-    PIPELINE_DIR / "wsl.env" if sys.platform.startswith("linux") else None
-)
-WSL_RUN = TOOLS_DIR / "wsl-run.sh"  # the same env for interpreters uv does not launch
+# The WSL launch environment (trainnr/wsl.env: GL to the GPU, CUDA's
+# library path, one BLAS thread), on WSL only. Every job carries it there,
+# because an agent launches the MCP server with almost no environment of
+# its own, and a Warp child without LD_LIBRARY_PATH falls to the CPU
+# silently. uv's `--env-file` fills only the variables that are unset, so
+# a user's own values win. Tests pass None to keep the command lines verbatim.
+ENV_FILE: Path | None = wsl_env_file()
 
 
 def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
@@ -80,6 +80,15 @@ def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     for extra in extras:
         argv += ["--extra", extra]
     return [*argv, "python"]
+
+
+def project_output(name: str) -> str:
+    """A job's default output folder: `runs/<name>` in the current
+    project (never the checkout or a plugin's install folder); refused
+    by name when no project is selected."""
+    from trainnr.project import current_project  # noqa: PLC0415
+
+    return str(current_project().runs / name)
 
 
 def walk_robots() -> tuple[str, ...]:
@@ -173,14 +182,24 @@ class Actions:
         return _uv(project, *extras, env_file=self.env_file)
 
     def _under_env(self, argv: list[str]) -> list[str]:
-        """A non-uv command line under the same environment (wsl-run.sh
-        sources the file, then execs)."""
-        return [str(WSL_RUN), *argv] if self.env_file is not None else argv
+        """A non-uv command line under the same environment: uv loads the
+        file (unset variables only) and runs the command as given."""
+        if self.env_file is None:
+            return argv
+        return [
+            "uv",
+            "run",
+            "--no-project",
+            "--env-file",
+            str(self.env_file),
+            "--",
+            *argv,
+        ]
 
     # -- data ---------------------------------------------------------
 
     def generate_kitting_demos(
-        self, episodes: int = 10, seed: int = 20260826, out: str = "runs/kitting-demos"
+        self, episodes: int = 10, seed: int = 20260826, out: str | None = None
     ) -> JobHandle:
         """Generate kitting demonstrations with the scripted expert; the
         success criterion keeps or discards each, DR draws recorded per
@@ -192,7 +211,7 @@ class Actions:
             *self._uv(PIPELINE_DIR, "sim"),
             str(TOOLS_DIR / "kitting-demos.py"),
             str(episodes),
-            out,
+            out if out is not None else project_output("kitting-demos"),
             "--seed",
             str(seed),
         ]
@@ -450,7 +469,7 @@ class Actions:
         episodes: int = 12,
         worlds: int = 9,
         seed: int = 1000,
-        out: str = "../runs/walk-demos",
+        out: str | None = None,
         *,
         robot: str | None = None,
         scene: str | None = None,
@@ -464,12 +483,16 @@ class Actions:
         discards a failures.jsonl. On a captured `scene` (docs/78 E3)
         the rollouts stand on it and the frames are the head camera's
         picture of its splat. Export with export_batch."""
+        if robot is not None:
+            robot = require_walk_robot(robot)
+        if out is None:
+            out = project_output("walk-demos")
         argv = [*self._uv(TRAINNR_MJLAB_DIR), "-m", "trainnr_mjlab.walk_press"]
         argv += [checkpoint] if checkpoint else ["--latest"]
         argv += ["--out", out, "--episodes", str(episodes)]
         argv += ["--worlds", str(worlds), "--seed", str(seed)]
         if robot is not None:
-            argv += ["--robot", require_walk_robot(robot)]
+            argv += ["--robot", robot]
         if project is not None:
             argv += ["--project", project]
         if scene is not None:
@@ -710,7 +733,12 @@ class Actions:
         return self.jobs.start("preflight-deployment", argv, PIPELINE_DIR)
 
     def ingest_public_log(
-        self, name: str, *, project: str, recording_name: str | None = None
+        self,
+        name: str,
+        *,
+        project: str,
+        recording_name: str | None = None,
+        accept_unlicensed: bool = False,
     ) -> JobHandle:
         """A registered public log fetched (size and digest checked) and
         ingested into the project with its provenance. A job: the fetch is
@@ -723,6 +751,7 @@ class Actions:
             "--project",
             project,
             *_given("--as", recording_name),
+            *(["--accept-unlicensed"] if accept_unlicensed else []),
         ]
         return self.jobs.start("ingest-public-log", argv, PIPELINE_DIR)
 
@@ -754,8 +783,8 @@ class Actions:
         """A job's state and its log tail."""
         return self.jobs.status(job_id)
 
-    def cancel_job(self, job_id: str) -> Cancelled:
-        """SIGTERM a job's process group."""
+    def cancel_job(self, job_id: str) -> Cancelled | Refusal:
+        """SIGTERM a job's process group, while the job's own process runs."""
         return self.jobs.cancel(job_id)
 
     def list_jobs(self) -> list[JobStatus]:

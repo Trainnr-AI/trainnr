@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 CHECKOUT_ENV = "TRAINNR_REPO"
+HOME_ENV = "TRAINNR_HOME"  # the user's own data: projects, caches
+HOME_DIR = "trainnr"  # ~/trainnr
 # The file that marks the checkout, relative to its root.
 CHECKOUT_MARKER = Path("trainnr") / "pyproject.toml"
 _PACKAGE = Path(__file__).resolve().parent
@@ -35,6 +37,49 @@ def checkout() -> Path:
         if (ancestor / CHECKOUT_MARKER).is_file():
             return ancestor
     return _PACKAGE.parents[1]
+
+
+# The WSL launch environment (GL through Mesa's D3D12 driver, CUDA's
+# library path, one BLAS thread). It is applied on WSL only, and only to
+# variables the user has not set: on a native Linux machine it would point
+# the renderer at a driver that is not there.
+WSL_ENV_FILE = Path("trainnr") / "wsl.env"
+WSL_INTEROP = Path("/proc/sys/fs/binfmt_misc/WSLInterop")
+
+
+def on_wsl() -> bool:
+    """Running under Windows' Subsystem for Linux: the rule the Studio
+    uses too (crates/trainnr-studio/src/spawn.rs `on_wsl`)."""
+    return bool(os.environ.get("WSL_DISTRO_NAME")) or WSL_INTEROP.exists()
+
+
+def wsl_env_file() -> Path | None:
+    """The WSL launch environment's file, on WSL when the checkout has it."""
+    if not on_wsl():
+        return None
+    path = checkout() / WSL_ENV_FILE
+    return path if path.is_file() else None
+
+
+def user_home() -> Path:
+    """Where the user's own data lives (projects, download caches):
+    `$TRAINNR_HOME`, else `~/trainnr`. Never the checkout or a plugin's
+    install folder, which an update replaces; read-only material (the
+    robot library, the tools) still comes from `checkout()`."""
+    named = os.environ.get(HOME_ENV, "").strip()
+    if named:
+        return Path(named).expanduser().absolute()
+    return Path.home() / HOME_DIR
+
+
+def user_cache(name: str, legacy: tuple[str, ...]) -> Path:
+    """`<user home>/cache/<name>`, unless a checkout already holds the
+    cache at its older place (`<checkout>/<legacy...>`), which is kept so
+    nothing downloaded before is fetched again."""
+    old = checkout().joinpath(*legacy)
+    if old.is_dir():
+        return old
+    return user_home() / "cache" / name
 
 
 def venv_bin(venv: Path, name: str) -> Path:
