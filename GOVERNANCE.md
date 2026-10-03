@@ -45,3 +45,26 @@ reporting on this repository). Conduct goes through `CODE_OF_CONDUCT.md`:
 a GitHub issue labelled `conduct`, or the contact on the maintainer's
 GitHub profile (@aggprakhar). A private address at trainnr.ai will be
 named here once it exists.
+
+## Versions and the public API
+
+One version covers the whole product (the Python packages, the Studio,
+the plugin, the MCP Registry entry, the citation); `tools/release.py`
+writes it everywhere and CI fails when any copy disagrees. Versions follow
+Semantic Versioning. Before 1.0, a minor release (0.2.0) may break the
+public API and a patch release (0.1.1) never does.
+
+The public API is what other people's code and agents depend on:
+
+- the MCP tools' names, arguments and reply fields;
+- the `trainnr` command line;
+- the record schemas (`trainnr-*/1`: project index, commands, Studio
+  state, findings, certificates, deployments);
+- the Python import paths of `trainnr` and `trainnr_mjlab`.
+
+A change to any of them is listed under *Breaking* in `CHANGELOG.md`.
+A renamed or removed tool keeps working, with a deprecation warning in
+its reply, for one minor release before it goes.
+
+A release is a tag `vX.Y.Z` pushed by a maintainer: it builds the Studio
+for each platform and attaches the downloads, each with its SHA-256.

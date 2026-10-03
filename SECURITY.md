@@ -39,3 +39,18 @@ reporters in the release notes unless they prefer otherwise.
 - `tools/cloud-gpu.py` provisions rented machines with an API key read
   from the environment. Keys are never written into the repository; a
   report that one has been is a security report.
+
+## Threat model
+
+trainnr is a local developer tool that an AI agent drives. What it trusts,
+what it does not, and what guards each boundary:
+
+| Boundary | What could go wrong | What guards it |
+|---|---|---|
+| The agent calling the MCP server | An agent, or a prompt injected into what it reads, asks for an action the user did not intend: a training run, a deployment to a robot, a deletion | Tools act only inside the open project directory; acting tools run as visible background jobs the user can list and cancel (`list_jobs`, `cancel_job`); nothing is deleted by a tool; deploying to hardware is the vendor's runtime, started by the user, after a pre-flight that refuses by name |
+| Files the user opens | A crafted robot model, scene, recording or dataset exploits a parser (MuJoCo, USD, URDF, rosbag2, MCAP) | Inputs are the user's own or named public sources with a recorded digest; the parsers are the upstream libraries, kept current by Dependabot and audited weekly (`tools/supply-chain.py`, `cargo-deny`) |
+| Downloads | A tampered Studio binary or public log | The Studio comes from this repository's GitHub release over HTTPS and is refused unless its SHA-256 matches; registered public logs are checked against their recorded size and digest |
+| Network | Data leaving the machine | The server listens on no network port; the Studio's viewer server binds to the local machine; cloud GPUs are used only when the user asks, with their key read from the environment and never written to the repository |
+| The repository | A malicious pull request reaches a release | Only maintainers merge; CI runs a pull request's code with a read-only token and no secrets; every action is pinned to a commit; release builds never restore a build cache; Dependabot and the weekly supply-chain job flag known advisories |
+
+A report that any row's guard can be bypassed is a security report.

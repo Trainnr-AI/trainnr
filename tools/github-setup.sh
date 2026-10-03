@@ -98,7 +98,7 @@ else
      "required_review_thread_resolution": true, "allowed_merge_methods": ["squash", "rebase"]}},
   {"type": "required_status_checks", "parameters": {
      "strict_required_status_checks_policy": true,
-     "required_status_checks": [{"context": "fast-gates"}, {"context": "sign-off"}]}}
+     "required_status_checks": [{"context": "fast-gates"}, {"context": "sign-off"}, {"context": "supply-chain"}]}}
  ]}
 JSON
 )

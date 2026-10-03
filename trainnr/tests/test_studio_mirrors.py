@@ -108,9 +108,11 @@ class TwistNames(unittest.TestCase):
 class StudioPort(unittest.TestCase):
     def test_the_ingest_port_is_the_one_the_shell_binds(self) -> None:
         # trainnr.viz.STUDIO_ADDRESS is the one Python home; the
-        # Rust shell binds the same port (documented mirror).
+        # Rust shell binds the same port (documented mirror), and on this
+        # machine only: an address other than 127.0.0.1 here would let
+        # the network stream into the window (SECURITY.md).
         address = constant(VIZ, r'STUDIO_ADDRESS = "rerun\+http://127\.0\.0\.1:(\d+)/')
-        bound = constant(MAIN_RS, r'const GRPC_BIND: &str = "0\.0\.0\.0:(\d+)"')
+        bound = constant(MAIN_RS, r'const GRPC_BIND: &str = "127\.0\.0\.1:(\d+)"')
         self.assertEqual(address, bound)
 
 

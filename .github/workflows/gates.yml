@@ -38,6 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: every commit is signed off
         env:
@@ -55,6 +56,35 @@ jobs:
             echo "Sign off with: git rebase --signoff $BASE && git push --force-with-lease"
             exit 1
           fi
+
+  supply-chain:
+    # Every change and every week: one version everywhere, the workflows
+    # linted for security (zizmor), the locked Python sets audited for
+    # known vulnerabilities, and the Studio's Rust dependencies checked
+    # for advisories, licences and sources (cargo-deny). The documented
+    # exceptions live in tools/supply-chain.py and the crate's deny.toml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_DENY_VERSION: "0.20.2"
+      CARGO_DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: one version everywhere
+        run: python3 tools/release.py check
+      - name: workflows linted for security
+        run: uvx zizmor --format plain .github/workflows
+      - name: cargo-deny, from its release, checksum-verified
+        run: |
+          name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o deny.tar.gz "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz"
+          echo "${CARGO_DENY_SHA256}  deny.tar.gz" | sha256sum -c -
+          tar xzf deny.tar.gz && sudo mv "${name}/cargo-deny" /usr/local/bin/
+      - name: dependencies audited (Python and Rust)
+        run: python3 tools/supply-chain.py
 
   fast-gates:
     if: github.event_name != 'schedule'
@@ -84,6 +114,8 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
           df -h / | tail -1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: system libraries (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input; Mesa's EGL and software GL for MuJoCo's renderer)
         run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev libegl1 libgl1-mesa-dri libgles2 libosmesa6
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
@@ -192,6 +224,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
 
       - name: python tests with sim + train extras

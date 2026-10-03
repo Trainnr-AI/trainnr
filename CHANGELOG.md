@@ -34,6 +34,20 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- One version everywhere (`tools/release.py`, checked in CI); a supply-chain
+  job (pip-audit on every locked Python set, cargo-deny on the Studio,
+  zizmor on the workflows); a pre-commit config; a threat model in
+  SECURITY.md and the public API's definition in GOVERNANCE.md.
+
+### Security
+
+- The Studio's viewer server listens on this machine only (127.0.0.1:9876);
+  it listened on every interface, so anyone on the same network could
+  stream into an open Studio. `TRAINNR_VIEWER_BIND` opens it on purpose.
+- urllib3 2.8.0, pyjwt 2.15.1, accelerate 1.15.0 and rustls 0.23.45, past
+  their published advisories; checkouts no longer keep the token, and the
+  release build restores no cache.
+
 - The Studio, prebuilt: a release workflow builds it for Linux (x86_64),
   macOS (Apple Silicon) and Windows (x86_64); `launch_studio` and
   `trainnr studio` download the build matching the package version,

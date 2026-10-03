@@ -28,6 +28,8 @@ page says what each one is for.
 | `coverage.sh` | Rust line coverage for the Studio crate. |
 | `coverage-badge.py` | Turns coverage.py's JSON report into the README's coverage badge (CI, after the tests). |
 | `plugin-prefetch.sh` | The plugin's session-start hook (`hooks/hooks.json`): downloads the prebuilt Studio in the background, once per version, silently. |
+| `release.py` | One version for the whole product: `check` (CI), `bump X.Y.Z` writes all eleven copies, `show`. |
+| `supply-chain.py` | Known vulnerabilities in every locked Python set (pip-audit) and the Studio's Rust advisories, licences and sources (cargo-deny); documented exceptions only. |
 | `github-setup.sh` | Applies the repository's GitHub settings: merges, Actions, labels and, once public, the ruleset on `main` and the security features; lists who can merge. Idempotent. |
 | `loc-report.py` | Line counts by area. |
 

@@ -1,0 +1,52 @@
+# The checks a contributor runs before each commit, with the standard
+# pre-commit tool (pip install pre-commit && pre-commit install). The
+# same checks run in CI; tools/setup-hooks.sh installs the repository's
+# fuller hook (tools/hooks/pre-commit) for maintainers.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: detect-private-key
+      - id: end-of-file-fixer
+        exclude: ^(docs|data|recordings|robots)/|\.(svg|lock)$
+      - id: trailing-whitespace
+        exclude: ^(docs|data|recordings|robots)/|\.(svg|lock)$
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        files: ^(trainnr|trainnr-mjlab|tools)/
+      - id: ruff-format
+        files: ^(trainnr|tools)/
+  - repo: local
+    hooks:
+      - id: version-copies-agree
+        name: one version everywhere
+        entry: python3 tools/release.py check
+        language: system
+        pass_filenames: false
+        files: (pyproject\.toml|__init__\.py|Cargo\.toml|plugin\.json|marketplace\.json|server\.json|CITATION\.cff)$
+      - id: docs-describe-real-code
+        name: docs describe real code
+        entry: python3 tools/check-docs.py
+        language: system
+        pass_filenames: false
+        files: \.md$
+      - id: package-layers
+        name: package layers
+        entry: python3 tools/check-layers.py
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: cargo-fmt
+        name: cargo fmt (the Studio)
+        entry: bash -c 'cd crates/trainnr-studio && cargo fmt --check'
+        language: system
+        pass_filenames: false
+        files: ^crates/trainnr-studio/.*\.rs$

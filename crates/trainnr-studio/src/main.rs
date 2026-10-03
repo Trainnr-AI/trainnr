@@ -70,9 +70,14 @@ const SLOW_FRAME_MS: f32 = 150.0;
 const FAST_FRAME_MS: f32 = 60.0;
 /// The picker row alone, when no scene runs above a streaming viewer.
 const VIEWPORT_PICKER_HEIGHT: f32 = 34.0;
-/// The standard Rerun SDK port on every interface: anything calling
-/// `rr.connect_grpc()` lands in this window.
-const GRPC_BIND: &str = "0.0.0.0:9876";
+/// The standard Rerun SDK port, on this machine only: anything here
+/// calling `rr.connect_grpc()` lands in this window, and nothing on the
+/// network can stream into it (it listened on every interface until
+/// 2026-10-03; every client, the cloud feed included, connects from this
+/// machine). `$TRAINNR_VIEWER_BIND` opens it deliberately, e.g.
+/// `0.0.0.0:9876` to stream from another machine on a trusted network.
+const GRPC_BIND: &str = "127.0.0.1:9876";
+const GRPC_BIND_ENV: &str = "TRAINNR_VIEWER_BIND";
 /// Bounds on what one agent command may ask of the viewer and the
 /// simulator: time steps in the viewer, physics steps in the stream.
 const MAX_TIME_STEPS: u64 = 1000;
@@ -135,8 +140,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Fails loudly if another viewer already holds the port — close the
     // standalone viewer rather than silently split streams.
+    let bind = std::env::var(GRPC_BIND_ENV).unwrap_or_else(|_| GRPC_BIND.to_owned());
     let (rx, _grpc_server_handle) = re_grpc_server::spawn_with_recv(
-        GRPC_BIND.parse()?,
+        bind.parse()?,
         Default::default(),
         re_grpc_server::shutdown::never(),
     );

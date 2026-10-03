@@ -32,6 +32,7 @@ cd trainnr && uv sync --extra sim --extra mcp --extra viz && cd ..   # the Pytho
 cd trainnr-mjlab && uv sync --extra viz && cd ..                      # the mjlab trainer
 cd crates/trainnr-studio && cargo build --release && cd ../..       # the Studio
 tools/setup-hooks.sh                                                  # the pre-commit gates
+# or the standard tool: pip install pre-commit && pre-commit install
 ```
 
 The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or
@@ -92,7 +93,10 @@ request.
   a code owner's approval (`.github/CODEOWNERS`); it is never force-pushed.
   Only maintainers merge, by squash or rebase.
 - Dependabot opens weekly update pull requests; they go through the same
-  gates.
+  gates. A supply-chain job audits every locked dependency set for known
+  vulnerabilities and the Studio's crates for advisories and licences
+  (`tools/supply-chain.py`); a new advisory fails the build unless its
+  exception is written down with a reason.
 
 ## Licence
 
