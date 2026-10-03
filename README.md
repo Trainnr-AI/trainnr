@@ -1,8 +1,10 @@
 # trainnr
 
 [![gates](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml/badge.svg?branch=main)](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml)
-[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Trainnr-AI/trainnr/badges/coverage.json)](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml)
+[![coverage](https://github.com/Trainnr-AI/trainnr/raw/badges/coverage.svg)](https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml)
+<!-- After the repository is public and the scorecard workflow has run once:
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Trainnr-AI/trainnr/badge)](https://scorecard.dev/viewer/?uri=github.com/Trainnr-AI/trainnr)
+-->
 [![licence: FSL-1.1-ALv2](https://img.shields.io/badge/licence-FSL--1.1--ALv2-blue)](LICENSE)
 [![python ≥ 3.10](https://img.shields.io/badge/python-%E2%89%A5%203.10-blue)](trainnr/pyproject.toml)
 [![MCP server](https://img.shields.io/badge/MCP-76%20tools-6f42c1)](#install)

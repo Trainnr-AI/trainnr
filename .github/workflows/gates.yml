@@ -153,7 +153,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: badge-coverage
-          path: trainnr/badge-coverage.json
+          path: |
+            trainnr/badge-coverage.json
+            trainnr/badge-coverage.svg
           retention-days: 7
 
   badges:
@@ -178,7 +180,8 @@ jobs:
           mkdir pub && cd pub
           git init -q -b badges
           cp ../badge-coverage.json coverage.json
-          git add coverage.json
+          cp ../badge-coverage.svg coverage.svg
+          git add coverage.json coverage.svg
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "coverage: $(python3 -c 'import json;print(json.load(open("coverage.json"))["message"])')"
           git push -q --force "https://x-access-token:${TOKEN}@github.com/${REPO}.git" badges
