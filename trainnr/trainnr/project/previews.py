@@ -144,7 +144,18 @@ Renderer = Callable[[Project, Path, Path, dict[str, Any]], bool]
 # The kinds whose picture is drawn here (PIL) and so follows the theme;
 # the others are the simulator's renders or the batch's own frames.
 THEMED_KINDS = frozenset(
-    {"scene", "drift", "recording", "policy", "certificate", "deploy", "finding", "run"}
+    {
+        "scene",
+        "drift",
+        "recording",
+        "policy",
+        "certificate",
+        "deploy",
+        "finding",
+        "run",
+        "robot",
+        "task",
+    }
 )
 
 
@@ -286,10 +297,19 @@ def _render_model(
         camera.elevation = camera_spec["elevation"]
         camera.lookat[:] = model.stat.center
         renderer.update_scene(data, camera=camera)
-        pixels = renderer.render()
+        pixels = np.asarray(renderer.render()).copy()
+        # The model on the theme's ground: a segmentation pass marks the
+        # pixels no geom covers (object id -1), and those take the palette's
+        # ground instead of MuJoCo's black, so a robot reads on a light
+        # page as it does on a dark one (2026-10-03).
+        renderer.enable_segmentation_rendering()
+        renderer.update_scene(data, camera=camera)
+        empty = np.asarray(renderer.render())[..., 0] < 0
+        renderer.disable_segmentation_rendering()
+        pixels[empty] = pal().ground
     finally:
         renderer.close()
-    return _save(np.asarray(pixels), out)
+    return _save(pixels, out)
 
 
 def _robot_model_file(source: Path) -> Path | None:

@@ -202,10 +202,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             rerun_app.app_options_mut().custom_window_decorations = chrome::custom_chrome();
 
             // The theme the person chose last time, before the first frame;
-            // the system's when nothing was chosen.
-            if let Some(pref) = cc.storage.and_then(|s| s.get_string(THEME_KEY)) {
-                cc.egui_ctx.set_theme(theme_preference(&pref));
-            }
+            // light when nothing was chosen (the default since 2026-10-03:
+            // the designed light palette is the product's face, theme.rs).
+            let chosen = cc
+                .storage
+                .and_then(|s| s.get_string(THEME_KEY))
+                .map(|pref| theme_preference(&pref))
+                .unwrap_or(DEFAULT_THEME);
+            cc.egui_ctx.set_theme(chosen);
 
             let viewport = ViewportFeed::idle();
             let mut shell = Shell::new(Model::open(repo_root()));
@@ -224,7 +228,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 activated_shown: None,
                 viewport_full: false,
                 closing: false,
-                theme_preference: egui::ThemePreference::System,
+                theme_preference: chosen,
                 frames: FrameClock::default(),
             }))
         }),
@@ -1502,6 +1506,8 @@ fn cmd_clone(
 
 /// The storage key of the chosen theme preference.
 const THEME_KEY: &str = "trainnr.theme";
+/// The theme a first launch opens in, before anyone picks one.
+const DEFAULT_THEME: egui::ThemePreference = egui::ThemePreference::Light;
 
 /// The heartbeat's word for the theme in effect.
 fn theme_name(theme: egui::Theme) -> &'static str {

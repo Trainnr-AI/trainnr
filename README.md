@@ -5,8 +5,9 @@
 <h1 align="center">trainnr</h1>
 
 <p align="center">
-  <b>The end-to-end robotics platform, run from your coding agent.</b><br>
-  Real-to-sim, train, sim-to-real, and back.
+  <b>The physical AI platform for robot learning, run from your coding agent.</b><br>
+  Simulation, reinforcement learning, deployment, and a data flywheel from<br>
+  the robot's telemetry back into training.
 </p>
 
 <p align="center">
@@ -30,16 +31,18 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/figures/readme/studio-overview-light.png">
-  <img alt="The Studio's Overview of a Go2 project: every stage of the loop proved, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview-dark.png">
-</picture>
+<img alt="The Studio's Overview of a Go2 project: every stage of the loop proved, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview.png">
 
-Identify your robot's dynamics from its own telemetry into a simulation
-model, generate training data, train policies by reinforcement learning
-(MuJoCo, mjlab) or imitation learning (LeRobot), evaluate them with exact
-confidence intervals, gate and deploy them on the robot's runtime, and
-watch the deployment's telemetry for drift, which starts the next turn.
+trainnr is an open-source platform for **physical AI**: robot learning
+from the robot's own data, end to end. It identifies your robot's dynamics
+from its telemetry into a **simulation** model (real-to-sim), creates
+training data on that model, trains policies with **reinforcement learning
+for robotics** (MuJoCo, mjlab) or imitation learning (LeRobot), evaluates
+them with exact confidence intervals, and gates the **deployment** on the
+robot's runtime (sim-to-real). The deployed robot's **telemetry** comes
+back as new data: it is checked for drift, re-identified, and fed **back
+into training**. That cycle is the **data flywheel**, and every turn of it
+is on the record.
 
 Every step is a tool of one **MCP server**, so your coding agent runs the
 loop by conversation. Every result is a **record** the next step cites,
@@ -124,7 +127,7 @@ test, runs on a laptop without a GPU.
 
 ## What it does
 
-### Real-to-sim: identify the robot you have
+### Real-to-sim: telemetry into a simulation model
 
 The robot's own telemetry, fitted into the model it trains on. Every
 parameter carries a 95 % interval and a verdict: pinned when the data
@@ -135,7 +138,7 @@ its provenance shown as such.
 
 `onboard_robot` · `ingest_recording` · `ingest_public_log` · `start_capture` · `identify_system`
 
-### Train on the identified model
+### Data creation and RL for robotics
 
 Reinforcement learning on [mjlab](https://github.com/mujocolab/mjlab), or
 imitation learning through [LeRobot](https://github.com/huggingface/lerobot),
@@ -147,7 +150,7 @@ randomization and kept by the task's success criterion, with a datasheet.
 
 `create_task` · `accept_task` · `train_walk` · `generate_walk_demos` · `multiply_demos` · `run_chain`
 
-### Evaluate with an interval, not a clip
+### Evaluation with an interval, not a clip
 
 A clip cannot tell 10 % from 99 %. An evaluation here is paired,
 seed-matched trials with an exact (Clopper-Pearson) confidence interval and
@@ -157,7 +160,7 @@ a funnel of how far each episode got; gates read the lower bound.
 
 `evaluate_walk` · `describe_eval` · `list_eval_records` · `friction_curve`
 
-### Deploy through a gate
+### Sim-to-real deployment through a gate
 
 The export is ONNX with normalization folded in, plus a manifest read from
 the built environment. The gate drives it through the manifest alone on two
@@ -170,7 +173,7 @@ torques and compute before the first tick, and measures the stops.
 
 `export_deployment` · `gate_deployment` · `attribute_deployment` · `preflight_deployment` · `stage_deployment`
 
-### Watch it in the simulator, in a captured scene
+### Simulation in a captured scene
 
 MuJoCo inside the Studio, with the embedded [Rerun](https://rerun.io)
 viewer beside it. A phone video becomes a scene: Gaussian splats for what
@@ -181,11 +184,14 @@ between the two measured. Here the deployed Go2 walks a captured garden.
 
 `capture_scene` · `import_scene` · `simulate_in_studio` · `control_simulator` · `screenshot_studio`
 
-### Watch the deployment for drift
+### Deployment telemetry back to training: the data flywheel
 
-New telemetry is identified again and judged against the robot's fitted
-intervals, without writing a new fit. What left its interval is named,
-and re-identification is recommended. That starts the next turn of the loop.
+The deployed robot's telemetry is identified again and judged against
+its fitted intervals. What left its interval is named, re-identification
+is recommended, and the new fit becomes the model the next policy trains
+on. Each turn adds recordings, fits, datasets, policies and evaluations,
+all stamped and queryable, so the next turn starts from more data than
+the last.
 
 <img alt="A drift check's page: parameters out of interval, within interval and undetermined, with the recommendation" src="docs/figures/readme/studio-drift.png">
 
