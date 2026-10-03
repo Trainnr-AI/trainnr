@@ -26,6 +26,7 @@
 <p align="center">
   <a href="#whats-inside">What's inside</a> ·
   <a href="#quickstart">Quickstart</a> ·
+  <a href="#runs-on-a-mac-and-on-linux-and-windows">Platforms</a> ·
   <a href="#what-it-does">What it does</a> ·
   <a href="docs/README.md">Docs</a> ·
   <a href="docs/paper/README.md">Paper</a> ·
@@ -148,6 +149,29 @@ On another platform, or to work on the Studio, build it from source:
 test, runs on a laptop without a GPU.
 
 </details>
+
+## Runs on a Mac, and on Linux and Windows
+
+trainnr's simulator is MuJoCo, which runs natively on Apple Silicon. On a
+Mac the whole loop from telemetry to evaluation runs locally: data
+collection, system identification, the simulation, synthetic data,
+evaluation, the sim-to-real gate and drift checks, the captured-scene
+chain (on Metal), and the Studio. Isaac Sim and Isaac Lab need Linux or
+Windows with an NVIDIA RTX GPU and do not run on macOS; Isaac's USD assets
+still come in, through Newton's importer.
+
+| | macOS (Apple Silicon) | Linux (x86_64) | Windows |
+|---|---|---|---|
+| MCP server, data collection, identification, simulation, evaluation, deployment gate, drift | yes | yes | through WSL2 |
+| The Studio (desktop app) | prebuilt | prebuilt | prebuilt; through WSL2 tested |
+| Captured scenes (COLMAP, Gaussian splats) | yes, Metal | yes, CUDA | through WSL2 |
+| Large-scale RL training (mjlab on MuJoCo Warp, CUDA) | on a rented GPU (`tools/cloud-gpu.py`) or a Linux machine | NVIDIA GPU | NVIDIA GPU through WSL2 |
+
+The Mac rows were measured on an Apple M1 Pro: the Studio, evaluations
+judged on arm64, MuJoCo Warp on the CPU, and the capture chain
+([`docs/76`](docs/76-the-loop.md), [`docs/78`](docs/78-the-scene-loop.md),
+[`docs/68`](docs/68-findings.md)). The Linux rows were measured on an RTX
+3090 Ti under WSL2.
 
 ## What it does
 
