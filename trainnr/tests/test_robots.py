@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from tests._extras import needs_numpy
+from tests._extras import installed, needs_numpy
 from trainnr.project import Kind, create_project, index_project
 from trainnr.project.ingest import ingest
 from trainnr.robots import Channel, Recording, list_adapters, resolve
@@ -316,6 +316,7 @@ class Wire(unittest.TestCase):
 
 
 @needs_numpy
+@unittest.skipUnless(installed("pyarrow"), "needs pyarrow (the lerobot extra)")
 class LeRobot(unittest.TestCase):
     def test_a_v3_dataset_yields_state_and_action_with_joint_names(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

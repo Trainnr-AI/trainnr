@@ -287,6 +287,7 @@ class ThePose(unittest.TestCase):
 
 
 @needs_sim
+@unittest.skipUnless(installed("rerun"), "needs rerun (the viz extra)")
 class TheMirror(unittest.TestCase):
     """The gate's picture in the Studio: a frame every `mirror.every` ticks with the
     pose in the scene, the command and the measured velocity as series.

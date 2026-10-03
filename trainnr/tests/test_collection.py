@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from tests._extras import needs_numpy
+from tests._extras import installed, needs_numpy
 from tests.test_robots import WIRE, make_lerobot, make_mcap
 from trainnr.project import Kind, create_project, index_project
 from trainnr.project.ingest import capture as live_capture
@@ -138,6 +138,7 @@ class Mocap(unittest.TestCase):
 
 
 @needs_numpy
+@unittest.skipUnless(installed("pyarrow"), "needs pyarrow (the lerobot extra)")
 class CollectionTags(unittest.TestCase):
     def test_each_adapter_names_its_collection_and_it_round_trips(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
