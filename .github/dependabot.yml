@@ -10,12 +10,26 @@ updates:
       actions: { patterns: ["*"] }
   - package-ecosystem: uv
     directory: /trainnr
+    ignore:
+      # The simulator is the measuring instrument: its version changes
+      # the numbers the records carry, so it moves by a deliberate commit
+      # with a re-measure, never by an update bot.
+      - dependency-name: "mujoco*"
+      - dependency-name: "mjlab"
+      - dependency-name: "warp-lang"
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     groups:
       python: { patterns: ["*"], update-types: ["minor", "patch"] }
   - package-ecosystem: uv
     directory: /trainnr-mjlab
+    ignore:
+      # The simulator is the measuring instrument: its version changes
+      # the numbers the records carry, so it moves by a deliberate commit
+      # with a re-measure, never by an update bot.
+      - dependency-name: "mujoco*"
+      - dependency-name: "mjlab"
+      - dependency-name: "warp-lang"
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     groups:
