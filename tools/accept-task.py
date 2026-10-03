@@ -48,7 +48,11 @@ from trainnr.project.task_ref import (  # noqa: E402
 from trainnr.tasks.acceptance import accept  # noqa: E402
 from trainnr.tasks.experts import expert_for, experts  # noqa: E402
 from trainnr.tasks.overlay import build_from_reference, build_variant  # noqa: E402
-from trainnr.tasks.walks import walk_robot  # noqa: E402
+from trainnr.tasks.walks import (  # noqa: E402
+    bundle_walk_shape_missing,
+    walk_robot,
+    walk_shape_sentence,
+)
 
 
 def main() -> None:
@@ -103,12 +107,31 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     *,
     run: Runner = subprocess.run,
     prepare: Callable[[Sequence[str], Path], None] = prepare_uv,
+    shape_missing: Callable[[str], list[str]] = bundle_walk_shape_missing,
 ) -> bool:
     """A walk's acceptance is learnability: the environment builds from
     the project's robot and a few PPO iterations run — trainnr_mjlab's smoke,
     in its own venv, with the declared span, through the SAME command
     line the train door spawns (launch environment included). The
-    identity it prints is the record."""
+    identity it prints is the record. First, the robot's shape: a bundle
+    without the parts the trainer reads by name (`tasks.walks.WALK_SHAPES`)
+    is refused in one sentence, not after a traceback in the log
+    (stranger test 2026-10-03)."""
+    missing = shape_missing(robot)
+    if missing:
+        reason = walk_shape_sentence(robot, missing)
+        _write_walk_verdict(
+            project,
+            folder,
+            ref,
+            accepted=False,
+            gate="the robot's shape, before the learnability smoke",
+            reasons=[reason],
+            identity={},
+            log=None,
+        )
+        print(f"REJECTED: {ref.stamp} — {reason}", flush=True)
+        return False
     argv = walk_train_argv(
         agent=SMOKE_AGENT,
         robot=robot,
@@ -142,30 +165,54 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
         if accepted
         else [f"the learnability smoke exited {result.returncode}; see acceptance.log"]
     )
+    _write_walk_verdict(
+        project,
+        folder,
+        ref,
+        accepted=accepted,
+        gate=(
+            f"learnability smoke: {SMOKE_ENVS} environments, "
+            f"{SMOKE_ITERATIONS} PPO iterations"
+        ),
+        reasons=reasons,
+        identity=identity,
+        log=log_path.name,
+    )
+    return accepted
+
+
+def _write_walk_verdict(  # noqa: PLR0913 - the verdict's fields, each named
+    project: Project,
+    folder: Path,
+    ref: TaskReference,
+    *,
+    accepted: bool,
+    gate: str,
+    reasons: list[str],
+    identity: dict,
+    log: str | None,
+) -> None:
+    """The walk verdict on disk — atomic, like the index, and the index
+    rewritten so the Studio sees it the moment the job ends."""
     record = {
         "schema": ACCEPTANCE_SCHEMA,
         "task": ref.stamp,
         "accepted": accepted,
-        "gate": (
-            f"learnability smoke: {SMOKE_ENVS} environments, "
-            f"{SMOKE_ITERATIONS} PPO iterations"
-        ),
+        "gate": gate,
         "reasons": reasons,
         "refusals": [],
         "identity": identity,
         "instrument": identity.get("actuator", "unrecorded"),
         "judged": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "log": log_path.name,
+        "log": log,
     }
-    print(
-        ("ACCEPTED" if accepted else "REJECTED") + f": {ref.stamp} — {record['gate']}",
-        flush=True,
-    )
+    if log is not None:
+        word = "ACCEPTED" if accepted else "REJECTED"
+        print(f"{word}: {ref.stamp} — {gate}", flush=True)
     staging = folder / (ACCEPTANCE_FILE + ".tmp")
     staging.write_text(json.dumps(record, indent=1) + "\n")
     staging.replace(folder / ACCEPTANCE_FILE)
     write_index(project, index_project(project))
-    return accepted
 
 
 def review_declared(project_root: Path, name: str) -> bool:

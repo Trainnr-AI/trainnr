@@ -24,6 +24,14 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
   gates) moved to its own archive repository, `Trainnr-AI/rig`, with its
   history. `recordings/` and the drivetrain bundle stay as evidence.
 
+### Fixed
+
+- From the second stranger test (the public edition cloned cold, 2026-10-03):
+  `evaluate_walk` hands its job the resolved checkpoint path (a bare
+  `run/model_N.pt` died in the judge); the artifact drawer's header
+  picture (a red triangle after the picture decoder moved off the UI
+  thread); the README's tool names and the address of Unitree's `go2.xml`.
+
 ### Added
 
 - A light theme for the Studio, designed (a white page, warm paper

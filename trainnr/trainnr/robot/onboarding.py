@@ -200,4 +200,42 @@ def onboard_mjcf(
         "bodies": int(model.nbody),
         "joints": int(model.njnt),
         "actuators": int(model.nu),
+        SHAPE_KEY: shape_census(model),
     }
+
+
+# The reply's census of what a trainer looks up by name, so an agent
+# learns a model's shape here and not from a traceback after `train_walk`
+# (docs/77 §3 item 5, done 2026-10-03 after the stranger test).
+SHAPE_KEY = "shape"
+
+
+def shape_census(model: Any) -> dict[str, Any]:
+    """The named parts a task reads by name: the collision geoms that carry a
+    name (contype or conaffinity set), the sites, and the trunk (the first
+    body under the world)."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    def name_of(obj: Any, i: int) -> str | None:
+        return mujoco.mj_id2name(model, obj, i) or None
+
+    collision = [
+        name
+        for i in range(model.ngeom)
+        if (model.geom_contype[i] or model.geom_conaffinity[i])
+        and (name := name_of(mujoco.mjtObj.mjOBJ_GEOM, i))
+    ]
+    sites = [
+        name
+        for i in range(model.nsite)
+        if (name := name_of(mujoco.mjtObj.mjOBJ_SITE, i))
+    ]
+    trunk = next(
+        (
+            name_of(mujoco.mjtObj.mjOBJ_BODY, i)
+            for i in range(1, model.nbody)
+            if model.body_parentid[i] == 0
+        ),
+        None,
+    )
+    return {"collision_geoms": collision, "sites": sites, "trunk": trunk}

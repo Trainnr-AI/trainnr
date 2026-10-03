@@ -292,18 +292,124 @@ class TheSharedLookups(unittest.TestCase):
             self.assertEqual(server._walk_of_run([], run_dir), "microduck")
 
 
-class TheAcceptanceSmoke(unittest.TestCase):
-    def test_review_walk_spawns_the_train_doors_line_and_reads_the_mark(self) -> None:
-        import importlib.util  # noqa: PLC0415
+def _accept_task_module() -> Any:
+    """`tools/accept-task.py` as a module (a script; the tests reach its
+    functions by loading the file)."""
+    import importlib.util  # noqa: PLC0415
 
-        if str(TOOLS) not in sys.path:  # the tools import their `_lab` neighbour
-            sys.path.insert(0, str(TOOLS))
-        spec = importlib.util.spec_from_file_location(
-            "accept_task", TOOLS / "accept-task.py"
-        )
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    if str(TOOLS) not in sys.path:  # the tools import their `_lab` neighbour
+        sys.path.insert(0, str(TOOLS))
+    spec = importlib.util.spec_from_file_location(
+        "accept_task", TOOLS / "accept-task.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class TheStudioDoorsResolveBareNames(unittest.TestCase):
+    """`screenshot_studio(artifact="go2")` was refused as `no artifact "go2"`
+    right after `onboard_robot` had answered with the version, while the
+    fit and drift doors had resolved bare names since 2026-09-28 (the
+    stranger test, 2026-10-03)."""
+
+    def test_screenshot_open_show_and_compare_take_a_bare_name(self) -> None:
+        with project_with("go2-walk") as (project, _):
+            stamp = "go2-flat@" + "0" * 12  # the declared task, by its name
+            sent: list[dict[str, Any]] = []
+
+            def fake_screenshot(proj: Any, **kwargs: Any) -> dict[str, Any]:
+                sent.append({"door": "screenshot", **kwargs})
+                return {"status": "done", "path": "x.png"}
+
+            def fake_command(proj: Any, verb: str, **kwargs: Any) -> dict[str, Any]:
+                sent.append({"door": verb, **kwargs})
+                return {"status": "done"}
+
+            with (
+                mock.patch("trainnr.project.control.screenshot", fake_screenshot),
+                mock.patch("trainnr.project.control.command", fake_command),
+                mock.patch(
+                    "trainnr.project.control.wait_presented",
+                    lambda *a, **k: {"presented": True},
+                ),
+            ):
+                self.assertEqual(
+                    server.screenshot_studio(
+                        section="environments", artifact="go2-flat"
+                    )["status"],
+                    "done",
+                )
+                self.assertEqual(
+                    server.open_in_studio(artifact="go2-flat")["status"], "done"
+                )
+                self.assertEqual(server.show_in_studio("go2-flat")["status"], "done")
+                self.assertEqual(
+                    server.compare_in_studio("go2-flat", stamp)["status"], "done"
+                )
+                # a full version passes through untouched
+                server.open_in_studio(artifact=stamp)
+                # a name nobody carries is refused by the same sentence as before
+                refused = server.screenshot_studio(artifact="spot")
+                self.assertEqual(refused["status"], "refused")
+                self.assertIn("no artifact 'spot'", refused["reason"])
+                self.assertEqual(server.show_in_studio("spot")["status"], "refused")
+                self.assertEqual(
+                    server.compare_in_studio("spot", stamp)["status"], "refused"
+                )
+            self.assertEqual(
+                [d["door"] for d in sent],
+                ["screenshot", "open", "show", "compare", "open"],
+            )
+            self.assertEqual(sent[0]["artifact"], stamp)
+            self.assertEqual(sent[1]["artifact"], stamp)
+            self.assertEqual(sent[2]["artifact"], stamp)
+            self.assertEqual((sent[3]["a"], sent[3]["b"]), (stamp, stamp))
+            self.assertEqual(sent[4]["artifact"], stamp)
+            self.assertEqual(project.root, project.root)  # the fixture's project
+
+
+class TheAcceptanceSmoke(unittest.TestCase):
+    def test_a_robot_in_the_wrong_shape_is_refused_before_the_smoke(self) -> None:
+        """A Menagerie Go2 (unnamed collision geoms, no foot sites) sent the
+        smoke into mjlab's regex traceback and the verdict read "exited 1;
+        see acceptance.log" (stranger test 2026-10-03). The census comes
+        first and the verdict says what is missing and where the right
+        model is; nothing is spawned."""
+        module = _accept_task_module()
+        calls: list[list[str]] = []
+
+        def fake_run(
+            argv: list[str], **kwargs: Any
+        ) -> subprocess.CompletedProcess[Any]:
+            calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0)
+
+        with project_with("go2-walk") as (project, _):
+            ref = read_task_reference(project, "go2-flat")
+            accepted = module.review_walk(
+                project,
+                ref.folder,
+                ref,
+                "go2",
+                run=fake_run,
+                prepare=lambda argv, cwd: None,
+                shape_missing=lambda robot: ["geom FR_foot_collision", "site imu"],
+            )
+            self.assertFalse(accepted)
+            self.assertEqual(calls, [])
+            record = json.loads((ref.folder / "acceptance.json").read_text())
+            self.assertFalse(record["accepted"])
+            [reason] = record["reasons"]
+            self.assertIn("missing geom FR_foot_collision, site imu", reason)
+            self.assertIn("unitree_rl_mjlab", reason)
+            self.assertIn("Menagerie", reason)
+            self.assertIsNone(record["log"])
+            self.assertEqual(record["instrument"], "unrecorded")
+
+    def test_review_walk_spawns_the_train_doors_line_and_reads_the_mark(self) -> None:
+        module = _accept_task_module()
         calls: list[list[str]] = []
 
         def fake_run(
@@ -325,6 +431,7 @@ class TheAcceptanceSmoke(unittest.TestCase):
                 "go2",
                 run=fake_run,
                 prepare=lambda argv, cwd: prepared.append(list(argv)),
+                shape_missing=lambda robot: [],
             )
             self.assertTrue(accepted)
             [argv] = calls

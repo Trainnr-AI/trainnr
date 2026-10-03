@@ -18,10 +18,10 @@ step cites. For developers with one robot and companies with a fleet.
 | 2. Real-to-sim | hardware proximity, measured: the robot's own telemetry fitted into the model it trains on, every parameter with an interval and a pinned / NOT PINNED verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |
 | 3. Build data | demonstrations generated under recorded randomization, kept by the task's success criterion, exported as LeRobot v3 with a datasheet | `generate_kitting_demos`, `generate_walk_demos`, `multiply_demos` | datasets with provenance |
 | 4. Train | reinforcement learning on mjlab or imitation through LeRobot, on the identified model with a measured randomization span | `train_walk`, `run_chain` | experiments and policies |
-| 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `evals`, `eval_detail` | evaluations that gate on the lower bound |
+| 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `list_eval_records`, `describe_eval` | evaluations that gate on the lower bound |
 | 6. Sim-to-real | the deployment is the last evaluation: the export, a gate on two runtimes (ours and the vendor's) against the same rows at a declared tolerance, a failed gate attributed to its cause (latency first), pre-flight before the first tick | `export_deployment`, `gate_deployment`, `attribute_deployment`, `preflight_deployment` | deployments with their gate and pre-flight |
 | 7. Deploy and watch | the policy on the vendor's runtime; its telemetry back into turn 1; the robot re-identified against its fitted intervals | `stage_deployment`, `check_drift` | drift records |
-| 8. Query and learn | every record above, from the agent or the Studio: which policy, on which model, under which conditions, with what interval | `describe_project`, `runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
+| 8. Query and learn | every record above, from the agent or the Studio: which policy, on which model, under which conditions, with what interval | `describe_project`, `describe_runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
 
 Everything in this table has run end to end on a Unitree Go2, in simulation,
 through the tools alone. The hardware step is the vendor's own runtime; no
@@ -42,8 +42,8 @@ session:
 
 | Stage | Tool | What it leaves behind |
 |---|---|---|
-| Project | `create_project_dir` | a project directory with its index |
-| Asset | `onboard_robot` (Unitree's `go2.xml`) | the robot bundle `go2@<hash>` |
+| Project | `create_project` | a project directory with its index |
+| Asset | `onboard_robot` (Unitree's own `go2.xml`, from [`unitree_rl_mjlab`](https://github.com/unitreerobotics/unitree_rl_mjlab) `src/assets/robots/unitree_go2/xmls/`; Menagerie's Go2 is a viewer twin without the named foot geoms the trainer needs) | the robot bundle `go2@<hash>` |
 | Telemetry | `ingest_public_log` or `ingest_recording` | a recording with its rate, dropouts and licence state |
 | System identification | `identify_system` | the fit: each parameter with an interval and a pinned / NOT PINNED verdict |
 | Environment | `create_task` (`trainnr/go2-walk`) | the declared task, accepted or refused |

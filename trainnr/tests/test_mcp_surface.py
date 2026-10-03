@@ -5,11 +5,14 @@ runs on any venv, because the functions deliberately import no MCP.
 """
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests._extras import needs_mcp, needs_numpy, needs_sim
+from trainnr import mcp_server
 from trainnr.mcp_server import (
     bundle_names,
     create_project_dir,
@@ -227,6 +230,62 @@ class FrictionCurves(unittest.TestCase):
 
 
 class Runs(unittest.TestCase):
+    def test_the_open_projects_runs_are_listed_with_their_manifests(self) -> None:
+        """A walk's experiments live in the project's `runs/` with
+        `training.json` and `identity.json`, not in the legacy root: the
+        README's "query and learn" row answered [] for them until
+        2026-10-03 (the stranger test)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy = root / "legacy"
+            (legacy / "t9").mkdir(parents=True)
+            (legacy / "t9" / "run.json").write_text(json.dumps({"name": "t9"}))
+            project = create_project_dir(str(root / "p"), "p")
+            run = Path(project["root"]) / "runs" / "g3-150"
+            run.mkdir(parents=True)
+            (run / "training.json").write_text(json.dumps({"iterations": 150}))
+            (run / "identity.json").write_text(json.dumps({"robot": "go2@abc"}))
+            (run / "verdict").mkdir()
+            (run / "verdict" / "records-cuda.jsonl").write_text("{}\n{}\n")
+            (Path(project["root"]) / "runs" / "empty").mkdir()
+            with (
+                mock.patch.dict(os.environ, {PROJECT_ENV: project["root"]}),
+                mock.patch.object(mcp_server, "_runs_root", return_value=legacy),
+            ):
+                runs = describe_runs()
+                records = list_eval_records()
+            # an explicit root is that root alone, as before
+            self.assertEqual(
+                describe_runs(legacy), [{"run": "t9", "manifest": {"name": "t9"}}]
+            )
+            self.assertEqual([r["run"] for r in runs], ["t9", "g3-150"])
+            project_run = runs[1]
+            self.assertEqual(project_run["where"], str(run))
+            self.assertEqual(project_run["training"], {"iterations": 150})
+            self.assertEqual(project_run["identity"], {"robot": "go2@abc"})
+            self.assertNotIn("run", project_run.keys() - {"run"})
+            self.assertEqual(
+                records,
+                [
+                    {
+                        "run": "g3-150",
+                        "file": "records-cuda.jsonl",
+                        "records": 2,
+                        "where": str(run / "verdict"),
+                    }
+                ],
+            )
+
+    def test_without_a_project_the_runs_are_the_legacy_root_alone(self) -> None:
+        nowhere = Path(tempfile.gettempdir()) / "trainnr-no-such-runs"
+        with (
+            mock.patch.dict(os.environ, {}, clear=False),
+            mock.patch.object(mcp_server, "_runs_root", return_value=nowhere),
+        ):
+            os.environ.pop(PROJECT_ENV, None)
+            self.assertEqual(describe_runs(), [])
+            self.assertEqual(list_eval_records(), [])
+
     def test_manifests_are_read_verbatim(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

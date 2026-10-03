@@ -44,7 +44,7 @@ from trainnr.bundles.locate import bundle_dirs, find_bundle
 from trainnr.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME
 from trainnr.mcp_actions import JUDGE_ALL_AXES
-from trainnr.mcp_jobs import DONE, JobHandle, Refusal, refusal
+from trainnr.mcp_jobs import DONE, REFUSED, JobHandle, Refusal, refusal
 from trainnr.physics.registry import engines
 from trainnr.project.locate import (
     DEPLOY_FOLDER,
@@ -496,17 +496,27 @@ def _no_single_walk(root: Path | None) -> str:
 CHECKPOINT_GLOB = "model_*.pt"
 
 
+def checkpoint_path(checkpoint: str, root: Path | None) -> Path:
+    """The file a checkpoint argument names: absolute as given, else under
+    the project's runs — `c0/model_1.pt` and `runs/c0/model_1.pt` name the
+    same file. The job gets THIS path, never the bare form: the judge runs
+    in another directory and a bare `run/model_N.pt` died there on
+    FileNotFoundError after the check here had passed (stranger test,
+    2026-10-03)."""
+    path = Path(checkpoint).expanduser()
+    if not path.is_absolute() and root is not None:
+        under = path.parts[0] == RUNS_FOLDER
+        path = root / path if under else root / RUNS_FOLDER / path
+    return path
+
+
 def checkpoint_missing(checkpoint: str, root: Path | None) -> str | None:
     """Why `checkpoint` cannot be evaluated, or None: a file path (absolute,
     or `run/model_N.pt` under the project's runs) that is not there is
     refused here naming the checkpoints its run folder holds, instead of
     a job that dies on FileNotFoundError twelve seconds later
     (2026-09-28)."""
-    path = Path(checkpoint).expanduser()
-    if not path.is_absolute() and root is not None:
-        # `c0/model_1.pt` and `runs/c0/model_1.pt` name the same file
-        under = path.parts[0] == RUNS_FOLDER
-        path = root / path if under else root / RUNS_FOLDER / path
+    path = checkpoint_path(checkpoint, root)
     if path.is_file():
         return None
     folder = path.parent
@@ -563,7 +573,7 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
         robot = declared.robot
     try:
         return Actions(JobManager(_jobs_root())).evaluate_walk(
-            checkpoint,
+            str(checkpoint_path(checkpoint, root)),
             trials=trials,
             seed=seed,
             device=device,
@@ -1193,17 +1203,54 @@ def describe_engines() -> list[dict[str, Any]]:
 
 
 def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
-    """Every run with a manifest under `trainnr/runs/` — the same
-    `run.json` the dashboard follows, verbatim."""
+    """Every run on record: the imitation chain's `run.json` manifests under
+    `trainnr/runs/` (or `runs_root`), verbatim, and — when a project is open
+    and no root was named — the project's own `runs/`, where a walk's
+    experiments keep `training.json` and `identity.json` (an agent reading
+    the README's "query and learn" row saw [] there, stranger test
+    2026-10-03). Each entry names the run and, for a project's, where it
+    lives."""
     root = _runs_root(runs_root)
-    if not root.is_dir():
-        return []
     described = []
-    for manifest in sorted(root.glob("*/run.json")):
-        described.append(
-            {"run": manifest.parent.name, "manifest": json.loads(manifest.read_text())}
-        )
+    if root.is_dir():
+        for manifest in sorted(root.glob("*/run.json")):
+            described.append(
+                {
+                    "run": manifest.parent.name,
+                    "manifest": json.loads(manifest.read_text()),
+                }
+            )
+    if runs_root is None:
+        described.extend(_project_runs())
     return described
+
+
+# The manifests a project's run folder may hold, by the loop that wrote it.
+PROJECT_RUN_MANIFESTS = ("run.json", "training.json", "identity.json")
+
+
+def _project_runs_root() -> Path | None:
+    """The open project's `runs/`, or None without a project."""
+    root = _project_root_if_any()
+    return None if root is None else root / RUNS_FOLDER
+
+
+def _project_runs() -> list[dict[str, Any]]:
+    """The open project's runs, each with whichever manifests it holds."""
+    runs = _project_runs_root()
+    if runs is None or not runs.is_dir():
+        return []
+    found = []
+    for folder in sorted(p for p in runs.iterdir() if p.is_dir()):
+        manifests = {}
+        for name in PROJECT_RUN_MANIFESTS:
+            path = folder / name
+            if path.is_file():
+                with contextlib.suppress(ValueError, OSError):
+                    manifests[name.removesuffix(".json")] = json.loads(path.read_text())
+        if manifests:
+            found.append({"run": folder.name, "where": str(folder), **manifests})
+    return found
 
 
 MIN_FITS_FOR_SPREAD = 2  # a spread needs two fits to disagree (tools/fit-report.py)
@@ -1222,21 +1269,38 @@ def _runs_root(runs_root: Path | None) -> Path:
     return runs_root if runs_root is not None else Path(__file__).parents[1] / "runs"
 
 
-def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
-    """Every episode-record file under `trainnr/runs/` — the JSONL the
-    evaluation layer writes, wherever a run keeps one."""
-    root = _runs_root(runs_root)
-    if not root.is_dir():
-        return []
+# Where a run keeps its per-episode rows: beside the manifest (the
+# imitation chain) or under `verdict/` (a walk's evaluation, `records-*.jsonl`).
+EVAL_RECORD_GLOBS = ("*/*episodes.jsonl", "*/verdict/records*.jsonl")
+
+
+def _eval_records_under(root: Path, where: str | None = None) -> list[dict[str, Any]]:
     found = []
-    for path in sorted(root.glob("*/*episodes.jsonl")):
-        found.append(
-            {
-                "run": path.parent.name,
+    for pattern in EVAL_RECORD_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            run = path.relative_to(root).parts[0]
+            entry = {
+                "run": run,
                 "file": path.name,
                 "records": sum(1 for line in path.read_text().splitlines() if line),
             }
-        )
+            if where is not None:
+                entry["where"] = str(path.parent)
+            found.append(entry)
+    return found
+
+
+def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
+    """Every episode-record file: under `trainnr/runs/` (or `runs_root`) —
+    the JSONL the evaluation layer writes — and, when a project is open and
+    no root was named, under the project's own `runs/`, where a walk's
+    evaluation keeps its rows in `verdict/` (stranger test 2026-10-03)."""
+    root = _runs_root(runs_root)
+    found = _eval_records_under(root) if root.is_dir() else []
+    if runs_root is None:
+        project_runs = _project_runs_root()
+        if project_runs is not None and project_runs.is_dir():
+            found.extend(_eval_records_under(project_runs, where="project"))
     return found
 
 
@@ -1595,6 +1659,27 @@ def quit_studio() -> dict[str, Any]:
     return quit_(current_project())
 
 
+def _studio_artifact(artifact: str | None) -> str | Refusal | None:
+    """A Studio door's `artifact` as the window wants it, a version: a bare
+    name (`go2`) resolves through `pick_artifact` like every other door's
+    since 2026-09-28 (the window itself matched versions only, and
+    `screenshot_studio(artifact="go2")` was refused right after
+    `onboard_robot` had answered with the version — stranger test
+    2026-10-03); several of one name are refused naming every version."""
+    if artifact is None or "@" in artifact:
+        return artifact
+    try:
+        _, found = _project_artifact(artifact, None)
+    except (KeyError, ValueError, FileNotFoundError) as why:
+        # a KeyError's str() wraps the sentence in quotes
+        return refusal(str(why.args[0]) if why.args else str(why))
+    return str(found.stamp)
+
+
+def _refused(value: object) -> bool:
+    return isinstance(value, dict) and value.get("status") == REFUSED
+
+
 def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing it can open
     section: str | None = None,
     artifact: str | None = None,
@@ -1618,11 +1703,14 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
 
     if section is not None and section.strip().lower() not in SECTIONS:
         return refusal(f"no page {section!r}; one of {', '.join(SECTIONS)}")
+    resolved = _studio_artifact(artifact)
+    if _refused(resolved):
+        return resolved  # type: ignore[return-value]
     return command(
         current_project(),
         "open",
         section=section,
-        artifact=artifact,
+        artifact=resolved,
         project=project,
         table=table,
         view=view,
@@ -1638,13 +1726,16 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
     from trainnr.project.control import command, wait_presented  # noqa: PLC0415
 
     project = current_project()
+    resolved = _studio_artifact(artifact)
+    if _refused(resolved) or resolved is None:
+        return resolved or refusal("name an artifact")  # type: ignore[return-value]
     since = time.time()
-    answer = command(project, "show", artifact=artifact)
+    answer = command(project, "show", artifact=resolved)
     if answer.get("status") != "done":
         return answer
     # The Studio only accepted the request; the presenter answers later,
     # and a kind it cannot show is a failure the agent must hear about.
-    return {**answer, **wait_presented(project, artifact, since=since)}
+    return {**answer, **wait_presented(project, resolved, since=since)}
 
 
 def focus_studio_recording(recording: str) -> dict[str, Any]:
@@ -1696,7 +1787,11 @@ def compare_in_studio(a: str, b: str) -> dict[str, Any]:
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command  # noqa: PLC0415
 
-    return command(current_project(), "compare", a=a, b=b)
+    left, right = _studio_artifact(a), _studio_artifact(b)
+    for side in (left, right):
+        if _refused(side):
+            return side  # type: ignore[return-value]
+    return command(current_project(), "compare", a=left, b=right)
 
 
 # One door, one timeline: every knob the viewer's own time panel has.
@@ -1923,8 +2018,11 @@ def screenshot_studio(
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import screenshot  # noqa: PLC0415
 
+    resolved = _studio_artifact(artifact)
+    if _refused(resolved):
+        return resolved  # type: ignore[return-value]
     return screenshot(
-        current_project(), section=section, artifact=artifact, width=width
+        current_project(), section=section, artifact=resolved, width=width
     )
 
 
@@ -2874,9 +2972,11 @@ def build_server() -> Any:  # noqa: PLR0915
         "Job handle."
     )(actions.generate_planned_demos)
     server.tool(
-        description="Onboard a robot: an MJCF directory, or a USD asset read by "
-        "Newton, becomes a hash-stamped bundle under robots/, compiled once as "
-        "the honesty check."
+        description="Onboard a robot: its MJCF file (the directory's meshes and "
+        "includes ride along) or a USD file read by Newton becomes a "
+        "hash-stamped bundle under robots/, compiled once as the honesty "
+        "check; the reply's `shape` census names the collision geoms, sites "
+        "and trunk a trainer will look for."
     )(onboard_robot)
     server.tool(description="A job's state and log tail")(actions.job_status)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)

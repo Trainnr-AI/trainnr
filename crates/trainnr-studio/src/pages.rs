@@ -1530,9 +1530,10 @@ fn detail(
                         DETAIL_PICTURE_WIDTH / THUMBNAIL_ASPECT,
                     ),
                 );
-                if let Some(uri) = crate::widgets::preview_uri(ui, &path) {
-                    egui::Image::new(uri).corner_radius(6.0).paint_at(ui, rect);
-                }
+                // Decoded off the UI thread like every card picture
+                // (pictures.rs); a file URI here drew the loader's red
+                // triangle in the drawer (stranger test, 2026-10-03).
+                crate::widgets::thumbnail(ui, &path, rect);
                 ui.advance_cursor_after_rect(rect);
                 ui.add_space(16.0);
             }

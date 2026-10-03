@@ -391,6 +391,28 @@ class LoopKinds(unittest.TestCase):
             with self.assertRaises(ValueError):
                 create_project(Path(tmp) / "q", "q", loop="osmosis")
 
+    def test_a_declared_walk_makes_the_loop_reinforcement_before_any_run(self) -> None:
+        """A project made without `loop`, a Go2 walk declared, no run yet:
+        the Overview said "4 of 9 stages", kept Dataset needed and offered
+        "generate demonstrations" (stranger test 2026-10-03). The walk
+        family's mark in the registry decides it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            write_task_reference(
+                project, "trainnr/go2-walk", "go2-walk@" + "0" * 12, name="go2-walk"
+            )
+            index = index_project(project)
+            data = next(s for s in index.states if s.name == "data generated")
+            self.assertFalse(data.needed)
+            self.assertNotIn("generate demonstrations", index.next_move or "")
+            # an arm task does not decide it: the loop stays unsaid
+            other = make_project(Path(tmp) / "arm")
+            write_task_reference(other, "trainnr/kitting", "kitting@" + "0" * 12)
+            data = next(
+                s for s in index_project(other).states if s.name == "data generated"
+            )
+            self.assertTrue(data.needed)
+
     def test_the_loop_is_read_off_the_runs_when_unset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = make_project(Path(tmp))

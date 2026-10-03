@@ -253,7 +253,7 @@ def index_project(project: Project) -> ProjectIndex:
                 )
             )
     _link_cited_by(artifacts)
-    loop = manifest.loop or _loop_of(artifacts)
+    loop = manifest.loop or _loop_of(artifacts, project.root)
     states = _states(artifacts, loop)
     missing = [s.name for s in states if not s.present and s.needed]
     # Telemetry is the loop's first state but not a prerequisite: a robot
@@ -1037,13 +1037,35 @@ NOT_NEEDED: dict[str, dict[str, str]] = {
 }
 
 
-def _loop_of(artifacts: list[Artifact]) -> str:
-    """The loop kind read off the runs when the manifest has not said:
-    what the first run says it learned by; empty with no runs."""
+def _loop_of(artifacts: list[Artifact], root: Path | None = None) -> str:
+    """The loop kind when the manifest has not said: what the first run
+    says it learned by, else `reinforcement` as soon as a declared task is
+    a walk family (a project made without `loop` kept the Dataset stage
+    needed and "generate demonstrations" as the next move with a Go2 walk
+    declared, stranger test 2026-10-03); empty with neither."""
     for a in artifacts:
         if a.kind == Kind.RUN.value and a.summary.get("learning") in LOOPS:
             return str(a.summary["learning"])
+    if root is not None and any(
+        a.kind == Kind.TASK.value and _is_walk_task(root / a.path) for a in artifacts
+    ):
+        return "reinforcement"
     return ""
+
+
+def _is_walk_task(path: Path) -> bool:
+    """Whether the declared task at `path` is a walk family (the task
+    registry's `walk` mark); an unknown family is not."""
+    # the registry loads plugins; imported here, not at module import
+    from trainnr.tasks.registry import resolve  # noqa: PLC0415
+
+    task_id = str(_read(path / TASK_FILE).get("task_id") or "")
+    if not task_id:
+        return False
+    try:
+        return bool(resolve(task_id).walk)
+    except (KeyError, ValueError):
+        return False
 
 
 def fit_bases(fits: Path) -> list[str]:
